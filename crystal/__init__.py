@@ -23,7 +23,7 @@ class Project(object):
         """
         self.path = path
         
-        self._resources = OrderedDict()
+        self._resources = OrderedDict()         # <url, Resource>
         
         self._loading = True
         try:
@@ -32,9 +32,9 @@ class Project(object):
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
                 c = self._db.cursor()
-                c.execute('select url from resource')
-                for (url,) in c:
-                    Resource(self, url)
+                c.execute('select url, id from resource')
+                for (url, id) in c:
+                    Resource(self, url, _id=id)
             else:
                 # Create new project
                 os.mkdir(path)
@@ -46,7 +46,7 @@ class Project(object):
             self._loading = False
 
 class Resource(object):
-    def __new__(cls, project, url):
+    def __new__(cls, project, url, _id=None):
         """
         Arguments:
         url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
@@ -59,9 +59,12 @@ class Resource(object):
             self.project = project
             self.url = url
             
-            if not project._loading:
+            if project._loading:
+                self._id = _id;
+            else:
                 c = project._db.cursor()
                 c.execute('insert into resource (url) values (?)', (url,))
                 project._db.commit()
+                self._id = c.lastrowid
             project._resources[url] = self
             return self
