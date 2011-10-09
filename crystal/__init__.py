@@ -5,6 +5,7 @@ import sqlite3
 class Project(object):
     """
     Groups together a set of resources that are downloaded and any associated settings.
+    Persisted and auto-saved.
     """
     
     FILE_EXTENSION = '.crystalproj'
@@ -45,8 +46,8 @@ class Project(object):
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
                 c = self._db.cursor()
-                c.execute('create table resource (id integer primary key, url text unique)')
-                c.execute('create table root_resource (id integer primary key, name text, resource_id integer unique, foreign key (resource_id) references resource(id))')
+                c.execute('create table resource (id integer primary key, url text unique not null)')
+                c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
         finally:
             self._loading = False
 
@@ -54,6 +55,12 @@ class CrossProjectReferenceError(Exception):
     pass
 
 class Resource(object):
+    """
+    Represents an entity, potentially downloadable.
+    Either created manually or discovered through a link from another resource.
+    Persisted and auto-saved.
+    """
+    
     def __new__(cls, project, url, _id=None):
         """
         Arguments:
@@ -82,6 +89,11 @@ class Resource(object):
         return "Resource('%s')" % (self.url,)
 
 class RootResource(object):
+    """
+    Represents a resource whose existence is manually defined by the user.
+    Persisted and auto-saved.
+    """
+    
     def __new__(cls, project, name, resource, _id=None):
         """
         Arguments:
