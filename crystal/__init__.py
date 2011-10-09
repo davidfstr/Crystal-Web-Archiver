@@ -13,19 +13,15 @@ class Project(object):
     _DB_FILENAME = 'database.sqlite'
     _BLOBS_DIRNAME = 'blobs'
     
-    def __init__(self, path, primary_domain=None):
+    def __init__(self, path):
         """
         Loads a project from the specified filepath, or creates a new one if none is found.
         
         Arguments:
         path -- path to a directory (ideally with the `FILE_EXTENSION` extension)
                 from which the project is to be loaded.
-        primary_domain -- absolute URL string that the majority of URLs will be relative to.
-                          URLs displayed in the UI will be converted to be relative to this
-                          URL whenever possible.
         """
         self.path = path
-        self.primary_domain = primary_domain
         
         self._resources = OrderedDict()
         
