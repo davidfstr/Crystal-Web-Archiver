@@ -85,6 +85,13 @@ class Resource(object):
             project._resources[url] = self
             return self
     
+    def download_body(self):
+        """
+        Returns a `Task` that yields a `ResourceRevision`.
+        [TODO: If this resource is up-to-date, yields the default revision immediately.]
+        """
+        return _ResourceBodyDownloadTask(self)
+    
     def __repr__(self):
         return "Resource('%s')" % (self.url,)
 
@@ -137,3 +144,57 @@ class RootResource(object):
         that is already associated with an existing `RootResource`.
         """
         pass
+
+import urllib2
+
+class _ResourceBodyDownloadTask(object): # TODO: extend from Task base class, once it is defined
+    def __init__(self, resource):
+        self._resource = resource
+        
+        self.title = 'Downloading: %s' % (resource.url,)
+        self.subtitle = 'Queued.'
+        self.subtasks = []
+    
+    def __call__(self):
+        """Synchronously runs this task."""
+        request = None
+        try:
+            # TODO: Migrate to httplib instead of urllib2, so that exact request headers can be saved
+            #       and redirections can be handled directly. Note that non-HTTP(S) URLs such as FTP
+            #       should still be handled. And don't forget to get a nice exception for unsupported
+            #       URI schemes (such as mailto).
+            self.subtitle = 'Waiting for response...'
+            request = urllib2.Request('http://www.themanime.org/')
+            response_body_stream = urllib2.urlopen(request) # may raise URLError
+            
+            # TODO: Provide incremental feedback such as '7 KB of 15 KB'
+            self.subtitle = 'Receiving response...'
+            response_body = response_body_stream.read() # may raise IOError
+            
+            return ResourceRevision(request=request, response_body=response_body)
+        except Exception as e:
+            return ResourceRevision(download_error=e, request=request)
+    
+    @property
+    def subtitle(self):
+        return self._subtitle
+    
+    @subtitle.setter
+    def subtitle(self, value):
+        # TODO: Display updates in GUI instead of CLI
+        print '-> %s' % (value,)
+        self._subtitle = value
+
+class ResourceRevision(object):
+    """
+    A downloaded revision of a `Resource`.
+    Stores all information needed to reperform the request exactly as originally done.
+    [TODO: Persisted and auto-saved.]
+    """
+    
+    def __init__(self, download_error=None, request=None, response_body=None):
+        if not ((download_error is None) != (response_body is None)):
+            raise ValueError('Must specify either "download_error" or "response_body" argument.')
+        self.download_error = download_error
+        self._request = request             # TODO: finalize internal representation
+        self._response_body = response_body # TODO: finalize internal representation
