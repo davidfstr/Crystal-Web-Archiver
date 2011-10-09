@@ -36,7 +36,7 @@ class Project(object):
                 for (url, id) in c.execute('select url, id from resource'):
                     Resource(self, url, _id=id)
                 for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
-                    resource = [r for r in self._resources if r._id == resource_id][0] # PERF
+                    resource = [r for r in self._resources.values() if r._id == resource_id][0] # PERF
                     RootResource(self, name, resource, _id=id)
             else:
                 # Create new project
@@ -49,6 +49,9 @@ class Project(object):
                 c.execute('create table root_resource (id integer primary key, name text, resource_id integer unique, foreign key (resource_id) references resource(id))')
         finally:
             self._loading = False
+
+class CrossProjectReferenceError(Exception):
+    pass
 
 class Resource(object):
     def __new__(cls, project, url, _id=None):
@@ -84,12 +87,16 @@ class RootResource(object):
         Arguments:
         project -- associated `Project`.
         name -- display name.
-        resource -- resource.
+        resource -- `Resource`.
         
         Raises:
+        CrossProjectReferenceError -- if `resource` belongs to a different project.
         RootResource.AlreadyExists -- if there is already a `RootResource` associated
                                       with the specified resource.
         """
+        
+        if resource.project != project:
+            raise CrossProjectReferenceError('Cannot have a RootResource refer to a Resource from a different Project.')
         
         if resource in project._root_resources:
             raise RootResource.AlreadyExists
