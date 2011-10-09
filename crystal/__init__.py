@@ -33,7 +33,7 @@ class Project(object):
                 
                 c = self._db.cursor()
                 c.execute('select url from resource')
-                for url in c:
+                for (url,) in c:
                     Resource(self, url)
             else:
                 # Create new project
