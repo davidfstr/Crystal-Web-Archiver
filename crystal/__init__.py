@@ -41,7 +41,7 @@ class Project(object):
                 os.mkdir(os.path.join(path, self._BLOBS_DIRNAME))
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
-                c.execute('create table resource (id integer primary key, url text)')
+                c.execute('create table resource (id integer primary key, url text unique)')
         finally:
             self._loading = False
 
