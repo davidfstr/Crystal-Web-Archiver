@@ -166,12 +166,14 @@ class _ResourceBodyDownloadTask(object): # TODO: extend from Task base class, on
             #       should still be handled. And don't forget to get a nice exception for unsupported
             #       URI schemes (such as mailto).
             self.subtitle = 'Waiting for response...'
-            request = urllib2.Request('http://www.themanime.org/')
-            response_body_stream = urllib2.urlopen(request) # may raise URLError
-            
-            # TODO: Provide incremental feedback such as '7 KB of 15 KB'
-            self.subtitle = 'Receiving response...'
-            response_body = response_body_stream.read() # may raise IOError
+            request = urllib2.Request(self._resource.url)
+            response_body_stream = urllib2.urlopen(request)
+            try:
+                # TODO: Provide incremental feedback such as '7 KB of 15 KB'
+                self.subtitle = 'Receiving response...'
+                response_body = response_body_stream.read() # may raise IOError
+            finally:
+                response_body_stream.close()
             
             return ResourceRevision(request=request, response_body=response_body)
         except Exception as e:
