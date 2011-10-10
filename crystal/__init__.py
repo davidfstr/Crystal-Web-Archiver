@@ -1,6 +1,10 @@
+# --------------------------------------------------------------------------------------------------
+# Model
+
 from collections import OrderedDict
 import os
 import sqlite3
+import urllib2
 
 class Project(object):
     """
@@ -145,8 +149,6 @@ class RootResource(object):
         """
         pass
 
-import urllib2
-
 class _ResourceBodyDownloadTask(object): # TODO: extend from Task base class, once it is defined
     def __init__(self, resource):
         self._resource = resource
@@ -200,6 +202,7 @@ class ResourceRevision(object):
         self._response_body = response_body # TODO: finalize internal representation
 
 # --------------------------------------------------------------------------------------------------
+# HTML
 
 from BeautifulSoup import BeautifulSoup
 import re
