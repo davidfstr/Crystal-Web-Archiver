@@ -108,11 +108,16 @@ class Resource(object):
         Returns a `Task` that yields a `ResourceRevision`.
         [TODO: If this resource is up-to-date, yields the default revision immediately.]
         """
+        if not self.downloadable:
+            raise Resource.NotDownloadable
         from crystal import _ResourceBodyDownloadTask
         return _ResourceBodyDownloadTask(self)
     
     def __repr__(self):
         return "Resource(%s)" % (repr(self.url),)
+    
+    class NotDownloadable(Exception):
+        pass
 
 class RootResource(object):
     """
