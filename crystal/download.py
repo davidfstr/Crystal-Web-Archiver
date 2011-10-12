@@ -1,3 +1,4 @@
+from collections import defaultdict
 from crystal.model import ResourceRevision
 import httplib
 import urllib2
@@ -115,3 +116,8 @@ class HttpResourceResponseMetadata(ResourceResponseMetadata):
         if set(kwargs.keys()) != set(['http_version', 'status_code', 'reason_phrase', 'headers']):
             raise ValueError
         self.__dict__ = kwargs
+        
+        header_dict = defaultdict(list)
+        for (name, value) in self.headers:
+            header_dict[name].append(value)
+        self.header_dict = header_dict

@@ -191,3 +191,19 @@ class ResourceRevision(object):
                 body_stream.close()
         else:
             self._body = None
+    
+    @property
+    def is_http(self):
+        from crystal.download import HttpResourceResponseMetadata
+        return self.metadata and isinstance(self.metadata, HttpResourceResponseMetadata)
+    
+    @property
+    def is_redirect(self):
+        return self.is_http and (self.metadata.status_code / 100) == 3
+    
+    @property
+    def redirect_url(self):
+        if self.is_redirect:
+            return self.metadata.header_dict.get('location', [None])[0]
+        else:
+            return None
