@@ -8,9 +8,6 @@ Unless otherwise specified, all changes to models are auto-saved.
 from collections import OrderedDict
 import os
 import sqlite3
-from urlparse import urlparse
-
-_SUPPORTED_SCHEMES = ('http', 'https', 'ftp')
 
 class Project(object):
     """
@@ -105,23 +102,23 @@ class Resource(object):
     
     @property
     def downloadable(self):
-        return urlparse(self.url).scheme.lower() in _SUPPORTED_SCHEMES
+        try:
+            from crystal.download import ResourceRequest
+            ResourceRequest.create(self.url)
+            return True
+        except Exception:
+            return False
     
-    def download_body(self):
+    def download_self(self):
         """
         Returns a `Task` that yields a `ResourceRevision`.
         [TODO: If this resource is up-to-date, yields the default revision immediately.]
         """
-        if not self.downloadable:
-            raise Resource.NotDownloadable
-        from crystal import _ResourceBodyDownloadTask
-        return _ResourceBodyDownloadTask(self)
+        from crystal.download import ResourceDownloadTask
+        return ResourceDownloadTask(self)
     
     def __repr__(self):
         return "Resource(%s)" % (repr(self.url),)
-    
-    class NotDownloadable(Exception):
-        pass
 
 class RootResource(object):
     """
@@ -180,9 +177,17 @@ class ResourceRevision(object):
     [TODO: Persisted and auto-saved.]
     """
     
-    def __init__(self, download_error=None, request=None, response_body=None):
-        if not ((download_error is None) != (response_body is None)):
-            raise ValueError('Must specify either "download_error" or "response_body" argument.')
-        self.download_error = download_error
-        self._request = request             # TODO: finalize internal representation
-        self._response_body = response_body # TODO: finalize internal representation
+    def __init__(self, error=None, metadata=None, body_stream=None):
+        if not ((error is None) != (body_stream is None)):
+            raise ValueError('Must specify either "error" or "body_stream" argument.')
+        self.error = error
+        self.metadata = metadata
+        if body_stream:
+            try:
+                # TODO: Not a great idea to read a response directly into memory.
+                #       This should be streamed to disk.
+                self._body = body_stream.read() # TODO: finalize internal representation
+            finally:
+                body_stream.close()
+        else:
+            self._body = None
