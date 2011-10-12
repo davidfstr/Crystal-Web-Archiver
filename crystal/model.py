@@ -8,6 +8,9 @@ Unless otherwise specified, all changes to models are auto-saved.
 from collections import OrderedDict
 import os
 import sqlite3
+from urlparse import urlparse
+
+_SUPPORTED_SCHEMES = ('http', 'https', 'ftp')
 
 class Project(object):
     """
@@ -95,6 +98,10 @@ class Resource(object):
                 self._id = c.lastrowid
             project._resources[url] = self
             return self
+    
+    @property
+    def downloadable(self):
+        return urlparse(self.url).scheme.lower() in _SUPPORTED_SCHEMES
     
     def download_body(self):
         """
