@@ -62,6 +62,10 @@ class Project(object):
             self._loading = False
     
     @property
+    def resources(self):
+        return self._resources.values()
+    
+    @property
     def root_resources(self):
         return self._root_resources.values()
 
