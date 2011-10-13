@@ -66,6 +66,10 @@ class Project(object):
     @property
     def root_resources(self):
         return self._root_resources.values()
+    
+    def find_root_resource(resource):
+        """Returns the `RootResource` with the specified `Resource` or None if none exists."""
+        return self._root_resources.get(resource, None)
 
 class CrossProjectReferenceError(Exception):
     pass
@@ -160,6 +164,10 @@ class RootResource(object):
                 self._id = c.lastrowid
             project._root_resources[resource] = self
             return self
+    
+    @property
+    def url(self):
+        return self.resource.url
     
     def __repr__(self):
         return "RootResource(%s,%s)" % (repr(self.name), repr(self.resource.url))
