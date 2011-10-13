@@ -6,6 +6,7 @@ Unless otherwise specified, all changes to models are auto-saved.
 """
 
 from collections import OrderedDict
+import mimetypes
 import os
 import sqlite3
 
@@ -194,16 +195,68 @@ class ResourceRevision(object):
     
     @property
     def is_http(self):
+        """Returns whether this resource was fetched using HTTP."""
         from crystal.download import HttpResourceResponseMetadata
         return self.metadata and isinstance(self.metadata, HttpResourceResponseMetadata)
     
     @property
     def is_redirect(self):
+        """Returns whether this resource is a redirect."""
         return self.is_http and (self.metadata.status_code / 100) == 3
     
     @property
     def redirect_url(self):
+        """
+        Returns the resource to which this resource redirects,
+        or None if it cannot be determined or this is not a redirect.
+        """
         if self.is_redirect:
             return self.metadata.header_dict.get('location', [None])[0]
         else:
             return None
+    
+    @property
+    def _redirect_title(self):
+        if self.is_redirect:
+            return '%s %s' % (self.metadata.status_code, self.metadata.reason_phrase)
+        else:
+            return None
+    
+    @property
+    def declared_content_type(self):
+        """Returns the MIME content type declared for this resource, or None if not declared."""
+        if self.is_http:
+            content_type_with_parameters = self.metadata.header_dict.get('content-type', [None])[0]
+            if content_type_with_parameters is None:
+                return None
+            else:
+                # Remove RFC 2045 parameters, if present
+                return content_type_with_parameters.split(';')[0].strip()
+        else:
+            return None
+    
+    @property
+    def content_type(self):
+        """Returns the MIME content type declared or guessed for this resource, or None if unknown."""
+        declared = self.declared_content_type
+        if declared is not None:
+            return declared
+        return mimetypes.guess_type(self.url)
+    
+    @property
+    def is_html(self):
+        """Returns whether this resource is HTML."""
+        return self.content_type == 'text/html'
+    
+    def links(self):
+        """Returns list of `Link`s found in this resource."""
+        # Extract links from HTML, if applicable
+        from crystal.html import LinkParser, Link
+        links = LinkParser.parse(self._body) if self.is_html else []
+        
+        # Add pseudo-link for redirect, if applicable
+        redirect_url = self.redirect_url
+        if redirect_url is not None:
+            links.append(Link(redirect_url, self._redirect_title, 'Redirect', True))
+        
+        return links

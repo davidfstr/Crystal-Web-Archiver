@@ -94,6 +94,9 @@ class HttpResourceRequest(ResourceRequest):
                     reason_phrase=response.reason,
                     headers=response.getheaders()),
                 HttpResourceBodyStream())
+    
+    def __repr__(self):
+        return 'HttpResourceRequest(%s)' % repr(self.url)
 
 class UrlResourceRequest(ResourceRequest):
     def __init__(self, url):
@@ -103,6 +106,9 @@ class UrlResourceRequest(ResourceRequest):
         request = urllib2.Request(self.url)
         response = urllib2.urlopen(request)
         return (None, response)
+    
+    def __repr__(self):
+        return 'UrlResourceRequest(%s)' % repr(self.url)
 
 class ResourceResponseMetadata(object):
     """
@@ -121,3 +127,6 @@ class HttpResourceResponseMetadata(ResourceResponseMetadata):
         for (name, value) in self.headers:
             header_dict[name].append(value)
         self.header_dict = header_dict
+    
+    def __repr__(self):
+        return 'HttpResourceResponseMetadata(%s, %s, %s)' % (repr(self.status_code), repr(self.reason_phrase), repr(self.header_dict.keys()))

@@ -8,6 +8,7 @@ import re
 class LinkParser(object):
     _any_re = re.compile(r'.*')
     
+    # TODO: Promote to top-level function, since this class isn't carrying its weight
     @staticmethod
     def parse(html_bytes):
         """
