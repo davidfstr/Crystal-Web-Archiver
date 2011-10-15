@@ -40,14 +40,11 @@ class _ResourceNode(Node):
         self.view = NodeView()
         self.view.title = title
         self.view.expandable = True
+        self.view.delegate = self
         
         self.resource = resource
         self.download_task = None
         self.links = None
-        
-        # FIXME: Move delegate association to Node constructor
-        # FIXME: Document the list of methods that Nodes can override to receive events
-        self.view.delegate = self
     
     @property
     def _project(self):
@@ -141,6 +138,16 @@ _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR = dict(zip(
 ))
 
 class TreeView(object):
+    """
+    Displays a tree of nodes.
+    
+    Acts as a facade for manipulating an underlying wxTreeCtrl.
+    For advanced customization, this wxTreeCtrl may be accessed through the `_peer` attribute.
+    
+    Automatically creates a root NodeView (accessible via the `root` attribute),
+    which will not be displayed 
+    """
+    
     def __init__(self, parent_peer):
         self._peer = wx.TreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
         
@@ -180,6 +187,22 @@ class TreeView(object):
         node_view._dispatch_event(event)
 
 class NodeView(object):
+    """
+    Node that is (or will be) in a TreeView.
+    
+    Acts as a facade for manipulating a wxTreeItemId in a wxTreeCtrl. Allows modifications even
+    if the underlying wxTreeItemId doesn't yet exist. For advanced customization, the wxTreeItemId
+    and wxTreeCtrl may be accessed through the `_peer` attribute (which is a `_NodeViewPeer`)).
+    
+    To receive events that occur on a NodeView, assign an object to the `delegate` attribute.
+    * For each event of interest, this object should implement methods of the signature:
+          def on_eventname(self, event)
+    * The `event` object passed to this method is a wx.Event object that can be inspected for more
+      information about the event.
+    * The full list of supported event names is given by
+      `_EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.values()`.
+    """
+    
     def __init__(self):
         self.delegate = None
         self._peer = None
