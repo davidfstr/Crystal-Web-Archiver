@@ -1,4 +1,4 @@
-# FIXME: Consider renaming this module to 'entitytree'
+# TODO: Consider renaming this module to 'entitytree'
 
 from collections import OrderedDict
 import threading
@@ -8,9 +8,14 @@ class EntityTree(object):
     def __init__(self, project, parent_peer):
         self.view = TreeView(parent_peer)
         self.root = RootNode(project, self.view.root)
+        
+        # TODO: Remove auto-testing code
+        self.view.expand(self.root.view.children[0].view)
 
 # ------------------------------------------------------------------------------
 # Nodes
+
+from crystal.model import Resource
 
 class Node(object):
     pass
@@ -39,13 +44,16 @@ class _ResourceNode(Node):
         self.resource = resource
         self.download_task = None
         self.links = None
+        
+        # FIXME: Move delegate association to Node constructor
+        # FIXME: Document the list of methods that Nodes can override to receive events
+        self.view.delegate = self
     
     @property
     def _project(self):
         return self.resource.project
     
-    # FIXME: Get view to call this appropriately
-    def node_did_expand(self):
+    def on_expanded(self, event):
         # If this is the first expansion attempt, start an asynchronous task to fetch
         # the resource and subsequently update the children
         if self.download_task is None:
@@ -55,7 +63,7 @@ class _ResourceNode(Node):
                 revision = self.download_task()
                 self.links = revision.links()
                 self._update_children()
-            threading.Thread(download_and_update_children).start()
+            threading.Thread(target=download_and_update_children).start()
     
     def _update_children(self):
         """
@@ -121,6 +129,17 @@ def _DEFAULT_FILE_ICON_SET():
         )
     return _DEFAULT_FILE_ICON_SET_CACHED
 
+# Maps wx.EVT_TREE_ITEM_* events to names of methods on `NodeView.delegate`
+# that will be called (if they exist) upon the reception of such an event.
+_EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR = {
+    wx.EVT_TREE_ITEM_EXPANDED: 'on_expanded',
+    # TODO: Consider adding support for additional wx.EVT_TREE_ITEM_* event types
+}
+_EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR = dict(zip(
+    [et.typeId for et in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR],
+    _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR.values()
+))
+
 class TreeView(object):
     def __init__(self, parent_peer):
         self._peer = wx.TreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
@@ -134,6 +153,10 @@ class TreeView(object):
         # Create root node's view
         self.root = NodeView()
         self.root._attach(_NodeViewPeer(self, self._peer.AddRoot('')))
+        
+        # Listen for events on peer
+        for event_type in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR:
+            self._peer.Bind(event_type, self._dispatch_event, self._peer)
     
     def get_image_id_for_bitmap(self, bitmap):
         """
@@ -146,9 +169,19 @@ class TreeView(object):
             image_id = self.tree_imagelist.Add(bitmap)
             self.bitmap_2_image_id[bitmap] = image_id
         return image_id
+    
+    def expand(self, node_view):
+        self._peer.Expand(node_view._peer.node_id)
+    
+    # Notified when any interesting event occurs on the peer
+    def _dispatch_event(self, event):
+        node_id = event.GetItem()
+        node_view = self._peer.GetPyData(node_id)
+        node_view._dispatch_event(event)
 
 class NodeView(object):
     def __init__(self):
+        self.delegate = None
         self._peer = None
         self._title = ''
         self._expandable = False
@@ -213,11 +246,23 @@ class NodeView(object):
             raise ValueError('Already attached to a different peer.')
         self._peer = peer
         
+        # Enable navigation from peer back to this view
+        peer.SetPyData(self)
+        
         # Trigger property logic to update peer
         self.title = self.title
         self.expandable = self.expandable
         self.icon_set = self.icon_set
         self.children = self.children
+    
+    # Called when a wx.EVT_TREE_ITEM_* event occurs on this node
+    def _dispatch_event(self, event):
+        if not self.delegate:
+            return
+        event_type_id = event.GetEventType()
+        delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
+        if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
+            getattr(self.delegate, delegate_callable_attr)(event)
 
 class _NodeViewPeer(tuple):
     def __new__(cls, tree, node_id):
@@ -236,6 +281,9 @@ class _NodeViewPeer(tuple):
     @property
     def node_id(self):
         return self[1]
+    
+    def SetPyData(self, obj):
+        self.tree_peer.SetPyData(self.node_id, obj)
     
     def SetItemText(self, text):
         self.tree_peer.SetItemText(self.node_id, text)
@@ -280,7 +328,7 @@ class simpleorderedset(object):
         return self.items.__iter__()
 
 class defaultordereddict(OrderedDict):
-    def __init__(default_factory=None):
+    def __init__(self, default_factory=None):
         self.default_factory = default_factory
     
     def __missing__(self, key):
