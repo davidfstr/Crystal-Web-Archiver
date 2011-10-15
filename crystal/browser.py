@@ -100,29 +100,59 @@ class LinkedResourceNode(_ResourceNode):
 
 import wx
 
+_DEFAULT_TREE_ICON_SIZE = (16,16)
+
+_DEFAULT_FOLDER_ICON_SET_CACHED = None
+def _DEFAULT_FOLDER_ICON_SET():
+    global _DEFAULT_FOLDER_ICON_SET_CACHED  # necessary to write to a module global
+    if not _DEFAULT_FOLDER_ICON_SET_CACHED:
+        _DEFAULT_FOLDER_ICON_SET_CACHED = (
+            (wx.TreeItemIcon_Normal,   wx.ArtProvider_GetBitmap(wx.ART_FOLDER,      wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
+            (wx.TreeItemIcon_Expanded, wx.ArtProvider_GetBitmap(wx.ART_FILE_OPEN,   wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
+        )
+    return _DEFAULT_FOLDER_ICON_SET_CACHED
+
+_DEFAULT_FILE_ICON_SET_CACHED = None
+def _DEFAULT_FILE_ICON_SET():
+    global _DEFAULT_FILE_ICON_SET_CACHED    # necessary to write to a module global
+    if not _DEFAULT_FILE_ICON_SET_CACHED:
+        _DEFAULT_FILE_ICON_SET_CACHED = (
+            (wx.TreeItemIcon_Normal,   wx.ArtProvider_GetBitmap(wx.ART_NORMAL_FILE, wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
+        )
+    return _DEFAULT_FILE_ICON_SET_CACHED
+
 class TreeView(object):
     def __init__(self, parent_peer):
         self._peer = wx.TreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
         
-        tree_icon_size = (16,16)
-        tree_icon_list = wx.ImageList(tree_icon_size[0], tree_icon_size[1])
-        self.folder_closed_icon  = tree_icon_list.Add(wx.ArtProvider_GetBitmap(wx.ART_FOLDER,        wx.ART_OTHER, tree_icon_size))
-        self.folder_open_icon    = tree_icon_list.Add(wx.ArtProvider_GetBitmap(wx.ART_FILE_OPEN,     wx.ART_OTHER, tree_icon_size))
-        self.file_icon           = tree_icon_list.Add(wx.ArtProvider_GetBitmap(wx.ART_NORMAL_FILE,   wx.ART_OTHER, tree_icon_size))
-        self._peer.AssignImageList(tree_icon_list)
+        # Setup node image registration
+        self.bitmap_2_image_id = dict()
+        tree_icon_size = _DEFAULT_TREE_ICON_SIZE
+        self.tree_imagelist = wx.ImageList(tree_icon_size[0], tree_icon_size[1])
+        self._peer.AssignImageList(self.tree_imagelist)
         
+        # Create root node's view
         self.root = NodeView()
         self.root._attach(_NodeViewPeer(self, self._peer.AddRoot('')))
     
-    def _configure_node_icon(self, node_peer):
-        node_peer.SetItemImage(self.folder_closed_icon, wx.TreeItemIcon_Normal)
-        node_peer.SetItemImage(self.folder_open_icon, wx.TreeItemIcon_Expanded)
+    def get_image_id_for_bitmap(self, bitmap):
+        """
+        Given a wx.Bitmap, returns an image ID suitable to use as an node icon.
+        Calling this multiple times with the same wx.Bitmap will return the same image ID.
+        """
+        if bitmap in self.bitmap_2_image_id:
+            image_id = self.bitmap_2_image_id[bitmap]
+        else:
+            image_id = self.tree_imagelist.Add(bitmap)
+            self.bitmap_2_image_id[bitmap] = image_id
+        return image_id
 
 class NodeView(object):
     def __init__(self):
         self._peer = None
         self._title = ''
         self._expandable = False
+        self._icon_set = None
         self._children = []
     
     def gettitle(self):
@@ -139,7 +169,26 @@ class NodeView(object):
         self._expandable = value
         if self._peer:
             self._peer.SetItemHasChildren(value)
+            # If using default icon set, force it to update since it depends on the expandable state
+            if self.icon_set is None:
+                self.icon_set = self.icon_set
     expandable = property(getexpandable, setexpandable)
+    
+    def geticon_set(self):
+        """
+        A sequence of (wx.TreeItemIcon, wx.Bitmap) tuples, specifying the set of icons applicable
+        to this node in various states. If None, then a default icon set is used, depending on
+        whether this node is expandable.
+        """
+        return self._icon_set
+    def seticon_set(self, value):
+        self._icon_set = value
+        if self._peer:
+            effective_value = value if value is not None else (
+                    _DEFAULT_FOLDER_ICON_SET() if self.expandable else _DEFAULT_FILE_ICON_SET())
+            for (which, bitmap) in effective_value:
+                self._peer.SetItemImage(self._tree.get_image_id_for_bitmap(bitmap), which)
+    icon_set = property(geticon_set, seticon_set)
     
     def getchildren(self):
         return self._children
@@ -153,6 +202,12 @@ class NodeView(object):
                 child.view._attach(_NodeViewPeer(self._peer.tree, self._peer.AppendItem('')))
     children = property(getchildren, setchildren)
     
+    @property
+    def _tree(self):
+        if not self._peer:
+            raise ValueError('Not attached to a tree.')
+        return self._peer.tree
+    
     def _attach(self, peer):
         if self._peer:
             raise ValueError('Already attached to a different peer.')
@@ -161,9 +216,8 @@ class NodeView(object):
         # Trigger property logic to update peer
         self.title = self.title
         self.expandable = self.expandable
+        self.icon_set = self.icon_set
         self.children = self.children
-        # TODO: NodeView should be handling its own icon configuration
-        self._peer.tree._configure_node_icon(self._peer)
 
 class _NodeViewPeer(tuple):
     def __new__(cls, tree, node_id):
