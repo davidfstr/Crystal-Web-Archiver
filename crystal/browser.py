@@ -142,28 +142,28 @@ class TreeView(object):
     Displays a tree of nodes.
     
     Acts as a facade for manipulating an underlying wxTreeCtrl.
-    For advanced customization, this wxTreeCtrl may be accessed through the `_peer` attribute.
+    For advanced customization, this wxTreeCtrl may be accessed through the `peer` attribute.
     
     Automatically creates a root NodeView (accessible via the `root` attribute),
     which will not be displayed 
     """
     
     def __init__(self, parent_peer):
-        self._peer = wx.TreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
+        self.peer = wx.TreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
         
         # Setup node image registration
         self.bitmap_2_image_id = dict()
         tree_icon_size = _DEFAULT_TREE_ICON_SIZE
         self.tree_imagelist = wx.ImageList(tree_icon_size[0], tree_icon_size[1])
-        self._peer.AssignImageList(self.tree_imagelist)
+        self.peer.AssignImageList(self.tree_imagelist)
         
         # Create root node's view
         self.root = NodeView()
-        self.root._attach(_NodeViewPeer(self, self._peer.AddRoot('')))
+        self.root._attach(NodeViewPeer(self, self.peer.AddRoot('')))
         
         # Listen for events on peer
         for event_type in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR:
-            self._peer.Bind(event_type, self._dispatch_event, self._peer)
+            self.peer.Bind(event_type, self._dispatch_event, self.peer)
     
     def get_image_id_for_bitmap(self, bitmap):
         """
@@ -178,12 +178,12 @@ class TreeView(object):
         return image_id
     
     def expand(self, node_view):
-        self._peer.Expand(node_view._peer.node_id)
+        self.peer.Expand(node_view.peer.node_id)
     
     # Notified when any interesting event occurs on the peer
     def _dispatch_event(self, event):
         node_id = event.GetItem()
-        node_view = self._peer.GetPyData(node_id)
+        node_view = self.peer.GetPyData(node_id)
         node_view._dispatch_event(event)
 
 class NodeView(object):
@@ -192,7 +192,7 @@ class NodeView(object):
     
     Acts as a facade for manipulating a wxTreeItemId in a wxTreeCtrl. Allows modifications even
     if the underlying wxTreeItemId doesn't yet exist. For advanced customization, the wxTreeItemId
-    and wxTreeCtrl may be accessed through the `_peer` attribute (which is a `_NodeViewPeer`)).
+    and wxTreeCtrl may be accessed through the `peer` attribute (which is a `NodeViewPeer`)).
     
     To receive events that occur on a NodeView, assign an object to the `delegate` attribute.
     * For each event of interest, this object should implement methods of the signature:
@@ -205,7 +205,7 @@ class NodeView(object):
     
     def __init__(self):
         self.delegate = None
-        self._peer = None
+        self.peer = None
         self._title = ''
         self._expandable = False
         self._icon_set = None
@@ -215,16 +215,16 @@ class NodeView(object):
         return self._title
     def settitle(self, value):
         self._title = value
-        if self._peer:
-            self._peer.SetItemText(value)
+        if self.peer:
+            self.peer.SetItemText(value)
     title = property(gettitle, settitle)
     
     def getexpandable(self):
         return self._expandable
     def setexpandable(self, value):
         self._expandable = value
-        if self._peer:
-            self._peer.SetItemHasChildren(value)
+        if self.peer:
+            self.peer.SetItemHasChildren(value)
             # If using default icon set, force it to update since it depends on the expandable state
             if self.icon_set is None:
                 self.icon_set = self.icon_set
@@ -239,35 +239,35 @@ class NodeView(object):
         return self._icon_set
     def seticon_set(self, value):
         self._icon_set = value
-        if self._peer:
+        if self.peer:
             effective_value = value if value is not None else (
                     _DEFAULT_FOLDER_ICON_SET() if self.expandable else _DEFAULT_FILE_ICON_SET())
             for (which, bitmap) in effective_value:
-                self._peer.SetItemImage(self._tree.get_image_id_for_bitmap(bitmap), which)
+                self.peer.SetItemImage(self._tree.get_image_id_for_bitmap(bitmap), which)
     icon_set = property(geticon_set, seticon_set)
     
     def getchildren(self):
         return self._children
     def setchildren(self, value):
         self._children = value
-        if self._peer:
-            if self._peer.GetFirstChild()[0].IsOk():
+        if self.peer:
+            if self.peer.GetFirstChild()[0].IsOk():
                 # TODO: Implement
                 raise NotImplementedError('Children list changed after original initialization.')
             for child in value:
-                child.view._attach(_NodeViewPeer(self._peer.tree, self._peer.AppendItem('')))
+                child.view._attach(NodeViewPeer(self.peer.tree, self.peer.AppendItem('')))
     children = property(getchildren, setchildren)
     
     @property
     def _tree(self):
-        if not self._peer:
+        if not self.peer:
             raise ValueError('Not attached to a tree.')
-        return self._peer.tree
+        return self.peer.tree
     
     def _attach(self, peer):
-        if self._peer:
+        if self.peer:
             raise ValueError('Already attached to a different peer.')
-        self._peer = peer
+        self.peer = peer
         
         # Enable navigation from peer back to this view
         peer.SetPyData(self)
@@ -287,7 +287,7 @@ class NodeView(object):
         if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
             getattr(self.delegate, delegate_callable_attr)(event)
 
-class _NodeViewPeer(tuple):
+class NodeViewPeer(tuple):
     def __new__(cls, tree, node_id):
         return tuple.__new__(cls, (tree, node_id))
     
@@ -299,7 +299,7 @@ class _NodeViewPeer(tuple):
     
     @property
     def tree_peer(self):
-        return self.tree._peer
+        return self.tree.peer
     
     @property
     def node_id(self):
