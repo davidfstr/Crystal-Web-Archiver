@@ -27,35 +27,34 @@ class LinkParser(object):
         
         links = []
         for tag in tags_with_src:
-            # TODO: Need to resolve URLs to be absolute
-            url = tag['src']
+            relative_url = tag['src']
             if tag.name == 'img':
                 title = LinkParser._get_image_tag_title(tag)
-                links.append(Link(url, title, 'Image', True))
+                links.append(Link(relative_url, 'Image', title, True))
             elif tag.name == 'frame':
                 title = tag['name'] if 'name' in tag.attrMap else None
-                links.append(Link(url, title, 'Frame', True))
+                links.append(Link(relative_url, 'Frame', title, True))
             elif tag.name == 'input' and 'type' in tag.attrMap and tag['type'] == 'image':
                 title = LinkParser._get_image_tag_title(tag)
-                links.append(Link(url, title, 'Form Image', True))
+                links.append(Link(relative_url, 'Form Image', title, True))
             else:
                 title = None
-                links.append(Link(url, title, 'Unknown Embedded (%s)' % (tag.name,), True))
+                links.append(Link(relative_url, 'Unknown Embedded (%s)' % tag.name, title, True))
         for tag in tags_with_href:
             # TODO: Need to resolve URLs to be absolute
-            url = tag['href']
+            relative_url = tag['href']
             if tag.name == 'a':
                 title = tag.string
-                links.append(Link(url, title, 'Link', False))
+                links.append(Link(relative_url, 'Link', title, False))
             elif tag.name == 'link' and (
                     ('rel' in tag.attrMap and tag['rel'] == 'stylesheet') or (
                      'type' in tag.attrMap and tag['type'] == 'text/css') or (
-                     url.endswith('.css'))):
+                     relative_url.endswith('.css'))):
                 title = None
-                links.append(Link(url, title, 'Stylesheet', True))
+                links.append(Link(relative_url, 'Stylesheet', title, True))
             else:
                 title = None
-                links.append(Link(url, title, 'Unknown (%s)' % (tag.name,), False))
+                links.append(Link(relative_url, 'Unknown (%s)' % tag.name, title, False))
         
         return links
     
@@ -69,17 +68,17 @@ class LinkParser(object):
             return None
 
 class Link(object):
-    def __init__(self, url, title, type_title, embedded):
+    def __init__(self, relative_url, type_title, title, embedded):
         """
         Arguments:
-        url - URL or URI referenced by this link.
-        title - displayed title for this link, or None.
+        relative_url - URL or URI referenced by this link, often relative.
         type_title - displayed title for this link's type.
+        title - displayed title for this link, or None.
         embedded - whether this link refers to an embedded resource.
         """
-        if url is None or type_title is None or embedded not in (True, False):
+        if relative_url is None or type_title is None or embedded not in (True, False):
             raise ValueError
-        self.url = url
+        self.relative_url = relative_url
         self.title = title
         self.type_title = type_title
         self.embedded = embedded
@@ -92,4 +91,4 @@ class Link(object):
             return '%s' % self.type_title
     
     def __repr__(self):
-        return 'Link(%s,%s,%s,%s)' % (repr(self.url), repr(self.title), repr(self.type_title), repr(self.embedded))
+        return 'Link(%s,%s,%s,%s)' % (repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))

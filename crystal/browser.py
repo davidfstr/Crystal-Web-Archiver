@@ -73,7 +73,7 @@ class _ResourceNode(Node):
             
             # Partition links and create resources
             for link in self.links:
-                resource = Resource(self._project, link.url)
+                resource = Resource(self._project, link.relative_url)
                 root_resource = self._project.find_root_resource(resource)
                 if root_resource is not None:
                     linked_root_resources.add(root_resource)
@@ -98,7 +98,8 @@ class RootResourceNode(_ResourceNode):
 
 class LinkedResourceNode(_ResourceNode):
     def __init__(self, resource, links):
-        title = ', '.join([link.full_title for link in links])
+        link_titles = ', '.join([link.full_title for link in links])
+        title = '%s - %s' % (resource.url, link_titles)
         super(LinkedResourceNode, self).__init__(title, resource)
 
 # ------------------------------------------------------------------------------
