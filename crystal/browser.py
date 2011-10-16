@@ -69,8 +69,14 @@ class _ResourceNode(Node):
             linked_root_resources = simpleorderedset()
             # TODO: Look for linked resource groups
             #linked_resource_groups = simpleorderedset()
-            # TODO: Partition less interesting resources into additional clusters (ex: self-reference, embedded, etc)
             linked_other_resources = defaultordereddict(list)
+            lowpri_offsite_resources = defaultordereddict(list)
+            # TODO: Recognize cluster: (Hidden: Banned by robots.txt)
+            # TODO: Recognize cluster: (Hidden: Self reference)
+            hidden_embedded_resources = defaultordereddict(list)
+            # TODO: Recognize cluster: (Hidden: Ignored Protocols: *)
+            
+            default_url_prefix = self._project.default_url_prefix
             
             # Partition links and create resources
             for link in self.links:
@@ -80,6 +86,10 @@ class _ResourceNode(Node):
                 root_resource = self._project.find_root_resource(resource)
                 if root_resource is not None:
                     linked_root_resources.add(root_resource)
+                elif default_url_prefix and not url.startswith(default_url_prefix):
+                    lowpri_offsite_resources[resource].append(link)
+                elif link.embedded:
+                    hidden_embedded_resources[resource].append(link)
                 else:
                     linked_other_resources[resource].append(link)
             
@@ -90,6 +100,16 @@ class _ResourceNode(Node):
                     children.append(RootResourceNode(rr))
                 for (r, links_to_r) in linked_other_resources.iteritems():
                     children.append(LinkedResourceNode(r, links_to_r))
+                if lowpri_offsite_resources:
+                    subchildren = []
+                    for (r, links_to_r) in lowpri_offsite_resources.iteritems():
+                        subchildren.append(LinkedResourceNode(r, links_to_r))
+                    children.append(ClusterNode('(Low-priority: Offsite)', subchildren))
+                if hidden_embedded_resources:
+                    subchildren = []
+                    for (r, links_to_r) in hidden_embedded_resources.iteritems():
+                        subchildren.append(LinkedResourceNode(r, links_to_r))
+                    children.append(ClusterNode('(Hidden: Embedded)', subchildren))
                 self.view.children = children
             ui_call_later(ui_task)
         self._project.db_call_later(db_task)
@@ -106,6 +126,15 @@ class LinkedResourceNode(_ResourceNode):
         link_titles = ', '.join([link.full_title for link in links])
         title = '%s - %s' % (project.get_display_url(resource.url), link_titles)
         super(LinkedResourceNode, self).__init__(title, resource)
+
+class ClusterNode(Node):
+    def __init__(self, title, children, icon_set=None):
+        self.view = NodeView()
+        self.view.icon_set = icon_set
+        self.view.title = title
+        self.view.expandable = True
+        self.view.children = children
+        self.view.delegate = self
 
 # ------------------------------------------------------------------------------
 # wxPython View Facade
