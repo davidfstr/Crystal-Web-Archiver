@@ -5,67 +5,63 @@ Tools for examining HTML resources.
 from BeautifulSoup import BeautifulSoup
 import re
 
-class LinkParser(object):
-    _any_re = re.compile(r'.*')
+_ANY_RE = re.compile(r'.*')
+
+def parse_links(html_bytes):
+    """
+    Parses and returns a list of `Link`s in the specified HTML bytestring.
+    """
+    # TODO: Pass in the hinted Content-Encoding HTTP header, if available,
+    #       to assist in determining the correct text encoding
+    try:
+        html = BeautifulSoup(html_bytes)
+    except Exception as e:
+        # TODO: Return the underlying exception as a warning
+        return []
     
-    # TODO: Promote to top-level function, since this class isn't carrying its weight
-    @staticmethod
-    def parse(html_bytes):
-        """
-        Parses and returns a list of `Link`s in the specified HTML bytestring.
-        """
-        # TODO: Pass in the hinted Content-Encoding HTTP header, if available,
-        #       to assist in determining the correct text encoding
-        try:
-            html = BeautifulSoup(html_bytes)
-        except Exception as e:
-            # TODO: Return the underlying exception as a warning
-            return []
-        
-        tags_with_src = html.findAll(LinkParser._any_re, src=LinkParser._any_re)
-        tags_with_href = html.findAll(LinkParser._any_re, href=LinkParser._any_re)
-        
-        links = []
-        for tag in tags_with_src:
-            relative_url = tag['src']
-            if tag.name == 'img':
-                title = LinkParser._get_image_tag_title(tag)
-                links.append(Link(relative_url, 'Image', title, True))
-            elif tag.name == 'frame':
-                title = tag['name'] if 'name' in tag.attrMap else None
-                links.append(Link(relative_url, 'Frame', title, True))
-            elif tag.name == 'input' and 'type' in tag.attrMap and tag['type'] == 'image':
-                title = LinkParser._get_image_tag_title(tag)
-                links.append(Link(relative_url, 'Form Image', title, True))
-            else:
-                title = None
-                links.append(Link(relative_url, 'Unknown Embedded (%s)' % tag.name, title, True))
-        for tag in tags_with_href:
-            # TODO: Need to resolve URLs to be absolute
-            relative_url = tag['href']
-            if tag.name == 'a':
-                title = tag.string
-                links.append(Link(relative_url, 'Link', title, False))
-            elif tag.name == 'link' and (
-                    ('rel' in tag.attrMap and tag['rel'] == 'stylesheet') or (
-                     'type' in tag.attrMap and tag['type'] == 'text/css') or (
-                     relative_url.endswith('.css'))):
-                title = None
-                links.append(Link(relative_url, 'Stylesheet', title, True))
-            else:
-                title = None
-                links.append(Link(relative_url, 'Unknown (%s)' % tag.name, title, False))
-        
-        return links
+    tags_with_src = html.findAll(_ANY_RE, src=_ANY_RE)
+    tags_with_href = html.findAll(_ANY_RE, href=_ANY_RE)
     
-    @staticmethod
-    def _get_image_tag_title(tag):
-        if 'alt' in tag.attrMap:
-            return tag['alt']
-        elif 'title' in tag.attrMap:
-            return tag['title']
+    links = []
+    for tag in tags_with_src:
+        relative_url = tag['src']
+        if tag.name == 'img':
+            title = _get_image_tag_title(tag)
+            links.append(Link(relative_url, 'Image', title, True))
+        elif tag.name == 'frame':
+            title = tag['name'] if 'name' in tag.attrMap else None
+            links.append(Link(relative_url, 'Frame', title, True))
+        elif tag.name == 'input' and 'type' in tag.attrMap and tag['type'] == 'image':
+            title = _get_image_tag_title(tag)
+            links.append(Link(relative_url, 'Form Image', title, True))
         else:
-            return None
+            title = None
+            links.append(Link(relative_url, 'Unknown Embedded (%s)' % tag.name, title, True))
+    for tag in tags_with_href:
+        # TODO: Need to resolve URLs to be absolute
+        relative_url = tag['href']
+        if tag.name == 'a':
+            title = tag.string
+            links.append(Link(relative_url, 'Link', title, False))
+        elif tag.name == 'link' and (
+                ('rel' in tag.attrMap and tag['rel'] == 'stylesheet') or (
+                 'type' in tag.attrMap and tag['type'] == 'text/css') or (
+                 relative_url.endswith('.css'))):
+            title = None
+            links.append(Link(relative_url, 'Stylesheet', title, True))
+        else:
+            title = None
+            links.append(Link(relative_url, 'Unknown (%s)' % tag.name, title, False))
+    
+    return links
+
+def _get_image_tag_title(tag):
+    if 'alt' in tag.attrMap:
+        return tag['alt']
+    elif 'title' in tag.attrMap:
+        return tag['title']
+    else:
+        return None
 
 class Link(object):
     def __init__(self, relative_url, type_title, title, embedded):

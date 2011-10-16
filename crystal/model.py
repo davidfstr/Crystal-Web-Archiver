@@ -272,8 +272,8 @@ class ResourceRevision(object):
     def links(self):
         """Returns list of `Link`s found in this resource."""
         # Extract links from HTML, if applicable
-        from crystal.html import LinkParser, Link
-        links = LinkParser.parse(self._body) if self.is_html else []
+        from crystal.html import parse_links, Link
+        links = parse_links(self._body) if self.is_html else []
         
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url
