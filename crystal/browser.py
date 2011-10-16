@@ -1,7 +1,3 @@
-from collections import OrderedDict
-import threading
-import wx
-
 class EntityTree(object):
     def __init__(self, project, parent_peer):
         self.view = TreeView(parent_peer)
@@ -14,6 +10,8 @@ class EntityTree(object):
 # Nodes
 
 from crystal.model import Resource
+from crystal.ui import ui_call_later
+import threading
 
 class Node(object):
     pass
@@ -65,28 +63,33 @@ class _ResourceNode(Node):
         Updates this node's children.
         Should be called whenever project entities change or the underlying resource's links change.
         """
-        linked_root_resources = simpleorderedset()
-        # TODO: Look for linked resource groups
-        #linked_resource_groups = simpleorderedset()
-        # TODO: Partition less interesting resources into additional clusters (ex: self-reference, embedded, etc)
-        linked_other_resources = defaultordereddict(list)
         
-        # Partition links
-        for link in self.links:
-            resource = Resource(self._project, link.url)
-            root_resource = self._project.find_root_resource(resource)
-            if root_resource is not None:
-                linked_root_resources.add(root_resource)
-            else:
-                linked_other_resources[resource].append(link)
-        
-        # Create children
-        children = []
-        for rr in linked_root_resources:
-            children.append(RootResourceNode(rr))
-        for (r, links_to_r) in linked_other_resources:
-            children.append(LinkedResourceNode(r, links_to_r))
-        self.view.children = children
+        def db_task():
+            linked_root_resources = simpleorderedset()
+            # TODO: Look for linked resource groups
+            #linked_resource_groups = simpleorderedset()
+            # TODO: Partition less interesting resources into additional clusters (ex: self-reference, embedded, etc)
+            linked_other_resources = defaultordereddict(list)
+            
+            # Partition links and create resources
+            for link in self.links:
+                resource = Resource(self._project, link.url)
+                root_resource = self._project.find_root_resource(resource)
+                if root_resource is not None:
+                    linked_root_resources.add(root_resource)
+                else:
+                    linked_other_resources[resource].append(link)
+            
+            def ui_task():
+                # Create children and update UI
+                children = []
+                for rr in linked_root_resources:
+                    children.append(RootResourceNode(rr))
+                for (r, links_to_r) in linked_other_resources.iteritems():
+                    children.append(LinkedResourceNode(r, links_to_r))
+                self.view.children = children
+            ui_call_later(ui_task)
+        self._project.db_call_later(db_task)
 
 class RootResourceNode(_ResourceNode):
     def __init__(self, root_resource):
@@ -95,8 +98,8 @@ class RootResourceNode(_ResourceNode):
 
 class LinkedResourceNode(_ResourceNode):
     def __init__(self, resource, links):
-        title = [link.title for link in links].join(', ')
-        super(LinkedResourceNode, self).__init__(title, root_resource.resource)
+        title = ', '.join([link.full_title for link in links])
+        super(LinkedResourceNode, self).__init__(title, resource)
 
 # ------------------------------------------------------------------------------
 # wxPython View Facade
@@ -325,6 +328,8 @@ class NodeViewPeer(tuple):
 # Collection Utilities
 # TODO: Extract to own module
 
+from collections import OrderedDict
+
 class simpleorderedset(object):
     """Ordered set that supports a limited set of operations."""
     
@@ -350,18 +355,21 @@ class simpleorderedset(object):
 
 class defaultordereddict(OrderedDict):
     def __init__(self, default_factory=None):
+        super(defaultordereddict, self).__init__()
         self.default_factory = default_factory
     
     def __missing__(self, key):
         if self.default_factory is None:
             raise KeyError(key)
-        return self.default_factory()
+        value = self.default_factory()
+        self[key] = value
+        return value
 
 # ------------------------------------------------------------------------------
 
 # Informal unit test
 def _test(project):
-    app = wx.App(False)
+    from crystal.ui import APP as app
     frame = wx.Frame(None, title='Frame', size=(500,300))
     et = EntityTree(project, frame)
     frame.Show(True)

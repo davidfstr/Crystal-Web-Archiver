@@ -84,5 +84,12 @@ class Link(object):
         self.type_title = type_title
         self.embedded = embedded
     
+    @property
+    def full_title(self):
+        if self.title:
+            return '%s: %s' % (self.type_title, self.title)
+        else:
+            return '%s' % self.type_title
+    
     def __repr__(self):
         return 'Link(%s,%s,%s,%s)' % (repr(self.url), repr(self.title), repr(self.type_title), repr(self.embedded))
