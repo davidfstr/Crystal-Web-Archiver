@@ -12,6 +12,7 @@ class EntityTree(object):
 from crystal.model import Resource
 from crystal.ui import ui_call_later
 import threading
+import urlparse
 
 class Node(object):
     pass
@@ -73,7 +74,9 @@ class _ResourceNode(Node):
             
             # Partition links and create resources
             for link in self.links:
-                resource = Resource(self._project, link.relative_url)
+                url = urlparse.urljoin(self.resource.url, link.relative_url)
+                resource = Resource(self._project, url)
+                
                 root_resource = self._project.find_root_resource(resource)
                 if root_resource is not None:
                     linked_root_resources.add(root_resource)
