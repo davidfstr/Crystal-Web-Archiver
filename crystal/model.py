@@ -35,6 +35,7 @@ class Project(object):
         self._properties = dict()               # <key, value>
         self._resources = OrderedDict()         # <url, Resource>
         self._root_resources = OrderedDict()    # <Resource, RootResource>
+        self._resource_groups = []              # <ResourceGroup>
         
         self._loading = True
         try:
@@ -50,6 +51,8 @@ class Project(object):
                 for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
                     resource = [r for r in self._resources.values() if r._id == resource_id][0] # PERF
                     RootResource(self, name, resource, _id=id)
+                for (name, url_pattern, id) in c.execute('select name, url_pattern, id from resource_group'):
+                    ResourceGroup(self, name, url_pattern, _id=id)
             else:
                 # Create new project
                 os.mkdir(path)
@@ -60,6 +63,7 @@ class Project(object):
                 c.execute('create table project_property (name text unique not null, value text not null)')
                 c.execute('create table resource (id integer primary key, url text unique not null)')
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
+                c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null)')
         finally:
             self._loading = False
     
@@ -119,6 +123,16 @@ class Project(object):
     def find_root_resource(self, resource):
         """Returns the `RootResource` with the specified `Resource` or None if none exists."""
         return self._root_resources.get(resource, None)
+    
+    @property
+    def resource_groups(self):
+        return self._resource_groups
+    
+    def get_resource_group(self, name):
+        for rg in self._resource_groups:
+            if rg.name == name:
+                return rg
+        return None
 
 class CrossProjectReferenceError(Exception):
     pass
@@ -317,3 +331,29 @@ class ResourceRevision(object):
             links.append(Link(redirect_url, self._redirect_title, 'Redirect', True))
         
         return links
+
+class ResourceGroup(object):
+    """
+    Groups resource whose url matches a particular pattern.
+    Persisted and auto-saved.
+    """
+    
+    def __init__(self, project, name, url_pattern, _id=None):
+        """
+        Arguments:
+        project -- associated `Project`.
+        name -- name of this group.
+        url_pattern -- url pattern matched by this group.
+        """
+        self.project = project
+        self.name = name
+        self.url_pattern = url_pattern
+        
+        if project._loading:
+            self._id = _id
+        else:
+            c = project._db.cursor()
+            c.execute('insert into resource_group (name, url_pattern) values (?, ?)', (name, url_pattern))
+            project._db.commit()
+            self._id = c.lastrowid
+        project._resource_groups.append(self)
