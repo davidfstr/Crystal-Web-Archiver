@@ -1,5 +1,3 @@
-# TODO: Consider renaming this module to 'entitytree'
-
 from collections import OrderedDict
 import threading
 import wx
@@ -255,14 +253,14 @@ class NodeView(object):
                 # TODO: Implement
                 raise NotImplementedError('Children list changed after original initialization.')
             for child in value:
-                child.view._attach(NodeViewPeer(self.peer.tree, self.peer.AppendItem('')))
+                child.view._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
     children = property(getchildren, setchildren)
     
     @property
     def _tree(self):
         if not self.peer:
             raise ValueError('Not attached to a tree.')
-        return self.peer.tree
+        return self.peer._tree
     
     def _attach(self, peer):
         if self.peer:
@@ -294,12 +292,12 @@ class NodeViewPeer(tuple):
     # TODO: Only the 'tree_peer' should be stored.
     #       Remove use of this property and update constructor.
     @property
-    def tree(self):
+    def _tree(self):
         return self[0]
     
     @property
     def tree_peer(self):
-        return self.tree.peer
+        return self._tree.peer
     
     @property
     def node_id(self):
