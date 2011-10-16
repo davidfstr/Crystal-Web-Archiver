@@ -54,16 +54,18 @@ class _ResourceNode(Node):
         if self.download_task is None:
             self.download_task = self.resource.download_self()
             
-            def download_and_update_children():
+            def bg_task():
                 revision = self.download_task()
                 self.links = revision.links()
                 self._update_children()
-            threading.Thread(target=download_and_update_children).start()
+            threading.Thread(target=bg_task).start()
     
     def _update_children(self):
         """
         Updates this node's children.
         Should be called whenever project entities change or the underlying resource's links change.
+        
+        May be called from any thread.
         """
         
         def db_task():
