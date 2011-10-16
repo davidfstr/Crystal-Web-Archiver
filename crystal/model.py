@@ -85,15 +85,15 @@ class Project(object):
             self._db.commit()
         self._properties[name] = value
     
-    def getdefault_url_prefix(self):
+    def _get_default_url_prefix(self):
         """
         URL prefix for the majority of this project's resource URLs.
         The UI will display resources under this prefix as relative URLs.
         """
         return self._get_property('default_url_prefix', None)
-    def setdefault_url_prefix(self, value):
+    def _set_default_url_prefix(self, value):
         self._set_property('default_url_prefix', value)
-    default_url_prefix = property(getdefault_url_prefix, setdefault_url_prefix)
+    default_url_prefix = property(_get_default_url_prefix, _set_default_url_prefix)
     
     def get_display_url(self, url):
         """

@@ -247,44 +247,44 @@ class NodeView(object):
         self._icon_set = None
         self._children = []
     
-    def gettitle(self):
+    def _get_title(self):
         return self._title
-    def settitle(self, value):
+    def _set_title(self, value):
         self._title = value
         if self.peer:
             self.peer.SetItemText(value)
-    title = property(gettitle, settitle)
+    title = property(_get_title, _set_title)
     
-    def getexpandable(self):
+    def _get_expandable(self):
         return self._expandable
-    def setexpandable(self, value):
+    def _set_expandable(self, value):
         self._expandable = value
         if self.peer:
             self.peer.SetItemHasChildren(value)
             # If using default icon set, force it to update since it depends on the expandable state
             if self.icon_set is None:
                 self.icon_set = self.icon_set
-    expandable = property(getexpandable, setexpandable)
+    expandable = property(_get_expandable, _set_expandable)
     
-    def geticon_set(self):
+    def _get_icon_set(self):
         """
         A sequence of (wx.TreeItemIcon, wx.Bitmap) tuples, specifying the set of icons applicable
         to this node in various states. If None, then a default icon set is used, depending on
         whether this node is expandable.
         """
         return self._icon_set
-    def seticon_set(self, value):
+    def _set_icon_set(self, value):
         self._icon_set = value
         if self.peer:
             effective_value = value if value is not None else (
                     _DEFAULT_FOLDER_ICON_SET() if self.expandable else _DEFAULT_FILE_ICON_SET())
             for (which, bitmap) in effective_value:
                 self.peer.SetItemImage(self._tree.get_image_id_for_bitmap(bitmap), which)
-    icon_set = property(geticon_set, seticon_set)
+    icon_set = property(_get_icon_set, _set_icon_set)
     
-    def getchildren(self):
+    def _get_children(self):
         return self._children
-    def setchildren(self, value):
+    def _set_children(self, value):
         self._children = value
         if self.peer:
             if self.peer.GetFirstChild()[0].IsOk():
@@ -292,7 +292,7 @@ class NodeView(object):
                 raise NotImplementedError('Children list changed after original initialization.')
             for child in value:
                 child.view._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
-    children = property(getchildren, setchildren)
+    children = property(_get_children, _set_children)
     
     @property
     def _tree(self):

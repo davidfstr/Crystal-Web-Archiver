@@ -5,13 +5,13 @@ import urllib2
 from urlparse import urlparse
 
 class Task(object):
-    def getsubtitle(self):
+    def _get_subtitle(self):
         return self._subtitle
-    def setsubtitle(self, value):
+    def _set_subtitle(self, value):
         # TODO: Display updates in GUI instead of CLI
         print '-> %s' % (value,)
         self._subtitle = value
-    subtitle = property(getsubtitle, setsubtitle)
+    subtitle = property(_get_subtitle, _set_subtitle)
 
 class ResourceDownloadTask(Task):
     def __init__(self, resource):
