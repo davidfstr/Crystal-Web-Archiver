@@ -8,6 +8,7 @@ Unless otherwise specified, all changes to models are auto-saved.
 from collections import OrderedDict
 import mimetypes
 import os
+import re
 import sqlite3
 
 class Project(object):
@@ -348,6 +349,7 @@ class ResourceGroup(object):
         self.project = project
         self.name = name
         self.url_pattern = url_pattern
+        self._url_pattern_re = ResourceGroup._url_pattern_to_re(url_pattern)
         
         if project._loading:
             self._id = _id
@@ -357,3 +359,27 @@ class ResourceGroup(object):
             project._db.commit()
             self._id = c.lastrowid
         project._resource_groups.append(self)
+    
+    @staticmethod
+    def _url_pattern_to_re(url_pattern):
+        """Converts a url pattern to a regex which matches it."""
+        
+        # Escape regex characters
+        patstr = re.escape(url_pattern)
+        
+        # Replace metacharacters with tokens
+        patstr = patstr.replace(r'\*\*', r'$**$')
+        patstr = patstr.replace(r'\*', r'$*$')
+        patstr = patstr.replace(r'\#', r'$#$')
+        patstr = patstr.replace(r'\@', r'$@$')
+        
+        # Replace tokens
+        patstr = patstr.replace(r'$**$', r'.*')
+        patstr = patstr.replace(r'$*$', r'[^/?=&]*')
+        patstr = patstr.replace(r'$#$', r'[0-9]+')
+        patstr = patstr.replace(r'$@$', r'[a-zA-Z]+')
+        
+        return re.compile(r'^' + patstr + r'$')
+    
+    def __contains__(self, resource):
+        return self._url_pattern_re.match(resource.url) is not None
