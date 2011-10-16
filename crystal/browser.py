@@ -96,13 +96,15 @@ class _ResourceNode(Node):
 
 class RootResourceNode(_ResourceNode):
     def __init__(self, root_resource):
-        title = '%s - %s' % (root_resource.url, root_resource.name)
+        project = root_resource.project
+        title = '%s - %s' % (project.get_display_url(root_resource.url), root_resource.name)
         super(RootResourceNode, self).__init__(title, root_resource.resource)
 
 class LinkedResourceNode(_ResourceNode):
     def __init__(self, resource, links):
+        project = resource.project
         link_titles = ', '.join([link.full_title for link in links])
-        title = '%s - %s' % (resource.url, link_titles)
+        title = '%s - %s' % (project.get_display_url(resource.url), link_titles)
         super(LinkedResourceNode, self).__init__(title, resource)
 
 # ------------------------------------------------------------------------------

@@ -32,6 +32,7 @@ class Project(object):
         """
         self.path = path
         
+        self._properties = dict()               # <key, value>
         self._resources = OrderedDict()         # <url, Resource>
         self._root_resources = OrderedDict()    # <Resource, RootResource>
         
@@ -42,6 +43,8 @@ class Project(object):
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
                 c = self._db.cursor()
+                for (name, value) in c.execute('select name, value from project_property'):
+                    self._set_property(name, value)
                 for (url, id) in c.execute('select url, id from resource'):
                     Resource(self, url, _id=id)
                 for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
@@ -54,6 +57,7 @@ class Project(object):
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
                 c = self._db.cursor()
+                c.execute('create table project_property (name text unique not null, value text not null)')
                 c.execute('create table resource (id integer primary key, url text unique not null)')
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
         finally:
@@ -71,6 +75,38 @@ class Project(object):
         # so use the queuing infrastructure for the UI thread.
         from crystal.ui import ui_call_later
         ui_call_later(callable)
+    
+    def _get_property(self, name, default):
+        return self._properties.get(name, default)
+    def _set_property(self, name, value):
+        if not self._loading:
+            c = self._db.cursor()
+            c.execute('insert or replace into project_property (name, value) values (?, ?)', (name, value))
+            self._db.commit()
+        self._properties[name] = value
+    
+    def getdefault_url_prefix(self):
+        """
+        URL prefix for the majority of this project's resource URLs.
+        The UI will display resources under this prefix as relative URLs.
+        """
+        return self._get_property('default_url_prefix', None)
+    def setdefault_url_prefix(self, value):
+        self._set_property('default_url_prefix', value)
+    default_url_prefix = property(getdefault_url_prefix, setdefault_url_prefix)
+    
+    def get_display_url(self, url):
+        """
+        Returns a displayable version of the provided URL.
+        If the URL lies under the configured `default_url_prefix`, that prefix will be stripped.
+        """
+        default_url_prefix = self.default_url_prefix
+        if default_url_prefix is None:
+            return url
+        if url.startswith(default_url_prefix):
+            return url[len(default_url_prefix):]
+        else:
+            return url
     
     @property
     def resources(self):
