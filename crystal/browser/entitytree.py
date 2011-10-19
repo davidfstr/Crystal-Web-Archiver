@@ -9,12 +9,18 @@ class EntityTree(object):
     """
     Displays a tree of top-level project entities.
     """
-    def __init__(self, project, parent_peer):
+    def __init__(self, parent_peer, project):
         self.view = TreeView(parent_peer)
         self.root = RootNode(project, self.view.root)
         
+        self.peer.SetInitialSize((550, 300))
+        
         # TODO: Remove auto-testing code
-        self.view.expand(self.root.view.children[0].view)
+        #self.view.expand(self.root.view.children[0].view)
+    
+    @property
+    def peer(self):
+        return self.view.peer
 
 class Node(object):
     pass
