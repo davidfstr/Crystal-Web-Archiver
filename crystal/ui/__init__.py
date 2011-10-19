@@ -23,6 +23,10 @@ class _BoxMixin:
     Mixin for wx.Window subclasses that manage an internal wx.BoxSizer.
     """
     def __init__(self, orient):
+        """
+        Arguments:
+        orient -- layout direction. Either wx.HORIZONTAL or wx.VERTICAL.
+        """
         self.sizer = wx.BoxSizer(orient)
         self.SetSizer(self.sizer)
     
@@ -52,7 +56,35 @@ class BoxPanel(wx.Panel, _BoxMixin):
     
     Most UIs can be constructed with nested boxes.
     """
-    
     def __init__(self, parent, orient, *args, **kwargs):
+        """
+        Arguments:
+        parent -- parent wx.Window.
+        orient -- layout direction. Either wx.HORIZONTAL or wx.VERTICAL.
+        """
         wx.Panel.__init__(self, parent, *args, **kwargs)
         _BoxMixin.__init__(self, orient)
+
+class PaddedPanel(object):
+    """
+    Panel that has a fixed size border around its single child.
+    """
+    def __new__(cls, parent, padding, create_child):
+        """
+        Arguments:
+        parent -- parent wx.Window.
+        padding -- number of padding pixels around all sides of the child.
+        create_child -- function(parent : wx.Window) that creates this panel's child.
+        """
+        def create_content_inner(parent):
+            content_inner = BoxPanel(parent, wx.VERTICAL)
+            content_inner.AddSpacer(padding)
+            content_inner.Add(create_child(content_inner), proportion=1, flag=wx.EXPAND)
+            content_inner.AddSpacer(padding)
+            return content_inner
+        
+        content = BoxPanel(parent, wx.HORIZONTAL)
+        content.AddSpacer(padding)
+        content.Add(create_content_inner(content), proportion=1, flag=wx.EXPAND)
+        content.AddSpacer(padding)
+        return content
