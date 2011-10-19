@@ -2,11 +2,7 @@
 Contains utility functions for manipulating the UI.
 """
 
-# Initialize wx, if not already done
 import wx
-
-# Single global app object
-APP = wx.PySimpleApp()
 
 def ui_call_later(callable):
     """
