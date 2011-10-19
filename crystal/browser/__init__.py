@@ -1,4 +1,5 @@
 from crystal.browser.entitytree import EntityTree
+from crystal.ui import BoxPanel
 import wx
 
 _DIALOG_INNER_PADDING = 10
@@ -54,26 +55,3 @@ class MainWindow(object):
         content.AddSpacer(_DIALOG_INNER_PADDING)
         content.Add(create_button_bar(content), flag=wx.EXPAND)
         return content
-
-# ------------------------------------------------------------------------------
-
-class _BoxMixin:
-    def __init__(self, orient):
-        self.sizer = wx.BoxSizer(orient)
-        self.SetSizer(self.sizer)
-    
-    def Add(self, child, *args, **kwargs):
-        if child.GetParent() is not self:
-            raise ValueError('Child not initialized with correct parent.')
-        self.sizer.Add(child, *args, **kwargs)
-    
-    def AddSpacer(self, size):
-        return self.sizer.AddSpacer(size)
-    
-    def AddStretchSpacer(self, *args, **kwargs):
-        return self.sizer.AddStretchSpacer(*args, **kwargs)
-
-class BoxPanel(wx.Panel, _BoxMixin):
-    def __init__(self, parent, orient, *args, **kwargs):
-        wx.Panel.__init__(self, parent, *args, **kwargs)
-        _BoxMixin.__init__(self, orient)

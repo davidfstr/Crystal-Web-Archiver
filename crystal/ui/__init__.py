@@ -17,3 +17,42 @@ def ui_call_later(callable):
         callable()
     else:
         wx.CallAfter(callable)
+
+class _BoxMixin:
+    """
+    Mixin for wx.Window subclasses that manage an internal wx.BoxSizer.
+    """
+    def __init__(self, orient):
+        self.sizer = wx.BoxSizer(orient)
+        self.SetSizer(self.sizer)
+    
+    def Add(self, child, *args, **kwargs):
+        """
+        Adds the specified child to this container's sizer.
+        """
+        if child.GetParent() is not self:
+            raise ValueError('Child not initialized with correct parent.')
+        self.sizer.Add(child, *args, **kwargs)
+    
+    def AddSpacer(self, size):
+        """
+        Adds a fixed-size spacer of the specified size.
+        """
+        return self.sizer.AddSpacer(size)
+    
+    def AddStretchSpacer(self, *args, **kwargs):
+        """
+        Adds a variable-size spacer.
+        """
+        return self.sizer.AddStretchSpacer(*args, **kwargs)
+
+class BoxPanel(wx.Panel, _BoxMixin):
+    """
+    Subclass of wx.Panel that has an automatically configured wx.BoxSizer.
+    
+    Most UIs can be constructed with nested boxes.
+    """
+    
+    def __init__(self, parent, orient, *args, **kwargs):
+        wx.Panel.__init__(self, parent, *args, **kwargs)
+        _BoxMixin.__init__(self, orient)
