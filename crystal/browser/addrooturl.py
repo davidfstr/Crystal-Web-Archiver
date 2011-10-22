@@ -1,4 +1,3 @@
-from crystal.ui import BoxPanel, PaddedPanel
 import wx
 
 _WINDOW_INNER_PADDING = 10
