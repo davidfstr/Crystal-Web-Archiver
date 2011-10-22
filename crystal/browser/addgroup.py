@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+
+import sys
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -10,7 +13,24 @@ class AddGroupDialog(object):
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         
-        frame_sizer.Add(self._create_fields(frame), flag=wx.EXPAND|wx.ALL,
+        # Mac: Requires wx 2.9 to appear in native look & feel
+        preview_box = wx.CollapsiblePane(frame, label='Preview')
+        preview_box_root = preview_box.GetPane()
+        preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
+        preview_box_root.SetSizer(preview_box_root_sizer)
+        preview_box_root_sizer.SetSizeHints(preview_box_root)
+        
+        url_list = wx.ListBox(preview_box_root, style=wx.LB_ALWAYS_SB, size=(-1,150))
+        url_list.InsertItems(['<url 1>', '<url 2>'], 0)
+        
+        preview_box_root_sizer.Add(wx.StaticText(preview_box_root, label='Known matching URLs:'), flag=wx.EXPAND)
+        preview_box_root_sizer.Add(url_list, flag=wx.EXPAND)
+        
+        content_sizer = wx.BoxSizer(wx.VERTICAL)
+        content_sizer.Add(self._create_fields(frame), flag=wx.EXPAND)
+        content_sizer.Add(preview_box, flag=wx.EXPAND)
+        
+        frame_sizer.Add(content_sizer, flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         frame_sizer.Add(frame.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
