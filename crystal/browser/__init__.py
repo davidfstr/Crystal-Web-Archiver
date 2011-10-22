@@ -9,18 +9,20 @@ class MainWindow(object):
         self.project = project
         
         frame = wx.Frame(None, title='Crystal')
+        frame_sizer = wx.BoxSizer(wx.VERTICAL)
+        frame.SetSizer(frame_sizer)
         
-        PaddedPanel(frame, _WINDOW_INNER_PADDING, self._create_content)
+        frame_sizer.Add(self._create_content(frame), flag=wx.EXPAND|wx.ALL, border=_WINDOW_INNER_PADDING)
         
-        frame.GetChildren()[0].Fit(); frame.Fit()
+        frame.Fit()
         frame.Show(True)
     
     def _create_content(self, parent):
-        content = BoxPanel(parent, wx.VERTICAL)
-        content.Add(self._create_entity_tree(content), proportion=1, flag=wx.EXPAND)
-        content.AddSpacer(_WINDOW_INNER_PADDING)
-        content.Add(self._create_button_bar(content), flag=wx.EXPAND)
-        return content
+        content_sizer = wx.BoxSizer(wx.VERTICAL)
+        content_sizer.Add(self._create_entity_tree(parent), proportion=1, flag=wx.EXPAND)
+        content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
+        content_sizer.Add(self._create_button_bar(parent), flag=wx.EXPAND)
+        return content_sizer
     
     def _create_entity_tree(self, parent):
         self.entity_tree = EntityTree(parent, self.project)
@@ -28,15 +30,15 @@ class MainWindow(object):
         return self.entity_tree.peer
     
     def _create_button_bar(self, parent):
-        content = BoxPanel(parent, wx.HORIZONTAL)
-        content.Add(wx.Button(content, label='+ URL'))
-        content.AddSpacer(_WINDOW_INNER_PADDING)
-        content.Add(wx.Button(content, label='+ Group'))
-        content.AddSpacer(_WINDOW_INNER_PADDING)
-        content.Add(wx.Button(content, label='-'))
-        content.AddSpacer(_WINDOW_INNER_PADDING * 2)
-        content.AddStretchSpacer()
-        content.Add(wx.Button(content, label='Update Membership'))
-        content.AddSpacer(_WINDOW_INNER_PADDING)
-        content.Add(wx.Button(content, label='Download'))
-        return content
+        content_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        content_sizer.Add(wx.Button(parent, label='+ URL'))
+        content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
+        content_sizer.Add(wx.Button(parent, label='+ Group'))
+        content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
+        content_sizer.Add(wx.Button(parent, label='-'))
+        content_sizer.AddSpacer(_WINDOW_INNER_PADDING * 2)
+        content_sizer.AddStretchSpacer()
+        content_sizer.Add(wx.Button(parent, label='Update Membership'))
+        content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
+        content_sizer.Add(wx.Button(parent, label='Download'))
+        return content_sizer
