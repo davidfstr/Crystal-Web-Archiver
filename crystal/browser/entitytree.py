@@ -1,7 +1,7 @@
 from crystal.model import Resource
-from crystal.ui import ui_call_later
 from crystal.ui.tree import *
 from crystal.xcollections import defaultordereddict
+from crystal.xthreading import bg_call_later, fg_call_later
 import threading
 import urlparse
 
@@ -40,10 +40,15 @@ class RootNode(Node):
         self.view.title = 'ROOT'
         self.view.expandable = True
         
+        self._project = project
+        
+        self.update_children()
+    
+    def update_children(self):
         children = []
-        for rr in project.root_resources:
+        for rr in self._project.root_resources:
             children.append(RootResourceNode(rr))
-        for rg in project.resource_groups:
+        for rg in self._project.resource_groups:
             children.append(ResourceGroupNode(rg))
         self.children = children
 
@@ -74,98 +79,91 @@ class _ResourceNode(Node):
             def bg_task():
                 revision = self.download_task()
                 self.links = revision.links()
-                self._update_children()
-            threading.Thread(target=bg_task).start()
+                fg_call_later(self.update_children)
+            bg_call_later(bg_task)
     
-    def _update_children(self):
+    def update_children(self):
         """
         Updates this node's children.
         Should be called whenever project entities change or the underlying resource's links change.
-        
-        May be called from any thread.
         """
+        # Partition links and create resources
+        resources_2_links = defaultordereddict(list)
+        for link in self.links:
+            url = urlparse.urljoin(self.resource.url, link.relative_url)
+            resource = Resource(self._project, url)
+            resources_2_links[resource].append(link)
         
-        def db_task():
-            # Partition links and create resources
-            resources_2_links = defaultordereddict(list)
-            for link in self.links:
-                url = urlparse.urljoin(self.resource.url, link.relative_url)
-                resource = Resource(self._project, url)
-                resources_2_links[resource].append(link)
+        linked_root_resources = []
+        group_2_root_and_normal_resources = defaultordereddict(lambda: (list(), list()))
+        linked_other_resources = []
+        lowpri_offsite_resources = []
+        # TODO: Recognize cluster: (Hidden: Banned by robots.txt)
+        # TODO: Recognize cluster: (Hidden: Self reference)
+        hidden_embedded_resources = []
+        # TODO: Recognize cluster: (Hidden: Ignored Protocols: *)
+        
+        default_url_prefix = self._project.default_url_prefix
+        for (r, links_to_r) in resources_2_links.iteritems():
+            rr = self._project.find_root_resource(r)
             
-            linked_root_resources = []
-            group_2_root_and_normal_resources = defaultordereddict(lambda: (list(), list()))
-            linked_other_resources = []
-            lowpri_offsite_resources = []
-            # TODO: Recognize cluster: (Hidden: Banned by robots.txt)
-            # TODO: Recognize cluster: (Hidden: Self reference)
-            hidden_embedded_resources = []
-            # TODO: Recognize cluster: (Hidden: Ignored Protocols: *)
-            
-            default_url_prefix = self._project.default_url_prefix
-            for (r, links_to_r) in resources_2_links.iteritems():
-                rr = self._project.find_root_resource(r)
+            if rr is not None:
+                linked_root_resources.append((rr, links_to_r))
+                for rg in self._project.resource_groups:
+                    if r in rg:
+                        group_2_root_and_normal_resources[rg][0].append((rr, links_to_r))
+            else:
+                in_any_group = False
+                for rg in self._project.resource_groups:
+                    if r in rg:
+                        in_any_group = True
+                        group_2_root_and_normal_resources[rg][1].append((r, links_to_r))
                 
-                if rr is not None:
-                    linked_root_resources.append((rr, links_to_r))
-                    for rg in self._project.resource_groups:
-                        if r in rg:
-                            group_2_root_and_normal_resources[rg][0].append((rr, links_to_r))
-                else:
-                    in_any_group = False
-                    for rg in self._project.resource_groups:
-                        if r in rg:
-                            in_any_group = True
-                            group_2_root_and_normal_resources[rg][1].append((r, links_to_r))
+                if not in_any_group:
+                    is_embedded = False
+                    for link in links_to_r:
+                        if link.embedded:
+                            is_embedded = True
+                            break
                     
-                    if not in_any_group:
-                        is_embedded = False
-                        for link in links_to_r:
-                            if link.embedded:
-                                is_embedded = True
-                                break
-                        
-                        if is_embedded:
-                            hidden_embedded_resources.append((r, links_to_r))
-                        elif default_url_prefix and not r.url.startswith(default_url_prefix):
-                            lowpri_offsite_resources.append((r, links_to_r))
-                        else:
-                            linked_other_resources.append((r, links_to_r))
-            
-            def ui_task():
-                # Create children and update UI
-                children = []
-                
-                for (rr, links_to_r) in linked_root_resources:
-                    children.append(RootResourceNode(rr))
-                
-                for (group, (rr_2_links, r_2_links)) in group_2_root_and_normal_resources.iteritems():
-                    root_rsrc_nodes = []
-                    for (rr, links_to_r) in rr_2_links:
-                        root_rsrc_nodes.append(RootResourceNode(rr))
-                    linked_rsrc_nodes = []
-                    for (r, links_to_r) in r_2_links:
-                        linked_rsrc_nodes.append(LinkedResourceNode(r, links_to_r))
-                    children.append(GroupedLinkedResourcesNode(group, root_rsrc_nodes, linked_rsrc_nodes))
-                
-                for (r, links_to_r) in linked_other_resources:
-                    children.append(LinkedResourceNode(r, links_to_r))
-                
-                if lowpri_offsite_resources:
-                    subchildren = []
-                    for (r, links_to_r) in lowpri_offsite_resources:
-                        subchildren.append(LinkedResourceNode(r, links_to_r))
-                    children.append(ClusterNode('(Low-priority: Offsite)', subchildren))
-                
-                if hidden_embedded_resources:
-                    subchildren = []
-                    for (r, links_to_r) in hidden_embedded_resources:
-                        subchildren.append(LinkedResourceNode(r, links_to_r))
-                    children.append(ClusterNode('(Hidden: Embedded)', subchildren))
-                
-                self.children = children
-            ui_call_later(ui_task)
-        self._project.db_call_later(db_task)
+                    if is_embedded:
+                        hidden_embedded_resources.append((r, links_to_r))
+                    elif default_url_prefix and not r.url.startswith(default_url_prefix):
+                        lowpri_offsite_resources.append((r, links_to_r))
+                    else:
+                        linked_other_resources.append((r, links_to_r))
+        
+        # Create children and update UI
+        children = []
+        
+        for (rr, links_to_r) in linked_root_resources:
+            children.append(RootResourceNode(rr))
+        
+        for (group, (rr_2_links, r_2_links)) in group_2_root_and_normal_resources.iteritems():
+            root_rsrc_nodes = []
+            for (rr, links_to_r) in rr_2_links:
+                root_rsrc_nodes.append(RootResourceNode(rr))
+            linked_rsrc_nodes = []
+            for (r, links_to_r) in r_2_links:
+                linked_rsrc_nodes.append(LinkedResourceNode(r, links_to_r))
+            children.append(GroupedLinkedResourcesNode(group, root_rsrc_nodes, linked_rsrc_nodes))
+        
+        for (r, links_to_r) in linked_other_resources:
+            children.append(LinkedResourceNode(r, links_to_r))
+        
+        if lowpri_offsite_resources:
+            subchildren = []
+            for (r, links_to_r) in lowpri_offsite_resources:
+                subchildren.append(LinkedResourceNode(r, links_to_r))
+            children.append(ClusterNode('(Low-priority: Offsite)', subchildren))
+        
+        if hidden_embedded_resources:
+            subchildren = []
+            for (r, links_to_r) in hidden_embedded_resources:
+                subchildren.append(LinkedResourceNode(r, links_to_r))
+            children.append(ClusterNode('(Hidden: Embedded)', subchildren))
+        
+        self.children = children
 
 class RootResourceNode(_ResourceNode):
     def __init__(self, root_resource):

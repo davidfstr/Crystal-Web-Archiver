@@ -68,19 +68,6 @@ class Project(object):
         finally:
             self._loading = False
     
-    def db_call_later(self, callable):
-        """
-        Calls the argument on the database thread.
-        This should be used for any operation that needs to access model elements.
-        
-        Presently there is no enforcement that all model accesses occur on the
-        database thread, but this may change in the future.
-        """
-        # For the time being, the database thread and the UI thread are the same,
-        # so use the queuing infrastructure for the UI thread.
-        from crystal.ui import ui_call_later
-        ui_call_later(callable)
-    
     def _get_property(self, name, default):
         return self._properties.get(name, default)
     def _set_property(self, name, value):
