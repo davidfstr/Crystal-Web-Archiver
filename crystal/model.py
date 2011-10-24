@@ -229,6 +229,14 @@ class RootResource(object):
             project._root_resources[resource] = self
             return self
     
+    def delete(self):
+        c = self.project._db.cursor()
+        c.execute('delete from root_resource where resource_id=?', (self.resource._id,))
+        self.project._db.commit()
+        self._id = None
+        
+        del self.project._root_resources[self.resource]
+    
     @property
     def url(self):
         return self.resource.url
