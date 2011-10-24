@@ -159,7 +159,7 @@ class NodeView(object):
                 # TODO: Implement
                 raise NotImplementedError('Children list changed after original initialization.')
             for child in value:
-                child.view._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
+                child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
     children = property(_get_children, _set_children)
     
     @property

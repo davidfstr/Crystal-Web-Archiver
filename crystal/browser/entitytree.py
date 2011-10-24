@@ -23,26 +23,35 @@ class EntityTree(object):
         return self.view.peer
 
 class Node(object):
-    pass
+    def __init__(self):
+        self._children = []
+    
+    def _get_children(self):
+        return self._children
+    def _set_children(self, value):
+        self._children = value
+        self.view.children = [child.view for child in value]
+    children = property(_get_children, _set_children)
 
 class RootNode(Node):
     def __init__(self, project, view):
+        super(RootNode, self).__init__()
         self.view = view
+        self.view.title = 'ROOT'
+        self.view.expandable = True
         
         children = []
         for rr in project.root_resources:
             children.append(RootResourceNode(rr))
         for rg in project.resource_groups:
             children.append(ResourceGroupNode(rg))
-        
-        self.view.title = 'ROOT'
-        self.view.expandable = True
-        self.view.children = children
+        self.children = children
 
 class _ResourceNode(Node):
     """Base class for `Node`s whose children is derived from the `Link`s in a `Resource`."""
     
     def __init__(self, title, resource):
+        super(_ResourceNode, self).__init__()
         self.view = NodeView()
         self.view.title = title
         self.view.expandable = True
@@ -154,7 +163,7 @@ class _ResourceNode(Node):
                         subchildren.append(LinkedResourceNode(r, links_to_r))
                     children.append(ClusterNode('(Hidden: Embedded)', subchildren))
                 
-                self.view.children = children
+                self.children = children
             ui_call_later(ui_task)
         self._project.db_call_later(db_task)
 
@@ -179,19 +188,26 @@ class LinkedResourceNode(_ResourceNode):
 
 class ClusterNode(Node):
     def __init__(self, title, children, icon_set=None):
+        super(ClusterNode, self).__init__()
         self.view = NodeView()
         self.view.icon_set = icon_set
         self.view.title = title
         self.view.expandable = True
-        self.view.children = children
         self.view.delegate = self
+        
+        self.children = children
 
 class ResourceGroupNode(Node):
     def __init__(self, resource_group):
-        project = resource_group.project
+        super(ResourceGroupNode, self).__init__()
+        self.view = NodeView()
+        self.view.title = '%s - %s' % (resource_group.url_pattern, resource_group.name)
+        self.view.expandable = True
+        self.view.delegate = self
         
         children_rrs = []
         children_rs = []
+        project = resource_group.project
         for r in project.resources:
             if r in resource_group:
                 rr = project.find_root_resource(r)
@@ -200,20 +216,17 @@ class ResourceGroupNode(Node):
                 else:
                     children_rrs.append(RootResourceNode(rr))
         children = children_rrs + children_rs
-        
-        self.view = NodeView()
-        self.view.title = '%s - %s' % (resource_group.url_pattern, resource_group.name)
-        self.view.expandable = True
-        self.view.children = children
-        self.view.delegate = self
+        self.children = children
 
 class GroupedLinkedResourcesNode(Node):
     def __init__(self, resource_group, root_rsrc_nodes, linked_rsrc_nodes):
+        super(GroupedLinkedResourcesNode, self).__init__()
         self.view = NodeView()
         self.view.title = '%s - %s' % (resource_group.url_pattern, resource_group.name)
         self.view.expandable = True
-        self.view.children = root_rsrc_nodes + linked_rsrc_nodes
         self.view.delegate = self
+        
+        self.children = root_rsrc_nodes + linked_rsrc_nodes
 
 # ------------------------------------------------------------------------------
 
