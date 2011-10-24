@@ -219,9 +219,9 @@ class GroupedLinkedResourcesNode(Node):
 
 # Informal unit test
 def _test(project):
-    from crystal.ui import APP as app
+    app = wx.PySimpleApp()
     frame = wx.Frame(None, title='Frame', size=(500,300))
-    et = EntityTree(project, frame)
+    et = EntityTree(frame, project)
     frame.Show(True)
     #app.MainLoop()
     return app

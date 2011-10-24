@@ -5,18 +5,28 @@ _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
 
 class AddRootUrlDialog(object):
-    def __init__(self, parent):
-        frame = wx.Dialog(parent, title='Add Root URL')
-        frame_sizer = wx.BoxSizer(wx.VERTICAL)
-        frame.SetSizer(frame_sizer)
+    def __init__(self, parent, on_finish):
+        """
+        Arguments:
+        parent -- parent wx.Window that this dialog is attached to.
+        on_finish -- called when OK pressed on dialog. Is a callable(name, url).
+        """
+        self.on_finish = on_finish
         
-        frame_sizer.Add(self._create_fields(frame), flag=wx.EXPAND|wx.ALL,
+        self.dialog = wx.Dialog(parent, title='Add Root URL')
+        dialog = self.dialog
+        dialog_sizer = wx.BoxSizer(wx.VERTICAL)
+        dialog.SetSizer(dialog_sizer)
+        dialog.Bind(wx.EVT_BUTTON, self._on_button)
+        dialog.Bind(wx.EVT_CLOSE, self._on_close)
+        
+        dialog_sizer.Add(self._create_fields(dialog), flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
-        frame_sizer.Add(frame.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
+        dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
         
-        frame.Fit()
-        frame.Show(True)
+        dialog.Fit()
+        dialog.Show(True)
     
     def _create_fields(self, parent):
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
@@ -32,3 +42,24 @@ class AddRootUrlDialog(object):
         fields_sizer.Add(self.url_field, flag=wx.EXPAND)
         
         return fields_sizer
+    
+    def _on_button(self, event):
+        btn_id = event.GetEventObject().GetId()
+        if btn_id == wx.ID_OK:
+            self._on_ok(event)
+        elif btn_id == wx.ID_CANCEL:
+            self._on_cancel(event)
+    
+    def _on_close(self, event):
+        self._on_cancel(event)
+    
+    def _on_ok(self, event):
+        name = self.name_field.GetValue()
+        url = self.url_field.GetValue()
+        self.on_finish(name, url)
+        self.dialog.Destroy()
+    
+    def _on_cancel(self, event):
+        self.dialog.Destroy()
+    
+    
