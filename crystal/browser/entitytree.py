@@ -274,8 +274,9 @@ class ClusterNode(Node):
 class ResourceGroupNode(Node):
     def __init__(self, resource_group):
         super(ResourceGroupNode, self).__init__()
+        project = resource_group.project
         self.view = NodeView()
-        self.view.title = '%s - %s' % (resource_group.url_pattern, resource_group.name)
+        self.view.title = '%s - %s' % (project.get_display_url(resource_group.url_pattern), resource_group.name)
         self.view.expandable = True
         self.view.delegate = self
         
@@ -303,8 +304,9 @@ class ResourceGroupNode(Node):
 class GroupedLinkedResourcesNode(Node):
     def __init__(self, resource_group, root_rsrc_nodes, linked_rsrc_nodes):
         super(GroupedLinkedResourcesNode, self).__init__()
+        project = resource_group.project
         self.view = NodeView()
-        self.view.title = '%s - %s' % (resource_group.url_pattern, resource_group.name)
+        self.view.title = '%s - %s' % (project.get_display_url(resource_group.url_pattern), resource_group.name)
         self.view.expandable = True
         self.view.delegate = self
         
