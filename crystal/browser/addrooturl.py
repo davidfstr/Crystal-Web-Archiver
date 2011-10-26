@@ -25,6 +25,8 @@ class AddRootUrlDialog(object):
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
         
+        self.name_field.SetFocus()
+        
         dialog.Fit()
         dialog.Show(True)
     
@@ -35,10 +37,12 @@ class AddRootUrlDialog(object):
         
         fields_sizer.Add(wx.StaticText(parent, label='Name:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
         self.name_field = wx.TextCtrl(parent)
+        self.name_field.SetSelection(-1, -1)
         fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         
         fields_sizer.Add(wx.StaticText(parent, label='URL:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
         self.url_field = wx.TextCtrl(parent, value='http://', size=(300,-1)) # width hint
+        self.url_field.SetSelection(-1, -1)
         fields_sizer.Add(self.url_field, flag=wx.EXPAND)
         
         return fields_sizer
