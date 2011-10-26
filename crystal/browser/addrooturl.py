@@ -13,8 +13,7 @@ class AddRootUrlDialog(object):
         """
         self.on_finish = on_finish
         
-        self.dialog = wx.Dialog(parent, title='Add Root URL')
-        dialog = self.dialog
+        dialog = self.dialog = wx.Dialog(parent, title='Add Root URL')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
         dialog.Bind(wx.EVT_BUTTON, self._on_button)

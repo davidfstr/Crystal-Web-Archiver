@@ -1,7 +1,7 @@
 from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree
-from crystal.model import Resource, RootResource
+from crystal.model import Resource, ResourceGroup, RootResource
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -15,7 +15,7 @@ class MainWindow(object):
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         
-        frame_sizer.Add(self._create_content(frame), flag=wx.EXPAND|wx.ALL, border=_WINDOW_INNER_PADDING)
+        frame_sizer.Add(self._create_content(frame), proportion=1, flag=wx.EXPAND|wx.ALL, border=_WINDOW_INNER_PADDING)
         
         frame.Fit()
         frame.Show(True)
@@ -70,13 +70,21 @@ class MainWindow(object):
         AddRootUrlDialog(self.frame, self._on_add_url_dialog_ok)
     
     def _on_add_url_dialog_ok(self, name, url):
-        # Create the root resource
-        # TODO: Handle error where a root resource with the specified name or url already exists
+        # TODO: Validate user input:
+        #       * Is name or url empty?
+        #       * Is name or url already taken?
         RootResource(self.project, name, Resource(self.project, url))
-        self.entity_tree.update()
+        self.entity_tree.update() # TODO: update tree automatically via listener on Project
     
     def _on_add_group(self, event):
-        AddGroupDialog(self.frame)
+        AddGroupDialog(self.frame, self._on_add_group_dialog_ok)
+    
+    def _on_add_group_dialog_ok(self, name, url_pattern):
+        # TODO: Validate user input:
+        #       * Is name or url_pattern empty?
+        #       * Is name or url_pattern already taken?
+        ResourceGroup(self.project, name, url_pattern)
+        self.entity_tree.update() # TODO: update tree automatically via listener on Project
     
     def _on_remove_entity(self, event):
         pass
