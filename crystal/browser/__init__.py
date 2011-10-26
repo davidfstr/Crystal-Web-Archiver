@@ -73,6 +73,7 @@ class MainWindow(object):
         # Create the root resource
         # TODO: Handle error where a root resource with the specified name or url already exists
         RootResource(self.project, name, Resource(self.project, url))
+        self.entity_tree.update()
     
     def _on_add_group(self, event):
         AddGroupDialog(self.frame)

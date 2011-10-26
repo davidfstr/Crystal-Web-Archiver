@@ -21,6 +21,22 @@ class EntityTree(object):
     @property
     def peer(self):
         return self.view.peer
+    
+    def update(self):
+        """
+        Updates the nodes in this tree, usually due to a project change.
+        """
+        self.root.update_descendants()
+
+def _sequence_with_matching_elements_replaced(new_seq, old_seq):
+    """
+    Returns copy of `new_seq`, replacing each element with an equivalent member of
+    `old_seq` whenever possible.
+    
+    Behavior is undefined if `new_seq` or `old_seq` contains duplicate elements.
+    """
+    old_seq_selfdict = dict([(x, x) for x in old_seq])
+    return [old_seq_selfdict.get(x, x) for x in new_seq]
 
 class Node(object):
     def __init__(self):
@@ -29,9 +45,30 @@ class Node(object):
     def _get_children(self):
         return self._children
     def _set_children(self, value):
+        value = _sequence_with_matching_elements_replaced(value, self._children)
         self._children = value
         self.view.children = [child.view for child in value]
     children = property(_get_children, _set_children)
+    
+    def update_descendants(self):
+        """
+        Updates this node's descendants, usually due to a project change.
+        """
+        self.update_children()
+        for child in self.children:
+            child.update_descendants()
+    
+    def update_children(self):
+        """
+        Updates this node's immediate children, usually due to a project change.
+        
+        Subclasses may override this method to recompute their children nodes.
+        The default implementation takes no action.
+        """
+        pass
+    
+    def __repr__(self):
+        return '<%s titled %s at %s>' % (type(self).__name__, repr(self.view.title), hex(id(self)))
 
 class RootNode(Node):
     def __init__(self, project, view):
@@ -64,7 +101,13 @@ class _ResourceNode(Node):
         
         self.resource = resource
         self.download_task = None
-        self.links = None
+        self.resource_links = None
+    
+    def __eq__(self, other):
+        return isinstance(other, _ResourceNode) and (
+            self.view.title == other.view.title and self.resource == other.resource)
+    def __hash__(self):
+        return hash(self.view.title) ^ hash(self.resource)
     
     @property
     def _project(self):
@@ -78,7 +121,7 @@ class _ResourceNode(Node):
             
             def bg_task():
                 revision = self.download_task()
-                self.links = revision.links()
+                self.resource_links = revision.links()
                 fg_call_later(self.update_children)
             bg_call_later(bg_task)
     
@@ -89,10 +132,11 @@ class _ResourceNode(Node):
         """
         # Partition links and create resources
         resources_2_links = defaultordereddict(list)
-        for link in self.links:
-            url = urlparse.urljoin(self.resource.url, link.relative_url)
-            resource = Resource(self._project, url)
-            resources_2_links[resource].append(link)
+        if self.resource_links:
+            for link in self.resource_links:
+                url = urlparse.urljoin(self.resource.url, link.relative_url)
+                resource = Resource(self._project, url)
+                resources_2_links[resource].append(link)
         
         linked_root_resources = []
         group_2_root_and_normal_resources = defaultordereddict(lambda: (list(), list()))
@@ -170,12 +214,28 @@ class RootResourceNode(_ResourceNode):
         project = root_resource.project
         title = '%s - %s' % (project.get_display_url(root_resource.url), root_resource.name)
         super(RootResourceNode, self).__init__(title, root_resource.resource)
+        
+        self.root_resource = root_resource
+    
+    def __eq__(self, other):
+        return isinstance(other, RootResourceNode) and (
+            self.root_resource == other.root_resource)
+    def __hash__(self):
+        return hash(self.root_resource)
 
 class NormalResourceNode(_ResourceNode):
     def __init__(self, resource):
         project = resource.project
         title = '%s' % project.get_display_url(resource.url)
         super(NormalResourceNode, self).__init__(title, resource)
+        
+        self.resource = resource
+    
+    def __eq__(self, other):
+        return isinstance(other, NormalResourceNode) and (
+            self.resource == other.resource)
+    def __hash__(self):
+        return hash(self.resource)
 
 class LinkedResourceNode(_ResourceNode):
     def __init__(self, resource, links):
@@ -183,6 +243,15 @@ class LinkedResourceNode(_ResourceNode):
         link_titles = ', '.join([link.full_title for link in links])
         title = '%s - %s' % (project.get_display_url(resource.url), link_titles)
         super(LinkedResourceNode, self).__init__(title, resource)
+        
+        self.resource = resource
+        self.links = tuple(links)
+    
+    def __eq__(self, other):
+        return isinstance(other, LinkedResourceNode) and (
+            self.resource == other.resource and self.links == other.links)
+    def __hash__(self):
+        return hash(self.resource) ^ hash(self.links)
 
 class ClusterNode(Node):
     def __init__(self, title, children, icon_set=None):
@@ -194,6 +263,13 @@ class ClusterNode(Node):
         self.view.delegate = self
         
         self.children = children
+        self._children_tuple = tuple(self.children)
+    
+    def __eq__(self, other):
+        return isinstance(other, ClusterNode) and (
+            self.children == other.children)
+    def __hash__(self):
+        return hash(self._children_tuple)
 
 class ResourceGroupNode(Node):
     def __init__(self, resource_group):
@@ -215,6 +291,14 @@ class ResourceGroupNode(Node):
                     children_rrs.append(RootResourceNode(rr))
         children = children_rrs + children_rs
         self.children = children
+        
+        self.resource_group = resource_group
+    
+    def __eq__(self, other):
+        return isinstance(other, ResourceGroupNode) and (
+            self.resource_group == other.resource_group)
+    def __hash__(self):
+        return hash(self.resource_group)
 
 class GroupedLinkedResourcesNode(Node):
     def __init__(self, resource_group, root_rsrc_nodes, linked_rsrc_nodes):
@@ -225,6 +309,13 @@ class GroupedLinkedResourcesNode(Node):
         self.view.delegate = self
         
         self.children = root_rsrc_nodes + linked_rsrc_nodes
+        self._children_tuple = tuple(self.children)
+    
+    def __eq__(self, other):
+        return isinstance(other, GroupedLinkedResourcesNode) and (
+            self.children == other.children)
+    def __hash__(self):
+        return hash(self._children_tuple)
 
 # ------------------------------------------------------------------------------
 

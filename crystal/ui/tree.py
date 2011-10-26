@@ -53,7 +53,7 @@ class TreeView(object):
     """
     
     def __init__(self, parent_peer):
-        self.peer = wx.TreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
+        self.peer = _OrderedTreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
         
         # Setup node image registration
         self.bitmap_2_image_id = dict()
@@ -89,6 +89,12 @@ class TreeView(object):
         node_id = event.GetItem()
         node_view = self.peer.GetPyData(node_id)
         node_view._dispatch_event(event)
+
+class _OrderedTreeCtrl(wx.TreeCtrl):
+    def OnCompareItems(self, item1, item2):
+        item1_view = self.GetPyData(item1)
+        item2_view = self.GetPyData(item2)
+        return item1_view._order_index - item2_view._order_index
 
 class NodeView(object):
     """
@@ -152,14 +158,33 @@ class NodeView(object):
     
     def _get_children(self):
         return self._children
-    def _set_children(self, value):
-        self._children = value
+    def _set_children(self, new_children):
+        old_children = self._children
+        self._children = new_children
         if self.peer:
-            if self.peer.GetFirstChild()[0].IsOk():
-                # TODO: Implement
-                raise NotImplementedError('Children list changed after original initialization.')
-            for child in value:
-                child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
+            if not self.peer.GetFirstChild()[0].IsOk():
+                # Add initial children
+                for child in new_children:
+                    child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
+            else:
+                # Replace existing children, preserving old ones that match new ones
+                old_children_set = set(old_children)
+                
+                children_to_delete = old_children_set - set(new_children)
+                for child in children_to_delete:
+                    child.peer.Delete()
+                
+                children_to_add = [new_child for new_child in new_children if new_child not in old_children_set]
+                for child in children_to_add:
+                    child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
+                
+                # Reorder children
+                i = 0
+                for child in new_children:
+                    child._order_index = i
+                    i += 1
+                self.peer.SortChildren()
+            
     children = property(_get_children, _set_children)
     
     @property
@@ -226,3 +251,9 @@ class NodeViewPeer(tuple):
     
     def SetItemImage(self, image, which):
         self.tree_peer.SetItemImage(self.node_id, image, which)
+    
+    def Delete(self):
+        self.tree_peer.Delete(self.node_id)
+    
+    def SortChildren(self):
+        self.tree_peer.SortChildren(self.node_id)
