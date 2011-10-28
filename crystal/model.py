@@ -134,6 +134,9 @@ class Resource(object):
     
     def __new__(cls, project, url, _id=None):
         """
+        Looks up an existing resource with the specified URL or creates a new
+        one if no preexisting resource matches.
+        
         Arguments:
         project -- associated `Project`.
         url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
@@ -165,6 +168,9 @@ class Resource(object):
         except Exception:
             return False
     
+    # TODO: Define download() method that fetches the resource itself,
+    #       plus any other "embedded" resources it links to.
+    
     def download_self(self):
         """
         Returns a `Task` that yields a `ResourceRevision`.
@@ -184,6 +190,8 @@ class RootResource(object):
     
     def __new__(cls, project, name, resource, _id=None):
         """
+        Creates a new root resource.
+        
         Arguments:
         project -- associated `Project`.
         name -- display name.
@@ -241,7 +249,6 @@ class RootResource(object):
 class ResourceRevision(object):
     """
     A downloaded revision of a `Resource`.
-    Stores all information needed to reperform the request exactly as originally done.
     [TODO: Persisted and auto-saved.]
     """
     
