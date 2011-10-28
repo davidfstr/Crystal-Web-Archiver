@@ -113,15 +113,16 @@ class UrlResourceRequest(ResourceRequest):
 class ResourceResponseMetadata(object):
     """
     Encapsulates metadata received when requesting a resource.
-    Serializable.
+    [TODO: Serializable.]
     """
     pass
 
 class HttpResourceResponseMetadata(ResourceResponseMetadata):
-    def __init__(self, **kwargs):
-        if set(kwargs.keys()) != set(['http_version', 'status_code', 'reason_phrase', 'headers']):
-            raise ValueError
-        self.__dict__ = kwargs
+    def __init__(self, http_version, status_code, reason_phrase, headers):
+        self.http_version = http_version
+        self.status_code = status_code
+        self.reason_phrase = reason_phrase
+        self.headers = headers
         
         header_dict = defaultdict(list)
         for (name, value) in self.headers:
@@ -129,4 +130,8 @@ class HttpResourceResponseMetadata(ResourceResponseMetadata):
         self.header_dict = header_dict
     
     def __repr__(self):
-        return 'HttpResourceResponseMetadata(%s, %s, %s)' % (repr(self.status_code), repr(self.reason_phrase), repr(self.header_dict.keys()))
+        return 'HttpResourceResponseMetadata(%s, %s, %s, %s)' % (
+            repr(self.http_version),
+            repr(self.status_code),
+            repr(self.reason_phrase),
+            repr(self.headers))
