@@ -55,7 +55,7 @@ class ResourceRequest(object):
     def __call__(self):
         """
         Returns a (metadata, body_stream) tuple, where
-            `metadata` is a `ResourceResponseMetadata` or None and
+            `metadata` is a JSON-serializable dictionary or None and
             `body_stream` is a file-like object (which supports `read` and `close`).
         
         Raises any Exception.
@@ -82,18 +82,18 @@ class HttpResourceRequest(ResourceRequest):
         conn.request('GET', self.url) # no special body or headers
         response = conn.getresponse()
         
+        metadata = {
+            'http_version': response.version,
+            'status_code': response.status,
+            'reason_phrase': response.reason,
+            'headers': response.getheaders()
+        }
         class HttpResourceBodyStream(object):
             close = conn.close
             read = response.read
             fileno = response.fileno
             mode = 'rb'
-        
-        return (HttpResourceResponseMetadata(
-                    http_version=response.version,
-                    status_code=response.status,
-                    reason_phrase=response.reason,
-                    headers=response.getheaders()),
-                HttpResourceBodyStream())
+        return (metadata, HttpResourceBodyStream())
     
     def __repr__(self):
         return 'HttpResourceRequest(%s)' % repr(self.url)
@@ -109,24 +109,3 @@ class UrlResourceRequest(ResourceRequest):
     
     def __repr__(self):
         return 'UrlResourceRequest(%s)' % repr(self.url)
-
-class ResourceResponseMetadata(object):
-    """
-    Encapsulates metadata received when requesting a resource.
-    [TODO: Serializable.]
-    """
-    pass
-
-class HttpResourceResponseMetadata(ResourceResponseMetadata):
-    def __init__(self, http_version, status_code, reason_phrase, headers):
-        self.http_version = http_version
-        self.status_code = status_code
-        self.reason_phrase = reason_phrase
-        self.headers = headers
-    
-    def __repr__(self):
-        return 'HttpResourceResponseMetadata(%s, %s, %s, %s)' % (
-            repr(self.http_version),
-            repr(self.status_code),
-            repr(self.reason_phrase),
-            repr(self.headers))

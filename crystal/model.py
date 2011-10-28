@@ -268,18 +268,23 @@ class ResourceRevision(object):
             self._body = None
     
     @property
+    def _url(self):
+        # TODO: Implement
+        raise NotImplementedError
+    
+    @property
     def is_http(self):
         """Returns whether this resource was fetched using HTTP."""
-        from crystal.download import HttpResourceResponseMetadata
-        return self.metadata and isinstance(self.metadata, HttpResourceResponseMetadata)
+        # HTTP resources are presently the only ones with metadata
+        return self.metadata is not None
     
     @property
     def is_redirect(self):
         """Returns whether this resource is a redirect."""
-        return self.is_http and (self.metadata.status_code / 100) == 3
+        return self.is_http and (self.metadata['status_code'] / 100) == 3
     
     def _get_first_value_of_http_header(self, name):
-        for (cur_name, cur_value) in self.metadata.headers:
+        for (cur_name, cur_value) in self.metadata['headers']:
             if name == cur_name:
                 return cur_value
         return None
@@ -298,7 +303,7 @@ class ResourceRevision(object):
     @property
     def _redirect_title(self):
         if self.is_redirect:
-            return '%s %s' % (self.metadata.status_code, self.metadata.reason_phrase)
+            return '%s %s' % (self.metadata['status_code'], self.metadata['reason_phrase'])
         else:
             return None
     
@@ -321,7 +326,7 @@ class ResourceRevision(object):
         declared = self.declared_content_type
         if declared is not None:
             return declared
-        return mimetypes.guess_type(self.url)
+        return mimetypes.guess_type(self._url)
     
     @property
     def is_html(self):
