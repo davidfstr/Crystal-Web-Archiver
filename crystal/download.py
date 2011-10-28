@@ -123,11 +123,6 @@ class HttpResourceResponseMetadata(ResourceResponseMetadata):
         self.status_code = status_code
         self.reason_phrase = reason_phrase
         self.headers = headers
-        
-        header_dict = defaultdict(list)
-        for (name, value) in self.headers:
-            header_dict[name].append(value)
-        self.header_dict = header_dict
     
     def __repr__(self):
         return 'HttpResourceResponseMetadata(%s, %s, %s, %s)' % (

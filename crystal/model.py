@@ -278,6 +278,12 @@ class ResourceRevision(object):
         """Returns whether this resource is a redirect."""
         return self.is_http and (self.metadata.status_code / 100) == 3
     
+    def _get_first_value_of_http_header(self, name):
+        for (cur_name, cur_value) in self.metadata.headers:
+            if name == cur_name:
+                return cur_value
+        return None
+    
     @property
     def redirect_url(self):
         """
@@ -285,7 +291,7 @@ class ResourceRevision(object):
         or None if it cannot be determined or this is not a redirect.
         """
         if self.is_redirect:
-            return self.metadata.header_dict.get('location', [None])[0]
+            return self._get_first_value_of_http_header('location')
         else:
             return None
     
@@ -300,7 +306,7 @@ class ResourceRevision(object):
     def declared_content_type(self):
         """Returns the MIME content type declared for this resource, or None if not declared."""
         if self.is_http:
-            content_type_with_parameters = self.metadata.header_dict.get('content-type', [None])[0]
+            content_type_with_parameters = self._get_first_value_of_http_header('content-type')
             if content_type_with_parameters is None:
                 return None
             else:
