@@ -6,10 +6,13 @@ Unless otherwise specified, all changes to models are auto-saved.
 """
 
 from collections import OrderedDict
+import json
 import mimetypes
 import os
 import re
+import shutil
 import sqlite3
+from xthreading import fg_call_and_wait
 
 class Project(object):
     """
@@ -21,7 +24,7 @@ class Project(object):
     
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
-    _BLOBS_DIRNAME = 'blobs'
+    _RESOURCE_REVISION_DIRNAME = 'resource_revision_body'
     
     def __init__(self, path):
         """
@@ -54,10 +57,11 @@ class Project(object):
                     RootResource(self, name, resource, _id=id)
                 for (name, url_pattern, id) in c.execute('select name, url_pattern, id from resource_group'):
                     ResourceGroup(self, name, url_pattern, _id=id)
+                # (ResourceRevisions are loaded on demand)
             else:
                 # Create new project
                 os.mkdir(path)
-                os.mkdir(os.path.join(path, self._BLOBS_DIRNAME))
+                os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
                 c = self._db.cursor()
@@ -65,6 +69,7 @@ class Project(object):
                 c.execute('create table resource (id integer primary key, url text unique not null)')
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null)')
+                c.execute('create table resource_revision (id integer primary key, error text not null, metadata text not null)')
         finally:
             self._loading = False
     
@@ -248,29 +253,80 @@ class RootResource(object):
 
 class ResourceRevision(object):
     """
-    A downloaded revision of a `Resource`.
-    [TODO: Persisted and auto-saved.]
+    A downloaded revision of a `Resource`. Immutable.
+    Persisted. Loaded on demand.
     """
     
-    def __init__(self, error=None, metadata=None, body_stream=None):
-        if not ((error is None) != (body_stream is None)):
-            raise ValueError('Must specify either "error" or "body_stream" argument.')
+    @staticmethod
+    def create_from_error(resource, error):
+        return ResourceRevision._create(resource, error=error)
+    
+    @staticmethod
+    def create_from_response(resource, metadata, body_stream):
+        try:
+            return ResourceRevision._create(resource, metadata=metadata, body_stream=body_stream)
+        except Exception as e:
+            return ResourceRevision.create_from_error(resource, e)
+    
+    @staticmethod
+    def _create(resource, error=None, metadata=None, body_stream=None):
+        self = ResourceRevision()
+        self.resource = resource
         self.error = error
         self.metadata = metadata
+        self.has_body = body_stream is not None
+        
+        project = self.project
+        
+        # Need to do this first to get the database ID
+        def fg_task():
+            RR = ResourceRevision
+            
+            c = project._db.cursor()
+            c.execute('insert into resource_revision (error, metadata) values (?, ?)', (RR._encode_error(error), RR._encode_metadata(metadata)))
+            project._db.commit()
+            self._id = c.lastrowid
+        fg_call_and_wait(fg_task)
+        
         if body_stream:
             try:
-                # TODO: Not a great idea to read a response directly into memory.
-                #       This should be streamed to disk.
-                self._body = body_stream.read() # TODO: finalize internal representation
-            finally:
-                body_stream.close()
-        else:
-            self._body = None
+                body_filepath = os.path.join(project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id))
+                with open(body_filepath, 'wb') as body_file:
+                    shutil.copyfileobj(body_stream, body_file)
+            except:
+                # Rollback database commit
+                def fg_task():
+                    c = project._db.cursor()
+                    c.execute('delete from resource_revision where id=?', (self._id,))
+                    project._db.commit()
+                fg_call_and_wait(fg_task)
+                raise
+        
+        return self
+    
+    @staticmethod
+    def _encode_error(error):
+        error_dict = {
+            'type': type(error).__name__,
+            'message': error.message if hasattr(error, 'message') else None,
+        }
+        return json.dumps(error_dict)
+    
+    @staticmethod
+    def _encode_metadata(metadata):
+        return json.dumps(metadata)
+    
+    @property
+    def project(self):
+        return self.resource.project
     
     @property
     def _url(self):
-        # TODO: Implement
-        raise NotImplementedError
+        return self.resource.url
+    
+    @property
+    def _body_filepath(self):
+        return os.path.join(self.project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id))
     
     @property
     def is_http(self):
@@ -333,11 +389,28 @@ class ResourceRevision(object):
         """Returns whether this resource is HTML."""
         return self.content_type == 'text/html'
     
+    def open(self):
+        """
+        Opens the body of this resource for reading, returning a file-like object.
+        """
+        if not self.has_body:
+            raise ValueError('Resource has no body.')
+        return open(self._body_filepath, 'rb')
+    
     def links(self):
-        """Returns list of `Link`s found in this resource."""
-        # Extract links from HTML, if applicable
+        """
+        Returns list of `Link`s found in this resource.
+        """
         from crystal.html import parse_links, Link
-        links = parse_links(self._body) if self.is_html else []
+        
+        # Extract links from HTML, if applicable
+        if not self.is_html or not self.has_body:
+            links = []
+        else:
+            with self.open() as body:
+                # TODO: Pass in the hinted Content-Encoding HTTP header, if available,
+                #       to assist in determining the correct text encoding
+                links = parse_links(body)
         
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url

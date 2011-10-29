@@ -7,14 +7,16 @@ import re
 
 _ANY_RE = re.compile(r'.*')
 
-def parse_links(html_bytes):
+def parse_links(html_bytes, declared_encoding=None):
     """
     Parses and returns a list of `Link`s in the specified HTML bytestring.
+    
+    Arguments:
+    html_bytes -- HTML bytestring or file object.
+    declared_encoding -- the encoding that the HTML document is declared to be in.
     """
-    # TODO: Pass in the hinted Content-Encoding HTTP header, if available,
-    #       to assist in determining the correct text encoding
     try:
-        html = BeautifulSoup(html_bytes)
+        html = BeautifulSoup(html_bytes, fromEncoding=declared_encoding)
     except Exception as e:
         # TODO: Return the underlying exception as a warning
         return []

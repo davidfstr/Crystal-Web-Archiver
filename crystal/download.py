@@ -29,9 +29,9 @@ class ResourceDownloadTask(Task):
             
             # TODO: Provide incremental feedback such as '7 KB of 15 KB'
             self.subtitle = 'Receiving response...'
-            return ResourceRevision(metadata=metadata, body_stream=body_stream)
+            return ResourceRevision.create_from_response(self._resource, metadata, body_stream)
         except Exception as error:
-            return ResourceRevision(error=error)
+            return ResourceRevision.create_from_error(self._resource, error)
 
 class ResourceRequest(object):
     """
