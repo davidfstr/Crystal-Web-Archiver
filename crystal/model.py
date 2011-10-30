@@ -117,7 +117,11 @@ class Project(object):
     def root_resources(self):
         return self._root_resources.values()
     
-    def find_root_resource(self, resource):
+    def get_resource(self, url):
+        """Returns the `Resource` with the specified URL or None if no such resource is recognized."""
+        return self._resources.get(url, None)
+    
+    def get_root_resource(self, resource):
         """Returns the `RootResource` with the specified `Resource` or None if none exists."""
         return self._root_resources.get(resource, None)
     
@@ -417,6 +421,10 @@ class ResourceRevision(object):
     def _url(self):
         return self.resource.url
     
+    def _ensure_has_body(self):
+        if not self.has_body:
+            raise ValueError('Resource has no body.')
+    
     @property
     def _body_filepath(self):
         return os.path.join(self.project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id))
@@ -482,12 +490,18 @@ class ResourceRevision(object):
         """Returns whether this resource is HTML."""
         return self.content_type == 'text/html'
     
+    def size(self):
+        """
+        Returns the size of this resource's body.
+        """
+        self._ensure_has_body()
+        return os.path.size(self._body_filepath)
+    
     def open(self):
         """
         Opens the body of this resource for reading, returning a file-like object.
         """
-        if not self.has_body:
-            raise ValueError('Resource has no body.')
+        self._ensure_has_body()
         return open(self._body_filepath, 'rb')
     
     def links(self):

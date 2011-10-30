@@ -149,7 +149,7 @@ class _ResourceNode(Node):
         
         default_url_prefix = self._project.default_url_prefix
         for (r, links_to_r) in resources_2_links.iteritems():
-            rr = self._project.find_root_resource(r)
+            rr = self._project.get_root_resource(r)
             
             if rr is not None:
                 linked_root_resources.append((rr, links_to_r))
@@ -285,7 +285,7 @@ class ResourceGroupNode(Node):
         project = resource_group.project
         for r in project.resources:
             if r in resource_group:
-                rr = project.find_root_resource(r)
+                rr = project.get_root_resource(r)
                 if rr is None:
                     children_rs.append(NormalResourceNode(r))
                 else:
