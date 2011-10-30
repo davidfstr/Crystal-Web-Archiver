@@ -3,6 +3,9 @@ Persistent data model.
 
 Unless otherwise specified, all changes to models are auto-saved.
 [TODO: Encapsulate read-only properties.]
+
+Model objects may only be manipulated on the foreground thread.
+Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 """
 
 from collections import OrderedDict
@@ -70,6 +73,7 @@ class Project(object):
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null)')
                 c.execute('create table resource_revision (id integer primary key, resource_id integer not null, error text not null, metadata text not null)')
+                e.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         finally:
             self._loading = False
     
@@ -176,13 +180,47 @@ class Resource(object):
     # TODO: Define download() method that fetches the resource itself,
     #       plus any other "embedded" resources it links to.
     
-    def download_self(self):
+    def download_self(self, force=False):
         """
-        Returns a `Task` that yields a `ResourceRevision`.
-        [TODO: If this resource is up-to-date, yields the default revision immediately.]
+        Returns a callable that returns a `ResourceRevision`.
+        If this resource is up-to-date, the callable returns the default revision immediately.
+        
+        The returned callable may take a long time to execute, and therefore is amenable
+        to being run on a background thread.
+        
+        Arguments:
+        force -- if True then a new revision of this resource is downloaded even if
+                 the most recent revision is deemed to be up-to-date.
         """
+        if not force and self.up_to_date():
+            return (lambda: fg_call_and_wait(lambda: self.default_revision()))
+        
         from crystal.download import ResourceDownloadTask
         return ResourceDownloadTask(self)
+    
+    # TODO: This should ideally be a cheap operation, not requiring a database hit.
+    #       Convert to property once this "cheapening" has been done.
+    def up_to_date(self):
+        """
+        Returns whether this resource is "up-to-date".
+        
+        An "up-to-date" resource is one that whose most recent local revision is estimated
+        to be the same (in content) as the remote version at the time of invocation.
+        """
+        # NOTE: Presently there is a hard-coded assumption that remote resources never change.
+        #       Therefore a downloaded revision is always considered "up-to-date".
+        #       This will likely require reconfiguring by the user in the future.
+        return self.has_any_revisions()
+    
+    # TODO: This should ideally be a cheap operation, not requiring a database hit.
+    #       Convert to property once this "cheapening" has been done.
+    def has_any_revisions(self):
+        """
+        Returns whether any revisions of this resource have been downloaded.
+        """
+        c = self.project._db.cursor()
+        c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
+        return c.fetchone() is not None
     
     def default_revision(self):
         """

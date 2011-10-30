@@ -25,17 +25,21 @@ def fg_call_and_wait(callable):
     """
     Calls the argument on the foreground thread and waits for it to complete.
     This should be called by background threads that need to access the UI or model.
+    
+    Returns the result of the callable.
+    If the callable raises an exception, it will be reraised by this method.
     """
     if wx.Thread_IsMain():
         callable()
     else:
         condition = threading.Condition()
+        callable_result = [None]
         callable_exc_info = [None]
         
         def fg_task():
             # Run task
             try:
-                callable()
+                callable_result[0] = callable()
             except BaseException as e:
                 callable_exc_info[0] = sys.exc_info()
             
@@ -54,6 +58,8 @@ def fg_call_and_wait(callable):
         if callable_exc_info[0] is not None:
             exc_info = callable_exc_info[0]
             raise exc_info[1], None, exc_info[2]
+        
+        return callable_result[0]
         
 
 def bg_call_later(callable):
