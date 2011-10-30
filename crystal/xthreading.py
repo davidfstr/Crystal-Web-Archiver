@@ -7,6 +7,7 @@ This thread is responsible for:
 (2) mediating access to model elements (including the underlying database).
 """
 
+import sys
 import threading
 import wx
 
@@ -29,14 +30,14 @@ def fg_call_and_wait(callable):
         callable()
     else:
         condition = threading.Condition()
-        callable_exception = [None]
+        callable_exc_info = [None]
         
         def fg_task():
             # Run task
             try:
                 callable()
             except BaseException as e:
-                callable_exception[0] = e
+                callable_exc_info[0] = sys.exc_info()
             
             # Send signal
             condition.acquire()
@@ -50,8 +51,9 @@ def fg_call_and_wait(callable):
         condition.release()
         
         # Reraise callable's exception, if applicable
-        if callable_exception[0] is not None:
-            raise callable_exception[0]
+        if callable_exc_info[0] is not None:
+            exc_info = callable_exc_info[0]
+            raise exc_info[1], None, exc_info[2]
         
 
 def bg_call_later(callable):
