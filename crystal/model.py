@@ -69,7 +69,7 @@ class Project(object):
                 c.execute('create table resource (id integer primary key, url text unique not null)')
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null)')
-                c.execute('create table resource_revision (id integer primary key, error text not null, metadata text not null)')
+                c.execute('create table resource_revision (id integer primary key, resource_id integer not null, error text not null, metadata text not null)')
         finally:
             self._loading = False
     
@@ -184,6 +184,30 @@ class Resource(object):
         from crystal.download import ResourceDownloadTask
         return ResourceDownloadTask(self)
     
+    def default_revision(self):
+        """
+        Loads and returns the "default" revision of this resource, which is the revision
+        that will be displayed when this resource is served or exported.
+        
+        If no revisions of this resource have been downloaded, None is returned.
+        """
+        default_revision_singleton = self.revisions(_query_suffix=' order by id desc limit 1')
+        return default_revision_singleton[0] if len(default_revision_singleton) == 1 else None
+    
+    def revisions(self, _query_suffix=''):
+        """
+        Loads and returns a list of `ResourceRevision`s downloaded for this resource.
+        If no such revisions exist, an empty list is returned.
+        """
+        RR = ResourceRevision
+        
+        revs = []
+        c = self.project._db.cursor()
+        query = 'select error, metadata, id from resource_revision where resource_id=?%s' % _query_suffix
+        for (error, metadata, id) in c.execute(query, (self._id,)):
+            revs.append(ResourceRevision._load(self, RR._decode_error(error), RR._decode_metadata(metadata), _id=id))
+        return revs
+    
     def __repr__(self):
         return "Resource(%s)" % (repr(self.url),)
 
@@ -274,6 +298,7 @@ class ResourceRevision(object):
         self.resource = resource
         self.error = error
         self.metadata = metadata
+        # (self._id computed below)
         self.has_body = body_stream is not None
         
         project = self.project
@@ -283,7 +308,7 @@ class ResourceRevision(object):
             RR = ResourceRevision
             
             c = project._db.cursor()
-            c.execute('insert into resource_revision (error, metadata) values (?, ?)', (RR._encode_error(error), RR._encode_metadata(metadata)))
+            c.execute('insert into resource_revision (resource_id, error, metadata) values (?, ?, ?)', (resource._id, RR._encode_error(error), RR._encode_metadata(metadata)))
             project._db.commit()
             self._id = c.lastrowid
         fg_call_and_wait(fg_task)
@@ -305,16 +330,46 @@ class ResourceRevision(object):
         return self
     
     @staticmethod
+    def _load(resource, error, metadata, _id):
+        self = ResourceRevision()
+        self.resource = resource
+        self.error = error
+        self.metadata = metadata
+        self._id = _id
+        self.has_body = os.path.exists(self._body_filepath)
+        return self
+    
+    @staticmethod
     def _encode_error(error):
-        error_dict = {
-            'type': type(error).__name__,
-            'message': error.message if hasattr(error, 'message') else None,
-        }
+        if error is None:
+            error_dict = None
+        elif isinstance(error, _PersistedError):
+            error_dict = {
+                'type': error.type,
+                'message': error.message,
+            }
+        else:
+            error_dict = {
+                'type': type(error).__name__,
+                'message': error.message if hasattr(error, 'message') else None,
+            }
         return json.dumps(error_dict)
     
     @staticmethod
     def _encode_metadata(metadata):
         return json.dumps(metadata)
+    
+    @staticmethod
+    def _decode_error(db_error):
+        error_dict = json.loads(db_error)
+        if error_dict is None:
+            return None
+        else:
+            return _PersistedError(error_dict['message'], error_dict['type'])
+    
+    @staticmethod
+    def _decode_metadata(db_metadata):
+        return json.loads(db_metadata)
     
     @property
     def project(self):
@@ -418,6 +473,17 @@ class ResourceRevision(object):
             links.append(Link(redirect_url, self._redirect_title, 'Redirect', True))
         
         return links
+    
+    def __repr__(self):
+        return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
+
+class _PersistedError(Exception):
+    """
+    Wraps an exception loaded from persistent storage.
+    """
+    def __init__(self, message, type):
+        self.message = message
+        self.type = type
 
 class ResourceGroup(object):
     """
