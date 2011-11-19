@@ -24,11 +24,15 @@ _HEADER_WHITELIST = set([
     'date',
     'vary',
     'content-type',
-    'server'
+    'server',
+    'last-modified',
+    'etag',
 ])
 # Set of archived headers known to cause problems if blindly played back
 _HEADER_BLACKLIST = set([
     'transfer-encoding',
+    'content-length',
+    'accept-ranges',
 ])
 
 class _RequestHandler(BaseHTTPRequestHandler):
