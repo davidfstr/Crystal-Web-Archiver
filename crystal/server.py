@@ -170,9 +170,18 @@ class _RequestHandler(BaseHTTPRequestHandler):
         """
         archive_url_parts = urlparse.urlparse(archive_url)
         
-        # TODO: Avoid stripping {params, query, fragment}, if present
-        request_url = 'http://%s/%s/%s%s' % (
-            self.request_host,
+        request_scheme = 'http'
+        request_netloc = self.request_host
+        request_path = '%s/%s%s' % (
             archive_url_parts.scheme,
             archive_url_parts.netloc, archive_url_parts.path)
+        request_params = archive_url_parts.params
+        request_query = archive_url_parts.query
+        request_fragment = archive_url_parts.fragment
+        
+        request_url_parts = (
+            request_scheme, request_netloc, request_path,
+            request_params, request_query, request_fragment
+        )
+        request_url = urlparse.urlunparse(request_url_parts)
         return request_url
