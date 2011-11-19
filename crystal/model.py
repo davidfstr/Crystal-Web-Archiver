@@ -506,23 +506,33 @@ class ResourceRevision(object):
     
     def links(self):
         """
-        Returns list of `Link`s found in this resource.
+        Returns list of Links found in this resource.
         """
-        from crystal.html import parse_links, Link
+        return self.html_and_links()[1]
+    
+    def html_and_links(self):
+        """
+        Returns a 2-tuple containing:
+        (1) if the resource is HTML, the HTML document, otherwise None;
+        (2) a list of Links found in this resource.
+        
+        The HTML document can be reoutput by getting its str() representation.
+        """
+        from crystal.html import parse_html_and_links, Link
         
         # Extract links from HTML, if applicable
         if not self.is_html or not self.has_body:
-            links = []
+            (html, links) = (None, [])
         else:
             with self.open() as body:
-                links = parse_links(body, self.declared_content_type)
+                (html, links) = parse_html_and_links(body, self.declared_content_type)
         
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url
         if redirect_url is not None:
             links.append(Link.create_external(redirect_url, self._redirect_title, 'Redirect', True))
         
-        return links
+        return (html, links)
     
     def __repr__(self):
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)

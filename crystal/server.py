@@ -4,6 +4,7 @@ import os
 import re
 import urlparse
 import shutil
+from StringIO import StringIO
 
 def run(project):
     port = 2797
@@ -69,23 +70,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_resource_not_in_archive(archive_url)
             return
         
-        if revision.is_http:
-            self.send_http_revision(revision)
-            return
-        else:
-            self.send_generic_revision(revision)
-            return
+        self.send_revision(revision)
     
     def send_welcome_page(self, query_params):
         if 'url' in query_params:
             archive_url = query_params['url'][0]
-            archive_url_parts = urlparse.urlparse(archive_url)
-            
-            # TODO: Avoid stripping {params, query, fragment}, if present
-            redirect_url = 'http://%s/%s/%s%s' % (
-                self.request_host,
-                archive_url_parts.scheme,
-                archive_url_parts.netloc, archive_url_parts.path)
+            redirect_url = self.get_request_url(archive_url)
             
             self.send_response(302)
             self.send_header('Location', redirect_url)
@@ -125,6 +115,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
 </html>
 """.strip() % {'archive_url': archive_url})
     
+    def send_revision(self, revision):
+        if revision.is_http:
+            self.send_http_revision(revision)
+        else:
+            self.send_generic_revision(revision)
+    
     def send_http_revision(self, revision):
         metadata = revision.metadata
         
@@ -141,18 +137,42 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         self.send_revision_body(revision)
     
-    # TODO: Test
     def send_generic_revision(self, revision):
         self.send_response(200)
         
         self.send_header('Content-Type', revision.content_type)
-        self.send_header('Content-Length', revision.size())
         self.end_headers()
         
         self.send_revision_body(revision)
     
     def send_revision_body(self, revision):
-        # TODO: Rewrite links in HTML.
-        #       Note that this will change the content length.
-        with revision.open() as body:
-            shutil.copyfileobj(body, self.wfile)
+        (html, links) = revision.html_and_links()
+        if html is None:
+            # Not HTML. Cannot rewrite content.
+            with revision.open() as body:
+                shutil.copyfileobj(body, self.wfile)
+        else:
+            # Rewrite links in HTML
+            base_url = revision.resource.url
+            for link in links:
+                relative_url = link.relative_url
+                absolute_url = urlparse.urljoin(base_url, relative_url)
+                request_url = self.get_request_url(absolute_url)
+                link.relative_url = request_url
+            
+            # Output altered HTML
+            shutil.copyfileobj(StringIO(str(html)), self.wfile)
+    
+    def get_request_url(self, archive_url):
+        """
+        Given the absolute URL of a resource, returns the URL that should be used to
+        request it from the archive server.
+        """
+        archive_url_parts = urlparse.urlparse(archive_url)
+        
+        # TODO: Avoid stripping {params, query, fragment}, if present
+        request_url = 'http://%s/%s/%s%s' % (
+            self.request_host,
+            archive_url_parts.scheme,
+            archive_url_parts.netloc, archive_url_parts.path)
+        return request_url

@@ -36,7 +36,14 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
     try:
         html = BeautifulSoup(html_bytes, fromEncoding=declared_encoding)
     except Exception as e:
-        # TODO: Return the underlying exception as a warning
+        # TODO: Return the underlying exception as a warning by some mechanism
+        
+        # If input is file object, read it directly into memory so that
+        # str() can be called on it properly.
+        if hasattr(html_bytes, 'read'):
+            html_bytes.seek(0)
+            html_bytes = html_bytes.read()
+        
         return (html_bytes, [])
     
     tags_with_src = html.findAll(_ANY_RE, src=_ANY_RE)
