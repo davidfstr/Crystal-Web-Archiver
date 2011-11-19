@@ -515,9 +515,7 @@ class ResourceRevision(object):
             links = []
         else:
             with self.open() as body:
-                # TODO: Pass in the hinted Content-Encoding HTTP header, if available,
-                #       to assist in determining the correct text encoding
-                links = parse_links(body)
+                links = parse_links(body, self.declared_content_type)
         
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url

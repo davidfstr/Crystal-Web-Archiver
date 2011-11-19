@@ -9,7 +9,25 @@ _ANY_RE = re.compile(r'.*')
 
 def parse_links(html_bytes, declared_encoding=None):
     """
-    Parses and returns a list of `Link`s in the specified HTML bytestring.
+    Parses the specified HTML bytestring, returning a list of Links.
+    
+    Arguments:
+    html_bytes -- HTML bytestring or file object.
+    declared_encoding -- the encoding that the HTML document is declared to be in.
+    """
+    (html, links) = parse_html_and_links(html_bytes, declared_encoding)
+    return links
+
+def parse_html_and_links(html_bytes, declared_encoding=None):
+    """
+    Parses the specified HTML bytestring, returning a 2-tuple containing
+    (1) the HTML document and
+    (2) a list of Links.
+    
+    The HTML document can be reoutput by getting its str() representation.
+    
+    This parse method is useful over parse_links() when the parsed links
+    need to be modified and the document reoutput.
     
     Arguments:
     html_bytes -- HTML bytestring or file object.
@@ -19,7 +37,7 @@ def parse_links(html_bytes, declared_encoding=None):
         html = BeautifulSoup(html_bytes, fromEncoding=declared_encoding)
     except Exception as e:
         # TODO: Return the underlying exception as a warning
-        return []
+        return (html_bytes, [])
     
     tags_with_src = html.findAll(_ANY_RE, src=_ANY_RE)
     tags_with_href = html.findAll(_ANY_RE, href=_ANY_RE)
@@ -39,6 +57,7 @@ def parse_links(html_bytes, declared_encoding=None):
         else:
             title = None
             links.append(Link(relative_url, 'Unknown Embedded (%s)' % tag.name, title, True))
+    
     for tag in tags_with_href:
         # TODO: Need to resolve URLs to be absolute
         relative_url = tag['href']
@@ -55,7 +74,7 @@ def parse_links(html_bytes, declared_encoding=None):
             title = None
             links.append(Link(relative_url, 'Unknown (%s)' % tag.name, title, False))
     
-    return links
+    return (html, links)
 
 def _get_image_tag_title(tag):
     if 'alt' in tag.attrMap:
