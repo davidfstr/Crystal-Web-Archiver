@@ -11,12 +11,16 @@ import sys
 import threading
 import wx
 
+# Useful to set to True for interactive sessions in the interpreter
+# when it isn't desirable to create a wx.App object.
+_ASSUME_CURRENT_THREAD_IS_FOREGROUND = False
+
 def fg_call_later(callable):
     """
     Schedules the argument to be called on the foreground thread.
     This should be called by background threads that need to access the UI or model.
     """
-    if wx.Thread_IsMain():
+    if _ASSUME_CURRENT_THREAD_IS_FOREGROUND or wx.Thread_IsMain():
         callable()
     else:
         wx.CallAfter(callable)
@@ -29,7 +33,7 @@ def fg_call_and_wait(callable):
     Returns the result of the callable.
     If the callable raises an exception, it will be reraised by this method.
     """
-    if wx.Thread_IsMain():
+    if _ASSUME_CURRENT_THREAD_IS_FOREGROUND or wx.Thread_IsMain():
         callable()
     else:
         condition = threading.Condition()
