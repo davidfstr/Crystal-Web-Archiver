@@ -520,7 +520,7 @@ class ResourceRevision(object):
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url
         if redirect_url is not None:
-            links.append(Link(redirect_url, self._redirect_title, 'Redirect', True))
+            links.append(Link.create_external(redirect_url, self._redirect_title, 'Redirect', True))
         
         return links
     

@@ -45,34 +45,38 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
     links = []
     for tag in tags_with_src:
         relative_url = tag['src']
+        embedded = True
         if tag.name == 'img':
             title = _get_image_tag_title(tag)
-            links.append(Link(relative_url, 'Image', title, True))
+            type_title = 'Image'
         elif tag.name == 'frame':
             title = tag['name'] if 'name' in tag.attrMap else None
-            links.append(Link(relative_url, 'Frame', title, True))
+            type_title = 'Frame'
         elif tag.name == 'input' and 'type' in tag.attrMap and tag['type'] == 'image':
             title = _get_image_tag_title(tag)
-            links.append(Link(relative_url, 'Form Image', title, True))
+            type_title = 'Form Image'
         else:
             title = None
-            links.append(Link(relative_url, 'Unknown Embedded (%s)' % tag.name, title, True))
+            type_title = 'Unknown Embedded (%s)' % tag.name
+        links.append(Link.create_from_tag(tag, 'src', type_title, title, embedded))
     
     for tag in tags_with_href:
-        # TODO: Need to resolve URLs to be absolute
         relative_url = tag['href']
+        embedded = False
         if tag.name == 'a':
             title = tag.string
-            links.append(Link(relative_url, 'Link', title, False))
+            type_title = 'Link'
         elif tag.name == 'link' and (
                 ('rel' in tag.attrMap and tag['rel'] == 'stylesheet') or (
                  'type' in tag.attrMap and tag['type'] == 'text/css') or (
                  relative_url.endswith('.css'))):
             title = None
-            links.append(Link(relative_url, 'Stylesheet', title, True))
+            type_title = 'Stylesheet'
+            embedded = True
         else:
             title = None
-            links.append(Link(relative_url, 'Unknown (%s)' % tag.name, title, False))
+            type_title = 'Unknown (%s)' % tag.name
+        links.append(Link.create_from_tag(tag, 'href', type_title, title, embedded))
     
     return (html, links)
 
@@ -85,8 +89,29 @@ def _get_image_tag_title(tag):
         return None
 
 class Link(object):
-    def __init__(self, relative_url, type_title, title, embedded):
+    """
+    Represents a link in a (usually-HTML) resource.
+    """
+    @staticmethod
+    def create_from_tag(tag, attr_name, type_title, title, embedded):
         """
+        Creates a link that is derived from the attribute of an HTML element.
+        
+        Arguments:
+        relative_url - URL or URI referenced by this link, often relative.
+        type_title - displayed title for this link's type.
+        title - displayed title for this link, or None.
+        embedded - whether this link refers to an embedded resource.
+        """
+        if tag is None or attr_name is None or type_title is None or embedded not in (True, False):
+            raise ValueError
+        return Link(None, tag, attr_name, type_title, title, embedded)
+    
+    @staticmethod
+    def create_external(relative_url, type_title, title, embedded):
+        """
+        Creates a external link that is not reflected in the original HTML content.
+        
         Arguments:
         relative_url - URL or URI referenced by this link, often relative.
         type_title - displayed title for this link's type.
@@ -95,10 +120,27 @@ class Link(object):
         """
         if relative_url is None or type_title is None or embedded not in (True, False):
             raise ValueError
-        self.relative_url = relative_url
+        return Link(relative_url, None, None, type_title, title, embedded)
+    
+    def __init__(self, relative_url, tag, attr_name, type_title, title, embedded):
+        self._relative_url = relative_url
+        self._tag = tag
+        self._attr_name = attr_name
         self.title = title
         self.type_title = type_title
         self.embedded = embedded
+    
+    def _get_relative_url(self):
+        if self._relative_url:
+            return self._relative_url
+        else:
+            return self._tag[self._attr_name]
+    def _set_relative_url(self, value):
+        if self._relative_url:
+            self._relative_url = value
+        else:
+            self._tag[self._attr_name] = value
+    relative_url = property(_get_relative_url, _set_relative_url)
     
     @property
     def full_title(self):
