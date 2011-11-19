@@ -33,6 +33,9 @@ _HEADER_BLACKLIST = set([
     'transfer-encoding',
     'content-length',
     'accept-ranges',
+    'cache-control',
+    'connection',
+    'age',
 ])
 
 class _RequestHandler(BaseHTTPRequestHandler):
@@ -130,13 +133,17 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         self.send_response(metadata['status_code'], metadata['reason_phrase'])
         
-        # TODO: Rewrite links in headers (such as the Location header)
         for (name, value) in metadata['headers']:
-            if name not in _HEADER_WHITELIST:
+            if name == 'location':
+                self.send_header(name, self.get_request_url(value))
+                continue
+                
+            if name in _HEADER_WHITELIST:
+                self.send_header(name, value)
+            else:
                 if name not in _HEADER_BLACKLIST:
                     print '*** Ignoring unknown header in archive: %s: %s' % (name, value)
                 continue
-            self.send_header(name, value)
         self.end_headers()
         
         self.send_revision_body(revision)
