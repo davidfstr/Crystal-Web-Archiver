@@ -53,15 +53,32 @@ class Project(object):
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
                 c = self._db.cursor()
+                
                 for (name, value) in c.execute('select name, value from project_property'):
                     self._set_property(name, value)
+                
                 for (url, id) in c.execute('select url, id from resource'):
                     Resource(self, url, _id=id)
+                
                 for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
-                    resource = [r for r in self._resources.values() if r._id == resource_id][0] # PERF
+                    resource = self._get_resource_with_id(resource_id)
                     RootResource(self, name, resource, _id=id)
-                for (name, url_pattern, id) in c.execute('select name, url_pattern, id from resource_group'):
-                    ResourceGroup(self, name, url_pattern, _id=id)
+                
+                group_2_source = {}
+                for (name, url_pattern, source_type, source_id, id) in c.execute('select name, url_pattern, source_type, source_id, id from resource_group'):
+                    group = ResourceGroup(self, name, url_pattern, _id=id)
+                    group_2_source[group] = (source_type, source_id)
+                for (group, (source_type, source_id)) in group_2_source.iteritems():
+                    if source_type is None:
+                        source_obj = None
+                    elif source_type == 'root_resource':
+                        source_obj = self._get_root_resource_with_id(source_id)
+                    elif source_type == 'resource_group':
+                        source_obj = self._get_resource_group_with_id(source_id)
+                    else:
+                        raise ProjectFormatError('Resource group %s has invalid source type "%s".' % (group._id, source_type))
+                    group._init_source(source_obj)
+                
                 # (ResourceRevisions are loaded on demand)
             else:
                 # Create new project
@@ -73,7 +90,7 @@ class Project(object):
                 c.execute('create table project_property (name text unique not null, value text not null)')
                 c.execute('create table resource (id integer primary key, url text unique not null)')
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
-                c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null)')
+                c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
                 c.execute('create table resource_revision (id integer primary key, resource_id integer not null, error text not null, metadata text not null)')
                 e.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         finally:
@@ -120,27 +137,46 @@ class Project(object):
     def resources(self):
         return self._resources.values()
     
+    def get_resource(self, url):
+        """Returns the `Resource` with the specified URL or None if no such resource exists."""
+        return self._resources.get(url, None)
+    
+    def _get_resource_with_id(self, resource_id):
+        """Returns the `Resource` with the specified ID or None if no such resource exists."""
+        # PERF: O(n) when it could be O(1)
+        return next((r for r in self._resources.values() if r._id == resource_id), None)
+    
     @property
     def root_resources(self):
         return self._root_resources.values()
     
-    def get_resource(self, url):
-        """Returns the `Resource` with the specified URL or None if no such resource is recognized."""
-        return self._resources.get(url, None)
-    
     def get_root_resource(self, resource):
         """Returns the `RootResource` with the specified `Resource` or None if none exists."""
         return self._root_resources.get(resource, None)
+    
+    def _get_root_resource_with_id(self, root_resource_id):
+        """Returns the `RootResource` with the specified ID or None if no such root resource exists."""
+        # PERF: O(n) when it could be O(1)
+        return next((rr for rr in self._root_resources.values() if rr._id == root_resource_id), None)
+    
+    def _get_root_resource_with_name(self, name):
+        """Returns the `RootResource` with the specified name or None if no such root resource exists."""
+        # PERF: O(n) when it could be O(1)
+        return next((rr for rr in self._root_resources.values() if rr.name == name), None)
     
     @property
     def resource_groups(self):
         return self._resource_groups
     
     def get_resource_group(self, name):
-        for rg in self._resource_groups:
-            if rg.name == name:
-                return rg
-        return None
+        """Returns the `ResourceGroup` with the specified name or None if no such resource exists."""
+        # PERF: O(n) when it could be O(1)
+        return next((rg for rg in self._resource_groups if rg.name == name), None)
+    
+    def _get_resource_group_with_id(self, resource_group_id):
+        """Returns the `ResourceGroup` with the specified ID or None if no such resource exists."""
+        # PERF: O(n) when it could be O(1)
+        return next((rg for rg in self._resource_groups if rg._id == resource_group_id), None)
     
     def add_task(self, task):
         """
@@ -150,6 +186,9 @@ class Project(object):
             self.root_task.append_child(task)
 
 class CrossProjectReferenceError(Exception):
+    pass
+
+class ProjectFormatError(Exception):
     pass
 
 class _WeakTaskRef(object):
@@ -679,6 +718,7 @@ class ResourceGroup(object):
         self.name = name
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup._url_pattern_to_re(url_pattern)
+        self._source = None
         self.listeners = []
         
         if project._loading:
@@ -689,6 +729,39 @@ class ResourceGroup(object):
             project._db.commit()
             self._id = c.lastrowid
         project._resource_groups.append(self)
+    
+    def _init_source(self, source):
+        self._source = source
+    
+    def _get_source(self):
+        """
+        The "source" of this resource group.
+        A source can be a RootResource, a ResourceGroup, or None.
+        
+        If the source of a resource group is set, the user asserts that downloading
+        the source will reveal all of the members of this group. Thus a group's source
+        acts as the source of its members.
+        """
+        return self._source
+    def _set_source(self, value):
+        if value is None:
+            source_type = None
+            source_id = None
+        elif type(value) is RootResource:
+            source_type = 'root_resource'
+            source_id = value._id
+        elif type(value) is ResourceGroup:
+            source_type = 'resource_group'
+            source_id = value._id
+        else:
+            raise ValueError('Not a valid type of source.')
+        
+        c = self.project._db.cursor()
+        c.execute('update resource_group set source_type=?, source_id=? where id=?', (source_type, source_id, self._id))
+        self.project._db.commit()
+        
+        self._source = value
+    source = property(_get_source, _set_source)
     
     @staticmethod
     def _url_pattern_to_re(url_pattern):
@@ -746,3 +819,6 @@ class ResourceGroup(object):
         """
         from crystal.task import DownloadResourceGroupTask
         return DownloadResourceGroupTask(self)
+
+    def __repr__(self):
+        return 'ResourceGroup(%s,%s)' % (repr(self.name), repr(self.url_pattern))
