@@ -15,12 +15,15 @@ import wx
 # when it isn't desirable to create a wx.App object.
 _ASSUME_CURRENT_THREAD_IS_FOREGROUND = False
 
+def _wx_main_thread_exists():
+    return wx.GetApp() is not None
+
 def fg_call_later(callable, *args):
     """
     Schedules the argument to be called on the foreground thread.
     This should be called by background threads that need to access the UI or model.
     """
-    if _ASSUME_CURRENT_THREAD_IS_FOREGROUND or wx.Thread_IsMain():
+    if _ASSUME_CURRENT_THREAD_IS_FOREGROUND or not _wx_main_thread_exists() or wx.Thread_IsMain():
         callable(*args)
     else:
         wx.CallAfter(callable, *args)
@@ -33,7 +36,7 @@ def fg_call_and_wait(callable, *args):
     Returns the result of the callable.
     If the callable raises an exception, it will be reraised by this method.
     """
-    if _ASSUME_CURRENT_THREAD_IS_FOREGROUND or wx.Thread_IsMain():
+    if _ASSUME_CURRENT_THREAD_IS_FOREGROUND or not _wx_main_thread_exists() or wx.Thread_IsMain():
         callable(*args)
     else:
         condition = threading.Condition()
