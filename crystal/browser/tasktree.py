@@ -1,14 +1,16 @@
-from crystal.ui.tree2cli import TreeView, NodeView
+from crystal.ui.tree2 import TreeView, NodeView
 
 class TaskTree(object):
     """
     View controller for the task tree
     """
-    def __init__(self, root_task):
+    def __init__(self, root_task, parent_peer):
         self.root = TaskTreeNode(root_task)
         
-        self.tree = TreeView()
+        self.tree = TreeView(parent_peer)
         self.tree.root = self.root.tree_node
+        
+        self.tree.peer.SetInitialSize((550, 300))
 
 class TaskTreeNode(object):
     """
@@ -21,6 +23,7 @@ class TaskTreeNode(object):
         self.tree_node = NodeView()
         self.tree_node.title = self.task.title
         self.tree_node.subtitle = self.task.subtitle
+        self.tree_node.expandable = not callable(task)
         for child in self.task.children:
             self.task_did_append_child(self.task, child)
     

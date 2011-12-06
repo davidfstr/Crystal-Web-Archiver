@@ -62,12 +62,19 @@ class TreeView(object):
         self.peer.AssignImageList(self.tree_imagelist)
         
         # Create root node's view
+        self._root_peer = NodeViewPeer(self, self.peer.AddRoot(''))
         self.root = NodeView()
-        self.root._attach(NodeViewPeer(self, self.peer.AddRoot('')))
         
         # Listen for events on peer
         for event_type in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR:
             self.peer.Bind(event_type, self._dispatch_event, self.peer)
+    
+    def _get_root(self):
+        return self._root
+    def _set_root(self, value):
+        self._root = value
+        self._root._attach(self._root_peer)
+    root = property(_get_root, _set_root)
     
     def get_image_id_for_bitmap(self, bitmap):
         """
@@ -184,8 +191,10 @@ class NodeView(object):
                     child._order_index = i
                     i += 1
                 self.peer.SortChildren()
-            
     children = property(_get_children, _set_children)
+    
+    def append_child(self, child):
+        self.children = self.children + [child]
     
     @property
     def _tree(self):
