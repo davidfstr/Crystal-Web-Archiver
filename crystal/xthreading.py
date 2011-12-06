@@ -37,7 +37,7 @@ def fg_call_and_wait(callable, *args):
     If the callable raises an exception, it will be reraised by this method.
     """
     if _ASSUME_CURRENT_THREAD_IS_FOREGROUND or not _wx_main_thread_exists() or wx.Thread_IsMain():
-        callable(*args)
+        return callable(*args)
     else:
         condition = threading.Condition()
         callable_result = [None]
@@ -67,7 +67,6 @@ def fg_call_and_wait(callable, *args):
             raise exc_info[1], None, exc_info[2]
         
         return callable_result[0]
-        
 
 def bg_call_later(callable, *args):
     """
