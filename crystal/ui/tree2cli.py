@@ -6,12 +6,14 @@ Provides a tree UI with an API similar to the 'tree' module, but with two differ
 
 class TreeView(object):
     def __init__(self):
-        self._root = NodeView()
-        self._root._attach(self)
+        self.root = NodeView()
     
-    @property
-    def root(self):
+    def _get_root(self):
         return self._root
+    def _set_root(self, value):
+        self._root = value
+        self._root._attach(self)
+    root = property(_get_root, _set_root)
     
     def _refresh(self):
         def _print_node(parent, level):
@@ -54,6 +56,9 @@ class NodeView(object):
             self._attach_children()
             self._tree._refresh()
     children = property(_get_children, _set_children)
+    
+    def append_child(self, child):
+        self.children = self.children + [child]
     
     def _attach(self, tree):
         self._tree = tree

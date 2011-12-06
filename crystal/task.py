@@ -58,7 +58,7 @@ class Task(object):
         return self._subtitle
     def _set_subtitle(self, value):
         def fg_task():
-            print '%s -> %s' % (self, value)
+            #print '%s -> %s' % (self, value)
             self._subtitle = value
             
             for lis in self.listeners:
@@ -87,6 +87,10 @@ class Task(object):
     def append_child(self, child):
         self._children.append(child)
         child.listeners.append(self)
+        
+        for lis in self.listeners:
+            if hasattr(lis, 'task_did_append_child'):
+                lis.task_did_append_child(self, child)
     
     def finish(self):
         """
@@ -290,6 +294,19 @@ class DownloadResourceGroupTask(Task):
         
         if self.num_children_complete == len(self.children):
             self.finish()
+
+class RootTask(Task):
+    """
+    Task whose primary purpose is to serve as the root task.
+    External code must create and add its child tasks.
+    
+    This task never completes.
+    """
+    def __init__(self):
+        Task.__init__(self, title='ROOT')
+        self.subtitle = 'Running'
+        
+        self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
 
 # ----------------------------------------------------------------------------------------
 
