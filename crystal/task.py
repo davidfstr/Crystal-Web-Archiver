@@ -22,6 +22,9 @@ class Task(object):
             - Should add the initial set of children in its constructor.
         - May add additional children tasks over time to perform additional work.
             - Generally this is done upon the completion of a child task.
+        - Automatically listen to child tasks. A container task may override:
+            o child_task_subtitle_did_change
+            o child_task_did_complete
     
     Tasks must generally be manipulated on the foreground thread unless
     documented otherwise.
@@ -108,8 +111,19 @@ class Task(object):
     
     # === Public Operations ===
     
-    # TODO: Document
     def try_get_next_task_unit(self):
+        """
+        Returns a callable ("task unit") that completes a unit of work for
+        this task, or None if no more units can be provided until at least
+        one of the previously returned units completes.
+        
+        Task units may be run on any thread.
+        
+        If this is a leaf task, its own __call__() method will be returned
+        as the solitary task unit. As a task unit, it must be designed to
+        run on any thread.
+        """
+        
         if self.complete:
             return None
         
@@ -155,14 +169,12 @@ class Task(object):
     # === Internal Events ===
     
     def task_subtitle_did_change(self, task):
-        # TODO: Document that subclasses may optionally provide this method
         if hasattr(self, 'child_task_subtitle_did_change'):
             self.child_task_subtitle_did_change(task)
     
     def task_did_complete(self, task):
         self._num_children_complete += 1
         
-        # TODO: Document that subclasses may optionally provide this method
         if hasattr(self, 'child_task_did_complete'):
             self.child_task_did_complete(task)
         
