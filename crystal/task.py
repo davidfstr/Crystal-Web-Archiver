@@ -1,5 +1,5 @@
 import time
-from xthreading import fg_call_later
+from xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 
 SCHEDULING_STYLE_NONE = 0
 SCHEDULING_STYLE_SEQUENTIAL = 1
@@ -324,9 +324,9 @@ class RootTask(Task):
 
 def schedule_forever(task):
     """
-    Runs the specified task synchronously until it completes execution.
+    Runs the specified task synchronously until it completes.
     
-    This is intended for testing, until a full scheduler class is written.
+    This function is intended for testing, until a full scheduler class is written.
     """
     
     while True:
@@ -337,3 +337,23 @@ def schedule_forever(task):
             else:
                 raise ValueError('Incomplete root task is refusing to yield units.')
         unit()
+
+def start_schedule_forever(task):
+    """
+    Asynchronously runs the specified task until it completes.
+    
+    This function is intended for testing, until a full scheduler class is written.
+    """
+    def bg_task():
+        while True:
+            def fg_task():
+                return (task.try_get_next_task_unit(), task.complete)
+            (unit, task_complete) = fg_call_and_wait(fg_task)
+            
+            if unit is None:
+                if task_complete:
+                    break
+                else:
+                    raise ValueError('Incomplete root task is refusing to yield units.')
+            unit()  # Run unit directly on this bg thread
+    bg_call_later(bg_task)
