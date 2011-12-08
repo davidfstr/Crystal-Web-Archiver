@@ -1,7 +1,9 @@
 from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree
+from crystal.browser.tasktree import TaskTree
 from crystal.model import Resource, ResourceGroup, RootResource
+from crystal.task import RootTask
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -9,18 +11,39 @@ _WINDOW_INNER_PADDING = 10
 class MainWindow(object):
     def __init__(self, project):
         self.project = project
+        self.root_task = RootTask()
         
-        self.frame = wx.Frame(None, title='Crystal')
-        frame = self.frame
+        frame = wx.Frame(None, title='Crystal')
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         
-        frame_sizer.Add(self._create_content(frame), proportion=1, flag=wx.EXPAND|wx.ALL, border=_WINDOW_INNER_PADDING)
+        splitter = wx.SplitterWindow(frame, style=wx.SP_LIVE_UPDATE)
+        splitter.SetSashGravity(1.0)
+        splitter.SetMinimumPaneSize(20)
+        
+        entity_pane = self._create_entity_pane(splitter)
+        task_pane = self._create_task_pane(splitter)
+        splitter.SplitHorizontally(entity_pane, task_pane, -task_pane.GetBestSize().height)
+        
+        frame_sizer.Add(splitter, proportion=1, flag=wx.EXPAND)
         
         frame.Fit()
         frame.Show(True)
+        
+        self.frame = frame
     
-    def _create_content(self, parent):
+    # === Entity Pane ===
+    
+    def _create_entity_pane(self, parent):
+        pane = wx.Panel(parent)
+        pane_sizer = wx.BoxSizer(wx.VERTICAL)
+        pane.SetSizer(pane_sizer)
+        
+        pane_sizer.Add(self._create_entity_pane_content(pane), proportion=1, flag=wx.EXPAND|wx.ALL, border=_WINDOW_INNER_PADDING)
+        
+        return pane
+    
+    def _create_entity_pane_content(self, parent):
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(self._create_entity_tree(parent), proportion=1, flag=wx.EXPAND)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
@@ -88,3 +111,24 @@ class MainWindow(object):
     
     def _on_remove_entity(self, event):
         pass
+    
+    # === Task Pane ===
+    
+    def _create_task_pane(self, parent):
+        pane = wx.Panel(parent)
+        pane_sizer = wx.BoxSizer(wx.VERTICAL)
+        pane.SetSizer(pane_sizer)
+        
+        pane_sizer.Add(self._create_task_pane_content(pane), proportion=1, flag=wx.EXPAND|wx.ALL, border=_WINDOW_INNER_PADDING)
+        
+        return pane
+    
+    def _create_task_pane_content(self, parent):
+        content_sizer = wx.BoxSizer(wx.VERTICAL)
+        content_sizer.Add(self._create_task_tree(parent), proportion=1, flag=wx.EXPAND)
+        return content_sizer
+    
+    def _create_task_tree(self, parent):
+        self.task_tree = TaskTree(parent, self.root_task)
+        
+        return self.task_tree.peer

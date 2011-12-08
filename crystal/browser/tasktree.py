@@ -4,13 +4,17 @@ class TaskTree(object):
     """
     View controller for the task tree
     """
-    def __init__(self, root_task, parent_peer):
+    def __init__(self, parent_peer, root_task):
         self.root = TaskTreeNode(root_task)
         
         self.tree = TreeView(parent_peer)
         self.tree.root = self.root.tree_node
         
-        self.tree.peer.SetInitialSize((550, 300))
+        self.tree.peer.SetInitialSize((550, 100)) # shows just over 4 collapsed items
+    
+    @property
+    def peer(self):
+        return self.tree.peer
 
 class TaskTreeNode(object):
     """
