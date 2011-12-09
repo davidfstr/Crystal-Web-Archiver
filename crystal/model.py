@@ -325,10 +325,26 @@ class ResourceRevision(object):
     
     @staticmethod
     def create_from_error(resource, error):
+        """
+        Creates a revision that encapsulates the error encountered when fetching the revision.
+        
+        Threadsafe.
+        """
         return ResourceRevision._create(resource, error=error)
     
     @staticmethod
     def create_from_response(resource, metadata, body_stream):
+        """
+        Creates a revision with the specified metadata and body.
+        
+        Threadsafe. The passed body stream will be read synchronously until EOF,
+        so it is recommended that this method be invoked on a background thread.
+        
+        Arguments:
+        resource -- resource that this is a revision of.
+        metadata -- JSON-encodable dictionary of resource metadata.
+        body_stream -- file-like object containing the revision body.
+        """
         try:
             return ResourceRevision._create(resource, metadata=metadata, body_stream=body_stream)
         except Exception as e:
