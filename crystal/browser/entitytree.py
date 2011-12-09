@@ -100,7 +100,7 @@ class _ResourceNode(Node):
         self.view.delegate = self
         
         self.resource = resource
-        self.download_task = None
+        self.download_future = None
         self.resource_links = None
     
     def __eq__(self, other):
@@ -116,14 +116,17 @@ class _ResourceNode(Node):
     def on_expanded(self, event):
         # If this is the first expansion attempt, start an asynchronous task to fetch
         # the resource and subsequently update the children
-        if self.download_task is None:
-            self.download_task = self.resource.download_self()
+        if self.download_future is None:
+            self.download_future = self.resource.download_body()
             
-            def bg_task():
-                revision = self.download_task()
-                self.resource_links = revision.links()
-                fg_call_later(self.update_children)
-            bg_call_later(bg_task)
+            def download_done(future):
+                revision = future.result()
+                def bg_task():
+                    # Link parsing is I/O intensive, so do it on a background thread
+                    self.resource_links = revision.links()
+                    fg_call_later(self.update_children)
+                bg_call_later(bg_task)
+            self.download_future.add_done_callback(download_done)
     
     def update_children(self):
         """

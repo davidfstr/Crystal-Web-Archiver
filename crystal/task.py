@@ -1,4 +1,5 @@
 import time
+from xfutures import Future
 from xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 
 SCHEDULING_STYLE_NONE = 0
@@ -186,15 +187,37 @@ class DownloadResourceBodyTask(Task):
     This is the most basic task, located at the leaves of the task tree.
     """
     
-    def __init__(self):
-        Task.__init__(self, title='Downloading body: URL - TITLE')
+    def __init__(self, abstract_resource):
+        """
+        Arguments:
+        abstract_resource -- a Resource or a RootResource.
+        """
+        resource = abstract_resource.resource
+        if hasattr(abstract_resource, 'name'):
+            title = 'Downloading body: %s - %s' % (resource.url, abstract_resource.name)
+        else:
+            title = 'Downloading body: %s' % (resource.url)
+        
+        Task.__init__(self, title=title)
+        self._resource = resource
+        # Can be used by observers of the task to obtain the resultant ResourceRevision.
+        self.future = Future()
     
     def __call__(self):
-        self.subtitle = 'Waiting for response...'
-        time.sleep(.2)
-        self.subtitle = 'Receiving response...'
-        time.sleep(.8)
-        self.finish()
+        # (Ignore client requests to cancel)
+        self.future.set_running_or_notify_cancel()
+        
+        from crystal.download import download_resource_revision
+        try:
+            # TODO: Report errors (embedded in the ResourceRevision) using the completion subtitle.
+            #       Need to add support for this behavior to Task.
+            result = download_resource_revision(self._resource, self)
+            self.future.set_result(result)
+        except:
+            (_, e, _) = sys.exc_info()
+            self.future.set_exception(e)
+        finally:
+            self.finish()
 
 class DownloadResourceTask(Task):
     """

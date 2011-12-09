@@ -15,7 +15,8 @@ import os
 import re
 import shutil
 import sqlite3
-from xthreading import fg_call_and_wait
+import urllib2
+from xthreading import bg_call_later, fg_call_and_wait
 
 class Project(object):
     """
@@ -173,34 +174,68 @@ class Resource(object):
             return self
     
     @property
+    def resource(self):
+        """
+        Returns self.
+        
+        This property is useful when a Resource and a RootResource are used in the same
+        context. Both Resource and RootResource have a 'resource' property that returns
+        the underlying resource.
+        """
+        return self
+    
+    @property
     def downloadable(self):
         try:
             from crystal.download import ResourceRequest
             ResourceRequest.create(self.url)
             return True
-        except Exception:
+        except urllib2.URLError:
             return False
     
-    # TODO: Define download() method that fetches the resource itself,
-    #       plus any other "embedded" resources it links to.
+    def download_body(self):
+        """
+        Returns a Future<ResourceRevision> that downloads (if necessary) and returns an
+        up-to-date version of this resource's body.
+        
+        The returned Future may invoke its callbacks on any thread.
+        
+        If it is necessary to perform a download, a top-level Task will be created
+        internally to perform the download and display the progress.
+        """
+        download_task = self.try_create_download_body_task()
+        if download_task is None:
+            # Already up-to-date
+            revision = self.default_revision()
+            if revision is None:
+                raise AssertionError('Up-to-date resource should have a default revision.')
+            
+            future = Future()
+            future.set_result(revision)
+            return future
+        
+        # TODO: Actually add the task to the task tree.
+        #       That way we don't have to schedule it ourselves.
+        bg_call_later(download_task)
+        
+        return download_task.future
     
-    def download_self(self, force=False):
+    def try_create_download_body_task(self):
         """
-        Returns a callable that returns a `ResourceRevision`.
-        If this resource is up-to-date, the callable returns the default revision immediately.
+        Creates a Task to download this resource's body, if it is not already up-to-date.
+        If a such a Task already exists, the preexisting Task will be returned instead of creating a new one.
+        If this resource is already up-to-date, None will be returned.
         
-        The returned callable may take a long time to execute, and therefore is amenable
-        to being run on a background thread.
-        
-        Arguments:
-        force -- if True then a new revision of this resource is downloaded even if
-                 the most recent revision is deemed to be up-to-date.
+        The caller is responsible for adding the returned Task as the child of an
+        appropriate parent task so that the UI displays it.
         """
-        if not force and self.up_to_date():
-            return (lambda: fg_call_and_wait(lambda: self.default_revision()))
+        if self.up_to_date():
+            return None
         
-        from crystal.download import ResourceDownloadTask
-        return ResourceDownloadTask(self)
+        # TODO: Only create a Task if there isn't already one in progress
+        from crystal.task import DownloadResourceBodyTask
+        task = DownloadResourceBodyTask(self)
+        return task
     
     # TODO: This should ideally be a cheap operation, not requiring a database hit.
     #       Convert to property once this "cheapening" has been done.

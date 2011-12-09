@@ -1,37 +1,31 @@
+"""
+Provides services for downloading a ResourceRevision.
+"""
+
 from collections import defaultdict
 from crystal.model import ResourceRevision
 import httplib
 import urllib2
 from urlparse import urlparse
 
-class Task(object):
-    def _get_subtitle(self):
-        return self._subtitle
-    def _set_subtitle(self, value):
-        # TODO: Display updates in GUI instead of CLI
-        print '-> %s' % (value,)
-        self._subtitle = value
-    subtitle = property(_get_subtitle, _set_subtitle)
-
-class ResourceDownloadTask(Task):
-    def __init__(self, resource):
-        self._resource = resource
-        
-        self.title = 'Downloading: %s' % (resource.url,)
-        self.subtitle = 'Queued.'
-        self.subtasks = []
+def download_resource_revision(resource, progress_listener):
+    """
+    Synchronously downloads a revision of the specified resource.
+    For internal use by DownloadResourceBodyTask.
     
-    def __call__(self):
-        """Synchronously runs this task."""
-        try:
-            self.subtitle = 'Waiting for response...'
-            (metadata, body_stream) = ResourceRequest.create(self._resource.url)()
-            
-            # TODO: Provide incremental feedback such as '7 KB of 15 KB'
-            self.subtitle = 'Receiving response...'
-            return ResourceRevision.create_from_response(self._resource, metadata, body_stream)
-        except Exception as error:
-            return ResourceRevision.create_from_error(self._resource, error)
+    Arguments:
+    resource -- the resource to download.
+    progress_listener -- the DownloadResourceBodyTask that progress updates will be sent to.
+    """
+    try:
+        progress_listener.subtitle = 'Waiting for response...'
+        (metadata, body_stream) = ResourceRequest.create(resource.url)()
+        
+        # TODO: Provide incremental feedback such as '7 KB of 15 KB'
+        progress_listener.subtitle = 'Receiving response...'
+        return ResourceRevision.create_from_response(resource, metadata, body_stream)
+    except Exception as error:
+        return ResourceRevision.create_from_error(resource, error)
 
 class ResourceRequest(object):
     """
@@ -50,7 +44,7 @@ class ResourceRequest(object):
         elif url_parts.scheme == 'ftp':
             return UrlResourceRequest(url)
         else:
-            raise URLError('URL scheme "%s" is not supported.' % url_parts.scheme)
+            raise urllib2.URLError('URL scheme "%s" is not supported.' % url_parts.scheme)
     
     def __call__(self):
         """
