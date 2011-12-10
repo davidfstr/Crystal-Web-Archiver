@@ -182,6 +182,19 @@ class Task(object):
         task.listeners.remove(self)
 
 # ----------------------------------------------------------------------------------------
+from crystal.model import Resource
+import urlparse
+
+def _get_abstract_resource_title(abstract_resource):
+    """
+    Arguments:
+    abstract_resource -- a Resource or a RootResource.
+    """
+    resource = abstract_resource.resource
+    if hasattr(abstract_resource, 'name'):
+        return '%s - %s' % (resource.url, abstract_resource.name)
+    else:
+        return '%s' % (resource.url)
 
 class DownloadResourceBodyTask(Task):
     """
@@ -194,14 +207,9 @@ class DownloadResourceBodyTask(Task):
         Arguments:
         abstract_resource -- a Resource or a RootResource.
         """
-        resource = abstract_resource.resource
-        if hasattr(abstract_resource, 'name'):
-            title = 'Downloading body: %s - %s' % (resource.url, abstract_resource.name)
-        else:
-            title = 'Downloading body: %s' % (resource.url)
+        Task.__init__(self, title='Downloading body: ' + _get_abstract_resource_title(abstract_resource))
+        self._resource = abstract_resource.resource
         
-        Task.__init__(self, title=title)
-        self._resource = resource
         # Can be used by observers of the task to obtain the resultant ResourceRevision.
         self.future = Future()
     
@@ -209,21 +217,18 @@ class DownloadResourceBodyTask(Task):
         # (Ignore client requests to cancel)
         self.future.set_running_or_notify_cancel()
         
-        from crystal.download import download_resource_revision
         try:
             # TODO: Report errors (embedded in the ResourceRevision) using the completion subtitle.
             #       Need to add support for this behavior to Task.
+            from crystal.download import download_resource_revision
             result = download_resource_revision(self._resource, self)
+            
             self.future.set_result(result)
         except:
             (_, e, _) = sys.exc_info()
             self.future.set_exception(e)
         finally:
             self.finish()
-
-# ----------------------------------------------------------------------------------------
-from crystal.model import Resource
-import urlparse
 
 class DownloadResourceTask(Task):
     """
@@ -234,15 +239,11 @@ class DownloadResourceTask(Task):
         Arguments:
         abstract_resource -- a Resource or a RootResource.
         """
-        resource = abstract_resource.resource
-        if hasattr(abstract_resource, 'name'):
-            title = 'Downloading: %s - %s' % (resource.url, abstract_resource.name)
-        else:
-            title = 'Downloading: %s' % (resource.url)
-        
-        Task.__init__(self, title)
-        self._resource = resource
+        Task.__init__(self, 'Downloading: ' + _get_abstract_resource_title(abstract_resource))
+        self._abstract_resource = abstract_resource
+        self._resource = resource = abstract_resource.resource
         self._download_body_task = DownloadResourceBodyTask(resource)
+        self._parse_links_task = None
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         self.append_child(self._download_body_task)
@@ -261,61 +262,62 @@ class DownloadResourceTask(Task):
             try:
                 body_revision = self._download_body_task.future.result()
             except:
-                embedded_resources = []
-                self._create_resource_download_tasks(embedded_resources)
+                # Behave as if there are no embedded resources
+                pass
             else:
-                # HACK: Workaround use of thread instead of child task perform work
-                self._num_children_complete -= 1
-                
-                # TODO: Should use an actual task to do this work
-                #       so that API contract of try_get_next_task_unit()
-                #       is satisfied completely. (In particular, additional
-                #       child tasks should only be added in the task unit
-                #       of a preceding child task.) We also get the benefit
-                #       that the user can see the operation in progress.
-                #       
-                #       Recommend that creation of this link-parsing task
-                #       be abstracted such that it can also be used by
-                #       the entity-tree code which also needs to perform
-                #       the same kind of parsing.
-                def bg_task():
-                    # (Perform expensive operations on background thread)
-                    links = body_revision.links()
+                self._parse_links_task = ParseResourceRevisionLinks(self._abstract_resource, body_revision)
+                self.append_child(self._parse_links_task)
+        
+        if task is self._parse_links_task:
+            links = self._parse_links_task.future.result()
+            
+            embedded_resources = []
+            link_urls_seen = set()
+            for link in links:
+                if link.embedded:
+                    link_url = urlparse.urljoin(self._resource.url, link.relative_url)
+                    if link_url in link_urls_seen:
+                        continue
+                    else:
+                        link_urls_seen.add(link_url)
                     
-                    def fg_task():
-                        embedded_resources = []
-                        
-                        link_urls_seen = set()
-                        for link in links:
-                            if link.embedded:
-                                link_url = urlparse.urljoin(self._resource.url, link.relative_url)
-                                if link_url in link_urls_seen:
-                                    continue
-                                else:
-                                    link_urls_seen.add(link_url)
-                                
-                                # (Must create Resources on foreground thread)
-                                link_resource = Resource(self._resource.project, link_url)
-                                embedded_resources.append(link_resource)
-                        
-                        # (Must call on foreground thread)
-                        self._create_resource_download_tasks(embedded_resources)
-                    
-                        # HACK: Workaround use of thread instead of child task perform work
-                        self._num_children_complete += 1
-                        if self.num_children_complete == len(self.children):
-                            self.finish()
-                    fg_call_later(fg_task)
-                bg_call_later(bg_task)
+                    link_resource = Resource(self._resource.project, link_url)
+                    embedded_resources.append(link_resource)
+            
+            for resource in embedded_resources:
+                self.append_child(DownloadResourceTask(resource))
         
         self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
         
         if self.num_children_complete == len(self.children):
             self.finish()
+
+class ParseResourceRevisionLinks(Task):
+    def __init__(self, abstract_resource, resource_revision):
+        """
+        Arguments:
+        abstract_resource -- a Resource or a RootResource.
+        resource_revision -- a ResourceRevision.
+        """
+        Task.__init__(self, title='Finding links in: ' + _get_abstract_resource_title(abstract_resource))
+        self._resource_revision = resource_revision
+        
+        # Can be used by observers of the task to obtain the resultant ResourceRevision.
+        self.future = Future()
     
-    def _create_resource_download_tasks(self, embedded_resources):
-        for resource in embedded_resources:
-            self.append_child(DownloadResourceTask(resource))
+    def __call__(self):
+        # (Ignore client requests to cancel)
+        self.future.set_running_or_notify_cancel()
+        
+        try:
+            result = self._resource_revision.links()
+            
+            self.future.set_result(result)
+        except:
+            (_, e, _) = sys.exc_info()
+            self.future.set_exception(e)
+        finally:
+            self.finish()
 
 # ----------------------------------------------------------------------------------------
 
