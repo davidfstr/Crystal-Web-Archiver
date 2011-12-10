@@ -11,7 +11,6 @@ _WINDOW_INNER_PADDING = 10
 class MainWindow(object):
     def __init__(self, project):
         self.project = project
-        self.root_task = RootTask()
         
         frame = wx.Frame(None, title='Crystal')
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -129,6 +128,6 @@ class MainWindow(object):
         return content_sizer
     
     def _create_task_tree(self, parent):
-        self.task_tree = TaskTree(parent, self.root_task)
+        self.task_tree = TaskTree(parent, self.project.root_task)
         
         return self.task_tree.peer

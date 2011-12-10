@@ -1,4 +1,4 @@
-import time
+from time import sleep
 from xfutures import Future
 from xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 
@@ -342,8 +342,17 @@ class RootTask(Task):
         self.subtitle = 'Running'
         
         self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
+    
+    def try_get_next_task_unit(self):
+        # Only the root task is allowed to have no children normally
+        if len(self.children) == 0:
+            return None
+        
+        return super(RootTask, self).try_get_next_task_unit()
 
 # ----------------------------------------------------------------------------------------
+
+_ROOT_TASK_POLL_INTERVAL = .1
 
 def schedule_forever(task):
     """
@@ -358,7 +367,10 @@ def schedule_forever(task):
             if task.complete:
                 break
             else:
-                raise ValueError('Incomplete root task is refusing to yield units.')
+                # TODO: Add logic to sleep appropriately until the root
+                #       task has more children to process
+                sleep(_ROOT_TASK_POLL_INTERVAL)
+                continue
         unit()
 
 def start_schedule_forever(task):
@@ -377,6 +389,9 @@ def start_schedule_forever(task):
                 if task_complete:
                     break
                 else:
-                    raise ValueError('Incomplete root task is refusing to yield units.')
+                    # TODO: Add logic to sleep appropriately until the root
+                    #       task has more children to process
+                    sleep(_ROOT_TASK_POLL_INTERVAL)
+                    continue
             unit()  # Run unit directly on this bg thread
     bg_call_later(bg_task)

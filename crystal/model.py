@@ -16,6 +16,7 @@ import re
 import shutil
 import sqlite3
 import urllib2
+from xfutures import Future
 from xthreading import bg_call_later, fg_call_and_wait
 
 class Project(object):
@@ -77,6 +78,11 @@ class Project(object):
                 e.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         finally:
             self._loading = False
+        
+        # Hold on to the root task and scheduler
+        from crystal.task import RootTask, start_schedule_forever
+        self.root_task = RootTask()
+        start_schedule_forever(self.root_task)
     
     def _get_property(self, name, default):
         return self._properties.get(name, default)
@@ -135,9 +141,37 @@ class Project(object):
             if rg.name == name:
                 return rg
         return None
+    
+    def add_task(self, task):
+        """
+        Schedules the specified top-level task for execution, if not already done.
+        """
+        if task not in self.root_task.children:
+            self.root_task.append_child(task)
 
 class CrossProjectReferenceError(Exception):
     pass
+
+class _WeakTaskRef(object):
+    """
+    Holds a reference to a Task until that task completes.
+    """
+    def __init__(self, task=None):
+        self._task = None
+        self.task = task
+    
+    def _get_task(self):
+        return self._task
+    def _set_task(self, value):
+        if self._task:
+            self._task.listeners.remove(self)
+        self._task = value
+        if self._task:
+            self._task.listeners.append(self)
+    task = property(_get_task, _set_task)
+    
+    def task_did_complete(self, task):
+        self.task = None
 
 class Resource(object):
     """
@@ -162,6 +196,7 @@ class Resource(object):
             self = object.__new__(cls)
             self.project = project
             self.url = url
+            self.download_body_task_ref = _WeakTaskRef()
             
             if project._loading:
                 self._id = _id
@@ -214,9 +249,7 @@ class Resource(object):
             future.set_result(revision)
             return future
         
-        # TODO: Actually add the task to the task tree.
-        #       That way we don't have to schedule it ourselves.
-        bg_call_later(download_task)
+        self.project.add_task(download_task)
         
         return download_task.future
     
@@ -229,12 +262,19 @@ class Resource(object):
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
         """
+        active_task = self.download_body_task_ref.task
+        if active_task is not None:
+            return active_task
+        
         if self.up_to_date():
             return None
         
         # TODO: Only create a Task if there isn't already one in progress
         from crystal.task import DownloadResourceBodyTask
         task = DownloadResourceBodyTask(self)
+        
+        self.download_body_task_ref.task = task
+        
         return task
     
     # TODO: This should ideally be a cheap operation, not requiring a database hit.
