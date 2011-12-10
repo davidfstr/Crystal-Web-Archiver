@@ -40,6 +40,7 @@ def fg_call_and_wait(callable, *args):
         return callable(*args)
     else:
         condition = threading.Condition()
+        callable_done = [False]
         callable_result = [None]
         callable_exc_info = [None]
         
@@ -51,15 +52,15 @@ def fg_call_and_wait(callable, *args):
                 callable_exc_info[0] = sys.exc_info()
             
             # Send signal
-            condition.acquire()
-            condition.notify()
-            condition.release()
+            with condition:
+                callable_done[0] = True
+                condition.notify()
         fg_call_later(fg_task)
         
         # Wait for signal
-        condition.acquire()
-        condition.wait()
-        condition.release()
+        with condition:
+            while not callable_done[0]:
+                condition.wait()
         
         # Reraise callable's exception, if applicable
         if callable_exc_info[0] is not None:
