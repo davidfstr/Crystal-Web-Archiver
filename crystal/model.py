@@ -197,6 +197,7 @@ class Resource(object):
             self.project = project
             self.url = url
             self.download_body_task_ref = _WeakTaskRef()
+            self.download_task_ref = _WeakTaskRef()
             
             if project._loading:
                 self._id = _id
@@ -238,8 +239,7 @@ class Resource(object):
         If it is necessary to perform a download, a top-level Task will be created
         internally to perform the download and display the progress.
         """
-        download_task = self.try_create_download_body_task()
-        if download_task is None:
+        if self.up_to_date():
             # Already up-to-date
             revision = self.default_revision()
             if revision is None:
@@ -249,11 +249,13 @@ class Resource(object):
             future.set_result(revision)
             return future
         
-        self.project.add_task(download_task)
-        
-        return download_task.future
+        task = self._try_create_download_body_task()
+        if task is None:
+            raise AssertionError('Failed to create download-body task for up-to-date Resource.')
+        self.project.add_task(task)
+        return task.future
     
-    def try_create_download_body_task(self):
+    def _try_create_download_body_task(self):
         """
         Creates a Task to download this resource's body, if it is not already up-to-date.
         If a such a Task already exists, the preexisting Task will be returned instead of creating a new one.
@@ -262,19 +264,41 @@ class Resource(object):
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
         """
-        active_task = self.download_body_task_ref.task
-        if active_task is not None:
-            return active_task
+        def task_factory():
+            if self.up_to_date():
+                return None
+            
+            from crystal.task import DownloadResourceBodyTask
+            return DownloadResourceBodyTask(self)
+        return self._get_task_or_create(self.download_body_task_ref, task_factory)
+    
+    def download(self):
+        """
+        Returns a Future<ResourceRevision> that downloads (if necessary) and returns an
+        up-to-date version of this resource's body. If a download is performed, all
+        embedded resources will be downloaded as well.
         
-        if self.up_to_date():
-            return None
+        The returned Future may invoke its callbacks on any thread.
         
-        # TODO: Only create a Task if there isn't already one in progress
-        from crystal.task import DownloadResourceBodyTask
-        task = DownloadResourceBodyTask(self)
+        If it is necessary to perform a download, a top-level Task will be created
+        internally to perform the download and display the progress.
+        """
+        task = self._create_download_task()
+        self.project.add_task(task)
+        return task.future
+    
+    def _create_download_task(self):
+        def task_factory():
+            from crystal.task import DownloadResourceTask
+            return DownloadResourceTask(self)
+        return self._get_task_or_create(self.download_task_ref, task_factory)
+    
+    def _get_task_or_create(self, task_ref, task_factory):
+        if task_ref.task is not None:
+            return task_ref.task
         
-        self.download_body_task_ref.task = task
-        
+        task = task_factory()
+        task_ref.task = task
         return task
     
     # TODO: This should ideally be a cheap operation, not requiring a database hit.

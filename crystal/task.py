@@ -181,6 +181,8 @@ class Task(object):
         
         task.listeners.remove(self)
 
+# ----------------------------------------------------------------------------------------
+
 class DownloadResourceBodyTask(Task):
     """
     Downloads a single resource's body.
@@ -219,17 +221,35 @@ class DownloadResourceBodyTask(Task):
         finally:
             self.finish()
 
+# ----------------------------------------------------------------------------------------
+from crystal.model import Resource
+import urlparse
+
 class DownloadResourceTask(Task):
     """
     Downloads a resource and all of its embedded resources recursively.
     """
-    def __init__(self, num_child_resources=2):
-        Task.__init__(self, title='Downloading: URL - TITLE')
-        self._num_child_resources = num_child_resources
-        self._download_body_task = DownloadResourceBodyTask()
+    def __init__(self, abstract_resource):
+        """
+        Arguments:
+        abstract_resource -- a Resource or a RootResource.
+        """
+        resource = abstract_resource.resource
+        if hasattr(abstract_resource, 'name'):
+            title = 'Downloading: %s - %s' % (resource.url, abstract_resource.name)
+        else:
+            title = 'Downloading: %s' % (resource.url)
+        
+        Task.__init__(self, title)
+        self._resource = resource
+        self._download_body_task = DownloadResourceBodyTask(resource)
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         self.append_child(self._download_body_task)
+    
+    @property
+    def future(self):
+        return self._download_body_task.future
     
     def child_task_subtitle_did_change(self, task):
         if task is self._download_body_task:
@@ -238,14 +258,66 @@ class DownloadResourceTask(Task):
     
     def child_task_did_complete(self, task):
         if task is self._download_body_task:
-            # Create subtasks to download all embedded resources
-            for i in xrange(self._num_child_resources):
-                self.append_child(DownloadResourceTask(0))
+            try:
+                body_revision = self._download_body_task.future.result()
+            except:
+                embedded_resources = []
+                self._create_resource_download_tasks(embedded_resources)
+            else:
+                # HACK: Workaround use of thread instead of child task perform work
+                self._num_children_complete -= 1
+                
+                # TODO: Should use an actual task to do this work
+                #       so that API contract of try_get_next_task_unit()
+                #       is satisfied completely. (In particular, additional
+                #       child tasks should only be added in the task unit
+                #       of a preceding child task.) We also get the benefit
+                #       that the user can see the operation in progress.
+                #       
+                #       Recommend that creation of this link-parsing task
+                #       be abstracted such that it can also be used by
+                #       the entity-tree code which also needs to perform
+                #       the same kind of parsing.
+                def bg_task():
+                    # (Perform expensive operations on background thread)
+                    links = body_revision.links()
+                    
+                    def fg_task():
+                        embedded_resources = []
+                        
+                        link_urls_seen = set()
+                        for link in links:
+                            if link.embedded:
+                                link_url = urlparse.urljoin(self._resource.url, link.relative_url)
+                                if link_url in link_urls_seen:
+                                    continue
+                                else:
+                                    link_urls_seen.add(link_url)
+                                
+                                # (Must create Resources on foreground thread)
+                                link_resource = Resource(self._resource.project, link_url)
+                                embedded_resources.append(link_resource)
+                        
+                        # (Must call on foreground thread)
+                        self._create_resource_download_tasks(embedded_resources)
+                    
+                        # HACK: Workaround use of thread instead of child task perform work
+                        self._num_children_complete += 1
+                        if self.num_children_complete == len(self.children):
+                            self.finish()
+                    fg_call_later(fg_task)
+                bg_call_later(bg_task)
         
         self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
         
         if self.num_children_complete == len(self.children):
             self.finish()
+    
+    def _create_resource_download_tasks(self, embedded_resources):
+        for resource in embedded_resources:
+            self.append_child(DownloadResourceTask(resource))
+
+# ----------------------------------------------------------------------------------------
 
 class UpdateResourceGroupMembersTask(Task):
     """
@@ -329,6 +401,8 @@ class DownloadResourceGroupTask(Task):
         
         if self.num_children_complete == len(self.children):
             self.finish()
+
+# ----------------------------------------------------------------------------------------
 
 class RootTask(Task):
     """
