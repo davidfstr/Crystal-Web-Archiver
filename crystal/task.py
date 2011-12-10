@@ -41,6 +41,7 @@ class Task(object):
         self.listeners = []
         
         self._did_yield_self = False            # used by leaf tasks
+        self._future = Future()                 # used by leaf tasks
         # TODO: Consider merging the following two fields
         self._first_incomplete_child_index = 0  # used by SCHEDULING_STYLE_SEQUENTIAL
         self._next_child_index = 0              # used by SCHEDULING_STYLE_ROUND_ROBIN
@@ -85,6 +86,20 @@ class Task(object):
         Whether this task is complete.
         """
         return self._complete
+    
+    @property
+    def future(self):
+        """
+        Returns a Future that receives the result of this task.
+        
+        This property is only defined by default for leaf tasks.
+        Container tasks may optionally override this if they
+        conceptually return a value.
+        """
+        if callable(self):
+            return self._future
+        else:
+            raise ValueError('Container tasks do not define a result by default.')
     
     # === Protected Operations ===
     
@@ -131,7 +146,7 @@ class Task(object):
         if callable(self):
             if not self._did_yield_self:
                 self._did_yield_self = True
-                return self
+                return self._call_self_and_record_result
             else:
                 return None
         else:
@@ -167,6 +182,17 @@ class Task(object):
             else:
                 raise ValueError('Container task has an unknown scheduling style (%s).' % self.scheduling_style)
     
+    def _call_self_and_record_result(self):
+        # (Ignore client requests to cancel)
+        self._future.set_running_or_notify_cancel()
+        try:
+            self._future.set_result(self())
+        except:
+            (_, e, _) = sys.exc_info()
+            self._future.set_exception(e)
+        finally:
+            self.finish()
+    
     # === Internal Events ===
     
     def task_subtitle_did_change(self, task):
@@ -200,6 +226,8 @@ class DownloadResourceBodyTask(Task):
     """
     Downloads a single resource's body.
     This is the most basic task, located at the leaves of the task tree.
+    
+    Returns a ResourceRevision.
     """
     
     def __init__(self, abstract_resource):
@@ -209,30 +237,19 @@ class DownloadResourceBodyTask(Task):
         """
         Task.__init__(self, title='Downloading body: ' + _get_abstract_resource_title(abstract_resource))
         self._resource = abstract_resource.resource
-        
-        # Can be used by observers of the task to obtain the resultant ResourceRevision.
-        self.future = Future()
     
     def __call__(self):
-        # (Ignore client requests to cancel)
-        self.future.set_running_or_notify_cancel()
-        
-        try:
-            # TODO: Report errors (embedded in the ResourceRevision) using the completion subtitle.
-            #       Need to add support for this behavior to Task.
-            from crystal.download import download_resource_revision
-            result = download_resource_revision(self._resource, self)
-            
-            self.future.set_result(result)
-        except:
-            (_, e, _) = sys.exc_info()
-            self.future.set_exception(e)
-        finally:
-            self.finish()
+        # TODO: Report errors (embedded in the ResourceRevision) using the completion subtitle.
+        #       Need to add support for this behavior to Task.
+        from crystal.download import download_resource_revision
+        return download_resource_revision(self._resource, self)
 
 class DownloadResourceTask(Task):
     """
     Downloads a resource and all of its embedded resources recursively.
+    
+    Returns the ResourceRevision for the resource body.
+    This is typically returned before all embedded resources have finished downloading.
     """
     def __init__(self, abstract_resource):
         """
@@ -293,6 +310,11 @@ class DownloadResourceTask(Task):
             self.finish()
 
 class ParseResourceRevisionLinks(Task):
+    """
+    Parses the list of linked resources from the specified ResourceRevision.
+    
+    Returns a list of Resources.
+    """
     def __init__(self, abstract_resource, resource_revision):
         """
         Arguments:
@@ -301,23 +323,9 @@ class ParseResourceRevisionLinks(Task):
         """
         Task.__init__(self, title='Finding links in: ' + _get_abstract_resource_title(abstract_resource))
         self._resource_revision = resource_revision
-        
-        # Can be used by observers of the task to obtain the resultant ResourceRevision.
-        self.future = Future()
     
     def __call__(self):
-        # (Ignore client requests to cancel)
-        self.future.set_running_or_notify_cancel()
-        
-        try:
-            result = self._resource_revision.links()
-            
-            self.future.set_result(result)
-        except:
-            (_, e, _) = sys.exc_info()
-            self.future.set_exception(e)
-        finally:
-            self.finish()
+        return self._resource_revision.links()
 
 # ----------------------------------------------------------------------------------------
 
