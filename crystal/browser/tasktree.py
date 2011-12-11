@@ -10,7 +10,7 @@ class TaskTree(object):
         self.tree = TreeView(parent_peer)
         self.tree.root = self.root.tree_node
         
-        self.tree.peer.SetInitialSize((550, 100)) # shows just over 4 collapsed items
+        self.tree.peer.SetInitialSize((750, 200))
     
     @property
     def peer(self):
