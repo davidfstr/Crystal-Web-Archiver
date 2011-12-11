@@ -211,6 +211,8 @@ class Task(object):
 from crystal.model import Resource
 import urlparse
 
+_DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
+
 def _get_abstract_resource_title(abstract_resource):
     """
     Arguments:
@@ -241,8 +243,12 @@ class DownloadResourceBodyTask(Task):
     def __call__(self):
         # TODO: Report errors (embedded in the ResourceRevision) using the completion subtitle.
         #       Need to add support for this behavior to Task.
-        from crystal.download import download_resource_revision
-        return download_resource_revision(self._resource, self)
+        try:
+            from crystal.download import download_resource_revision
+            return download_resource_revision(self._resource, self)
+        finally:
+            self.subtitle = 'Waiting before performing next request...'
+            sleep(_DELAY_BETWEEN_DOWNLOADS)
 
 class DownloadResourceTask(Task):
     """
