@@ -356,11 +356,11 @@ class UpdateResourceGroupMembersTask(Task):
     This task primarily serves to provide a nice title describing why the child
     task is being run.
     """
-    def __init__(self, num_child_resources_of_source=0):
-        Task.__init__(self, title='Finding members of group: TITLE')
+    def __init__(self, group):
+        Task.__init__(self, title='Finding members of group: %s' % group.name)
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
-        self.append_child(DownloadResourceTask(num_child_resources_of_source))
+        self.append_child(group.source.create_download_task())
     
     def child_task_subtitle_did_change(self, task):
         if not task.complete:
@@ -376,17 +376,19 @@ class DownloadResourceGroupMembersTask(Task):
     If the group's members change during the task execution,
     additional child tasks will be created to download any additional group members.
     """
-    def __init__(self, num_initial_members=2, group_already_up_to_date=False):
-        Task.__init__(self, title='Downloading members of group: TITLE')
-        self._done_updating_group = group_already_up_to_date
+    def __init__(self, group):
+        Task.__init__(self, title='Downloading members of group: %s' % group.name)
+        self.group = group
+        self.group.listeners.append(self)
+        self._done_updating_group = False
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
-        for i in xrange(num_initial_members):
-            self.append_child(DownloadResourceTask())
+        for member in group.members():
+            self.append_child(member.create_download_task())
         self._update_subtitle()
     
-    def group_did_add_member(self, member):
-        self.append_child(DownloadResourceTask())
+    def group_did_add_member(self, group, member):
+        self.append_child(member.create_download_task())
         self._update_subtitle()
     
     def group_did_finish_updating(self):
@@ -410,10 +412,10 @@ class DownloadResourceGroupTask(Task):
     Downloads a resource group. This involves updating the groups set of
     members and downloading them, in parallel.
     """
-    def __init__(self):
-        Task.__init__(self, title='Downloading group: TITLE')
-        self._update_members_task = UpdateResourceGroupMembersTask(num_child_resources_of_source=1)
-        self._download_members_task = DownloadResourceGroupMembersTask()
+    def __init__(self, group):
+        Task.__init__(self, title='Downloading group: %s' % group.name)
+        self._update_members_task = UpdateResourceGroupMembersTask(group)
+        self._download_members_task = DownloadResourceGroupMembersTask(group)
         
         self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
         self.append_child(self._update_members_task)

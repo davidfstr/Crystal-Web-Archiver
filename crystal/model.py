@@ -196,8 +196,8 @@ class Resource(object):
             self = object.__new__(cls)
             self.project = project
             self.url = url
-            self.download_body_task_ref = _WeakTaskRef()
-            self.download_task_ref = _WeakTaskRef()
+            self._download_body_task_ref = _WeakTaskRef()
+            self._download_task_ref = _WeakTaskRef()
             
             if project._loading:
                 self._id = _id
@@ -207,6 +207,11 @@ class Resource(object):
                 project._db.commit()
                 self._id = c.lastrowid
             project._resources[url] = self
+            
+            if not project._loading:
+                for rg in project.resource_groups:
+                    rg._resource_did_instantiate(self)
+            
             return self
     
     @property
@@ -252,7 +257,7 @@ class Resource(object):
         def task_factory():
             from crystal.task import DownloadResourceBodyTask
             return DownloadResourceBodyTask(self)
-        return self._get_task_or_create(self.download_body_task_ref, task_factory)
+        return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
     def download(self):
         """
@@ -278,7 +283,7 @@ class Resource(object):
         def task_factory():
             from crystal.task import DownloadResourceTask
             return DownloadResourceTask(self)
-        return self._get_task_or_create(self.download_task_ref, task_factory)
+        return self._get_task_or_create(self._download_task_ref, task_factory)
     
     def _get_task_or_create(self, task_ref, task_factory):
         if task_ref.task is not None:
@@ -392,6 +397,16 @@ class RootResource(object):
     @property
     def url(self):
         return self.resource.url
+    
+    # TODO: Create the underlying task with the full RootResource
+    #       so that the correct subtitle is displayed.
+    def download(self):
+        return self.resource.download()
+    
+    # TODO: Create the underlying task with the full RootResource
+    #       so that the correct subtitle is displayed.
+    def create_download_task(self):
+        return self.resource.create_download_task()
     
     def __repr__(self):
         return "RootResource(%s,%s)" % (repr(self.name), repr(self.resource.url))
@@ -664,6 +679,7 @@ class ResourceGroup(object):
         self.name = name
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup._url_pattern_to_re(url_pattern)
+        self.listeners = []
         
         if project._loading:
             self._id = _id
@@ -697,3 +713,36 @@ class ResourceGroup(object):
     
     def __contains__(self, resource):
         return self._url_pattern_re.match(resource.url) is not None
+    
+    # TODO: Make this a property if it is ever optimized to O(1)
+    def members(self):
+        # PERF: O(n) when it could be O(1)
+        for r in self.project.resources:
+            if r in self:
+                yield r
+    
+    # (Called by Resource's constructor)
+    def _resource_did_instantiate(self, resource):
+        if resource in self:
+            for lis in self.listeners:
+                if hasattr(lis, 'group_did_add_member'):
+                    lis.group_did_add_member(self, resource)
+    
+    def download(self):
+        """
+        Downloads this group asynchronously.
+        
+        A top-level Task will be created internally to display the progress.
+        """
+        task = self.create_download_task()
+        self.project.add_task(task)
+    
+    def create_download_task(self):
+        """
+        Creates a Task to download this resource group.
+        
+        The caller is responsible for adding the returned Task as the child of an
+        appropriate parent task so that the UI displays it.
+        """
+        from crystal.task import DownloadResourceGroupTask
+        return DownloadResourceGroupTask(self)
