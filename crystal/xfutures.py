@@ -4,7 +4,7 @@ Python 2.7.
 """
 
 try:
-    from concurrent.futures import futures
+    from concurrent.futures import *
 except ImportError:
     import logging
     import threading
