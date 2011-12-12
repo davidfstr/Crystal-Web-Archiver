@@ -1,3 +1,4 @@
+import sys
 from time import sleep
 from xfutures import Future
 from xthreading import bg_call_later, fg_call_and_wait, fg_call_later
@@ -242,6 +243,16 @@ class DownloadResourceBodyTask(Task):
         self._resource = abstract_resource.resource
     
     def __call__(self):
+        # If the resource is already up-to-date, return its default revision
+        def fg_task():
+            if self._resource.up_to_date():
+                return self._resource.default_revision()
+            else:
+                return None
+        body_revision = fg_call_and_wait(fg_task)
+        if body_revision is not None:
+            return body_revision
+        
         # TODO: Report errors (embedded in the ResourceRevision) using the completion subtitle.
         #       Need to add support for this behavior to Task.
         try:

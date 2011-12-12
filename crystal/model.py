@@ -255,6 +255,8 @@ class Resource(object):
         self.project.add_task(task)
         return task.future
     
+    # FIXME: Simplify logic of callers that expect this to return None sometimes.
+    # FIXME: Rename to 'create_download_body_task'
     def try_create_download_body_task(self):
         """
         Creates a Task to download this resource's body, if it is not already up-to-date.
@@ -265,9 +267,6 @@ class Resource(object):
         appropriate parent task so that the UI displays it.
         """
         def task_factory():
-            if self.up_to_date():
-                return None
-            
             from crystal.task import DownloadResourceBodyTask
             return DownloadResourceBodyTask(self)
         return self._get_task_or_create(self.download_body_task_ref, task_factory)
