@@ -249,13 +249,13 @@ class Resource(object):
             future.set_result(revision)
             return future
         
-        task = self._try_create_download_body_task()
+        task = self.try_create_download_body_task()
         if task is None:
             raise AssertionError('Failed to create download-body task for up-to-date Resource.')
         self.project.add_task(task)
         return task.future
     
-    def _try_create_download_body_task(self):
+    def try_create_download_body_task(self):
         """
         Creates a Task to download this resource's body, if it is not already up-to-date.
         If a such a Task already exists, the preexisting Task will be returned instead of creating a new one.
