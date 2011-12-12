@@ -819,6 +819,16 @@ class ResourceGroup(object):
         """
         from crystal.task import DownloadResourceGroupTask
         return DownloadResourceGroupTask(self)
+    
+    def update_membership(self):
+        """
+        Updates the membership of this group asynchronously.
+        
+        A top-level Task will be created internally to display the progress.
+        """
+        from crystal.task import UpdateResourceGroupMembersTask
+        task = UpdateResourceGroupMembersTask(self)
+        self.project.add_task(task)
 
     def __repr__(self):
         return 'ResourceGroup(%s,%s)' % (repr(self.name), repr(self.url_pattern))
