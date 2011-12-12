@@ -277,26 +277,15 @@ class DownloadResourceTask(Task):
         Task.__init__(self, 'Downloading: ' + _get_abstract_resource_title(abstract_resource))
         self._abstract_resource = abstract_resource
         self._resource = resource = abstract_resource.resource
-        self._download_body_task = None
+        self._download_body_task = resource.create_download_body_task()
         self._parse_links_task = None
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
-        
-        self._download_body_task = resource.try_create_download_body_task()
-        if self._download_body_task is not None:
-            # Download body if needed...
-            self._future = self._download_body_task.future
-            self.append_child(self._download_body_task)
-        else:
-            # ...otherwise skip directly to parsing the links
-            body_revision = resource.default_revision()
-            self._future = Future();
-            self._future.set_result(body_revision)
-            self._download_body_task_did_complete(body_revision)
+        self.append_child(self._download_body_task)
     
     @property
     def future(self):
-        return self._future
+        return self._download_body_task.future
     
     def child_task_subtitle_did_change(self, task):
         if task is self._download_body_task:
@@ -311,7 +300,8 @@ class DownloadResourceTask(Task):
                 # Behave as if there are no embedded resources
                 pass
             else:
-                self._download_body_task_did_complete(body_revision)
+                self._parse_links_task = ParseResourceRevisionLinks(self._abstract_resource, body_revision)
+                self.append_child(self._parse_links_task)
         
         if task is self._parse_links_task:
             links = self._parse_links_task.future.result()
@@ -330,18 +320,12 @@ class DownloadResourceTask(Task):
                     embedded_resources.append(link_resource)
             
             for resource in embedded_resources:
-                download_resource_task = resource.try_create_download_body_task()
-                if download_resource_task is not None:
-                    self.append_child(download_resource_task)
+                self.append_child(resource.create_download_body_task())
         
         self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
         
         if self.num_children_complete == len(self.children):
             self.finish()
-    
-    def _download_body_task_did_complete(self, body_revision):
-        self._parse_links_task = ParseResourceRevisionLinks(self._abstract_resource, body_revision)
-        self.append_child(self._parse_links_task)
 
 class ParseResourceRevisionLinks(Task):
     """
