@@ -393,6 +393,7 @@ class DownloadResourceGroupMembersTask(Task):
     
     def group_did_finish_updating(self):
         self._done_updating_group = True
+        self._update_subtitle()
         self._update_completed_status()
     
     def child_task_did_complete(self, task):

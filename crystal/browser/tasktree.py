@@ -14,6 +14,7 @@ class TaskTree(object):
     
     @property
     def peer(self):
+        """The wx.TreeCtrl controlled by this class."""
         return self.tree.peer
 
 class TaskTreeNode(object):

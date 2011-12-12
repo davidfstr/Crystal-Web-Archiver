@@ -14,13 +14,20 @@ class EntityTree(object):
         self.root = RootNode(project, self.view.root)
         
         self.peer.SetInitialSize((550, 300))
-        
-        # TODO: Remove auto-testing code
-        #self.view.expand(self.root.view.children[0].view)
     
     @property
     def peer(self):
+        """The wx.TreeCtrl controlled by this class."""
         return self.view.peer
+    
+    @property
+    def selected_entity(self):
+        selected_node_view = self.view.selected_node
+        if selected_node_view is not None:
+            selected_node = selected_node_view.data
+            return selected_node.entity
+        else:
+            return None
     
     def update(self):
         """
@@ -42,6 +49,13 @@ class Node(object):
     def __init__(self):
         self._children = []
     
+    def _get_view(self):
+        return self._view
+    def _set_view(self, value):
+        self._view = value
+        self._view.data = self
+    view = property(_get_view, _set_view)
+    
     def _get_children(self):
         return self._children
     def _set_children(self, value):
@@ -49,6 +63,14 @@ class Node(object):
         self._children = value
         self.view.children = [child.view for child in value]
     children = property(_get_children, _set_children)
+    
+    @property
+    def entity(self):
+        """
+        The entity (ex: RootResource, Resource, ResourceGroup)
+        represented by this node, or None if not applicable.
+        """
+        return None
     
     def update_descendants(self):
         """
@@ -102,6 +124,10 @@ class _ResourceNode(Node):
         self.resource = resource
         self.download_future = None
         self.resource_links = None
+    
+    @property
+    def entity(self):
+        return self.resource
     
     def __eq__(self, other):
         return isinstance(other, _ResourceNode) and (
@@ -220,6 +246,10 @@ class RootResourceNode(_ResourceNode):
         
         self.root_resource = root_resource
     
+    @property
+    def entity(self):
+        return self.root_resource
+    
     def __eq__(self, other):
         return isinstance(other, RootResourceNode) and (
             self.root_resource == other.root_resource)
@@ -233,6 +263,10 @@ class NormalResourceNode(_ResourceNode):
         super(NormalResourceNode, self).__init__(title, resource)
         
         self.resource = resource
+    
+    @property
+    def entity(self):
+        return self.resource
     
     def __eq__(self, other):
         return isinstance(other, NormalResourceNode) and (
@@ -249,6 +283,10 @@ class LinkedResourceNode(_ResourceNode):
         
         self.resource = resource
         self.links = tuple(links)
+    
+    @property
+    def entity(self):
+        return self.resource
     
     def __eq__(self, other):
         return isinstance(other, LinkedResourceNode) and (
@@ -298,6 +336,10 @@ class ResourceGroupNode(Node):
         
         self.resource_group = resource_group
     
+    @property
+    def entity(self):
+        return self.resource_group
+    
     def __eq__(self, other):
         return isinstance(other, ResourceGroupNode) and (
             self.resource_group == other.resource_group)
@@ -315,6 +357,12 @@ class GroupedLinkedResourcesNode(Node):
         
         self.children = root_rsrc_nodes + linked_rsrc_nodes
         self._children_tuple = tuple(self.children)
+        
+        self.resource_group = resource_group
+    
+    @property
+    def entity(self):
+        return self.resource_group
     
     def __eq__(self, other):
         return isinstance(other, GroupedLinkedResourcesNode) and (

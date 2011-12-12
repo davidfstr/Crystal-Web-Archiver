@@ -76,6 +76,11 @@ class TreeView(object):
         self._root._attach(self._root_peer)
     root = property(_get_root, _set_root)
     
+    @property
+    def selected_node(self):
+        selected_node_id = self.peer.GetSelection()
+        return self.peer.GetPyData(selected_node_id) if selected_node_id.IsOk() else None
+    
     def get_image_id_for_bitmap(self, bitmap):
         """
         Given a wx.Bitmap, returns an image ID suitable to use as an node icon.

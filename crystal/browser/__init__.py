@@ -51,6 +51,7 @@ class MainWindow(object):
     
     def _create_entity_tree(self, parent):
         self.entity_tree = EntityTree(parent, self.project)
+        self.entity_tree.peer.Bind(wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
         
         return self.entity_tree.peer
     
@@ -67,10 +68,12 @@ class MainWindow(object):
         remove_entity_button.Disable()
         
         update_membership_button = wx.Button(parent, label='Update Membership')
+        # TODO: Enable depending on what item in the tree is selected
         update_membership_button.Disable()
         
-        download_button = wx.Button(parent, label='Download')
-        download_button.Disable()
+        self._download_button = wx.Button(parent, label='Download')
+        self._download_button.Bind(wx.EVT_BUTTON, self._on_download_entity)
+        self._download_button.Disable()
         
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
         content_sizer.Add(add_url_button)
@@ -82,7 +85,7 @@ class MainWindow(object):
         content_sizer.AddStretchSpacer()
         content_sizer.Add(update_membership_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(download_button)
+        content_sizer.Add(self._download_button)
         return content_sizer
     
     def _on_add_url(self, event):
@@ -110,6 +113,13 @@ class MainWindow(object):
     
     def _on_remove_entity(self, event):
         pass
+    
+    def _on_download_entity(self, event):
+        self.entity_tree.selected_entity.download()
+    
+    def _on_selected_entity_changed(self, event):
+        enabled = (self.entity_tree.selected_entity is not None)
+        self._download_button.Enable(enabled)
     
     # === Task Pane ===
     
