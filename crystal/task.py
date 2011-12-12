@@ -320,7 +320,7 @@ class DownloadResourceTask(Task):
                     embedded_resources.append(link_resource)
             
             for resource in embedded_resources:
-                self.append_child(resource.create_download_body_task())
+                self.append_child(resource.create_download_task())
         
         self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
         

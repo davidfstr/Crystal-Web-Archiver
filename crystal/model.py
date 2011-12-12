@@ -236,28 +236,15 @@ class Resource(object):
         
         The returned Future may invoke its callbacks on any thread.
         
-        If it is necessary to perform a download, a top-level Task will be created
-        internally to perform the download and display the progress.
+        A top-level Task will be created internally to display the progress.
         """
-        if self.up_to_date():
-            # Already up-to-date
-            revision = self.default_revision()
-            if revision is None:
-                raise AssertionError('Up-to-date resource should have a default revision.')
-            
-            future = Future()
-            future.set_result(revision)
-            return future
-        
         task = self.create_download_body_task()
         self.project.add_task(task)
         return task.future
     
     def create_download_body_task(self):
         """
-        Creates a Task to download this resource's body, if it is not already up-to-date.
-        If a such a Task already exists, the preexisting Task will be returned instead of creating a new one.
-        If this resource is already up-to-date, None will be returned.
+        Creates a Task to download this resource's body.
         
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
@@ -275,14 +262,19 @@ class Resource(object):
         
         The returned Future may invoke its callbacks on any thread.
         
-        If it is necessary to perform a download, a top-level Task will be created
-        internally to perform the download and display the progress.
+        A top-level Task will be created internally to display the progress.
         """
-        task = self._create_download_task()
+        task = self.create_download_task()
         self.project.add_task(task)
         return task.future
     
-    def _create_download_task(self):
+    def create_download_task(self):
+        """
+        Creates a Task to download this resource and all its embedded resources.
+        
+        The caller is responsible for adding the returned Task as the child of an
+        appropriate parent task so that the UI displays it.
+        """
         def task_factory():
             from crystal.task import DownloadResourceTask
             return DownloadResourceTask(self)
