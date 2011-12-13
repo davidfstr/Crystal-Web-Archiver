@@ -11,8 +11,42 @@ import sys
 import threading
 import wx
 
+# If True, then the runtime of foreground tasks is tracked to ensure
+# they are short. This is necessary to keep the UI responsive.
+_PROFILE_FG_TASKS = True
+
+# Maximum reasonable time that foreground tasks should take to complete.
+# If profiling is enabled, warnings will be printed for tasks whose runtime
+# exceeds this threshold.
+_FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
+
 def _wx_main_thread_exists():
     return wx.GetApp() is not None
+
+def _create_profiled_callable(callable, *args):
+    """
+    Decorates the specified callable such that it prints
+    a warning to the console if its runtime is long.
+    """
+    def profiled_callable():
+        import time
+        start_time = time.time()
+        try:
+            callable(*args)
+        finally:
+            end_time = time.time()
+            delta_time = end_time - start_time
+            if delta_time > _FG_TASK_RUNTIME_THRESHOLD:
+                root_callable = callable
+                while hasattr(root_callable, 'callable'):
+                    root_callable = root_callable.callable
+                
+                import inspect
+                print "*** Foreground task took %.02fs to execute: %s @ [%s:%s]" % (
+                    delta_time, root_callable,
+                    inspect.getsourcefile(root_callable),
+                    inspect.getsourcelines(root_callable)[-1])
+    return profiled_callable
 
 # TODO: Consider renaming this to 'fg_call_soon' and have the
 #       (force == True) variant still be called 'fg_call_later'.
@@ -27,6 +61,10 @@ def fg_call_later(callable, force=False, *args):
     If the current thread is the foreground thread, the argument is executed immediately
     unless the 'force' parameter is True.
     """
+    if _PROFILE_FG_TASKS:
+        callable = _create_profiled_callable(callable, *args);
+        args=()
+    
     if not _wx_main_thread_exists() or (wx.Thread_IsMain() and not force):
         callable(*args)
     else:
@@ -59,6 +97,7 @@ def fg_call_and_wait(callable, *args):
             with condition:
                 callable_done[0] = True
                 condition.notify()
+        fg_task.callable = callable
         fg_call_later(fg_task)
         
         # Wait for signal
