@@ -257,7 +257,18 @@ class DownloadResourceBodyTask(Task):
         #       Need to add support for this behavior to Task.
         try:
             from crystal.download import download_resource_revision
-            return download_resource_revision(self._resource, self)
+            body_revision = download_resource_revision(self._resource, self)
+            
+            # Automatically parse the body's links and create associated resources
+            links = body_revision.links()
+            def fg_task():
+                r = self._resource
+                for link in links:
+                    url = urlparse.urljoin(r.url, link.relative_url)
+                    Resource(r.project, url)
+            fg_call_and_wait(fg_task)
+            
+            return body_revision
         finally:
             self.subtitle = 'Waiting before performing next request...'
             sleep(_DELAY_BETWEEN_DOWNLOADS)
@@ -369,28 +380,6 @@ class UpdateResourceGroupMembersTask(Task):
             self.subtitle = task.subtitle
     
     def child_task_did_complete(self, task):
-        # Find all the links in the source and resolve them to Resources,
-        # creating those Resources as necessary.
-        # 
-        # TODO: May want to consider doing this automatically whenever a
-        #       resource revision is downloaded. So long as an explicit
-        #       step has to be made here, the set of members isn't updated
-        #       until the *entire* source is downloaded, which is inefficient
-        #       if the source happens to be another ResourceGroup.
-        # 
-        # HACK: Shouldn't be doing blocking work in a callback,
-        #       but I'm too lazy to make this into a real Task right now.
-        if type(self.group.source) is RootResource:
-            resources = [self.group.source.resource]
-        elif type(self.group.source) is ResourceGroup:
-            resources = self.group.source.members()
-        else:
-            raise AssertionError('Unknown type of group source.')
-        for r in resources:
-            for link in r.default_revision().links():
-                url = urlparse.urljoin(r.url, link.relative_url)
-                resource = Resource(r.project, url)
-        
         if self.num_children_complete == len(self.children):
             self.finish()
 
