@@ -346,6 +346,7 @@ class ParseResourceRevisionLinks(Task):
         return self._resource_revision.links()
 
 # ----------------------------------------------------------------------------------------
+from crystal.model import Resource, ResourceGroup, RootResource
 
 class UpdateResourceGroupMembersTask(Task):
     """
@@ -358,6 +359,7 @@ class UpdateResourceGroupMembersTask(Task):
     """
     def __init__(self, group):
         Task.__init__(self, title='Finding members of group: %s' % group.name)
+        self.group = group
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         self.append_child(group.source.create_download_task())
@@ -367,6 +369,28 @@ class UpdateResourceGroupMembersTask(Task):
             self.subtitle = task.subtitle
     
     def child_task_did_complete(self, task):
+        # Find all the links in the source and resolve them to Resources,
+        # creating those Resources as necessary.
+        # 
+        # TODO: May want to consider doing this automatically whenever a
+        #       resource revision is downloaded. So long as an explicit
+        #       step has to be made here, the set of members isn't updated
+        #       until the *entire* source is downloaded, which is inefficient
+        #       if the source happens to be another ResourceGroup.
+        # 
+        # HACK: Shouldn't be doing blocking work in a callback,
+        #       but I'm too lazy to make this into a real Task right now.
+        if type(self.group.source) is RootResource:
+            resources = [self.group.source.resource]
+        elif type(self.group.source) is ResourceGroup:
+            resources = self.group.source.members()
+        else:
+            raise AssertionError('Unknown type of group source.')
+        for r in resources:
+            for link in r.default_revision().links():
+                url = urlparse.urljoin(r.url, link.relative_url)
+                resource = Resource(r.project, url)
+        
         if self.num_children_complete == len(self.children):
             self.finish()
 
