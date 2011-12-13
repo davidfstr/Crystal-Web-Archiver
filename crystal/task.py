@@ -260,11 +260,16 @@ class DownloadResourceBodyTask(Task):
             body_revision = download_resource_revision(self._resource, self)
             
             # Automatically parse the body's links and create associated resources
+            self.subtitle = 'Parsing links...'
+            r = self._resource
             links = body_revision.links()
+            urls = [urlparse.urljoin(r.url, link.relative_url) for link in links]
+            
+            self.subtitle = 'Recording links...'
             def fg_task():
-                r = self._resource
-                for link in links:
-                    url = urlparse.urljoin(r.url, link.relative_url)
+                # PERF: This is taking 1-2 sec to execute on THEM's Review List page.
+                #       Need to look at optimizing this to avoid blocking the UI.
+                for url in urls:
                     Resource(r.project, url)
             fg_call_and_wait(fg_task)
             
@@ -354,6 +359,7 @@ class ParseResourceRevisionLinks(Task):
         self._resource_revision = resource_revision
     
     def __call__(self):
+        self.subtitle = 'Parsing links...'
         return self._resource_revision.links()
 
 # ----------------------------------------------------------------------------------------
