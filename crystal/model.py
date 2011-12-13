@@ -40,6 +40,7 @@ class Project(object):
                 from which the project is to be loaded.
         """
         self.path = path
+        self.listeners = []
         
         self._properties = dict()               # <key, value>
         self._resources = OrderedDict()         # <url, Resource>
@@ -184,6 +185,17 @@ class Project(object):
         """
         if task not in self.root_task.children:
             self.root_task.append_child(task)
+    
+    # (Called when a new Resource is created after the project has loaded)
+    def _resource_did_instantiate(self, resource):
+        # Notify resource groups (which are like hardwired listeners)
+        for rg in self.resource_groups:
+            rg._resource_did_instantiate(resource)
+        
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'resource_did_instantiate'):
+                lis.resource_did_instantiate(resource)
 
 class CrossProjectReferenceError(Exception):
     pass
@@ -248,8 +260,7 @@ class Resource(object):
             project._resources[url] = self
             
             if not project._loading:
-                for rg in project.resource_groups:
-                    rg._resource_did_instantiate(self)
+                project._resource_did_instantiate(self)
             
             return self
     
@@ -794,7 +805,7 @@ class ResourceGroup(object):
             if r in self:
                 yield r
     
-    # (Called by Resource's constructor)
+    # (Called when a new Resource is created after the project has loaded)
     def _resource_did_instantiate(self, resource):
         if resource in self:
             for lis in self.listeners:

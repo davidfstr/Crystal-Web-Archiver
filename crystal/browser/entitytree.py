@@ -12,6 +12,9 @@ class EntityTree(object):
     def __init__(self, parent_peer, project):
         self.view = TreeView(parent_peer)
         self.root = RootNode(project, self.view.root)
+        self._group_nodes_need_updating = False
+        
+        project.listeners.append(self)
         
         self.peer.SetInitialSize((550, 300))
     
@@ -34,6 +37,26 @@ class EntityTree(object):
         Updates the nodes in this tree, usually due to a project change.
         """
         self.root.update_descendants()
+    
+    def _refresh_group_nodes(self):
+        # Coalesce multiple refreshes that happen in succession
+        if self._group_nodes_need_updating:
+            return
+        else:
+            self._group_nodes_need_updating = True
+            fg_call_later(self._refresh_group_nodes_now, force=True)
+    
+    def _refresh_group_nodes_now(self):
+        try:
+            for rgn in self.root.children:
+                if type(rgn) is not ResourceGroupNode:
+                    continue
+                rgn.update_children()
+        finally:
+            self._group_nodes_need_updating = False
+    
+    def resource_did_instantiate(self, resource):
+        self._refresh_group_nodes()
 
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     """
@@ -321,24 +344,26 @@ class ResourceGroupNode(Node):
         self.view.expandable = True
         self.view.delegate = self
         
+        self.resource_group = resource_group
+        
+        self.update_children()
+    
+    @property
+    def entity(self):
+        return self.resource_group
+    
+    def update_children(self):
         children_rrs = []
         children_rs = []
-        project = resource_group.project
+        project = self.resource_group.project
         for r in project.resources:
-            if r in resource_group:
+            if r in self.resource_group:
                 rr = project.get_root_resource(r)
                 if rr is None:
                     children_rs.append(NormalResourceNode(r))
                 else:
                     children_rrs.append(RootResourceNode(rr))
-        children = children_rrs + children_rs
-        self.children = children
-        
-        self.resource_group = resource_group
-    
-    @property
-    def entity(self):
-        return self.resource_group
+        self.children = children_rrs + children_rs
     
     def __eq__(self, other):
         return isinstance(other, ResourceGroupNode) and (
