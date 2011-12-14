@@ -12,8 +12,13 @@ import shutil
 from StringIO import StringIO
 from xthreading import bg_call_later, fg_call_and_wait
 
+_SERVER_PORT = 2797
+
 def start(project):
-    port = 2797
+    """
+    Starts the archive server on a daemon thread.
+    """
+    port = _SERVER_PORT
     address = ('', port)
     server = HTTPServer(address, _RequestHandler)
     server.project = project
@@ -24,6 +29,14 @@ def start(project):
         finally:
             server.server_close()
     bg_call_later(bg_task, daemon=True)
+
+def get_request_url(archive_url):
+    """
+    Given the absolute URL of a resource, returns the URL that should be used to
+    request it from the archive server.
+    """
+    request_host = 'localhost:%s' % _SERVER_PORT
+    return _RequestHandler.get_request_url_with_host(archive_url, request_host)
 
 _SCHEME_REST_RE = re.compile(r'^/([^/]+)/(.+)$')
 
@@ -183,6 +196,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
             shutil.copyfileobj(StringIO(str(html)), self.wfile)
     
     def get_request_url(self, archive_url):
+        return _RequestHandler.get_request_url_with_host(archive_url, self.request_host)
+    
+    @staticmethod
+    def get_request_url_with_host(archive_url, request_host):
         """
         Given the absolute URL of a resource, returns the URL that should be used to
         request it from the archive server.
@@ -190,7 +207,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         archive_url_parts = urlparse.urlparse(archive_url)
         
         request_scheme = 'http'
-        request_netloc = self.request_host
+        request_netloc = request_host
         request_path = '%s/%s%s' % (
             archive_url_parts.scheme,
             archive_url_parts.netloc, archive_url_parts.path)
