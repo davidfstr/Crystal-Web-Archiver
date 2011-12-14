@@ -5,17 +5,20 @@ import re
 import urlparse
 import shutil
 from StringIO import StringIO
+from xthreading import bg_call_later, fg_call_and_wait
 
-def run(project):
+def start(project):
     port = 2797
     address = ('', port)
     server = HTTPServer(address, _RequestHandler)
     server.project = project
-    try:
-        print 'Server started on port %s.' % port
-        server.serve_forever()
-    finally:
-        server.server_close()
+    def bg_task():
+        try:
+            print 'Server started on port %s.' % port
+            server.serve_forever()
+        finally:
+            server.server_close()
+    bg_call_later(bg_task, daemon=True)
 
 _SCHEME_REST_RE = re.compile(r'^/([^/]+)/(.+)$')
 
@@ -72,7 +75,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_resource_not_in_archive(archive_url)
             return
         
-        revision = resource.default_revision()
+        revision = fg_call_and_wait(resource.default_revision)
         if not revision:
             self.send_resource_not_in_archive(archive_url)
             return
