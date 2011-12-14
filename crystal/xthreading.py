@@ -112,8 +112,15 @@ def fg_call_and_wait(callable, *args):
         
         return callable_result[0]
 
-def bg_call_later(callable, *args):
+def bg_call_later(callable, daemon=False, *args):
     """
     Calls the argument on a new background thread.
+    
+    Arguments:
+    daemon -- if True, forces the background thread to be a daemon,
+              and not prevent program termination while it is running.
     """
-    threading.Thread(target=callable, args=args).start()
+    thread = threading.Thread(target=callable, args=args)
+    if daemon:
+        thread.daemon = True
+    thread.start()
