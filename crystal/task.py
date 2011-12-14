@@ -518,4 +518,4 @@ def start_schedule_forever(task):
                     sleep(_ROOT_TASK_POLL_INTERVAL)
                     continue
             unit()  # Run unit directly on this bg thread
-    bg_call_later(bg_task)
+    bg_call_later(bg_task, daemon=True)
