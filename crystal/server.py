@@ -1,3 +1,8 @@
+"""
+Implements an HTTP server that serves resource revisions from a Project.
+Runs on its own daemon thread.
+"""
+
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
 import os

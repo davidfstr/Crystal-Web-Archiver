@@ -98,9 +98,14 @@ class Project(object):
             self._loading = False
         
         # Hold on to the root task and scheduler
-        from crystal.task import RootTask, start_schedule_forever
-        self.root_task = RootTask()
-        start_schedule_forever(self.root_task)
+        import crystal.task
+        self.root_task = crystal.task.RootTask()
+        crystal.task.start_schedule_forever(self.root_task)
+        
+        # Hold on to the server connection
+        self.server_running = False
+    
+    # === Properties ===
     
     def _get_property(self, name, default):
         return self._properties.get(name, default)
@@ -179,12 +184,16 @@ class Project(object):
         # PERF: O(n) when it could be O(1)
         return next((rg for rg in self._resource_groups if rg._id == resource_group_id), None)
     
+    # === Tasks ===
+    
     def add_task(self, task):
         """
         Schedules the specified top-level task for execution, if not already done.
         """
         if task not in self.root_task.children:
             self.root_task.append_child(task)
+    
+    # === Events ===
     
     # (Called when a new Resource is created after the project has loaded)
     def _resource_did_instantiate(self, resource):
@@ -196,6 +205,17 @@ class Project(object):
         for lis in self.listeners:
             if hasattr(lis, 'resource_did_instantiate'):
                 lis.resource_did_instantiate(resource)
+    
+    # === Server ===
+    
+    def start_server(self):
+        """
+        Starts an HTTP server that serves pages from this project.
+        """
+        if not self.server_running:
+            import crystal.server
+            crystal.server.start(self)
+            self.server_running = True
 
 class CrossProjectReferenceError(Exception):
     pass
