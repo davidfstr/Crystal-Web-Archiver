@@ -169,7 +169,7 @@ class Node(object):
     def _call_on_descendants(self, method_name):
         getattr(self, method_name)()
         for child in self.children:
-            getattr(child, method_name)()
+            child._call_on_descendants(method_name)
     
     def update_children(self):
         """
