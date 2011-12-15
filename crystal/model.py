@@ -30,7 +30,7 @@ class Project(object):
     
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
-    _RESOURCE_REVISION_DIRNAME = 'resource_revision_body'
+    _RESOURCE_REVISION_DIRNAME = 'revisions'
     
     def __init__(self, path):
         """
