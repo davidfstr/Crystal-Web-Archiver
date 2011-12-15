@@ -33,7 +33,7 @@ class EntityTree(object):
     def selected_entity(self):
         selected_node_view = self.view.selected_node
         if selected_node_view is not None:
-            selected_node = selected_node_view.data
+            selected_node = selected_node_view.delegate
             return selected_node.entity
         else:
             return None
@@ -65,7 +65,7 @@ class EntityTree(object):
         self._refresh_group_nodes()
     
     def on_right_click(self, event, node_view):
-        node = node_view.data
+        node = node_view.delegate
         self._right_clicked_node = node
         
         # Create popup menu
@@ -135,9 +135,7 @@ class Node(object):
         return self._view
     def _set_view(self, value):
         self._view = value
-        # TODO: Use the 'delegate' property instead, since that's what it's designed for.
-        #       Remove manual setting of the delegate by subclasses.
-        self._view.data = self
+        self._view.delegate = self
     view = property(_get_view, _set_view)
     
     def _get_children(self):
@@ -221,7 +219,6 @@ class _ResourceNode(Node):
         self.view = NodeView()
         self.view.title = title
         self.view.expandable = True
-        self.view.delegate = self
         
         self.resource = resource
         self.download_future = None
@@ -411,7 +408,6 @@ class ClusterNode(Node):
         self.view.icon_set = icon_set
         self.view.title = title
         self.view.expandable = True
-        self.view.delegate = self
         
         self.children = children
         self._children_tuple = tuple(self.children)
@@ -430,7 +426,6 @@ class ResourceGroupNode(Node):
         self.view = NodeView()
         self.view.title = self.calculate_title()
         self.view.expandable = True
-        self.view.delegate = self
         
         self.update_children()
     
@@ -471,7 +466,6 @@ class GroupedLinkedResourcesNode(Node):
         self.view = NodeView()
         self.view.title = self.calculate_title()
         self.view.expandable = True
-        self.view.delegate = self
         
         self.children = root_rsrc_nodes + linked_rsrc_nodes
         self._children_tuple = tuple(self.children)
