@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from crystal.model import ResourceGroup
 import sys
 import wx
 
@@ -8,14 +9,18 @@ _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
 
 class AddGroupDialog(object):
-    def __init__(self, parent, on_finish, initial_url=None):
+    # === Init ===
+    
+    def __init__(self, parent, on_finish, project, initial_url=None):
         """
         Arguments:
         parent -- parent wx.Window that this dialog is attached to.
         on_finish -- called when OK pressed on dialog. Is a callable(name, url_pattern).
+        project -- the project.
         initial_url -- overrides the initial URL displayed.
         """
-        self.on_finish = on_finish
+        self._project = project
+        self._on_finish = on_finish
         if initial_url is None:
             initial_url = 'http://'
         
@@ -32,11 +37,10 @@ class AddGroupDialog(object):
         preview_box_root.SetSizer(preview_box_root_sizer)
         preview_box_root_sizer.SetSizeHints(preview_box_root)
         
-        url_list = wx.ListBox(preview_box_root, style=wx.LB_ALWAYS_SB, size=(-1,150))
-        url_list.InsertItems(['<url 1>', '<url 2>'], 0)
+        self.url_list = wx.ListBox(preview_box_root, style=wx.LB_ALWAYS_SB, size=(-1,150))
         
         preview_box_root_sizer.Add(wx.StaticText(preview_box_root, label='Known matching URLs:'), flag=wx.EXPAND)
-        preview_box_root_sizer.Add(url_list, flag=wx.EXPAND)
+        preview_box_root_sizer.Add(self.url_list, flag=wx.EXPAND)
         
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(self._create_fields(dialog, initial_url), flag=wx.EXPAND)
@@ -48,6 +52,7 @@ class AddGroupDialog(object):
             border=_WINDOW_INNER_PADDING)
         
         self.name_field.SetFocus()
+        self._update_preview_urls()
         
         dialog.Fit()
         dialog.Show(True)
@@ -64,6 +69,7 @@ class AddGroupDialog(object):
         
         pattern_field_sizer = wx.BoxSizer(wx.VERTICAL)
         self.pattern_field = wx.TextCtrl(parent, value=initial_url, size=(300,-1)) # width hint
+        self.pattern_field.Bind(wx.EVT_TEXT, self._on_pattern_field_changed)
         self.pattern_field.SetSelection(-1, -1)
         pattern_field_sizer.Add(self.pattern_field, flag=wx.EXPAND)
         pattern_field_sizer.Add(wx.StaticText(parent, label='# = digit, @ = alpha, * = any nonslash, ** = any'), flag=wx.EXPAND)
@@ -72,6 +78,25 @@ class AddGroupDialog(object):
         fields_sizer.Add(pattern_field_sizer, flag=wx.EXPAND)
         
         return fields_sizer
+    
+    # === Operations ===
+    
+    def _update_preview_urls(self):
+        url_pattern = self.pattern_field.GetValue()
+        url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
+        
+        matching_urls = []
+        for r in self._project.resources:
+            if url_pattern_re.match(r.url) is not None:
+                matching_urls.append(r.url)
+        
+        self.url_list.Clear()
+        self.url_list.InsertItems(sorted(matching_urls), 0)
+    
+    # === Events ===
+    
+    def _on_pattern_field_changed(self, event):
+        self._update_preview_urls()
     
     def _on_button(self, event):
         btn_id = event.GetEventObject().GetId()
@@ -86,7 +111,7 @@ class AddGroupDialog(object):
     def _on_ok(self, event):
         name = self.name_field.GetValue()
         url_pattern = self.pattern_field.GetValue()
-        self.on_finish(name, url_pattern)
+        self._on_finish(name, url_pattern)
         self.dialog.Destroy()
     
     def _on_cancel(self, event):

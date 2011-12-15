@@ -123,6 +123,7 @@ class MainWindow(object):
     def _on_add_group(self, event):
         AddGroupDialog(
             self.frame, self._on_add_group_dialog_ok,
+            self.project,
             initial_url=self._selection_initial_url)
     
     def _on_add_group_dialog_ok(self, name, url_pattern):

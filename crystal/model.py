@@ -764,7 +764,7 @@ class ResourceGroup(object):
         self.project = project
         self.name = name
         self.url_pattern = url_pattern
-        self._url_pattern_re = ResourceGroup._url_pattern_to_re(url_pattern)
+        self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         self._source = None
         self.listeners = []
         
@@ -811,7 +811,7 @@ class ResourceGroup(object):
     source = property(_get_source, _set_source)
     
     @staticmethod
-    def _url_pattern_to_re(url_pattern):
+    def create_re_for_url_pattern(url_pattern):
         """Converts a url pattern to a regex which matches it."""
         
         # Escape regex characters

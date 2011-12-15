@@ -5,6 +5,8 @@ _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
 
 class AddRootUrlDialog(object):
+    # === Init ===
+    
     def __init__(self, parent, on_finish, initial_url=None):
         """
         Arguments:
@@ -12,7 +14,7 @@ class AddRootUrlDialog(object):
         on_finish -- called when OK pressed on dialog. Is a callable(name, url).
         initial_url -- overrides the initial URL displayed.
         """
-        self.on_finish = on_finish
+        self._on_finish = on_finish
         if initial_url is None:
             initial_url = 'http://'
         
@@ -49,6 +51,8 @@ class AddRootUrlDialog(object):
         
         return fields_sizer
     
+    # === Events ===
+    
     def _on_button(self, event):
         btn_id = event.GetEventObject().GetId()
         if btn_id == wx.ID_OK:
@@ -62,7 +66,7 @@ class AddRootUrlDialog(object):
     def _on_ok(self, event):
         name = self.name_field.GetValue()
         url = self.url_field.GetValue()
-        self.on_finish(name, url)
+        self._on_finish(name, url)
         self.dialog.Destroy()
     
     def _on_cancel(self, event):
