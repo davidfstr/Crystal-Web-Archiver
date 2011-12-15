@@ -31,7 +31,7 @@ class AddGroupDialog(object):
         dialog.Bind(wx.EVT_CLOSE, self._on_close)
         
         # Mac: Requires wx 2.9 to appear in native look & feel
-        preview_box = wx.CollapsiblePane(dialog, label='Preview')
+        preview_box = wx.CollapsiblePane(dialog, label='Preview Members')
         preview_box_root = preview_box.GetPane()
         preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
         preview_box_root.SetSizer(preview_box_root_sizer)
@@ -77,6 +77,16 @@ class AddGroupDialog(object):
         fields_sizer.Add(wx.StaticText(parent, label='URL Pattern:', style=wx.ALIGN_RIGHT|wx.ALIGN_TOP), flag=wx.EXPAND)
         fields_sizer.Add(pattern_field_sizer, flag=wx.EXPAND)
         
+        fields_sizer.Add(wx.StaticText(parent, label='Source:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
+        self.source_choice_box = wx.Choice(parent)
+        self.source_choice_box.Append('None', None)
+        for rr in self._project.root_resources:
+            self.source_choice_box.Append(rr.name, rr)
+        for rg in self._project.resource_groups:
+            self.source_choice_box.Append(rg.name, rg)
+        self.source_choice_box.SetSelection(0)
+        fields_sizer.Add(self.source_choice_box, flag=wx.EXPAND)
+        
         return fields_sizer
     
     # === Operations ===
@@ -111,7 +121,9 @@ class AddGroupDialog(object):
     def _on_ok(self, event):
         name = self.name_field.GetValue()
         url_pattern = self.pattern_field.GetValue()
-        self._on_finish(name, url_pattern)
+        source = self.source_choice_box.GetClientData(
+            self.source_choice_box.GetSelection())
+        self._on_finish(name, url_pattern, source)
         self.dialog.Destroy()
     
     def _on_cancel(self, event):

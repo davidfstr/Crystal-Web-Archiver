@@ -126,11 +126,12 @@ class MainWindow(object):
             self.project,
             initial_url=self._selection_initial_url)
     
-    def _on_add_group_dialog_ok(self, name, url_pattern):
+    def _on_add_group_dialog_ok(self, name, url_pattern, source):
         # TODO: Validate user input:
         #       * Is name or url_pattern empty?
         #       * Is name or url_pattern already taken?
-        ResourceGroup(self.project, name, url_pattern)
+        rg = ResourceGroup(self.project, name, url_pattern)
+        rg.source = source
         self.entity_tree.update() # TODO: update tree automatically via listener on Project
     
     def _on_remove_entity(self, event):
