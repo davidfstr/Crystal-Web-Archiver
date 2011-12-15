@@ -93,7 +93,7 @@ class Project(object):
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
                 c.execute('create table resource_revision (id integer primary key, resource_id integer not null, error text not null, metadata text not null)')
-                e.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
+                c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         finally:
             self._loading = False
         
