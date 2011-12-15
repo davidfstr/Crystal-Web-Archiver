@@ -89,10 +89,13 @@ class EntityTree(object):
         if item_id == _ID_SET_PREFIX:
             self._project.default_url_prefix = (
                 EntityTree._get_url_prefix_for_resource(node.resource))
-            # FIXME: Update node titles
+            self._update_titles_of_descendants()
         elif item_id == _ID_CLEAR_PREFIX:
             self._project.default_url_prefix = None
-            # FIXME: Update node titles
+            self._update_titles_of_descendants()
+    
+    def _update_titles_of_descendants(self):
+        self.root.update_title_of_descendants()
     
     @staticmethod
     def _get_url_prefix_for_resource(resource):
@@ -157,9 +160,18 @@ class Node(object):
         """
         Updates this node's descendants, usually due to a project change.
         """
-        self.update_children()
+        self._call_on_descendants('update_children')
+    
+    def update_title_of_descendants(self):
+        """
+        Updates the title of this node's descendants, usually due to a project change.
+        """
+        self._call_on_descendants('update_title')
+    
+    def _call_on_descendants(self, method_name):
+        getattr(self, method_name)()
         for child in self.children:
-            child.update_descendants()
+            getattr(child, method_name)()
     
     def update_children(self):
         """
@@ -170,12 +182,20 @@ class Node(object):
         """
         pass
     
+    def update_title(self):
+        """
+        Updates this node's title. Usually due to a project change.
+        """
+        if hasattr(self, 'calculate_title'):
+            self.view.title = self.calculate_title()
+    
     def __repr__(self):
         return '<%s titled %s at %s>' % (type(self).__name__, repr(self.view.title), hex(id(self)))
 
 class RootNode(Node):
     def __init__(self, project, view):
         super(RootNode, self).__init__()
+        
         self.view = view
         self.view.title = 'ROOT'
         self.view.expandable = True
@@ -197,6 +217,7 @@ class _ResourceNode(Node):
     
     def __init__(self, title, resource):
         super(_ResourceNode, self).__init__()
+        
         self.view = NodeView()
         self.view.title = title
         self.view.expandable = True
@@ -321,11 +342,14 @@ class _ResourceNode(Node):
 
 class RootResourceNode(_ResourceNode):
     def __init__(self, root_resource):
-        project = root_resource.project
-        title = '%s - %s' % (project.get_display_url(root_resource.url), root_resource.name)
-        super(RootResourceNode, self).__init__(title, root_resource.resource)
-        
         self.root_resource = root_resource
+        super(RootResourceNode, self).__init__(self.calculate_title(), root_resource.resource)
+    
+    def calculate_title(self):
+        project = self.root_resource.project
+        return '%s - %s' % (
+            project.get_display_url(self.root_resource.url),
+            self.root_resource.name)
     
     @property
     def entity(self):
@@ -339,11 +363,12 @@ class RootResourceNode(_ResourceNode):
 
 class NormalResourceNode(_ResourceNode):
     def __init__(self, resource):
-        project = resource.project
-        title = '%s' % project.get_display_url(resource.url)
-        super(NormalResourceNode, self).__init__(title, resource)
-        
         self.resource = resource
+        super(NormalResourceNode, self).__init__(self.calculate_title(), resource)
+    
+    def calculate_title(self):
+        project = self.resource.project
+        return '%s' % project.get_display_url(self.resource.url)
     
     @property
     def entity(self):
@@ -357,13 +382,16 @@ class NormalResourceNode(_ResourceNode):
 
 class LinkedResourceNode(_ResourceNode):
     def __init__(self, resource, links):
-        project = resource.project
-        link_titles = ', '.join([link.full_title for link in links])
-        title = '%s - %s' % (project.get_display_url(resource.url), link_titles)
-        super(LinkedResourceNode, self).__init__(title, resource)
-        
         self.resource = resource
         self.links = tuple(links)
+        super(LinkedResourceNode, self).__init__(self.calculate_title(), resource)
+    
+    def calculate_title(self):
+        project = self.resource.project
+        link_titles = ', '.join([link.full_title for link in self.links])
+        return '%s - %s' % (
+            project.get_display_url(self.resource.url),
+            link_titles)
     
     @property
     def entity(self):
@@ -378,6 +406,7 @@ class LinkedResourceNode(_ResourceNode):
 class ClusterNode(Node):
     def __init__(self, title, children, icon_set=None):
         super(ClusterNode, self).__init__()
+        
         self.view = NodeView()
         self.view.icon_set = icon_set
         self.view.title = title
@@ -395,16 +424,21 @@ class ClusterNode(Node):
 
 class ResourceGroupNode(Node):
     def __init__(self, resource_group):
+        self.resource_group = resource_group
         super(ResourceGroupNode, self).__init__()
-        project = resource_group.project
+        
         self.view = NodeView()
-        self.view.title = '%s - %s' % (project.get_display_url(resource_group.url_pattern), resource_group.name)
+        self.view.title = self.calculate_title()
         self.view.expandable = True
         self.view.delegate = self
         
-        self.resource_group = resource_group
-        
         self.update_children()
+    
+    def calculate_title(self):
+        project = self.resource_group.project
+        return '%s - %s' % (
+            project.get_display_url(self.resource_group.url_pattern),
+            self.resource_group.name)
     
     @property
     def entity(self):
@@ -431,17 +465,22 @@ class ResourceGroupNode(Node):
 
 class GroupedLinkedResourcesNode(Node):
     def __init__(self, resource_group, root_rsrc_nodes, linked_rsrc_nodes):
+        self.resource_group = resource_group
         super(GroupedLinkedResourcesNode, self).__init__()
-        project = resource_group.project
+        
         self.view = NodeView()
-        self.view.title = '%s - %s' % (project.get_display_url(resource_group.url_pattern), resource_group.name)
+        self.view.title = self.calculate_title()
         self.view.expandable = True
         self.view.delegate = self
         
         self.children = root_rsrc_nodes + linked_rsrc_nodes
         self._children_tuple = tuple(self.children)
-        
-        self.resource_group = resource_group
+    
+    def calculate_title(self):
+        project = self.resource_group.project
+        return '%s - %s' % (
+            project.get_display_url(self.resource_group.url_pattern),
+            self.resource_group.name)
     
     @property
     def entity(self):
