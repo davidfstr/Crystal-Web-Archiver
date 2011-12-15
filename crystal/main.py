@@ -99,6 +99,7 @@ def _prompt_for_project():
     dialog = BetterMessageDialog(None,
         message='Open an existing project or create a new project?',
         title='Actions | Crystal',
+        style=wx.YES_NO,
         yes_label='Open',
         no_label='Create')
     choice = dialog.ShowModal()
@@ -146,6 +147,16 @@ def _prompt_to_open_project():
     
     if not os.path.exists(project_path):
         raise AssertionError
+    if not Project.is_valid(project_path):
+        from crystal.ui.BetterMessageDialog import BetterMessageDialog
+        
+        dialog = BetterMessageDialog(None,
+            message='The selected directory is not a valid project.',
+            title='Invalid Project',
+            style=wx.OK)
+        dialog.ShowModal()
+        exit()
+    
     return Project(project_path)
 
 def _load_project(project_path):

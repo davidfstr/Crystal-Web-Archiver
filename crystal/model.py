@@ -105,6 +105,12 @@ class Project(object):
         # Hold on to the server connection
         self.server_running = False
     
+    @staticmethod
+    def is_valid(path):
+        return (
+            os.path.exists(path) and 
+            os.path.exists(os.path.join(path, Project._DB_FILENAME)))
+    
     # === Properties ===
     
     def _get_property(self, name, default):
