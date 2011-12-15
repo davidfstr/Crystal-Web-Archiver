@@ -113,6 +113,10 @@ class Project(object):
     
     # === Properties ===
     
+    @property
+    def title(self):
+        return os.path.basename(self.path)
+    
     def _get_property(self, name, default):
         return self._properties.get(name, default)
     def _set_property(self, name, value):

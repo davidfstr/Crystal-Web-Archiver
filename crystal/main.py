@@ -98,7 +98,7 @@ def _prompt_for_project():
     
     dialog = BetterMessageDialog(None,
         message='Open an existing project or create a new project?',
-        title='Actions | Crystal',
+        title='Select a Project',
         style=wx.YES_NO,
         yes_label='Open',
         no_label='Create')

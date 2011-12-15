@@ -12,7 +12,7 @@ class MainWindow(object):
     def __init__(self, project):
         self.project = project
         
-        frame = wx.Frame(None, title='Crystal')
+        frame = wx.Frame(None, title=project.title)
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         
