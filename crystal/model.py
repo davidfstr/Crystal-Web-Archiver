@@ -93,7 +93,7 @@ class Project(object):
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
                 c = self._db.cursor()
-                c.execute('create table project_property (name text unique not null, value text not null)')
+                c.execute('create table project_property (name text unique not null, value text)')
                 c.execute('create table resource (id integer primary key, url text unique not null)')
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')

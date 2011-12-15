@@ -5,14 +5,20 @@ from crystal.xthreading import bg_call_later, fg_call_later
 import threading
 import urlparse
 
+_ID_SET_PREFIX = 101
+_ID_CLEAR_PREFIX = 102
+
 class EntityTree(object):
     """
     Displays a tree of top-level project entities.
     """
     def __init__(self, parent_peer, project):
         self.view = TreeView(parent_peer)
+        self.view.delegate = self
         self.root = RootNode(project, self.view.root)
+        self._project = project
         self._group_nodes_need_updating = False
+        self._right_clicked_node = None
         
         project.listeners.append(self)
         
@@ -57,6 +63,56 @@ class EntityTree(object):
     
     def resource_did_instantiate(self, resource):
         self._refresh_group_nodes()
+    
+    def on_right_click(self, event, node_view):
+        node = node_view.data
+        self._right_clicked_node = node
+        
+        # Create popup menu
+        menu = wx.Menu()
+        menu.Bind(wx.EVT_MENU, self._on_popup_menuitem_selected)
+        if self._project.default_url_prefix == (
+                EntityTree._get_url_prefix_for_resource(node.resource)):
+            menu.Append(_ID_CLEAR_PREFIX, 'Clear Default URL Prefix')
+        else:
+            menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
+        
+        # Show popup menu
+        if menu.GetMenuItemCount() > 0:
+            self.peer.PopupMenu(menu, event.GetPoint())
+        menu.Destroy()
+    
+    def _on_popup_menuitem_selected(self, event):
+        node = self._right_clicked_node
+        
+        item_id = event.GetId()
+        if item_id == _ID_SET_PREFIX:
+            self._project.default_url_prefix = (
+                EntityTree._get_url_prefix_for_resource(node.resource))
+            # FIXME: Update node titles
+        elif item_id == _ID_CLEAR_PREFIX:
+            self._project.default_url_prefix = None
+            # FIXME: Update node titles
+    
+    @staticmethod
+    def _get_url_prefix_for_resource(resource):
+        """
+        Given a resource, returns the URL prefix that will chop off everything
+        before the resource's enclosing directory.
+        """
+        url = resource.url
+        url_components = urlparse.urlparse(url)
+        
+        # If URL path contains slash, chop last slash and everything following it
+        path = url_components.path
+        if '/' in path:
+            new_path = path[:path.rindex('/')]
+        else:
+            new_path = path
+        
+        new_url_components = list(url_components)
+        new_url_components[2] = new_path
+        return urlparse.urlunparse(new_url_components)
 
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     """
@@ -76,6 +132,8 @@ class Node(object):
         return self._view
     def _set_view(self, value):
         self._view = value
+        # TODO: Use the 'delegate' property instead, since that's what it's designed for.
+        #       Remove manual setting of the delegate by subclasses.
         self._view.data = self
     view = property(_get_view, _set_view)
     

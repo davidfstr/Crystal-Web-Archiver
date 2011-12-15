@@ -34,6 +34,7 @@ def _DEFAULT_FILE_ICON_SET():
 # that will be called (if they exist) upon the reception of such an event.
 _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR = {
     wx.EVT_TREE_ITEM_EXPANDED: 'on_expanded',
+    wx.EVT_TREE_ITEM_RIGHT_CLICK: 'on_right_click',
     # TODO: Consider adding support for additional wx.EVT_TREE_ITEM_* event types
 }
 _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR = dict(zip(
@@ -53,6 +54,7 @@ class TreeView(object):
     """
     
     def __init__(self, parent_peer):
+        self.delegate = None
         self.peer = _OrderedTreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
         
         # Setup node image registration
@@ -100,7 +102,16 @@ class TreeView(object):
     def _dispatch_event(self, event):
         node_id = event.GetItem()
         node_view = self.peer.GetPyData(node_id)
+        
+        # Dispatch event to the node
         node_view._dispatch_event(event)
+        
+        # Dispatch event to my delegate
+        if self.delegate:
+            event_type_id = event.GetEventType()
+            delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
+            if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
+                getattr(self.delegate, delegate_callable_attr)(event, node_view)
 
 class _OrderedTreeCtrl(wx.TreeCtrl):
     def OnCompareItems(self, item1, item2):
@@ -223,12 +234,12 @@ class NodeView(object):
     
     # Called when a wx.EVT_TREE_ITEM_* event occurs on this node
     def _dispatch_event(self, event):
-        if not self.delegate:
-            return
-        event_type_id = event.GetEventType()
-        delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
-        if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
-            getattr(self.delegate, delegate_callable_attr)(event)
+        # Dispatch event to my delegate
+        if self.delegate:
+            event_type_id = event.GetEventType()
+            delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
+            if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
+                getattr(self.delegate, delegate_callable_attr)(event)
 
 class NodeViewPeer(tuple):
     def __new__(cls, tree, node_id):
