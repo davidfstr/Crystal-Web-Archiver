@@ -104,20 +104,23 @@ def _prompt_for_project():
         no_label='Create')
     choice = dialog.ShowModal()
     
-    if choice == wx.ID_YES:
-        return _prompt_to_open_project()
-    elif choice == wx.ID_NO:
-        return _prompt_to_create_project()
-    else:
-        exit()
+    try:
+        if choice == wx.ID_YES:
+            return _prompt_to_open_project(dialog)
+        elif choice == wx.ID_NO:
+            return _prompt_to_create_project(dialog)
+        else:
+            exit()
+    finally:
+        dialog.Destroy()
 
-def _prompt_to_create_project():
+def _prompt_to_create_project(parent):
     from crystal.model import Project
     import os.path
     import shutil
     import wx
     
-    dialog = wx.FileDialog(None,
+    dialog = wx.FileDialog(parent,
         message='',
         wildcard='*' + Project.FILE_EXTENSION,
         style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
@@ -127,23 +130,25 @@ def _prompt_to_create_project():
     project_path = dialog.GetPath()
     if not project_path.endswith(Project.FILE_EXTENSION):
         project_path += Project.FILE_EXTENSION
+    dialog.Destroy()
     
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
     return Project(project_path)
 
-def _prompt_to_open_project():
+def _prompt_to_open_project(parent):
     from crystal.model import Project
     import os.path
     import wx
     
-    dialog = wx.DirDialog(None,
+    dialog = wx.DirDialog(parent,
         message='',
         style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
     if not dialog.ShowModal() == wx.ID_OK:
         exit()
     
     project_path = dialog.GetPath()
+    dialog.Destroy()
     
     if not os.path.exists(project_path):
         raise AssertionError
@@ -155,6 +160,7 @@ def _prompt_to_open_project():
             title='Invalid Project',
             style=wx.OK)
         dialog.ShowModal()
+        dialog.Destroy()
         exit()
     
     return Project(project_path)
