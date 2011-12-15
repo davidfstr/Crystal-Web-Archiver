@@ -5,13 +5,16 @@ _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
 
 class AddRootUrlDialog(object):
-    def __init__(self, parent, on_finish):
+    def __init__(self, parent, on_finish, initial_url=None):
         """
         Arguments:
         parent -- parent wx.Window that this dialog is attached to.
         on_finish -- called when OK pressed on dialog. Is a callable(name, url).
+        initial_url -- overrides the initial URL displayed.
         """
         self.on_finish = on_finish
+        if initial_url is None:
+            initial_url = 'http://'
         
         dialog = self.dialog = wx.Dialog(parent, title='Add Root URL')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -19,7 +22,7 @@ class AddRootUrlDialog(object):
         dialog.Bind(wx.EVT_BUTTON, self._on_button)
         dialog.Bind(wx.EVT_CLOSE, self._on_close)
         
-        dialog_sizer.Add(self._create_fields(dialog), flag=wx.EXPAND|wx.ALL,
+        dialog_sizer.Add(self._create_fields(dialog, initial_url), flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
@@ -29,7 +32,7 @@ class AddRootUrlDialog(object):
         dialog.Fit()
         dialog.Show(True)
     
-    def _create_fields(self, parent):
+    def _create_fields(self, parent, initial_url):
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         fields_sizer.AddGrowableCol(1)
@@ -40,7 +43,7 @@ class AddRootUrlDialog(object):
         fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         
         fields_sizer.Add(wx.StaticText(parent, label='URL:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
-        self.url_field = wx.TextCtrl(parent, value='http://', size=(300,-1)) # width hint
+        self.url_field = wx.TextCtrl(parent, value=initial_url, size=(300,-1)) # width hint
         self.url_field.SetSelection(-1, -1)
         fields_sizer.Add(self.url_field, flag=wx.EXPAND)
         

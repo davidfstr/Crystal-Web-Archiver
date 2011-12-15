@@ -31,7 +31,7 @@ class MainWindow(object):
         
         self.frame = frame
     
-    # === Entity Pane ===
+    # === Entity Pane: Init ===
     
     def _create_entity_pane(self, parent):
         pane = wx.Panel(parent)
@@ -94,11 +94,22 @@ class MainWindow(object):
         content_sizer.Add(self._view_button)
         return content_sizer
     
+    # === Entity Pane: Properties ===
+    
+    @property
+    def _selection_initial_url(self):
+        selected_entity = self.entity_tree.selected_entity
+        if type(selected_entity) is Resource:
+            return selected_entity.url
+        else:
+            return self.project.default_url_prefix
+    
+    # === Entity Pane: Events ===
+    
     def _on_add_url(self, event):
-        # TODO: Prepopulate URL field with that of the selected resource (if applicable).
-        #       Otherwise prepopulate it with the project's default URL prefix (if applicable).
-        #       Otherwise prepopulate it with "http://"
-        AddRootUrlDialog(self.frame, self._on_add_url_dialog_ok)
+        AddRootUrlDialog(
+            self.frame, self._on_add_url_dialog_ok,
+            initial_url=self._selection_initial_url)
     
     def _on_add_url_dialog_ok(self, name, url):
         # TODO: Validate user input:
@@ -108,7 +119,9 @@ class MainWindow(object):
         self.entity_tree.update() # TODO: update tree automatically via listener on Project
     
     def _on_add_group(self, event):
-        AddGroupDialog(self.frame, self._on_add_group_dialog_ok)
+        AddGroupDialog(
+            self.frame, self._on_add_group_dialog_ok,
+            initial_url=self._selection_initial_url)
     
     def _on_add_group_dialog_ok(self, name, url_pattern):
         # TODO: Validate user input:
@@ -147,7 +160,7 @@ class MainWindow(object):
         self._view_button.Enable(
             type(selected_entity) in (Resource, RootResource))
     
-    # === Task Pane ===
+    # === Task Pane: Init ===
     
     def _create_task_pane(self, parent):
         pane = wx.Panel(parent)
