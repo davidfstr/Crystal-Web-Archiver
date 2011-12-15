@@ -34,9 +34,9 @@ def main(args):
     
     # Get a project
     if len(args) == 0:
-        project = prompt_for_project()
+        project = _prompt_for_project()
     elif len(args) == 1:
-        project = load_project(args[0])
+        project = _load_project(args[0])
     if project is None:
         raise AssertionError
     
@@ -92,7 +92,7 @@ def _running_as_bundle():
     #       I think py2exe's logic is: hasattr(sys, 'frozen')
     return False
 
-def prompt_for_project():
+def _prompt_for_project():
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     import wx
     
@@ -104,13 +104,13 @@ def prompt_for_project():
     choice = dialog.ShowModal()
     
     if choice == wx.ID_YES:
-        return prompt_to_open_project()
+        return _prompt_to_open_project()
     elif choice == wx.ID_NO:
-        return prompt_to_create_project()
+        return _prompt_to_create_project()
     else:
         exit()
 
-def prompt_to_create_project():
+def _prompt_to_create_project():
     from crystal.model import Project
     import os.path
     import shutil
@@ -131,7 +131,7 @@ def prompt_to_create_project():
         shutil.rmtree(project_path)
     return Project(project_path)
 
-def prompt_to_open_project():
+def _prompt_to_open_project():
     from crystal.model import Project
     import os.path
     import wx
@@ -148,7 +148,7 @@ def prompt_to_open_project():
         raise AssertionError
     return Project(project_path)
 
-def load_project(project_path):
+def _load_project(project_path):
     from crystal.model import Project
     import os.path
     
