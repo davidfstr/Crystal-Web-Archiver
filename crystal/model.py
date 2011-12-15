@@ -473,8 +473,16 @@ class RootResource(object):
             return self
     
     def delete(self):
+        """
+        Deletes this root resource.
+        If it is referenced as a source, it will be replaced with None.
+        """
+        for rg in self.project.resource_groups:
+            if rg.source == self:
+                rg.source = None
+        
         c = self.project._db.cursor()
-        c.execute('delete from root_resource where resource_id=?', (self.resource._id,))
+        c.execute('delete from root_resource where id=?', (self._id,))
         self.project._db.commit()
         self._id = None
         
@@ -779,6 +787,22 @@ class ResourceGroup(object):
     
     def _init_source(self, source):
         self._source = source
+    
+    def delete(self):
+        """
+        Deletes this resource group.
+        If it is referenced as a source, it will be replaced with None.
+        """
+        for rg in self.project.resource_groups:
+            if rg.source == self:
+                rg.source = None
+        
+        c = self.project._db.cursor()
+        c.execute('delete from resource_group where id=?', (self._id,))
+        self.project._db.commit()
+        self._id = None
+        
+        self.project._resource_groups.remove(self)
     
     def _get_source(self):
         """
