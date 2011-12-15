@@ -9,6 +9,7 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 """
 
 from collections import OrderedDict
+from crystal.packages import set_package
 import json
 import mimetypes
 import os
@@ -84,6 +85,7 @@ class Project(object):
             else:
                 # Create new project
                 os.mkdir(path)
+                set_package(path, True)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
