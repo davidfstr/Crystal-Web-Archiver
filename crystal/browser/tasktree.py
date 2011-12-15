@@ -41,3 +41,6 @@ class TaskTreeNode(object):
     def task_did_append_child(self, task, child):
         child_ttnode = TaskTreeNode(child)
         self.tree_node.append_child(child_ttnode.tree_node)
+    
+    def task_did_clear_children(self, task):
+        self.tree_node.children = []

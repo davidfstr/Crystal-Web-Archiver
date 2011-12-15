@@ -127,6 +127,22 @@ class Task(object):
                     lis.task_did_complete(self)
         fg_call_later(fg_task)
     
+    def clear_children(self):
+        """
+        Clears all of this task's children.
+        Recommended only for use by RootTask.
+        """
+        if not all(c.complete for c in self.children):
+            raise ValueError('Some children are not complete.')
+        
+        self._children = []
+        self._first_incomplete_child_index = 0
+        self._next_child_index = 0
+        
+        for lis in self.listeners:
+            if hasattr(lis, 'task_did_clear_children'):
+                lis.task_did_clear_children(self)
+    
     # === Public Operations ===
     
     def try_get_next_task_unit(self):
@@ -473,6 +489,10 @@ class RootTask(Task):
             return None
         
         return super(RootTask, self).try_get_next_task_unit()
+    
+    def child_task_did_complete(self, task):
+        if all(c.complete for c in self.children):
+            self.clear_children()
 
 # ----------------------------------------------------------------------------------------
 
