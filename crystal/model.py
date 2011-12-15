@@ -51,6 +51,9 @@ class Project(object):
         self._loading = True
         try:
             if os.path.exists(path):
+                if not Project.is_valid(path):
+                    raise ProjectFormatError('Project format is invalid.')
+                
                 # Load from existing project
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
@@ -111,7 +114,8 @@ class Project(object):
     def is_valid(path):
         return (
             os.path.exists(path) and 
-            os.path.exists(os.path.join(path, Project._DB_FILENAME)))
+            os.path.exists(os.path.join(path, Project._DB_FILENAME)) and
+            os.path.exists(os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)))
     
     # === Properties ===
     
