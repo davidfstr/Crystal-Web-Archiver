@@ -93,13 +93,22 @@ def _running_as_bundle():
     return False
 
 def prompt_for_project():
-    s = raw_input('[C]reate a new project or [O]pen an existing? [C] ').lower()
-    if s.startswith('c') or s == '':
-        return prompt_to_create_project()
-    elif s.startswith('o'):
+    from crystal.ui.BetterMessageDialog import BetterMessageDialog
+    import wx
+    
+    dialog = BetterMessageDialog(None,
+        message='Open an existing project or create a new project?',
+        title='Actions | Crystal',
+        yes_label='Open',
+        no_label='Create')
+    choice = dialog.ShowModal()
+    
+    if choice == wx.ID_YES:
         return prompt_to_open_project()
+    elif choice == wx.ID_NO:
+        return prompt_to_create_project()
     else:
-        exit('Not a valid option. Try "c" or "o".')
+        exit()
 
 def prompt_to_create_project():
     from crystal.model import Project
