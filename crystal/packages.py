@@ -18,5 +18,3 @@ def set_package(dir_path, is_package=True):
         return False
     else:
         return True
-
-    
