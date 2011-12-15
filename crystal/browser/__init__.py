@@ -99,8 +99,10 @@ class MainWindow(object):
     @property
     def _selection_initial_url(self):
         selected_entity = self.entity_tree.selected_entity
-        if type(selected_entity) is Resource:
-            return selected_entity.url
+        if type(selected_entity) in (Resource, RootResource):
+            return selected_entity.resource.url
+        elif type(selected_entity) is ResourceGroup:
+            return selected_entity.url_pattern
         else:
             return self.project.default_url_prefix
     
