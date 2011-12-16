@@ -62,10 +62,9 @@ class MainWindow(object):
         add_group_button = wx.Button(parent, label='+ Group')
         add_group_button.Bind(wx.EVT_BUTTON, self._on_add_group)
         
-        remove_entity_button = wx.Button(parent, label='-')
-        remove_entity_button.Bind(wx.EVT_BUTTON, self._on_remove_entity)
-        # TODO: Enable depending on what item in the tree is selected
-        remove_entity_button.Disable()
+        self._remove_entity_button = wx.Button(parent, label='-')
+        self._remove_entity_button.Bind(wx.EVT_BUTTON, self._on_remove_entity)
+        self._remove_entity_button.Disable()
         
         self._download_button = wx.Button(parent, label='Download')
         self._download_button.Bind(wx.EVT_BUTTON, self._on_download_entity)
@@ -84,7 +83,7 @@ class MainWindow(object):
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
         content_sizer.Add(add_group_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(remove_entity_button)
+        content_sizer.Add(self._remove_entity_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING * 2)
         content_sizer.AddStretchSpacer()
         content_sizer.Add(self._download_button)
@@ -118,7 +117,7 @@ class MainWindow(object):
         #       * Is name or url empty?
         #       * Is name or url already taken?
         RootResource(self.project, name, Resource(self.project, url))
-        self.entity_tree.update() # TODO: update tree automatically via listener on Project
+        self.entity_tree.update()
     
     def _on_add_group(self, event):
         AddGroupDialog(
@@ -132,10 +131,11 @@ class MainWindow(object):
         #       * Is name or url_pattern already taken?
         rg = ResourceGroup(self.project, name, url_pattern)
         rg.source = source
-        self.entity_tree.update() # TODO: update tree automatically via listener on Project
+        self.entity_tree.update()
     
     def _on_remove_entity(self, event):
-        pass
+        self.entity_tree.selected_entity.delete()
+        self.entity_tree.update()
     
     def _on_download_entity(self, event):
         self.entity_tree.selected_entity.download()
@@ -157,6 +157,8 @@ class MainWindow(object):
     
     def _on_selected_entity_changed(self, event):
         selected_entity = self.entity_tree.selected_entity
+        self._remove_entity_button.Enable(
+            type(selected_entity) in (ResourceGroup, RootResource))
         self._download_button.Enable(
             selected_entity is not None)
         self._update_membership_button.Enable(
