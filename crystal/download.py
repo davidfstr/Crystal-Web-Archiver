@@ -8,6 +8,9 @@ import httplib
 import urllib2
 from urlparse import urlparse
 
+# The User-Agent string to use for downloads, or None to omit.
+_USER_AGENT_STRING = 'Crystal/0.1 (crystalbot@dafoster.net)'
+
 def download_resource_revision(resource, progress_listener):
     """
     Synchronously downloads a revision of the specified resource.
@@ -73,7 +76,10 @@ class HttpResourceRequest(ResourceRequest):
             conn = httplib.HTTPSConnection(host_and_port)
         else:
             raise ValueError('Not an HTTP(S) URL.')
-        conn.request('GET', self.url) # no special body or headers
+        headers = {
+            'User-Agent': _USER_AGENT_STRING,
+        }
+        conn.request('GET', self.url, headers=headers)
         response = conn.getresponse()
         
         metadata = {
