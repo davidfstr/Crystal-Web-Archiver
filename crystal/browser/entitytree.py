@@ -32,11 +32,27 @@ class EntityTree(object):
     @property
     def selected_entity(self):
         selected_node_view = self.view.selected_node
-        if selected_node_view is not None:
-            selected_node = selected_node_view.delegate
-            return selected_node.entity
-        else:
+        if selected_node_view is None:
             return None
+        selected_node = selected_node_view.delegate
+        
+        return selected_node.entity
+    
+    # HACK: Violates the Law of Demeter rather substantially.
+    @property
+    def parent_of_selected_entity(self):
+        selected_wxtreeitemid = self.view.peer.GetSelection()
+        if not selected_wxtreeitemid.IsOk():
+            return None
+        
+        parent_wxtreeitemid = self.view.peer.GetItemParent(selected_wxtreeitemid)
+        if not parent_wxtreeitemid.IsOk():
+            return None
+        
+        parent_node_view = self.view.peer.GetPyData(parent_wxtreeitemid)
+        parent_node = parent_node_view.delegate
+        
+        return parent_node.entity
     
     def update(self):
         """

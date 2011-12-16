@@ -106,6 +106,20 @@ class MainWindow(object):
         else:
             return self.project.default_url_prefix
     
+    @property
+    def _selection_initial_source(self):
+        selected_entity = self.entity_tree.selected_entity
+        if type(selected_entity) in (Resource, RootResource):
+            parent_of_selected_entity = self.entity_tree.parent_of_selected_entity
+            if type(parent_of_selected_entity) in (ResourceGroup, RootResource):
+                return parent_of_selected_entity
+            else:
+                return None
+        elif type(selected_entity) is ResourceGroup:
+            return selected_entity.source
+        else:
+            return None
+    
     # === Entity Pane: Events ===
     
     def _on_add_url(self, event):
@@ -124,7 +138,8 @@ class MainWindow(object):
         AddGroupDialog(
             self.frame, self._on_add_group_dialog_ok,
             self.project,
-            initial_url=self._selection_initial_url)
+            initial_url=self._selection_initial_url,
+            initial_source=self._selection_initial_source)
     
     def _on_add_group_dialog_ok(self, name, url_pattern, source):
         # TODO: Validate user input:

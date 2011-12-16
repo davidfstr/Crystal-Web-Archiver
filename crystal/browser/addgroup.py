@@ -11,13 +11,14 @@ _FORM_ROW_SPACING = 10
 class AddGroupDialog(object):
     # === Init ===
     
-    def __init__(self, parent, on_finish, project, initial_url=None):
+    def __init__(self, parent, on_finish, project, initial_url=None, initial_source=None):
         """
         Arguments:
         parent -- parent wx.Window that this dialog is attached to.
         on_finish -- called when OK pressed on dialog. Is a callable(name, url_pattern).
         project -- the project.
         initial_url -- overrides the initial URL displayed.
+        initial_source -- overrides the initial source displayed.
         """
         self._project = project
         self._on_finish = on_finish
@@ -43,7 +44,9 @@ class AddGroupDialog(object):
         preview_box_root_sizer.Add(self.url_list, flag=wx.EXPAND)
         
         content_sizer = wx.BoxSizer(wx.VERTICAL)
-        content_sizer.Add(self._create_fields(dialog, initial_url), flag=wx.EXPAND)
+        content_sizer.Add(
+            self._create_fields(dialog, initial_url, initial_source),
+            flag=wx.EXPAND)
         content_sizer.Add(preview_box, flag=wx.EXPAND)
         
         dialog_sizer.Add(content_sizer, flag=wx.EXPAND|wx.ALL,
@@ -57,7 +60,7 @@ class AddGroupDialog(object):
         dialog.Fit()
         dialog.Show(True)
     
-    def _create_fields(self, parent, initial_url):
+    def _create_fields(self, parent, initial_url, initial_source):
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         fields_sizer.AddGrowableCol(1)
@@ -85,6 +88,12 @@ class AddGroupDialog(object):
         for rg in self._project.resource_groups:
             self.source_choice_box.Append(rg.name, rg)
         self.source_choice_box.SetSelection(0)
+        if initial_source is not None:
+            for i in xrange(self.source_choice_box.GetCount()):
+                cur_source = self.source_choice_box.GetClientData(i)
+                if cur_source == initial_source:
+                    self.source_choice_box.SetSelection(i)
+                    break
         fields_sizer.Add(self.source_choice_box, flag=wx.EXPAND)
         
         return fields_sizer
