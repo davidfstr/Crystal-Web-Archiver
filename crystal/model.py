@@ -888,6 +888,9 @@ class ResourceGroup(object):
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
         """
+        if self.source is None:
+            raise ValueError('Cannot download a group that lacks a source.')
+        
         from crystal.task import DownloadResourceGroupTask
         return DownloadResourceGroupTask(self)
     
@@ -897,6 +900,9 @@ class ResourceGroup(object):
         
         A top-level Task will be created internally to display the progress.
         """
+        if self.source is None:
+            raise ValueError('Cannot update members of a group that lacks a source.')
+        
         from crystal.task import UpdateResourceGroupMembersTask
         task = UpdateResourceGroupMembersTask(self)
         self.project.add_task(task)

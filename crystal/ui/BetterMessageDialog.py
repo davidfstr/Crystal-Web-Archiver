@@ -21,9 +21,10 @@ class BetterMessageDialog(wx.Dialog):
         self_sizer = wx.BoxSizer(wx.VERTICAL); self.SetSizer(self_sizer)
         self.Bind(wx.EVT_BUTTON, self._on_button)
         
+        message_label = wx.StaticText(self, label=message)
+        message_label.Wrap(400)
         self_sizer.Add(
-            wx.StaticText(self, label=
-                message),
+            message_label,
             flag=wx.ALL,
             border=_WINDOW_INNER_PADDING)
         self_sizer.Add(

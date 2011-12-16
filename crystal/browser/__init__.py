@@ -4,6 +4,7 @@ from crystal.browser.entitytree import EntityTree
 from crystal.browser.tasktree import TaskTree
 from crystal.model import Resource, ResourceGroup, RootResource
 from crystal.task import RootTask
+from crystal.ui.BetterMessageDialog import BetterMessageDialog
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -138,10 +139,36 @@ class MainWindow(object):
         self.entity_tree.update()
     
     def _on_download_entity(self, event):
-        self.entity_tree.selected_entity.download()
+        selected_entity = self.entity_tree.selected_entity
+        if self._alert_if_not_downloadable(selected_entity):
+            return
+        selected_entity.download()
     
     def _on_update_group_membership(self, event):
-        self.entity_tree.selected_entity.update_membership()
+        selected_entity = self.entity_tree.selected_entity
+        if self._alert_if_not_downloadable(selected_entity):
+            return
+        selected_entity.update_membership()
+    
+    def _alert_if_not_downloadable(self, entity):
+        """
+        Displays an alert if the entity is a group without a source,
+        which cannot be downloaded. Returns True if an alert was displayed.
+        """
+        if type(entity) is ResourceGroup and entity.source is None:
+            # TODO: Would be great if we automatically gave the user the option
+            #       to select a source for the group. Perhaps by automatically
+            #       forwarding the user to the edit dialog for the group.
+            dialog = BetterMessageDialog(self.frame,
+                message=('The group "%s" does not have a source defined, which ' +
+                    'prevents it from being downloaded.') % entity.name,
+                title='No Source Defined',
+                style=wx.OK)
+            dialog.ShowModal()
+            dialog.Destroy()
+            return True
+        else:
+            return False
     
     def _on_view_entity(self, event):
         import crystal.server
