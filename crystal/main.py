@@ -138,12 +138,21 @@ def _prompt_to_create_project(parent):
 
 def _prompt_to_open_project(parent):
     from crystal.model import Project
+    from crystal.packages import can_set_package
     import os.path
     import wx
     
-    dialog = wx.DirDialog(parent,
-        message='',
-        style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
+    if can_set_package():
+        # If projects appear as files, use a file selection dialog
+        dialog = wx.FileDialog(parent,
+            message='Choose a project',
+            wildcard='Projects (%(wc)s)|%(wc)s' % {'wc': '*' + Project.FILE_EXTENSION},
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+    else:
+        # If projects appear as directories, use a directory selection dialog
+        dialog = wx.DirDialog(parent,
+            message='Choose a project',
+            style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
     if not dialog.ShowModal() == wx.ID_OK:
         exit()
     

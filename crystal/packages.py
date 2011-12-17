@@ -1,4 +1,12 @@
+import platform
 import subprocess
+
+def can_set_package():
+    """
+    Returns whether the 'set_package' command is supported on this platform.
+    """
+    is_mac_os_x = (platform.system() == 'Darwin')
+    return is_mac_os_x
 
 def set_package(dir_path, is_package=True):
     """
@@ -10,6 +18,10 @@ def set_package(dir_path, is_package=True):
     
     Returns True if successful, False otherwise.
     """
+    
+    # Don't even try if it isn't likely to work
+    if not can_set_package():
+        return False
     
     try:
         subprocess.check_call([
