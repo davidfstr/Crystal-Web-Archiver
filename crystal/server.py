@@ -38,6 +38,8 @@ def get_request_url(archive_url):
     request_host = 'localhost:%s' % _SERVER_PORT
     return _RequestHandler.get_request_url_with_host(archive_url, request_host)
 
+# ----------------------------------------------------------------------------------------
+
 _SCHEME_REST_RE = re.compile(r'^/([^/]+)/(.+)$')
 
 # Set of archived headers that may be played back as-is

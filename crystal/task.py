@@ -496,7 +496,9 @@ class RootTask(Task):
 
 # ----------------------------------------------------------------------------------------
 
-_ROOT_TASK_POLL_INTERVAL = .1
+# TODO: Eliminate polling by adding logic to sleep appropriately until the
+#       root task has more children to process.
+_ROOT_TASK_POLL_INTERVAL = .1 # secs
 
 def schedule_forever(task):
     """
@@ -504,15 +506,12 @@ def schedule_forever(task):
     
     This function is intended for testing, until a full scheduler class is written.
     """
-    
     while True:
         unit = task.try_get_next_task_unit()
         if unit is None:
             if task.complete:
                 break
             else:
-                # TODO: Add logic to sleep appropriately until the root
-                #       task has more children to process
                 sleep(_ROOT_TASK_POLL_INTERVAL)
                 continue
         unit()
@@ -533,8 +532,6 @@ def start_schedule_forever(task):
                 if task_complete:
                     break
                 else:
-                    # TODO: Add logic to sleep appropriately until the root
-                    #       task has more children to process
                     sleep(_ROOT_TASK_POLL_INTERVAL)
                     continue
             unit()  # Run unit directly on this bg thread
