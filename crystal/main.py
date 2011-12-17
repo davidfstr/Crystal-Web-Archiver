@@ -56,7 +56,7 @@ def _check_environment():
     if py3:
         exit('This application cannot run under Python 3.x. Try Python 2.7 instead.')
     
-    # Check for wx
+    # Check for dependencies
     if not _running_as_bundle():
         try:
             import wxversion
@@ -80,8 +80,15 @@ def _check_environment():
             
             exit(
                 'wxPython found but couldn\'t be loaded. ' +
-                'Your Python is %s. Are you sure wxPython is %s?' %
+                'Your Python is %s. Are you sure the installed wxPython is %s?' %
                     (python_bitness, python_bitness))
+        
+        try:
+            import BeautifulSoup
+        except ImportError:
+            exit(
+                'This application requires BeautifulSoup to be installed. ' +
+                'Download it from http://www.crummy.com/software/BeautifulSoup/')
 
 def _running_as_bundle():
     """
