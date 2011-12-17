@@ -718,6 +718,8 @@ class ResourceRevision(object):
     def links(self):
         """
         Returns list of Links found in this resource.
+        
+        This method blocks while parsing the links.
         """
         return self.html_and_links()[1]
     
@@ -728,6 +730,8 @@ class ResourceRevision(object):
         (2) a list of Links found in this resource.
         
         The HTML document can be reoutput by getting its str() representation.
+        
+        This method blocks while parsing the links.
         """
         from crystal.html import parse_html_and_links, Link
         
