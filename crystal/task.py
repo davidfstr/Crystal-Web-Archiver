@@ -452,14 +452,18 @@ class DownloadResourceGroupTask(Task):
         Task.__init__(self, title='Downloading group: %s' % group.name)
         self._update_members_task = UpdateResourceGroupMembersTask(group)
         self._download_members_task = DownloadResourceGroupMembersTask(group)
+        self._started_downloading_members = False
         
         self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
         self.append_child(self._update_members_task)
         self.append_child(self._download_members_task)
     
     def child_task_subtitle_did_change(self, task):
-        if task == self._download_members_task:
+        if task == self._update_members_task and not self._started_downloading_members:
+            self.subtitle = 'Updating group members...'
+        elif task == self._download_members_task:
             self.subtitle = task.subtitle
+            self._started_downloading_members = True
     
     def child_task_did_complete(self, task):
         if task == self._update_members_task:
