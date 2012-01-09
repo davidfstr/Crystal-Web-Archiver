@@ -17,6 +17,7 @@ import re
 import shutil
 import sqlite3
 import urllib2
+from urlparse import urlparse, urlunparse
 from xfutures import Future
 from xthreading import bg_call_later, fg_call_and_wait
 
@@ -276,6 +277,11 @@ class Resource(object):
         project -- associated `Project`.
         url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
         """
+        
+        # Normalize the URL, stripping any fragment component
+        url_parts = list(urlparse(url))
+        url_parts[5] = '' # strip fragment if present
+        url = urlunparse(url_parts)
         
         if url in project._resources:
             return project._resources[url]
