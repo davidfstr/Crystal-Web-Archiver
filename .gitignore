@@ -3,3 +3,4 @@
 
 # Python
 *.pyc
+*.pyo

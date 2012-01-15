@@ -95,9 +95,7 @@ def _running_as_bundle():
     Returns whether we are running in a bundled environment,
     such as py2exe or py2app.
     """
-    # TODO: Update this logic once bundling tools have been selected.
-    #       I think py2exe's logic is: hasattr(sys, 'frozen')
-    return False
+    return hasattr(sys, 'frozen')
 
 def _prompt_for_project():
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
