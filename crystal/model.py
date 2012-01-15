@@ -278,10 +278,13 @@ class Resource(object):
         url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
         """
         
-        # Normalize the URL, stripping any fragment component
-        url_parts = list(urlparse(url))
-        url_parts[5] = '' # strip fragment if present
-        url = urlunparse(url_parts)
+        # (Provide backward compatibility with older projects that may contain
+        #  resources with fragment components in the URL)
+        if url not in project._resources:
+            # Normalize the URL, stripping any fragment component
+            url_parts = list(urlparse(url))
+            url_parts[5] = '' # strip fragment if present
+            url = urlunparse(url_parts)
         
         if url in project._resources:
             return project._resources[url]
@@ -640,7 +643,7 @@ class ResourceRevision(object):
     
     def _ensure_has_body(self):
         if not self.has_body:
-            raise ValueError('Resource has no body.')
+            raise ValueError('Resource "%s" has no body.' % self._url)
     
     @property
     def _body_filepath(self):
