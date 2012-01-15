@@ -184,7 +184,7 @@ class Link(object):
                 attr_value = self._get_attr_value_for_url(value)
             else:
                 attr_value = value
-            self._tag[self._attr_name] = value
+            self._tag[self._attr_name] = attr_value
     relative_url = property(_get_relative_url, _set_relative_url)
     
     @property
