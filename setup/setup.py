@@ -22,8 +22,8 @@ PLIST = {
         # Associate application with .crystalproj files
         {
             'CFBundleTypeExtensions': ['crystalproj'],
-            #'CFBundleTypeIconFile': 'crystalproj.icns',
-            #'CFBundleTypeName': 'net.dafoster.crystal.crystalproj'
+            'CFBundleTypeIconFile': 'DocIconMac.icns',
+            'CFBundleTypeName': 'Crystal Project',
             'CFBundleTypeRole': 'Editor',
             'LSTypeIsPackage': True,
         },
@@ -40,9 +40,10 @@ if FORCE_32_BIT: PLIST['LSArchitecturePriority'] = ['i386']
 setup(
     name=APP_NAME,
     app=['../src/main.py'],
-    data_files=[],
+    data_files=['media/DocIconMac.icns'],
     options={'py2app': {
         'argv_emulation': True,
+        'iconfile': 'media/AppIconMac.icns',
         'plist': PLIST,
         'prefer_ppc': FORCE_32_BIT,
     }},
