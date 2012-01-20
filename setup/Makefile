@@ -1,4 +1,5 @@
 dist-mac:
-	rm -rf build dist
+	rm -rf build dist dist-mac
 	python setup.py py2app
-	hdiutil create -srcfolder dist -volname "Crystal Web Archiver" -format UDZO dist/crystal-1.0.dmg
+	mkdir dist-mac
+	hdiutil create -srcfolder dist -volname "Crystal Web Archiver" -format UDZO dist-mac/crystal-1.0.dmg

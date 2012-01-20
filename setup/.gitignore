@@ -1,3 +1,4 @@
 # py2app
 build
 dist
+dist-mac
