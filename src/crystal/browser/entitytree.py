@@ -226,6 +226,16 @@ class RootNode(Node):
             children.append(ResourceGroupNode(rg))
         self.children = children
 
+class _LoadingNode(Node):
+    def __init__(self):
+        super(_LoadingNode, self).__init__()
+        
+        self.view = NodeView()
+        self.view.title = 'Loading...'
+    
+    def update_children(self):
+        pass
+
 class _ResourceNode(Node):
     """Base class for `Node`s whose children is derived from the `Link`s in a `Resource`."""
     
@@ -235,6 +245,8 @@ class _ResourceNode(Node):
         self.view = NodeView()
         self.view.title = title
         self.view.expandable = True
+        # Workaround for: http://trac.wxwidgets.org/ticket/13886
+        self.children = [_LoadingNode()]
         
         self.resource = resource
         self.download_future = None
@@ -274,6 +286,10 @@ class _ResourceNode(Node):
         Updates this node's children.
         Should be called whenever project entities change or the underlying resource's links change.
         """
+        if self.download_future is None:
+            # We were never expanded, so no need to recalculate anything.
+            return
+        
         # Partition links and create resources
         resources_2_links = defaultordereddict(list)
         if self.resource_links:
