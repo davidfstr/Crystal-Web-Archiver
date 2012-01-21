@@ -2,3 +2,6 @@
 build
 dist
 dist-mac
+
+# setup.py
+setuptools-*.egg
