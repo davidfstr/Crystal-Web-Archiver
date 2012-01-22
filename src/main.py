@@ -16,6 +16,22 @@ def main(args):
     """
     _check_environment()
     
+    # If running as Windows executable, redirect stdout and stderr
+    # to file, since these don't exist for normal Windows programs
+    import sys
+    if hasattr(sys, 'frozen') and sys.frozen == 'windows_exe':
+        try:
+            sys.stdout = open('stdout.log', 'w')
+            sys.stderr = open('stderr.log', 'w')
+        except:
+            # Fallback on py2exe's default behavior of writing
+            # the stderr to its own logfile in the same directory,
+            # albeit with a "See the logfile for details" message
+            # upon application exit.
+            # 
+            # Failure here is most likely due to running from a locked volume.
+            pass
+    
     # Ensure the main package can be imported
     import os
     try:
