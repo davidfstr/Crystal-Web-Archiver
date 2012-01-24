@@ -2,6 +2,7 @@
 build
 dist
 dist-mac
+dist-win
 
 # setup.py
 setuptools-*.egg
