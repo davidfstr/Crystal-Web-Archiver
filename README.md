@@ -7,36 +7,16 @@ Python program and because other website downloaders I tried didn't work well fo
 Crystal is not feature complete, compared to my original design, but works well enough to
 serve my current limited needs. It should be considered alpha or beta quality.
 
-A few unique characteristics of Crystal:
 
-* Downloaded pages are stored on disk in their original form as downloaded from the web,
-  including all HTTP headers. This makes the downloaded file format suitable for archival.
-
-* To download pages automatically, the user must define "groups" of pages with similar
-  URLs (ex: "Blog Posts", "Archive Pages") and specify rules for finding links to members
-  of the group.
-    * Once a group has been defined in this way, it is possible for the user to
-      instruct Crystal to simply download the group. This involves finding links to all
-      members of the group (possibly by downloading other groups) and then downloading
-      each member of the group, in parallel.
-
-The design is intended for the future addition of the following features:
-
-* Intelligently updating the pages in websites that have already been downloaded.
-    * This would be done by defining rules on groups that specify how often its members
-      are updated. For example the set of "Archive Pages" on WordPress blogs is expected
-      to change monthly. And the most recently added member of the "Archive Pages" group
-      may change daily, whereas the other members are expected to never change.
-    * Multiple revisions per downloaded resource are supported to allow multiple
-      versions of the same resource to be tracked over time.
-
+Download
+--------
+* [Mac OS X 10.7 (Lion)](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-mac-1.0.dmg)
+* [Windows XP and later](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-win-1.0.exe)
 
 Quickstart
 ----------
 
-* Download the binary for your operating system:
-    * [Mac OS X 10.7 (Lion)](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-mac-1.0.dmg)
-    * [Windows XP and later](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-win-1.0.exe)
+* Download the binary for your operating system. See [above](#Download).
 * Open the program and create a new project, call it "xkcd".
 * Click the "+ URL" button to add the "http://xkcd.com/1/" URL, named "First Comic".
 * Expand the new "First Comic" node to download the page and display its links.
@@ -92,3 +72,30 @@ Known Issues
 
 * IE 8 under Windows 7 crashes when trying to view some downloaded sites, such as
   xkcd.com. I recommend using a different default browser, such as Chrome.
+
+
+Design
+------
+
+A few unique characteristics of Crystal:
+
+* Downloaded pages are stored on disk in their original form as downloaded from the web,
+  including all HTTP headers. This makes the downloaded file format suitable for archival.
+
+* To download pages automatically, the user must define "groups" of pages with similar
+  URLs (ex: "Blog Posts", "Archive Pages") and specify rules for finding links to members
+  of the group.
+    * Once a group has been defined in this way, it is possible for the user to
+      instruct Crystal to simply download the group. This involves finding links to all
+      members of the group (possibly by downloading other groups) and then downloading
+      each member of the group, in parallel.
+
+The design is intended for the future addition of the following features:
+
+* Intelligently updating the pages in websites that have already been downloaded.
+    * This would be done by defining rules on groups that specify how often its members
+      are updated. For example the set of "Archive Pages" on WordPress blogs is expected
+      to change monthly. And the most recently added member of the "Archive Pages" group
+      may change daily, whereas the other members are expected to never change.
+    * Multiple revisions per downloaded resource are supported to allow multiple
+      versions of the same resource to be tracked over time.
