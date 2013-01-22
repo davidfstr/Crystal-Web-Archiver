@@ -16,7 +16,7 @@ Download
 Quickstart
 ----------
 
-* Download the binary for your operating system. See [above](#Download).
+* Download the binary for your operating system. See [above](#download).
 * Open the program and create a new project, call it "xkcd".
 * Click the "+ URL" button to add the "http://xkcd.com/1/" URL, named "First Comic".
 * Expand the new "First Comic" node to download the page and display its links.
