@@ -1,5 +1,5 @@
 """
-Tools for examining HTML resources.
+HTML parser implementation that uses BeautifulSoup.
 """
 
 from BeautifulSoup import BeautifulSoup
@@ -11,32 +11,7 @@ _INPUT_RE = re.compile('(?i)input')
 _BUTTON_RE = re.compile('(?i)button')
 _ON_CLICK_RE = re.compile('(?i)([a-zA-Z]*\.(?:href|location)) *= *([\'"])([^\'"]*)[\'"] *;?$')
 
-def parse_links(html_bytes, declared_encoding=None):
-    """
-    Parses the specified HTML bytestring, returning a list of Links.
-    
-    Arguments:
-    html_bytes -- HTML bytestring or file object.
-    declared_encoding -- the encoding that the HTML document is declared to be in.
-    """
-    (html, links) = parse_html_and_links(html_bytes, declared_encoding)
-    return links
-
 def parse_html_and_links(html_bytes, declared_encoding=None):
-    """
-    Parses the specified HTML bytestring, returning a 2-tuple containing
-    (1) the HTML document and
-    (2) a list of Links.
-    
-    The HTML document can be reoutput by getting its str() representation.
-    
-    This parse method is useful over parse_links() when the parsed links
-    need to be modified and the document reoutput.
-    
-    Arguments:
-    html_bytes -- HTML bytestring or file object.
-    declared_encoding -- the encoding that the HTML document is declared to be in.
-    """
     try:
         html = BeautifulSoup(html_bytes, fromEncoding=declared_encoding)
     except Exception as e:
@@ -186,13 +161,6 @@ class Link(object):
                 attr_value = value
             self._tag[self._attr_name] = attr_value
     relative_url = property(_get_relative_url, _set_relative_url)
-    
-    @property
-    def full_title(self):
-        if self.title:
-            return '%s: %s' % (self.type_title, self.title)
-        else:
-            return '%s' % self.type_title
     
     def __repr__(self):
         return 'Link(%s,%s,%s,%s)' % (repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))
