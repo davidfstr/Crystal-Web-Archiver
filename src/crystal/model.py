@@ -320,15 +320,6 @@ class Resource(object):
         """
         return self
     
-    @property
-    def downloadable(self):
-        try:
-            from crystal.download import ResourceRequest
-            ResourceRequest.create(self.url)
-            return True
-        except urllib2.URLError:
-            return False
-    
     def download_body(self):
         """
         Returns a Future<ResourceRevision> that downloads (if necessary) and returns an
