@@ -68,6 +68,15 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             title = None
             type_title = 'Stylesheet'
             embedded = True
+        elif tag.name == 'link' and (
+                ('rel' in tag.attrMap and tag['rel'] in (
+                    'shortcut icon',
+                    'icon',
+                    'apple-touch-icon')) or (
+                 relative_url.endswith('.ico'))):
+            title = None
+            type_title = 'Icon'
+            embedded = True
         else:
             title = None
             type_title = 'Unknown (%s)' % tag.name
