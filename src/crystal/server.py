@@ -50,6 +50,7 @@ _HEADER_WHITELIST = set([
     'server',
     'last-modified',
     'etag',
+    'x-powered-by',
 ])
 # Set of archived headers known to cause problems if blindly played back
 _HEADER_BLACKLIST = set([
