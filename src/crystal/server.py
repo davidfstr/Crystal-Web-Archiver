@@ -50,16 +50,34 @@ _HEADER_WHITELIST = set([
     'server',
     'last-modified',
     'etag',
-    'x-powered-by',
+    'content-encoding',
+    'x-xss-protection',
+    'x-content-type-options',
+    'x-frame-options',
 ])
 # Set of archived headers known to cause problems if blindly played back
 _HEADER_BLACKLIST = set([
-    'transfer-encoding',
-    'content-length',
-    'accept-ranges',
+    # Connection-related headers
+    'transfer-encoding',# overridden by this web server
+    'content-length',   # overridden by this web server
+    'accept-ranges',    # partial content ranges not supported by this server
+    'connection',       # usually: keep-alive
+    'via',              # this web server is not a proxy
+    
+    # Cache-related headers
     'cache-control',
-    'connection',
     'age',
+    'expires',
+    
+    # Cookie-related headers
+    'p3p',              # never allow third party cookies
+    
+    # Ignored non-problematic headers:
+    'x-powered-by',
+    'x-monk',
+    'x-cache',
+    'x-ecn-p',
+    'vtag',
 ])
 
 class _RequestHandler(BaseHTTPRequestHandler):
