@@ -10,6 +10,7 @@ _ANY_RE = re.compile(r'.*')
 _INPUT_RE = re.compile('(?i)input')
 _BUTTON_RE = re.compile('(?i)button')
 _ON_CLICK_RE = re.compile('(?i)([a-zA-Z]*\.(?:href|location)) *= *([\'"])([^\'"]*)[\'"] *;?$')
+_BODY_RE = re.compile('(?i)body')
 
 def parse_html_and_links(html_bytes, declared_encoding=None):
     try:
@@ -26,6 +27,16 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
         return (html_bytes, [])
     
     links = []
+    
+    # <body background=*>
+    for tag in html.findAll(_BODY_RE, background=_ANY_RE):
+        relative_url = tag['background']
+        embedded = True
+        title = None
+        type_title = 'Background Image'
+        links.append(Link.create_from_tag(tag, 'background', type_title, title, embedded))
+    
+    # <* src=*>
     for tag in html.findAll(_ANY_RE, src=_ANY_RE):
         relative_url = tag['src']
         embedded = True
@@ -43,6 +54,7 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             type_title = 'Unknown Embedded (%s)' % tag.name
         links.append(Link.create_from_tag(tag, 'src', type_title, title, embedded))
     
+    # <* href=*>
     for tag in html.findAll(_ANY_RE, href=_ANY_RE):
         relative_url = tag['href']
         embedded = False
@@ -61,6 +73,8 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             type_title = 'Unknown (%s)' % tag.name
         links.append(Link.create_from_tag(tag, 'href', type_title, title, embedded))
     
+    # <input type='button' onclick='*.location = "*";'>
+    # This type of link is heavily used on fanfiction.net
     for tag in html.findAll(_INPUT_RE, type=_BUTTON_RE, onclick=_ON_CLICK_RE):
         matcher = _ON_CLICK_RE.match(tag['onclick'])
         def get_attr_value(url):
