@@ -1,6 +1,8 @@
 Crystal Web Archiver
 ====================
 
+* **NOTICE: Crystal Web Archiver has been superseded by the [webcrystal] project.**
+
 Crystal is a program to download websites. I wrote it because I wanted to write a large
 Python program and because other website downloaders I tried didn't work well for me.
 
@@ -12,6 +14,9 @@ Download
 --------
 * [Mac OS X 10.7 (Lion)](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-mac-1.0.dmg)
 * [Windows XP and later](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-win-1.0.exe)
+
+[webcrystal]: http://dafoster.net/projects/webcrystal/
+
 
 Quickstart
 ----------
