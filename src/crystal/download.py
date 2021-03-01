@@ -4,7 +4,7 @@ Provides services for downloading a ResourceRevision.
 
 from collections import defaultdict
 from crystal.model import ResourceRevision
-import httplib
+from http.client import HTTPConnection, HTTPSConnection
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -72,9 +72,9 @@ class HttpResourceRequest(ResourceRequest):
         host_and_port = url_parts.netloc
         
         if scheme == 'http':
-            conn = httplib.HTTPConnection(host_and_port)
+            conn = HTTPConnection(host_and_port)
         elif scheme == 'https':
-            conn = httplib.HTTPSConnection(host_and_port)
+            conn = HTTPSConnection(host_and_port)
         else:
             raise ValueError('Not an HTTP(S) URL.')
         headers = {
