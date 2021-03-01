@@ -14,7 +14,12 @@ _BODY_RE = re.compile('(?i)body')
 
 def parse_html_and_links(html_bytes, declared_encoding=None):
     try:
-        html = BeautifulSoup(html_bytes, fromEncoding=declared_encoding)
+        html = BeautifulSoup(
+            html_bytes,
+            from_encoding=declared_encoding,
+            # TODO: Consider migrating to 'lxml' parser for additional speed
+            features='html.parser',
+        )
     except Exception as e:
         # TODO: Return the underlying exception as a warning by some mechanism
         
