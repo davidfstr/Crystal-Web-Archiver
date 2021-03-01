@@ -651,8 +651,9 @@ class ResourceRevision(object):
         return self.is_http and (self.metadata['status_code'] / 100) == 3
     
     def _get_first_value_of_http_header(self, name):
+        name = name.lower()
         for (cur_name, cur_value) in self.metadata['headers']:
-            if name == cur_name:
+            if name == cur_name.lower():
                 return cur_value
         return None
     
