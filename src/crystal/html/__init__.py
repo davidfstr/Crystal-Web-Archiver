@@ -44,7 +44,7 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
     
     # HACK: The BeautifulSoup parser doesn't currently handle <frameset>
     #       tags correctly. So workaround with a basic parser.
-    if ('frameset' in html_bytes) or ('FRAMESET' in html_bytes):
+    if (b'frameset' in html_bytes) or (b'FRAMESET' in html_bytes):
         return basic.parse_html_and_links(html_bytes, declared_encoding)
     else:
         return soup.parse_html_and_links(html_bytes, declared_encoding)
