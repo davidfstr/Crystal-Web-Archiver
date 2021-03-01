@@ -320,15 +320,6 @@ class Resource(object):
         """
         return self
     
-    @property
-    def downloadable(self):
-        try:
-            from crystal.download import ResourceRequest
-            ResourceRequest.create(self.url)
-            return True
-        except urllib2.URLError:
-            return False
-    
     def download_body(self):
         """
         Returns a Future<ResourceRevision> that downloads (if necessary) and returns an
@@ -742,7 +733,7 @@ class ResourceRevision(object):
         
         This method blocks while parsing the links.
         """
-        from crystal.html import parse_html_and_links, Link
+        from crystal.html import parse_html_and_links, create_external_link
         
         # Extract links from HTML, if applicable
         if not self.is_html or not self.has_body:
@@ -754,7 +745,7 @@ class ResourceRevision(object):
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url
         if redirect_url is not None:
-            links.append(Link.create_external(redirect_url, self._redirect_title, 'Redirect', True))
+            links.append(create_external_link(redirect_url, self._redirect_title, 'Redirect', True))
         
         return (html, links)
     

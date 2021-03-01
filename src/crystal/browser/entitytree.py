@@ -237,7 +237,7 @@ class _LoadingNode(Node):
         pass
 
 class _ResourceNode(Node):
-    """Base class for `Node`s whose children is derived from the `Link`s in a `Resource`."""
+    """Base class for `Node`s whose children is derived from the links in a `Resource`."""
     
     def __init__(self, title, resource):
         super(_ResourceNode, self).__init__()
@@ -417,10 +417,16 @@ class LinkedResourceNode(_ResourceNode):
     
     def calculate_title(self):
         project = self.resource.project
-        link_titles = ', '.join([link.full_title for link in self.links])
+        link_titles = ', '.join([self._full_title_of_link(link) for link in self.links])
         return '%s - %s' % (
             project.get_display_url(self.resource.url),
             link_titles)
+    
+    def _full_title_of_link(self, link):
+        if link.title:
+            return '%s: %s' % (link.type_title, link.title)
+        else:
+            return '%s' % link.type_title
     
     @property
     def entity(self):

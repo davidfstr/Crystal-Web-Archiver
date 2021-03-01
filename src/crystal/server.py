@@ -24,7 +24,7 @@ def start(project):
     server.project = project
     def bg_task():
         try:
-            print 'Server started on port %s.' % port
+            print colorize(_TERM_FG_GREEN, 'Server started on port %s.' % port)
             server.serve_forever()
         finally:
             server.server_close()
@@ -50,15 +50,34 @@ _HEADER_WHITELIST = set([
     'server',
     'last-modified',
     'etag',
+    'content-encoding',
+    'x-xss-protection',
+    'x-content-type-options',
+    'x-frame-options',
 ])
 # Set of archived headers known to cause problems if blindly played back
 _HEADER_BLACKLIST = set([
-    'transfer-encoding',
-    'content-length',
-    'accept-ranges',
+    # Connection-related headers
+    'transfer-encoding',# overridden by this web server
+    'content-length',   # overridden by this web server
+    'accept-ranges',    # partial content ranges not supported by this server
+    'connection',       # usually: keep-alive
+    'via',              # this web server is not a proxy
+    
+    # Cache-related headers
     'cache-control',
-    'connection',
     'age',
+    'expires',
+    
+    # Cookie-related headers
+    'p3p',              # never allow third party cookies
+    
+    # Ignored non-problematic headers:
+    'x-powered-by',
+    'x-monk',
+    'x-cache',
+    'x-ecn-p',
+    'vtag',
 ])
 
 class _RequestHandler(BaseHTTPRequestHandler):
@@ -144,6 +163,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
 </body>
 </html>
 """.strip() % {'archive_url': archive_url})
+        
+        print colorize(_TERM_FG_RED, '*** Requested resource not in archive: ' + archive_url)
     
     def send_revision(self, revision):
         if revision.is_http:
@@ -165,7 +186,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 self.send_header(name, value)
             else:
                 if name not in _HEADER_BLACKLIST:
-                    print '*** Ignoring unknown header in archive: %s: %s' % (name, value)
+                    print colorize(_TERM_FG_YELLOW, 
+                        '*** Ignoring unknown header in archive: %s: %s' % (name, value))
                 continue
         self.end_headers()
         
@@ -223,3 +245,33 @@ class _RequestHandler(BaseHTTPRequestHandler):
         )
         request_url = urlparse.urlunparse(request_url_parts)
         return request_url
+    
+    def log_error(self, format, *args):
+        print colorize(_TERM_FG_RED, format % args)
+    
+    def log_message(self, format, *args):
+        print colorize(_TERM_FG_CYAN, format % args)
+        
+# ----------------------------------------------------------------------------------------
+# Terminal Colors
+
+_USE_COLORS = True
+
+# ANSI color codes
+# Obtained from: http://www.bri1.com/files/06-2008/pretty.py
+_TERM_FG_BLUE =          '\033[0;34m'
+_TERM_FG_BOLD_BLUE =     '\033[1;34m'
+_TERM_FG_RED =           '\033[0;31m'
+_TERM_FG_BOLD_RED =      '\033[1;31m'
+_TERM_FG_GREEN =         '\033[0;32m'
+_TERM_FG_BOLD_GREEN =    '\033[1;32m'
+_TERM_FG_CYAN =          '\033[0;36m'
+_TERM_FG_BOLD_CYAN =     '\033[1;36m'
+_TERM_FG_YELLOW =        '\033[0;33m'
+_TERM_FG_BOLD_YELLOW =   '\033[1;33m'
+_TERM_RESET =            '\033[0m'
+
+def colorize(color_code, str_value):
+    return (color_code + str_value + _TERM_RESET) if _USE_COLORS else str_value
+
+# ------------------------------------------------------------------------------

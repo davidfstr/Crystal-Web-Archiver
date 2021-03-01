@@ -1,5 +1,5 @@
 """
-Tools for examining HTML resources.
+HTML parser implementation that uses BeautifulSoup.
 """
 
 from BeautifulSoup import BeautifulSoup
@@ -10,33 +10,9 @@ _ANY_RE = re.compile(r'.*')
 _INPUT_RE = re.compile('(?i)input')
 _BUTTON_RE = re.compile('(?i)button')
 _ON_CLICK_RE = re.compile('(?i)([a-zA-Z]*\.(?:href|location)) *= *([\'"])([^\'"]*)[\'"] *;?$')
-
-def parse_links(html_bytes, declared_encoding=None):
-    """
-    Parses the specified HTML bytestring, returning a list of Links.
-    
-    Arguments:
-    html_bytes -- HTML bytestring or file object.
-    declared_encoding -- the encoding that the HTML document is declared to be in.
-    """
-    (html, links) = parse_html_and_links(html_bytes, declared_encoding)
-    return links
+_BODY_RE = re.compile('(?i)body')
 
 def parse_html_and_links(html_bytes, declared_encoding=None):
-    """
-    Parses the specified HTML bytestring, returning a 2-tuple containing
-    (1) the HTML document and
-    (2) a list of Links.
-    
-    The HTML document can be reoutput by getting its str() representation.
-    
-    This parse method is useful over parse_links() when the parsed links
-    need to be modified and the document reoutput.
-    
-    Arguments:
-    html_bytes -- HTML bytestring or file object.
-    declared_encoding -- the encoding that the HTML document is declared to be in.
-    """
     try:
         html = BeautifulSoup(html_bytes, fromEncoding=declared_encoding)
     except Exception as e:
@@ -51,6 +27,16 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
         return (html_bytes, [])
     
     links = []
+    
+    # <body background=*>
+    for tag in html.findAll(_BODY_RE, background=_ANY_RE):
+        relative_url = tag['background']
+        embedded = True
+        title = None
+        type_title = 'Background Image'
+        links.append(Link.create_from_tag(tag, 'background', type_title, title, embedded))
+    
+    # <* src=*>
     for tag in html.findAll(_ANY_RE, src=_ANY_RE):
         relative_url = tag['src']
         embedded = True
@@ -68,6 +54,7 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             type_title = 'Unknown Embedded (%s)' % tag.name
         links.append(Link.create_from_tag(tag, 'src', type_title, title, embedded))
     
+    # <* href=*>
     for tag in html.findAll(_ANY_RE, href=_ANY_RE):
         relative_url = tag['href']
         embedded = False
@@ -81,11 +68,22 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             title = None
             type_title = 'Stylesheet'
             embedded = True
+        elif tag.name == 'link' and (
+                ('rel' in tag.attrMap and tag['rel'] in (
+                    'shortcut icon',
+                    'icon',
+                    'apple-touch-icon')) or (
+                 relative_url.endswith('.ico'))):
+            title = None
+            type_title = 'Icon'
+            embedded = True
         else:
             title = None
             type_title = 'Unknown (%s)' % tag.name
         links.append(Link.create_from_tag(tag, 'href', type_title, title, embedded))
     
+    # <input type='button' onclick='*.location = "*";'>
+    # This type of link is heavily used on fanfiction.net
     for tag in html.findAll(_INPUT_RE, type=_BUTTON_RE, onclick=_ON_CLICK_RE):
         matcher = _ON_CLICK_RE.match(tag['onclick'])
         def get_attr_value(url):
@@ -186,13 +184,6 @@ class Link(object):
                 attr_value = value
             self._tag[self._attr_name] = attr_value
     relative_url = property(_get_relative_url, _set_relative_url)
-    
-    @property
-    def full_title(self):
-        if self.title:
-            return '%s: %s' % (self.type_title, self.title)
-        else:
-            return '%s' % self.type_title
     
     def __repr__(self):
         return 'Link(%s,%s,%s,%s)' % (repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))
