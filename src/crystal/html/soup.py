@@ -44,9 +44,9 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             title = _get_image_tag_title(tag)
             type_title = 'Image'
         elif tag.name == 'frame':
-            title = tag['name'] if 'name' in tag.attrMap else None
+            title = tag['name'] if 'name' in tag.attrs else None
             type_title = 'Frame'
-        elif tag.name == 'input' and 'type' in tag.attrMap and tag['type'] == 'image':
+        elif tag.name == 'input' and 'type' in tag.attrs and tag['type'] == 'image':
             title = _get_image_tag_title(tag)
             type_title = 'Form Image'
         else:
@@ -62,14 +62,14 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             title = tag.string
             type_title = 'Link'
         elif tag.name == 'link' and (
-                ('rel' in tag.attrMap and tag['rel'] == 'stylesheet') or (
-                 'type' in tag.attrMap and tag['type'] == 'text/css') or (
+                ('rel' in tag.attrs and tag['rel'] == 'stylesheet') or (
+                 'type' in tag.attrs and tag['type'] == 'text/css') or (
                  relative_url.endswith('.css'))):
             title = None
             type_title = 'Stylesheet'
             embedded = True
         elif tag.name == 'link' and (
-                ('rel' in tag.attrMap and tag['rel'] in (
+                ('rel' in tag.attrs and tag['rel'] in (
                     'shortcut icon',
                     'icon',
                     'apple-touch-icon')) or (
@@ -91,7 +91,7 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             return matcher.group(1) + ' = ' + q + url + q
         
         relative_url = matcher.group(3)
-        title = tag['value'] if 'value' in tag.attrMap else None
+        title = tag['value'] if 'value' in tag.attrs else None
         type_title = 'Button'
         embedded = False
         links.append(Link.create_from_complex_tag(
@@ -101,9 +101,9 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
     return (html, links)
 
 def _get_image_tag_title(tag):
-    if 'alt' in tag.attrMap:
+    if 'alt' in tag.attrs:
         return tag['alt']
-    elif 'title' in tag.attrMap:
+    elif 'title' in tag.attrs:
         return tag['title']
     else:
         return None
