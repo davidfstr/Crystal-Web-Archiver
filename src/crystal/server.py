@@ -223,7 +223,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 link.relative_url = request_url
             
             # Output altered HTML
-            shutil.copyfileobj(StringIO(str(html)), self.wfile)
+            self.wfile.write(str(html).encode('utf-8'))
     
     def get_request_url(self, archive_url):
         return _RequestHandler.get_request_url_with_host(archive_url, self.request_host)
