@@ -2,7 +2,7 @@
 HTML parser implementation that uses BeautifulSoup.
 """
 
-from BeautifulSoup import BeautifulSoup
+from bs4 import BeautifulSoup
 import re
 
 _ANY_RE = re.compile(r'.*')

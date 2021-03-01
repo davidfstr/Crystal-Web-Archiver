@@ -16,10 +16,9 @@ import os
 import re
 import shutil
 import sqlite3
-import urllib2
-from urlparse import urlparse, urlunparse
-from xfutures import Future
-from xthreading import bg_call_later, fg_call_and_wait
+from urllib.parse import urlparse, urlunparse
+from .xfutures import Future
+from .xthreading import bg_call_later, fg_call_and_wait
 
 class Project(object):
     """
@@ -74,7 +73,7 @@ class Project(object):
                 for (name, url_pattern, source_type, source_id, id) in c.execute('select name, url_pattern, source_type, source_id, id from resource_group'):
                     group = ResourceGroup(self, name, url_pattern, _id=id)
                     group_2_source[group] = (source_type, source_id)
-                for (group, (source_type, source_id)) in group_2_source.iteritems():
+                for (group, (source_type, source_id)) in group_2_source.items():
                     if source_type is None:
                         source_obj = None
                     elif source_type == 'root_resource':

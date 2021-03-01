@@ -1,7 +1,7 @@
 import sys
 from time import sleep
-from xfutures import Future
-from xthreading import bg_call_later, fg_call_and_wait, fg_call_later
+from .xfutures import Future
+from .xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 
 SCHEDULING_STYLE_NONE = 0
 SCHEDULING_STYLE_SEQUENTIAL = 1
@@ -64,7 +64,7 @@ class Task(object):
         return self._subtitle
     def _set_subtitle(self, value):
         def fg_task():
-            #print '%s -> %s' % (self, value)
+            #print('%s -> %s' % (self, value))
             self._subtitle = value
             
             for lis in self.listeners:
@@ -227,7 +227,7 @@ class Task(object):
 
 # ----------------------------------------------------------------------------------------
 from crystal.model import Resource
-import urlparse
+from urllib.parse import urljoin
 
 _DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
 
@@ -279,7 +279,7 @@ class DownloadResourceBodyTask(Task):
             self.subtitle = 'Parsing links...'
             r = self._resource
             links = body_revision.links()
-            urls = [urlparse.urljoin(r.url, link.relative_url) for link in links]
+            urls = [urljoin(r.url, link.relative_url) for link in links]
             
             self.subtitle = 'Recording links...'
             def fg_task():
@@ -342,7 +342,7 @@ class DownloadResourceTask(Task):
             link_urls_seen = set()
             for link in links:
                 if link.embedded:
-                    link_url = urlparse.urljoin(self._resource.url, link.relative_url)
+                    link_url = urljoin(self._resource.url, link.relative_url)
                     if link_url in link_urls_seen:
                         continue
                     else:

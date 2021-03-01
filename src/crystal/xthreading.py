@@ -42,10 +42,10 @@ def _create_profiled_callable(callable, *args):
                     root_callable = root_callable.callable
                 
                 import inspect
-                print "*** Foreground task took %.02fs to execute: %s @ [%s:%s]" % (
+                print("*** Foreground task took %.02fs to execute: %s @ [%s:%s]" % (
                     delta_time, root_callable,
                     inspect.getsourcefile(root_callable),
-                    inspect.getsourcelines(root_callable)[-1])
+                    inspect.getsourcelines(root_callable)[-1]))
     return profiled_callable
 
 # TODO: Consider renaming this to 'fg_call_soon' and have the
@@ -65,7 +65,7 @@ def fg_call_later(callable, force=False, *args):
         callable = _create_profiled_callable(callable, *args);
         args=()
     
-    if not _wx_main_thread_exists() or (wx.Thread_IsMain() and not force):
+    if not _wx_main_thread_exists() or (wx.IsMainThread() and not force):
         callable(*args)
     else:
         wx.CallAfter(callable, *args)
@@ -78,7 +78,7 @@ def fg_call_and_wait(callable, *args):
     Returns the result of the callable.
     If the callable raises an exception, it will be reraised by this method.
     """
-    if not _wx_main_thread_exists() or wx.Thread_IsMain():
+    if not _wx_main_thread_exists() or wx.IsMainThread():
         return callable(*args)
     else:
         condition = threading.Condition()
@@ -108,7 +108,7 @@ def fg_call_and_wait(callable, *args):
         # Reraise callable's exception, if applicable
         if callable_exc_info[0] is not None:
             exc_info = callable_exc_info[0]
-            raise exc_info[1], None, exc_info[2]
+            raise exc_info[1]().with_traceback(exc_info[2])
         
         return callable_result[0]
 

@@ -16,8 +16,8 @@ def _DEFAULT_FOLDER_ICON_SET():
     global _DEFAULT_FOLDER_ICON_SET_CACHED  # necessary to write to a module global
     if not _DEFAULT_FOLDER_ICON_SET_CACHED:
         _DEFAULT_FOLDER_ICON_SET_CACHED = (
-            (wx.TreeItemIcon_Normal,   wx.ArtProvider_GetBitmap(wx.ART_FOLDER,      wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
-            (wx.TreeItemIcon_Expanded, wx.ArtProvider_GetBitmap(wx.ART_FILE_OPEN,   wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
+            (wx.TreeItemIcon_Normal,   wx.ArtProvider.GetBitmap(wx.ART_FOLDER,      wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
+            (wx.TreeItemIcon_Expanded, wx.ArtProvider.GetBitmap(wx.ART_FILE_OPEN,   wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
         )
     return _DEFAULT_FOLDER_ICON_SET_CACHED
 
@@ -26,7 +26,7 @@ def _DEFAULT_FILE_ICON_SET():
     global _DEFAULT_FILE_ICON_SET_CACHED    # necessary to write to a module global
     if not _DEFAULT_FILE_ICON_SET_CACHED:
         _DEFAULT_FILE_ICON_SET_CACHED = (
-            (wx.TreeItemIcon_Normal,   wx.ArtProvider_GetBitmap(wx.ART_NORMAL_FILE, wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
+            (wx.TreeItemIcon_Normal,   wx.ArtProvider.GetBitmap(wx.ART_NORMAL_FILE, wx.ART_OTHER, _DEFAULT_TREE_ICON_SIZE)),
         )
     return _DEFAULT_FILE_ICON_SET_CACHED
 

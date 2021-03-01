@@ -3,7 +3,7 @@ from crystal.ui.tree import *
 from crystal.xcollections import defaultordereddict
 from crystal.xthreading import bg_call_later, fg_call_later
 import threading
-import urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 _ID_SET_PREFIX = 101
 _ID_CLEAR_PREFIX = 102
@@ -120,7 +120,7 @@ class EntityTree(object):
         before the resource's enclosing directory.
         """
         url = resource.url
-        url_components = urlparse.urlparse(url)
+        url_components = urlparse(url)
         
         # If URL path contains slash, chop last slash and everything following it
         path = url_components.path
@@ -131,7 +131,7 @@ class EntityTree(object):
         
         new_url_components = list(url_components)
         new_url_components[2] = new_path
-        return urlparse.urlunparse(new_url_components)
+        return urlunparse(new_url_components)
 
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     """
@@ -294,7 +294,7 @@ class _ResourceNode(Node):
         resources_2_links = defaultordereddict(list)
         if self.resource_links:
             for link in self.resource_links:
-                url = urlparse.urljoin(self.resource.url, link.relative_url)
+                url = urljoin(self.resource.url, link.relative_url)
                 resource = Resource(self._project, url)
                 resources_2_links[resource].append(link)
         
@@ -308,7 +308,7 @@ class _ResourceNode(Node):
         # TODO: Recognize cluster: (Hidden: Ignored Protocols: *)
         
         default_url_prefix = self._project.default_url_prefix
-        for (r, links_to_r) in resources_2_links.iteritems():
+        for (r, links_to_r) in resources_2_links.items():
             rr = self._project.get_root_resource(r)
             
             if rr is not None:
@@ -343,7 +343,7 @@ class _ResourceNode(Node):
         for (rr, links_to_r) in linked_root_resources:
             children.append(RootResourceNode(rr))
         
-        for (group, (rr_2_links, r_2_links)) in group_2_root_and_normal_resources.iteritems():
+        for (group, (rr_2_links, r_2_links)) in group_2_root_and_normal_resources.items():
             root_rsrc_nodes = []
             for (rr, links_to_r) in rr_2_links:
                 root_rsrc_nodes.append(RootResourceNode(rr))

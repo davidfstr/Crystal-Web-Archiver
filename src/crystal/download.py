@@ -5,8 +5,9 @@ Provides services for downloading a ResourceRevision.
 from collections import defaultdict
 from crystal.model import ResourceRevision
 import httplib
-import urllib2
-from urlparse import urlparse
+import urllib.error
+import urllib.request
+from urllib.parse import urlparse
 
 # The User-Agent string to use for downloads, or None to omit.
 _USER_AGENT_STRING = 'Crystal/0.1 (crystalbot@dafoster.net)'
@@ -39,7 +40,7 @@ class ResourceRequest(object):
     def create(url):
         """
         Raises:
-        urllib2.URLError -- if URL scheme not supported.
+        urllib.error.URLError -- if URL scheme not supported.
         """
         url_parts = urlparse(url)
         if url_parts.scheme in ('http', 'https'):
@@ -47,7 +48,7 @@ class ResourceRequest(object):
         elif url_parts.scheme == 'ftp':
             return UrlResourceRequest(url)
         else:
-            raise urllib2.URLError('URL scheme "%s" is not supported.' % url_parts.scheme)
+            raise urllib.error.URLError('URL scheme "%s" is not supported.' % url_parts.scheme)
     
     def __call__(self):
         """
@@ -103,8 +104,8 @@ class UrlResourceRequest(ResourceRequest):
         self.url = url
     
     def __call__(self):
-        request = urllib2.Request(self.url)
-        response = urllib2.urlopen(request)
+        request = urllib.request.Request(self.url)
+        response = urllib.request.urlopen(request)
         return (None, response)
     
     def __repr__(self):

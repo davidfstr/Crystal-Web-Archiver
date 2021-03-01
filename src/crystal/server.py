@@ -3,14 +3,14 @@ Implements an HTTP server that serves resource revisions from a Project.
 Runs on its own daemon thread.
 """
 
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from io import StringIO
 import os
 import re
-import urlparse
 import shutil
-from StringIO import StringIO
-from xthreading import bg_call_later, fg_call_and_wait
+from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
+from .xthreading import bg_call_later, fg_call_and_wait
 
 _SERVER_PORT = 2797
 
@@ -24,7 +24,7 @@ def start(project):
     server.project = project
     def bg_task():
         try:
-            print colorize(_TERM_FG_GREEN, 'Server started on port %s.' % port)
+            print(colorize(_TERM_FG_GREEN, 'Server started on port %s.' % port))
             server.serve_forever()
         finally:
             server.server_close()
@@ -95,9 +95,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         scheme_rest_match = _SCHEME_REST_RE.match(self.path)
         if not scheme_rest_match:
-            path_parts = urlparse.urlparse(self.path)
+            path_parts = urlparse(self.path)
             if path_parts.path == '/':
-                query_params = urlparse.parse_qs(path_parts.query)
+                query_params = parse_qs(path_parts.query)
             else:
                 query_params = {}
             
@@ -138,7 +138,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.wfile.write("""
 <!DOCTYPE html>
 <html>
-<head><title>Welcome | Crystal Web Archiver</title></head>
+<head>
+    <meta charset="utf-8" />
+    <title>Welcome | Crystal Web Archiver</title>
+</head>
 <body>
     <p>Enter the URL of a page to load from the archive:</p>
     <form action="/">
@@ -146,25 +149,28 @@ class _RequestHandler(BaseHTTPRequestHandler):
     </form>
 </body>
 </html>
-""".strip())
+""".strip().encode('utf-8'))
     
     def send_resource_not_in_archive(self, archive_url):
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
         
-        self.wfile.write("""
+        self.wfile.write(("""
 <!DOCTYPE html>
 <html>
-<head><title>Not in Archive | Crystal Web Archiver</title></head>
+<head>
+    <meta charset="utf-8" />
+    <title>Not in Archive | Crystal Web Archiver</title>
+</head>
 <body>
     <p>The requested resource was not found in the archive.</p>
     <p>The original resource is located here: <a href="%(archive_url)s">%(archive_url)s</a></p>
 </body>
 </html>
-""".strip() % {'archive_url': archive_url})
+""".strip() % {'archive_url': archive_url}).encode('utf-8'))
         
-        print colorize(_TERM_FG_RED, '*** Requested resource not in archive: ' + archive_url)
+        print(colorize(_TERM_FG_RED, '*** Requested resource not in archive: ' + archive_url))
     
     def send_revision(self, revision):
         if revision.is_http:
@@ -186,8 +192,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 self.send_header(name, value)
             else:
                 if name not in _HEADER_BLACKLIST:
-                    print colorize(_TERM_FG_YELLOW, 
-                        '*** Ignoring unknown header in archive: %s: %s' % (name, value))
+                    print(colorize(_TERM_FG_YELLOW, 
+                        '*** Ignoring unknown header in archive: %s: %s' % (name, value)))
                 continue
         self.end_headers()
         
@@ -212,7 +218,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             base_url = revision.resource.url
             for link in links:
                 relative_url = link.relative_url
-                absolute_url = urlparse.urljoin(base_url, relative_url)
+                absolute_url = urljoin(base_url, relative_url)
                 request_url = self.get_request_url(absolute_url)
                 link.relative_url = request_url
             
@@ -228,7 +234,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         Given the absolute URL of a resource, returns the URL that should be used to
         request it from the archive server.
         """
-        archive_url_parts = urlparse.urlparse(archive_url)
+        archive_url_parts = urlparse(archive_url)
         
         request_scheme = 'http'
         request_netloc = request_host
@@ -243,14 +249,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
             request_scheme, request_netloc, request_path,
             request_params, request_query, request_fragment
         )
-        request_url = urlparse.urlunparse(request_url_parts)
+        request_url = urlunparse(request_url_parts)
         return request_url
     
     def log_error(self, format, *args):
-        print colorize(_TERM_FG_RED, format % args)
+        print(colorize(_TERM_FG_RED, format % args))
     
     def log_message(self, format, *args):
-        print colorize(_TERM_FG_CYAN, format % args)
+        print(colorize(_TERM_FG_CYAN, format % args))
         
 # ----------------------------------------------------------------------------------------
 # Terminal Colors
