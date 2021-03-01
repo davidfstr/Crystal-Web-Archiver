@@ -528,7 +528,7 @@ class GroupedLinkedResourcesNode(Node):
 
 # Informal unit test
 def _test(project):
-    app = wx.PySimpleApp()
+    app = wx.App()
     frame = wx.Frame(None, title='Frame', size=(500,300))
     et = EntityTree(frame, project)
     frame.Show(True)

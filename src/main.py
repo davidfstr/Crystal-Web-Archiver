@@ -46,7 +46,7 @@ def main(args):
     
     # Start GUI subsystem
     import wx
-    app = wx.PySimpleApp(redirect=False)
+    app = wx.App(redirect=False)
     
     # Get a project
     if len(args) == 0:
