@@ -49,7 +49,7 @@ class EntityTree(object):
         if not parent_wxtreeitemid.IsOk():
             return None
         
-        parent_node_view = self.view.peer.GetPyData(parent_wxtreeitemid)
+        parent_node_view = self.view.peer.GetItemData(parent_wxtreeitemid)
         parent_node = parent_node_view.delegate
         
         return parent_node.entity

@@ -81,7 +81,7 @@ class TreeView(object):
     @property
     def selected_node(self):
         selected_node_id = self.peer.GetSelection()
-        return self.peer.GetPyData(selected_node_id) if selected_node_id.IsOk() else None
+        return self.peer.GetItemData(selected_node_id) if selected_node_id.IsOk() else None
     
     def get_image_id_for_bitmap(self, bitmap):
         """
@@ -101,7 +101,7 @@ class TreeView(object):
     # Notified when any interesting event occurs on the peer
     def _dispatch_event(self, event):
         node_id = event.GetItem()
-        node_view = self.peer.GetPyData(node_id)
+        node_view = self.peer.GetItemData(node_id)
         
         # Dispatch event to the node
         node_view._dispatch_event(event)
@@ -115,8 +115,8 @@ class TreeView(object):
 
 class _OrderedTreeCtrl(wx.TreeCtrl):
     def OnCompareItems(self, item1, item2):
-        item1_view = self.GetPyData(item1)
-        item2_view = self.GetPyData(item2)
+        item1_view = self.GetItemData(item1)
+        item2_view = self.GetItemData(item2)
         return item1_view._order_index - item2_view._order_index
 
 class NodeView(object):
@@ -224,7 +224,7 @@ class NodeView(object):
         self.peer = peer
         
         # Enable navigation from peer back to this view
-        peer.SetPyData(self)
+        peer.SetItemData(self)
         
         # Trigger property logic to update peer
         self.title = self.title
@@ -259,8 +259,8 @@ class NodeViewPeer(tuple):
     def node_id(self):
         return self[1]
     
-    def SetPyData(self, obj):
-        self.tree_peer.SetPyData(self.node_id, obj)
+    def SetItemData(self, obj):
+        self.tree_peer.SetItemData(self.node_id, obj)
     
     def SetItemText(self, text):
         self.tree_peer.SetItemText(self.node_id, text)
