@@ -41,5 +41,5 @@ class BetterMessageDialog(wx.Dialog):
         self.Fit()
     
     def _on_button(self, event):
-        self.SetReturnCode(event.GetEventObject().GetId())
+        self.EndModal(event.GetEventObject().GetId())
         self.Hide()

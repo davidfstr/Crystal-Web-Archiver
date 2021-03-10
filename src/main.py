@@ -46,7 +46,7 @@ def main(args):
     
     # Start GUI subsystem
     import wx
-    app = wx.PySimpleApp(redirect=False)
+    app = wx.App(redirect=False)
     
     # Get a project
     if len(args) == 0:
@@ -65,42 +65,21 @@ def main(args):
 
 def _check_environment():
     # Check Python version
-    py2_7_or_better = hasattr(sys, 'version_info') and sys.version_info >= (2,7)
     py3 = hasattr(sys, 'version_info') and sys.version_info >= (3,0)
-    if not py2_7_or_better:
-        exit('This application requires Python 2.7 or later.')
-    if py3:
-        exit('This application cannot run under Python 3.x. Try Python 2.7 instead.')
+    if not py3:
+        exit('This application requires Python 3.x.')
     
     # Check for dependencies
     if not _running_as_bundle():
         try:
-            import wxversion
+            import wx
         except ImportError:
             exit(
                 'This application requires wxPython to be installed. ' + 
                 'Download it from http://wxpython.org/')
-        else:
-            # Check version and display dialog to user if an upgrade is needed.
-            # If a dialog is displayed, the application will exit automatically.
-            wxversion.ensureMinimal('2.8')
         
         try:
-            import wx
-        except ImportError:
-            is_64bits = sys.maxsize > 2**32
-            if is_64bits:
-                python_bitness = '64-bit'
-            else:
-                python_bitness = '32-bit'
-            
-            exit(
-                'wxPython found but couldn\'t be loaded. ' +
-                'Your Python is %s. Are you sure the installed wxPython is %s?' %
-                    (python_bitness, python_bitness))
-        
-        try:
-            import BeautifulSoup
+            from bs4 import BeautifulSoup
         except ImportError:
             exit(
                 'This application requires BeautifulSoup to be installed. ' +

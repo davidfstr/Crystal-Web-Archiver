@@ -17,13 +17,13 @@ class TreeView(object):
     
     def _refresh(self):
         def _print_node(parent, level):
-            print '%s* %s' % ('  '*level, parent.title or '-')
-            print '%s  %s' % ('  '*level, parent.subtitle or '-')
+            print('%s* %s' % ('  '*level, parent.title or '-'))
+            print('%s  %s' % ('  '*level, parent.subtitle or '-'))
             for child in parent.children:
                 _print_node(child, level+1)
         
         _print_node(self.root, 0)
-        print
+        print()
 
 class NodeView(object):
     def __init__(self):
