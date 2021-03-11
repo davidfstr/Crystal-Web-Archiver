@@ -1,21 +1,20 @@
 Crystal Web Archiver
 ====================
 
-* **NOTICE: Crystal Web Archiver has been superseded by the [webcrystal] project.**
+Crystal is a program to download websites for long-term archival. It works best
+on traditional websites made of distinct pages (rather than infinitely scrolling
+feeds of content) which make limited use of JavaScript. This includes most
+static websites, blogs, and wikis and excludes most social media sites.
 
-Crystal is a program to download websites. I wrote it because I wanted to write a large
-Python program and because other website downloaders I tried didn't work well for me.
-
-Crystal is not feature complete, compared to my original design, but works well enough to
-serve my current limited needs. It should be considered alpha or beta quality.
+> This project is **alpha quality**, and in particular requires additional
+> documentation to be realistically usable by most people. If you'd like to
+> take the plunge anyway, please see the "Quickstart" section below.
 
 
 Download
 --------
 * [Mac OS X 10.7 (Lion)](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-mac-1.0.dmg)
 * [Windows XP and later](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-win-1.0.exe)
-
-[webcrystal]: http://dafoster.net/projects/webcrystal/
 
 
 Quickstart
@@ -79,6 +78,14 @@ Known Issues
   xkcd.com. I recommend using a different default browser, such as Chrome.
 
 
+History
+-------
+
+I wrote Crystal originally in 2011 because other website downloaders
+I tried didn't work well for me and because I wanted to write a large
+Python program, as Python was a new language for me at the time.
+
+
 Design
 ------
 
@@ -104,3 +111,12 @@ The design is intended for the future addition of the following features:
       may change daily, whereas the other members are expected to never change.
     * Multiple revisions per downloaded resource are supported to allow multiple
       versions of the same resource to be tracked over time.
+
+
+Related Projects
+----------------
+
+* [webcrystal]: An alternative website archiving tool that focuses on making it
+  easy for automated crawlers (rather than for humans) to download websites.
+
+[webcrystal]: http://dafoster.net/projects/webcrystal/
