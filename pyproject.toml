@@ -1,0 +1,45 @@
+[tool.poetry]
+name = "crystal"
+version = "1.1.0"
+description = ""
+authors = ["David Foster <david@dafoster.net>"]
+readme = "README.md"
+license = "Proprietary"
+repository = "https://github.com/davidfstr/Crystal-Web-Archiver"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: MacOS X",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: Other/Proprietary License",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+    "Topic :: Software Development :: Version Control",
+    "Topic :: System :: Archiving :: Backup",
+    "Topic :: System :: Archiving :: Mirroring",
+]
+packages = [
+    { include = "crystal", from = "src" },
+    { include = "main.py", from = "src" },
+]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.10"
+wxPython = "^4.1.1"
+beautifulsoup4 = "^4.9.3"
+py2app = { version = "^0.23", markers = "sys_platform == 'darwin'" }
+py2exe = { version = "^0.10.2.1", markers = "sys_platform == 'win32'" }
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

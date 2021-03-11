@@ -7,3 +7,6 @@
 
 # virtualenv
 venv
+
+# Poetry
+/dist
