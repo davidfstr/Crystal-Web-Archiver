@@ -1,27 +1,25 @@
 Building a Package for Distribution
 ===================================
 
-Mac OS X 10.7 and later:
+Mac OS X 10.7 - 10.14:
 1. Install the prerequisites:
-    * Python 2.7 (Universal)
-    * wxPython 2.8 Carbon (32-bit)
-    * BeautifulSoup 3.2
-    * py2app
-2. Run the following commands in Terminal:
+    * Python 3.9.x
+    * Poetry: https://python-poetry.org/
+2. Run the following commands in a Terminal window from this directory:
+    $ poetry install
     $ cd setup
     $ ./make-mac.sh
 3. The output disk image will be in the setup/dist-mac directory.
 
-Windows XP and later:
+Windows XP, 7, 8, 10:
 1. Install the prerequisites:
-    * Python 2.7 (32-bit)
-    * wxPython 2.8 Unicode (32-bit)
-    * BeautifulSoup 3.2
-    * py2exe 0.6.9 (32-bit)
+    * Python 3.9.x
+    * Poetry: https://python-poetry.org/
     * Inno Setup 5
 2. Copy the "MSVCP90.dll" to C:\WINDOWS\system32. The "MSVCR90.dll" may also work.
    This DLL can be obtained from Visual Studio 2008 or Google.
-3. Run the following commands in Command Prompt:
+3. Run the following commands in a Command Prompt window from this directory:
+    $ poetry install
     $ cd setup
     $ make-win.bat
 4. The output installer will be in the setup/dist-win directory.
