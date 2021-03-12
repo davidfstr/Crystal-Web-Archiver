@@ -61,7 +61,7 @@ class AddGroupDialog(object):
         dialog.Show(True)
     
     def _create_fields(self, parent, initial_url, initial_source):
-        fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
+        fields_sizer = wx.FlexGridSizer(cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         fields_sizer.AddGrowableCol(1)
         
@@ -89,7 +89,7 @@ class AddGroupDialog(object):
             self.source_choice_box.Append(rg.name, rg)
         self.source_choice_box.SetSelection(0)
         if initial_source is not None:
-            for i in xrange(self.source_choice_box.GetCount()):
+            for i in range(self.source_choice_box.GetCount()):
                 cur_source = self.source_choice_box.GetClientData(i)
                 if cur_source == initial_source:
                     self.source_choice_box.SetSelection(i)
