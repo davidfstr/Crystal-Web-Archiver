@@ -108,7 +108,7 @@ def fg_call_and_wait(callable, *args):
         # Reraise callable's exception, if applicable
         if callable_exc_info[0] is not None:
             exc_info = callable_exc_info[0]
-            raise exc_info[1]().with_traceback(exc_info[2])
+            raise exc_info[1].with_traceback(exc_info[2])
         
         return callable_result[0]
 
