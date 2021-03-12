@@ -184,14 +184,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_response(metadata['status_code'], metadata['reason_phrase'])
         
         for (name, value) in metadata['headers']:
-            if name == 'location':
+            if name.lower() == 'location':
                 self.send_header(name, self.get_request_url(value))
                 continue
                 
-            if name in _HEADER_WHITELIST:
+            if name.lower() in _HEADER_WHITELIST:
                 self.send_header(name, value)
             else:
-                if name not in _HEADER_BLACKLIST:
+                if name.lower() not in _HEADER_BLACKLIST:
                     print(colorize(_TERM_FG_YELLOW, 
                         '*** Ignoring unknown header in archive: %s: %s' % (name, value)))
                 continue
