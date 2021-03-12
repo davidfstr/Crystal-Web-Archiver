@@ -351,7 +351,12 @@ class DownloadResourceTask(Task):
                     link_resource = Resource(self._resource.project, link_url)
                     embedded_resources.append(link_resource)
             
+            self_resource = self._abstract_resource  # cache
             for resource in embedded_resources:
+                if resource == self_resource:
+                    # Avoid infinite recursion when resource identifies itself
+                    # (probably incorrectly) as an embedded resource of itself
+                    continue
                 self.append_child(resource.create_download_task())
         
         self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
