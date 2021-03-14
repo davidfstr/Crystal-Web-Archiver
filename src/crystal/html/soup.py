@@ -16,6 +16,7 @@ _BODY_RE = re.compile(r'(?i)body')
 _SCRIPT_RE = re.compile(r'(?i)script')
 _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
 _QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")(https?:\\?/\\?/[^"]+)"|(')(https?:\\?/\\?/[^']+)')''')
+_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
 _PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg)$')
 
@@ -95,7 +96,7 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
         links.append(Link.create_from_tag(tag, 'href', type_title, title, embedded))
     
     # <input type='button' onclick='*.location = "*";'>
-    # This type of link is heavily used on fanfiction.net
+    # This type of link is used on: fanfiction.net
     for tag in html.findAll(_INPUT_RE, type=_BUTTON_RE, onclick=_ON_CLICK_RE):
         matcher = _ON_CLICK_RE.match(tag['onclick'])
         def replace_url_in_old_attr_value(url, old_attr_value):
@@ -111,7 +112,7 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
             relative_url, replace_url_in_old_attr_value))
     
     # <script [type="text/javascript"]>..."http(s)://**"...</script>
-    # This type of link is used on http://*.daportfolio.com/
+    # This type of link is used on: http://*.daportfolio.com/
     for tag in html.findAll(_SCRIPT_RE, string=_QUOTED_HTTP_LINK_RE):
         if 'type' in tag.attrs and not _TEXT_JAVASCRIPT_RE.fullmatch(tag.attrs['type']):
             continue
@@ -142,6 +143,29 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
                     tag, 'string', type_title, title, embedded,
                     relative_url, replace_url_in_old_attr_value))
             process_match(match)
+    
+    # <* *="http(s)://**">
+    # This type of link is used on: https://blog.calm.com/take-a-deep-breath
+    # where the attribute name is "data-url".
+    seen_tags_and_attr_names = set([(link.tag, link.attr_name) for link in links])  # capture
+    for tag in html.findAll():
+        for (attr_name, attr_value) in tag.attrs.items():
+            if (tag, attr_name) in seen_tags_and_attr_names:
+                continue
+            if not isinstance(attr_value, str):
+                # HACK: BeautifulSoup has been observed to provide a 
+                #       List[str] value for the "class" attribute...
+                continue
+            matcher = _HTTP_LINK_RE.fullmatch(attr_value)
+            if not matcher:
+                continue
+            
+            relative_url = matcher.group(1)
+            title = None
+            type_title = 'Attribute Reference'
+            embedded = _PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
+            links.append(Link.create_from_tag(
+                tag, attr_name, type_title, title, embedded))
     
     return (html, links)
 
@@ -230,6 +254,14 @@ class Link(object):
                 attr_value = url
             self._attr_value = attr_value
     relative_url = property(_get_relative_url, _set_relative_url)
+    
+    @property
+    def tag(self):
+        return self._tag
+    
+    @property
+    def attr_name(self):
+        return self._attr_name
     
     def _get_attr_value(self):
         if self._attr_name == 'string':
