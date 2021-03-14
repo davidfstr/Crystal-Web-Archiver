@@ -603,7 +603,7 @@ class ResourceRevision(object):
         else:
             error_dict = {
                 'type': type(error).__name__,
-                'message': error.message if hasattr(error, 'message') else None,
+                'message': str(error),
             }
         return json.dumps(error_dict)
     
