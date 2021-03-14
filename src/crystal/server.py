@@ -4,11 +4,13 @@ Runs on its own daemon thread.
 """
 
 from datetime import datetime
+from html import escape as html_escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import StringIO
 import os
 import re
 import shutil
+from textwrap import dedent
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 from .xthreading import bg_call_later, fg_call_and_wait
 
@@ -119,7 +121,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_resource_not_in_archive(archive_url)
             return
         
-        self.send_revision(revision)
+        self.send_revision(revision, archive_url)
     
     def send_welcome_page(self, query_params):
         if 'url' in query_params:
@@ -135,48 +137,99 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
         
-        self.wfile.write("""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8" />
-    <title>Welcome | Crystal Web Archiver</title>
-</head>
-<body>
-    <p>Enter the URL of a page to load from the archive:</p>
-    <form action="/">
-        URL: <input type="text" name="url" value="http://" /><input type="submit" value="Go" />
-    </form>
-</body>
-</html>
-""".strip().encode('utf-8'))
+        self.wfile.write(dedent(
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8" />
+                <title>Welcome | Crystal Web Archiver</title>
+            </head>
+            <body>
+                <p>Enter the URL of a page to load from the archive:</p>
+                <form action="/">
+                    URL: <input type="text" name="url" value="http://" /><input type="submit" value="Go" />
+                </form>
+            </body>
+            </html>
+            """
+        ).lstrip('\n').encode('utf-8'))
     
     def send_resource_not_in_archive(self, archive_url):
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
         
-        self.wfile.write(("""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8" />
-    <title>Not in Archive | Crystal Web Archiver</title>
-</head>
-<body>
-    <p>The requested resource was not found in the archive.</p>
-    <p>The original resource is located here: <a href="%(archive_url)s">%(archive_url)s</a></p>
-</body>
-</html>
-""".strip() % {'archive_url': archive_url}).encode('utf-8'))
+        self.wfile.write((dedent(
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8" />
+                <title>Not in Archive | Crystal Web Archiver</title>
+            </head>
+            <body>
+                <p>The requested resource was not found in the archive.</p>
+                <p>The original resource is located here: <a href="%(archive_url)s">%(archive_url)s</a></p>
+            </body>
+            </html>
+            """
+        ).lstrip('\n') % {
+            # TODO: Shouldn't this be HTML-escaped?
+            'archive_url': archive_url
+        }).encode('utf-8'))
         
         print(colorize(_TERM_FG_RED, '*** Requested resource not in archive: ' + archive_url))
     
-    def send_revision(self, revision):
+    def send_revision(self, revision, archive_url):
+        if revision.error is not None:
+            self.send_resource_error(revision.error_dict, archive_url)
+            return
+        assert revision.has_body
+        
         if revision.is_http:
             self.send_http_revision(revision)
         else:
             self.send_generic_revision(revision)
+    
+    def send_resource_error(self, error_dict, archive_url):
+        self.send_response(400)
+        self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+        
+        self.wfile.write((dedent(
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8" />
+                <title>Fetch Error | Crystal Web Archiver</title>
+            </head>
+            <body>
+                <p>
+                    A <tt>%(error_type)s</tt> error with message <tt>%(error_message)s</tt>
+                    was encountered when fetching this resource.
+                </p>
+                <p>The original resource is located here: <a href="%(archive_url)s">%(archive_url)s</a></p>
+            </body>
+            </html>
+            """
+        ).lstrip('\n') % {
+            'error_type': (
+                html_escape(error_dict['type'])
+                if error_dict is not None
+                else 'unknown'
+            ),
+            'error_message': (
+                html_escape(error_dict['message'])
+                if error_dict is not None and error_dict['message'] is not None
+                else 'unknown'
+            ),
+            # TODO: Shouldn't this be HTML-escaped?
+            'archive_url': archive_url
+        }).encode('utf-8'))
+        
+        print(colorize(_TERM_FG_RED, '*** Requested resource was fetched with error: ' + archive_url))
     
     def send_http_revision(self, revision):
         metadata = revision.metadata
@@ -208,6 +261,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_revision_body(revision)
     
     def send_revision_body(self, revision):
+        assert revision.has_body
+        
         (html, links) = revision.html_and_links()
         if html is None:
             # Not HTML. Cannot rewrite content.

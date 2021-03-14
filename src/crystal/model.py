@@ -517,6 +517,8 @@ class ResourceRevision(object):
     Persisted. Loaded on demand.
     """
     
+    # === Init ===
+    
     @staticmethod
     def create_from_error(resource, error):
         """
@@ -591,8 +593,12 @@ class ResourceRevision(object):
         self.has_body = os.path.exists(self._body_filepath)
         return self
     
+    @classmethod
+    def _encode_error(cls, error):
+        return json.dumps(cls._encode_error_dict(error))
+    
     @staticmethod
-    def _encode_error(error):
+    def _encode_error_dict(error):
         if error is None:
             error_dict = None
         elif isinstance(error, _PersistedError):
@@ -605,7 +611,7 @@ class ResourceRevision(object):
                 'type': type(error).__name__,
                 'message': str(error),
             }
-        return json.dumps(error_dict)
+        return error_dict
     
     @staticmethod
     def _encode_metadata(metadata):
@@ -623,6 +629,8 @@ class ResourceRevision(object):
     def _decode_metadata(db_metadata):
         return json.loads(db_metadata)
     
+    # === Properties ===
+    
     @property
     def project(self):
         return self.resource.project
@@ -631,6 +639,10 @@ class ResourceRevision(object):
     def _url(self):
         return self.resource.url
     
+    @property
+    def error_dict(self):
+        return self._encode_error_dict(self.error)
+    
     def _ensure_has_body(self):
         if not self.has_body:
             raise ValueError('Resource "%s" has no body.' % self._url)
@@ -638,6 +650,8 @@ class ResourceRevision(object):
     @property
     def _body_filepath(self):
         return os.path.join(self.project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id))
+    
+    # === Metadata ===
     
     @property
     def is_http(self):
@@ -700,6 +714,8 @@ class ResourceRevision(object):
     def is_html(self):
         """Returns whether this resource is HTML."""
         return self.content_type == 'text/html'
+    
+    # === Body ===
     
     def size(self):
         """
@@ -769,6 +785,8 @@ class _PersistedError(Exception):
     """
     Wraps an exception loaded from persistent storage.
     """
+    # TODO: Alter parameter order to be [type, message] instead,
+    #       which prints out more nicely.
     def __init__(self, message, type):
         self.message = message
         self.type = type
