@@ -3,14 +3,21 @@ HTML parser implementation that uses BeautifulSoup.
 """
 
 from bs4 import BeautifulSoup
+import json
 import re
 
 _ANY_RE = re.compile(r'.*')
 
-_INPUT_RE = re.compile('(?i)input')
-_BUTTON_RE = re.compile('(?i)button')
+_INPUT_RE = re.compile(r'(?i)input')
+_BUTTON_RE = re.compile(r'(?i)button')
+# TODO: Make this an r'...' string
 _ON_CLICK_RE = re.compile('(?i)([a-zA-Z]*\.(?:href|location)) *= *([\'"])([^\'"]*)[\'"] *;?$')
-_BODY_RE = re.compile('(?i)body')
+_BODY_RE = re.compile(r'(?i)body')
+_SCRIPT_RE = re.compile(r'(?i)script')
+_TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
+_QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")(https?:\\?/\\?/[^"]+)"|(')(https?:\\?/\\?/[^']+)')''')
+
+_PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg)$')
 
 def parse_html_and_links(html_bytes, declared_encoding=None):
     try:
@@ -91,7 +98,7 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
     # This type of link is heavily used on fanfiction.net
     for tag in html.findAll(_INPUT_RE, type=_BUTTON_RE, onclick=_ON_CLICK_RE):
         matcher = _ON_CLICK_RE.match(tag['onclick'])
-        def get_attr_value(url):
+        def replace_url_in_old_attr_value(url, old_attr_value):
             q = matcher.group(2)
             return matcher.group(1) + ' = ' + q + url + q
         
@@ -101,7 +108,40 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
         embedded = False
         links.append(Link.create_from_complex_tag(
             tag, 'onclick', type_title, title, embedded,
-            relative_url, get_attr_value))
+            relative_url, replace_url_in_old_attr_value))
+    
+    # <script [type="text/javascript"]>..."http(s)://**"...</script>
+    # This type of link is used on http://*.daportfolio.com/
+    for tag in html.findAll(_SCRIPT_RE, string=_QUOTED_HTTP_LINK_RE):
+        if 'type' in tag.attrs and not _TEXT_JAVASCRIPT_RE.fullmatch(tag.attrs['type']):
+            continue
+        
+        matches = _QUOTED_HTTP_LINK_RE.findall(tag.string)
+        for match in matches:
+            def process_match(match):
+                q = match[0] or match[2]
+                old_string_literal = q + (match[1] or match[3]) + q
+                
+                def replace_url_in_old_attr_value(url, old_attr_value):
+                    if q == "'":
+                        new_string_literal = q + json.dumps(url).replace(q, '\\' + q) + q
+                    else:  # q == '"' or something else
+                        new_string_literal = json.dumps(url)
+                    
+                    return old_attr_value.replace(old_string_literal, new_string_literal)
+                
+                try:
+                    relative_url = json.loads('"' + (match[1] or match[3]) + '"')
+                except ValueError:
+                    # Failed to parse JavaScript string literal
+                    return
+                title = None
+                type_title = 'Script Reference'
+                embedded = _PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
+                links.append(Link.create_from_complex_tag(
+                    tag, 'string', type_title, title, embedded,
+                    relative_url, replace_url_in_old_attr_value))
+            process_match(match)
     
     return (html, links)
 
@@ -136,18 +176,19 @@ class Link(object):
     
     @staticmethod
     def create_from_complex_tag(tag, attr_name, type_title, title, embedded,
-            relative_url, get_attr_value_for_url):
+            relative_url, replace_url_in_old_attr_value):
         """
         See Link.create_from_tag()
         
         Extra Arguments:
-        get_attr_value_for_url -- function that takes a URL and returns the appropriate
-                                  value for the underlying tag's attribute.
+        replace_url_in_old_attr_value --
+            function that takes a URL and returns the appropriate
+            value for the underlying tag's attribute.
         """
-        if (tag is None or attr_name is None or not callable(get_attr_value_for_url) or 
+        if (tag is None or attr_name is None or not callable(replace_url_in_old_attr_value) or 
                 type_title is None or embedded not in (True, False)):
             raise ValueError
-        return Link(relative_url, tag, attr_name, type_title, title, embedded, get_attr_value_for_url)
+        return Link(relative_url, tag, attr_name, type_title, title, embedded, replace_url_in_old_attr_value)
     
     @staticmethod
     def create_external(relative_url, type_title, title, embedded):
@@ -165,11 +206,11 @@ class Link(object):
         return Link(relative_url, None, None, type_title, title, embedded)
     
     def __init__(self, relative_url, tag, attr_name, type_title, title, embedded,
-            get_attr_value_for_url=None):
+            replace_url_in_old_attr_value=None):
         self._relative_url = relative_url
         self._tag = tag
         self._attr_name = attr_name
-        self._get_attr_value_for_url = get_attr_value_for_url
+        self._replace_url_in_old_attr_value = replace_url_in_old_attr_value
         self.title = title
         self.type_title = type_title
         self.embedded = embedded
@@ -179,16 +220,29 @@ class Link(object):
             return self._relative_url
         else:
             return self._tag[self._attr_name]
-    def _set_relative_url(self, value):
-        if self._relative_url and not self._get_attr_value_for_url:
-            self._relative_url = value
+    def _set_relative_url(self, url):
+        if self._relative_url and not self._replace_url_in_old_attr_value:
+            self._relative_url = url
         else:
-            if self._get_attr_value_for_url:
-                attr_value = self._get_attr_value_for_url(value)
+            if self._replace_url_in_old_attr_value:
+                attr_value = self._replace_url_in_old_attr_value(url, self._attr_value)
             else:
-                attr_value = value
-            self._tag[self._attr_name] = attr_value
+                attr_value = url
+            self._attr_value = attr_value
     relative_url = property(_get_relative_url, _set_relative_url)
     
+    def _get_attr_value(self):
+        if self._attr_name == 'string':
+            return self._tag.string
+        else:
+            return self._tag[self._attr_name]
+    def _set_attr_value(self, attr_value):
+        if self._attr_name == 'string':
+            self._tag.string = attr_value
+        else:
+            self._tag[self._attr_name] = attr_value
+    _attr_value = property(_get_attr_value, _set_attr_value)
+    
     def __repr__(self):
+        # TODO: Update repr to include new constructor parameters
         return 'Link(%s,%s,%s,%s)' % (repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))
