@@ -749,6 +749,19 @@ class ResourceRevision(object):
         
         return (html, links)
     
+    # NOTE: Only used from a Python REPL at the moment
+    def delete(self):
+        project = self.project
+        
+        body_filepath = self._body_filepath  # cache
+        if os.path.exists(body_filepath):
+            os.remove(body_filepath)
+        
+        c = project._db.cursor()
+        c.execute('delete from resource_revision where id=?', (self._id,))
+        project._db.commit()
+        self._id = None
+    
     def __repr__(self):
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
 
