@@ -648,7 +648,7 @@ class ResourceRevision(object):
     @property
     def is_redirect(self):
         """Returns whether this resource is a redirect."""
-        return self.is_http and (self.metadata['status_code'] / 100) == 3
+        return self.is_http and (self.metadata['status_code'] // 100) == 3
     
     def _get_first_value_of_http_header(self, name):
         name = name.lower()
