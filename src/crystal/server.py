@@ -267,7 +267,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
         if html is None:
             # Not HTML. Cannot rewrite content.
             with revision.open() as body:
-                shutil.copyfileobj(body, self.wfile)
+                try:
+                    shutil.copyfileobj(body, self.wfile)
+                except BrokenPipeError:
+                    # Browser did disconnect early
+                    return
         else:
             # Rewrite links in HTML
             base_url = revision.resource.url
@@ -278,7 +282,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 link.relative_url = request_url
             
             # Output altered HTML
-            self.wfile.write(str(html).encode('utf-8'))
+            try:
+                self.wfile.write(str(html).encode('utf-8'))
+            except BrokenPipeError:
+                # Browser did disconnect early
+                return
     
     def get_request_url(self, archive_url):
         return _RequestHandler.get_request_url_with_host(archive_url, self.request_host)
