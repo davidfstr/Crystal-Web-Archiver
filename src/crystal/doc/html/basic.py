@@ -6,14 +6,17 @@ from crystal.doc.generic import Document, Link
 import re
 
 def parse_html_and_links(html_bytes, declared_charset=None):
-    if not isinstance(html_bytes, str):
+    if not isinstance(html_bytes, bytes):
         raise ValueError('This parser implementation only accepts bytestrings.')
+    # HACK: Assume UTF-8 encoding
+    # TODO: Handle UnicodeDecodeError
+    html = html_bytes.decode('utf-8')
     
-    dividers_and_urls = re.split(r'(?i)([\'"][^\'"]+\.s?html?[\'"])', html_bytes)
+    dividers_and_urls = re.split(r'(?i)([\'"][^\'"]+\.s?html?[\'"])', html)
     
     dividers_and_links = []
     links = []
-    for i, old_item in enumerate(dividers_and_urls):
+    for (i, old_item) in enumerate(dividers_and_urls):
         if i & 1 == 0:
             new_item = old_item
         else:
