@@ -8,6 +8,8 @@ Model objects may only be manipulated on the foreground thread.
 Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 """
 
+from __future__ import annotations
+
 from collections import OrderedDict
 import cgi
 from crystal.packages import set_package
@@ -17,9 +19,13 @@ import os
 import re
 import shutil
 import sqlite3
+from typing import Optional, TYPE_CHECKING
 from urllib.parse import urlparse, urlunparse
 from .xfutures import Future
 from .xthreading import bg_call_later, fg_call_and_wait
+
+if TYPE_CHECKING:
+    from crystal.doc.generic import Document, Link
 
 class Project(object):
     """
@@ -691,33 +697,34 @@ class ResourceRevision(object):
             return None
     
     @property
-    def declared_content_type(self):
+    def declared_content_type_with_options(self) -> Optional[str]:  # ex: 'text/html; charset=utf-8'
+        if self.is_http:
+            return self._get_first_value_of_http_header('content-type')
+        else:
+            return None
+    
+    @property
+    def declared_content_type(self) -> Optional[str]:  # ex: 'text/html'
         """Returns the MIME content type declared for this resource, or None if not declared."""
-        if self.is_http:
-            content_type_with_options = self._get_first_value_of_http_header('content-type')
-            if content_type_with_options is None:
-                return None
-            else:
-                (content_type, content_type_options) = cgi.parse_header(content_type_with_options)
-                return content_type
-        else:
+        content_type_with_options = self.declared_content_type_with_options
+        if content_type_with_options is None:
             return None
+        else:
+            (content_type, content_type_options) = cgi.parse_header(content_type_with_options)
+            return content_type
     
     @property
-    def declared_charset(self):
+    def declared_charset(self) -> Optional[str]:  # ex: 'utf-8'
         """Returns the charset declared for this resource, or None if not declared."""
-        if self.is_http:
-            content_type_with_options = self._get_first_value_of_http_header('content-type')
-            if content_type_with_options is None:
-                return None
-            else:
-                (content_type, content_type_options) = cgi.parse_header(content_type_with_options)
-                return content_type_options.get('charset')
-        else:
+        content_type_with_options = self.declared_content_type_with_options
+        if content_type_with_options is None:
             return None
+        else:
+            (content_type, content_type_options) = cgi.parse_header(content_type_with_options)
+            return content_type_options.get('charset')
     
     @property
-    def content_type(self):
+    def content_type(self) -> str:  # ex: 'utf-8'
         """Returns the MIME content type declared or guessed for this resource, or None if unknown."""
         declared = self.declared_content_type
         if declared is not None:
@@ -725,12 +732,12 @@ class ResourceRevision(object):
         return mimetypes.guess_type(self._url)
     
     @property
-    def is_html(self):
+    def is_html(self) -> bool:
         """Returns whether this resource is HTML."""
         return self.content_type == 'text/html'
     
     @property
-    def is_css(self):
+    def is_css(self) -> bool:
         """Returns whether this resource is CSS."""
         return self.content_type == 'text/css'
     
@@ -758,11 +765,12 @@ class ResourceRevision(object):
         """
         return self.document_and_links()[1]
     
-    def document_and_links(self):
+    def document_and_links(self) -> tuple[Document, list[Link], Optional[str]]:
         """
-        Returns a 2-tuple containing:
-        (1) if the resource is HTML, the HTML document, otherwise None;
+        Returns a 3-tuple containing:
+        (1) if the resource is a document, the document, otherwise None;
         (2) a list of Links found in this resource.
+        (3) a Content-Type value for the document, or None if unknown
         
         The HTML document can be reoutput by getting its str() representation.
         
@@ -776,19 +784,22 @@ class ResourceRevision(object):
         if self.is_html and self.has_body:
             with self.open() as body:
                 (doc, links) = parse_html_and_links(body, self.declared_charset)
+            content_type_with_options = 'text/html; charset=utf-8'
         elif self.is_css and self.has_body:
             with self.open() as body:
                 body_bytes = body.read()
             (doc, links) = parse_css_and_links(body_bytes, self.declared_charset)
+            content_type_with_options = 'text/css; charset=utf-8'
         else:
             (doc, links) = (None, [])
+            content_type_with_options = None
         
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url
         if redirect_url is not None:
             links.append(create_external_link(redirect_url, self._redirect_title, 'Redirect', True))
         
-        return (doc, links)
+        return (doc, links, content_type_with_options)
     
     # NOTE: Only used from a Python REPL at the moment
     def delete(self):

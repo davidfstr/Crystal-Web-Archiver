@@ -260,9 +260,31 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def send_http_revision(self, revision):
         metadata = revision.metadata
         
+        # Determine Content-Type to send
+        sender = self.send_revision_body(revision)
+        content_type_with_options = (
+            next(sender) or 
+            revision.declared_content_type_with_options
+        )
+        
+        # Determine headers to send
+        headers = [[k, v] for (k, v) in metadata['headers']]  # clone, make mutable
+        if content_type_with_options is not None:
+            # Replace first preexisting 'Content-Type' header with new value,
+            # or append new 'Content-Type' header to end of headers
+            for kv in headers:
+                (k, v) = kv
+                if k.lower() == 'content-type':
+                    kv[1] = content_type_with_options
+                    break
+            else:
+                headers.append(['content-type', content_type_with_options])
+        
+        # Send status line
         self.send_response(metadata['status_code'], metadata['reason_phrase'])
         
-        for (name, value) in metadata['headers']:
+        # Send headers
+        for (name, value) in headers:
             if name.lower() == 'location':
                 self.send_header(name, self.get_request_url(value))
                 continue
@@ -276,20 +298,47 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 continue
         self.end_headers()
         
-        self.send_revision_body(revision)
+        # Send body
+        try:
+            next(sender)
+        except StopIteration:
+            pass
+        else:
+            raise AssertionError()
     
     def send_generic_revision(self, revision):
+        # Determine what Content-Type to send
+        sender = self.send_revision_body(revision)
+        content_type_with_options = (
+            next(sender) or 
+            revision.declared_content_type_with_options
+        )
+        
+        # Send status line
         self.send_response(200)
         
-        self.send_header('Content-Type', revision.content_type)
+        # Send headers
+        if content_type_with_options is not None:
+            self.send_header('Content-Type', content_type_with_options)
         self.end_headers()
         
-        self.send_revision_body(revision)
+        # Send body
+        try:
+            next(sender)
+        except StopIteration:
+            pass
+        else:
+            raise AssertionError()
     
     def send_revision_body(self, revision):
         assert revision.has_body
         
-        (doc, links) = revision.document_and_links()
+        (doc, links, content_type_with_options) = revision.document_and_links()
+        
+        # Send headers with content type
+        yield content_type_with_options
+        
+        # Send body
         if doc is None:
             # Not a document. Cannot rewrite content.
             with revision.open() as body:
