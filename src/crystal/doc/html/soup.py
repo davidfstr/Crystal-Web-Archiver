@@ -42,8 +42,8 @@ def parse_html_and_links(html_bytes, declared_charset=None):
     
     links = []
     
-    # <body background=*>
-    for tag in html.findAll(_BODY_RE, background=_ANY_RE):
+    # <* background=*>
+    for tag in html.findAll(_ANY_RE, background=_ANY_RE):
         relative_url = tag['background']
         embedded = True
         title = None
