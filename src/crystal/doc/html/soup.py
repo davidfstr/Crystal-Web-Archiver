@@ -3,6 +3,7 @@ HTML parser implementation that uses BeautifulSoup.
 """
 
 from bs4 import BeautifulSoup
+from crystal.doc.generic import Document, Link
 import json
 import re
 
@@ -47,7 +48,7 @@ def parse_html_and_links(html_bytes, declared_charset=None):
         embedded = True
         title = None
         type_title = 'Background Image'
-        links.append(Link.create_from_tag(tag, 'background', type_title, title, embedded))
+        links.append(HtmlLink.create_from_tag(tag, 'background', type_title, title, embedded))
     
     # <* src=*>
     for tag in html.findAll(_ANY_RE, src=_ANY_RE):
@@ -65,7 +66,7 @@ def parse_html_and_links(html_bytes, declared_charset=None):
         else:
             title = None
             type_title = 'Unknown Embedded (%s)' % tag.name
-        links.append(Link.create_from_tag(tag, 'src', type_title, title, embedded))
+        links.append(HtmlLink.create_from_tag(tag, 'src', type_title, title, embedded))
     
     # <* href=*>
     for tag in html.findAll(_ANY_RE, href=_ANY_RE):
@@ -93,7 +94,7 @@ def parse_html_and_links(html_bytes, declared_charset=None):
         else:
             title = None
             type_title = 'Unknown (%s)' % tag.name
-        links.append(Link.create_from_tag(tag, 'href', type_title, title, embedded))
+        links.append(HtmlLink.create_from_tag(tag, 'href', type_title, title, embedded))
     
     # <input type='button' onclick='*.location = "*";'>
     # This type of link is used on: fanfiction.net
@@ -107,7 +108,7 @@ def parse_html_and_links(html_bytes, declared_charset=None):
         title = tag['value'] if 'value' in tag.attrs else None
         type_title = 'Button'
         embedded = False
-        links.append(Link.create_from_complex_tag(
+        links.append(HtmlLink.create_from_complex_tag(
             tag, 'onclick', type_title, title, embedded,
             relative_url, replace_url_in_old_attr_value))
     
@@ -139,7 +140,7 @@ def parse_html_and_links(html_bytes, declared_charset=None):
                 title = None
                 type_title = 'Script Reference'
                 embedded = _PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
-                links.append(Link.create_from_complex_tag(
+                links.append(HtmlLink.create_from_complex_tag(
                     tag, 'string', type_title, title, embedded,
                     relative_url, replace_url_in_old_attr_value))
             process_match(match)
@@ -164,10 +165,10 @@ def parse_html_and_links(html_bytes, declared_charset=None):
             title = None
             type_title = 'Attribute Reference'
             embedded = _PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
-            links.append(Link.create_from_tag(
+            links.append(HtmlLink.create_from_tag(
                 tag, attr_name, type_title, title, embedded))
     
-    return (html, links)
+    return (HtmlDocument(html), links)
 
 def _get_image_tag_title(tag):
     if 'alt' in tag.attrs:
@@ -177,8 +178,15 @@ def _get_image_tag_title(tag):
     else:
         return None
 
+class HtmlDocument(Document):
+    def __init__(self, html: BeautifulSoup) -> None:
+        self._html = html
+    
+    def __str__(self) -> str:
+        return str(self._html)
+
 # TODO: Split this internally into three subclasses
-class Link(object):
+class HtmlLink(Link):
     """
     Represents a link in a (usually-HTML) resource.
     """
@@ -196,13 +204,13 @@ class Link(object):
         if (tag is None or attr_name is None or type_title is None or
                 embedded not in (True, False)):
             raise ValueError
-        return Link(None, tag, attr_name, type_title, title, embedded)
+        return HtmlLink(None, tag, attr_name, type_title, title, embedded)
     
     @staticmethod
     def create_from_complex_tag(tag, attr_name, type_title, title, embedded,
             relative_url, replace_url_in_old_attr_value):
         """
-        See Link.create_from_tag()
+        See HtmlLink.create_from_tag()
         
         Extra Arguments:
         replace_url_in_old_attr_value --
@@ -212,7 +220,7 @@ class Link(object):
         if (tag is None or attr_name is None or not callable(replace_url_in_old_attr_value) or 
                 type_title is None or embedded not in (True, False)):
             raise ValueError
-        return Link(relative_url, tag, attr_name, type_title, title, embedded, replace_url_in_old_attr_value)
+        return HtmlLink(relative_url, tag, attr_name, type_title, title, embedded, replace_url_in_old_attr_value)
     
     @staticmethod
     def create_external(relative_url, type_title, title, embedded):
@@ -227,7 +235,7 @@ class Link(object):
         """
         if relative_url is None or type_title is None or embedded not in (True, False):
             raise ValueError
-        return Link(relative_url, None, None, type_title, title, embedded)
+        return HtmlLink(relative_url, None, None, type_title, title, embedded)
     
     def __init__(self, relative_url, tag, attr_name, type_title, title, embedded,
             replace_url_in_old_attr_value=None):
@@ -278,4 +286,4 @@ class Link(object):
     
     def __repr__(self):
         # TODO: Update repr to include new constructor parameters
-        return 'Link(%s,%s,%s,%s)' % (repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))
+        return 'HtmlLink(%s,%s,%s,%s)' % (repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))

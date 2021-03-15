@@ -4,6 +4,7 @@ Parses CSS documents.
 
 from __future__ import annotations
 
+from crystal.doc.generic import Document, Link
 import tinycss2
 from tinycss2 import ast
 from tinycss2.serializer import serialize_url
@@ -12,7 +13,7 @@ from tinycss2.serializer import serialize_url
 def parse_css_and_links(
         body_bytes: bytes, 
         declared_charset: str=None
-        ) -> tuple[CssDocument, list[UrlTokenLink]]:
+        ) -> tuple[CssDocument, list[Link]]:
     (rules, encoding) = tinycss2.parse_stylesheet_bytes(
         body_bytes,
         protocol_encoding=declared_charset)
@@ -26,7 +27,7 @@ def parse_css_and_links(
     return (CssDocument(rules), links)
 
 
-class CssDocument(object):
+class CssDocument(Document):
     def __init__(self, rules) -> None:
         self._rules = rules
     
@@ -34,7 +35,7 @@ class CssDocument(object):
         return tinycss2.serialize(self._rules)
 
 
-class UrlTokenLink(object):
+class UrlTokenLink(Link):
     def __init__(self, token) -> None:
         self._token = token
         

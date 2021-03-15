@@ -768,8 +768,9 @@ class ResourceRevision(object):
         
         This method blocks while parsing the links.
         """
-        from crystal.css import parse_css_and_links
-        from crystal.html import parse_html_and_links, create_external_link
+        from crystal.doc.css import parse_css_and_links
+        from crystal.doc.generic import create_external_link
+        from crystal.doc.html import parse_html_and_links
         
         # Extract links from HTML, if applicable
         if self.is_html and self.has_body:

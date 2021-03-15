@@ -2,6 +2,7 @@
 HTML parser implementation that uses regular expressions.
 """
 
+from crystal.doc.generic import Document, Link
 import re
 
 def parse_html_and_links(html_bytes, declared_charset=None):
@@ -23,16 +24,17 @@ def parse_html_and_links(html_bytes, declared_charset=None):
     
     return (BasicHtmlDocument(dividers_and_links), links)
 
-class BasicHtmlDocument(object):
+class BasicHtmlDocument(Document):
     def __init__(self, dividers_and_links):
         self._dividers_and_links = dividers_and_links
     
     def __str__(self):
         return ''.join([str(item) for item in self._dividers_and_links])
 
-class BasicLink(object):
+class BasicLink(Link):
     def __init__(self, quoted_href):
         self._quoted_href = quoted_href
+        
         self.title = None
         self.type_title = 'Unknown'
         self.embedded = False

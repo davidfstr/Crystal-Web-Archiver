@@ -35,8 +35,8 @@ def parse_html_and_links(html_bytes, declared_charset=None):
     html_bytes -- HTML bytestring or file object.
     declared_charset -- the encoding that the HTML document is declared to be in.
     """    
-    import crystal.html.basic as basic
-    import crystal.html.soup as soup
+    import crystal.doc.html.basic as basic
+    import crystal.doc.html.soup as soup
     
     # Convert html_bytes to string
     if hasattr(html_bytes, 'read'):
@@ -48,9 +48,3 @@ def parse_html_and_links(html_bytes, declared_charset=None):
         return basic.parse_html_and_links(html_bytes, declared_charset)
     else:
         return soup.parse_html_and_links(html_bytes, declared_charset)
-
-
-def create_external_link(relative_url, type_title, title, embedded):
-    import crystal.html.soup as soup
-    
-    return soup.Link.create_external(relative_url, type_title, title, embedded)
