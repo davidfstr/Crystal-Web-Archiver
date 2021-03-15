@@ -57,6 +57,11 @@ _HEADER_WHITELIST = set([
     'x-xss-protection',
     'x-content-type-options',
     'x-frame-options',
+    
+    # AWS Cloudfront
+    'x-amz-cf-id',
+    'x-amz-cf-pop',
+    'x-amz-storage-class',
 ])
 # Set of archived headers known to cause problems if blindly played back
 _HEADER_BLACKLIST = set([
