@@ -2,19 +2,19 @@
 Parses HTML documents.
 """
 
-def parse_links(html_bytes, declared_encoding=None):
+def parse_links(html_bytes, declared_charset=None):
     """
     Parses the specified HTML bytestring, returning a list of links.
     
     Arguments:
     html_bytes -- HTML bytestring or file object.
-    declared_encoding -- the encoding that the HTML document is declared to be in.
+    declared_charset -- the encoding that the HTML document is declared to be in.
     """
-    (html, links) = parse_html_and_links(html_bytes, declared_encoding)
+    (html, links) = parse_html_and_links(html_bytes, declared_charset)
     return links
 
 
-def parse_html_and_links(html_bytes, declared_encoding=None):
+def parse_html_and_links(html_bytes, declared_charset=None):
     """
     Parses the specified HTML bytestring, returning a 2-tuple containing
     (1) the HTML document and
@@ -33,7 +33,7 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
     
     Arguments:
     html_bytes -- HTML bytestring or file object.
-    declared_encoding -- the encoding that the HTML document is declared to be in.
+    declared_charset -- the encoding that the HTML document is declared to be in.
     """    
     import crystal.html.basic as basic
     import crystal.html.soup as soup
@@ -45,9 +45,9 @@ def parse_html_and_links(html_bytes, declared_encoding=None):
     # HACK: The BeautifulSoup parser doesn't currently handle <frameset>
     #       tags correctly. So workaround with a basic parser.
     if (b'frameset' in html_bytes) or (b'FRAMESET' in html_bytes):
-        return basic.parse_html_and_links(html_bytes, declared_encoding)
+        return basic.parse_html_and_links(html_bytes, declared_charset)
     else:
-        return soup.parse_html_and_links(html_bytes, declared_encoding)
+        return soup.parse_html_and_links(html_bytes, declared_charset)
 
 
 def create_external_link(relative_url, type_title, title, embedded):

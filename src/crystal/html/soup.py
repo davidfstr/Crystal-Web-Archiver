@@ -20,11 +20,11 @@ _HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
 _PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg)$')
 
-def parse_html_and_links(html_bytes, declared_encoding=None):
+def parse_html_and_links(html_bytes, declared_charset=None):
     try:
         html = BeautifulSoup(
             html_bytes,
-            from_encoding=declared_encoding,
+            from_encoding=declared_charset,
             # TODO: Consider migrating to 'lxml' parser for additional speed
             features='html.parser',
         )
@@ -235,6 +235,7 @@ class Link(object):
         self._tag = tag
         self._attr_name = attr_name
         self._replace_url_in_old_attr_value = replace_url_in_old_attr_value
+        
         self.title = title
         self.type_title = type_title
         self.embedded = embedded

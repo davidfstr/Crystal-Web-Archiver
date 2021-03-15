@@ -284,9 +284,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def send_revision_body(self, revision):
         assert revision.has_body
         
-        (html, links) = revision.html_and_links()
-        if html is None:
-            # Not HTML. Cannot rewrite content.
+        (doc, links) = revision.document_and_links()
+        if doc is None:
+            # Not a document. Cannot rewrite content.
             with revision.open() as body:
                 try:
                     shutil.copyfileobj(body, self.wfile)
@@ -294,7 +294,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     # Browser did disconnect early
                     return
         else:
-            # Rewrite links in HTML
+            # Rewrite links in document
             base_url = revision.resource.url
             for link in links:
                 relative_url = link.relative_url
@@ -302,9 +302,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 request_url = self.get_request_url(absolute_url)
                 link.relative_url = request_url
             
-            # Output altered HTML
+            # Output altered document
             try:
-                self.wfile.write(str(html).encode('utf-8'))
+                self.wfile.write(str(doc).encode('utf-8'))
             except BrokenPipeError:
                 # Browser did disconnect early
                 return

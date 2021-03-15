@@ -9,6 +9,7 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 """
 
 from collections import OrderedDict
+import cgi
 from crystal.packages import set_package
 import json
 import mimetypes
@@ -693,12 +694,25 @@ class ResourceRevision(object):
     def declared_content_type(self):
         """Returns the MIME content type declared for this resource, or None if not declared."""
         if self.is_http:
-            content_type_with_parameters = self._get_first_value_of_http_header('content-type')
-            if content_type_with_parameters is None:
+            content_type_with_options = self._get_first_value_of_http_header('content-type')
+            if content_type_with_options is None:
                 return None
             else:
-                # Remove RFC 2045 parameters, if present
-                return content_type_with_parameters.split(';')[0].strip()
+                (content_type, content_type_options) = cgi.parse_header(content_type_with_options)
+                return content_type
+        else:
+            return None
+    
+    @property
+    def declared_charset(self):
+        """Returns the charset declared for this resource, or None if not declared."""
+        if self.is_http:
+            content_type_with_options = self._get_first_value_of_http_header('content-type')
+            if content_type_with_options is None:
+                return None
+            else:
+                (content_type, content_type_options) = cgi.parse_header(content_type_with_options)
+                return content_type_options.get('charset')
         else:
             return None
     
@@ -714,6 +728,11 @@ class ResourceRevision(object):
     def is_html(self):
         """Returns whether this resource is HTML."""
         return self.content_type == 'text/html'
+    
+    @property
+    def is_css(self):
+        """Returns whether this resource is CSS."""
+        return self.content_type == 'text/css'
     
     # === Body ===
     
@@ -737,9 +756,9 @@ class ResourceRevision(object):
         
         This method blocks while parsing the links.
         """
-        return self.html_and_links()[1]
+        return self.document_and_links()[1]
     
-    def html_and_links(self):
+    def document_and_links(self):
         """
         Returns a 2-tuple containing:
         (1) if the resource is HTML, the HTML document, otherwise None;
@@ -749,21 +768,26 @@ class ResourceRevision(object):
         
         This method blocks while parsing the links.
         """
+        from crystal.css import parse_css_and_links
         from crystal.html import parse_html_and_links, create_external_link
         
         # Extract links from HTML, if applicable
-        if not self.is_html or not self.has_body:
-            (html, links) = (None, [])
-        else:
+        if self.is_html and self.has_body:
             with self.open() as body:
-                (html, links) = parse_html_and_links(body, self.declared_content_type)
+                (doc, links) = parse_html_and_links(body, self.declared_charset)
+        elif self.is_css and self.has_body:
+            with self.open() as body:
+                body_bytes = body.read()
+            (doc, links) = parse_css_and_links(body_bytes, self.declared_charset)
+        else:
+            (doc, links) = (None, [])
         
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url
         if redirect_url is not None:
             links.append(create_external_link(redirect_url, self._redirect_title, 'Redirect', True))
         
-        return (html, links)
+        return (doc, links)
     
     # NOTE: Only used from a Python REPL at the moment
     def delete(self):

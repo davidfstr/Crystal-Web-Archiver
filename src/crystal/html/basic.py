@@ -4,7 +4,7 @@ HTML parser implementation that uses regular expressions.
 
 import re
 
-def parse_html_and_links(html_bytes, declared_encoding=None):
+def parse_html_and_links(html_bytes, declared_charset=None):
     if not isinstance(html_bytes, str):
         raise ValueError('This parser implementation only accepts bytestrings.')
     

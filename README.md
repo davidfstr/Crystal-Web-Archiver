@@ -62,8 +62,6 @@ Known Issues
       to the page rewriting algorithm (perhaps to avoid relying on BeautifulSoup)
       should fix this, even for existing projects.
 
-* Links within CSS stylesheets are not detected.
-
 * Memory usage when downloading large groups (>2000 members) is very high.
     * There may be wxPython objects that aren't getting deallocated properly.
       In particular I suspect that the "tree refresh" behavior that occurs
