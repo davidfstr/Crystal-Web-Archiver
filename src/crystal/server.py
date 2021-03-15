@@ -5,6 +5,7 @@ Runs on its own daemon thread.
 
 from datetime import datetime
 from html import escape as html_escape
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import StringIO
 import os
@@ -90,6 +91,26 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @property
     def request_host(self):
         return self.headers.get('Host', 'localhost:%s' % self.server.server_port)
+    
+    def parse_request(self):  # override
+        # If we receive a request line with clearly binary data,
+        # such as from an incoming HTTPS connection,
+        # reject it immediately, before BaseHTTPRequestHandler
+        # tries to print a ton of binary data to the console
+        # as an error.
+        if b'\x00' in self.raw_requestline:
+            # Populate globals that send_error() requires
+            self.command = None
+            self.request_version = self.default_request_version
+            self.close_connection = True
+            self.requestline = '<binary data>'
+            
+            self.send_error(
+                HTTPStatus.BAD_REQUEST,
+                "Bad request version")
+            return False
+        
+        return super().parse_request()
     
     def do_GET(self):
         request_host = self.request_host
