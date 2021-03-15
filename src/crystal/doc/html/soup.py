@@ -99,18 +99,20 @@ def parse_html_and_links(html_bytes, declared_charset=None):
     # <input type='button' onclick='*.location = "*";'>
     # This type of link is used on: fanfiction.net
     for tag in html.findAll(_INPUT_RE, type=_BUTTON_RE, onclick=_ON_CLICK_RE):
-        matcher = _ON_CLICK_RE.match(tag['onclick'])
-        def replace_url_in_old_attr_value(url, old_attr_value):
-            q = matcher.group(2)
-            return matcher.group(1) + ' = ' + q + url + q
-        
-        relative_url = matcher.group(3)
-        title = tag['value'] if 'value' in tag.attrs else None
-        type_title = 'Button'
-        embedded = False
-        links.append(HtmlLink.create_from_complex_tag(
-            tag, 'onclick', type_title, title, embedded,
-            relative_url, replace_url_in_old_attr_value))
+        matcher = _ON_CLICK_RE.search(tag['onclick'])
+        def process_match(matcher):
+            def replace_url_in_old_attr_value(url, old_attr_value):
+                q = matcher.group(2)
+                return matcher.group(1) + ' = ' + q + url + q
+            
+            relative_url = matcher.group(3)
+            title = tag['value'] if 'value' in tag.attrs else None
+            type_title = 'Button'
+            embedded = False
+            links.append(HtmlLink.create_from_complex_tag(
+                tag, 'onclick', type_title, title, embedded,
+                relative_url, replace_url_in_old_attr_value))
+        process_match(matcher)
     
     # <script [type="text/javascript"]>..."http(s)://**"...</script>
     # This type of link is used on: http://*.daportfolio.com/
