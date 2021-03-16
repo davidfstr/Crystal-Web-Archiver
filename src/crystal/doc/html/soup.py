@@ -128,7 +128,7 @@ def parse_html_and_links(html_bytes, declared_charset=None):
                 
                 def replace_url_in_old_attr_value(url, old_attr_value):
                     if q == "'":
-                        new_string_literal = q + json.dumps(url).replace(q, '\\' + q) + q
+                        new_string_literal = q + json.dumps(url)[1:-1].replace(q, '\\' + q) + q
                     else:  # q == '"' or something else
                         new_string_literal = json.dumps(url)
                     
