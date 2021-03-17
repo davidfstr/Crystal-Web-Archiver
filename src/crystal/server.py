@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 from textwrap import dedent
+from typing import Optional
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 from .xthreading import bg_call_later, fg_call_and_wait
 
@@ -27,7 +28,7 @@ def start(project):
     server.project = project
     def bg_task():
         try:
-            print(colorize(_TERM_FG_GREEN, 'Server started on port %s.' % port))
+            print_success('Server started on port %s.' % port)
             server.serve_forever()
         finally:
             server.server_close()
@@ -43,7 +44,7 @@ def get_request_url(archive_url):
 
 # ----------------------------------------------------------------------------------------
 
-_REQUEST_URL_PATH_RE = re.compile(r'^/_/([^/]+)/(.+)$')
+_REQUEST_PATH_IN_ARCHIVE_RE = re.compile(r'^/_/([^/]+)/(.+)$')
 
 # Set of archived headers that may be played back as-is
 _HEADER_WHITELIST = set([
@@ -94,8 +95,20 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return self.server.project
     
     @property
-    def request_host(self):
-        return self.headers.get('Host', 'localhost:%s' % self.server.server_port)
+    def _server_host(self) -> str:
+        return 'localhost:%s' % self.server.server_port
+    
+    # === Request Properties ===
+    
+    @property
+    def request_host(self) -> str:
+        return self.headers.get('Host', self._server_host)
+    
+    @property
+    def referer(self) -> Optional[str]:
+        return self.headers.get('Referer')
+    
+    # === Handle Incoming Request ===
     
     def parse_request(self):  # override
         # If we receive a request line with clearly binary data,
@@ -117,15 +130,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         return super().parse_request()
     
-    def do_GET(self):
+    def do_GET(self):  # override
         request_host = self.request_host
         request_url = 'http://%s%s' % (request_host, self.path)
         
-        request_url_match = _REQUEST_URL_PATH_RE.match(self.path)
-        if request_url_match:
-            (scheme, rest) = request_url_match.groups()
-            archive_url = '%s://%s' % (scheme, rest)
-            
+        # Serve resource revision in archive
+        archive_url = self.get_archive_url(self.path)
+        if archive_url is not None:
             # TODO: Normalize archive url by stripping fragment (and maybe also {params, query}).
             #       This should probably be implemented in a static method on Resource,
             #       as this functionality should also be used by the Resource constructor.
@@ -142,25 +153,50 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_revision(revision, archive_url)
             return
         
-        if self.path == '/':
-            path_parts = urlparse(self.path)
-            if path_parts.path == '/':
-                query_params = parse_qs(path_parts.query)
-            else:
-                query_params = {}
-            
-            self.send_welcome_page(query_params)
+        # Dynamically rewrite incoming link from archived resource revision
+        referer = self.referer  # cache
+        if referer is not None:
+            referer_urlparts = urlparse(referer)
+            if ((referer_urlparts.netloc == '' and referer_urlparts.path.startswith('/')) or 
+                    referer_urlparts.netloc == self._server_host):
+                referer_archive_url = self.get_archive_url(referer_urlparts.path)
+                referer_archive_urlparts = urlparse(referer_archive_url)
+                requested_archive_url = '%s://%s%s' % (
+                    referer_archive_urlparts.scheme,
+                    referer_archive_urlparts.netloc,
+                    self.path,
+                )
+                redirect_url = self.get_request_url(requested_archive_url)
+                
+                print_warning('*** Dynamically rewriting link from %s: %s' % (
+                    referer_archive_url,
+                    requested_archive_url,
+                ))
+                
+                self.send_response(307)
+                self.send_header('Location', redirect_url)
+                self.end_headers()
+                return
+        
+        # Serve Welcome page
+        path_parts = urlparse(self.path)
+        if path_parts.path == '/':
+            self.send_welcome_page(parse_qs(path_parts.query))
             return
-        else:
-            self.send_not_found_page()
-            return
+        
+        # Serve Not Found page
+        self.send_not_found_page()
+        return
     
-    def send_welcome_page(self, query_params):
+    # === Send Page ===
+    
+    def send_welcome_page(self, query_params: dict[str, str]) -> None:
+        # TODO: Is this /?url=** path used anywhere anymore?
         if 'url' in query_params:
             archive_url = query_params['url'][0]
             redirect_url = self.get_request_url(archive_url)
             
-            self.send_response(302)
+            self.send_response(307)
             self.send_header('Location', redirect_url)
             self.end_headers()
             return
@@ -187,7 +223,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             """
         ).lstrip('\n').encode('utf-8'))
     
-    def send_not_found_page(self):
+    def send_not_found_page(self) -> None:
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
@@ -208,7 +244,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             """
         ).lstrip('\n').encode('utf-8'))
     
-    def send_resource_not_in_archive(self, archive_url):
+    def send_resource_not_in_archive(self, archive_url: str) -> None:
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
@@ -232,9 +268,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
             'archive_url': archive_url
         }).encode('utf-8'))
         
-        print(colorize(_TERM_FG_RED, '*** Requested resource not in archive: ' + archive_url))
+        print_error('*** Requested resource not in archive: ' + archive_url)
     
-    def send_revision(self, revision, archive_url):
+    # === Send Revision ===
+    
+    def send_revision(self, revision, archive_url) -> None:
         if revision.error is not None:
             self.send_resource_error(revision.error_dict, archive_url)
             return
@@ -245,7 +283,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_generic_revision(revision)
     
-    def send_resource_error(self, error_dict, archive_url):
+    def send_resource_error(self, error_dict, archive_url) -> None:
         self.send_response(400)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
@@ -282,9 +320,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
             'archive_url': archive_url
         }).encode('utf-8'))
         
-        print(colorize(_TERM_FG_RED, '*** Requested resource was fetched with error: ' + archive_url))
+        print_error('*** Requested resource was fetched with error: ' + archive_url)
     
-    def send_http_revision(self, revision):
+    def send_http_revision(self, revision) -> None:
         metadata = revision.metadata
         
         # Determine Content-Type to send
@@ -320,8 +358,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 self.send_header(name, value)
             else:
                 if name.lower() not in _HEADER_BLACKLIST:
-                    print(colorize(_TERM_FG_YELLOW, 
-                        '*** Ignoring unknown header in archive: %s: %s' % (name, value)))
+                    print_warning(
+                        '*** Ignoring unknown header in archive: %s: %s' % (name, value))
                 continue
         self.end_headers()
         
@@ -333,7 +371,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         else:
             raise AssertionError()
     
-    def send_generic_revision(self, revision):
+    def send_generic_revision(self, revision) -> None:
         # Determine what Content-Type to send
         sender = self.send_revision_body(revision)
         content_type_with_options = (
@@ -357,7 +395,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         else:
             raise AssertionError()
     
-    def send_revision_body(self, revision):
+    def send_revision_body(self, revision) -> None:
         assert revision.has_body
         
         (doc, links, content_type_with_options) = revision.document_and_links()
@@ -390,11 +428,23 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 # Browser did disconnect early
                 return
     
-    def get_request_url(self, archive_url):
+    # === URL Transformation ===
+    
+    @staticmethod
+    def get_archive_url(request_path: str) -> Optional[str]:
+        match = _REQUEST_PATH_IN_ARCHIVE_RE.match(request_path)
+        if match:
+            (scheme, rest) = match.groups()
+            archive_url = '%s://%s' % (scheme, rest)
+            return archive_url
+        else:
+            return None
+    
+    def get_request_url(self, archive_url: str) -> str:
         return _RequestHandler.get_request_url_with_host(archive_url, self.request_host)
     
     @staticmethod
-    def get_request_url_with_host(archive_url, request_host):
+    def get_request_url_with_host(archive_url: str, request_host: str) -> str:
         """
         Given the absolute URL of a resource, returns the URL that should be used to
         request it from the archive server.
@@ -417,11 +467,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
         request_url = urlunparse(request_url_parts)
         return request_url
     
-    def log_error(self, format, *args):
-        print(colorize(_TERM_FG_RED, format % args))
+    # === Logging ===
     
-    def log_message(self, format, *args):
-        print(colorize(_TERM_FG_CYAN, format % args))
+    def log_error(self, format, *args):  # override
+        print_error(format % args)
+    
+    def log_message(self, format, *args):  # override
+        print_info(format % args)
         
 # ----------------------------------------------------------------------------------------
 # Terminal Colors
@@ -444,5 +496,17 @@ _TERM_RESET =            '\033[0m'
 
 def colorize(color_code, str_value):
     return (color_code + str_value + _TERM_RESET) if _USE_COLORS else str_value
+
+def print_success(message: str) -> None:
+    print(colorize(_TERM_FG_GREEN, message))
+
+def print_error(message: str) -> None:
+    print(colorize(_TERM_FG_RED, message))
+
+def print_warning(message: str) -> None:
+    print(colorize(_TERM_FG_YELLOW, message))
+
+def print_info(message: str) -> None:
+    print(colorize(_TERM_FG_CYAN, message))
 
 # ------------------------------------------------------------------------------
