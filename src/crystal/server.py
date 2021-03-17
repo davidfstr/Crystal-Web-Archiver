@@ -43,7 +43,7 @@ def get_request_url(archive_url):
 
 # ----------------------------------------------------------------------------------------
 
-_SCHEME_REST_RE = re.compile(r'^/([^/]+)/(.+)$')
+_REQUEST_URL_PATH_RE = re.compile(r'^/_/([^/]+)/(.+)$')
 
 # Set of archived headers that may be played back as-is
 _HEADER_WHITELIST = set([
@@ -121,8 +121,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
         request_host = self.request_host
         request_url = 'http://%s%s' % (request_host, self.path)
         
-        scheme_rest_match = _SCHEME_REST_RE.match(self.path)
-        if not scheme_rest_match:
+        request_url_match = _REQUEST_URL_PATH_RE.match(self.path)
+        if not request_url_match:
             path_parts = urlparse(self.path)
             if path_parts.path == '/':
                 query_params = parse_qs(path_parts.query)
@@ -131,7 +131,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             
             self.send_welcome_page(query_params)
             return
-        (scheme, rest) = scheme_rest_match.groups()
+        (scheme, rest) = request_url_match.groups()
         archive_url = '%s://%s' % (scheme, rest)
         
         # TODO: Normalize archive url by stripping fragment (and maybe also {params, query}).
@@ -376,7 +376,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         request_scheme = 'http'
         request_netloc = request_host
-        request_path = '%s/%s%s' % (
+        request_path = '_/%s/%s%s' % (
             archive_url_parts.scheme,
             archive_url_parts.netloc, archive_url_parts.path)
         request_params = archive_url_parts.params
