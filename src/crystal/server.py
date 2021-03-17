@@ -50,6 +50,7 @@ _REQUEST_PATH_IN_ARCHIVE_RE = re.compile(r'^/_/([^/]+)/(.+)$')
 _HEADER_WHITELIST = set([
     'date',
     'vary',
+    'content-language',
     'content-type',
     'server',
     'last-modified',
@@ -59,29 +60,79 @@ _HEADER_WHITELIST = set([
     'x-content-type-options',
     'x-frame-options',
     
-    # AWS Cloudfront
+    # CORS
+    'access-control-allow-origin',
+    'access-control-allow-methods',
+    'access-control-expose-headers',
+    
+    # Timing
+    'timing-allow-origin',  # enable cross-origin access to timing API
+    'server-timing',
+    
+    # Vendor-specific: AWS Cloudfront
     'x-amz-cf-id',
     'x-amz-cf-pop',
     'x-amz-storage-class',
+    
+    # Vendor-specific: Cloudflare
+    'cf-cache-status',
+    'cf-ray',
+    'cf-request-id',
+    
+    # Vendor-specific: Google Cloud
+    'x-goog-generation',
+    'x-goog-hash',
+    'x-goog-metageneration',
+    'x-goog-storage-class',
+    'x-goog-stored-content-encoding',
+    'x-goog-stored-content-length',
+    'x-guploader-uploadid',
+    
+    # Vendor-specific: Fastly
+    'detected-user-agent',
+    'normalized-user-agent',
+    'request_came_from_shield',
 ])
 # Set of archived headers known to cause problems if blindly played back
 _HEADER_BLACKLIST = set([
-    # Connection-related headers
+    # Connection
     'transfer-encoding',# overridden by this web server
     'content-length',   # overridden by this web server
     'accept-ranges',    # partial content ranges not supported by this server
     'connection',       # usually: keep-alive
     'via',              # this web server is not a proxy
     
-    # Cache-related headers
+    # Cache
     'cache-control',
     'age',
     'expires',
     
-    # Cookie-related headers
+    # Cookie
+    'set-cookie',       # don't allow cookies to be set by archived site
     'p3p',              # never allow third party cookies
     
-    # Ignored non-problematic headers:
+    # HTTPS & Certificates
+    'expect-ct',        # don't require Certificate Transparency
+    'strict-transport-security',  # don't require HTTPS
+    
+    # Logging
+    'nel',              # don't enable network request logging
+    'report-to',        # don't enable Content Security Policy logging
+    
+    # Referer
+    'referrer-policy',  # don't omit referer because used to dynamically rewrite links
+    
+    # Protocol Upgrades
+    'alt-svc',          # we don't support HTTP/2, QUIC, or any alternate protocol advertised by this
+    
+    # X-RateLimit
+    'x-ratelimit-limit',
+    'x-ratelimit-remaining',
+    'x-ratelimit-count',
+    'x-ratelimit-reset',
+    
+    # Ignored non-problematic headers
+    # TODO: Consider moving these headers to the _HEADER_WHITELIST
     'x-powered-by',
     'x-monk',
     'x-cache',
