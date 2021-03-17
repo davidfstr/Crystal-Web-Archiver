@@ -13,7 +13,7 @@ import re
 import shutil
 from textwrap import dedent
 from typing import Optional
-from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
+from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 from .xthreading import bg_call_later, fg_call_and_wait
 
 _SERVER_PORT = 2797
@@ -188,6 +188,22 @@ class _RequestHandler(BaseHTTPRequestHandler):
         # Serve resource revision in archive
         archive_url = self.get_archive_url(self.path)
         if archive_url is not None:
+            # Fill in missing '/' path if needed
+            archive_urlparts = urlparse(archive_url)
+            if archive_urlparts.path == '':
+                archive_url_with_path = urlunparse(ParseResult(
+                    scheme=archive_urlparts.scheme,
+                    netloc=archive_urlparts.netloc,
+                    path='/',
+                    params=archive_urlparts.params,
+                    query=archive_urlparts.query,
+                    fragment=archive_urlparts.fragment,
+                ))
+                redirect_url = self.get_request_url(archive_url_with_path)
+                
+                self.send_redirect(redirect_url)
+                return
+            
             # TODO: Normalize archive url by stripping fragment (and maybe also {params, query}).
             #       This should probably be implemented in a static method on Resource,
             #       as this functionality should also be used by the Resource constructor.
@@ -224,9 +240,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     requested_archive_url,
                 ))
                 
-                self.send_response(307)
-                self.send_header('Location', redirect_url)
-                self.end_headers()
+                self.send_redirect(redirect_url)
                 return
         
         # Serve Welcome page
@@ -247,9 +261,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             archive_url = query_params['url'][0]
             redirect_url = self.get_request_url(archive_url)
             
-            self.send_response(307)
-            self.send_header('Location', redirect_url)
-            self.end_headers()
+            self.send_redirect(redirect_url)
             return
         
         self.send_response(200)
@@ -320,6 +332,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
         }).encode('utf-8'))
         
         print_error('*** Requested resource not in archive: ' + archive_url)
+    
+    def send_redirect(self, redirect_url: str) -> None:
+        self.send_response(307)
+        self.send_header('Location', redirect_url)
+        self.end_headers()
     
     # === Send Revision ===
     
