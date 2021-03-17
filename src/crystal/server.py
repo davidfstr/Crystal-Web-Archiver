@@ -122,7 +122,27 @@ class _RequestHandler(BaseHTTPRequestHandler):
         request_url = 'http://%s%s' % (request_host, self.path)
         
         request_url_match = _REQUEST_URL_PATH_RE.match(self.path)
-        if not request_url_match:
+        if request_url_match:
+            (scheme, rest) = request_url_match.groups()
+            archive_url = '%s://%s' % (scheme, rest)
+            
+            # TODO: Normalize archive url by stripping fragment (and maybe also {params, query}).
+            #       This should probably be implemented in a static method on Resource,
+            #       as this functionality should also be used by the Resource constructor.
+            resource = self.project.get_resource(archive_url)
+            if not resource:
+                self.send_resource_not_in_archive(archive_url)
+                return
+            
+            revision = fg_call_and_wait(resource.default_revision)
+            if not revision:
+                self.send_resource_not_in_archive(archive_url)
+                return
+            
+            self.send_revision(revision, archive_url)
+            return
+        
+        if self.path == '/':
             path_parts = urlparse(self.path)
             if path_parts.path == '/':
                 query_params = parse_qs(path_parts.query)
@@ -131,23 +151,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
             
             self.send_welcome_page(query_params)
             return
-        (scheme, rest) = request_url_match.groups()
-        archive_url = '%s://%s' % (scheme, rest)
-        
-        # TODO: Normalize archive url by stripping fragment (and maybe also {params, query}).
-        #       This should probably be implemented in a static method on Resource,
-        #       as this functionality should also be used by the Resource constructor.
-        resource = self.project.get_resource(archive_url)
-        if not resource:
-            self.send_resource_not_in_archive(archive_url)
+        else:
+            self.send_not_found_page()
             return
-        
-        revision = fg_call_and_wait(resource.default_revision)
-        if not revision:
-            self.send_resource_not_in_archive(archive_url)
-            return
-        
-        self.send_revision(revision, archive_url)
     
     def send_welcome_page(self, query_params):
         if 'url' in query_params:
@@ -176,6 +182,27 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 <form action="/">
                     URL: <input type="text" name="url" value="http://" /><input type="submit" value="Go" />
                 </form>
+            </body>
+            </html>
+            """
+        ).lstrip('\n').encode('utf-8'))
+    
+    def send_not_found_page(self):
+        self.send_response(404)
+        self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+        
+        self.wfile.write(dedent(
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8" />
+                <title>Not Found | Crystal Web Archiver</title>
+            </head>
+            <body>
+                <p>There is no page here.</>
+                <p>Return to <a href="/">home page</a>?</p>
             </body>
             </html>
             """
