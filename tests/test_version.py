@@ -1,5 +1,6 @@
 from crystal import __version__
 import os
+import pytest
 import re
 
 
@@ -16,3 +17,8 @@ def test_version_in_pyproject_toml_is_consistent_with_package_version():
     assert m is not None, 'Unable to find version in pyproject.toml'
     pyproject_toml_version = m.group(1)
     assert __version__ == pyproject_toml_version
+
+
+@pytest.mark.skip('not yet automated')
+def test_version_and_copyright_in_mac_binary_is_correct():
+    pass
