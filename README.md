@@ -43,11 +43,6 @@ Known Issues
   the source of a group cannot be changed in the UI.
     * As a workaround, create a new group with the desired changes and delete the old group.
 
-* Links to Twitter (ex: "https://twitter.com/#!/THEMAnimeReview") are not followed
-  correctly. This is because the fragment component of URLs (ex: "#!/THEMAnimeReview")
-  are treated as insignificant and only the base URL (ex: "https://twitter.com/") is
-  downloaded. This behavior is consistent with 99% of URLs used on other sites.
-
 * robots.txt is not obeyed.
     * In practice this isn't a big issue since the user is required to explicitly define
       which pages should be downloaded.
