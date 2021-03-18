@@ -55,13 +55,6 @@ Known Issues
       to avoid taxing site infrastructure and to avoid unintentional denial of service
       attacks.
 
-* Pages with frames (that use the `<frameset>` tag) are not presented to the user correctly,
-  due to BeautifulSoup's tendency to incorrectly insert closing `</frameset>` tags all
-  over the place.
-    * Such pages are still downloaded correctly (and links are followed), so changes
-      to the page rewriting algorithm (perhaps to avoid relying on BeautifulSoup)
-      should fix this, even for existing projects.
-
 * Memory usage when downloading large groups (>2000 members) is very high.
     * There may be wxPython objects that aren't getting deallocated properly.
       In particular I suspect that the "tree refresh" behavior that occurs
