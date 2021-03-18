@@ -65,6 +65,10 @@ Known Issues
 * Projects (and the underlying databases) are manipulated on the UI thread.
   Occasionally this causes the UI to become unresponsive for a few seconds.
 
+* Large projects (with 10,000+ resources) take a few seconds to open
+  because all project resource URLs are loaded into memory immediately.
+  Also no feedback is displayed while opening.
+
 * IE 8 under Windows 7 crashes when trying to view some downloaded sites, such as
   xkcd.com. I recommend using a different default browser, such as Chrome.
 
