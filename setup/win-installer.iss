@@ -1,12 +1,12 @@
 [Setup]
 AppName=Crystal Web Archiver
-AppVersion=1.0
+AppVersion=1.1.0b
 DefaultDirName={pf}\Crystal Web Archiver
 DefaultGroupName=Crystal Web Archiver
 UninstallDisplayIcon={app}\Crystal Web Archiver.exe
 Compression=lzma2
 SolidCompression=yes
-OutputBaseFilename=crystal-win-1.0
+OutputBaseFilename=crystal-win-1.1.0b
 OutputDir=dist-win
 DisableProgramGroupPage=yes
 
