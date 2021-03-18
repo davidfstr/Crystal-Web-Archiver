@@ -240,32 +240,34 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     requested_archive_url,
                 ))
                 
-                self.send_redirect(redirect_url)
+                self.send_redirect(redirect_url, vary_referer=True)
                 return
         
         # Serve Welcome page
         path_parts = urlparse(self.path)
         if path_parts.path == '/':
-            self.send_welcome_page(parse_qs(path_parts.query))
+            self.send_welcome_page(parse_qs(path_parts.query), vary_referer=True)
             return
         
         # Serve Not Found page
-        self.send_not_found_page()
+        self.send_not_found_page(vary_referer=True)
         return
     
     # === Send Page ===
     
-    def send_welcome_page(self, query_params: dict[str, str]) -> None:
+    def send_welcome_page(self, query_params: dict[str, str], *, vary_referer: bool) -> None:
         # TODO: Is this /?url=** path used anywhere anymore?
         if 'url' in query_params:
             archive_url = query_params['url'][0]
             redirect_url = self.get_request_url(archive_url)
             
-            self.send_redirect(redirect_url)
+            self.send_redirect(redirect_url, vary_referer=vary_referer)
             return
         
         self.send_response(200)
         self.send_header('Content-Type', 'text/html')
+        if vary_referer:
+            self.send_header('Vary', 'Referer')
         self.end_headers()
         
         self.wfile.write(dedent(
@@ -286,9 +288,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
             """
         ).lstrip('\n').encode('utf-8'))
     
-    def send_not_found_page(self) -> None:
+    def send_not_found_page(self, *, vary_referer: bool) -> None:
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
+        if vary_referer:
+            self.send_header('Vary', 'Referer')
         self.end_headers()
         
         self.wfile.write(dedent(
@@ -333,9 +337,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         print_error('*** Requested resource not in archive: ' + archive_url)
     
-    def send_redirect(self, redirect_url: str) -> None:
+    def send_redirect(self, redirect_url: str, *, vary_referer: bool=False) -> None:
         self.send_response(307)
         self.send_header('Location', redirect_url)
+        if vary_referer:
+            self.send_header('Vary', 'Referer')
         self.end_headers()
     
     # === Send Revision ===
