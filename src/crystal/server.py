@@ -3,6 +3,8 @@ Implements an HTTP server that serves resource revisions from a Project.
 Runs on its own daemon thread.
 """
 
+from crystal.model import Resource
+from crystal.task import schedule_forever
 from datetime import datetime
 from html import escape as html_escape
 from http import HTTPStatus
@@ -209,8 +211,28 @@ class _RequestHandler(BaseHTTPRequestHandler):
             #       as this functionality should also be used by the Resource constructor.
             resource = self.project.get_resource(archive_url)
             if not resource:
-                self.send_resource_not_in_archive(archive_url)
-                return
+                matching_rg = None
+                for rg in self.project.resource_groups:
+                    if rg.contains_url(archive_url):
+                        matching_rg = rg
+                        break
+                
+                # If the previously undiscovered resource is a member of an
+                # existing resource group, presume that the user is interested 
+                # in downloading it immediately upon access
+                if matching_rg is not None:
+                    print_warning('*** Dynamically downloading new resource in group %s: %s' % (
+                        matching_rg.name,
+                        archive_url,
+                    ))
+                    
+                    # Download resource immediately
+                    resource = fg_call_and_wait(lambda: Resource(self.project, archive_url))
+                    resource.download().result()
+                    # (continue to serve downloaded resource revision)
+                else:
+                    self.send_resource_not_in_archive(archive_url)
+                    return
             
             revision = fg_call_and_wait(resource.default_revision)
             if not revision:

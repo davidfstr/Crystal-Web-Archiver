@@ -926,8 +926,11 @@ class ResourceGroup(object):
         
         return re.compile(r'^' + patstr + r'$')
     
-    def __contains__(self, resource):
-        return self._url_pattern_re.match(resource.url) is not None
+    def __contains__(self, resource) -> bool:
+        return self.contains_url(resource.url)
+    
+    def contains_url(self, resource_url: str) -> bool:
+        return self._url_pattern_re.match(resource_url) is not None
     
     # TODO: Make this a property if it is ever optimized to O(1)
     def members(self):
