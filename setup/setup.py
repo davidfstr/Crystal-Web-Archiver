@@ -20,14 +20,11 @@ See the tutorial for py2exe for more information about this DLL.
 from ez_setup import use_setuptools
 use_setuptools()
 
-from crystal import __version__
-import datetime
 from setuptools import setup
 import sys
 
-APP_NAME = 'Crystal Web Archiver'
-VERSION_STRING = __version__
-COPYRIGHT_STRING = f'Copyright © 2011-{datetime.date.today().year} David Foster. All Rights Reserved'
+with open('./setup_settings.py', 'r') as f:
+    exec(f.read())
 
 if sys.platform == 'darwin':
     # If run without args, build application

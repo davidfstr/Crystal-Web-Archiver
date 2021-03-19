@@ -25,23 +25,29 @@ def test_version_and_copyright_in_mac_binary_is_correct():
     pass
 
 
-def test_version_in_windows_binary_is_correct():
+def test_version_and_copyright_in_windows_binary_is_correct():
     iss_filepath = os.path.join(
         os.path.dirname(__file__), '..', 'setup', 'win-installer.iss')
     with open(iss_filepath, 'r') as f:
         iss = f.read()
+    
+    setup_settings_filepath = os.path.join(
+        os.path.dirname(__file__), '..', 'setup', 'setup_settings.py')
+    with open(setup_settings_filepath, 'r') as f:
+        exec(f.read())
+    COPYRIGHT_STRING_ = locals()['COPYRIGHT_STRING']  # HACK
     
     m = re.search(r'\nAppVersion=(.*)\n', iss)
     assert m is not None
     app_version = m.group(1)
     assert __version__ == app_version
     
+    m = re.search(r'\nAppCopyright=(.*)\n', iss)
+    assert m is not None
+    app_copyright = m.group(1)
+    assert COPYRIGHT_STRING_.replace('©', '(C)') == app_copyright
+    
     m = re.search(r'\nOutputBaseFilename=(.*)\n', iss)
     assert m is not None
     output_base_filename = m.group(1)
     assert f'crystal-win-{__version__}' == output_base_filename
-
-
-@pytest.mark.skip('fails: not yet implemented')
-def test_copyright_in_windows_binary_is_correct():
-    pass
