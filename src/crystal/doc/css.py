@@ -21,17 +21,18 @@ def parse_css_and_links(
     links = []
     for rule in rules:
         if isinstance(rule, ast.QualifiedRule) or isinstance(rule, ast.AtRule):
-            for token in rule.content:
-                # url(**)
-                if isinstance(token, ast.URLToken):
-                    links.append(UrlTokenLink(token))
-                
-                # url("**")
-                elif isinstance(token, ast.FunctionBlock):
-                    if (token.lower_name == 'url' and 
-                            len(token.arguments) == 1 and 
-                            isinstance(token.arguments[0], ast.StringToken)):
-                        links.append(UrlFunctionLink(token.arguments[0]))
+            if rule.content is not None:  # has been observed as None in the wild sometimes
+                for token in rule.content:
+                    # url(**)
+                    if isinstance(token, ast.URLToken):
+                        links.append(UrlTokenLink(token))
+                    
+                    # url("**")
+                    elif isinstance(token, ast.FunctionBlock):
+                        if (token.lower_name == 'url' and 
+                                len(token.arguments) == 1 and 
+                                isinstance(token.arguments[0], ast.StringToken)):
+                            links.append(UrlFunctionLink(token.arguments[0]))
     
     return (CssDocument(rules), links)
 
