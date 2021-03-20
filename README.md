@@ -103,6 +103,17 @@ The design is intended for the future addition of the following features:
       versions of the same resource to be tracked over time.
 
 
+Contributing
+------------
+
+If you'd like to request a feature or report a bug, please create
+[a new GitHub Issue](https://github.com/davidfstr/Crystal-Web-Archiver/issues/new).
+
+To build new binaries for Mac or Windows, follow the instructions at <COMPILING.txt>.
+
+To run tests, run `poetry run pytest` in Terminal (Mac) or Command Prompt (Windows).
+
+
 Related Projects
 ----------------
 

@@ -14,7 +14,7 @@ import os
 import re
 import shutil
 from textwrap import dedent
-from typing import Optional
+from typing import Dict, Optional
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 from .xthreading import bg_call_later, fg_call_and_wait
 
@@ -277,7 +277,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # === Send Page ===
     
-    def send_welcome_page(self, query_params: dict[str, str], *, vary_referer: bool) -> None:
+    def send_welcome_page(self, query_params: Dict[str, str], *, vary_referer: bool) -> None:
         # TODO: Is this /?url=** path used anywhere anymore?
         if 'url' in query_params:
             archive_url = query_params['url'][0]

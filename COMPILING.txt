@@ -3,26 +3,39 @@ Building a Package for Distribution
 
 Mac OS X 10.7 - 10.14:
 1. Install the prerequisites:
-    * Python 3.9.x
+    * Python 3.8.x, from Mac installer on python.org
     * Poetry: https://python-poetry.org/
+        $ curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
 2. Run the following commands in a Terminal window from this directory:
     $ poetry install
     $ cd setup
     $ ./make-mac.sh
 3. The output disk image will be in the setup/dist-mac directory.
 
-Windows XP, 7, 8, 10:
+Windows 7, 8, 10:
 1. Install the prerequisites:
-    * Python 3.9.x
+    * Python 3.8.x, from Windows installer on python.org
+        - Do select the option to alter the system PATH.
+        - Ensure Python works in Command Prompt:
+            $ python -V
     * Poetry: https://python-poetry.org/
-    * Inno Setup 5
-2. Copy the "MSVCP90.dll" to C:\WINDOWS\system32. The "MSVCR90.dll" may also work.
-   This DLL can be obtained from Visual Studio 2008 or Google.
-3. Run the following commands in a Command Prompt window from this directory:
+        - NOTE: Neither of the following official instructions work on Windows 7:
+            1. (Invoke-WebRequest -Uri https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py -UseBasicParsing).Content | python -
+            2. $ python -m pip install --user poetry
+        - Manually download the get-poetry.py script
+        - Run the get-poetry.py script in Command Prompt:
+            $ python get-poetry.py
+                - NOTE: It claims to alter the system PATH but does not actually do it.
+        - Add to the end of your ';'-separated system PATH:
+            C:\Users\__YOUR_USERNAME__\.poetry\bin
+        - Ensure Poetry works in Command Prompt:
+            $ poetry --version
+    * Inno Setup 5 (Unicode version), from https://files.jrsoftware.org/is/5/
+2. Run the following commands in a Command Prompt window from this directory:
     $ poetry install
     $ cd setup
     $ make-win.bat
-4. The output installer will be in the setup/dist-win directory.
+3. The output installer will be in the setup/dist-win directory.
 
 Linux:
 * Figure it out and let me know.

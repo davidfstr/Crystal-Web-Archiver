@@ -23,8 +23,8 @@ use_setuptools()
 from setuptools import setup
 import sys
 
-APP_NAME = 'Crystal Web Archiver'
-VERSION_STRING = '1.0'
+with open('./setup_settings.py', 'r') as f:
+    exec(f.read())
 
 if sys.platform == 'darwin':
     # If run without args, build application
@@ -57,7 +57,7 @@ if sys.platform == 'darwin':
         'CFBundleSignature': 'CrWA',
         'CFBundleVersion': VERSION_STRING,
         'LSPrefersPPC': FORCE_32_BIT,
-        'NSHumanReadableCopyright': u'Copyright © 2010-2011 David Foster',
+        'NSHumanReadableCopyright': COPYRIGHT_STRING,
     }
     if FORCE_32_BIT: PLIST['LSArchitecturePriority'] = ['i386']
 
