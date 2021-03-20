@@ -169,7 +169,7 @@ modulegraph = ">=0.17"
 
 [[package]]
 name = "py2exe"
-version = "0.10.2.1"
+version = "0.10.3.0"
 description = "Build standalone executables for Windows"
 category = "main"
 optional = false
@@ -219,7 +219,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
 name = "soupsieve"
-version = "2.2"
+version = "2.2.1"
 description = "A modern CSS selector implementation for Beautiful Soup."
 category = "main"
 optional = false
@@ -271,8 +271,8 @@ six = "*"
 
 [metadata]
 lock-version = "1.1"
-python-versions = ">=3.9,<3.10"
-content-hash = "73773eb57c5afd2d0d6ecd6680d5ff75e509ab619c28cc61df0a52ca9533b3db"
+python-versions = ">=3.8,<3.9"
+content-hash = "7fca482ccc67bcb152ac55faf8796078325999de42fdcce6017f63b8a99825d7"
 
 [metadata.files]
 altgraph = [
@@ -396,15 +396,15 @@ py2app = [
     {file = "py2app-0.23.tar.gz", hash = "sha256:772f7b30cac260537ecfada2801d1e9833010caf6d0439e80e64e1a558718d39"},
 ]
 py2exe = [
-    {file = "py2exe-0.10.2.1-cp36-none-win32.whl", hash = "sha256:d16f41d42e879358419568f841adede0614ddb7bf705b600a39c228beacef323"},
-    {file = "py2exe-0.10.2.1-cp36-none-win_amd64.whl", hash = "sha256:fac69943e20f5d2c41546842255070a8a70c255978dba40e81d4bfcf346bd7fc"},
-    {file = "py2exe-0.10.2.1-cp37-none-win32.whl", hash = "sha256:e200f4b65f0595e0a2116450fcf891500e557700a83997d64cb7645e07dca013"},
-    {file = "py2exe-0.10.2.1-cp37-none-win_amd64.whl", hash = "sha256:e041da051fa98a130702ad68ffc36160f7a1413001e07abafe0156ddac95ffc6"},
-    {file = "py2exe-0.10.2.1-cp38-none-win32.whl", hash = "sha256:9c05a83e87544c8b10561a5ff328743826528eea4b5be2394f9b1d31916b7b26"},
-    {file = "py2exe-0.10.2.1-cp38-none-win_amd64.whl", hash = "sha256:4fe9871db013565b9e7aa52644d11495769047f35a436a28d88c51347ca2679d"},
-    {file = "py2exe-0.10.2.1-cp39-none-win32.whl", hash = "sha256:de056fb4b8f0fe6674091a58c78628a34f24fe4fa0af3b02e2ba4e74320a4f95"},
-    {file = "py2exe-0.10.2.1-cp39-none-win_amd64.whl", hash = "sha256:8bc13bd5e219913454fdb6094ef564315bb2eab3d4f4199b132467e06430c7f6"},
-    {file = "py2exe-0.10.2.1.tar.gz", hash = "sha256:e5dc26fd1cf9d6c8f0150b633f5ed6c906a62ddaf3d8e3b7068b34249cfd0779"},
+    {file = "py2exe-0.10.3.0-cp36-cp36m-win32.whl", hash = "sha256:48b124f6ea51604fe66c6d5670321037a1214e297b8ff02d504ff2e101b8be27"},
+    {file = "py2exe-0.10.3.0-cp36-cp36m-win_amd64.whl", hash = "sha256:08bbc4fe566b5f60f55f03abc92c8aecebf3fb5fc2215196779da6544870bd1b"},
+    {file = "py2exe-0.10.3.0-cp37-cp37m-win32.whl", hash = "sha256:54b65798888679ceb7f1758124268179c3922af08002c83dedc1cc3f346361af"},
+    {file = "py2exe-0.10.3.0-cp37-cp37m-win_amd64.whl", hash = "sha256:336fcdcdcde023ca83781c27157a649b197ad61b454941ad0c35a284122937fe"},
+    {file = "py2exe-0.10.3.0-cp38-cp38-win32.whl", hash = "sha256:e6c3dd6224c36b541d77eab42cf6131ebea92797b5063a4d56cd631f412adf18"},
+    {file = "py2exe-0.10.3.0-cp38-cp38-win_amd64.whl", hash = "sha256:8d57b787af2a987cb5273701d7ffc3ca0372b72c2b8953b0b580333bdd6a7850"},
+    {file = "py2exe-0.10.3.0-cp39-cp39-win32.whl", hash = "sha256:43807260b60e66d2533b48fc165f90abf00c2d5dd50740af43be4ed72a0bfcc3"},
+    {file = "py2exe-0.10.3.0-cp39-cp39-win_amd64.whl", hash = "sha256:1372cf49edb420bd8a26babd983ef0461fd29eaaae2e707b2be2792735c34deb"},
+    {file = "py2exe-0.10.3.0.tar.gz", hash = "sha256:1e7d53c514c072ce3e6454a744f17a0b1796ea8f00cf8c4714c77e232fc797fa"},
 ]
 pyparsing = [
     {file = "pyparsing-2.4.7-py2.py3-none-any.whl", hash = "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b"},
@@ -419,8 +419,8 @@ six = [
     {file = "six-1.15.0.tar.gz", hash = "sha256:30639c035cdb23534cd4aa2dd52c3bf48f06e5f4a941509c8bafd8ce11080259"},
 ]
 soupsieve = [
-    {file = "soupsieve-2.2-py3-none-any.whl", hash = "sha256:d3a5ea5b350423f47d07639f74475afedad48cf41c0ad7a82ca13a3928af34f6"},
-    {file = "soupsieve-2.2.tar.gz", hash = "sha256:407fa1e8eb3458d1b5614df51d9651a1180ea5fedf07feb46e45d7e25e6d6cdd"},
+    {file = "soupsieve-2.2.1-py3-none-any.whl", hash = "sha256:c2c1c2d44f158cdbddab7824a9af8c4f83c76b1e23e049479aa432feb6c4c23b"},
+    {file = "soupsieve-2.2.1.tar.gz", hash = "sha256:052774848f448cf19c7e959adf5566904d525f33a3f8b6ba6f6f8f26ec7de0cc"},
 ]
 tinycss2 = [
     {file = "tinycss2-1.1.0-py3-none-any.whl", hash = "sha256:0353b5234bcaee7b1ac7ca3dea7e02cd338a9f8dcbb8f2dcd32a5795ec1e5f9a"},

@@ -31,7 +31,8 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.10"
+# NOTE: Python 3.8 is the last Python to support Windows 7
+python = ">=3.8,<3.9"
 wxPython = "^4.1.1"
 beautifulsoup4 = "^4.9.3"
 py2app = { version = "^0.23", markers = "sys_platform == 'darwin'" }

@@ -1,8 +1,8 @@
 #!/bin/sh
 
-VERSION=`python3 -c 'import crystal; print(crystal.__version__)'`
+VERSION=`python -c 'import sys; sys.path.append("../src"); import crystal; print(crystal.__version__)'`
 
 rm -rf build dist dist-mac
-python setup.py py2app
+poetry run python setup.py py2app
 mkdir dist-mac
 hdiutil create -srcfolder dist -volname "Crystal Web Archiver" -format UDZO dist-mac/crystal-mac-$VERSION.dmg
