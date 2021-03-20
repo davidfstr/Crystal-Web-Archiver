@@ -19,7 +19,7 @@ _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
 _QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")(https?:\\?/\\?/[^"]+)"|(')(https?:\\?/\\?/[^']+)')''')
 _HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
-_PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg)$')
+_PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
 
 def parse_html_and_links(html_bytes, declared_charset=None):
     try:
