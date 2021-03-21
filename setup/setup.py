@@ -16,10 +16,6 @@ following error is encountered:
 See the tutorial for py2exe for more information about this DLL.
 """
 
-# Install 'setuptools' package if necessary
-from ez_setup import use_setuptools
-use_setuptools()
-
 from setuptools import setup
 import sys
 
