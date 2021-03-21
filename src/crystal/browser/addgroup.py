@@ -110,7 +110,8 @@ class AddGroupDialog(object):
                 matching_urls.append(r.url)
         
         self.url_list.Clear()
-        self.url_list.InsertItems(sorted(matching_urls), 0)
+        if len(matching_urls) > 0:  # avoid warning on Mac
+            self.url_list.InsertItems(sorted(matching_urls), 0)
     
     # === Events ===
     
