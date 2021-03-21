@@ -105,7 +105,8 @@ def _prompt_for_project():
         title='Select a Project',
         style=wx.YES_NO,
         yes_label='Open',
-        no_label='Create')
+        no_label='Create',
+        escape_is_cancel=True)
     choice = dialog.ShowModal()
     
     try:
@@ -113,7 +114,7 @@ def _prompt_for_project():
             return _prompt_to_open_project(dialog)
         elif choice == wx.ID_NO:
             return _prompt_to_create_project(dialog)
-        else:
+        else:  # wx.ID_CANCEL
             exit()
     finally:
         dialog.Destroy()

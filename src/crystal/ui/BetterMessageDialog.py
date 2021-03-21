@@ -6,7 +6,7 @@ class BetterMessageDialog(wx.Dialog):
     """
     Implements a version of wx.MessageDialog that allows the button names to be customized.
     """
-    def __init__(self, parent, message, title, style, yes_label=None, no_label=None):
+    def __init__(self, parent, message, title, style, yes_label=None, no_label=None, escape_is_cancel=False):
         """
         Arguments:
         parent -- parent window.
@@ -37,6 +37,9 @@ class BetterMessageDialog(wx.Dialog):
             self.FindWindowById(wx.ID_YES).SetLabel(yes_label)
         if no_label is not None:
             self.FindWindowById(wx.ID_NO).SetLabel(no_label)
+        
+        if escape_is_cancel:
+            self.SetEscapeId(wx.ID_CANCEL)
         
         self.Fit()
     
