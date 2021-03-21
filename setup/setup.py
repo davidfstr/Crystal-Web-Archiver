@@ -35,8 +35,6 @@ if sys.platform == 'darwin':
             'This script requires py2app to be installed. ' + 
             'Download it from http://undefined.org/python/py2app.html')
     
-    FORCE_32_BIT = True     # wxPython 2.8.11.0 (mac-unicode) / Carbon (32-bit only)
-
     PLIST = {
         'CFBundleDocumentTypes': [
             # Associate application with .crystalproj files
@@ -52,10 +50,8 @@ if sys.platform == 'darwin':
         'CFBundleShortVersionString': VERSION_STRING,
         'CFBundleSignature': 'CrWA',
         'CFBundleVersion': VERSION_STRING,
-        'LSPrefersPPC': FORCE_32_BIT,
         'NSHumanReadableCopyright': COPYRIGHT_STRING,
     }
-    if FORCE_32_BIT: PLIST['LSArchitecturePriority'] = ['i386']
 
     extra_setup_options = dict(
         setup_requires=['py2app'],
@@ -65,7 +61,6 @@ if sys.platform == 'darwin':
             'argv_emulation': True,
             'iconfile': 'media/AppIconMac.icns',
             'plist': PLIST,
-            'prefer_ppc': FORCE_32_BIT,
         }},
     )
 elif sys.platform == 'win32':
