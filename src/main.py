@@ -7,8 +7,13 @@ Home of the main function, which starts the program.
 #       This would prevent the version-checking code from running.
 #       
 #       Therefore most imports in this file should occur directly within functions.
+import os
 import sys
 from sys import exit
+
+_APP_NAME = 'Crystal Web Archiver'
+_APP_AUTHOR = 'DaFoster'
+
 
 def main(args):
     """
@@ -16,24 +21,23 @@ def main(args):
     """
     _check_environment()
     
-    # If running as Windows executable, redirect stdout and stderr
-    # to file, since these don't exist for normal Windows programs
-    import sys
-    if hasattr(sys, 'frozen') and sys.frozen == 'windows_exe':
-        try:
-            sys.stdout = open('stdout.log', 'w')
-            sys.stderr = open('stderr.log', 'w')
-        except:
-            # Fallback on py2exe's default behavior of writing
-            # the stderr to its own logfile in the same directory,
-            # albeit with a "See the logfile for details" message
-            # upon application exit.
-            # 
-            # Failure here is most likely due to running from a locked volume.
-            pass
+    # If running as Mac app or as Windows executable, redirect stdout and 
+    # stderr to file, since these don't exist in these environments.
+    # Use line buffering (buffering=1) so that prints are observable immediately.
+    if hasattr(sys, 'frozen') and sys.frozen in ['macosx_app', 'windows_exe']:
+        from appdirs import user_log_dir
+        log_dirpath = user_log_dir(_APP_NAME, _APP_AUTHOR)
+        os.makedirs(log_dirpath, exist_ok=True)
+        
+        sys.stdout = open(os.path.join(log_dirpath, 'stdout.log'), 'w', buffering=1)
+        sys.stderr = open(os.path.join(log_dirpath, 'stderr.log'), 'w', buffering=1)
+    
+    # 1. Enable terminal colors on Windows, by wrapping stdout and stderr
+    # 2. Strip colorizing ANSI escape sequences when printing to a log file
+    import colorama
+    colorama.init()
     
     # Ensure the main package can be imported
-    import os
     try:
         import crystal
     except ImportError:

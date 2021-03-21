@@ -38,6 +38,8 @@ beautifulsoup4 = "^4.9.3"
 py2app = { version = "^0.23", markers = "sys_platform == 'darwin'" }
 py2exe = { version = "^0.10.2.1", markers = "sys_platform == 'win32'" }
 tinycss2 = "^1.1.0"
+appdirs = "^1.4.4"
+colorama = "^0.4.4"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
