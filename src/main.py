@@ -50,22 +50,65 @@ def main(args):
     
     # Start GUI subsystem
     import wx
-    app = wx.App(redirect=False)
-    
-    # Get a project
-    if len(args) == 0:
-        project = _prompt_for_project()
-    elif len(args) == 1:
-        project = _load_project(args[0])
-    if project is None:
-        raise AssertionError
-    
-    # Create main window
-    from crystal.browser import MainWindow
-    window = MainWindow(project);
     
     # Run GUI
-    wx.GetApp().MainLoop()
+    class MyApp(wx.App):
+        def __init__(self, *args, **kwargs):
+            self._keepalive_frame = None
+            self._did_finish_launch = False
+            super().__init__(*args, **kwargs)
+        
+        def OnPreInit(self):
+            # (May insert debugging code here in the future)
+            pass
+        
+        def OnInit(self):
+            # Activate wx keepalive until self._finish_launch() is called
+            self._keepalive_frame = wx.Frame(None, -1, 'Crystal Web Archiver')
+            
+            # Call self._finish_launch() after a short delay if it isn't
+            # called in the meantime by MacOpenFile
+            def wait_for_maybe_open_file():
+                import time
+                time.sleep(.2)
+                
+                if not self._did_finish_launch:
+                    wx.CallAfter(lambda: self._finish_launch())
+            import threading
+            thread = threading.Thread(target=wait_for_maybe_open_file, daemon=False)
+            thread.start()
+            
+            return True
+        
+        def MacOpenFile(self, filepath):
+            if self._did_finish_launch:
+                # Ignore attempts to open additional projects if one is already open
+                pass
+            else:
+                self._finish_launch(filepath)
+        
+        def _finish_launch(self, filepath=None):
+            self._did_finish_launch = True
+            
+            # If project to open passed on the command-line, use it
+            if len(args) == 1:
+                filepath = args[0]
+            
+            # Get a project
+            if filepath is None:
+                project = _prompt_for_project()
+            else:
+                project = _load_project(filepath)
+            assert project is not None
+            
+            # Create main window
+            from crystal.browser import MainWindow
+            window = MainWindow(project)
+            
+            # Deactivate wx keepalive
+            self._keepalive_frame.Destroy()
+    app = MyApp(redirect=False)
+    app.MainLoop()
 
 def _check_environment():
     # Check Python version

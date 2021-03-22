@@ -58,7 +58,9 @@ if sys.platform == 'darwin':
         app=['../src/main.py'],
         data_files=['media/DocIconMac.icns'],
         options={'py2app': {
-            'argv_emulation': True,
+            # Cannot use argv_emulation=True in latest version of py2app
+            # because of: https://github.com/ronaldoussoren/py2app/issues/340
+            'argv_emulation': False,
             'iconfile': 'media/AppIconMac.icns',
             'plist': PLIST,
         }},
