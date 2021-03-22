@@ -64,9 +64,6 @@ Known Issues
   because all project resource URLs are loaded into memory immediately.
   Also no feedback is displayed while opening.
 
-* IE 8 under Windows 7 crashes when trying to view some downloaded sites, such as
-  xkcd.com. I recommend using a different default browser, such as Chrome.
-
 
 History
 -------
