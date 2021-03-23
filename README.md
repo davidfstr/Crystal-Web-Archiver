@@ -23,20 +23,22 @@ Download ⬇︎
 Quickstart ⭐
 ----------
 
-* Download the binary for your operating system. See [above](#download).
+* Download the binary for your operating system. See [above](#download-%EF%B8%8E).
 * Open the program and create a new project, call it "xkcd".
-* Click the "+ URL" button to add the "http://xkcd.com/1/" URL, named "First Comic".
+* Click the "+ URL" button to add the "https://xkcd.com/1/" URL, named "First Comic".
 * Expand the new "First Comic" node to download the page and display its links.
 * Click the "+ Group" button to add a new group called "Comics" with the pattern
-  "http://xkcd.com/#/". The "#" is a wildcard that matches any number.
+  "https://xkcd.com/#/". The "#" is a wildcard that matches any number.
+  Make sure it also has "First Comic" selected as the Source.
     * If you click the "Preview Members" button in the dialog, you should see a list of
-      several URLs, including "http://xkcd.com/1/" and "http://xkcd.com/2/".
+      several URLs, including "https://xkcd.com/1/" and "https://xkcd.com/2/".
 * Close the "First Comic" node so that you can see the new "Comics" node at the root level.
 * Select the "Comics" node and press the "Download" button.
   This will download all xkcd comics.
 * Expand the "Comics" node to see a list of all comic pages.
 * Select any comic page you'd like to see and press the "View" button.
   Your default web browser should open and display the downloaded page.
+* Congratulations! You've downloaded your first website with Crystal!
 
 
 Known Issues 🐞
