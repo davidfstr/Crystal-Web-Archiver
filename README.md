@@ -15,8 +15,9 @@ static websites, blogs, and wikis and excludes most social media sites.
 
 Download ⬇︎
 --------
-* [Mac OS X 10.7 (Lion)](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-mac-1.0.dmg)
-* [Windows XP and later](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-win-1.0.exe)
+
+* [macOS 10.14 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.1.0b/crystal-mac-1.1.0b.dmg)
+* [Windows 7, 8, 10](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.1.0b/crystal-win-1.1.0b.exe)
 
 
 Quickstart ⭐
@@ -124,3 +125,96 @@ Related Projects ⎋
   easy for automated crawlers (rather than for humans) to download websites.
 
 [webcrystal]: http://dafoster.net/projects/webcrystal/
+
+
+Release Notes ⋮
+-------------
+
+### Future
+
+* See the [Roadmap](https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Roadmap).
+
+### v1.1.0b <small>(March 22, 2021)</small>
+
+Our first beta release brings support for downloading more complex static sites,
+recognizing vastly more link types than ever before. It also supports various 
+kinds of *dynamic* link-rewriting (🧠), beyond the usual static link-rewriting.
+
+Additionally the code has been modernized to work properly on the latest
+operating systems and use newer versions of the BeautifulSoup parser and
+the wxWidgets UI library. Unfortunately this has meant dropping support for
+some older macOS versions and Windows XP.
+
+* Parsing improvements
+    * Recognize `url(*)` and `url("*")` references inside CSS!
+    * Recognize http(s):// references inside `<script>` tags! 🧠
+    * Recognize http(s):// references inside custom and unknown attribute types! 🧠
+    * Recognize many more link types:
+        * Recognize `<* background=*>` links
+        * Recognize favicon links
+    * Fix scoping issue that made detection of *multiple* links of the format
+      `<input type='button' onclick='*.location = "*";'>` unreliable.
+    * Fix Content-Type and Location headers to be recognized in case-insensitive fashion,
+      fixing redirects and encoding issues on many archived sites.
+    * Support rudimentary parsing of pages containing frames (and `<frameset>` tags),
+      with a new "basic" parser that can be used instead of the "soup" parser.
+    * Fix infinite recursion if a resource identifies itself as a self-embedded resource.
+
+* Downloading improvements
+    * Save download errors in archive more reliably
+
+* Serving & link-rewriting improvements
+    * Dynamically rewrite incoming links from unparseable site-relative and 
+      protocol-relative URLs in archived resource revisions! 🧠
+        * Did require altering the request URL format to be more distinct: **(Breaking Change)**
+            * Old format: `http://localhost:2797/http/www.example.com/index.html`
+            * New format: `http://localhost:2797/_/http/www.example.com/index.html`
+    * Dynamically download accessed resources that are a member of an existing
+      resource group. 🧠
+        * Does allow many unparseable resource-relative URLs in archived
+          resources to be recognized and downloaded successfully.
+    * Better header processing:
+        * Recognize many more headers:
+            * Recognize standard headers related to CORS, Timing, Cookies, 
+              HTTPS & Certificates, Logging, Referer, Protocol Upgrades,
+              and X-RateLimit.
+            * Recognize vendor-specific headers from AWS Cloudfront, 
+              Cloudflare, Fastly, and Google Cloud.
+        * Match headers against the header whitelist and blacklist in case-insensitive fashion,
+          allowing more headers to be served correctly and reducing unknown-header warnings.
+    * Fix to serve appropriate error page when viewing resource in archive
+      that was fetched with an error, rather than crashing.
+    * Fix transformed HTML and CSS documents to be reported as charset=utf-8 correctly.
+    * Automatically fixup URLs lacking a path to have a / path.
+    * Don't attempt to rewrite mailto or javascript URLs.
+    * Don't print error if browser drops connection early.
+    * Avoid printing binary data to console when handling incoming binary protocol message.
+        * This can happen if archived JavaScript attempts to force fetching a 
+          archived resource over HTTPS from an http:// URL.
+    * Colorize logged output by default. 🎨
+
+* Modernize codebase
+    * Upgrade Python 2.7 -> 3.8
+    * Upgrade wxPython 2.x -> 4
+    * Upgrade BeautifulSoup 2.x -> 4
+    * Track and pin dependencies with Poetry
+    * Change supported operating system versions **(Breaking Change)**
+        * Drop support for Windows XP. Only Windows 7, 8, and 10 are now supported.
+        * Drop support for Mac OS X 10.7 - 10.13. Only macOS 10.14+ is now supported.
+
+* Miscellaneous
+    * User-Agent: Alter to advertise correct version and project URL.
+    * Logging changes:
+        * Mac: Redirect stdout and stderr to file when running as binary.
+        * Windows: Alter location of stdout and stderr log files to be in %APPDATA%
+          rather than beside the .exe, to enable logging even when Crystal is running
+          from a locked volume.
+    * Other fixes:
+        * Mac: Fix wxPython warning around inserting an empty list of items to a list.
+        * Fix closing the initial welcome dialog to be correctly interpreted as Quit.
+    * Documentation improvements to the README
+    * Upgrade development status from Alpha -> Beta 🎉
+
+### v1.0.0a <small>(January 24, 2012)</small>
+
+* Initial version
