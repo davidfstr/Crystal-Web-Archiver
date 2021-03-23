@@ -72,6 +72,10 @@ I wrote Crystal originally in 2011 because other website downloaders
 I tried didn't work well for me and because I wanted to write a large
 Python program, as Python was a new language for me at the time.
 
+Every few years I revisit Crystal to add features allowing me to more sites
+that I care about, and to bring Crystal up-to-date for the latest
+operating systems.
+
 
 Design
 ------
