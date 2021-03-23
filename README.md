@@ -1,6 +1,8 @@
 Crystal Web Archiver
 ====================
 
+<img src="README/logo.png" title="Crystal Web Archiver icon" align="right" />
+
 Crystal is a program to download websites for long-term archival. It works best
 on traditional websites made of distinct pages (rather than infinitely scrolling
 feeds of content) which make limited use of JavaScript. This includes most
