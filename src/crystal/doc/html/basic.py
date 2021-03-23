@@ -8,9 +8,10 @@ import re
 def parse_html_and_links(html_bytes, declared_charset=None):
     if not isinstance(html_bytes, bytes):
         raise ValueError('This parser implementation only accepts bytestrings.')
-    # HACK: Assume UTF-8 encoding
-    # TODO: Handle UnicodeDecodeError
-    html = html_bytes.decode('utf-8')
+    # TODO: Attempt to honor the declared_charset rather than always assuming UTF-8.
+    #       Recommend using the webencodings package (already a dependency) to map
+    #       internet charset names to Python encoding names.
+    html = html_bytes.decode('utf-8', errors='replace')
     
     dividers_and_urls = re.split(r'(?i)([\'"][^\'"]+\.s?html?[\'"])', html)
     
