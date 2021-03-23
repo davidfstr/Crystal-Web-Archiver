@@ -8,7 +8,7 @@ on traditional websites made of distinct pages (rather than infinitely scrolling
 feeds of content) which make limited use of JavaScript. This includes most
 static websites, blogs, and wikis and excludes most social media sites.
 
-> This project is **alpha quality**, and in particular requires additional
+> This project is **beta quality**, and in particular requires additional
 > documentation to be realistically usable by most people. If you'd like to
 > take the plunge anyway, please see the "Quickstart" section below.
 
