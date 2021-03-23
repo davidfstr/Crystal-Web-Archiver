@@ -11,13 +11,13 @@ static websites, blogs, and wikis and excludes most social media sites.
 > take the plunge anyway, please see the "Quickstart" section below.
 
 
-Download
+Download ⬇︎
 --------
 * [Mac OS X 10.7 (Lion)](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-mac-1.0.dmg)
 * [Windows XP and later](https://github.com/downloads/davidfstr/Crystal-Web-Archiver/crystal-win-1.0.exe)
 
 
-Quickstart
+Quickstart ⭐
 ----------
 
 * Download the binary for your operating system. See [above](#download).
@@ -36,7 +36,7 @@ Quickstart
   Your default web browser should open and display the downloaded page.
 
 
-Known Issues
+Known Issues 🐞
 ------------
 
 * The UI does not allow a group to be changed once it is defined. In particular
@@ -65,7 +65,7 @@ Known Issues
   Also no feedback is displayed while opening.
 
 
-History
+History 📖
 -------
 
 I wrote Crystal originally in 2011 because other website downloaders
@@ -77,7 +77,7 @@ that I care about, and to bring Crystal up-to-date for the latest
 operating systems.
 
 
-Design
+Design 📐
 ------
 
 A few unique characteristics of Crystal:
@@ -104,7 +104,7 @@ The design is intended for the future addition of the following features:
       versions of the same resource to be tracked over time.
 
 
-Contributing
+Contributing ⚒
 ------------
 
 If you'd like to request a feature or report a bug, please create
@@ -115,7 +115,7 @@ To build new binaries for Mac or Windows, follow the instructions at <COMPILING.
 To run tests, run `poetry run pytest` in Terminal (Mac) or Command Prompt (Windows).
 
 
-Related Projects
+Related Projects ⎋
 ----------------
 
 * [webcrystal]: An alternative website archiving tool that focuses on making it
