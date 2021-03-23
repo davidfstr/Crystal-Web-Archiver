@@ -3,6 +3,7 @@ Provides services for downloading a ResourceRevision.
 """
 
 from collections import defaultdict
+from crystal import __version__
 from crystal.model import ResourceRevision
 from http.client import HTTPConnection, HTTPSConnection
 import urllib.error
@@ -10,7 +11,7 @@ import urllib.request
 from urllib.parse import urlparse
 
 # The User-Agent string to use for downloads, or None to omit.
-_USER_AGENT_STRING = 'Crystal/0.1 (crystalbot@dafoster.net)'
+_USER_AGENT_STRING = 'Crystal/%s (https://dafoster.net/projects/crystal-web-archiver/)' % __version__
 
 def download_resource_revision(resource, progress_listener):
     """
@@ -77,9 +78,9 @@ class HttpResourceRequest(ResourceRequest):
             conn = HTTPSConnection(host_and_port)
         else:
             raise ValueError('Not an HTTP(S) URL.')
-        headers = {
-            'User-Agent': _USER_AGENT_STRING,
-        }
+        headers = {}
+        if _USER_AGENT_STRING is not None:
+            headers['User-Agent'] = _USER_AGENT_STRING
         conn.request('GET', self.url, headers=headers)
         response = conn.getresponse()
         
