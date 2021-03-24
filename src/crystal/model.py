@@ -492,6 +492,20 @@ class Resource(object):
             revs.append(ResourceRevision._load(self, RR._decode_error(error), RR._decode_metadata(metadata), _id=id))
         return revs
     
+    # NOTE: Only used from a Python REPL at the moment
+    def delete(self):
+        project = self.project
+        
+        for rev in self.revisions():
+            rev.delete()
+        
+        c = project._db.cursor()
+        c.execute('delete from resource where id=?', (self._id,))
+        project._db.commit()
+        self._id = None
+        
+        del project._resources[self.url]
+    
     def __repr__(self):
         return "Resource(%s)" % (repr(self.url),)
 
