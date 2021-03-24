@@ -190,27 +190,26 @@ class _RequestHandler(BaseHTTPRequestHandler):
         # Serve resource revision in archive
         archive_url = self.get_archive_url(self.path)
         if archive_url is not None:
-            # Fill in missing '/' path if needed
-            archive_urlparts = urlparse(archive_url)
-            if archive_urlparts.path == '':
-                archive_url_with_path = urlunparse(ParseResult(
-                    scheme=archive_urlparts.scheme,
-                    netloc=archive_urlparts.netloc,
-                    path='/',
-                    params=archive_urlparts.params,
-                    query=archive_urlparts.query,
-                    fragment=archive_urlparts.fragment,
-                ))
-                redirect_url = self.get_request_url(archive_url_with_path)
-                
-                self.send_redirect(redirect_url)
-                return
+            # If URL not in archive in its original form,
+            # see whether it exists in the archive in a different form,
+            # or whether it should be created in a different form
+            if self.project.get_resource(archive_url) is None:
+                archive_url_alternatives = Resource.resource_url_alternatives(
+                    self.project, archive_url)
+                if len(archive_url_alternatives) >= 2:
+                    for urla in archive_url_alternatives[1:]:
+                        if self.project.get_resource(urla) is not None:
+                            # Redirect to existing URL in archive
+                            self.send_redirect(self.get_request_url(urla))
+                            return
+                    
+                    # Redirect to canonical form of URL in archive
+                    self.send_redirect(self.get_request_url(archive_url_alternatives[-1]))
+                    return
+            # (Either resource exists at archive_url, or archive_url is in canonical form)
             
-            # TODO: Normalize archive url by stripping fragment (and maybe also {params, query}).
-            #       This should probably be implemented in a static method on Resource,
-            #       as this functionality should also be used by the Resource constructor.
             resource = self.project.get_resource(archive_url)
-            if not resource:
+            if resource is None:
                 matching_rg = None
                 for rg in self.project.resource_groups:
                     if rg.contains_url(archive_url):
@@ -235,7 +234,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     return
             
             revision = fg_call_and_wait(resource.default_revision)
-            if not revision:
+            if revision is None:
                 self.send_resource_not_in_archive(archive_url)
                 return
             

@@ -19,7 +19,7 @@ import os
 import re
 import shutil
 import sqlite3
-from typing import Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 from urllib.parse import urlparse, urlunparse
 from .xfutures import Future
 from .xthreading import bg_call_later, fg_call_and_wait
@@ -274,7 +274,7 @@ class Resource(object):
     Persisted and auto-saved.
     """
     
-    def __new__(cls, project, url, _id=None):
+    def __new__(cls, project: Project, url: str, _id=None) -> Resource:
         """
         Looks up an existing resource with the specified URL or creates a new
         one if no preexisting resource matches.
@@ -284,36 +284,95 @@ class Resource(object):
         url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
         """
         
-        # (Provide backward compatibility with older projects that may contain
-        #  resources with fragment components in the URL)
-        if url not in project._resources:
-            # Normalize the URL, stripping any fragment component
-            url_parts = list(urlparse(url))
-            url_parts[5] = '' # strip fragment if present
-            url = urlunparse(url_parts)
-        
-        if url in project._resources:
-            return project._resources[url]
+        if _id is None:
+            url_alternatives = cls.resource_url_alternatives(project, url)
+            
+            # Find first matching existing alternative URL, to provide
+            # backward compatibility with older projects that use less-normalized
+            # forms of the original URL
+            for urla in url_alternatives:
+                if urla in project._resources:
+                    return project._resources[urla]
+            
+            normalized_url = url_alternatives[-1]
         else:
-            self = object.__new__(cls)
-            self.project = project
-            self.url = url
-            self._download_body_task_ref = _WeakTaskRef()
-            self._download_task_ref = _WeakTaskRef()
-            
-            if project._loading:
-                self._id = _id
+            # Always use original URL if loading from saved resource
+            normalized_url = url
+        del url  # prevent accidental usage later
+        
+        self = object.__new__(cls)
+        self.project = project
+        self.url = normalized_url
+        self._download_body_task_ref = _WeakTaskRef()
+        self._download_task_ref = _WeakTaskRef()
+        
+        if project._loading:
+            self._id = _id
+        else:
+            c = project._db.cursor()
+            c.execute('insert into resource (url) values (?)', (normalized_url,))
+            project._db.commit()
+            self._id = c.lastrowid
+        project._resources[normalized_url] = self
+        
+        if not project._loading:
+            project._resource_did_instantiate(self)
+        
+        return self
+    
+    @staticmethod
+    def resource_url_alternatives(project: Project, url: str) -> List[str]:
+        """
+        Given an original URL, perhaps computed from a link or directly input
+        by the user, return a list of alternative URLs that become progressively
+        more-and-more normalized, ending with the fully normal form of the URL.
+        
+        Each alternative URL returned corresponds to a way that a URL was 
+        stored in a Project in a previous version of Crystal, and future
+        versions of Crystal should attempt to fetch the less-normalized
+        URL versions in preference to the more-normalized versions of an
+        URL from a project whenever those less-normalized versions already
+        exist in a project.
+        
+        Newer projects will attempt to save new URLs in the most normalized
+        form possible.
+        """
+        alternatives = []
+        
+        # Always yield original URL first
+        alternatives.append(url)
+        
+        url_parts = list(urlparse(url))  # clone to make mutable
+        
+        # Strip fragment component
+        # TODO: Recommend restricting fragment-stripping to the 
+        #       ('http', 'https') schemes. That would however be a 
+        #       (hopefully small) breaking change, 
+        #       whose impact should be considered.
+        if url_parts[5] != '':  # fragment; strip if present
+            url_parts[5] = ''
+            alternatives.append(urlunparse(url_parts))
+        
+        # TODO: Consider extending these normalization rules to apply to
+        #       certain additional less-common schemes like 'ftp'
+        if url_parts[0].lower() in ('http', 'https'):  # scheme
+            # Normalize domain name
+            if _is_ascii(url_parts[1]):  # netloc (domain)
+                netloc_lower = url_parts[1].lower()
+                if url_parts[1] != netloc_lower:
+                    url_parts[1] = netloc_lower
+                    alternatives.append(urlunparse(url_parts))
             else:
-                c = project._db.cursor()
-                c.execute('insert into resource (url) values (?)', (url,))
-                project._db.commit()
-                self._id = c.lastrowid
-            project._resources[url] = self
+                # TODO: Support internationalized domains names and advanced
+                #       case normalization from RFC 4343
+                pass
             
-            if not project._loading:
-                project._resource_did_instantiate(self)
-            
-            return self
+            # Normalize missing path to /
+            if url_parts[2] == '':  # path
+                url_parts[2] = '/'
+                alternatives.append(urlunparse(url_parts))
+        
+        return alternatives
     
     @property
     def resource(self):
@@ -983,3 +1042,13 @@ class ResourceGroup(object):
 
     def __repr__(self):
         return 'ResourceGroup(%s,%s)' % (repr(self.name), repr(self.url_pattern))
+
+
+def _is_ascii(s: str) -> bool:
+    assert isinstance(s, str)
+    try:
+        s.encode('ascii')
+    except UnicodeEncodeError:
+        return False
+    else:
+        return True
