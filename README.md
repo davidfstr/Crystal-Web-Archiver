@@ -77,8 +77,8 @@ I wrote Crystal originally in 2011 because other website downloaders
 I tried didn't work well for me and because I wanted to write a large
 Python program, as Python was a new language for me at the time.
 
-Every few years I revisit Crystal to add features allowing me to more sites
-that I care about, and to bring Crystal up-to-date for the latest
+Every few years I revisit Crystal to add features allowing me to archive 
+more sites that I care about, and to bring Crystal up-to-date for the latest
 operating systems.
 
 
@@ -87,8 +87,10 @@ Design 📐
 
 A few unique characteristics of Crystal:
 
-* Downloaded pages are stored on disk in their original form as downloaded from the web,
-  including all HTTP headers. This makes the downloaded file format suitable for archival.
+* The Crystal project file format (`*.crystalproj`) is suitable for long-term archival:
+    * Downloaded pages are stored in their original form as downloaded
+      from the web including all HTTP headers.
+    * Metadata is stored in a [SQLite database].
 
 * To download pages automatically, the user must define "groups" of pages with similar
   URLs (ex: "Blog Posts", "Archive Pages") and specify rules for finding links to members
@@ -107,6 +109,8 @@ The design is intended for the future addition of the following features:
       may change daily, whereas the other members are expected to never change.
     * Multiple revisions per downloaded resource are supported to allow multiple
       versions of the same resource to be tracked over time.
+
+[SQLite database]: https://sqlite.org/lts.html
 
 
 Contributing ⚒
@@ -228,7 +232,7 @@ some older macOS versions and Windows XP.
 * Miscellaneous
     * User-Agent: Alter to advertise correct version and project URL.
     * Logging changes:
-        * Mac: Redirect stdout and stderr to file when running as binary.
+        * Mac: Redirect stdout and stderr to file when running as a binary.
         * Windows: Alter location of stdout and stderr log files to be in %APPDATA%
           rather than beside the .exe, to enable logging even when Crystal is running
           from a locked volume.
