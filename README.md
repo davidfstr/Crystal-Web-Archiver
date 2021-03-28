@@ -112,12 +112,28 @@ The design is intended for the future addition of the following features:
 Contributing ⚒
 ------------
 
-If you'd like to request a feature or report a bug, please create
-[a new GitHub Issue](https://github.com/davidfstr/Crystal-Web-Archiver/issues/new).
+If you'd like to request a feature, report a bug, or ask a question, please create
+[a new GitHub Issue](https://github.com/davidfstr/Crystal-Web-Archiver/issues/new),
+with either the `type-feature`, `type-bug`, or `type-question` tag.
 
-To build new binaries for Mac or Windows, follow the instructions at <COMPILING.txt>.
+If you'd like to help work on coding new features, please see
+the [code contributor workflow]. If you'd like to help moderate the community
+please see the [maintainer workflow].
 
-To run tests, run `poetry run pytest` in Terminal (Mac) or Command Prompt (Windows).
+[code contributor workflow]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Contributor-Workflows#code-contributors
+[maintainer workflow]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Contributor-Workflows#maintainers
+
+### Code Contributors
+
+To **run the code locally**,
+run `poetry install` once in Terminal (Mac) or in Command Prompt (Windows), and
+`poetry run python src/main.py` thereafter.
+
+To **build new binaries** for Mac or Windows, follow the instructions at [COMPILING.txt].
+
+To **run tests**, run `poetry run pytest` in Terminal (Mac) or in Command Prompt (Windows).
+
+[COMPILING.txt]: COMPILING.txt
 
 
 Related Projects ⎋
@@ -134,7 +150,12 @@ Release Notes ⋮
 
 ### Future
 
-* See the [Roadmap](https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Roadmap).
+* See the [Roadmap].
+* See open [high-priority issues] and [medium-priority issues].
+
+[Roadmap]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Roadmap
+[high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
+[medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
 ### v1.1.0b <small>(March 22, 2021)</small>
 
