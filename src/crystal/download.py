@@ -2,10 +2,13 @@
 Provides services for downloading a ResourceRevision.
 """
 
+import certifi
 from collections import defaultdict
 from crystal import __version__
 from crystal.model import ResourceRevision
 from http.client import HTTPConnection, HTTPSConnection
+import platform
+import ssl
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -75,7 +78,7 @@ class HttpResourceRequest(ResourceRequest):
         if scheme == 'http':
             conn = HTTPConnection(host_and_port)
         elif scheme == 'https':
-            conn = HTTPSConnection(host_and_port)
+            conn = HTTPSConnection(host_and_port, context=get_ssl_context())
         else:
             raise ValueError('Not an HTTP(S) URL.')
         headers = {}
@@ -106,8 +109,23 @@ class UrlResourceRequest(ResourceRequest):
     
     def __call__(self):
         request = urllib.request.Request(self.url)
-        response = urllib.request.urlopen(request)
+        response = urllib.request.urlopen(request, context=get_ssl_context())
         return (None, response)
     
     def __repr__(self):
         return 'UrlResourceRequest(%s)' % repr(self.url)
+
+
+_SSL_CONTEXT = None
+
+def get_ssl_context():
+    global _SSL_CONTEXT
+    if _SSL_CONTEXT is None:
+        if platform.system() == 'Windows':
+            # Use Windows default CA certificates
+            cafile = None
+        else:
+            # Use bundled certifi CA certificates
+            cafile = certifi.where()
+        _SSL_CONTEXT = ssl.create_default_context(cafile=cafile)
+    return _SSL_CONTEXT
