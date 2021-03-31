@@ -161,6 +161,12 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### v1.1.1b <small>(TBD)</small>
+
+* macOS Fixes
+    * Fix argument processing issue that prevented app launch on 
+      macOS 10.14 Mojave.
+
 ### v1.1.0b <small>(March 22, 2021)</small>
 
 Our first beta release brings support for downloading more complex static sites,

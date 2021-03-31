@@ -97,7 +97,10 @@ def main(args):
             self._did_finish_launch = True
             
             # If project to open passed on the command-line, use it
-            if len(args) == 1:
+            # NOTE: macOS does sometimes pass a strange argument that
+            #       looks like '-psn_0_438379' upon first launch when
+            #       run as a binary downloaded from the internet
+            if len(args) == 1 and os.path.exists(args[0]):
                 filepath = args[0]
             
             # Get a project
