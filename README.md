@@ -163,11 +163,27 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### v1.1.1b <small>(TBD)</small>
+### v1.1.1b <small>(April 2, 2021)</small>
+
+Several first-time-launch issues were fixed. And domains are now recognized
+in a case-insensitive fashion, eliminating duplicate URLs within some sites.
 
 * macOS Fixes
     * Fix argument processing issue that prevented app launch on 
       macOS 10.14 Mojave.
+    * Bundle HTTPS certificates from the 
+      [certifi](https://pypi.org/project/certifi/) project.
+
+* Windows Fixes
+    * Embed VCRUNTIME140.dll so that Crystal does install reliably on
+      a fresh Windows 7 machine.
+
+* Serving & link-rewriting improvements
+    * Treat domain names in a case-insensitive fashion.
+
+* Miscellaneous
+    * Can delete entire resources from the Crystal CLI, 
+      in addition to resource revisions.
 
 ### v1.1.0b <small>(March 22, 2021)</small>
 
