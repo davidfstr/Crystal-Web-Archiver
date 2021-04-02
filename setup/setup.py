@@ -95,9 +95,6 @@ elif sys.platform == 'win32':
         zipfile=None,
         options={'py2exe': {
             'ignores': [
-                # Conditionally imported by Crystal
-                'concurrent.futures',
-                
                 # Mac junk
                 'Carbon', 'Carbon.Files',
                 # Windows junk
