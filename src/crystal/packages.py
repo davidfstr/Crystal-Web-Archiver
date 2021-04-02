@@ -1,32 +1,12 @@
 import platform
-import subprocess
 
-def can_set_package():
+def project_appears_as_package_file():
     """
-    Returns whether the 'set_package' command is supported on this platform.
+    Returns whether *.crystalproj items appear as package files on this platform.
+    
+    In particular on macOS the CFBundleDocumentTypes property list key defines
+    that *.crystalproj items as LSTypeIsPackage=true, which causes all such
+    items to appear as package files rather than as directories.
     """
-    is_mac_os_x = (platform.system() == 'Darwin')
-    return is_mac_os_x
-
-def set_package(dir_path, is_package=True):
-    """
-    Marks the specified directory as a 'package', meaning that it will
-    appear as a file in the native file manager (ex: Finder or Windows Explorer).
-    
-    This is currently only implemented on Mac OS X. Calling this on other systems will
-    have no effect.
-    
-    Returns True if successful, False otherwise.
-    """
-    
-    # Don't even try if it isn't likely to work
-    if not can_set_package():
-        return False
-    
-    try:
-        subprocess.check_call([
-            '/usr/bin/SetFile', '-a', 'B' if is_package else 'b', dir_path])
-    except:
-        return False
-    else:
-        return True
+    is_mac_os = (platform.system() == 'Darwin')
+    return is_mac_os

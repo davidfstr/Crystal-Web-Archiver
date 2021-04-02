@@ -195,11 +195,11 @@ def _prompt_to_create_project(parent):
 
 def _prompt_to_open_project(parent):
     from crystal.model import Project
-    from crystal.packages import can_set_package
+    from crystal.packages import project_appears_as_package_file
     import os.path
     import wx
     
-    if can_set_package():
+    if project_appears_as_package_file():
         # If projects appear as files, use a file selection dialog
         dialog = wx.FileDialog(parent,
             message='Choose a project',
