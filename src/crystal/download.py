@@ -2,7 +2,6 @@
 Provides services for downloading a ResourceRevision.
 """
 
-import certifi
 from collections import defaultdict
 from crystal import __version__
 from crystal.model import ResourceRevision
@@ -126,6 +125,7 @@ def get_ssl_context():
             cafile = None
         else:
             # Use bundled certifi CA certificates
+            import certifi
             cafile = certifi.where()
         _SSL_CONTEXT = ssl.create_default_context(cafile=cafile)
     return _SSL_CONTEXT
