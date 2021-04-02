@@ -5,7 +5,7 @@ import re
 
 
 def test_version_is_expected_value():
-    assert __version__ == '1.1.0b'
+    assert __version__ == '1.1.1b'
 
 
 def test_version_in_pyproject_toml_is_consistent_with_package_version():
