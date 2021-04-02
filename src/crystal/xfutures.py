@@ -21,7 +21,7 @@ except ImportError:
     # Logger for internal use by the futures package.
     LOGGER = logging.getLogger("concurrent.futures")
     
-    class Future(object):
+    class Future(object):  # type: ignore[no-redef]
         """Represents the result of an asynchronous computation."""
     
         def __init__(self):

@@ -14,7 +14,7 @@ import os
 import re
 import shutil
 from textwrap import dedent
-from typing import Dict, Optional
+from typing import Dict, Generator, Optional
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 from .xthreading import bg_call_later, fg_call_and_wait
 
@@ -149,7 +149,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @property
     def _server_host(self) -> str:
-        return 'localhost:%s' % self.server.server_port
+        return 'localhost:%s' % self.server.server_port  # type: ignore[attr-defined]
     
     # === Request Properties ===
     
@@ -490,7 +490,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         else:
             raise AssertionError()
     
-    def send_revision_body(self, revision) -> None:
+    def send_revision_body(self, revision) -> Generator[str, None, None]:
         assert revision.has_body
         
         (doc, links, content_type_with_options) = revision.document_and_links()

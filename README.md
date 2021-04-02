@@ -137,6 +137,8 @@ To **build new binaries** for Mac or Windows, follow the instructions at [COMPIL
 
 To **run tests**, run `poetry run pytest` in Terminal (Mac) or in Command Prompt (Windows).
 
+To **typecheck**, run `poetry run mypy` in Terminal (Mac) or in Command Prompt (Windows).
+
 [COMPILING.txt]: COMPILING.txt
 
 

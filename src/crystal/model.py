@@ -594,6 +594,7 @@ class ResourceRevision(object):
     A downloaded revision of a `Resource`. Immutable.
     Persisted. Loaded on demand.
     """
+    has_body: bool
     
     # === Init ===
     
@@ -795,12 +796,13 @@ class ResourceRevision(object):
             return content_type_options.get('charset')
     
     @property
-    def content_type(self) -> str:  # ex: 'utf-8'
+    def content_type(self) -> Optional[str]:  # ex: 'utf-8'
         """Returns the MIME content type declared or guessed for this resource, or None if unknown."""
         declared = self.declared_content_type
         if declared is not None:
             return declared
-        return mimetypes.guess_type(self._url)
+        (content_type, encoding) = mimetypes.guess_type(self._url)
+        return content_type
     
     @property
     def is_html(self) -> bool:
@@ -855,7 +857,7 @@ class ResourceRevision(object):
         if self.is_html and self.has_body:
             with self.open() as body:
                 (doc, links) = parse_html_and_links(body, self.declared_charset)
-            content_type_with_options = 'text/html; charset=utf-8'
+            content_type_with_options = 'text/html; charset=utf-8'  # type: Optional[str]
         elif self.is_css and self.has_body:
             with self.open() as body:
                 body_bytes = body.read()
