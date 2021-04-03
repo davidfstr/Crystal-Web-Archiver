@@ -227,7 +227,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     
                     # Download resource immediately
                     resource = fg_call_and_wait(lambda: Resource(self.project, archive_url))
-                    resource.download().result()
+                    # NOTE: Need to wait for embedded resources as well.
+                    #       If we were to serve a downloaded HTML page with
+                    #       embedded links that were not yet downloaded,
+                    #       they would be served as HTTP 404 until they
+                    #       finished downloading. To avoid serving a broken
+                    #       page we must wait longer for the embedded resources
+                    #       to finish downloading.
+                    resource.download(wait_for_embedded=True).result()
                     # (continue to serve downloaded resource revision)
                 else:
                     self.send_resource_not_in_archive(archive_url)

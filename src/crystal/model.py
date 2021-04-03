@@ -271,6 +271,8 @@ class Resource(object):
     Either created manually or discovered through a link from another resource.
     Persisted and auto-saved.
     """
+    project: Project
+    url: str
     
     def __new__(cls, project: Project, url: str, _id=None) -> Resource:
         """
@@ -408,7 +410,7 @@ class Resource(object):
             return DownloadResourceBodyTask(self)
         return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
-    def download(self):
+    def download(self, wait_for_embedded: bool=False) -> Future:
         """
         Returns a Future<ResourceRevision> that downloads (if necessary) and returns an
         up-to-date version of this resource's body. If a download is performed, all
@@ -420,7 +422,7 @@ class Resource(object):
         """
         task = self.create_download_task()
         self.project.add_task(task)
-        return task.future
+        return task.get_future(wait_for_embedded)
     
     def create_download_task(self):
         """

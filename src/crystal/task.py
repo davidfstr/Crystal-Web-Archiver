@@ -299,7 +299,8 @@ class DownloadResourceTask(Task):
     Downloads a resource and all of its embedded resources recursively.
     
     Returns the ResourceRevision for the resource body.
-    This is typically returned before all embedded resources have finished downloading.
+    This is returned before all embedded resources have finished downloading,
+    unless you specially use get_future(wait_for_embedded=True).
     """
     def __init__(self, abstract_resource):
         """
@@ -314,17 +315,26 @@ class DownloadResourceTask(Task):
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         self.append_child(self._download_body_task)
+        
+        self._download_body_with_embedded_future = Future()
+        self._download_body_with_embedded_future.set_running_or_notify_cancel()
     
     @property
-    def future(self):
+    def future(self) -> Future:
         return self._download_body_task.future
     
-    def child_task_subtitle_did_change(self, task):
+    def get_future(self, wait_for_embedded: bool=False) -> Future:
+        if not wait_for_embedded:
+            return self._download_body_task.future
+        else:
+            return self._download_body_with_embedded_future
+    
+    def child_task_subtitle_did_change(self, task: Task) -> None:
         if task is self._download_body_task:
             if not task.complete:
                 self.subtitle = task.subtitle
     
-    def child_task_did_complete(self, task):
+    def child_task_did_complete(self, task: Task) -> None:
         if task is self._download_body_task:
             try:
                 body_revision = self._download_body_task.future.result()
@@ -363,6 +373,15 @@ class DownloadResourceTask(Task):
         
         if self.num_children_complete == len(self.children):
             self.finish()
+            
+            # Complete self._download_body_with_embedded_future,
+            # with value of self._download_body_task.future
+            exc = self._download_body_task.future.exception()
+            if exc is not None:
+                self._download_body_with_embedded_future.set_exception(exc)
+            else:
+                self._download_body_with_embedded_future.set_result(
+                    self._download_body_task.future.result())
 
 class ParseResourceRevisionLinks(Task):
     """
