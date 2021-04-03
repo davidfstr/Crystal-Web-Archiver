@@ -55,3 +55,10 @@ def _unquote_unreserved(uri):
 
 class _InvalidURL(ValueError):
     """The URL provided was somehow invalid."""
+
+
+def is_unrewritable_url(url: str) -> bool:
+    for prefix in ('mailto:', 'javascript:', 'data:'):
+        if url.startswith(prefix):
+            return True
+    return False

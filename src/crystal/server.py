@@ -519,13 +519,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
             base_url = revision.resource.url
             for link in links:
                 relative_url = link.relative_url
-                if (relative_url.startswith('mailto:') or 
-                        relative_url.startswith('javascript:')):
-                    # Do not rewrite
-                    request_url = relative_url
-                else:
-                    absolute_url = urljoin(base_url, relative_url)
-                    request_url = self.get_request_url(absolute_url)
+                absolute_url = urljoin(base_url, relative_url)
+                request_url = self.get_request_url(absolute_url)
                 link.relative_url = request_url
             
             # Output altered document

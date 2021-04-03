@@ -20,7 +20,7 @@ import shutil
 import sqlite3
 from typing import List, Optional, TYPE_CHECKING
 from urllib.parse import urlparse, urlunparse
-from .urls import requote_uri
+from .urls import is_unrewritable_url, requote_uri
 from .xfutures import Future
 from .xthreading import bg_call_later, fg_call_and_wait
 
@@ -917,6 +917,9 @@ class ResourceRevision(object):
         else:
             (doc, links) = (None, [])
             content_type_with_options = None
+        
+        # Ignore links that should never be rewritten
+        links = [link for link in links if not is_unrewritable_url(link.relative_url)]
         
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url
