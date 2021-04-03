@@ -16,8 +16,8 @@ static websites, blogs, and wikis and excludes most social media sites.
 Download ⬇︎
 --------
 
-* [macOS 10.14 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.1.0b/crystal-mac-1.1.0b.dmg)
-* [Windows 7, 8, 10](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.1.0b/crystal-win-1.1.0b.exe)
+* [macOS 10.14 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.1.1b/crystal-mac-1.1.1b.dmg)
+* [Windows 7, 8, 10](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.1.1b/crystal-win-1.1.1b.exe)
 
 
 Quickstart ⭐
