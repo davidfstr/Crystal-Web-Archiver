@@ -479,7 +479,7 @@ class Resource(object):
     
     # TODO: This should ideally be a cheap operation, not requiring a database hit.
     #       Convert to property once this "cheapening" has been done.
-    def has_any_revisions(self):
+    def has_any_revisions(self) -> bool:
         """
         Returns whether any revisions of this resource have been downloaded.
         """
@@ -487,7 +487,7 @@ class Resource(object):
         c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
         return c.fetchone() is not None
     
-    def default_revision(self):
+    def default_revision(self) -> Optional[ResourceRevision]:
         """
         Loads and returns the "default" revision of this resource, which is the revision
         that will be displayed when this resource is served or exported.
@@ -497,7 +497,7 @@ class Resource(object):
         default_revision_singleton = self.revisions(_query_suffix=' order by id desc limit 1')
         return default_revision_singleton[0] if len(default_revision_singleton) == 1 else None
     
-    def revisions(self, _query_suffix=''):
+    def revisions(self, _query_suffix: str='') -> List[ResourceRevision]:
         """
         Loads and returns a list of `ResourceRevision`s downloaded for this resource.
         If no such revisions exist, an empty list is returned.
