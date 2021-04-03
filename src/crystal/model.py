@@ -20,6 +20,7 @@ import shutil
 import sqlite3
 from typing import List, Optional, TYPE_CHECKING
 from urllib.parse import urlparse, urlunparse
+from .urls import requote_uri
 from .xfutures import Future
 from .xthreading import bg_call_later, fg_call_and_wait
 
@@ -272,7 +273,8 @@ class Resource(object):
     Persisted and auto-saved.
     """
     project: Project
-    url: str
+    _url: str
+    _id: int  # or None if deleted
     
     def __new__(cls, project: Project, url: str, _id=None) -> Resource:
         """
@@ -302,7 +304,7 @@ class Resource(object):
         
         self = object.__new__(cls)
         self.project = project
-        self.url = normalized_url
+        self._url = normalized_url
         self._download_body_task_ref = _WeakTaskRef()
         self._download_task_ref = _WeakTaskRef()
         
@@ -371,6 +373,13 @@ class Resource(object):
             if url_parts[2] == '':  # path
                 url_parts[2] = '/'
                 alternatives.append(urlunparse(url_parts))
+            
+            # Percent-encode the URL (as per RFC 3986) if it wasn't already
+            old_url = urlunparse(url_parts)
+            new_url = requote_uri(old_url)
+            if new_url != old_url:
+                alternatives.append(new_url)
+            del url_parts  # prevent accidental future use
         
         return alternatives
     
@@ -384,6 +393,16 @@ class Resource(object):
         the underlying resource.
         """
         return self
+    
+    @property
+    def url(self) -> str:
+        return self._url
+    
+    # NOTE: Usually a resource's URL will be in normal form when it is created,
+    #       unless it was loaded from disk in non-normal form.
+    @property
+    def normalized_url(self) -> str:
+        return self.resource_url_alternatives(self.project, self._url)[-1]
     
     def download_body(self):
         """
@@ -493,7 +512,37 @@ class Resource(object):
         return revs
     
     # NOTE: Only used from a Python REPL at the moment
-    def delete(self):
+    def try_normalize_url(self) -> bool:
+        """
+        Tries to alter this resource's URL to be in normal form,
+        unless there is already an existing resource with that URL.
+        """
+        new_url = self.normalized_url
+        if new_url == self._url:
+            return True
+        return self._try_alter_url(new_url)
+    
+    def _try_alter_url(self, new_url: str) -> bool:
+        """
+        Tries to alter this resource's URL to new specified URL,
+        unless there is already an existing resource with that URL.
+        """
+        project = self.project
+        
+        if new_url in project._resources:
+            return False
+        
+        c = project._db.cursor()
+        c.execute('update resource set url=? where id=?', (new_url, self._id,))
+        project._db.commit()
+        
+        del project._resources[self._url]
+        project._resources[new_url] = self
+        self._url = new_url
+        return True
+    
+    # NOTE: Only used from a Python REPL at the moment
+    def delete(self) -> None:
         project = self.project
         
         for rev in self.revisions():
@@ -502,7 +551,7 @@ class Resource(object):
         c = project._db.cursor()
         c.execute('delete from resource where id=?', (self._id,))
         project._db.commit()
-        self._id = None
+        self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         del project._resources[self.url]
     
