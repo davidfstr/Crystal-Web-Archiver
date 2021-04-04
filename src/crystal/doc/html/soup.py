@@ -16,7 +16,7 @@ _ON_CLICK_RE = re.compile('(?i)([a-zA-Z]*\.(?:href|location)) *= *([\'"])([^\'"]
 _BODY_RE = re.compile(r'(?i)body')
 _SCRIPT_RE = re.compile(r'(?i)script')
 _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
-_QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")(https?:\\?/\\?/[^"]+)"|(')(https?:\\?/\\?/[^']+)')''')
+_QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")((?:https?:)?\\?/\\?/[^/][^"]+)"|(')((?:https?:)?\\?/\\?/[^/][^']+)')''')
 _HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
 _PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
@@ -116,8 +116,10 @@ def parse_html_and_links(html_bytes, declared_charset=None):
                 relative_url, replace_url_in_old_attr_value))
         process_match(matcher)
     
-    # <script [type="text/javascript"]>..."http(s)://**"...</script>
-    # This type of link is used on: http://*.daportfolio.com/
+    # 1. <script [type="text/javascript"]>..."http(s)://**"...</script>
+    #   - This type of link is used on: http://*.daportfolio.com/
+    # 2. <script [type="text/javascript"]>..."//**"...</script>
+    #   - This type of link is used on: https://blog.calm.com/take-a-deep-breath
     for tag in html.findAll(_SCRIPT_RE, string=_QUOTED_HTTP_LINK_RE):
         if 'type' in tag.attrs and not _TEXT_JAVASCRIPT_RE.fullmatch(tag.attrs['type']):
             continue
