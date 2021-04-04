@@ -33,6 +33,12 @@ def parse_css_and_links(
                                 len(token.arguments) == 1 and 
                                 isinstance(token.arguments[0], ast.StringToken)):
                             links.append(UrlFunctionLink(token.arguments[0]))
+        
+        # @import "**";
+        if isinstance(rule, ast.AtRule) and rule.at_keyword == 'import':
+            for token in rule.prelude:
+                if isinstance(token, ast.StringToken):
+                    links.append(StringTokenLink(token))
     
     return (CssDocument(rules), links)
 
@@ -74,4 +80,20 @@ class UrlFunctionLink(Link):
     def _set_relative_url(self, url: str) -> None:
         self._token.value = url
         self._token.representation = serialize_string_value(url)
+    relative_url = property(_get_relative_url, _set_relative_url)
+
+
+class StringTokenLink(Link):
+    def __init__(self, token: ast.StringToken) -> None:
+        self._token = token
+        
+        self.title = None
+        self.type_title = 'CSS @import'
+        self.embedded = True
+    
+    def _get_relative_url(self) -> str:
+        return self._token.value
+    def _set_relative_url(self, url: str) -> None:
+        self._token.value = url
+        self._token.representation = '"%s"' % serialize_string_value(url)
     relative_url = property(_get_relative_url, _set_relative_url)
