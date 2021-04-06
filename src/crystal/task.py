@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import sys
 from time import sleep
+from typing import List, Optional
 from .xfutures import Future
 from .xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 
@@ -36,6 +39,7 @@ class Task(object):
         self._title = title
         self._subtitle = 'Queued'
         self.scheduling_style = SCHEDULING_STYLE_NONE
+        self._parent = None
         self._children = []
         self._num_children_complete = 0
         self._complete = False
@@ -74,7 +78,11 @@ class Task(object):
     subtitle = property(_get_subtitle, _set_subtitle)
     
     @property
-    def children(self):
+    def parent(self) -> Optional[Task]:
+        return self._parent
+    
+    @property
+    def children(self) -> List[Task]:
         return self._children
     
     @property
@@ -105,7 +113,9 @@ class Task(object):
     # === Protected Operations ===
     
     def append_child(self, child):
+        child._parent = self
         self._children.append(child)
+        
         child.listeners.append(self)
         
         for lis in self.listeners:
@@ -135,7 +145,10 @@ class Task(object):
         if not all(c.complete for c in self.children):
             raise ValueError('Some children are not complete.')
         
+        for child in self._children:
+            child._parent = None
         self._children = []
+        
         self._first_incomplete_child_index = 0
         self._next_child_index = 0
         
@@ -361,11 +374,12 @@ class DownloadResourceTask(Task):
                     link_resource = Resource(self._resource.project, link_url)
                     embedded_resources.append(link_resource)
             
-            self_resource = self._abstract_resource  # cache
+            ancestor_downloading_resources = self._ancestor_downloading_resources()
             for resource in embedded_resources:
-                if resource == self_resource:
+                if resource in ancestor_downloading_resources:
                     # Avoid infinite recursion when resource identifies itself
-                    # (probably incorrectly) as an embedded resource of itself
+                    # (probably incorrectly) as an embedded resource of itself,
+                    # or when a chain of embedded resources links to itself
                     continue
                 self.append_child(resource.create_download_task())
         
@@ -382,6 +396,15 @@ class DownloadResourceTask(Task):
             else:
                 self._download_body_with_embedded_future.set_result(
                     self._download_body_task.future.result())
+    
+    def _ancestor_downloading_resources(self) -> List[Resource]:
+        ancestors = []
+        cur_task = self  # type: Optional[Task]
+        while cur_task is not None:
+            if isinstance(cur_task, DownloadResourceTask):
+                ancestors.append(cur_task._resource)
+            cur_task = cur_task.parent
+        return ancestors
 
 class ParseResourceRevisionLinks(Task):
     """
