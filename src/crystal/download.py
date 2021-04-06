@@ -4,7 +4,7 @@ Provides services for downloading a ResourceRevision.
 
 from collections import defaultdict
 from crystal import __version__
-from crystal.model import ResourceRevision
+from crystal.model import ResourceRevision, ResourceRevisionMetadata
 from http.client import HTTPConnection, HTTPSConnection
 import platform
 import ssl
@@ -86,12 +86,12 @@ class HttpResourceRequest(ResourceRequest):
         conn.request('GET', self.url, headers=headers)
         response = conn.getresponse()
         
-        metadata = {
+        metadata = ResourceRevisionMetadata({
             'http_version': response.version,
             'status_code': response.status,
             'reason_phrase': response.reason,
             'headers': response.getheaders()
-        }
+        })
         class HttpResourceBodyStream(object):
             close = conn.close
             read = response.read

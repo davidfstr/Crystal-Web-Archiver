@@ -18,7 +18,7 @@ import os
 import re
 import shutil
 import sqlite3
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, TypedDict
 from urllib.parse import urlparse, urlunparse
 from .urls import is_unrewritable_url, requote_uri
 from .xfutures import Future
@@ -645,6 +645,7 @@ class ResourceRevision(object):
     A downloaded revision of a `Resource`. Immutable.
     Persisted. Loaded on demand.
     """
+    metadata: Optional[ResourceRevisionMetadata]
     has_body: bool
     
     # === Init ===
@@ -788,6 +789,13 @@ class ResourceRevision(object):
         """Returns whether this resource was fetched using HTTP."""
         # HTTP resources are presently the only ones with metadata
         return self.metadata is not None
+    
+    @property
+    def status_code(self) -> Optional[int]:
+        if self.metadata is None:
+            return None
+        else:
+            return self.metadata['status_code']
     
     @property
     def is_redirect(self):
@@ -943,6 +951,12 @@ class ResourceRevision(object):
     
     def __repr__(self):
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
+
+class ResourceRevisionMetadata(TypedDict):
+    http_version: int  # 10 for HTTP/1.0, 11 for HTTP/1.1
+    status_code: int
+    reason_phrase: str
+    headers: object  # email.message.EmailMessage
 
 class _PersistedError(Exception):
     """

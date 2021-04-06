@@ -355,8 +355,15 @@ class DownloadResourceTask(Task):
                 # Behave as if there are no embedded resources
                 pass
             else:
-                self._parse_links_task = ParseResourceRevisionLinks(self._abstract_resource, body_revision)
-                self.append_child(self._parse_links_task)
+                # If revision is an error page then do not download any embedded
+                # resources automatically. Poorly written error pages may
+                # themselves download other resources with errors,
+                # recursing infinitely.
+                status_code = body_revision.status_code or 500
+                is_error_page = (status_code // 100) in (4, 5)  # HTTP 4xx or 5xx
+                if not is_error_page:
+                    self._parse_links_task = ParseResourceRevisionLinks(self._abstract_resource, body_revision)
+                    self.append_child(self._parse_links_task)
         
         if task is self._parse_links_task:
             links = self._parse_links_task.future.result()
