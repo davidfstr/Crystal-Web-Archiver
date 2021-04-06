@@ -545,9 +545,21 @@ class Resource(object):
     def delete(self) -> None:
         project = self.project
         
+        # Ensure not referenced by a RootResource
+        c = project._db.cursor()
+        root_resource_ids = [
+            id
+            for (id,) in 
+            c.execute('select id from root_resource where resource_id=?', (self._id,))
+        ]
+        if len(root_resource_ids) > 0:
+            raise ValueError(f'Cannot delete {self!r} referenced by RootResource {root_resource_ids!r}')
+        
+        # Delete ResourceRevision children
         for rev in self.revisions():
             rev.delete()
         
+        # Delete Resource itself
         c = project._db.cursor()
         c.execute('delete from resource where id=?', (self._id,))
         project._db.commit()
