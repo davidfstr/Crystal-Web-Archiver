@@ -20,6 +20,7 @@ import shutil
 import sqlite3
 from typing import List, Optional, TYPE_CHECKING, TypedDict
 from urllib.parse import urlparse, urlunparse
+from .plugins import phpbb
 from .urls import is_unrewritable_url, requote_uri
 from .xfutures import Future
 from .xthreading import bg_call_later, fg_call_and_wait
@@ -380,6 +381,16 @@ class Resource(object):
             if new_url != old_url:
                 alternatives.append(new_url)
             del url_parts  # prevent accidental future use
+        
+        # Allow plugins to normalize URLs further
+        old_url = new_url
+        try:
+            new_url = phpbb.normalize_url(old_url)
+        except:  # ignore errors
+            new_url = old_url
+        else:
+            if new_url != old_url:
+                alternatives.append(new_url)
         
         return alternatives
     
