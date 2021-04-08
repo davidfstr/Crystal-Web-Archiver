@@ -3,6 +3,7 @@ from crystal.ui.tree import *
 from crystal.xcollections import defaultordereddict
 from crystal.xthreading import bg_call_later, fg_call_later
 import threading
+from typing import List
 from urllib.parse import urljoin, urlparse, urlunparse
 
 _ID_SET_PREFIX = 101
@@ -477,17 +478,16 @@ class ResourceGroupNode(Node):
     def entity(self):
         return self.resource_group
     
-    def update_children(self):
-        children_rrs = []
-        children_rs = []
+    def update_children(self) -> None:
+        children_rrs = []  # type: List[Node]
+        children_rs = []  # type: List[Node]
         project = self.resource_group.project
-        for r in project.resources:
-            if r in self.resource_group:
-                rr = project.get_root_resource(r)
-                if rr is None:
-                    children_rs.append(NormalResourceNode(r))
-                else:
-                    children_rrs.append(RootResourceNode(rr))
+        for r in self.resource_group.members:
+            rr = project.get_root_resource(r)
+            if rr is None:
+                children_rs.append(NormalResourceNode(r))
+            else:
+                children_rrs.append(RootResourceNode(rr))
         self.children = children_rrs + children_rs
     
     def __eq__(self, other):

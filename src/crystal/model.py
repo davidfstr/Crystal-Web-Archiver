@@ -218,8 +218,8 @@ class Project(object):
     
     # === Events ===
     
-    # (Called when a new Resource is created after the project has loaded)
-    def _resource_did_instantiate(self, resource):
+    # Called when a new Resource is created after the project has loaded
+    def _resource_did_instantiate(self, resource: Resource) -> None:
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
             rg._resource_did_instantiate(resource)
@@ -228,6 +228,22 @@ class Project(object):
         for lis in self.listeners:
             if hasattr(lis, 'resource_did_instantiate'):
                 lis.resource_did_instantiate(resource)
+    
+    def _resource_did_alter_url(self, 
+            resource: Resource, old_url: str, new_url: str) -> None:
+        del self._resources[old_url]
+        self._resources[new_url] = resource
+        
+        # Notify resource groups (which are like hardwired listeners)
+        for rg in self.resource_groups:
+            rg._resource_did_alter_url(resource, old_url, new_url)
+    
+    def _resource_did_delete(self, resource: Resource) -> None:
+        del self._resources[resource.url]
+        
+        # Notify resource groups (which are like hardwired listeners)
+        for rg in self.resource_groups:
+            rg._resource_did_delete(resource)
     
     # === Server ===
     
@@ -547,9 +563,11 @@ class Resource(object):
         c.execute('update resource set url=? where id=?', (new_url, self._id,))
         project._db.commit()
         
-        del project._resources[self._url]
-        project._resources[new_url] = self
+        old_url = self._url  # capture
         self._url = new_url
+        
+        project._resource_did_alter_url(self, old_url, new_url)
+        
         return True
     
     # NOTE: Only used from a Python REPL at the moment
@@ -576,7 +594,7 @@ class Resource(object):
         project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
-        del project._resources[self.url]
+        project._resource_did_delete(self)
     
     def __repr__(self):
         return "Resource(%s)" % (repr(self.url),)
@@ -997,7 +1015,11 @@ class ResourceGroup(object):
     Persisted and auto-saved.
     """
     
-    def __init__(self, project, name, url_pattern, _id=None):
+    def __init__(self, 
+            project: Project, 
+            name: str, 
+            url_pattern: str, 
+            _id: Optional[int]=None) -> None:
         """
         Arguments:
         project -- associated `Project`.
@@ -1009,7 +1031,13 @@ class ResourceGroup(object):
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         self._source = None
-        self.listeners = []
+        self.listeners = []  # type: List[object]
+        
+        members = []
+        for r in self.project.resources:
+            if self.contains_url(r.url):
+                members.append(r)
+        self._members = members
         
         if project._loading:
             self._id = _id
@@ -1090,25 +1118,35 @@ class ResourceGroup(object):
         
         return re.compile(r'^' + patstr + r'$')
     
-    def __contains__(self, resource) -> bool:
-        return self.contains_url(resource.url)
+    def __contains__(self, resource: Resource) -> bool:
+        return resource in self._members
     
     def contains_url(self, resource_url: str) -> bool:
         return self._url_pattern_re.match(resource_url) is not None
     
-    # TODO: Make this a property if it is ever optimized to O(1)
-    def members(self):
-        # PERF: O(n) when it could be O(1)
-        for r in self.project.resources:
-            if r in self:
-                yield r
+    @property
+    def members(self) -> List[Resource]:
+        return self._members
     
-    # (Called when a new Resource is created after the project has loaded)
-    def _resource_did_instantiate(self, resource):
-        if resource in self:
+    # Called when a new Resource is created after the project has loaded
+    def _resource_did_instantiate(self, resource: Resource) -> None:
+        if self.contains_url(resource.url):
+            self._members.append(resource)
+            
             for lis in self.listeners:
                 if hasattr(lis, 'group_did_add_member'):
-                    lis.group_did_add_member(self, resource)
+                    lis.group_did_add_member(self, resource)  # type: ignore[attr-defined]
+    
+    def _resource_did_alter_url(self, 
+            resource: Resource, old_url: str, new_url: str) -> None:
+        if self.contains_url(old_url):
+            self._members.remove(resource)
+        if self.contains_url(new_url):
+            self._members.append(resource)
+    
+    def _resource_did_delete(self, resource: Resource) -> None:
+        if resource in self._members:
+            self._members.remove(resource)
     
     def download(self):
         """

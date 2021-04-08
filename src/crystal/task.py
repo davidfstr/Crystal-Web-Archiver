@@ -465,14 +465,14 @@ class DownloadResourceGroupMembersTask(Task):
     If the group's members change during the task execution,
     additional child tasks will be created to download any additional group members.
     """
-    def __init__(self, group):
+    def __init__(self, group: ResourceGroup) -> None:
         Task.__init__(self, title='Downloading members of group: %s' % group.name)
         self.group = group
         self.group.listeners.append(self)
         self._done_updating_group = False
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
-        for member in group.members():
+        for member in group.members:
             self.append_child(member.create_download_task())
         self._update_subtitle()
     
