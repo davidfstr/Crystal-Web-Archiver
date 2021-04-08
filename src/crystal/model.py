@@ -374,6 +374,7 @@ class Resource(object):
         
         # TODO: Consider extending these normalization rules to apply to
         #       certain additional less-common schemes like 'ftp'
+        new_url: str
         if url_parts[0].lower() in ('http', 'https'):  # scheme
             # Normalize domain name
             if _is_ascii(url_parts[1]):  # netloc (domain)
@@ -397,6 +398,8 @@ class Resource(object):
             if new_url != old_url:
                 alternatives.append(new_url)
             del url_parts  # prevent accidental future use
+        else:
+            new_url = urlunparse(url_parts)
         
         # Allow plugins to normalize URLs further
         old_url = new_url
