@@ -162,6 +162,19 @@ class Task(object):
                     lis.task_did_complete(self)
         fg_call_later(fg_task)
     
+    def finalize_children(self, final_children: List[Task]) -> None:
+        """
+        Replace all completed children with a new set of completed children.
+        """
+        if not all(c.complete for c in self.children):
+            raise ValueError('Some children are not complete.')
+        if not all(c.complete for c in final_children):
+            raise ValueError('Some final children are not complete.')
+        self.clear_children()
+        
+        for c in final_children:
+            self.append_child(c)
+    
     def clear_children(self):
         """
         Clears all of this task's children.
@@ -437,8 +450,6 @@ class DownloadResourceTask(Task):
         self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
         
         if self.num_children_complete == len(self.children):
-            self.finish()
-            
             # Complete self._download_body_with_embedded_future,
             # with value of self._download_body_task.future
             exc = self._download_body_task.future.exception()
@@ -448,6 +459,21 @@ class DownloadResourceTask(Task):
                 else:
                     self._download_body_with_embedded_future.set_result(
                         self._download_body_task.future.result())
+            
+            # Cull children, allowing related memory to be freed
+            final_children = []
+            num_downloaded_resources = 0
+            for c in self.children:
+                if c is self._download_body_task or c is self._parse_links_task:
+                    final_children.append(c)
+                else:
+                    assert isinstance(task, DownloadResourceTask)
+                    num_downloaded_resources += 1
+            final_children.append(_DownloadResourcesPlaceholderTask(
+                num_downloaded_resources))
+            self.finalize_children(final_children)
+            
+            self.finish()
     
     def _ancestor_downloading_resources(self) -> List[Resource]:
         ancestors = []
@@ -480,6 +506,22 @@ class ParseResourceRevisionLinks(Task):
     def dispose(self) -> None:
         super().dispose()
         self._resource_revision = None
+
+class _DownloadResourcesPlaceholderTask(Task):
+    """
+    Placeholder task that replaces 0 or more downloaded resources.
+    """
+    
+    def __init__(self, item_count: int) -> None:
+        Task.__init__(self, title='Downloading %d item%s' % (
+            item_count,
+            's' if item_count != 1 else ''
+        ))
+        self._complete = True  # HACK: pre-finish this part
+        self.finish()
+    
+    def __call__(self):
+        raise ValueError()
 
 # ----------------------------------------------------------------------------------------
 from crystal.model import Resource, ResourceGroup, RootResource
