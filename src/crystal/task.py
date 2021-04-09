@@ -33,6 +33,22 @@ class Task(object):
     
     Tasks must generally be manipulated on the foreground thread unless
     documented otherwise.
+    
+    A task's result can be obtained from its future.
+    
+    Using tasks:
+    - Arbitrary code can perform some action in the background by creating a task,
+      adding a listener to the task's future (or otherwise storing the future),
+      and scheduling the task within the project using Project.add_task().
+    - A task may perform a subtask by creating a Task object for the subtask,
+      and scheduling the subtask within itself using Task.append_child().
+    
+    A parent task is responsible for disposing each of its child tasks using 
+    Task.dispose() after it has processed the child's result.
+    Any tasks scheduled directly on a project's root task with Project.add_task()
+    will have its result automatically disposed once the task is complete.
+    So if you care about the result of a task you plan to schedule on a project, 
+    be sure to save the task's future *before* scheduling it.
     """
     
     def __init__(self, title):
@@ -109,6 +125,15 @@ class Task(object):
             return self._future
         else:
             raise ValueError('Container tasks do not define a result by default.')
+    
+    def dispose(self) -> None:
+        """
+        Replaces this task's future with a new future that raises a 
+        TaskDisposedException, allowing the original future to be
+        garbage-collected if it isn't referenced elsewhere.
+        """
+        self._future = Future()
+        self._future.set_exception(_TASK_DISPOSED_EXCEPTION)
     
     # === Protected Operations ===
     
@@ -238,6 +263,11 @@ class Task(object):
         
         task.listeners.remove(self)
 
+class TaskDisposedException(Exception):
+    pass
+
+_TASK_DISPOSED_EXCEPTION = TaskDisposedException()
+
 # ----------------------------------------------------------------------------------------
 from crystal.model import Resource
 from urllib.parse import urljoin
@@ -330,7 +360,6 @@ class DownloadResourceTask(Task):
         self.append_child(self._download_body_task)
         
         self._download_body_with_embedded_future = Future()
-        self._download_body_with_embedded_future.set_running_or_notify_cancel()
     
     @property
     def future(self) -> Future:
@@ -341,6 +370,13 @@ class DownloadResourceTask(Task):
             return self._download_body_task.future
         else:
             return self._download_body_with_embedded_future
+    
+    def dispose(self) -> None:
+        super().dispose()
+        self._download_body_task.dispose()
+        self._download_body_with_embedded_future = Future()
+        self._download_body_with_embedded_future.set_exception(
+            _TASK_DISPOSED_EXCEPTION)
     
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task is self._download_body_task:
@@ -364,9 +400,13 @@ class DownloadResourceTask(Task):
                 if not is_error_page:
                     self._parse_links_task = ParseResourceRevisionLinks(self._abstract_resource, body_revision)
                     self.append_child(self._parse_links_task)
+            
+            # (Don't dispose self._download_body_task because its future is
+            #  used for this task's own future.)
         
-        if task is self._parse_links_task:
+        elif task is self._parse_links_task:
             links = self._parse_links_task.future.result()
+            self._parse_links_task.dispose()
             
             embedded_resources = []
             link_urls_seen = set()
@@ -390,6 +430,10 @@ class DownloadResourceTask(Task):
                     continue
                 self.append_child(resource.create_download_task())
         
+        else:
+            assert isinstance(task, DownloadResourceTask)
+            task.dispose()
+        
         self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
         
         if self.num_children_complete == len(self.children):
@@ -398,11 +442,12 @@ class DownloadResourceTask(Task):
             # Complete self._download_body_with_embedded_future,
             # with value of self._download_body_task.future
             exc = self._download_body_task.future.exception()
-            if exc is not None:
-                self._download_body_with_embedded_future.set_exception(exc)
-            else:
-                self._download_body_with_embedded_future.set_result(
-                    self._download_body_task.future.result())
+            if not self._download_body_with_embedded_future.done():  # not disposed
+                if exc is not None:
+                    self._download_body_with_embedded_future.set_exception(exc)
+                else:
+                    self._download_body_with_embedded_future.set_result(
+                        self._download_body_task.future.result())
     
     def _ancestor_downloading_resources(self) -> List[Resource]:
         ancestors = []
@@ -431,6 +476,10 @@ class ParseResourceRevisionLinks(Task):
     def __call__(self):
         self.subtitle = 'Parsing links...'
         return self._resource_revision.links()
+    
+    def dispose(self) -> None:
+        super().dispose()
+        self._resource_revision = None
 
 # ----------------------------------------------------------------------------------------
 from crystal.model import Resource, ResourceGroup, RootResource
@@ -456,6 +505,8 @@ class UpdateResourceGroupMembersTask(Task):
             self.subtitle = task.subtitle
     
     def child_task_did_complete(self, task):
+        task.dispose()
+        
         if self.num_children_complete == len(self.children):
             self.finish()
 
@@ -486,6 +537,8 @@ class DownloadResourceGroupMembersTask(Task):
         self._update_completed_status()
     
     def child_task_did_complete(self, task):
+        task.dispose()
+        
         self._update_subtitle()
         self._update_completed_status()
     
@@ -520,6 +573,8 @@ class DownloadResourceGroupTask(Task):
             self._started_downloading_members = True
     
     def child_task_did_complete(self, task):
+        task.dispose()
+        
         if task == self._update_members_task:
             self._download_members_task.group_did_finish_updating()
         
@@ -549,6 +604,8 @@ class RootTask(Task):
         return super(RootTask, self).try_get_next_task_unit()
     
     def child_task_did_complete(self, task):
+        task.dispose()
+        
         if all(c.complete for c in self.children):
             self.clear_children()
 
