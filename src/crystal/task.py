@@ -147,7 +147,7 @@ class Task(object):
             if hasattr(lis, 'task_did_append_child'):
                 lis.task_did_append_child(self, child)
     
-    def finish(self, force_later: bool=False) -> None:
+    def finish(self) -> None:
         """
         Marks this task as completed.
         Threadsafe.
@@ -160,7 +160,7 @@ class Task(object):
             for lis in list(self.listeners):
                 if hasattr(lis, 'task_did_complete'):
                     lis.task_did_complete(self) 
-        fg_call_later(fg_task, force=force_later)
+        fg_call_later(fg_task)
     
     def finalize_children(self, final_children: List[Task]) -> None:
         """
@@ -253,6 +253,8 @@ class Task(object):
     
     def _call_self_and_record_result(self):
         # (Ignore client requests to cancel)
+        if self._future.done():
+            raise AssertionError(f'Future for {self!r} was already done')
         self._future.set_running_or_notify_cancel()
         try:
             self._future.set_result(self())
@@ -557,12 +559,14 @@ class _PlaceholderTask(Task):  # abstract
             title: str,
             value: object=_NO_VALUE,
             exception: Optional[Exception]=None,
-            force_finish_later: bool=False) -> None:
+            prefinish: bool=False) -> None:
         super().__init__(title)
         self._value = value
         self._exception = exception
         
-        self.finish(force_later=force_finish_later)
+        if prefinish:
+            self._complete = True  # HACK: pre-finish this part
+            self.finish()
     
     def __call__(self):
         if self._value is not _NO_VALUE:
@@ -585,7 +589,6 @@ class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
         super().__init__(
             title='Already downloaded',
             exception=_ALREADY_DOWNLOADED_EXCEPTION,
-            force_finish_later=True,
         )    
 
 class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
@@ -598,7 +601,8 @@ class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
             title='Downloading %d item%s' % (
                 item_count,
                 's' if item_count != 1 else ''
-            )
+            ),
+            prefinish=True,
         )
 
 # ----------------------------------------------------------------------------------------
