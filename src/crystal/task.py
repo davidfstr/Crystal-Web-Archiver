@@ -137,7 +137,7 @@ class Task(object):
     
     # === Protected Operations ===
     
-    def append_child(self, child):
+    def append_child(self, child: Task) -> None:
         child._parent = self
         self._children.append(child)
         
@@ -147,7 +147,7 @@ class Task(object):
             if hasattr(lis, 'task_did_append_child'):
                 lis.task_did_append_child(self, child)
     
-    def finish(self):
+    def finish(self, force_later: bool=False) -> None:
         """
         Marks this task as completed.
         Threadsafe.
@@ -159,8 +159,8 @@ class Task(object):
             # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
             for lis in list(self.listeners):
                 if hasattr(lis, 'task_did_complete'):
-                    lis.task_did_complete(self)
-        fg_call_later(fg_task)
+                    lis.task_did_complete(self) 
+        fg_call_later(fg_task, force=force_later)
     
     def finalize_children(self, final_children: List[Task]) -> None:
         """
@@ -175,7 +175,7 @@ class Task(object):
         for c in final_children:
             self.append_child(c)
     
-    def clear_children(self):
+    def clear_children(self) -> None:
         """
         Clears all of this task's children.
         Recommended only for use by RootTask.
@@ -366,13 +366,34 @@ class DownloadResourceTask(Task):
         Task.__init__(self, 'Downloading: ' + _get_abstract_resource_title(abstract_resource))
         self._abstract_resource = abstract_resource
         self._resource = resource = abstract_resource.resource
+        
         self._download_body_task = resource.create_download_body_task()
         self._parse_links_task = None
+        self._already_downloaded_task = (
+            _AlreadyDownloadedPlaceholderTask()
+            if self._resource.already_downloaded_this_session
+            else None
+        )
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         self.append_child(self._download_body_task)
+        if self._already_downloaded_task is not None:
+            # NOTE: For compatibility with DownloadResourceTask's default
+            #       behavior of always returning a ResourceRevision,
+            #       we still take the time to load the ResourceRevision from
+            #       disk with self._download_body_task.
+            # TODO: Avoid loading the ResourceRevision from disk in the common
+            #       case where the caller doesn't actually use the
+            #       ResourceRevision result of this task and its resource
+            #       has already been downloaded this session.
+            self.append_child(self._already_downloaded_task)
         
         self._download_body_with_embedded_future = Future()
+        
+        # Prevent other DownloadResourceTasks created during this session from
+        # attempting to redownload this resource since they would duplicate
+        # the same actions and waste time
+        self._resource.already_downloaded_this_session = True
     
     @property
     def future(self) -> Future:
@@ -398,24 +419,28 @@ class DownloadResourceTask(Task):
     
     def child_task_did_complete(self, task: Task) -> None:
         if task is self._download_body_task:
-            try:
-                body_revision = self._download_body_task.future.result()
-            except:
-                # Behave as if there are no embedded resources
+            if self._already_downloaded_task is not None:
+                # Don't reparse links or attempt to redownload embedded resources
                 pass
             else:
-                # If revision is an error page then do not download any embedded
-                # resources automatically. Poorly written error pages may
-                # themselves download other resources with errors,
-                # recursing infinitely.
-                status_code = body_revision.status_code or 500
-                is_error_page = (status_code // 100) in (4, 5)  # HTTP 4xx or 5xx
-                if not is_error_page:
-                    self._parse_links_task = ParseResourceRevisionLinks(self._abstract_resource, body_revision)
-                    self.append_child(self._parse_links_task)
-            
-            # (Don't dispose self._download_body_task because its future is
-            #  used for this task's own future.)
+                try:
+                    body_revision = self._download_body_task.future.result()
+                except:
+                    # Behave as if there are no embedded resources
+                    pass
+                else:
+                    # If revision is an error page then do not download any embedded
+                    # resources automatically. Poorly written error pages may
+                    # themselves download other resources with errors,
+                    # recursing infinitely.
+                    status_code = body_revision.status_code or 500
+                    is_error_page = (status_code // 100) in (4, 5)  # HTTP 4xx or 5xx
+                    if not is_error_page:
+                        self._parse_links_task = ParseResourceRevisionLinks(self._abstract_resource, body_revision)
+                        self.append_child(self._parse_links_task)
+                
+                # (Don't dispose self._download_body_task because its future is
+                #  used for this task's own future.)
         
         elif task is self._parse_links_task:
             links = self._parse_links_task.future.result()
@@ -444,7 +469,11 @@ class DownloadResourceTask(Task):
                 self.append_child(resource.create_download_task())
         
         else:
-            assert isinstance(task, DownloadResourceTask)
+            assert isinstance(task, (
+                DownloadResourceTask,
+                _DownloadResourcesPlaceholderTask,
+                _AlreadyDownloadedPlaceholderTask
+            ))
             task.dispose()
         
         self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
@@ -461,17 +490,21 @@ class DownloadResourceTask(Task):
                         self._download_body_task.future.result())
             
             # Cull children, allowing related memory to be freed
-            final_children = []
-            num_downloaded_resources = 0
-            for c in self.children:
-                if c is self._download_body_task or c is self._parse_links_task:
-                    final_children.append(c)
-                else:
-                    assert isinstance(task, DownloadResourceTask)
-                    num_downloaded_resources += 1
-            final_children.append(_DownloadResourcesPlaceholderTask(
-                num_downloaded_resources))
-            self.finalize_children(final_children)
+            if self._already_downloaded_task is not None:
+                # No DownloadResourceTask children exist to cull
+                pass
+            else:
+                final_children = []
+                num_downloaded_resources = 0
+                for c in self.children:
+                    if c is self._download_body_task or c is self._parse_links_task:
+                        final_children.append(c)
+                    else:
+                        assert isinstance(task, DownloadResourceTask)
+                        num_downloaded_resources += 1
+                final_children.append(_DownloadResourcesPlaceholderTask(
+                    num_downloaded_resources))
+                self.finalize_children(final_children)
             
             self.finish()
     
@@ -507,21 +540,59 @@ class ParseResourceRevisionLinks(Task):
         super().dispose()
         self._resource_revision = None
 
-class _DownloadResourcesPlaceholderTask(Task):
+_NO_VALUE = object()
+
+class _PlaceholderTask(Task):  # abstract
     """
-    Placeholder task that replaces 0 or more downloaded resources.
+    Leaf task that presents a fixed title and starts as completed.
     """
-    
-    def __init__(self, item_count: int) -> None:
-        Task.__init__(self, title='Downloading %d item%s' % (
-            item_count,
-            's' if item_count != 1 else ''
-        ))
-        self._complete = True  # HACK: pre-finish this part
-        self.finish()
+    def __init__(self,
+            title: str,
+            value: object=_NO_VALUE,
+            exception: Optional[Exception]=None,
+            force_finish_later: bool=False) -> None:
+        super().__init__(title)
+        self._value = value
+        self._exception = exception
+        
+        self.finish(force_later=force_finish_later)
     
     def __call__(self):
-        raise ValueError()
+        if self._value is not _NO_VALUE:
+            return self._value
+        elif self._exception is not None:
+            raise self._exception
+        else:
+            return None  # default value
+
+class _AlreadyDownloadedException(Exception):
+    pass
+
+_ALREADY_DOWNLOADED_EXCEPTION = _AlreadyDownloadedException()
+
+class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
+    """
+    Placeholder task that marks resources that have already been downloaded.
+    """
+    def __init__(self) -> None:
+        super().__init__(
+            title='Already downloaded',
+            exception=_ALREADY_DOWNLOADED_EXCEPTION,
+            force_finish_later=True,
+        )    
+
+class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
+    """
+    Placeholder task that replaces 0 or more DownloadResourceTasks,
+    allowing them to be garbage-collected.
+    """
+    def __init__(self, item_count: int) -> None:
+        super().__init__(
+            title='Downloading %d item%s' % (
+                item_count,
+                's' if item_count != 1 else ''
+            )
+        )
 
 # ----------------------------------------------------------------------------------------
 from crystal.model import Resource, ResourceGroup, RootResource

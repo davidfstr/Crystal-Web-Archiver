@@ -291,6 +291,7 @@ class Resource(object):
     """
     project: Project
     _url: str
+    already_downloaded_this_session: bool
     _id: int  # or None if deleted
     
     def __new__(cls, project: Project, url: str, _id=None) -> Resource:
@@ -324,6 +325,7 @@ class Resource(object):
         self._url = normalized_url
         self._download_body_task_ref = _WeakTaskRef()
         self._download_task_ref = _WeakTaskRef()
+        self.already_downloaded_this_session = False
         
         if project._loading:
             self._id = _id
