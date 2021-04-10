@@ -579,8 +579,6 @@ class _PlaceholderTask(Task):  # abstract
 class _AlreadyDownloadedException(Exception):
     pass
 
-_ALREADY_DOWNLOADED_EXCEPTION = _AlreadyDownloadedException()
-
 class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
     """
     Placeholder task that marks resources that have already been downloaded.
@@ -588,7 +586,7 @@ class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
     def __init__(self) -> None:
         super().__init__(
             title='Already downloaded',
-            exception=_ALREADY_DOWNLOADED_EXCEPTION,
+            exception=_AlreadyDownloadedException().with_traceback(None),
         )    
 
 class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
