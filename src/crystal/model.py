@@ -294,6 +294,7 @@ class Resource(object):
     _url: str
     _download_body_task_ref: _WeakTaskRef
     _download_task_ref: _WeakTaskRef
+    _download_task_noresult_ref: _WeakTaskRef
     already_downloaded_this_session: bool
     _id: int  # or None if deleted
     
@@ -328,6 +329,7 @@ class Resource(object):
         self._url = normalized_url
         self._download_body_task_ref = _WeakTaskRef()
         self._download_task_ref = _WeakTaskRef()
+        self._download_task_noresult_ref = _WeakTaskRef()
         self.already_downloaded_this_session = False
         
         if project._loading:
@@ -497,12 +499,10 @@ class Resource(object):
         def task_factory():
             from crystal.task import DownloadResourceTask
             return DownloadResourceTask(self, needs_result=needs_result)
-        if needs_result:
-            return self._get_task_or_create(self._download_task_ref, task_factory)
-        else:
-            # Unsafe to cache DownloadResourceTask with needs_result=False
-            # alongside versions with needs_result=True
-            return task_factory()
+        return self._get_task_or_create(
+            self._download_task_ref if needs_result else self._download_task_noresult_ref,
+            task_factory
+        )
     
     def _get_task_or_create(self, task_ref, task_factory):
         if task_ref.task is not None:
