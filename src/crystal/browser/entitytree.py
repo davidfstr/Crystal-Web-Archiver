@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 from crystal.model import Resource
 from crystal.ui.tree import *
 from crystal.xcollections import defaultordereddict
 from crystal.xthreading import bg_call_later, fg_call_later
 import threading
-from typing import List
+from typing import List, Optional, TYPE_CHECKING, Union
 from urllib.parse import urljoin, urlparse, urlunparse
+
+if TYPE_CHECKING:
+    from crystal.model import ResourceGroup, RootResource
 
 _ID_SET_PREFIX = 101
 _ID_CLEAR_PREFIX = 102
@@ -31,11 +36,11 @@ class EntityTree(object):
         return self.view.peer
     
     @property
-    def selected_entity(self):
+    def selected_entity(self) -> Optional[NodeEntity]:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
-        selected_node = selected_node_view.delegate
+        selected_node = selected_node_view.delegate  # type: Node
         
         return selected_node.entity
     
@@ -144,6 +149,8 @@ def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     old_seq_selfdict = dict([(x, x) for x in old_seq])
     return [old_seq_selfdict.get(x, x) for x in new_seq]
 
+NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
+
 class Node(object):
     def __init__(self):
         self._children = []
@@ -164,10 +171,9 @@ class Node(object):
     children = property(_get_children, _set_children)
     
     @property
-    def entity(self):
+    def entity(self) -> Optional[NodeEntity]:
         """
-        The entity (ex: RootResource, Resource, ResourceGroup)
-        represented by this node, or None if not applicable.
+        The entity represented by this node, or None if not applicable.
         """
         return None
     

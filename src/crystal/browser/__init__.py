@@ -10,6 +10,8 @@ import wx
 _WINDOW_INNER_PADDING = 10
 
 class MainWindow(object):
+    entity_tree: EntityTree
+    
     def __init__(self, project):
         self.project = project
         
@@ -153,11 +155,12 @@ class MainWindow(object):
         self.entity_tree.selected_entity.delete()
         self.entity_tree.update()
     
-    def _on_download_entity(self, event):
+    def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
+        assert selected_entity is not None
         if self._alert_if_not_downloadable(selected_entity):
             return
-        selected_entity.download()
+        selected_entity.download(needs_result=False)
     
     def _on_update_group_membership(self, event):
         selected_entity = self.entity_tree.selected_entity

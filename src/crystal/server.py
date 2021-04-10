@@ -234,7 +234,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     #       finished downloading. To avoid serving a broken
                     #       page we must wait longer for the embedded resources
                     #       to finish downloading.
-                    resource.download(wait_for_embedded=True).result()
+                    try:
+                        resource.download(
+                            wait_for_embedded=True,
+                            needs_result=False,
+                        ).result()
+                    except:
+                        # Don't care if there was an error downloading
+                        pass
                     # (continue to serve downloaded resource revision)
                 else:
                     self.send_resource_not_in_archive(archive_url)

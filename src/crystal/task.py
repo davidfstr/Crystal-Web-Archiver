@@ -358,7 +358,7 @@ class DownloadResourceTask(Task):
     This is returned before all embedded resources have finished downloading,
     unless you specially use get_future(wait_for_embedded=True).
     """
-    def __init__(self, abstract_resource):
+    def __init__(self, abstract_resource, *, needs_result: bool=True):
         """
         Arguments:
         abstract_resource -- a Resource or a RootResource.
@@ -367,8 +367,12 @@ class DownloadResourceTask(Task):
         self._abstract_resource = abstract_resource
         self._resource = resource = abstract_resource.resource
         
-        self._download_body_task = resource.create_download_body_task()
-        self._parse_links_task = None
+        self._download_body_task = (
+            None
+            if self._resource.already_downloaded_this_session and not needs_result
+            else resource.create_download_body_task()
+        )
+        self._parse_links_task = None  # type: Optional[ParseResourceRevisionLinks]
         self._already_downloaded_task = (
             _AlreadyDownloadedPlaceholderTask()
             if self._resource.already_downloaded_this_session
@@ -376,19 +380,12 @@ class DownloadResourceTask(Task):
         )
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
-        self.append_child(self._download_body_task)
+        if self._download_body_task is not None:
+            self.append_child(self._download_body_task)
         if self._already_downloaded_task is not None:
-            # NOTE: For compatibility with DownloadResourceTask's default
-            #       behavior of always returning a ResourceRevision,
-            #       we still take the time to load the ResourceRevision from
-            #       disk with self._download_body_task.
-            # TODO: Avoid loading the ResourceRevision from disk in the common
-            #       case where the caller doesn't actually use the
-            #       ResourceRevision result of this task and its resource
-            #       has already been downloaded this session.
             self.append_child(self._already_downloaded_task)
         
-        self._download_body_with_embedded_future = Future()
+        self._download_body_with_embedded_future = Future()  # type: Future
         
         # Prevent other DownloadResourceTasks created during this session from
         # attempting to redownload this resource since they would duplicate
@@ -397,17 +394,26 @@ class DownloadResourceTask(Task):
     
     @property
     def future(self) -> Future:
-        return self._download_body_task.future
+        if self._download_body_task is None:
+            assert self._already_downloaded_task is not None
+            return self._already_downloaded_task.future
+        else:
+            return self._download_body_task.future
     
     def get_future(self, wait_for_embedded: bool=False) -> Future:
-        if not wait_for_embedded:
-            return self._download_body_task.future
+        if self._download_body_task is None:
+            assert self._already_downloaded_task is not None
+            return self._already_downloaded_task.future
         else:
-            return self._download_body_with_embedded_future
+            if not wait_for_embedded:
+                return self._download_body_task.future
+            else:
+                return self._download_body_with_embedded_future
     
     def dispose(self) -> None:
         super().dispose()
-        self._download_body_task.dispose()
+        if self._download_body_task is not None:
+            self._download_body_task.dispose()
         self._download_body_with_embedded_future = Future()
         self._download_body_with_embedded_future.set_exception(
             _TASK_DISPOSED_EXCEPTION)
@@ -466,7 +472,7 @@ class DownloadResourceTask(Task):
                     # (probably incorrectly) as an embedded resource of itself,
                     # or when a chain of embedded resources links to itself
                     continue
-                self.append_child(resource.create_download_task())
+                self.append_child(resource.create_download_task(needs_result=False))
         
         else:
             assert isinstance(task, (
@@ -481,13 +487,14 @@ class DownloadResourceTask(Task):
         if self.num_children_complete == len(self.children):
             # Complete self._download_body_with_embedded_future,
             # with value of self._download_body_task.future
-            exc = self._download_body_task.future.exception()
-            if not self._download_body_with_embedded_future.done():  # not disposed
-                if exc is not None:
-                    self._download_body_with_embedded_future.set_exception(exc)
-                else:
-                    self._download_body_with_embedded_future.set_result(
-                        self._download_body_task.future.result())
+            if self._download_body_task is not None:
+                exc = self._download_body_task.future.exception()
+                if not self._download_body_with_embedded_future.done():  # not disposed
+                    if exc is not None:
+                        self._download_body_with_embedded_future.set_exception(exc)
+                    else:
+                        self._download_body_with_embedded_future.set_result(
+                            self._download_body_task.future.result())
             
             # Cull children, allowing related memory to be freed
             if self._already_downloaded_task is not None:
@@ -606,12 +613,14 @@ class UpdateResourceGroupMembersTask(Task):
     This task primarily serves to provide a nice title describing why the child
     task is being run.
     """
-    def __init__(self, group):
+    def __init__(self, group: ResourceGroup) -> None:
         Task.__init__(self, title='Finding members of group: %s' % group.name)
         self.group = group
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
-        self.append_child(group.source.create_download_task())
+        if group.source is None:
+            raise ValueError('Expected group with a source')
+        self.append_child(group.source.create_download_task(needs_result=False))
     
     def child_task_subtitle_did_change(self, task):
         if not task.complete:
@@ -637,11 +646,11 @@ class DownloadResourceGroupMembersTask(Task):
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         for member in group.members:
-            self.append_child(member.create_download_task())
+            self.append_child(member.create_download_task(needs_result=False))
         self._update_subtitle()
     
     def group_did_add_member(self, group, member):
-        self.append_child(member.create_download_task())
+        self.append_child(member.create_download_task(needs_result=False))
         self._update_subtitle()
     
     def group_did_finish_updating(self):

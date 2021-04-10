@@ -18,7 +18,7 @@ import os
 import re
 import shutil
 import sqlite3
-from typing import List, Optional, TYPE_CHECKING, TypedDict
+from typing import cast, List, Optional, TYPE_CHECKING, TypedDict, Union
 from urllib.parse import urlparse, urlunparse
 from .plugins import phpbb
 from .urls import is_unrewritable_url, requote_uri
@@ -27,6 +27,7 @@ from .xthreading import bg_call_later, fg_call_and_wait
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
+    from crystal.task import DownloadResourceTask, DownloadResourceGroupTask, Task
 
 class Project(object):
     """
@@ -291,6 +292,8 @@ class Resource(object):
     """
     project: Project
     _url: str
+    _download_body_task_ref: _WeakTaskRef
+    _download_task_ref: _WeakTaskRef
     already_downloaded_this_session: bool
     _id: int  # or None if deleted
     
@@ -461,21 +464,30 @@ class Resource(object):
             return DownloadResourceBodyTask(self)
         return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
-    def download(self, wait_for_embedded: bool=False) -> Future:
+    def download(self, wait_for_embedded: bool=False, needs_result: bool=True) -> Future:
         """
-        Returns a Future<ResourceRevision> that downloads (if necessary) and returns an
+        Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
         up-to-date version of this resource's body. If a download is performed, all
         embedded resources will be downloaded as well.
         
         The returned Future may invoke its callbacks on any thread.
         
         A top-level Task will be created internally to display the progress.
+        
+        By default the returned future waits only for the resource itself
+        to finish downloading but not for any embedded resources to finish
+        downloading. Pass wait_for_embedded=True if you also want to wait
+        for embedded resources.
+        
+        If needs_result=False then the caller is declaring that it does
+        not need and will ignore the result of the returned future,
+        which enables additional optimizations.
         """
-        task = self.create_download_task()
+        task = self.create_download_task(needs_result=needs_result)
         self.project.add_task(task)
         return task.get_future(wait_for_embedded)
     
-    def create_download_task(self):
+    def create_download_task(self, needs_result: bool=True) -> DownloadResourceTask:
         """
         Creates a Task to download this resource and all its embedded resources.
         
@@ -484,8 +496,13 @@ class Resource(object):
         """
         def task_factory():
             from crystal.task import DownloadResourceTask
-            return DownloadResourceTask(self)
-        return self._get_task_or_create(self._download_task_ref, task_factory)
+            return DownloadResourceTask(self, needs_result=needs_result)
+        if needs_result:
+            return self._get_task_or_create(self._download_task_ref, task_factory)
+        else:
+            # Unsafe to cache DownloadResourceTask with needs_result=False
+            # alongside versions with needs_result=True
+            return task_factory()
     
     def _get_task_or_create(self, task_ref, task_factory):
         if task_ref.task is not None:
@@ -609,8 +626,11 @@ class RootResource(object):
     Represents a resource whose existence is manually defined by the user.
     Persisted and auto-saved.
     """
+    project: Project
+    name: str
+    resource: Resource
     
-    def __new__(cls, project, name, resource, _id=None):
+    def __new__(cls, project, name, resource, _id=None) -> RootResource:
         """
         Creates a new root resource.
         
@@ -668,13 +688,13 @@ class RootResource(object):
     
     # TODO: Create the underlying task with the full RootResource
     #       so that the correct subtitle is displayed.
-    def download(self):
-        return self.resource.download()
+    def download(self, needs_result: bool=True) -> Future:
+        return self.resource.download(needs_result=needs_result)
     
     # TODO: Create the underlying task with the full RootResource
     #       so that the correct subtitle is displayed.
-    def create_download_task(self):
-        return self.resource.create_download_task()
+    def create_download_task(self, needs_result: bool=True) -> Task:
+        return self.resource.create_download_task(needs_result=needs_result)
     
     def __repr__(self):
         return "RootResource(%s,%s)" % (repr(self.name), repr(self.resource.url))
@@ -1014,6 +1034,8 @@ class _PersistedError(Exception):
         self.message = message
         self.type = type
 
+ResourceGroupSource = Union['RootResource', 'ResourceGroup', None]
+
 class ResourceGroup(object):
     """
     Groups resource whose url matches a particular pattern.
@@ -1035,7 +1057,7 @@ class ResourceGroup(object):
         self.name = name
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
-        self._source = None
+        self._source = None  # type: ResourceGroupSource
         self.listeners = []  # type: List[object]
         
         members = []
@@ -1053,7 +1075,7 @@ class ResourceGroup(object):
             self._id = c.lastrowid
         project._resource_groups.append(self)
     
-    def _init_source(self, source):
+    def _init_source(self, source: ResourceGroupSource) -> None:
         self._source = source
     
     def delete(self):
@@ -1072,17 +1094,16 @@ class ResourceGroup(object):
         
         self.project._resource_groups.remove(self)
     
-    def _get_source(self):
+    def _get_source(self) -> ResourceGroupSource:
         """
         The "source" of this resource group.
-        A source can be a RootResource, a ResourceGroup, or None.
         
         If the source of a resource group is set, the user asserts that downloading
         the source will reveal all of the members of this group. Thus a group's source
         acts as the source of its members.
         """
         return self._source
-    def _set_source(self, value):
+    def _set_source(self, value: ResourceGroupSource) -> None:
         if value is None:
             source_type = None
             source_id = None
@@ -1100,7 +1121,7 @@ class ResourceGroup(object):
         self.project._db.commit()
         
         self._source = value
-    source = property(_get_source, _set_source)
+    source = cast(ResourceGroupSource, property(_get_source, _set_source))
     
     @staticmethod
     def create_re_for_url_pattern(url_pattern):
@@ -1153,22 +1174,26 @@ class ResourceGroup(object):
         if resource in self._members:
             self._members.remove(resource)
     
-    def download(self):
+    def download(self, needs_result: bool=False) -> None:
         """
         Downloads this group asynchronously.
         
         A top-level Task will be created internally to display the progress.
         """
-        task = self.create_download_task()
+        if needs_result:
+            raise ValueError('Download task for a group never has a result')
+        task = self.create_download_task(needs_result=needs_result)
         self.project.add_task(task)
     
-    def create_download_task(self):
+    def create_download_task(self, needs_result: bool=False) -> DownloadResourceGroupTask:
         """
         Creates a Task to download this resource group.
         
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
         """
+        if needs_result:
+            raise ValueError('Download task for a group never has a result')
         if self.source is None:
             raise ValueError('Cannot download a group that lacks a source.')
         
