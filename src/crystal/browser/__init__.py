@@ -2,7 +2,8 @@ from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree
 from crystal.browser.tasktree import TaskTree
-from crystal.model import Resource, ResourceGroup, RootResource
+from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.progress import OpenProjectProgressListener
 from crystal.task import RootTask
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 import wx
@@ -12,7 +13,7 @@ _WINDOW_INNER_PADDING = 10
 class MainWindow(object):
     entity_tree: EntityTree
     
-    def __init__(self, project):
+    def __init__(self, project: Project, progress_listener: OpenProjectProgressListener) -> None:
         self.project = project
         
         frame = wx.Frame(None, title=project.title)
@@ -23,7 +24,7 @@ class MainWindow(object):
         splitter.SetSashGravity(1.0)
         splitter.SetMinimumPaneSize(20)
         
-        entity_pane = self._create_entity_pane(splitter)
+        entity_pane = self._create_entity_pane(splitter, progress_listener)
         task_pane = self._create_task_pane(splitter)
         splitter.SplitHorizontally(entity_pane, task_pane, -task_pane.GetBestSize().height)
         
@@ -36,24 +37,31 @@ class MainWindow(object):
     
     # === Entity Pane: Init ===
     
-    def _create_entity_pane(self, parent):
+    def _create_entity_pane(self, parent, progress_listener: OpenProjectProgressListener):
         pane = wx.Panel(parent)
         pane_sizer = wx.BoxSizer(wx.VERTICAL)
         pane.SetSizer(pane_sizer)
         
-        pane_sizer.Add(self._create_entity_pane_content(pane), proportion=1, flag=wx.EXPAND|wx.ALL, border=_WINDOW_INNER_PADDING)
+        pane_sizer.Add(
+            self._create_entity_pane_content(pane, progress_listener),
+            proportion=1,
+            flag=wx.EXPAND|wx.ALL,
+            border=_WINDOW_INNER_PADDING)
         
         return pane
     
-    def _create_entity_pane_content(self, parent):
+    def _create_entity_pane_content(self, parent, progress_listener: OpenProjectProgressListener):
         content_sizer = wx.BoxSizer(wx.VERTICAL)
-        content_sizer.Add(self._create_entity_tree(parent), proportion=1, flag=wx.EXPAND)
+        content_sizer.Add(
+            self._create_entity_tree(parent, progress_listener),
+            proportion=1,
+            flag=wx.EXPAND)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
         content_sizer.Add(self._create_button_bar(parent), flag=wx.EXPAND)
         return content_sizer
     
-    def _create_entity_tree(self, parent):
-        self.entity_tree = EntityTree(parent, self.project)
+    def _create_entity_tree(self, parent, progress_listener: OpenProjectProgressListener):
+        self.entity_tree = EntityTree(parent, self.project, progress_listener)
         self.entity_tree.peer.Bind(wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
         
         return self.entity_tree.peer

@@ -7,6 +7,8 @@ This abstraction provides:
 * access to the underlying "peer" objects (i.e. wx.TreeCtrl, tree item index)
 """
 
+from crystal.progress import OpenProjectProgressListener
+from typing import Optional
 import wx
 
 _DEFAULT_TREE_ICON_SIZE = (16,16)
@@ -181,13 +183,27 @@ class NodeView(object):
     
     def _get_children(self):
         return self._children
-    def _set_children(self, new_children):
+    def _set_children(self, new_children) -> None:
+        self.set_children(new_children)
+    children = property(_get_children, _set_children)
+    
+    def set_children(self,
+            new_children,
+            progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
+        if progress_listener is not None:
+            part_count = sum([len(c.children) for c in new_children])
+            progress_listener.creating_entity_tree_nodes(part_count)
+        
         old_children = self._children
         self._children = new_children
         if self.peer:
             if not self.peer.GetFirstChild()[0].IsOk():
                 # Add initial children
-                for child in new_children:
+                part_index = 0
+                for (index, child) in enumerate(new_children):
+                    if progress_listener is not None:
+                        progress_listener.creating_entity_tree_node(part_index)
+                        part_index += len(child.children)
                     child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
             else:
                 # Replace existing children, preserving old ones that match new ones
@@ -207,7 +223,6 @@ class NodeView(object):
                     child._order_index = i
                     i += 1
                 self.peer.SortChildren()
-    children = property(_get_children, _set_children)
     
     def append_child(self, child):
         self.children = self.children + [child]

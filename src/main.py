@@ -3,13 +3,24 @@
 Home of the main function, which starts the program.
 """
 
-# NOTE: Do not add any imports that fail under Python 1.x.
+# NOTE: Do not add any imports that fail under Python 2.x.
 #       This would prevent the version-checking code from running.
 #       
 #       Therefore most imports in this file should occur directly within functions.
 import os
 import sys
 from sys import exit
+try:
+    from typing import TYPE_CHECKING
+except ImportError:
+    TYPE_CHECKING = False
+
+if TYPE_CHECKING:
+    from crystal.model import Project
+    from crystal.progress import OpenProjectProgressListener
+    from typing import Optional
+    import wx
+
 
 _APP_NAME = 'Crystal Web Archiver'
 _APP_AUTHOR = 'DaFoster'
@@ -94,6 +105,7 @@ def main(args):
                 self._finish_launch(filepath)
         
         def _finish_launch(self, filepath=None):
+            # type: (Optional[str]) -> None
             self._did_finish_launch = True
             
             # If project to open passed on the command-line, use it
@@ -103,16 +115,18 @@ def main(args):
             if len(args) == 1 and os.path.exists(args[0]):
                 filepath = args[0]
             
-            # Get a project
-            if filepath is None:
-                project = _prompt_for_project()
-            else:
-                project = _load_project(filepath)
-            assert project is not None
-            
-            # Create main window
-            from crystal.browser import MainWindow
-            window = MainWindow(project)
+            from crystal.progress import OpenProjectProgressDialog
+            with OpenProjectProgressDialog() as progress_listener:
+                # Get a project
+                if filepath is None:
+                    project = _prompt_for_project(progress_listener)
+                else:
+                    project = _load_project(filepath, progress_listener)
+                assert project is not None
+                
+                # Create main window
+                from crystal.browser import MainWindow
+                window = MainWindow(project, progress_listener)
             
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
@@ -148,7 +162,8 @@ def _running_as_bundle():
     """
     return hasattr(sys, 'frozen')
 
-def _prompt_for_project():
+def _prompt_for_project(progress_listener):
+    # type: (OpenProjectProgressListener) -> Project
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     import wx
     
@@ -163,15 +178,16 @@ def _prompt_for_project():
     
     try:
         if choice == wx.ID_YES:
-            return _prompt_to_open_project(dialog)
+            return _prompt_to_open_project(dialog, progress_listener)
         elif choice == wx.ID_NO:
-            return _prompt_to_create_project(dialog)
+            return _prompt_to_create_project(dialog, progress_listener)
         else:  # wx.ID_CANCEL
             exit()
     finally:
         dialog.Destroy()
 
-def _prompt_to_create_project(parent):
+def _prompt_to_create_project(parent, progress_listener):
+    # type: (wx.Window, OpenProjectProgressListener) -> Project
     from crystal.model import Project
     import os.path
     import shutil
@@ -191,9 +207,10 @@ def _prompt_to_create_project(parent):
     
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
-    return Project(project_path)
+    return Project(project_path, progress_listener)
 
-def _prompt_to_open_project(parent):
+def _prompt_to_open_project(parent, progress_listener):
+    # type: (wx.Window, OpenProjectProgressListener) -> Project
     from crystal.model import Project
     from crystal.packages import project_appears_as_package_file
     import os.path
@@ -229,9 +246,10 @@ def _prompt_to_open_project(parent):
         dialog.Destroy()
         exit()
     
-    return Project(project_path)
+    return Project(project_path, progress_listener)
 
-def _load_project(project_path):
+def _load_project(project_path, progress_listener):
+    # type: (str, OpenProjectProgressListener) -> Project
     from crystal.model import Project
     import os.path
     
@@ -240,7 +258,7 @@ def _load_project(project_path):
     
     # TODO: If errors while loading a project (ex: bad format),
     #       present them to the user nicely
-    return Project(project_path)
+    return Project(project_path, progress_listener)
 
 # ----------------------------------------------------------------------------------------
 

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from crystal.model import Resource
+from crystal.model import Project, Resource
+from crystal.progress import (
+    DummyOpenProjectProgressListener,
+    OpenProjectProgressListener,
+)
 from crystal.ui.tree import *
 from crystal.xcollections import defaultordereddict
 from crystal.xthreading import bg_call_later, fg_call_later
@@ -18,10 +22,13 @@ class EntityTree(object):
     """
     Displays a tree of top-level project entities.
     """
-    def __init__(self, parent_peer, project):
+    def __init__(self,
+            parent_peer,
+            project: Project,
+            progress_listener: OpenProjectProgressListener) -> None:
         self.view = TreeView(parent_peer)
         self.view.delegate = self
-        self.root = RootNode(project, self.view.root)
+        self.root = RootNode(project, self.view.root, progress_listener)
         self._project = project
         self._group_nodes_need_updating = False
         self._right_clicked_node = None
@@ -164,11 +171,16 @@ class Node(object):
     
     def _get_children(self):
         return self._children
-    def _set_children(self, value):
+    def _set_children(self, value) -> None:
+        self.set_children(value)
+    children = property(_get_children, _set_children)
+    
+    def set_children(self,
+            value,
+            progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
         value = _sequence_with_matching_elements_replaced(value, self._children)
         self._children = value
-        self.view.children = [child.view for child in value]
-    children = property(_get_children, _set_children)
+        self.view.set_children([child.view for child in value], progress_listener)
     
     @property
     def entity(self) -> Optional[NodeEntity]:
@@ -177,24 +189,24 @@ class Node(object):
         """
         return None
     
-    def update_descendants(self):
+    def update_descendants(self) -> None:
         """
         Updates this node's descendants, usually due to a project change.
         """
         self._call_on_descendants('update_children')
     
-    def update_title_of_descendants(self):
+    def update_title_of_descendants(self) -> None:
         """
         Updates the title of this node's descendants, usually due to a project change.
         """
         self._call_on_descendants('update_title')
     
-    def _call_on_descendants(self, method_name):
+    def _call_on_descendants(self, method_name) -> None:
         getattr(self, method_name)()
         for child in self.children:
             child._call_on_descendants(method_name)
     
-    def update_children(self):
+    def update_children(self) -> None:
         """
         Updates this node's immediate children, usually due to a project change.
         
@@ -203,18 +215,18 @@ class Node(object):
         """
         pass
     
-    def update_title(self):
+    def update_title(self) -> None:
         """
         Updates this node's title. Usually due to a project change.
         """
         if hasattr(self, 'calculate_title'):
-            self.view.title = self.calculate_title()
+            self.view.title = self.calculate_title()  # type: ignore[attr-defined]
     
     def __repr__(self):
         return '<%s titled %s at %s>' % (type(self).__name__, repr(self.view.title), hex(id(self)))
 
 class RootNode(Node):
-    def __init__(self, project, view):
+    def __init__(self, project, view, progress_listener: OpenProjectProgressListener) -> None:
         super(RootNode, self).__init__()
         
         self.view = view
@@ -223,15 +235,26 @@ class RootNode(Node):
         
         self._project = project
         
-        self.update_children()
+        self.update_children(progress_listener)
     
-    def update_children(self):
-        children = []
-        for rr in self._project.root_resources:
+    def update_children(self, 
+            progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
+        if progress_listener is None:
+            progress_listener = DummyOpenProjectProgressListener()
+        
+        children = []  # type: List[Node]
+        
+        progress_listener.loading_root_resource_views()
+        for (index, rr) in enumerate(self._project.root_resources):
+            progress_listener.loading_root_resource_view(index)
             children.append(RootResourceNode(rr))
-        for rg in self._project.resource_groups:
+        
+        progress_listener.loading_resource_group_views()
+        for (index, rg) in enumerate(self._project.resource_groups):
+            progress_listener.loading_resource_group_view(index)
             children.append(ResourceGroupNode(rg))
-        self.children = children
+        
+        self.set_children(children, progress_listener)
 
 class _LoadingNode(Node):
     def __init__(self):

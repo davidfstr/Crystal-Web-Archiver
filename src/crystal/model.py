@@ -11,6 +11,11 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 from __future__ import annotations
 
 from collections import OrderedDict
+from crystal.plugins import phpbb
+from crystal.progress import DummyOpenProjectProgressListener, OpenProjectProgressListener
+from crystal.urls import is_unrewritable_url, requote_uri
+from crystal.xfutures import Future
+from crystal.xthreading import bg_call_later, fg_call_and_wait
 import cgi
 import json
 import mimetypes
@@ -18,12 +23,8 @@ import os
 import re
 import shutil
 import sqlite3
-from typing import cast, List, Optional, TYPE_CHECKING, TypedDict, Union
+from typing import cast, Dict, List, Optional, TYPE_CHECKING, TypedDict, Union
 from urllib.parse import urlparse, urlunparse
-from .plugins import phpbb
-from .urls import is_unrewritable_url, requote_uri
-from .xfutures import Future
-from .xthreading import bg_call_later, fg_call_and_wait
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
@@ -41,7 +42,9 @@ class Project(object):
     _DB_FILENAME = 'database.sqlite'
     _RESOURCE_REVISION_DIRNAME = 'revisions'
     
-    def __init__(self, path):
+    def __init__(self,
+            path: str,
+            progress_listener: Optional[OpenProjectProgressListener]) -> None:
         """
         Loads a project from the specified filepath, or creates a new one if none is found.
         
@@ -49,13 +52,18 @@ class Project(object):
         path -- path to a directory (ideally with the `FILE_EXTENSION` extension)
                 from which the project is to be loaded.
         """
-        self.path = path
-        self.listeners = []
+        if progress_listener is None:
+            progress_listener = DummyOpenProjectProgressListener()
         
-        self._properties = dict()               # <key, value>
-        self._resources = OrderedDict()         # <url, Resource>
-        self._root_resources = OrderedDict()    # <Resource, RootResource>
-        self._resource_groups = []              # <ResourceGroup>
+        self.path = path
+        self.listeners = []  # type: List[object]
+        
+        self._properties = dict()               # type: Dict[str, str]
+        self._resources = OrderedDict()         # type: Dict[str, Resource]
+        self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
+        self._resource_groups = []              # type: List[ResourceGroup]
+        
+        progress_listener.opening_project(os.path.basename(path))
         
         self._loading = True
         try:
@@ -71,15 +79,23 @@ class Project(object):
                 for (name, value) in c.execute('select name, value from project_property'):
                     self._set_property(name, value)
                 
+                [(resource_count,)] = c.execute('select count(1) from resource')
+                progress_listener.loading_resources(resource_count)
                 for (url, id) in c.execute('select url, id from resource'):
                     Resource(self, url, _id=id)
                 
+                [(root_resource_count,)] = c.execute('select count(1) from root_resource')
+                progress_listener.loading_root_resources(root_resource_count)
                 for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
                     resource = self._get_resource_with_id(resource_id)
                     RootResource(self, name, resource, _id=id)
                 
+                [(resource_group_count,)] = c.execute('select count(1) from resource_group')
+                progress_listener.loading_resource_groups(resource_group_count)
                 group_2_source = {}
-                for (name, url_pattern, source_type, source_id, id) in c.execute('select name, url_pattern, source_type, source_id, id from resource_group'):
+                for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
+                        'select name, url_pattern, source_type, source_id, id from resource_group')):
+                    progress_listener.loading_resource_group(index)
                     group = ResourceGroup(self, name, url_pattern, _id=id)
                     group_2_source[group] = (source_type, source_id)
                 for (group, (source_type, source_id)) in group_2_source.items():
@@ -102,8 +118,11 @@ class Project(object):
                 
                 c = self._db.cursor()
                 c.execute('create table project_property (name text unique not null, value text)')
+                progress_listener.loading_resources(resource_count=0)
                 c.execute('create table resource (id integer primary key, url text unique not null)')
+                progress_listener.loading_root_resources(root_resource_count=0)
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
+                progress_listener.loading_resource_groups(resource_group_count=0)
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
                 c.execute('create table resource_revision (id integer primary key, resource_id integer not null, error text not null, metadata text not null)')
                 c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
@@ -228,7 +247,7 @@ class Project(object):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_did_instantiate'):
-                lis.resource_did_instantiate(resource)
+                lis.resource_did_instantiate(resource)  # type: ignore[attr-defined]
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
