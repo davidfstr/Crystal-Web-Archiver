@@ -49,25 +49,16 @@ Known Issues 🐞
     * As a workaround, create a new group with the desired changes and delete the old group.
 
 * robots.txt is not obeyed.
+  [(#31)](https://github.com/davidfstr/Crystal-Web-Archiver/issues/31)
     * In practice this isn't a big issue since the user is required to explicitly define
       which pages should be downloaded.
     * Furthermore, there is a hardcoded delay of 1 second between downloads of pages,
       to avoid taxing site infrastructure and to avoid unintentional denial of service
       attacks.
 
-* Memory usage when downloading large groups (>2000 members) is very high.
-    * There may be wxPython objects that aren't getting deallocated properly.
-      In particular I suspect that the "tree refresh" behavior that occurs
-      may not be deallocating old tree node references correctly.
-    * Or there may be an object reference that isn't getting cleaned up correctly.
-    * Informal testing suggests that both problems are probably present.
-
-* Projects (and the underlying databases) are manipulated on the UI thread.
-  Occasionally this causes the UI to become unresponsive for a few seconds.
-
 * Large projects (with 10,000+ resources) take a few seconds to open
   because all project resource URLs are loaded into memory immediately.
-  Also no feedback is displayed while opening.
+  [(#30)](https://github.com/davidfstr/Crystal-Web-Archiver/issues/30)
 
 
 History 📖
@@ -162,6 +153,50 @@ Release Notes ⋮
 [Roadmap]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Roadmap
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
+
+### v1.2.0b <small>(April 12, 2021)</small>
+
+This release primarily features better support for large projects and groups.
+Downloads of large groups are dramatically faster and now only require a
+constant amount of memory no matter how large the group is. Also a progress bar
+is now displayed when opening a large project.
+
+A few more link types in CSS and `<script>` tags are now recognized.
+
+Last but not least, phpBB forums are now recognized specially and can be
+downloaded effectively without creating an explosion of URL combinations.
+phpBB support is still experimental and likely requires additional tuning.
+
+* Performance & memory usage improvements
+    * Don't hold resource revisions of group members in memory while downloading
+      other members of the same group.
+        * Drastically reduces memory usage while downloading large groups,
+          and keeps memory usage mostly constant over time.
+    * Don't attempt to reparse and redownload embedded resources for resources
+      that were already downloaded in the current session of Crystal.
+        * Speeds up downloading large groups where many members embed the
+          same expensive subresource (like a soft 404 page).
+    * Enumerate resource group members in constant time rather than linear time.
+        * Drastically speeds up creating new resources and other operations.
+
+* Parsing improvements
+    * Can identify `@import "*";` references inside CSS.
+    * Can identify //... references inside `<script>` tags.
+    * Fix links that contain spaces and other characters to be percent-encoded.
+    * Don't try to rewrite `data:` URLs
+
+* Crawling improvements
+    * Don't recurse infinitely if resource identifies ancestor as a
+      self-embedded resource.
+    * Don't download embedded resources of HTTP 4xx and 5xx error pages.
+
+* Serving improvements
+    * When dynamically downloading HTML pages, wait for embedded resources too.
+      Avoids rendering such pages with a bunch of missing images.
+
+* Miscellaneous
+    * Specially recognize and normalize phpBB URLs.
+    * Disallow delete of Resource if it is referenced by a RootResource.
 
 ### v1.1.1b <small>(April 2, 2021)</small>
 
