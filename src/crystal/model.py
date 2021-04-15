@@ -44,7 +44,7 @@ class Project(object):
     
     def __init__(self,
             path: str,
-            progress_listener: Optional[OpenProjectProgressListener]) -> None:
+            progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
         """
         Loads a project from the specified filepath, or creates a new one if none is found.
         
