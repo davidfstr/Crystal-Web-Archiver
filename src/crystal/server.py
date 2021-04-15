@@ -184,8 +184,28 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return super().parse_request()
     
     def do_GET(self):  # override
-        request_host = self.request_host
-        request_url = 'http://%s%s' % (request_host, self.path)
+        # Parse self.path using RFC 2616 rules,
+        # which in particular allows it to be an absolute URI!
+        if self.path == '*':
+            self.send_response(400)
+            self.end_headers()
+            return
+        elif self.path.startswith('/'):
+            host = self.headers.get('Host')
+            if host is None:
+                self.send_response(400)
+                self.end_headers()
+                return
+        else:  # self.path must be an absolute URI
+            pathurl_parts = urlparse(self.path)
+            if pathurl_parts.scheme not in ('http', 'https') or pathurl_parts.netloc == '':
+                self.send_response(400)
+                self.end_headers()
+                return
+            
+            # Rewrite self.path to be a URL path and the Host header to be a domain
+            self.path = urlunparse(pathurl_parts._replace(scheme='', netloc=''))
+            self.headers['Host'] = pathurl_parts.netloc  # replace any that existed before
         
         # Serve resource revision in archive
         archive_url = self.get_archive_url(self.path)

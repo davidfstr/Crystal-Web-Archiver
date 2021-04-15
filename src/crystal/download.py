@@ -92,6 +92,9 @@ class HttpResourceRequest(ResourceRequest):
             'reason_phrase': response.reason,
             'headers': response.getheaders()
         })
+        # TODO: Defining a class inline like this is probably expensive,
+        #       especially in memory usage. Please define class externally
+        #       and just instantiate here.
         class HttpResourceBodyStream(object):
             close = conn.close
             read = response.read
