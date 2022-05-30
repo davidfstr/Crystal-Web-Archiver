@@ -9,7 +9,7 @@ from crystal.cli import (
     print_success,
     print_warning,
 )
-from crystal.model import Resource
+from crystal.model import Resource, ResourceGroup, ResourceRevision
 from crystal.task import schedule_forever
 from datetime import datetime
 from html import escape as html_escape
@@ -20,7 +20,7 @@ import os
 import re
 import shutil
 from textwrap import dedent
-from typing import Dict, Generator, Optional
+from typing import Dict, Generator, List, Optional
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 from .xthreading import bg_call_later, fg_call_and_wait
 
@@ -189,7 +189,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         return super().parse_request()
     
-    def do_GET(self):  # override
+    def do_GET(self) -> None:  # override
         # Parse self.path using RFC 2616 rules,
         # which in particular allows it to be an absolute URI!
         if self.path == '*':
@@ -236,47 +236,43 @@ class _RequestHandler(BaseHTTPRequestHandler):
             
             resource = self.project.get_resource(archive_url)
             if resource is None:
-                matching_rg = None
-                for rg in self.project.resource_groups:
-                    if rg.contains_url(archive_url):
-                        matching_rg = rg
-                        break
-                
                 # If the previously undiscovered resource is a member of an
                 # existing resource group, presume that the user is interested 
                 # in downloading it immediately upon access
+                matching_rg = self._find_group_matching_archive_url(archive_url)
                 if matching_rg is not None:
                     print_warning('*** Dynamically downloading new resource in group %s: %s' % (
                         matching_rg.name,
                         archive_url,
                     ))
                     
-                    # Download resource immediately
+                    # Try download resource immediately
                     resource = fg_call_and_wait(lambda: Resource(self.project, archive_url))
-                    # NOTE: Need to wait for embedded resources as well.
-                    #       If we were to serve a downloaded HTML page with
-                    #       embedded links that were not yet downloaded,
-                    #       they would be served as HTTP 404 until they
-                    #       finished downloading. To avoid serving a broken
-                    #       page we must wait longer for the embedded resources
-                    #       to finish downloading.
-                    try:
-                        resource.download(
-                            wait_for_embedded=True,
-                            needs_result=False,
-                        ).result()
-                    except:
-                        # Don't care if there was an error downloading
-                        pass
+                    self._try_download_revision_dynamically(resource, needs_result=False)
                     # (continue to serve downloaded resource revision)
                 else:
                     self.send_resource_not_in_archive(archive_url)
                     return
             
-            revision = fg_call_and_wait(resource.default_revision)
+            revision = fg_call_and_wait(resource.default_revision)  # type: Optional[ResourceRevision]
             if revision is None:
-                self.send_resource_not_in_archive(archive_url)
-                return
+                # If the existing resource is a member of an
+                # existing resource group, presume that the user is interested 
+                # in downloading it immediately upon access
+                matching_rg = self._find_group_matching_archive_url(archive_url)
+                if matching_rg is not None:
+                    print_warning('*** Dynamically downloading existing resource in group %s: %s' % (
+                        matching_rg.name,
+                        archive_url,
+                    ))
+                    
+                    # Try download resource immediately
+                    revision = self._try_download_revision_dynamically(resource, needs_result=True)
+                    # (continue to serve downloaded resource revision)
+                
+                if revision is None:
+                    self.send_resource_not_in_archive(archive_url)
+                    return
             
             self.send_revision(revision, archive_url)
             return
@@ -289,6 +285,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     referer_urlparts.netloc == self._server_host):
                 referer_archive_url = self.get_archive_url(referer_urlparts.path)
                 referer_archive_urlparts = urlparse(referer_archive_url)
+                assert isinstance(referer_archive_urlparts.scheme, str)
+                assert isinstance(referer_archive_urlparts.netloc, str)
                 requested_archive_url = '%s://%s%s' % (
                     referer_archive_urlparts.scheme,
                     referer_archive_urlparts.netloc,
@@ -314,9 +312,33 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_not_found_page(vary_referer=True)
         return
     
+    def _find_group_matching_archive_url(self, archive_url: str) -> Optional[ResourceGroup]:
+        for rg in self.project.resource_groups:
+            if rg.contains_url(archive_url):
+                return rg
+        return None
+    
+    @staticmethod
+    def _try_download_revision_dynamically(resource: Resource, *, needs_result: bool) -> Optional[ResourceRevision]:
+        try:
+            return resource.download(
+                # NOTE: Need to wait for embedded resources as well.
+                #       If we were to serve a downloaded HTML page with
+                #       embedded links that were not yet downloaded,
+                #       they would be served as HTTP 404 until they
+                #       finished downloading. To avoid serving a broken
+                #       page we must wait longer for the embedded resources
+                #       to finish downloading.
+                wait_for_embedded=True,
+                needs_result=needs_result,
+            ).result()
+        except Exception:
+            # Don't care if there was an error downloading
+            return None
+    
     # === Send Page ===
     
-    def send_welcome_page(self, query_params: Dict[str, str], *, vary_referer: bool) -> None:
+    def send_welcome_page(self, query_params: Dict[str, List[str]], *, vary_referer: bool) -> None:
         # TODO: Is this /?url=** path used anywhere anymore?
         if 'url' in query_params:
             archive_url = query_params['url'][0]
