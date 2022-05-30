@@ -8,7 +8,7 @@ from crystal.task import schedule_forever
 from datetime import datetime
 from html import escape as html_escape
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import StringIO
 import os
 import re
@@ -26,7 +26,7 @@ def start(project):
     """
     port = _SERVER_PORT
     address = ('', port)
-    server = HTTPServer(address, _RequestHandler)
+    server = ThreadingHTTPServer(address, _RequestHandler)
     server.project = project
     def bg_task():
         try:
