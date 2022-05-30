@@ -108,11 +108,31 @@ def main(args):
             # type: (Optional[str]) -> None
             self._did_finish_launch = True
             
+            # Filter out strange "psn" argument (ex: '-psn_0_438379') that
+            # macOS does sometimes pass upon first launch when run as a
+            # binary downloaded from the internet.
+            nonlocal args
+            args = [a for a in args if not a.startswith('-psn_')]
+            
+            # Parse CLI arguments
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument(
+                '--server',
+                help='Start a server on localhost to serve the project.',
+                action='store_true',
+            )
+            parser.add_argument(
+                'filepath',
+                help='Optional. Path to a *.crystalproj to open.',
+                type=str,
+                default=None,
+                nargs='?',
+            )
+            parsed_args = parser.parse_args(args)  # may raise SystemExit
+            
             # If project to open passed on the command-line, use it
-            # NOTE: macOS does sometimes pass a strange argument that
-            #       looks like '-psn_0_438379' upon first launch when
-            #       run as a binary downloaded from the internet
-            if len(args) == 1 and os.path.exists(args[0]):
+            if parsed_args.filepath is not None:
                 filepath = args[0]
             
             from crystal.progress import OpenProjectProgressDialog
@@ -127,6 +147,10 @@ def main(args):
                 # Create main window
                 from crystal.browser import MainWindow
                 window = MainWindow(project, progress_listener)
+            
+            # Start serving immediately if requested
+            if parsed_args.server:
+                project.start_server()
             
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
