@@ -117,9 +117,16 @@ class TreeView(object):
 
 class _OrderedTreeCtrl(wx.TreeCtrl):
     def OnCompareItems(self, item1, item2):
-        item1_view = self.GetItemData(item1)
-        item2_view = self.GetItemData(item2)
-        return item1_view._order_index - item2_view._order_index
+        (item1_view, item2_view) = (self.GetItemData(item1), self.GetItemData(item2))
+        assert isinstance(item1_view, NodeView) and isinstance(item2_view, NodeView)
+        (order_index_1, order_index_2) = (
+            getattr(item1_view, '_order_index', None),
+            getattr(item2_view, '_order_index', None)
+        )
+        if order_index_1 is None and order_index_2 is None:
+            return 0
+        assert isinstance(order_index_1, int) and isinstance(order_index_2, int)
+        return order_index_1 - order_index_2
 
 class NodeView(object):
     """
@@ -201,6 +208,7 @@ class NodeView(object):
                 # Add initial children
                 part_index = 0
                 for (index, child) in enumerate(new_children):
+                    child._order_index = index
                     if progress_listener is not None:
                         progress_listener.creating_entity_tree_node(part_index)
                         part_index += len(child.children)
@@ -218,10 +226,8 @@ class NodeView(object):
                     child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
                 
                 # Reorder children
-                i = 0
-                for child in new_children:
-                    child._order_index = i
-                    i += 1
+                for (index, child) in enumerate(new_children):
+                    child._order_index = index
                 self.peer.SortChildren()
     
     def append_child(self, child):
