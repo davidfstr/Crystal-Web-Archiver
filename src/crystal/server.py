@@ -73,6 +73,12 @@ _HEADER_WHITELIST = set([
     'access-control-allow-methods',
     'access-control-expose-headers',
     
+    # CORP
+    'cross-origin-resource-policy',
+    
+    # COOP
+    'cross-origin-opener-policy',
+    
     # Timing
     'timing-allow-origin',  # enable cross-origin access to timing API
     'server-timing',
@@ -81,6 +87,11 @@ _HEADER_WHITELIST = set([
     'x-amz-cf-id',
     'x-amz-cf-pop',
     'x-amz-storage-class',
+    
+    # Vendor-specific: AWS S3
+    'x-amz-id-2',
+    'x-amz-request-id',
+    'x-amz-version-id',
     
     # Vendor-specific: Cloudflare
     'cf-cache-status',
@@ -100,6 +111,7 @@ _HEADER_WHITELIST = set([
     'detected-user-agent',
     'normalized-user-agent',
     'request_came_from_shield',
+    'x-served-by',
 ])
 # Set of archived headers known to cause problems if blindly played back
 _HEADER_BLACKLIST = set([
