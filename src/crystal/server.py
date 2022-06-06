@@ -14,7 +14,7 @@ from crystal.task import schedule_forever
 from datetime import datetime
 from html import escape as html_escape
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import StringIO
 import os
 import re
@@ -161,10 +161,13 @@ _HEADER_BLACKLIST = set([
     'vtag',
 ])
 
-class _HttpServer(ThreadingHTTPServer):
+class _HttpServer(HTTPServer):
     project: Project
 
 class _RequestHandler(BaseHTTPRequestHandler):
+    # Prevent slow/broken request from blocking all other requests
+    timeout = 1  # second
+    
     @property
     def project(self) -> Project:
         server = self.server
