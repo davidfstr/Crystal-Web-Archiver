@@ -9,7 +9,7 @@ from crystal.cli import (
     print_success,
     print_warning,
 )
-from crystal.model import Resource, ResourceGroup, ResourceRevision
+from crystal.model import Project, Resource, ResourceGroup, ResourceRevision
 from crystal.task import schedule_forever
 from datetime import datetime
 from html import escape as html_escape
@@ -26,13 +26,13 @@ from .xthreading import bg_call_later, fg_call_and_wait
 
 _SERVER_PORT = 2797
 
-def start(project):
+def start(project: Project) -> None:
     """
     Starts the archive server on a daemon thread.
     """
     port = _SERVER_PORT
     address = ('', port)
-    server = ThreadingHTTPServer(address, _RequestHandler)
+    server = _HttpServer(address, _RequestHandler)
     server.project = project
     def bg_task():
         try:
@@ -42,13 +42,14 @@ def start(project):
             server.server_close()
     bg_call_later(bg_task, daemon=True)
 
-def get_request_url(archive_url):
+def get_request_url(archive_url: str, project: Project) -> str:
     """
     Given the absolute URL of a resource, returns the URL that should be used to
     request it from the archive server.
     """
     request_host = 'localhost:%s' % _SERVER_PORT
-    return _RequestHandler.get_request_url_with_host(archive_url, request_host)
+    return _RequestHandler.get_request_url_with_host(
+        archive_url, request_host, project.default_url_prefix)
 
 # ----------------------------------------------------------------------------------------
 
@@ -160,10 +161,15 @@ _HEADER_BLACKLIST = set([
     'vtag',
 ])
 
+class _HttpServer(ThreadingHTTPServer):
+    project: Project
+
 class _RequestHandler(BaseHTTPRequestHandler):
     @property
-    def project(self):
-        return self.server.project
+    def project(self) -> Project:
+        server = self.server
+        assert isinstance(server, _HttpServer)
+        return server.project
     
     @property
     def _server_host(self) -> str:
@@ -599,25 +605,40 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # === URL Transformation ===
     
-    @staticmethod
-    def get_archive_url(request_path: str) -> Optional[str]:
+    def get_archive_url(self, request_path: str) -> Optional[str]:
         match = _REQUEST_PATH_IN_ARCHIVE_RE.match(request_path)
         if match:
             (scheme, rest) = match.groups()
             archive_url = '%s://%s' % (scheme, rest)
             return archive_url
         else:
+            # If valid default URL prefix is set, use it
+            default_url_prefix = self.project.default_url_prefix  # cache
+            if default_url_prefix is not None and not default_url_prefix.endswith('/'):
+                assert request_path.startswith('/')
+                return default_url_prefix + request_path
+            
             return None
     
     def get_request_url(self, archive_url: str) -> str:
-        return _RequestHandler.get_request_url_with_host(archive_url, self.request_host)
+        return _RequestHandler.get_request_url_with_host(
+            archive_url, self.request_host, self.project.default_url_prefix)
     
     @staticmethod
-    def get_request_url_with_host(archive_url: str, request_host: str) -> str:
+    def get_request_url_with_host(
+            archive_url: str,
+            request_host: str,
+            default_url_prefix: str,
+            ) -> str:
         """
         Given the absolute URL of a resource, returns the URL that should be used to
         request it from the archive server.
         """
+        # If valid default URL prefix is set, use it
+        if default_url_prefix is not None and not default_url_prefix.endswith('/'):
+            if archive_url.startswith(default_url_prefix + '/'):
+                return f'http://{request_host}' + archive_url[len(default_url_prefix):]
+        
         archive_url_parts = urlparse(archive_url)
         
         request_scheme = 'http'
