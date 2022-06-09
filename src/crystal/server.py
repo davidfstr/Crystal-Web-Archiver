@@ -504,11 +504,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
         metadata = revision.metadata
         
         # Determine Content-Type to send
-        sender = self.send_revision_body(revision)
-        content_type_with_options = (
-            next(sender) or 
-            revision.declared_content_type_with_options
-        )
+        assert revision.has_body
+        (doc, links, content_type_with_options) = revision.document_and_links()
+        if not content_type_with_options:
+            content_type_with_options = revision.declared_content_type_with_options
         
         # Determine headers to send
         headers = [[k, v] for (k, v) in metadata['headers']]  # clone, make mutable
@@ -542,20 +541,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         
         # Send body
-        try:
-            next(sender)
-        except StopIteration:
-            pass
-        else:
-            raise AssertionError()
+        self.send_revision_body(revision, doc, links)
     
     def send_generic_revision(self, revision) -> None:
         # Determine what Content-Type to send
-        sender = self.send_revision_body(revision)
-        content_type_with_options = (
-            next(sender) or 
-            revision.declared_content_type_with_options
-        )
+        assert revision.has_body
+        (doc, links, content_type_with_options) = revision.document_and_links()
+        if not content_type_with_options:
+            content_type_with_options = revision.declared_content_type_with_options
         
         # Send status line
         self.send_response(200)
@@ -566,21 +559,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         
         # Send body
-        try:
-            next(sender)
-        except StopIteration:
-            pass
-        else:
-            raise AssertionError()
+        self.send_revision_body(revision, doc, links)
     
-    def send_revision_body(self, revision) -> Generator[str, None, None]:
-        assert revision.has_body
-        
-        (doc, links, content_type_with_options) = revision.document_and_links()
-        
-        # Send headers with content type
-        yield content_type_with_options
-        
+    def send_revision_body(self, revision, doc, links) -> None:
         # Send body
         if doc is None:
             # Not a document. Cannot rewrite content.

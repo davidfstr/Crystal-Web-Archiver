@@ -357,6 +357,7 @@ class Resource(object):
             c = project._db.cursor()
             c.execute('insert into resource (url) values (?)', (normalized_url,))
             project._db.commit()
+            assert c.lastrowid is not None
             self._id = c.lastrowid
         project._resources[normalized_url] = self
         
