@@ -2,7 +2,16 @@
 Parses HTML documents.
 """
 
-def parse_links(html_bytes, declared_charset=None):
+from __future__ import annotations
+
+from crystal.doc.generic import Document, Link
+from io import BytesIO
+from typing import Optional, Union
+
+def parse_links(
+        html_bytes: bytes, 
+        declared_charset: Optional[str]=None
+        ) -> list[Link]:
     """
     Parses the specified HTML bytestring, returning a list of links.
     
@@ -14,7 +23,10 @@ def parse_links(html_bytes, declared_charset=None):
     return links
 
 
-def parse_html_and_links(html_bytes, declared_charset=None):
+def parse_html_and_links(
+        html_bytes: Union[bytes, BytesIO], 
+        declared_charset: Optional[str]=None
+        ) -> tuple[Document, list[Link]]:
     """
     Parses the specified HTML bytestring, returning a 2-tuple containing
     (1) the HTML document and
@@ -40,7 +52,8 @@ def parse_html_and_links(html_bytes, declared_charset=None):
     
     # Convert html_bytes to string
     if hasattr(html_bytes, 'read'):
-        html_bytes = html_bytes.read()
+        html_bytes = html_bytes.read()  # type: ignore[union-attr]
+    assert isinstance(html_bytes, bytes)
     
     # HACK: The BeautifulSoup parser doesn't currently handle <frameset>
     #       tags correctly. So workaround with a basic parser.

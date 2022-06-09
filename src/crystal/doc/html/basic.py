@@ -2,10 +2,16 @@
 HTML parser implementation that uses regular expressions.
 """
 
+from __future__ import annotations
+
 from crystal.doc.generic import Document, Link
 import re
+from typing import Optional
 
-def parse_html_and_links(html_bytes, declared_charset=None):
+def parse_html_and_links(
+        html_bytes: bytes, 
+        declared_charset: Optional[str]=None
+        ) -> tuple[Document, list[Link]]:
     if not isinstance(html_bytes, bytes):
         raise ValueError('This parser implementation only accepts bytestrings.')
     # TODO: Attempt to honor the declared_charset rather than always assuming UTF-8.

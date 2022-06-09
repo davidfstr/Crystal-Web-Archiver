@@ -9,9 +9,11 @@ from crystal.cli import (
     print_success,
     print_warning,
 )
+from crystal.doc.generic import Document, Link
+from crystal.doc.html.soup import HtmlDocument
 from crystal.model import Project, Resource, ResourceGroup, ResourceRevision
 from crystal.task import schedule_forever
-from datetime import datetime
+import datetime
 from html import escape as html_escape
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -54,6 +56,9 @@ def get_request_url(archive_url: str, project: Project) -> str:
 # ----------------------------------------------------------------------------------------
 
 _REQUEST_PATH_IN_ARCHIVE_RE = re.compile(r'^/_/([^/]+)/(.+)$')
+
+_PIN_DATE_JS_PATH_RE = re.compile(r'^/_/crystal/pin_date\.js\?t=([0-9]+)$')
+_PIN_DATE_JS_PATH_PREFIX = '/_/crystal/pin_date.js?t='
 
 # Set of archived headers that may be played back as-is
 _HEADER_WHITELIST = set([
@@ -161,6 +166,16 @@ _HEADER_BLACKLIST = set([
     'vtag',
 ])
 
+# When True, attempt to override JavaScript's Date class in HTML documents to
+# return a consistent datetime for "now" matching the Date header that the
+# page was served with.
+# 
+# Some pages like <https://newsletter.pragmaticengineer.com/archive> format
+# URLs in JavaScript based on the current datetime. By pinning the current
+# datetime to a consistent value, the generated URLs will also have a
+# consistent value, allowing those generated URLs to be cached effectively.
+_ENABLE_PIN_DATE_MITIGATION = True
+
 class _HttpServer(HTTPServer):
     project: Project
 
@@ -233,6 +248,17 @@ class _RequestHandler(BaseHTTPRequestHandler):
             # Rewrite self.path to be a URL path and the Host header to be a domain
             self.path = urlunparse(pathurl_parts._replace(scheme='', netloc=''))
             self.headers['Host'] = pathurl_parts.netloc  # replace any that existed before
+        
+        # Serve pin_date.js if requested
+        m = _PIN_DATE_JS_PATH_RE.fullmatch(self.path)
+        if m is not None:
+            timestamp = int(m.group(1))
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/javascript')
+            self.end_headers()
+            self.wfile.write(_pin_date_js(timestamp).encode('utf-8'))
+            return
         
         # Serve resource revision in archive
         archive_url = self.get_archive_url(self.path)
@@ -450,7 +476,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # === Send Revision ===
     
-    def send_revision(self, revision, archive_url) -> None:
+    def send_revision(self, revision: ResourceRevision, archive_url: str) -> None:
         if revision.error is not None:
             self.send_resource_error(revision.error_dict, archive_url)
             return
@@ -500,8 +526,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         print_error('*** Requested resource was fetched with error: ' + archive_url)
     
-    def send_http_revision(self, revision) -> None:
+    def send_http_revision(self, revision: ResourceRevision) -> None:
         metadata = revision.metadata
+        assert metadata is not None
         
         # Determine Content-Type to send
         assert revision.has_body
@@ -522,6 +549,26 @@ class _RequestHandler(BaseHTTPRequestHandler):
             else:
                 headers.append(['content-type', content_type_with_options])
         
+        # Try extract revision datetime from Date header
+        revision_datetime: Optional[datetime.datetime]
+        date_str = None  # type: Optional[str]
+        for (k, v) in headers:
+            if k.lower() == 'date':
+                date_str = v
+                break
+        if date_str is not None:
+            try:
+                revision_datetime = datetime.datetime.strptime(
+                    date_str,
+                    '%a, %d %b %Y %H:%M:%S %Z'
+                ).replace(tzinfo=datetime.timezone.utc)
+            except ValueError:
+                # Invalid Date header
+                revision_datetime = None
+        else:
+            # Missing Date header
+            revision_datetime = None
+        
         # Send status line
         self.send_response(metadata['status_code'], metadata['reason_phrase'])
         
@@ -541,9 +588,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         
         # Send body
-        self.send_revision_body(revision, doc, links)
+        self.send_revision_body(revision, doc, links, revision_datetime)
     
-    def send_generic_revision(self, revision) -> None:
+    def send_generic_revision(self, revision: ResourceRevision) -> None:
         # Determine what Content-Type to send
         assert revision.has_body
         (doc, links, content_type_with_options) = revision.document_and_links()
@@ -559,9 +606,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         
         # Send body
-        self.send_revision_body(revision, doc, links)
+        self.send_revision_body(revision, doc, links, revision_datetime=None)
     
-    def send_revision_body(self, revision, doc, links) -> None:
+    def send_revision_body(self, 
+            revision: ResourceRevision, 
+            doc: Optional[Document], 
+            links: List[Link], 
+            revision_datetime: Optional[datetime.datetime]
+            ) -> None:
         # Send body
         if doc is None:
             # Not a document. Cannot rewrite content.
@@ -579,6 +631,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 absolute_url = urljoin(base_url, relative_url)
                 request_url = self.get_request_url(absolute_url)
                 link.relative_url = request_url
+            
+            if _ENABLE_PIN_DATE_MITIGATION:
+                # TODO: Add try_insert_script() to Document interface
+                if isinstance(doc, HtmlDocument) and revision_datetime is not None:
+                    doc.try_insert_script(
+                        _PIN_DATE_JS_PATH_PREFIX + 
+                        str(int(revision_datetime.timestamp())))
             
             # Output altered document
             try:
@@ -648,5 +707,32 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     def log_message(self, format, *args):  # override
         print_info(format % args)
+
+_PIN_DATE_JS_TEMPLATE = dedent(
+    """
+    window.Date = (function() {
+        const RealDate = window.Date;  // capture
+        
+        function PageLoadDate() {
+            if (this === window) {
+                // Date() -> str
+                return (new PageLoadDate()).toString();
+            } else {
+                // new Date() -> Date
+                return new RealDate(%d);
+            }
+        }
+        PageLoadDate.now = function() {
+            return (new PageLoadDate()).getTime();
+        }
+        PageLoadDate.UTC = RealDate.UTC
+        
+        return PageLoadDate;
+    })();
+    """
+).lstrip()  # type: str
+
+def _pin_date_js(timestamp: int) -> str:
+    return _PIN_DATE_JS_TEMPLATE % timestamp
 
 # ------------------------------------------------------------------------------

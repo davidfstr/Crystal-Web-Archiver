@@ -731,6 +731,8 @@ class ResourceRevision(object):
     A downloaded revision of a `Resource`. Immutable.
     Persisted. Loaded on demand.
     """
+    resource: Resource
+    error: Exception
     metadata: Optional[ResourceRevisionMetadata]
     has_body: bool
     
@@ -983,7 +985,7 @@ class ResourceRevision(object):
         """
         return self.document_and_links()[1]
     
-    def document_and_links(self) -> tuple[Document, list[Link], Optional[str]]:
+    def document_and_links(self) -> tuple[Optional[Document], list[Link], Optional[str]]:
         """
         Returns a 3-tuple containing:
         (1) if the resource is a document, the document, otherwise None;
@@ -1042,7 +1044,7 @@ class ResourceRevisionMetadata(TypedDict):
     http_version: int  # 10 for HTTP/1.0, 11 for HTTP/1.1
     status_code: int
     reason_phrase: str
-    headers: object  # email.message.EmailMessage
+    headers: list[tuple[str, str]]  # email.message.EmailMessage
 
 class _PersistedError(Exception):
     """

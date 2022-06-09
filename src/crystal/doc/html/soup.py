@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 import json
 import re
+from typing import Optional
 
 _ANY_RE = re.compile(r'.*')
 
@@ -21,7 +22,10 @@ _HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
 _PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
 
-def parse_html_and_links(html_bytes, declared_charset=None):
+def parse_html_and_links(
+        html_bytes: bytes, 
+        declared_charset: Optional[str]=None
+        ) -> 'tuple[HtmlDocument, list[HtmlLink]]':
     try:
         html = BeautifulSoup(
             html_bytes,
@@ -187,6 +191,17 @@ def _get_image_tag_title(tag):
 class HtmlDocument(Document):
     def __init__(self, html: BeautifulSoup) -> None:
         self._html = html
+    
+    def try_insert_script(self, script_url: str) -> bool:
+        first_element = self._html.find(True)
+        if first_element is not None:
+            script = self._html.new_tag('script')
+            script['src'] = script_url
+            
+            first_element.insert_before(script)
+            return True
+        else:
+            return False
     
     def __str__(self) -> str:
         return str(self._html)
