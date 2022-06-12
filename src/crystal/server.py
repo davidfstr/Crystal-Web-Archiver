@@ -64,6 +64,7 @@ _PIN_DATE_JS_PATH_PREFIX = '/_/crystal/pin_date.js?t='
 _HEADER_ALLOWLIST = set([
     'date',
     'vary',
+    'content-disposition',
     'content-language',
     'content-type',
     'server',
