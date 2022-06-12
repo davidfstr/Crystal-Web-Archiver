@@ -89,22 +89,22 @@ _HEADER_ALLOWLIST = set([
     'timing-allow-origin',  # enable cross-origin access to timing API
     'server-timing',
     
-    # Vendor-specific: AWS Cloudfront
+    # Infrastructure-specific: AWS Cloudfront
     'x-amz-cf-id',
     'x-amz-cf-pop',
     'x-amz-storage-class',
     
-    # Vendor-specific: AWS S3
+    # Infrastructure-specific: AWS S3
     'x-amz-id-2',
     'x-amz-request-id',
     'x-amz-version-id',
     
-    # Vendor-specific: Cloudflare
+    # Infrastructure-specific: Cloudflare
     'cf-cache-status',
     'cf-ray',
     'cf-request-id',
     
-    # Vendor-specific: Google Cloud
+    # Infrastructure-specific: Google Cloud
     'x-goog-generation',
     'x-goog-hash',
     'x-goog-metageneration',
@@ -113,11 +113,22 @@ _HEADER_ALLOWLIST = set([
     'x-goog-stored-content-length',
     'x-guploader-uploadid',
     
-    # Vendor-specific: Fastly
+    # Infrastructure-specific: Fastly
     'detected-user-agent',
+    'fastly-restarts',
     'normalized-user-agent',
     'request_came_from_shield',
     'x-served-by',
+    
+    # Infrastructure-specific: Envoy
+    'x-envoy-attempt-count',
+    'x-envoy-upstream-service-time',
+    
+    # Service-specific: imgix
+    'x-imgix-id',
+    
+    # Site-specific: Substack
+    'x-cluster',
 ])
 # Set of archived headers known to cause problems if blindly played back
 _HEADER_DENYLIST = set([
@@ -132,6 +143,9 @@ _HEADER_DENYLIST = set([
     'cache-control',
     'age',
     'expires',
+    
+    # Content-Security-Policy
+    'content-security-policy-report-only',
     
     # Cookie
     'set-cookie',       # don't allow cookies to be set by archived site
