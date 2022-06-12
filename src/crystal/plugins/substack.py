@@ -1,4 +1,4 @@
-from base64 import b64decode, b64encode
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from crystal.plugins.util.params import try_get_int, try_get_str
 import json
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
@@ -14,8 +14,9 @@ def normalize_url(old_url: str, **kwargs) -> str:
             d = try_get_str(params, 'd')
             if t is not None and d is not None:
                 try:
-                    d_obj = json.loads(b64decode(d))
+                    d_obj = json.loads(urlsafe_b64decode(d))
                 except ValueError:
+                    print('*** Substack: Unable to decode "d" argument: ' + d)
                     pass
                 else:
                     if isinstance(d_obj, dict):
@@ -44,7 +45,7 @@ def normalize_url(old_url: str, **kwargs) -> str:
                             ))  # reinterpret
                             page['url'] = url  # reinterpret
                         
-                        new_d = b64encode(json.dumps(d_obj).encode('utf-8')).decode('utf-8')
+                        new_d = urlsafe_b64encode(json.dumps(d_obj).encode('utf-8')).decode('utf-8')
                         
                         new_params = dict(_=t, d=new_d)
                         new_query = urlencode(new_params)
