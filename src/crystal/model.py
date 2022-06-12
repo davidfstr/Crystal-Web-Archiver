@@ -11,7 +11,10 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 from __future__ import annotations
 
 from collections import OrderedDict
-from crystal.plugins import phpbb
+from crystal.plugins import (
+    phpbb as plugins_phpbb,
+    substack as plugins_substack,
+)   
 from crystal.progress import DummyOpenProjectProgressListener, OpenProjectProgressListener
 from crystal.urls import is_unrewritable_url, requote_uri
 from crystal.xfutures import Future
@@ -430,13 +433,15 @@ class Resource(object):
         
         # Allow plugins to normalize URLs further
         old_url = new_url
-        try:
-            new_url = phpbb.normalize_url(old_url)
-        except Exception:  # ignore errors
-            new_url = old_url
-        else:
-            if new_url != old_url:
-                alternatives.append(new_url)
+        for normalize_url in (plugins_phpbb.normalize_url, plugins_substack.normalize_url):
+            try:
+                new_url = normalize_url(old_url)
+            except Exception:  # ignore errors
+                new_url = old_url
+            else:
+                if new_url != old_url:
+                    alternatives.append(new_url)
+                    old_url = new_url  # reinterpret
         
         return alternatives
     
