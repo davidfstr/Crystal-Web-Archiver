@@ -61,7 +61,7 @@ _PIN_DATE_JS_PATH_RE = re.compile(r'^/_/crystal/pin_date\.js\?t=([0-9]+)$')
 _PIN_DATE_JS_PATH_PREFIX = '/_/crystal/pin_date.js?t='
 
 # Set of archived headers that may be played back as-is
-_HEADER_WHITELIST = set([
+_HEADER_ALLOWLIST = set([
     'date',
     'vary',
     'content-language',
@@ -120,7 +120,7 @@ _HEADER_WHITELIST = set([
     'x-served-by',
 ])
 # Set of archived headers known to cause problems if blindly played back
-_HEADER_BLACKLIST = set([
+_HEADER_DENYLIST = set([
     # Connection
     'transfer-encoding',# overridden by this web server
     'content-length',   # overridden by this web server
@@ -158,7 +158,7 @@ _HEADER_BLACKLIST = set([
     'x-ratelimit-reset',
     
     # Ignored non-problematic headers
-    # TODO: Consider moving these headers to the _HEADER_WHITELIST
+    # TODO: Consider moving these headers to the _HEADER_ALLOWLIST
     'x-powered-by',
     'x-monk',
     'x-cache',
@@ -578,10 +578,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 self.send_header(name, self.get_request_url(value))
                 continue
                 
-            if name.lower() in _HEADER_WHITELIST:
+            if name.lower() in _HEADER_ALLOWLIST:
                 self.send_header(name, value)
             else:
-                if name.lower() not in _HEADER_BLACKLIST:
+                if name.lower() not in _HEADER_DENYLIST:
                     print_warning(
                         '*** Ignoring unknown header in archive: %s: %s' % (name, value))
                 continue
