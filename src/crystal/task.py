@@ -258,7 +258,7 @@ class Task(object):
         self._future.set_running_or_notify_cancel()
         try:
             self._future.set_result(self())
-        except:
+        except BaseException:
             (_, e, _) = sys.exc_info()
             self._future.set_exception(e)
         finally:
@@ -433,7 +433,7 @@ class DownloadResourceTask(Task):
             else:
                 try:
                     body_revision = self._download_body_task.future.result()
-                except:
+                except Exception:
                     # Behave as if there are no embedded resources
                     pass
                 else:

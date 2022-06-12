@@ -432,7 +432,7 @@ class Resource(object):
         old_url = new_url
         try:
             new_url = phpbb.normalize_url(old_url)
-        except:  # ignore errors
+        except Exception:  # ignore errors
             new_url = old_url
         else:
             if new_url != old_url:
@@ -791,7 +791,7 @@ class ResourceRevision(object):
                 body_filepath = os.path.join(project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id))
                 with open(body_filepath, 'wb') as body_file:
                     shutil.copyfileobj(body_stream, body_file)
-            except:
+            except Exception:
                 # Rollback database commit
                 def fg_task():
                     c = project._db.cursor()
