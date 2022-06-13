@@ -32,29 +32,33 @@ def parse_html_and_links(
         
         dividers_and_links.append(new_item)
     
-    return (BasicHtmlDocument(dividers_and_links), links)
+    return (BasicDocument(dividers_and_links), links)
 
-class BasicHtmlDocument(Document):
-    def __init__(self, dividers_and_links):
+class BasicDocument(Document):
+    def __init__(self, dividers_and_links: 'list[str | BasicLink]') -> None:
         self._dividers_and_links = dividers_and_links
     
-    def __str__(self):
+    def __str__(self) -> str:
         return ''.join([str(item) for item in self._dividers_and_links])
 
 class BasicLink(Link):
-    def __init__(self, quoted_href):
+    def __init__(self, quoted_href: str) -> None:
+        if not (len(quoted_href) >= 2 and 
+                quoted_href[0] in ('\'', '\"') and 
+                quoted_href[-1] == quoted_href[0]):
+            raise ValueError()
         self._quoted_href = quoted_href
         
         self.title = None
         self.type_title = 'Unknown'
         self.embedded = False
     
-    def _get_relative_url(self):
+    def _get_relative_url(self) -> str:
         return self._quoted_href[1:-1]
-    def _set_relative_url(self, value):
+    def _set_relative_url(self, value: str) -> None:
         self._quoted_href = '"%s"' % value
     relative_url = property(_get_relative_url, _set_relative_url)
     
-    # Simplifies BasicHtmlDocument's __str__ method implementation
-    def __str__(self):
+    # Simplifies BasicDocument's __str__ method implementation
+    def __str__(self) -> str:
         return self._quoted_href

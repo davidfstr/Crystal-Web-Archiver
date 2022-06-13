@@ -966,6 +966,11 @@ class ResourceRevision(object):
         """Returns whether this resource is CSS."""
         return self.content_type == 'text/css'
     
+    @property
+    def is_json(self) -> bool:
+        """Returns whether this resource is JSON."""
+        return self.content_type == 'application/json'
+    
     # === Body ===
     
     def size(self):
@@ -994,7 +999,7 @@ class ResourceRevision(object):
         """
         Returns a 3-tuple containing:
         (1) if the resource is a document, the document, otherwise None;
-        (2) a list of Links found in this resource.
+        (2) a list of rewritable Links found in this resource.
         (3) a Content-Type value for the document, or None if unknown
         
         The HTML document can be reoutput by getting its str() representation.
@@ -1004,6 +1009,7 @@ class ResourceRevision(object):
         from crystal.doc.css import parse_css_and_links
         from crystal.doc.generic import create_external_link
         from crystal.doc.html import parse_html_and_links
+        from crystal.doc.json import parse_json_and_links
         
         # Extract links from HTML, if applicable
         if self.is_html and self.has_body:
@@ -1015,6 +1021,15 @@ class ResourceRevision(object):
                 body_bytes = body.read()
             (doc, links) = parse_css_and_links(body_bytes, self.declared_charset)
             content_type_with_options = 'text/css; charset=utf-8'
+        elif self.is_json and self.has_body:
+            with self.open() as body:
+                doc_and_links = parse_json_and_links(body, self.declared_charset)
+            if doc_and_links is not None:
+                (doc, links) = doc_and_links
+                content_type_with_options = 'application/json; charset=utf-8'
+            else:
+                (doc, links) = (None, [])
+                content_type_with_options = None
         else:
             (doc, links) = (None, [])
             content_type_with_options = None

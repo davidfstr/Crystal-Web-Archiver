@@ -2,6 +2,8 @@
 HTML parser implementation that uses BeautifulSoup.
 """
 
+from __future__ import annotations
+
 from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 import json
@@ -18,9 +20,9 @@ _BODY_RE = re.compile(r'(?i)body')
 _SCRIPT_RE = re.compile(r'(?i)script')
 _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
 _QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")((?:https?:)?\\?/\\?/[^/][^"]+)"|(')((?:https?:)?\\?/\\?/[^/][^']+)')''')
-_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
+ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
-_PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
+PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
 
 def parse_html_and_links(
         html_bytes: bytes, 
@@ -149,7 +151,7 @@ def parse_html_and_links(
                     return
                 title = None
                 type_title = 'Script Reference'
-                embedded = _PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
+                embedded = PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
                 links.append(HtmlLink.create_from_complex_tag(
                     tag, 'string', type_title, title, embedded,
                     relative_url, replace_url_in_old_attr_value))
@@ -167,14 +169,14 @@ def parse_html_and_links(
                 # HACK: BeautifulSoup has been observed to provide a 
                 #       List[str] value for the "class" attribute...
                 continue
-            matcher = _HTTP_LINK_RE.fullmatch(attr_value)
+            matcher = ABSOLUTE_HTTP_LINK_RE.fullmatch(attr_value)
             if not matcher:
                 continue
             
             relative_url = matcher.group(1)
             title = None
             type_title = 'Attribute Reference'
-            embedded = _PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
+            embedded = PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
             links.append(HtmlLink.create_from_tag(
                 tag, attr_name, type_title, title, embedded))
     

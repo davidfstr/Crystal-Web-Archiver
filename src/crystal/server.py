@@ -14,7 +14,7 @@ from crystal.doc.html.soup import HtmlDocument
 from crystal.model import Project, Resource, ResourceGroup, ResourceRevision
 from crystal.task import schedule_forever
 import datetime
-from html import escape as html_escape
+from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import StringIO
