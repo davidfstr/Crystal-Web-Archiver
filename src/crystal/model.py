@@ -1012,10 +1012,14 @@ class ResourceRevision(object):
         from crystal.doc.json import parse_json_and_links
         
         # Extract links from HTML, if applicable
+        (doc, links) = (None, [])
+        content_type_with_options = None
         if self.is_html and self.has_body:
             with self.open() as body:
-                (doc, links) = parse_html_and_links(body, self.declared_charset)
-            content_type_with_options = 'text/html; charset=utf-8'  # type: Optional[str]
+                doc_and_links = parse_html_and_links(body, self.declared_charset)
+            if doc_and_links is not None:
+                (doc, links) = doc_and_links
+                options = 'text/html; charset=utf-8'  # type: Optional[str]
         elif self.is_css and self.has_body:
             with self.open() as body:
                 body_bytes = body.read()
@@ -1027,12 +1031,6 @@ class ResourceRevision(object):
             if doc_and_links is not None:
                 (doc, links) = doc_and_links
                 content_type_with_options = 'application/json; charset=utf-8'
-            else:
-                (doc, links) = (None, [])
-                content_type_with_options = None
-        else:
-            (doc, links) = (None, [])
-            content_type_with_options = None
         
         # Ignore links that should never be rewritten
         links = [link for link in links if not is_unrewritable_url(link.relative_url)]

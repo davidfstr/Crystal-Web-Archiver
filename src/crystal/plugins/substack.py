@@ -14,7 +14,7 @@ def normalize_url(old_url: str, **kwargs) -> str:
             d = try_get_str(params, 'd')
             if t is not None and d is not None:
                 try:
-                    d_obj = json.loads(urlsafe_b64decode(d))
+                    d_obj = json.loads(urlsafe_b64decode(d))  # type: ignore[attr-defined]
                 except ValueError:
                     print('*** Substack: Unable to decode "d" argument: ' + d)
                     pass
@@ -45,7 +45,9 @@ def normalize_url(old_url: str, **kwargs) -> str:
                             ))  # reinterpret
                             page['url'] = url  # reinterpret
                         
-                        new_d = urlsafe_b64encode(json.dumps(d_obj).encode('utf-8')).decode('utf-8')
+                        new_d = urlsafe_b64encode(
+                            json.dumps(d_obj).encode('utf-8')  # type: ignore[attr-defined]
+                        ).decode('utf-8')
                         
                         new_params = dict(_=t, d=new_d)
                         new_query = urlencode(new_params)

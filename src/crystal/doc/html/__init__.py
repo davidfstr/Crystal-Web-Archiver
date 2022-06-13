@@ -8,25 +8,11 @@ from crystal.doc.generic import Document, Link
 from io import BytesIO
 from typing import Optional, Union
 
-def parse_links(
-        html_bytes: bytes, 
-        declared_charset: Optional[str]=None
-        ) -> list[Link]:
-    """
-    Parses the specified HTML bytestring, returning a list of links.
-    
-    Arguments:
-    html_bytes -- HTML bytestring or file object.
-    declared_charset -- the encoding that the HTML document is declared to be in.
-    """
-    (html, links) = parse_html_and_links(html_bytes, declared_charset)
-    return links
-
 
 def parse_html_and_links(
         html_bytes: Union[bytes, BytesIO], 
         declared_charset: Optional[str]=None
-        ) -> tuple[Document, list[Link]]:
+        ) -> Optional[tuple[Document, list[Link]]]:
     """
     Parses the specified HTML bytestring, returning a 2-tuple containing
     (1) the HTML document and
@@ -39,9 +25,6 @@ def parse_html_and_links(
     * type_title : str -- displayed title for this link's type.
     * title : str -- displayed title for this link, or None.
     * embedded : bool -- whether this link refers to an embedded resource.
-    
-    This parse method should be used instead of parse_links() when the parsed
-    links need to be modified and the document reoutput.
     
     Arguments:
     html_bytes -- HTML bytestring or file object.

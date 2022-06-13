@@ -27,7 +27,7 @@ PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
 def parse_html_and_links(
         html_bytes: bytes, 
         declared_charset: Optional[str]=None
-        ) -> 'tuple[HtmlDocument, list[HtmlLink]]':
+        ) -> 'Optional[tuple[HtmlDocument, list[HtmlLink]]]':
     try:
         html = BeautifulSoup(
             html_bytes,
@@ -36,15 +36,7 @@ def parse_html_and_links(
             features='html.parser',
         )
     except Exception as e:
-        # TODO: Return the underlying exception as a warning by some mechanism
-        
-        # If input is file object, read it directly into memory so that
-        # str() can be called on it properly.
-        if hasattr(html_bytes, 'read'):
-            html_bytes.seek(0)
-            html_bytes = html_bytes.read()
-        
-        return (html_bytes, [])
+        return None
     
     links = []
     
@@ -108,7 +100,7 @@ def parse_html_and_links(
     # This type of link is used on: fanfiction.net
     for tag in html.findAll(_INPUT_RE, type=_BUTTON_RE, onclick=_ON_CLICK_RE):
         matcher = _ON_CLICK_RE.search(tag['onclick'])
-        def process_match(matcher):
+        def process_match(matcher) -> None:
             def replace_url_in_old_attr_value(url, old_attr_value):
                 q = matcher.group(2)
                 return matcher.group(1) + ' = ' + q + url + q
@@ -132,7 +124,7 @@ def parse_html_and_links(
         
         matches = _QUOTED_HTTP_LINK_RE.findall(tag.string)
         for match in matches:
-            def process_match(match):
+            def process_str_match(match: str) -> None:
                 q = match[0] or match[2]
                 old_string_literal = q + (match[1] or match[3]) + q
                 
@@ -145,7 +137,7 @@ def parse_html_and_links(
                     return old_attr_value.replace(old_string_literal, new_string_literal)
                 
                 try:
-                    relative_url = json.loads('"' + (match[1] or match[3]) + '"')
+                    relative_url = json.loads('"' + (match[1] or match[3]) + '"')  # type: ignore[attr-defined]
                 except ValueError:
                     # Failed to parse JavaScript string literal
                     return
@@ -155,7 +147,7 @@ def parse_html_and_links(
                 links.append(HtmlLink.create_from_complex_tag(
                     tag, 'string', type_title, title, embedded,
                     relative_url, replace_url_in_old_attr_value))
-            process_match(match)
+            process_str_match(match)
     
     # <* *="http(s)://**">
     # This type of link is used on: https://blog.calm.com/take-a-deep-breath
