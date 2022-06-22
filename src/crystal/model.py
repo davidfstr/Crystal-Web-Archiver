@@ -148,6 +148,9 @@ class Project(object):
         
         # Hold on to the server connection
         self.server_running = False
+        
+        # Define initial configuration
+        self.request_cookie = None  # type: Optional[str]
     
     @staticmethod
     def is_valid(path):
