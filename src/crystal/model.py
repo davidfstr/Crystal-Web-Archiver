@@ -213,6 +213,14 @@ class Project(object):
         else:
             return url
     
+    def request_cookie_applies_to(self, url: str) -> bool:
+        default_url_prefix = self.default_url_prefix  # capture
+        return (
+            default_url_prefix is not None and
+            not default_url_prefix.endswith('/') and
+            url.startswith(default_url_prefix + '/')
+        )
+    
     @property
     def resources(self):
         return self._resources.values()
@@ -779,7 +787,6 @@ class ResourceRevision(object):
     # === Init ===
     
     @staticmethod
-    # TODO: Alter callers to pass request_cookie appropriately
     def create_from_error(resource, error, request_cookie=None) -> ResourceRevision:
         """
         Creates a revision that encapsulates the error encountered when fetching the revision.
@@ -792,7 +799,6 @@ class ResourceRevision(object):
             error=error)
     
     @staticmethod
-    # TODO: Alter callers to pass request_cookie appropriately
     def create_from_response(resource, metadata, body_stream, request_cookie=None) -> ResourceRevision:
         """
         Creates a revision with the specified metadata and body.
@@ -812,7 +818,7 @@ class ResourceRevision(object):
                 metadata=metadata,
                 body_stream=body_stream)
         except Exception as e:
-            return ResourceRevision.create_from_error(resource, e)
+            return ResourceRevision.create_from_error(resource, e, request_cookie)
     
     @staticmethod
     def _create(resource, *, request_cookie=None, error=None, metadata=None, body_stream=None) -> ResourceRevision:
