@@ -309,7 +309,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 # existing resource group, presume that the user is interested 
                 # in downloading it immediately upon access
                 matching_rg = self._find_group_matching_archive_url(archive_url)
-                if matching_rg is not None:
+                if matching_rg is not None and not self.project.readonly:
                     print_warning('*** Dynamically downloading new resource in group %s: %s' % (
                         matching_rg.name,
                         archive_url,
@@ -323,13 +323,15 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     self.send_resource_not_in_archive(archive_url)
                     return
             
-            revision = fg_call_and_wait(lambda: resource.default_revision(stale_ok=True))  # type: Optional[ResourceRevision]
+            revision = fg_call_and_wait(lambda: resource.default_revision(
+                stale_ok=True if self.project.readonly else False
+            ))  # type: Optional[ResourceRevision]
             if revision is None:
                 # If the existing resource is a member of an
                 # existing resource group, presume that the user is interested 
                 # in downloading it immediately upon access
                 matching_rg = self._find_group_matching_archive_url(archive_url)
-                if matching_rg is not None:
+                if matching_rg is not None and not self.project.readonly:
                     print_warning('*** Dynamically downloading existing resource in group %s: %s' % (
                         matching_rg.name,
                         archive_url,
