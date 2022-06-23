@@ -26,7 +26,7 @@ import os
 import re
 import shutil
 import sqlite3
-from typing import cast, Dict, List, Optional, TYPE_CHECKING, TypedDict, Union
+from typing import Callable, cast, Dict, List, Optional, TYPE_CHECKING, TypedDict, Union
 from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
@@ -47,7 +47,8 @@ class Project(object):
     
     def __init__(self,
             path: str,
-            progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
+            progress_listener: Optional[OpenProjectProgressListener]=None,
+            *, readonly: bool=False) -> None:
         """
         Loads a project from the specified filepath, or creates a new one if none is found.
         
@@ -65,6 +66,10 @@ class Project(object):
         self._resources = OrderedDict()         # type: Dict[str, Resource]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
+        self.readonly = True  # will reinitialize after database is located
+        
+        def initially_readonly(can_write_db: bool) -> bool:
+            return readonly or not can_write_db
         
         progress_listener.opening_project(os.path.basename(path))
         
@@ -76,12 +81,17 @@ class Project(object):
                 if not Project.is_valid(path):
                     raise ProjectFormatError('Project format is invalid.')
                 
-                self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
+                db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
+                db = sqlite3.connect(db_filepath)
+                can_write_db = os.access(db_filepath, os.W_OK)
+                
+                self.readonly = initially_readonly(can_write_db)
+                self._db = DatabaseConnection(db, lambda: self.readonly)
                 
                 c = self._db.cursor()
                 
                 # Upgrade database schema to latest version
-                self._apply_migrations(c)
+                self._apply_migrations(c, readonly=(not can_write_db))
                 
                 # Load project properties
                 for (name, value) in c.execute('select name, value from project_property'):
@@ -126,7 +136,13 @@ class Project(object):
                 
                 os.mkdir(path)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
-                self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
+                
+                db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
+                db = sqlite3.connect(db_filepath)
+                can_write_db = True
+                
+                self.readonly = initially_readonly(can_write_db)
+                self._db = DatabaseConnection(db, lambda: self.readonly)
                 
                 c = self._db.cursor()
                 c.execute('create table project_property (name text unique not null, value text)')
@@ -160,14 +176,21 @@ class Project(object):
             os.path.exists(os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)))
     
     @classmethod
-    def _apply_migrations(cls, c: sqlite3.dbapi2.Cursor) -> None:
-        """Upgrades this project's database schema to the latest version."""
+    def _apply_migrations(cls, c: DatabaseCursor, readonly: bool) -> None:
+        """
+        Upgrades this project's database schema to the latest version.
+        
+        Raises:
+        * ProjectReadOnlyError
+        """
         # Add resource_revision.request_cookie column if missing
         if 'request_cookie' not in cls._get_column_names_of_table(c, 'resource_revision'):
+            if readonly:
+                raise ProjectReadOnlyError()
             c.execute('alter table resource_revision add column request_cookie text')
     
     @staticmethod
-    def _get_column_names_of_table(c: sqlite3.dbapi2.Cursor, table_name: str) -> list[str]:
+    def _get_column_names_of_table(c: DatabaseCursor, table_name: str) -> list[str]:
         return [
             column_name
             for (_, column_name, column_type, _, _, _)
@@ -181,10 +204,12 @@ class Project(object):
     def title(self):
         return os.path.basename(self.path)
     
-    def _get_property(self, name, default):
+    def _get_property(self, name: str, default: str) -> str:
         return self._properties.get(name, default)
-    def _set_property(self, name, value):
+    def _set_property(self, name: str, value: str) -> None:
         if not self._loading:
+            if self.readonly:
+                raise ProjectReadOnlyError()
             c = self._db.cursor()
             c.execute('insert or replace into project_property (name, value) values (?, ?)', (name, value))
             self._db.commit()
@@ -315,10 +340,63 @@ class Project(object):
             crystal.server.start(self)
             self.server_running = True
 
+class DatabaseConnection:
+    """Wraps a sqlite3.dbapi2.Connection, ensuring that it is used correctly."""
+    
+    def __init__(self,
+            db: sqlite3.dbapi2.Connection,
+            readonly_func: Callable[[], bool]) -> None:
+        self._db = db
+        self._readonly_func = readonly_func
+    
+    def cursor(self, *args, **kwargs) -> DatabaseCursor:
+        c = self._db.cursor(*args, **kwargs)  # type: sqlite3.dbapi2.Cursor
+        return DatabaseCursor(c, self._readonly_func())
+    
+    def __getattr__(self, attr_name: str):
+        return getattr(self._db, attr_name)
+
+class DatabaseCursor:
+    """Wraps a sqlite3.dbapi2.Cursor, ensuring that it is used correctly."""
+    
+    def __init__(self, c: sqlite3.dbapi2.Cursor, readonly: bool) -> None:
+        self._c = c
+        self._readonly = readonly
+    
+    def execute(self, command: str, *args, **kwargs) -> DatabaseCursor:
+        # Ensure that caller does disallow commands that write to the database
+        # if the project is readonly
+        if self._readonly:
+            command_lower = command.lower()  # cache
+            command_is_read = (
+                command_lower.startswith('select ') or
+                command_lower.startswith('pragma table_info(')
+            )
+            command_is_write = not command_is_read  # conservative
+            if command_is_write:
+                raise AssertionError(
+                    'Attempted to write to database when (Project.readonly == True). '
+                    'Caller should have checked this case and thrown ProjectReadOnlyError.'
+                )
+        
+        result = self._c.execute(command, *args, **kwargs)
+        assert result is self._c
+        return self
+    
+    # Define specially to help mypy know that this attribute exists
+    def __iter__(self, *args, **kwargs):
+        return self._c.__iter__(*args, **kwargs)
+    
+    def __getattr__(self, attr_name: str):
+        return getattr(self._c, attr_name)
+
 class CrossProjectReferenceError(Exception):
     pass
 
 class ProjectFormatError(Exception):
+    pass
+
+class ProjectReadOnlyError(Exception):
     pass
 
 class _WeakTaskRef(object):
@@ -393,6 +471,8 @@ class Resource(object):
         if project._loading:
             self._id = _id
         else:
+            if project.readonly:
+                raise ProjectReadOnlyError()
             c = project._db.cursor()
             c.execute('insert into resource (url) values (?)', (normalized_url,))
             project._db.commit()
@@ -661,11 +741,13 @@ class Resource(object):
         Tries to alter this resource's URL to new specified URL,
         unless there is already an existing resource with that URL.
         """
-        project = self.project
+        project = self.project  # cache
         
         if new_url in project._resources:
             return False
         
+        if project.readonly:
+            raise ProjectReadOnlyError()
         c = project._db.cursor()
         c.execute('update resource set url=? where id=?', (new_url, self._id,))
         project._db.commit()
@@ -696,6 +778,8 @@ class Resource(object):
             rev.delete()
         
         # Delete Resource itself
+        if project.readonly:
+            raise ProjectReadOnlyError()
         c = project._db.cursor()
         c.execute('delete from resource where id=?', (self._id,))
         project._db.commit()
@@ -728,6 +812,7 @@ class RootResource(object):
         CrossProjectReferenceError -- if `resource` belongs to a different project.
         RootResource.AlreadyExists -- if there is already a `RootResource` associated
                                       with the specified resource.
+        ProjectReadOnlyError
         """
         
         if resource.project != project:
@@ -744,6 +829,8 @@ class RootResource(object):
             if project._loading:
                 self._id = _id
             else:
+                if project.readonly:
+                    raise ProjectReadOnlyError()
                 c = project._db.cursor()
                 c.execute('insert into root_resource (name, resource_id) values (?, ?)', (name, resource._id))
                 project._db.commit()
@@ -760,6 +847,8 @@ class RootResource(object):
             if rg.source == self:
                 rg.source = None
         
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
         c = self.project._db.cursor()
         c.execute('delete from root_resource where id=?', (self._id,))
         self.project._db.commit()
@@ -855,6 +944,8 @@ class ResourceRevision(object):
         def fg_task():
             RR = ResourceRevision
             
+            if project.readonly:
+                raise ProjectReadOnlyError()
             c = project._db.cursor()
             c.execute(
                 'insert into resource_revision '
@@ -872,6 +963,8 @@ class ResourceRevision(object):
             except Exception:
                 # Rollback database commit
                 def fg_task():
+                    if project.readonly:
+                        raise ProjectReadOnlyError()
                     c = project._db.cursor()
                     c.execute('delete from resource_revision where id=?', (self._id,))
                     project._db.commit()
@@ -1124,6 +1217,8 @@ class ResourceRevision(object):
         if os.path.exists(body_filepath):
             os.remove(body_filepath)
         
+        if project.readonly:
+            raise ProjectReadOnlyError()
         c = project._db.cursor()
         c.execute('delete from resource_revision where id=?', (self._id,))
         project._db.commit()
@@ -1183,6 +1278,8 @@ class ResourceGroup(object):
         if project._loading:
             self._id = _id
         else:
+            if project.readonly:
+                raise ProjectReadOnlyError()
             c = project._db.cursor()
             c.execute('insert into resource_group (name, url_pattern) values (?, ?)', (name, url_pattern))
             project._db.commit()
@@ -1201,6 +1298,8 @@ class ResourceGroup(object):
             if rg.source == self:
                 rg.source = None
         
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
         c = self.project._db.cursor()
         c.execute('delete from resource_group where id=?', (self._id,))
         self.project._db.commit()
@@ -1230,6 +1329,8 @@ class ResourceGroup(object):
         else:
             raise ValueError('Not a valid type of source.')
         
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
         c = self.project._db.cursor()
         c.execute('update resource_group set source_type=?, source_id=? where id=?', (source_type, source_id, self._id))
         self.project._db.commit()

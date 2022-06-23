@@ -129,6 +129,11 @@ def main(args):
                 default=None,
             )
             parser.add_argument(
+                '--readonly',
+                help='Whether to open the project as read-only.',
+                action='store_true',
+            )
+            parser.add_argument(
                 'filepath',
                 help='Optional. Path to a *.crystalproj to open.',
                 type=str,
@@ -141,13 +146,17 @@ def main(args):
             if parsed_args.filepath is not None:
                 filepath = args[0]
             
+            project_kwargs = dict(
+                readonly=parsed_args.readonly,
+            )
+            
             from crystal.progress import OpenProjectProgressDialog
             with OpenProjectProgressDialog() as progress_listener:
                 # Get a project
                 if filepath is None:
-                    project = _prompt_for_project(progress_listener)
+                    project = _prompt_for_project(progress_listener, **project_kwargs)
                 else:
-                    project = _load_project(filepath, progress_listener)
+                    project = _load_project(filepath, progress_listener, **project_kwargs)
                 assert project is not None
                 
                 # Configure project
@@ -195,8 +204,8 @@ def _running_as_bundle():
     """
     return hasattr(sys, 'frozen')
 
-def _prompt_for_project(progress_listener):
-    # type: (OpenProjectProgressListener) -> Project
+def _prompt_for_project(progress_listener, **project_kwargs):
+    # type: (OpenProjectProgressListener, object) -> Project
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     import wx
     
@@ -211,16 +220,16 @@ def _prompt_for_project(progress_listener):
     
     try:
         if choice == wx.ID_YES:
-            return _prompt_to_open_project(dialog, progress_listener)
+            return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
         elif choice == wx.ID_NO:
-            return _prompt_to_create_project(dialog, progress_listener)
+            return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
         else:  # wx.ID_CANCEL
             exit()
     finally:
         dialog.Destroy()
 
-def _prompt_to_create_project(parent, progress_listener):
-    # type: (wx.Window, OpenProjectProgressListener) -> Project
+def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
+    # type: (wx.Window, OpenProjectProgressListener, object) -> Project
     from crystal.model import Project
     import os.path
     import shutil
@@ -240,10 +249,10 @@ def _prompt_to_create_project(parent, progress_listener):
     
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
-    return Project(project_path, progress_listener)
+    return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
-def _prompt_to_open_project(parent, progress_listener):
-    # type: (wx.Window, OpenProjectProgressListener) -> Project
+def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
+    # type: (wx.Window, OpenProjectProgressListener, object) -> Project
     from crystal.model import Project
     from crystal.packages import project_appears_as_package_file
     import os.path
@@ -279,10 +288,10 @@ def _prompt_to_open_project(parent, progress_listener):
         dialog.Destroy()
         exit()
     
-    return Project(project_path, progress_listener)
+    return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
-def _load_project(project_path, progress_listener):
-    # type: (str, OpenProjectProgressListener) -> Project
+def _load_project(project_path, progress_listener, **project_kwargs):
+    # type: (str, OpenProjectProgressListener, object) -> Project
     from crystal.model import Project
     import os.path
     
@@ -291,7 +300,7 @@ def _load_project(project_path, progress_listener):
     
     # TODO: If errors while loading a project (ex: bad format),
     #       present them to the user nicely
-    return Project(project_path, progress_listener)
+    return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
 # ----------------------------------------------------------------------------------------
 
