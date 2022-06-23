@@ -320,7 +320,7 @@ class DownloadResourceBodyTask(Task):
         # If the resource is already up-to-date, return its default revision
         def fg_task():
             if self._resource.up_to_date():
-                return self._resource.default_revision()
+                return self._resource.default_revision(stale_ok=False)
             else:
                 return None
         body_revision = fg_call_and_wait(fg_task)

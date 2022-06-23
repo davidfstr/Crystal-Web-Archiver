@@ -597,26 +597,45 @@ class Resource(object):
         c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
         return c.fetchone() is not None
     
-    def default_revision(self) -> Optional[ResourceRevision]:
+    def default_revision(self, *, stale_ok: bool=True) -> Optional[ResourceRevision]:
         """
         Loads and returns the "default" revision of this resource, which is the revision
         that will be displayed when this resource is served or exported.
         
         If no revisions of this resource have been downloaded, None is returned.
+        
+        If stale_ok=False and the most up-to-date revision of this resource is
+        still stale, return None rather than returning a stale revision.
         """
-        default_revision_singleton = self.revisions(_query_suffix=' order by id desc limit 1')
-        return default_revision_singleton[0] if len(default_revision_singleton) == 1 else None
+        project = self.project  # cache
+        
+        revisions = self.revisions()
+        for revision in reversed(revisions):  # prioritize most recently downloaded
+            if stale_ok:
+                return revision
+            else:
+                revision_is_stale = False
+                if project.request_cookie_applies_to(self.url) and project.request_cookie is not None:
+                    if revision.request_cookie != project.request_cookie:
+                        revision_is_stale = True  # reinterpret
+                
+                if not revision_is_stale:
+                    return revision
+        return None
     
-    def revisions(self, _query_suffix: str='') -> List[ResourceRevision]:
+    def revisions(self) -> List[ResourceRevision]:
         """
         Loads and returns a list of `ResourceRevision`s downloaded for this resource.
         If no such revisions exist, an empty list is returned.
+        
+        Revisions will be returned in the order they were downloaded,
+        from least-recent to most-recent.
         """
         RR = ResourceRevision
         
-        revs = []
+        revs = []  # type: list[ResourceRevision]
         c = self.project._db.cursor()
-        query = 'select request_cookie, error, metadata, id from resource_revision where resource_id=?%s' % _query_suffix
+        query = 'select request_cookie, error, metadata, id from resource_revision where resource_id=? order by id asc'
         for (request_cookie, error, metadata, id) in c.execute(query, (self._id,)):
             revs.append(ResourceRevision.load(
                 resource=self,

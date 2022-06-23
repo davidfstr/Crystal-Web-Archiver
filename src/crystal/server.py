@@ -323,7 +323,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     self.send_resource_not_in_archive(archive_url)
                     return
             
-            revision = fg_call_and_wait(resource.default_revision)  # type: Optional[ResourceRevision]
+            revision = fg_call_and_wait(lambda: resource.default_revision(stale_ok=True))  # type: Optional[ResourceRevision]
             if revision is None:
                 # If the existing resource is a member of an
                 # existing resource group, presume that the user is interested 
