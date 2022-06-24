@@ -241,6 +241,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return super().parse_request()
     
     def do_GET(self) -> None:  # override
+        try:
+            self._do_GET()
+        except BrokenPipeError:
+            # Browser did drop connection before did finish sending response
+            pass
+    
+    def _do_GET(self) -> None:
         # Parse self.path using RFC 2616 rules,
         # which in particular allows it to be an absolute URI!
         if self.path == '*':
