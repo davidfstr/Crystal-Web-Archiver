@@ -123,6 +123,12 @@ def main(args):
                 action='store_true',
             )
             parser.add_argument(
+                '--cookie',
+                help='HTTP Cookie header value when downloading resources.',
+                type=str,
+                default=None,
+            )
+            parser.add_argument(
                 'filepath',
                 help='Optional. Path to a *.crystalproj to open.',
                 type=str,
@@ -143,6 +149,9 @@ def main(args):
                 else:
                     project = _load_project(filepath, progress_listener)
                 assert project is not None
+                
+                # Configure project
+                project.request_cookie = parsed_args.cookie
                 
                 # Create main window
                 from crystal.browser import MainWindow

@@ -24,6 +24,8 @@ Download ⬇︎
 Quickstart ⭐
 ----------
 
+To download a simple static website (ex: [xkcd](https://xkcd.com)):
+
 * Download the binary for your operating system. See [above](#download-%EF%B8%8E).
 * Open the program and create a new project, call it "xkcd".
 * Click the "+ URL" button to add the "https://xkcd.com/1/" URL, named "First Comic".
@@ -41,6 +43,21 @@ Quickstart ⭐
   Your default web browser should open and display the downloaded page.
 * Congratulations! You've downloaded your first website with Crystal!
 
+To download a website that requires login (ex: [The Pragmatic Engineer](https://newsletter.pragmaticengineer.com/)):
+
+* Using a browser like Chrome, login to the website you want to download.
+* Right-click anywhere on the page and choose Inspect to open the Chrome Developer Tools.
+* Switch to the Network pane and enable the Doc filter.
+* Reload the page by pressing the ⟳ button.
+* Select the page's URL in the Network pane.
+* Scroll down to see the "Request Headers" section and look for a "cookie" request header.
+* Copy the value of the "cookie" request header to a text file for safekeeping.
+* Download and launch the command-line version of Crystal.
+  Passing the saved "cookie" request header value to the `--cookie` command-line option:
+    * `poetry run python3 src/main.py --cookie __COOKIE_HEADER_VALUE__`
+* Now download pages using Crystal as you would normally. The specified cookie
+  header value (which logs you in to the remote server) will be used as you
+  download pages.
 
 Known Issues 🐞
 ------------

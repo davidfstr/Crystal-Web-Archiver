@@ -71,28 +71,36 @@ class Project(object):
         self._loading = True
         try:
             if os.path.exists(path):
+                # Load from existing project
+                
                 if not Project.is_valid(path):
                     raise ProjectFormatError('Project format is invalid.')
                 
-                # Load from existing project
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
                 
                 c = self._db.cursor()
                 
+                # Upgrade database schema to latest version
+                self._apply_migrations(c)
+                
+                # Load project properties
                 for (name, value) in c.execute('select name, value from project_property'):
                     self._set_property(name, value)
                 
+                # Load Resources
                 [(resource_count,)] = c.execute('select count(1) from resource')
                 progress_listener.loading_resources(resource_count)
                 for (url, id) in c.execute('select url, id from resource'):
                     Resource(self, url, _id=id)
                 
+                # Load RootResources
                 [(root_resource_count,)] = c.execute('select count(1) from root_resource')
                 progress_listener.loading_root_resources(root_resource_count)
                 for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
                     resource = self._get_resource_with_id(resource_id)
                     RootResource(self, name, resource, _id=id)
                 
+                # Load ResourceGroups
                 [(resource_group_count,)] = c.execute('select count(1) from resource_group')
                 progress_listener.loading_resource_groups(resource_group_count)
                 group_2_source = {}
@@ -115,6 +123,7 @@ class Project(object):
                 # (ResourceRevisions are loaded on demand)
             else:
                 # Create new project
+                
                 os.mkdir(path)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
                 self._db = sqlite3.connect(os.path.join(path, self._DB_FILENAME))
@@ -127,7 +136,7 @@ class Project(object):
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
                 progress_listener.loading_resource_groups(resource_group_count=0)
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
-                c.execute('create table resource_revision (id integer primary key, resource_id integer not null, error text not null, metadata text not null)')
+                c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
                 c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         finally:
             self._loading = False
@@ -139,6 +148,9 @@ class Project(object):
         
         # Hold on to the server connection
         self.server_running = False
+        
+        # Define initial configuration
+        self.request_cookie = None  # type: Optional[str]
     
     @staticmethod
     def is_valid(path):
@@ -146,6 +158,22 @@ class Project(object):
             os.path.exists(path) and 
             os.path.exists(os.path.join(path, Project._DB_FILENAME)) and
             os.path.exists(os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)))
+    
+    @classmethod
+    def _apply_migrations(cls, c: sqlite3.dbapi2.Cursor) -> None:
+        """Upgrades this project's database schema to the latest version."""
+        # Add resource_revision.request_cookie column if missing
+        if 'request_cookie' not in cls._get_column_names_of_table(c, 'resource_revision'):
+            c.execute('alter table resource_revision add column request_cookie text')
+    
+    @staticmethod
+    def _get_column_names_of_table(c: sqlite3.dbapi2.Cursor, table_name: str) -> list[str]:
+        return [
+            column_name
+            for (_, column_name, column_type, _, _, _)
+            # NOTE: Cannot use regular '?' placeholder in this PRAGMA
+            in c.execute('PRAGMA table_info(%s)' % (table_name,))
+        ]
     
     # === Properties ===
     
@@ -184,6 +212,14 @@ class Project(object):
             return url[len(default_url_prefix):]
         else:
             return url
+    
+    def request_cookie_applies_to(self, url: str) -> bool:
+        default_url_prefix = self.default_url_prefix  # capture
+        return (
+            default_url_prefix is not None and
+            not default_url_prefix.endswith('/') and
+            url.startswith(default_url_prefix + '/')
+        )
     
     @property
     def resources(self):
@@ -561,28 +597,52 @@ class Resource(object):
         c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
         return c.fetchone() is not None
     
-    def default_revision(self) -> Optional[ResourceRevision]:
+    def default_revision(self, *, stale_ok: bool=True) -> Optional[ResourceRevision]:
         """
         Loads and returns the "default" revision of this resource, which is the revision
         that will be displayed when this resource is served or exported.
         
         If no revisions of this resource have been downloaded, None is returned.
+        
+        If stale_ok=False and the most up-to-date revision of this resource is
+        still stale, return None rather than returning a stale revision.
         """
-        default_revision_singleton = self.revisions(_query_suffix=' order by id desc limit 1')
-        return default_revision_singleton[0] if len(default_revision_singleton) == 1 else None
+        project = self.project  # cache
+        
+        revisions = self.revisions()
+        for revision in reversed(revisions):  # prioritize most recently downloaded
+            if stale_ok:
+                return revision
+            else:
+                revision_is_stale = False
+                if project.request_cookie_applies_to(self.url) and project.request_cookie is not None:
+                    if revision.request_cookie != project.request_cookie:
+                        revision_is_stale = True  # reinterpret
+                
+                if not revision_is_stale:
+                    return revision
+        return None
     
-    def revisions(self, _query_suffix: str='') -> List[ResourceRevision]:
+    def revisions(self) -> List[ResourceRevision]:
         """
         Loads and returns a list of `ResourceRevision`s downloaded for this resource.
         If no such revisions exist, an empty list is returned.
+        
+        Revisions will be returned in the order they were downloaded,
+        from least-recent to most-recent.
         """
         RR = ResourceRevision
         
-        revs = []
+        revs = []  # type: list[ResourceRevision]
         c = self.project._db.cursor()
-        query = 'select error, metadata, id from resource_revision where resource_id=?%s' % _query_suffix
-        for (error, metadata, id) in c.execute(query, (self._id,)):
-            revs.append(ResourceRevision._load(self, RR._decode_error(error), RR._decode_metadata(metadata), _id=id))
+        query = 'select request_cookie, error, metadata, id from resource_revision where resource_id=? order by id asc'
+        for (request_cookie, error, metadata, id) in c.execute(query, (self._id,)):
+            revs.append(ResourceRevision.load(
+                resource=self,
+                request_cookie=request_cookie,
+                error=RR._decode_error(error),
+                metadata=RR._decode_metadata(metadata),
+                id=id))
         return revs
     
     # NOTE: Only used from a Python REPL at the moment
@@ -737,23 +797,28 @@ class ResourceRevision(object):
     Persisted. Loaded on demand.
     """
     resource: Resource
+    request_cookie: Optional[str]
     error: Exception
     metadata: Optional[ResourceRevisionMetadata]
+    _id: int
     has_body: bool
     
     # === Init ===
     
     @staticmethod
-    def create_from_error(resource, error):
+    def create_from_error(resource, error, request_cookie=None) -> ResourceRevision:
         """
         Creates a revision that encapsulates the error encountered when fetching the revision.
         
         Threadsafe.
         """
-        return ResourceRevision._create(resource, error=error)
+        return ResourceRevision._create(
+            resource,
+            request_cookie=request_cookie,
+            error=error)
     
     @staticmethod
-    def create_from_response(resource, metadata, body_stream):
+    def create_from_response(resource, metadata, body_stream, request_cookie=None) -> ResourceRevision:
         """
         Creates a revision with the specified metadata and body.
         
@@ -766,14 +831,19 @@ class ResourceRevision(object):
         body_stream -- file-like object containing the revision body.
         """
         try:
-            return ResourceRevision._create(resource, metadata=metadata, body_stream=body_stream)
+            return ResourceRevision._create(
+                resource,
+                request_cookie=request_cookie,
+                metadata=metadata,
+                body_stream=body_stream)
         except Exception as e:
-            return ResourceRevision.create_from_error(resource, e)
+            return ResourceRevision.create_from_error(resource, e, request_cookie)
     
     @staticmethod
-    def _create(resource, error=None, metadata=None, body_stream=None):
+    def _create(resource, *, request_cookie=None, error=None, metadata=None, body_stream=None) -> ResourceRevision:
         self = ResourceRevision()
         self.resource = resource
+        self.request_cookie = request_cookie
         self.error = error
         self.metadata = metadata
         # (self._id computed below)
@@ -786,7 +856,10 @@ class ResourceRevision(object):
             RR = ResourceRevision
             
             c = project._db.cursor()
-            c.execute('insert into resource_revision (resource_id, error, metadata) values (?, ?, ?)', (resource._id, RR._encode_error(error), RR._encode_metadata(metadata)))
+            c.execute(
+                'insert into resource_revision '
+                    '(resource_id, request_cookie, error, metadata) values (?, ?, ?, ?)', 
+                (resource._id, request_cookie, RR._encode_error(error), RR._encode_metadata(metadata)))
             project._db.commit()
             self._id = c.lastrowid
         fg_call_and_wait(fg_task)
@@ -808,12 +881,13 @@ class ResourceRevision(object):
         return self
     
     @staticmethod
-    def _load(resource, error, metadata, _id):
+    def load(resource, request_cookie, error, metadata, id) -> ResourceRevision:
         self = ResourceRevision()
         self.resource = resource
+        self.request_cookie = request_cookie
         self.error = error
         self.metadata = metadata
-        self._id = _id
+        self._id = id
         self.has_body = os.path.exists(self._body_filepath)
         return self
     
