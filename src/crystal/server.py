@@ -11,7 +11,7 @@ from crystal.cli import (
 )
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
-from crystal.model import Project, Resource, ResourceGroup, ResourceRevision
+from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
 from crystal.task import schedule_forever
 import datetime
 from html import escape as html_escape  # type: ignore[attr-defined]
@@ -310,7 +310,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 # in downloading it immediately upon access
                 matching_rg = self._find_group_matching_archive_url(archive_url)
                 if matching_rg is not None and not self.project.readonly:
-                    print_warning('*** Dynamically downloading new resource in group %s: %s' % (
+                    print_warning('*** Dynamically downloading new resource in group %r: %s' % (
                         matching_rg.name,
                         archive_url,
                     ))
@@ -327,19 +327,31 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 stale_ok=True if self.project.readonly else False
             ))  # type: Optional[ResourceRevision]
             if revision is None:
-                # If the existing resource is a member of an
-                # existing resource group, presume that the user is interested 
-                # in downloading it immediately upon access
-                matching_rg = self._find_group_matching_archive_url(archive_url)
-                if matching_rg is not None and not self.project.readonly:
-                    print_warning('*** Dynamically downloading existing resource in group %s: %s' % (
-                        matching_rg.name,
-                        archive_url,
-                    ))
+                if not self.project.readonly:
+                    # If the existing resource is also a root resource,
+                    # presume that the user is interested 
+                    # in downloading it immediately upon access
+                    matching_rr = self._find_root_resource_matching_archive_url(archive_url)
+                    if matching_rr is not None:
+                        print_warning('*** Dynamically downloading root resource %r: %s' % (
+                            matching_rr.name,
+                            archive_url,
+                        ))
                     
-                    # Try download resource immediately
-                    revision = self._try_download_revision_dynamically(resource, needs_result=True)
-                    # (continue to serve downloaded resource revision)
+                    # If the existing resource is a member of an
+                    # existing resource group, presume that the user is interested 
+                    # in downloading it immediately upon access
+                    matching_rg = self._find_group_matching_archive_url(archive_url)
+                    if matching_rg is not None:
+                        print_warning('*** Dynamically downloading existing resource in group %r: %s' % (
+                            matching_rg.name,
+                            archive_url,
+                        ))
+                    
+                    if matching_rr is not None or matching_rg is not None:
+                        # Try download resource immediately
+                        revision = self._try_download_revision_dynamically(resource, needs_result=True)
+                        # (continue to serve downloaded resource revision)
                 
                 if revision is None:
                     self.send_resource_not_in_archive(archive_url)
@@ -382,6 +394,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
         # Serve Not Found page
         self.send_not_found_page(vary_referer=True)
         return
+    
+    def _find_root_resource_matching_archive_url(self, archive_url: str) -> Optional[RootResource]:
+        for rr in self.project.root_resources:
+            if rr.resource.url == archive_url:
+                return rr
+        return None
     
     def _find_group_matching_archive_url(self, archive_url: str) -> Optional[ResourceGroup]:
         for rg in self.project.resource_groups:

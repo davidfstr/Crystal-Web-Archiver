@@ -26,7 +26,9 @@ import os
 import re
 import shutil
 import sqlite3
-from typing import Callable, cast, Dict, List, Optional, TYPE_CHECKING, TypedDict, Union
+from typing import (
+    Callable, cast, Dict, Iterable, List, Optional, TYPE_CHECKING, TypedDict, Union
+)
 from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
@@ -247,10 +249,10 @@ class Project(object):
         )
     
     @property
-    def resources(self):
+    def resources(self) -> Iterable[Resource]:
         return self._resources.values()
     
-    def get_resource(self, url):
+    def get_resource(self, url: str) -> Optional[Resource]:
         """Returns the `Resource` with the specified URL or None if no such resource exists."""
         return self._resources.get(url, None)
     
@@ -260,10 +262,10 @@ class Project(object):
         return next((r for r in self._resources.values() if r._id == resource_id), None)
     
     @property
-    def root_resources(self):
+    def root_resources(self) -> Iterable[RootResource]:
         return self._root_resources.values()
     
-    def get_root_resource(self, resource):
+    def get_root_resource(self, resource: Resource) -> Optional[RootResource]:
         """Returns the `RootResource` with the specified `Resource` or None if none exists."""
         return self._root_resources.get(resource, None)
     
@@ -278,7 +280,7 @@ class Project(object):
         return next((rr for rr in self._root_resources.values() if rr.name == name), None)
     
     @property
-    def resource_groups(self):
+    def resource_groups(self) -> Iterable[ResourceGroup]:
         return self._resource_groups
     
     def get_resource_group(self, name):
