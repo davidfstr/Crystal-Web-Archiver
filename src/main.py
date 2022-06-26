@@ -118,8 +118,8 @@ def main(args):
             import argparse
             parser = argparse.ArgumentParser()
             parser.add_argument(
-                '--server',
-                help='Start a server on localhost to serve the project.',
+                '--serve',
+                help='Start serving the project immediately.',
                 action='store_true',
             )
             parser.add_argument(
@@ -167,7 +167,7 @@ def main(args):
                 window = MainWindow(project, progress_listener)
             
             # Start serving immediately if requested
-            if parsed_args.server:
+            if parsed_args.serve:
                 project.start_server()
             
             # Deactivate wx keepalive
