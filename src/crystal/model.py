@@ -75,7 +75,7 @@ class Project(object):
         self._resources = OrderedDict()         # type: Dict[str, Resource]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
-        self.readonly = True  # will reinitialize after database is located
+        self._readonly = True  # will reinitialize after database is located
         
         def initially_readonly(can_write_db: bool) -> bool:
             return readonly or not can_write_db
@@ -94,7 +94,7 @@ class Project(object):
                 db = sqlite3.connect(db_filepath)
                 can_write_db = os.access(db_filepath, os.W_OK)
                 
-                self.readonly = initially_readonly(can_write_db)
+                self._readonly = initially_readonly(can_write_db)
                 self._db = DatabaseConnection(db, lambda: self.readonly)
                 
                 c = self._db.cursor()
@@ -151,7 +151,7 @@ class Project(object):
                 db = sqlite3.connect(db_filepath)
                 can_write_db = True
                 
-                self.readonly = initially_readonly(can_write_db)
+                self._readonly = initially_readonly(can_write_db)
                 self._db = DatabaseConnection(db, lambda: self.readonly)
                 
                 c = self._db.cursor()
@@ -200,8 +200,12 @@ class Project(object):
     # === Properties ===
     
     @property
-    def title(self):
+    def title(self) -> str:
         return os.path.basename(self.path)
+    
+    @property
+    def readonly(self) -> bool:
+        return self._readonly
     
     def _get_property(self, name: str, default: str) -> str:
         return self._properties.get(name, default)
