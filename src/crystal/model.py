@@ -11,6 +11,12 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 from __future__ import annotations
 
 from collections import OrderedDict
+from crystal.db import (
+    DatabaseConnection,
+    DatabaseCursor,
+    get_column_names_of_table,
+    is_no_such_column_error_for,
+)
 from crystal.plugins import (
     phpbb as plugins_phpbb,
     substack as plugins_substack,
@@ -27,7 +33,8 @@ import re
 import shutil
 import sqlite3
 from typing import (
-    Callable, cast, Dict, Iterable, List, Optional, TYPE_CHECKING, TypedDict, Union
+    Any, Callable, cast, Dict, Iterable, List, Optional, TYPE_CHECKING, Tuple,
+    TypedDict, Union
 )
 from urllib.parse import urlparse, urlunparse
 
@@ -92,8 +99,9 @@ class Project(object):
                 
                 c = self._db.cursor()
                 
-                # Upgrade database schema to latest version
-                self._apply_migrations(c, readonly=(not can_write_db))
+                # Upgrade database schema to latest version (unless is readonly)
+                if not self.readonly:
+                    self._apply_migrations(c)
                 
                 # Load project properties
                 for (name, value) in c.execute('select name, value from project_property'):
@@ -178,7 +186,7 @@ class Project(object):
             os.path.exists(os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)))
     
     @classmethod
-    def _apply_migrations(cls, c: DatabaseCursor, readonly: bool) -> None:
+    def _apply_migrations(cls, c: DatabaseCursor) -> None:
         """
         Upgrades this project's database schema to the latest version.
         
@@ -186,19 +194,8 @@ class Project(object):
         * ProjectReadOnlyError
         """
         # Add resource_revision.request_cookie column if missing
-        if 'request_cookie' not in cls._get_column_names_of_table(c, 'resource_revision'):
-            if readonly:
-                raise ProjectReadOnlyError()
+        if 'request_cookie' not in get_column_names_of_table(c, 'resource_revision'):
             c.execute('alter table resource_revision add column request_cookie text')
-    
-    @staticmethod
-    def _get_column_names_of_table(c: DatabaseCursor, table_name: str) -> list[str]:
-        return [
-            column_name
-            for (_, column_name, column_type, _, _, _)
-            # NOTE: Cannot use regular '?' placeholder in this PRAGMA
-            in c.execute('PRAGMA table_info(%s)' % (table_name,))
-        ]
     
     # === Properties ===
     
@@ -341,56 +338,6 @@ class Project(object):
             import crystal.server
             crystal.server.start(self)
             self.server_running = True
-
-class DatabaseConnection:
-    """Wraps a sqlite3.dbapi2.Connection, ensuring that it is used correctly."""
-    
-    def __init__(self,
-            db: sqlite3.dbapi2.Connection,
-            readonly_func: Callable[[], bool]) -> None:
-        self._db = db
-        self._readonly_func = readonly_func
-    
-    def cursor(self, *args, **kwargs) -> DatabaseCursor:
-        c = self._db.cursor(*args, **kwargs)  # type: sqlite3.dbapi2.Cursor
-        return DatabaseCursor(c, self._readonly_func())
-    
-    def __getattr__(self, attr_name: str):
-        return getattr(self._db, attr_name)
-
-class DatabaseCursor:
-    """Wraps a sqlite3.dbapi2.Cursor, ensuring that it is used correctly."""
-    
-    def __init__(self, c: sqlite3.dbapi2.Cursor, readonly: bool) -> None:
-        self._c = c
-        self._readonly = readonly
-    
-    def execute(self, command: str, *args, **kwargs) -> DatabaseCursor:
-        # Ensure that caller does disallow commands that write to the database
-        # if the project is readonly
-        if self._readonly:
-            command_lower = command.lower()  # cache
-            command_is_read = (
-                command_lower.startswith('select ') or
-                command_lower.startswith('pragma table_info(')
-            )
-            command_is_write = not command_is_read  # conservative
-            if command_is_write:
-                raise AssertionError(
-                    'Attempted to write to database when (Project.readonly == True). '
-                    'Caller should have checked this case and thrown ProjectReadOnlyError.'
-                )
-        
-        result = self._c.execute(command, *args, **kwargs)
-        assert result is self._c
-        return self
-    
-    # Define specially to help mypy know that this attribute exists
-    def __iter__(self, *args, **kwargs):
-        return self._c.__iter__(*args, **kwargs)
-    
-    def __getattr__(self, attr_name: str):
-        return getattr(self._c, attr_name)
 
 class CrossProjectReferenceError(Exception):
     pass
@@ -717,8 +664,24 @@ class Resource(object):
         
         revs = []  # type: list[ResourceRevision]
         c = self.project._db.cursor()
-        query = 'select request_cookie, error, metadata, id from resource_revision where resource_id=? order by id asc'
-        for (request_cookie, error, metadata, id) in c.execute(query, (self._id,)):
+        try:
+            rows = c.execute(
+                'select request_cookie, error, metadata, id '
+                    'from resource_revision where resource_id=? order by id asc',
+                (self._id,)
+            )  # type: Iterable[Tuple[Any, Any, Any, Any]]
+        except Exception as e:
+            if is_no_such_column_error_for('request_cookie', e):
+                # Fetch from <=1.2.0 database schema
+                old_rows = c.execute(
+                    'select error, metadata, id '
+                        'from resource_revision where resource_id=? order by id asc',
+                    (self._id,)
+                )  # type: Iterable[Tuple[Any, Any, Any]]
+                rows = ((None, c0, c1, c2) for (c0, c1, c2) in old_rows)
+            else:
+                raise
+        for (request_cookie, error, metadata, id) in rows:
             revs.append(ResourceRevision.load(
                 resource=self,
                 request_cookie=request_cookie,
