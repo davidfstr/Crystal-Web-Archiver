@@ -92,7 +92,14 @@ class Project(object):
                 
                 db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
                 db = sqlite3.connect(db_filepath)
-                can_write_db = os.access(db_filepath, os.W_OK)
+                can_write_db = (
+                    # Can write to *.crystalproj
+                    # (is not Locked on macOS, is not on read-only volume)
+                    os.access(path, os.W_OK) and
+                    # Can write to database
+                    # (is not Locked on macOS, is not Read Only on Windows, is not on read-only volume)
+                    os.access(db_filepath, os.W_OK)
+                )
                 
                 self._readonly = initially_readonly(can_write_db)
                 self._db = DatabaseConnection(db, lambda: self.readonly)
