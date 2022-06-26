@@ -8,13 +8,16 @@ This abstraction provides:
 """
 
 from crystal.progress import OpenProjectProgressListener
-from typing import Optional
+from typing import NewType, Optional, Tuple
 import wx
+
+IconSet = Tuple[Tuple[wx.TreeItemIcon, wx.Bitmap], ...]
+ImageIndex = NewType('ImageIndex', int)
 
 _DEFAULT_TREE_ICON_SIZE = (16,16)
 
 _DEFAULT_FOLDER_ICON_SET_CACHED = None
-def _DEFAULT_FOLDER_ICON_SET():
+def _DEFAULT_FOLDER_ICON_SET() -> IconSet:
     global _DEFAULT_FOLDER_ICON_SET_CACHED  # necessary to write to a module global
     if not _DEFAULT_FOLDER_ICON_SET_CACHED:
         _DEFAULT_FOLDER_ICON_SET_CACHED = (
@@ -24,7 +27,7 @@ def _DEFAULT_FOLDER_ICON_SET():
     return _DEFAULT_FOLDER_ICON_SET_CACHED
 
 _DEFAULT_FILE_ICON_SET_CACHED = None
-def _DEFAULT_FILE_ICON_SET():
+def _DEFAULT_FILE_ICON_SET() -> IconSet:
     global _DEFAULT_FILE_ICON_SET_CACHED    # necessary to write to a module global
     if not _DEFAULT_FILE_ICON_SET_CACHED:
         _DEFAULT_FILE_ICON_SET_CACHED = (
@@ -85,7 +88,7 @@ class TreeView(object):
         selected_node_id = self.peer.GetSelection()
         return self.peer.GetItemData(selected_node_id) if selected_node_id.IsOk() else None
     
-    def get_image_id_for_bitmap(self, bitmap):
+    def get_image_id_for_bitmap(self, bitmap: wx.Bitmap) -> ImageIndex:
         """
         Given a wx.Bitmap, returns an image ID suitable to use as an node icon.
         Calling this multiple times with the same wx.Bitmap will return the same image ID.
@@ -94,7 +97,7 @@ class TreeView(object):
             image_id = self.bitmap_2_image_id[bitmap]
         else:
             image_id = self.tree_imagelist.Add(bitmap)
-            self.bitmap_2_image_id[bitmap] = image_id
+            self.bitmap_2_image_id[bitmap] = ImageIndex(image_id)
         return image_id
     
     def expand(self, node_view):
@@ -150,7 +153,7 @@ class NodeView(object):
         self.peer = None
         self._title = ''
         self._expandable = False
-        self._icon_set = None
+        self._icon_set = None  # type: Optional[IconSet]
         self._children = []
     
     def _get_title(self):
@@ -172,18 +175,24 @@ class NodeView(object):
                 self.icon_set = self.icon_set
     expandable = property(_get_expandable, _set_expandable)
     
-    def _get_icon_set(self):
+    def _get_icon_set(self) -> Optional[IconSet]:
         """
         A sequence of (wx.TreeItemIcon, wx.Bitmap) tuples, specifying the set of icons applicable
         to this node in various states. If None, then a default icon set is used, depending on
         whether this node is expandable.
         """
         return self._icon_set
-    def _set_icon_set(self, value):
+    def _set_icon_set(self, value: Optional[IconSet]) -> None:
         self._icon_set = value
         if self.peer:
-            effective_value = value if value is not None else (
-                    _DEFAULT_FOLDER_ICON_SET() if self.expandable else _DEFAULT_FILE_ICON_SET())
+            effective_value = (
+                value
+                if value is not None else (
+                    _DEFAULT_FOLDER_ICON_SET()
+                    if self.expandable 
+                    else _DEFAULT_FILE_ICON_SET()
+                )
+            )  # type: IconSet
             for (which, bitmap) in effective_value:
                 self.peer.SetItemImage(self._tree.get_image_id_for_bitmap(bitmap), which)
     icon_set = property(_get_icon_set, _set_icon_set)
@@ -263,21 +272,21 @@ class NodeView(object):
                 getattr(self.delegate, delegate_callable_attr)(event)
 
 class NodeViewPeer(tuple):
-    def __new__(cls, tree, node_id):
+    def __new__(cls, tree: TreeView, node_id: wx.TreeItemId):
         return tuple.__new__(cls, (tree, node_id))
     
     # TODO: Only the 'tree_peer' should be stored.
     #       Remove use of this property and update constructor.
     @property
-    def _tree(self):
+    def _tree(self) -> TreeView:
         return self[0]
     
     @property
-    def tree_peer(self):
+    def tree_peer(self) -> wx.TreeCtrl:
         return self._tree.peer
     
     @property
-    def node_id(self):
+    def node_id(self) -> wx.TreeItemId:
         return self[1]
     
     def SetItemData(self, obj):
@@ -295,8 +304,10 @@ class NodeViewPeer(tuple):
     def AppendItem(self, text, *args):
         return self.tree_peer.AppendItem(self.node_id, text, *args)
     
-    def SetItemImage(self, image, which):
-        self.tree_peer.SetItemImage(self.node_id, image, which)
+    def SetItemImage(self, image: ImageIndex, which: wx.TreeItemIcon) -> None:
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            self.tree_peer.SetItemImage(node_id, image, which)
     
     def Delete(self):
         self.tree_peer.Delete(self.node_id)
