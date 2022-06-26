@@ -172,6 +172,87 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### v1.3.0b <small>(July 10, 2022)</small>
+
+This release allows more kinds of advanced sites to be downloaded,
+including sites requiring login and sites relying on JSON APIs,
+especially those with infinitely scrolling pages.
+
+Projects can now be opened in a [read-only mode] such that
+browsing existing downloaded content will never attempt to
+dynamically download additional content.
+
+Advanced manipulation of projects can now be done from a
+[shell] launched from the command-line interface.
+
+Last but not least, [Substack]-based sites are now recognized specially and can be
+downloaded effectively without creating an explosion of URL combinations.
+
+* Regular downloading improvements
+    * Can now download sites that require cookie-based login.
+
+* Dynamic downloading improvements
+    * Can identify URL references inside JSON responses.
+        * In particular URLs that occur within JSON API endpoint responses
+          are recognized correctly, which improves support for dynamically
+          downloading infinitely scrolling pages.
+    * Browsing to an URL that is a member of an existing resource group
+      or matches an existing root URL will download it automatically.
+    * Downloads now fail with a timeout error if an origin server fails
+      to respond promptly rather than hanging the download operation forever.
+
+* Parsing improvements
+    * Whitespace is now stripped from relative URLs obtained from HTML tags,
+      which allows the related linked URLs to be discovered correctly.
+
+* Serving improvements
+    * Downloaded sites will be served with shortened URLs if a
+      Default URL Prefix is defined for a project.
+    * Served sites will pin the value of `Date.now()` (and similar date/time
+      functions in JavaScript) to always return the same date/time
+      from when the page was originally downloaded, which helps ensure
+      that any JavaScript on the page behaves in a consistent fashion.
+        * In particular if there is JavaScript code that is using the
+          current date/time to construct & fetch a URL,
+          it will now generate a consistent URL (which can be downloaded
+          to the project) rather than an inconsistent URL which cannot
+          be cached properly.
+    * Files that an origin server provided with a custom
+      download filename via the [Content-Disposition] HTTP header
+      are now correctly served with that filename.
+    * Ignore early disconnection errors when a browser downloads a served URL.
+
+* Archival improvements
+    * It is now possible to open a project in [read-only mode],
+      and this is done automatically for projects that are marked as
+      Locked (on macOS), Read Only (on Windows), or reside on a read-only
+      filesystem (such as on a DVD, CD, or optical disc).
+
+* UI improvements
+    * Main Window: Alter buttons to use more words and less symbols
+    * Main Window: Fix splitter to be visible
+    * Task Panel: Use white background on macOS (rather than invisible gray)
+    * Main Window: Add version number
+
+* CLI improvements
+    * A `--serve` CLI option is added which automatically starts serving
+      a project immediately after it is opened.
+    * A `--shell` CLI option opens a Python shell that can be used to
+      interact with projects in an advanced manner.
+
+* Stability improvements
+    * Two issues that could cause Crystal to crash with a Segmentation Fault
+      were fixed:
+        * [Fixed a crash related to attempting to set the icon of a tree node
+          that no longer exists](https://github.com/davidfstr/Crystal-Web-Archiver/issues/52)
+        * [Fixed a crash related to sorting of wx.TreeCtrl nodes](https://github.com/davidfstr/Crystal-Web-Archiver/commit/a90ca150b0fe76a9f584290a6a16c43b2ffd480a)
+    * Automated UI tests now exist, and are run continuously with GitHub Actions.
+
+[read-only mode]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Read-Only-Projects
+[shell]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Shell
+[Substack]: https://substack.com/
+[Content-Disposition]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition
+
 ### v1.2.0b <small>(April 12, 2021)</small>
 
 This release primarily features better support for large projects and groups.
