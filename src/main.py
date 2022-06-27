@@ -144,7 +144,7 @@ def main(args):
             
             # If project to open passed on the command-line, use it
             if parsed_args.filepath is not None:
-                filepath = args[0]
+                filepath = parsed_args.filepath
             
             project_kwargs = dict(
                 readonly=parsed_args.readonly,
