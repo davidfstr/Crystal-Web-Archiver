@@ -212,11 +212,18 @@ def _prompt_for_project(progress_listener, **project_kwargs):
     dialog = BetterMessageDialog(None,
         message='Open an existing project or create a new project?',
         title='Select a Project',
+        checkbox_label='Open as read only',
         style=wx.YES_NO,
         yes_label='Open',
         no_label='Create',
         escape_is_cancel=True)
     choice = dialog.ShowModal()
+    
+    if dialog.IsCheckBoxChecked():
+        project_kwargs = {
+            **project_kwargs,
+            **dict(readonly=True),
+        }  # reinterpret
     
     try:
         if choice == wx.ID_YES:
