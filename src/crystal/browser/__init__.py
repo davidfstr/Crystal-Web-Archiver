@@ -67,13 +67,13 @@ class MainWindow(object):
         return self.entity_tree.peer
     
     def _create_button_bar(self, parent):
-        add_url_button = wx.Button(parent, label='+ URL')
+        add_url_button = wx.Button(parent, label='Add URL')
         add_url_button.Bind(wx.EVT_BUTTON, self._on_add_url)
         
-        add_group_button = wx.Button(parent, label='+ Group')
+        add_group_button = wx.Button(parent, label='Add Group')
         add_group_button.Bind(wx.EVT_BUTTON, self._on_add_group)
         
-        self._remove_entity_button = wx.Button(parent, label='-')
+        self._remove_entity_button = wx.Button(parent, label='Forget')
         self._remove_entity_button.Bind(wx.EVT_BUTTON, self._on_remove_entity)
         self._remove_entity_button.Disable()
         
