@@ -32,7 +32,7 @@ class MainWindow(object):
         frame_sizer.Add(splitter, proportion=1, flag=wx.EXPAND)
         
         frame_sizer.Add(
-            self._create_status_bar(frame, project.readonly),
+            self._create_status_bar(frame),
             proportion=0,
             flag=wx.ALIGN_RIGHT)
         
@@ -40,6 +40,10 @@ class MainWindow(object):
         frame.Show(True)
         
         self.frame = frame
+    
+    @property
+    def _readonly(self) -> bool:
+        return self.project.readonly
     
     # === Entity Pane: Init ===
     
@@ -72,12 +76,18 @@ class MainWindow(object):
         
         return self.entity_tree.peer
     
-    def _create_button_bar(self, parent):
+    def _create_button_bar(self, parent: wx.Window):
+        readonly = self._readonly  # cache
+        
         add_url_button = wx.Button(parent, label='Add URL')
         add_url_button.Bind(wx.EVT_BUTTON, self._on_add_url)
+        if readonly:
+            add_url_button.Disable()
         
         add_group_button = wx.Button(parent, label='Add Group')
         add_group_button.Bind(wx.EVT_BUTTON, self._on_add_group)
+        if readonly:
+            add_group_button.Disable()
         
         self._remove_entity_button = wx.Button(parent, label='Forget')
         self._remove_entity_button.Bind(wx.EVT_BUTTON, self._on_remove_entity)
@@ -217,12 +227,16 @@ class MainWindow(object):
         webbrowser.open(request_url)
     
     def _on_selected_entity_changed(self, event):
-        selected_entity = self.entity_tree.selected_entity
+        selected_entity = self.entity_tree.selected_entity  # cache
+        readonly = self._readonly  # cache
         self._remove_entity_button.Enable(
+            (not readonly) and
             type(selected_entity) in (ResourceGroup, RootResource))
         self._download_button.Enable(
+            (not readonly) and
             selected_entity is not None)
         self._update_membership_button.Enable(
+            (not readonly) and
             type(selected_entity) is ResourceGroup)
         self._view_button.Enable(
             type(selected_entity) in (Resource, RootResource))
@@ -257,7 +271,9 @@ class MainWindow(object):
     
     # === Status Bar: Init ===
     
-    def _create_status_bar(self, parent: wx.Window, readonly: bool) -> wx.Window:
+    def _create_status_bar(self, parent: wx.Window) -> wx.Window:
+        readonly = self._readonly  # cache
+        
         pane = wx.Panel(parent)
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
         pane.SetSizer(pane_sizer)
