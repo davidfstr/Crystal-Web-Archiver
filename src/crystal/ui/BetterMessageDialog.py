@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Callable, Optional
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -13,7 +13,8 @@ class BetterMessageDialog(wx.Dialog):
             message: str, 
             title: str, 
             style,
-            *, checkbox_label: Optional[str]=None, 
+            *, checkbox_label: Optional[str]=None,
+            on_checkbox_clicked: Optional[Callable[[wx.CommandEvent], None]]=None,
             yes_label: Optional[str]=None, 
             no_label: Optional[str]=None, 
             escape_is_cancel: bool=False,
@@ -42,6 +43,8 @@ class BetterMessageDialog(wx.Dialog):
             self._checkbox = None
         else:
             self._checkbox = wx.CheckBox(self, label=checkbox_label)
+            if on_checkbox_clicked is not None:
+                self._checkbox.Bind(wx.EVT_CHECKBOX, on_checkbox_clicked)
         self_sizer.Add(
             self._checkbox,
             flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_LEFT,

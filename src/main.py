@@ -209,10 +209,16 @@ def _prompt_for_project(progress_listener, **project_kwargs):
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     import wx
     
+    def on_checkbox_clicked(event: wx.CommandEvent) -> None:
+        readonly_checkbox_checked = dialog.IsCheckBoxChecked()
+        create_button = dialog.FindWindowById(wx.ID_NO)
+        create_button.Enabled = not readonly_checkbox_checked
+    
     dialog = BetterMessageDialog(None,
         message='Open an existing project or create a new project?',
         title='Select a Project',
         checkbox_label='Open as read only',
+        on_checkbox_clicked=on_checkbox_clicked,
         style=wx.YES_NO,
         yes_label='Open',
         no_label='Create',
