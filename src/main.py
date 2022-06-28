@@ -254,7 +254,7 @@ def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
 def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
     # type: (wx.Window, OpenProjectProgressListener, object) -> Project
     from crystal.model import Project
-    from crystal.packages import project_appears_as_package_file
+    from crystal.os import project_appears_as_package_file
     import os.path
     import wx
     

@@ -3,6 +3,7 @@ from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree
 from crystal.browser.tasktree import TaskTree
 from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.os import is_mac_os
 from crystal.progress import OpenProjectProgressListener
 from crystal.task import RootTask
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
@@ -223,7 +224,7 @@ class MainWindow(object):
     
     # === Task Pane: Init ===
     
-    def _create_task_pane(self, parent):
+    def _create_task_pane(self, parent: wx.Window) -> wx.Window:
         pane = wx.Panel(parent)
         pane_sizer = wx.BoxSizer(wx.VERTICAL)
         pane.SetSizer(pane_sizer)
@@ -232,12 +233,15 @@ class MainWindow(object):
         
         return pane
     
-    def _create_task_pane_content(self, parent):
+    def _create_task_pane_content(self, parent: wx.Window) -> wx.Window:
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(self._create_task_tree(parent), proportion=1, flag=wx.EXPAND)
         return content_sizer
     
-    def _create_task_tree(self, parent):
+    def _create_task_tree(self, parent: wx.Window) -> wx.Window:
         self.task_tree = TaskTree(parent, self.project.root_task)
+        if is_mac_os():
+            self.task_tree.peer.SetBackgroundColour(
+                wx.Colour(254, 254, 254))  # pure white
         
         return self.task_tree.peer

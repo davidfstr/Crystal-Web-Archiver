@@ -1,10 +1,11 @@
 from crystal.ui.tree2 import TreeView, NodeView
+import wx
 
 class TaskTree(object):
     """
     View controller for the task tree
     """
-    def __init__(self, parent_peer, root_task):
+    def __init__(self, parent_peer: wx.Window, root_task) -> None:
         self.root = TaskTreeNode(root_task)
         
         self.tree = TreeView(parent_peer)
@@ -13,7 +14,7 @@ class TaskTree(object):
         self.tree.peer.SetInitialSize((750, 200))
     
     @property
-    def peer(self):
+    def peer(self) -> wx.TreeCtrl:
         """The wx.TreeCtrl controlled by this class."""
         return self.tree.peer
 
