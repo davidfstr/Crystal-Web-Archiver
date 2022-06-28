@@ -31,6 +31,11 @@ class MainWindow(object):
         
         frame_sizer.Add(splitter, proportion=1, flag=wx.EXPAND)
         
+        frame_sizer.Add(
+            self._create_status_bar(frame, project.readonly),
+            proportion=0,
+            flag=wx.ALIGN_RIGHT)
+        
         frame.Fit()
         frame.Show(True)
         
@@ -229,7 +234,11 @@ class MainWindow(object):
         pane_sizer = wx.BoxSizer(wx.VERTICAL)
         pane.SetSizer(pane_sizer)
         
-        pane_sizer.Add(self._create_task_pane_content(pane), proportion=1, flag=wx.EXPAND|wx.ALL, border=_WINDOW_INNER_PADDING)
+        pane_sizer.Add(
+            self._create_task_pane_content(pane), 
+            proportion=1, 
+            flag=wx.EXPAND|wx.ALL, 
+            border=_WINDOW_INNER_PADDING)
         
         return pane
     
@@ -245,3 +254,21 @@ class MainWindow(object):
                 wx.Colour(254, 254, 254))  # pure white
         
         return self.task_tree.peer
+    
+    # === Status Bar: Init ===
+    
+    def _create_status_bar(self, parent: wx.Window, readonly: bool) -> wx.Window:
+        pane = wx.Panel(parent)
+        pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        pane.SetSizer(pane_sizer)
+        
+        read_write_icon = wx.StaticText(pane, label='🔒' if readonly else '✏️')
+        read_write_icon.SetToolTip('Read only project' if readonly else 'Writable project')
+        
+        pane_sizer.Add(
+            read_write_icon, 
+            proportion=1, 
+            flag=wx.EXPAND|wx.ALL, 
+            border=_WINDOW_INNER_PADDING)
+        
+        return pane
