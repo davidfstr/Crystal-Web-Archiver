@@ -1,13 +1,13 @@
 [Setup]
 AppName=Crystal Web Archiver
-AppVersion=1.2.0b
-AppCopyright=Copyright (C) 2011-2021 David Foster. All Rights Reserved
+AppVersion=1.3.0b
+AppCopyright=Copyright (C) 2011-2022 David Foster. All Rights Reserved
 DefaultDirName={pf}\Crystal Web Archiver
 DefaultGroupName=Crystal Web Archiver
 UninstallDisplayIcon={app}\Crystal Web Archiver.exe
 Compression=lzma2
 SolidCompression=yes
-OutputBaseFilename=crystal-win-1.2.0b
+OutputBaseFilename=crystal-win-1.3.0b
 OutputDir=dist-win
 DisableProgramGroupPage=yes
 
