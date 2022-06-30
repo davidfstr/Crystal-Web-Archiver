@@ -5,6 +5,7 @@ from crystal.progress import (
     DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
 )
+from crystal.task import CannotDownloadWhenProjectReadOnlyError
 from crystal.ui.tree import *
 from crystal.xcollections import defaultordereddict
 from crystal.xthreading import bg_call_later, fg_call_later
@@ -227,7 +228,7 @@ class Node(object):
 
 class RootNode(Node):
     def __init__(self, project, view, progress_listener: OpenProjectProgressListener) -> None:
-        super(RootNode, self).__init__()
+        super().__init__()
         
         self.view = view
         self.view.title = 'ROOT'
@@ -258,10 +259,20 @@ class RootNode(Node):
 
 class _LoadingNode(Node):
     def __init__(self):
-        super(_LoadingNode, self).__init__()
+        super().__init__()
         
         self.view = NodeView()
         self.view.title = 'Loading...'
+    
+    def update_children(self):
+        pass
+
+class _ChildrenUnavailableBecauseReadOnlyNode(Node):
+    def __init__(self):
+        super().__init__()
+        
+        self.view = NodeView()
+        self.view.title = 'Cannot download children: Project is read only'
     
     def update_children(self):
         pass
@@ -270,12 +281,12 @@ class _ResourceNode(Node):
     """Base class for `Node`s whose children is derived from the links in a `Resource`."""
     
     def __init__(self, title, resource):
-        super(_ResourceNode, self).__init__()
+        super().__init__()
         
         self.view = NodeView()
         self.view.title = title
         self.view.expandable = True
-        # Workaround for: http://trac.wxwidgets.org/ticket/13886
+        # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
         self.children = [_LoadingNode()]
         
         self.resource = resource
@@ -303,12 +314,16 @@ class _ResourceNode(Node):
             self.download_future = self.resource.download()
             
             def download_done(future):
-                revision = future.result()
-                def bg_task():
-                    # Link parsing is I/O intensive, so do it on a background thread
-                    self.resource_links = revision.links()
-                    fg_call_later(self.update_children)
-                bg_call_later(bg_task)
+                try:
+                    revision = future.result()
+                except CannotDownloadWhenProjectReadOnlyError:
+                    self.children = [_ChildrenUnavailableBecauseReadOnlyNode()]
+                else:
+                    def bg_task():
+                        # Link parsing is I/O intensive, so do it on a background thread
+                        self.resource_links = revision.links()
+                        fg_call_later(self.update_children)
+                    bg_call_later(bg_task)
             self.download_future.add_done_callback(download_done)
     
     def update_children(self):
@@ -402,7 +417,7 @@ class _ResourceNode(Node):
 class RootResourceNode(_ResourceNode):
     def __init__(self, root_resource):
         self.root_resource = root_resource
-        super(RootResourceNode, self).__init__(self.calculate_title(), root_resource.resource)
+        super().__init__(self.calculate_title(), root_resource.resource)
     
     def calculate_title(self):
         project = self.root_resource.project
@@ -423,7 +438,7 @@ class RootResourceNode(_ResourceNode):
 class NormalResourceNode(_ResourceNode):
     def __init__(self, resource):
         self.resource = resource
-        super(NormalResourceNode, self).__init__(self.calculate_title(), resource)
+        super().__init__(self.calculate_title(), resource)
     
     def calculate_title(self):
         project = self.resource.project
@@ -443,7 +458,7 @@ class LinkedResourceNode(_ResourceNode):
     def __init__(self, resource, links):
         self.resource = resource
         self.links = tuple(links)
-        super(LinkedResourceNode, self).__init__(self.calculate_title(), resource)
+        super().__init__(self.calculate_title(), resource)
     
     def calculate_title(self):
         project = self.resource.project
@@ -470,7 +485,7 @@ class LinkedResourceNode(_ResourceNode):
 
 class ClusterNode(Node):
     def __init__(self, title, children, icon_set=None):
-        super(ClusterNode, self).__init__()
+        super().__init__()
         
         self.view = NodeView()
         self.view.icon_set = icon_set
@@ -489,7 +504,7 @@ class ClusterNode(Node):
 class ResourceGroupNode(Node):
     def __init__(self, resource_group):
         self.resource_group = resource_group
-        super(ResourceGroupNode, self).__init__()
+        super().__init__()
         
         self.view = NodeView()
         self.view.title = self.calculate_title()
@@ -528,7 +543,7 @@ class ResourceGroupNode(Node):
 class GroupedLinkedResourcesNode(Node):
     def __init__(self, resource_group, root_rsrc_nodes, linked_rsrc_nodes):
         self.resource_group = resource_group
-        super(GroupedLinkedResourcesNode, self).__init__()
+        super().__init__()
         
         self.view = NodeView()
         self.view.title = self.calculate_title()

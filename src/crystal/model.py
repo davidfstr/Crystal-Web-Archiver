@@ -550,6 +550,10 @@ class Resource(object):
         The returned Future may invoke its callbacks on any thread.
         
         A top-level Task will be created internally to display the progress.
+        
+        Future Raises:
+        CannotDownloadWhenProjectReadOnlyError --
+            If resource is not already downloaded and project is read-only.
         """
         task = self.create_download_body_task()
         self.project.add_task(task)
@@ -585,6 +589,10 @@ class Resource(object):
         If needs_result=False then the caller is declaring that it does
         not need and will ignore the result of the returned future,
         which enables additional optimizations.
+        
+        Future Raises:
+        CannotDownloadWhenProjectReadOnlyError --
+            If resource is not already downloaded and project is read-only.
         """
         task = self.create_download_task(needs_result=needs_result)
         self.project.add_task(task)

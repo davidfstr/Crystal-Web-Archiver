@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from time import sleep
-from typing import List, Optional
+from typing import List, Optional, Union
 from .xfutures import Future
 from .xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 
@@ -308,15 +308,20 @@ class DownloadResourceBodyTask(Task):
     Returns a ResourceRevision.
     """
     
-    def __init__(self, abstract_resource):
+    def __init__(self, abstract_resource: Union[Resource, RootResource]) -> None:
         """
         Arguments:
         abstract_resource -- a Resource or a RootResource.
         """
         Task.__init__(self, title='Downloading body: ' + _get_abstract_resource_title(abstract_resource))
-        self._resource = abstract_resource.resource
+        self._resource = abstract_resource.resource  # type: Resource
     
     def __call__(self):
+        """
+        Raises:
+        CannotDownloadWhenProjectReadOnlyError --
+            If resource is not already downloaded and project is read-only.
+        """
         # If the resource is already up-to-date, return its default revision
         def fg_task():
             if self._resource.up_to_date():
@@ -326,6 +331,9 @@ class DownloadResourceBodyTask(Task):
         body_revision = fg_call_and_wait(fg_task)
         if body_revision is not None:
             return body_revision
+        
+        if self._resource.project.readonly:
+            raise CannotDownloadWhenProjectReadOnlyError()
         
         # TODO: Report errors (embedded in the ResourceRevision) using the completion subtitle.
         #       Need to add support for this behavior to Task.
@@ -351,6 +359,9 @@ class DownloadResourceBodyTask(Task):
         finally:
             self.subtitle = 'Waiting before performing next request...'
             sleep(_DELAY_BETWEEN_DOWNLOADS)
+
+class CannotDownloadWhenProjectReadOnlyError(Exception):
+    pass
 
 class DownloadResourceTask(Task):
     """
