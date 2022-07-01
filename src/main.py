@@ -9,7 +9,6 @@ Home of the main function, which starts the program.
 #       Therefore most imports in this file should occur directly within functions.
 import os
 import sys
-from sys import exit
 try:
     from typing import TYPE_CHECKING
 except ImportError:
@@ -57,7 +56,7 @@ def main(args):
         try:
             import crystal
         except ImportError:
-            exit('Can\'t find the main "crystal" package on your Python path.')
+            sys.exit('Can\'t find the main "crystal" package on your Python path.')
     
     # Start GUI subsystem
     import wx
@@ -118,6 +117,11 @@ def main(args):
             import argparse
             parser = argparse.ArgumentParser()
             parser.add_argument(
+                '--shell',
+                help='Start a CLI shell after opening a project.',
+                action='store_true',
+            )
+            parser.add_argument(
                 '--serve',
                 help='Start serving the project immediately.',
                 action='store_true',
@@ -170,6 +174,38 @@ def main(args):
             if parsed_args.serve:
                 project.start_server()
             
+            if parsed_args.shell:
+                # Define exit instructions,
+                # based on site.setquit()'s definition in Python 3.8
+                if os.sep == '\\':
+                    eof = 'Ctrl-Z plus Return'
+                else:
+                    eof = 'Ctrl-D (i.e. EOF)'
+                exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
+                
+                from crystal import __version__ as crystal_version
+                from sys import version_info as python_version_info
+                python_version = '.'.join([str(x) for x in python_version_info[:3]])
+                
+                import code
+                import threading
+                threading.Thread(
+                    target=lambda: code.interact(
+                        banner=(
+                            f'Crystal {crystal_version} (Python {python_version})\n'
+                            'Type "help" for more information.\n'
+                            'Variables "project" and "window" are available.\n'
+                            f'{exit_instructions}.'
+                        ),
+                        local=dict(
+                            project=project,
+                            window=window,
+                        ),
+                        exitmsg='now waiting for main window to close...',
+                    ),
+                    daemon=False,
+                ).start()
+            
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
     app = MyApp(redirect=False)
@@ -179,21 +215,21 @@ def _check_environment():
     # Check Python version
     py3 = hasattr(sys, 'version_info') and sys.version_info >= (3,0)
     if not py3:
-        exit('This application requires Python 3.x.')
+        sys.exit('This application requires Python 3.x.')
     
     # Check for dependencies
     if not _running_as_bundle():
         try:
             import wx
         except ImportError:
-            exit(
+            sys.exit(
                 'This application requires wxPython to be installed. ' + 
                 'Download it from http://wxpython.org/')
         
         try:
             from bs4 import BeautifulSoup
         except ImportError:
-            exit(
+            sys.exit(
                 'This application requires BeautifulSoup to be installed. ' +
                 'Download it from http://www.crummy.com/software/BeautifulSoup/')
 
@@ -237,7 +273,7 @@ def _prompt_for_project(progress_listener, **project_kwargs):
         elif choice == wx.ID_NO:
             return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
         else:  # wx.ID_CANCEL
-            exit()
+            sys.exit()
     finally:
         dialog.Destroy()
 
@@ -253,7 +289,7 @@ def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
         wildcard='*' + Project.FILE_EXTENSION,
         style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
     if not dialog.ShowModal() == wx.ID_OK:
-        exit()
+        sys.exit()
     
     project_path = dialog.GetPath()
     if not project_path.endswith(Project.FILE_EXTENSION):
@@ -283,7 +319,7 @@ def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
             message='Choose a project',
             style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
     if not dialog.ShowModal() == wx.ID_OK:
-        exit()
+        sys.exit()
     
     project_path = dialog.GetPath()
     dialog.Destroy()
@@ -299,7 +335,7 @@ def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
             style=wx.OK)
         dialog.ShowModal()
         dialog.Destroy()
-        exit()
+        sys.exit()
     
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
@@ -309,7 +345,7 @@ def _load_project(project_path, progress_listener, **project_kwargs):
     import os.path
     
     if not os.path.exists(project_path):
-        exit('File not found: %s' % project_path)
+        sys.exit('File not found: %s' % project_path)
     
     # TODO: If errors while loading a project (ex: bad format),
     #       present them to the user nicely
