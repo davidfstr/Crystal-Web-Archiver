@@ -35,12 +35,13 @@ def main(args):
     # stderr to file, since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
     if hasattr(sys, 'frozen') and sys.frozen in ['macosx_app', 'windows_exe']:
-        from appdirs import user_log_dir
-        log_dirpath = user_log_dir(_APP_NAME, _APP_AUTHOR)
-        os.makedirs(log_dirpath, exist_ok=True)
-        
-        sys.stdout = open(os.path.join(log_dirpath, 'stdout.log'), 'w', buffering=1)
-        sys.stderr = open(os.path.join(log_dirpath, 'stderr.log'), 'w', buffering=1)
+        if sys.stdout is None or sys.stderr is None:
+            from appdirs import user_log_dir
+            log_dirpath = user_log_dir(_APP_NAME, _APP_AUTHOR)
+            os.makedirs(log_dirpath, exist_ok=True)
+            
+            sys.stdout = open(os.path.join(log_dirpath, 'stdout.log'), 'w', buffering=1)
+            sys.stderr = open(os.path.join(log_dirpath, 'stderr.log'), 'w', buffering=1)
     
     # 1. Enable terminal colors on Windows, by wrapping stdout and stderr
     # 2. Strip colorizing ANSI escape sequences when printing to a log file
