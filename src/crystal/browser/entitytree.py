@@ -24,7 +24,7 @@ class EntityTree(object):
     Displays a tree of top-level project entities.
     """
     def __init__(self,
-            parent_peer,
+            parent_peer: wx.Window,
             project: Project,
             progress_listener: OpenProjectProgressListener) -> None:
         self.view = TreeView(parent_peer, name='cr-entity-tree')
@@ -39,7 +39,7 @@ class EntityTree(object):
         self.peer.SetInitialSize((550, 300))
     
     @property
-    def peer(self):
+    def peer(self) -> wx.TreeCtrl:
         """The wx.TreeCtrl controlled by this class."""
         return self.view.peer
     
@@ -48,7 +48,8 @@ class EntityTree(object):
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
-        selected_node = selected_node_view.delegate  # type: Node
+        selected_node = selected_node_view.delegate
+        assert isinstance(selected_node, Node)
         
         return selected_node.entity
     
@@ -161,23 +162,23 @@ NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
 
 class Node(object):
     def __init__(self):
-        self._children = []
+        self._children = []  # type: List[Node]
     
-    def _get_view(self):
+    def _get_view(self) -> NodeView:
         return self._view
-    def _set_view(self, value):
+    def _set_view(self, value: NodeView) -> None:
         self._view = value
         self._view.delegate = self
     view = property(_get_view, _set_view)
     
-    def _get_children(self):
+    def _get_children(self) -> List[Node]:
         return self._children
-    def _set_children(self, value) -> None:
+    def _set_children(self, value: List[Node]) -> None:
         self.set_children(value)
     children = property(_get_children, _set_children)
     
     def set_children(self,
-            value,
+            value: List[Node],
             progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
         value = _sequence_with_matching_elements_replaced(value, self._children)
         self._children = value
@@ -227,7 +228,7 @@ class Node(object):
         return '<%s titled %s at %s>' % (type(self).__name__, repr(self.view.title), hex(id(self)))
 
 class RootNode(Node):
-    def __init__(self, project, view, progress_listener: OpenProjectProgressListener) -> None:
+    def __init__(self, project: Project, view: NodeView, progress_listener: OpenProjectProgressListener) -> None:
         super().__init__()
         
         self.view = view

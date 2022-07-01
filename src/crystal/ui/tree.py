@@ -7,8 +7,10 @@ This abstraction provides:
 * access to the underlying "peer" objects (i.e. wx.TreeCtrl, tree item index)
 """
 
+from __future__ import annotations
+
 from crystal.progress import OpenProjectProgressListener
-from typing import NewType, Optional, Tuple
+from typing import Dict, List, NewType, Optional, Tuple
 import wx
 
 IconSet = Tuple[Tuple[wx.TreeItemIcon, wx.Bitmap], ...]
@@ -58,8 +60,8 @@ class TreeView(object):
     which will not be displayed 
     """
     
-    def __init__(self, parent_peer, *, name: str=None):
-        self.delegate = None
+    def __init__(self, parent_peer: wx.Window, *, name: str=None) -> None:
+        self.delegate = None  # type: object
         self.peer = _OrderedTreeCtrl(
             parent_peer,
             style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT,
@@ -67,10 +69,10 @@ class TreeView(object):
                 dict(name=name)
                 if name is not None else
                 dict()
-            ))
+            ))  # type: wx.TreeCtrl
         
         # Setup node image registration
-        self.bitmap_2_image_id = dict()
+        self.bitmap_2_image_id = dict()  # type: Dict[wx.Bitmap, ImageIndex]
         tree_icon_size = _DEFAULT_TREE_ICON_SIZE
         self.tree_imagelist = wx.ImageList(tree_icon_size[0], tree_icon_size[1])
         self.peer.AssignImageList(self.tree_imagelist)
@@ -83,15 +85,15 @@ class TreeView(object):
         for event_type in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR:
             self.peer.Bind(event_type, self._dispatch_event, self.peer)
     
-    def _get_root(self):
+    def _get_root(self) -> NodeView:
         return self._root
-    def _set_root(self, value):
+    def _set_root(self, value: NodeView) -> None:
         self._root = value
         self._root._attach(self._root_peer)
     root = property(_get_root, _set_root)
     
     @property
-    def selected_node(self):
+    def selected_node(self) -> Optional[NodeView]:
         selected_node_id = self.peer.GetSelection()
         return self.peer.GetItemData(selected_node_id) if selected_node_id.IsOk() else None
     
@@ -113,7 +115,7 @@ class TreeView(object):
     # Notified when any interesting event occurs on the peer
     def _dispatch_event(self, event):
         node_id = event.GetItem()
-        node_view = self.peer.GetItemData(node_id)
+        node_view = self.peer.GetItemData(node_id)  # type: NodeView
         
         # Dispatch event to the node
         node_view._dispatch_event(event)
@@ -155,13 +157,13 @@ class NodeView(object):
       `_EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.values()`.
     """
     
-    def __init__(self):
-        self.delegate = None
-        self.peer = None
+    def __init__(self) -> None:
+        self.delegate = None  # type: object
+        self.peer = None  # type: Optional[NodeViewPeer]
         self._title = ''
         self._expandable = False
         self._icon_set = None  # type: Optional[IconSet]
-        self._children = []
+        self._children = []  # type: List[NodeView]
     
     def _get_title(self):
         return self._title
@@ -204,14 +206,14 @@ class NodeView(object):
                 self.peer.SetItemImage(self._tree.get_image_id_for_bitmap(bitmap), which)
     icon_set = property(_get_icon_set, _set_icon_set)
     
-    def _get_children(self):
+    def _get_children(self) -> List[NodeView]:
         return self._children
-    def _set_children(self, new_children) -> None:
+    def _set_children(self, new_children: List[NodeView]) -> None:
         self.set_children(new_children)
     children = property(_get_children, _set_children)
     
     def set_children(self,
-            new_children,
+            new_children: List[NodeView],
             progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
         if progress_listener is not None:
             part_count = sum([len(c.children) for c in new_children])
@@ -224,7 +226,10 @@ class NodeView(object):
                 # Add initial children
                 part_index = 0
                 for (index, child) in enumerate(new_children):
-                    child._order_index = index
+                    # TODO: Consider storing _order_index in a separate
+                    #       child_2_order_index dict rather than annotating
+                    #       the child object directly
+                    child._order_index = index  # type: ignore[attr-defined]
                     if progress_listener is not None:
                         progress_listener.creating_entity_tree_node(part_index)
                         part_index += len(child.children)
@@ -235,7 +240,8 @@ class NodeView(object):
                 
                 children_to_delete = old_children_set - set(new_children)
                 for child in children_to_delete:
-                    child.peer.Delete()
+                    if child.peer is not None:
+                        child.peer.Delete()
                 
                 children_to_add = [new_child for new_child in new_children if new_child not in old_children_set]
                 for child in children_to_add:
@@ -243,19 +249,19 @@ class NodeView(object):
                 
                 # Reorder children
                 for (index, child) in enumerate(new_children):
-                    child._order_index = index
+                    child._order_index = index  # type: ignore[attr-defined]
                 self.peer.SortChildren()
     
-    def append_child(self, child):
+    def append_child(self, child: NodeView) -> None:
         self.children = self.children + [child]
     
     @property
-    def _tree(self):
+    def _tree(self) -> TreeView:
         if not self.peer:
             raise ValueError('Not attached to a tree.')
         return self.peer._tree
     
-    def _attach(self, peer):
+    def _attach(self, peer: NodeViewPeer) -> None:
         if self.peer:
             raise ValueError('Already attached to a different peer.')
         self.peer = peer
@@ -296,19 +302,19 @@ class NodeViewPeer(tuple):
     def node_id(self) -> wx.TreeItemId:
         return self[1]
     
-    def SetItemData(self, obj):
+    def SetItemData(self, obj: NodeView) -> None:
         self.tree_peer.SetItemData(self.node_id, obj)
     
-    def SetItemText(self, text):
+    def SetItemText(self, text: str) -> None:
         self.tree_peer.SetItemText(self.node_id, text)
     
-    def SetItemHasChildren(self, has):
+    def SetItemHasChildren(self, has: bool) -> None:
         self.tree_peer.SetItemHasChildren(self.node_id, has)
     
     def GetFirstChild(self):
         return self.tree_peer.GetFirstChild(self.node_id)
     
-    def AppendItem(self, text, *args):
+    def AppendItem(self, text: str, *args) -> wx.TreeItemId:
         return self.tree_peer.AppendItem(self.node_id, text, *args)
     
     def SetItemImage(self, image: ImageIndex, which: wx.TreeItemIcon) -> None:
@@ -316,8 +322,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             self.tree_peer.SetItemImage(node_id, image, which)
     
-    def Delete(self):
+    def Delete(self) -> None:
         self.tree_peer.Delete(self.node_id)
     
-    def SortChildren(self):
+    def SortChildren(self) -> None:
         self.tree_peer.SortChildren(self.node_id)

@@ -60,7 +60,7 @@ class MainWindow(object):
         
         return pane
     
-    def _create_entity_pane_content(self, parent, progress_listener: OpenProjectProgressListener):
+    def _create_entity_pane_content(self, parent: wx.Window, progress_listener: OpenProjectProgressListener):
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
             self._create_entity_tree(parent, progress_listener),
@@ -70,7 +70,7 @@ class MainWindow(object):
         content_sizer.Add(self._create_button_bar(parent), flag=wx.EXPAND)
         return content_sizer
     
-    def _create_entity_tree(self, parent, progress_listener: OpenProjectProgressListener):
+    def _create_entity_tree(self, parent: wx.Window, progress_listener: OpenProjectProgressListener):
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
         self.entity_tree.peer.Bind(wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
         
