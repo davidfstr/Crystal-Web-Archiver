@@ -396,7 +396,8 @@ def _prompt_for_project(progress_listener, **project_kwargs):
         style=wx.YES_NO,
         yes_label='Open',
         no_label='Create',
-        escape_is_cancel=True)
+        escape_is_cancel=True,
+        name='cr-open-or-create-project')
     
     if dialog.IsCheckBoxChecked():
         project_kwargs = {
@@ -492,7 +493,8 @@ def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
         dialog = BetterMessageDialog(None,
             message='The selected directory is not a valid project.',
             title='Invalid Project',
-            style=wx.OK)
+            style=wx.OK,
+            name='cr-invalid-project')
         dialog.ShowModal()
         dialog.Destroy()
         sys.exit()

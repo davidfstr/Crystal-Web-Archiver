@@ -58,9 +58,16 @@ class TreeView(object):
     which will not be displayed 
     """
     
-    def __init__(self, parent_peer):
+    def __init__(self, parent_peer, *, name: str=None):
         self.delegate = None
-        self.peer = _OrderedTreeCtrl(parent_peer, style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT)
+        self.peer = _OrderedTreeCtrl(
+            parent_peer,
+            style=wx.TR_DEFAULT_STYLE|wx.TR_HIDE_ROOT,
+            **(
+                dict(name=name)
+                if name is not None else
+                dict()
+            ))
         
         # Setup node image registration
         self.bitmap_2_image_id = dict()

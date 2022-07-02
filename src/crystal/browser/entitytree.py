@@ -27,7 +27,7 @@ class EntityTree(object):
             parent_peer,
             project: Project,
             progress_listener: OpenProjectProgressListener) -> None:
-        self.view = TreeView(parent_peer)
+        self.view = TreeView(parent_peer, name='cr-entity-tree')
         self.view.delegate = self
         self.root = RootNode(project, self.view.root, progress_listener)
         self._project = project

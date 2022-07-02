@@ -18,7 +18,7 @@ class AddRootUrlDialog(object):
         if initial_url is None:
             initial_url = 'http://'
         
-        dialog = self.dialog = wx.Dialog(parent, title='Add Root URL')
+        dialog = self.dialog = wx.Dialog(parent, title='Add Root URL', name='cr-add-url-dialog')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
         dialog.Bind(wx.EVT_BUTTON, self._on_button)
@@ -40,12 +40,16 @@ class AddRootUrlDialog(object):
         fields_sizer.AddGrowableCol(1)
         
         fields_sizer.Add(wx.StaticText(parent, label='Name:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
-        self.name_field = wx.TextCtrl(parent)
+        self.name_field = wx.TextCtrl(
+            parent,
+            name='cr-add-url-dialog__name-field')
         self.name_field.SetSelection(-1, -1)
         fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         
         fields_sizer.Add(wx.StaticText(parent, label='URL:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
-        self.url_field = wx.TextCtrl(parent, value=initial_url, size=(300,-1)) # width hint
+        self.url_field = wx.TextCtrl(
+            parent, value=initial_url, size=(300,-1), # width hint
+            name='cr-add-url-dialog__url-field')
         self.url_field.SetSelection(-1, -1)
         fields_sizer.Add(self.url_field, flag=wx.EXPAND)
         

@@ -17,11 +17,11 @@ class MainWindow(object):
     def __init__(self, project: Project, progress_listener: OpenProjectProgressListener) -> None:
         self.project = project
         
-        frame = wx.Frame(None, title=project.title)
+        frame = wx.Frame(None, title=project.title, name='cr-main-window')
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         
-        splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_LIVE_UPDATE)
+        splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_LIVE_UPDATE, name='cr-main-window-splitter')
         splitter.SetSashGravity(1.0)
         splitter.SetMinimumPaneSize(20)
         
@@ -79,29 +79,29 @@ class MainWindow(object):
     def _create_button_bar(self, parent: wx.Window):
         readonly = self._readonly  # cache
         
-        add_url_button = wx.Button(parent, label='Add URL')
+        add_url_button = wx.Button(parent, label='Add URL', name='cr-add-url-button')
         add_url_button.Bind(wx.EVT_BUTTON, self._on_add_url)
         if readonly:
             add_url_button.Disable()
         
-        add_group_button = wx.Button(parent, label='Add Group')
+        add_group_button = wx.Button(parent, label='Add Group', name='cr-add-group-button')
         add_group_button.Bind(wx.EVT_BUTTON, self._on_add_group)
         if readonly:
             add_group_button.Disable()
         
-        self._remove_entity_button = wx.Button(parent, label='Forget')
+        self._remove_entity_button = wx.Button(parent, label='Forget', name='cr-forget-button')
         self._remove_entity_button.Bind(wx.EVT_BUTTON, self._on_remove_entity)
         self._remove_entity_button.Disable()
         
-        self._download_button = wx.Button(parent, label='Download')
+        self._download_button = wx.Button(parent, label='Download', name='cr-download-button')
         self._download_button.Bind(wx.EVT_BUTTON, self._on_download_entity)
         self._download_button.Disable()
         
-        self._update_membership_button = wx.Button(parent, label='Update Membership')
+        self._update_membership_button = wx.Button(parent, label='Update Membership', name='cr-update-membership-button')
         self._update_membership_button.Bind(wx.EVT_BUTTON, self._on_update_group_membership)
         self._update_membership_button.Disable()
         
-        self._view_button = wx.Button(parent, label='View')
+        self._view_button = wx.Button(parent, label='View', name='cr-view-button')
         self._view_button.Bind(wx.EVT_BUTTON, self._on_view_entity)
         self._view_button.Disable()
         
@@ -278,7 +278,7 @@ class MainWindow(object):
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
         pane.SetSizer(pane_sizer)
         
-        read_write_icon = wx.StaticText(pane, label='🔒' if readonly else '✏️')
+        read_write_icon = wx.StaticText(pane, label='🔒' if readonly else '✏️', name='cr-read-write-icon')
         read_write_icon.SetToolTip('Read only project' if readonly else 'Writable project')
         
         pane_sizer.Add(

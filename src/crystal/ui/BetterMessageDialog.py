@@ -18,6 +18,7 @@ class BetterMessageDialog(wx.Dialog):
             yes_label: Optional[str]=None, 
             no_label: Optional[str]=None, 
             escape_is_cancel: bool=False,
+            name: Optional[str]=None,
             ) -> None:
         """
         Arguments:
@@ -29,7 +30,7 @@ class BetterMessageDialog(wx.Dialog):
         yes_label -- label for the wx.YES button.
         no_label -- label for the wx.NO button.
         """
-        wx.Dialog.__init__(self, parent, title=title)
+        wx.Dialog.__init__(self, parent, title=title, name=name)
         self_sizer = wx.BoxSizer(wx.VERTICAL); self.SetSizer(self_sizer)
         self.Bind(wx.EVT_BUTTON, self._on_button)
         

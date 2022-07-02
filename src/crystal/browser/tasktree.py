@@ -8,7 +8,7 @@ class TaskTree(object):
     def __init__(self, parent_peer: wx.Window, root_task) -> None:
         self.root = TaskTreeNode(root_task)
         
-        self.tree = TreeView(parent_peer)
+        self.tree = TreeView(parent_peer, name='cr-task-tree')
         self.tree.root = self.root.tree_node
         
         self.tree.peer.SetInitialSize((750, 200))
