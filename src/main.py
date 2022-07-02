@@ -150,30 +150,14 @@ def main(args):
             if parsed_args.filepath is not None:
                 filepath = parsed_args.filepath
             
-            project_kwargs = dict(
-                readonly=parsed_args.readonly,
-            )
+            # Setup proxy variables for shell
+            from crystal.model import Project
+            from crystal.browser import MainWindow
+            _Proxy.patch_help()
+            project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
+            window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
             
-            from crystal.progress import OpenProjectProgressDialog
-            with OpenProjectProgressDialog() as progress_listener:
-                # Get a project
-                if filepath is None:
-                    project = _prompt_for_project(progress_listener, **project_kwargs)
-                else:
-                    project = _load_project(filepath, progress_listener, **project_kwargs)
-                assert project is not None
-                
-                # Configure project
-                project.request_cookie = parsed_args.cookie
-                
-                # Create main window
-                from crystal.browser import MainWindow
-                window = MainWindow(project, progress_listener)
-            
-            # Start serving immediately if requested
-            if parsed_args.serve:
-                project.start_server()
-            
+            # Start shell if requested
             if parsed_args.shell:
                 # Define exit instructions,
                 # based on site.setquit()'s definition in Python 3.8
@@ -198,13 +182,38 @@ def main(args):
                             f'{exit_instructions}.'
                         ),
                         local=dict(
-                            project=project,
-                            window=window,
+                            project=project_proxy,
+                            window=window_proxy,
                         ),
                         exitmsg='now waiting for main window to close...',
                     ),
                     daemon=False,
                 ).start()
+            
+            # Open/create a project
+            from crystal.progress import OpenProjectProgressDialog
+            with OpenProjectProgressDialog() as progress_listener:
+                # Get a project
+                project_kwargs = dict(
+                    readonly=parsed_args.readonly,
+                )
+                if filepath is None:
+                    project = _prompt_for_project(progress_listener, **project_kwargs)
+                else:
+                    project = _load_project(filepath, progress_listener, **project_kwargs)
+                assert project is not None
+                project_proxy.initialize_proxy(project)
+                
+                # Configure project
+                project.request_cookie = parsed_args.cookie
+                
+                # Create main window
+                window = MainWindow(project, progress_listener)
+                window_proxy.initialize_proxy(window)
+            
+            # Start serving immediately if requested
+            if parsed_args.serve:
+                project.start_server()
             
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
@@ -239,6 +248,64 @@ def _running_as_bundle():
     such as py2exe or py2app.
     """
     return hasattr(sys, 'frozen')
+
+class _Proxy(object):
+    _unset_repr: str
+    _value: 'Optional[object]'
+    
+    @staticmethod
+    def patch_help() -> None:
+        """Patch help() such that it understands _Proxy objects."""
+        import pydoc
+        old_resolve = pydoc.resolve  # capture
+        def new_resolve(thing, *args, **kwargs):
+            if isinstance(thing, _Proxy):
+                if thing._value is None:
+                    return old_resolve(thing, *args, **kwargs)  # the _Proxy itself
+                else:
+                    return old_resolve(thing._value, *args, **kwargs)
+            else:
+                return old_resolve(thing, *args, **kwargs)
+        pydoc.resolve = new_resolve  # monkeypatch
+    
+    def __init__(self, unset_repr: str) -> None:
+        super().__setattr__('_unset_repr', unset_repr)
+        super().__setattr__('_value', None)
+    
+    def initialize_proxy(self, value) -> None:
+        if value is None:
+            raise ValueError('Must initialize proxy with non-None value')
+        if self._value is not None:
+            raise ValueError('Proxy already initialized')
+        super().__setattr__('_value', value)
+    
+    def __repr__(self) -> str:
+        value = self._value  # cache
+        if value is None:
+            return self._unset_repr
+        else:
+            return repr(value)
+    
+    def __dir__(self):
+        value = self._value  # cache
+        if value is None:
+            return super().__dir__()
+        else:
+            return dir(value)
+    
+    def __setattr__(self, attr_name: str, attr_value):
+        value = self._value  # cache
+        if value is None:
+            raise AttributeError
+        else:
+            setattr(value, attr_name, attr_value)
+    
+    def __getattr__(self, attr_name: str):
+        value = self._value  # cache
+        if value is None:
+            raise AttributeError
+        else:
+            return getattr(value, attr_name)
 
 def _prompt_for_project(progress_listener, **project_kwargs):
     # type: (OpenProjectProgressListener, object) -> Project
