@@ -43,7 +43,9 @@ class BetterMessageDialog(wx.Dialog):
         if checkbox_label is None:
             self._checkbox = None
         else:
-            self._checkbox = wx.CheckBox(self, label=checkbox_label)
+            self._checkbox = wx.CheckBox(
+                self, label=checkbox_label,
+                **(dict(name=f'{name}__checkbox') if name else dict()))
             if on_checkbox_clicked is not None:
                 self._checkbox.Bind(wx.EVT_CHECKBOX, on_checkbox_clicked)
         self_sizer.Add(
