@@ -61,6 +61,44 @@ def main(args: List[str]) -> None:
         except ImportError:
             sys.exit('Can\'t find the main "crystal" package on your Python path.')
     
+    # Filter out strange "psn" argument (ex: '-psn_0_438379') that
+    # macOS does sometimes pass upon first launch when run as a
+    # binary downloaded from the internet.
+    args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
+    
+    # Parse CLI arguments
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--shell',
+        help='Start a CLI shell after opening a project.',
+        action='store_true',
+    )
+    parser.add_argument(
+        '--serve',
+        help='Start serving the project immediately.',
+        action='store_true',
+    )
+    parser.add_argument(
+        '--cookie',
+        help='HTTP Cookie header value when downloading resources.',
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
+        '--readonly',
+        help='Whether to open the project as read-only.',
+        action='store_true',
+    )
+    parser.add_argument(
+        'filepath',
+        help='Optional. Path to a *.crystalproj to open.',
+        type=str,
+        default=None,
+        nargs='?',
+    )
+    parsed_args = parser.parse_args(args)  # may raise SystemExit
+    
     # Start GUI subsystem
     import wx
     
@@ -110,7 +148,7 @@ def main(args: List[str]) -> None:
             # type: (Optional[str]) -> None
             self._did_finish_launch = True
             
-            _did_launch(args, filepath)
+            _did_launch(parsed_args, filepath)
             
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
@@ -122,7 +160,7 @@ def main(args: List[str]) -> None:
         app.MainLoop()  # will raise SystemExit if user quits
         
         # Re-launch, reopening the initial dialog
-        _did_launch(args)
+        _did_launch(parsed_args)
 
 def _check_environment():
     # Check Python version
@@ -153,49 +191,11 @@ def _running_as_bundle():
     """
     return hasattr(sys, 'frozen')
 
-def _did_launch(args: List[str], filepath: Optional[str]=None) -> None:
+def _did_launch(parsed_args, filepath: Optional[str]=None) -> None:
     """
     Raises:
     * SystemExit -- if the user quits
     """
-    
-    # Filter out strange "psn" argument (ex: '-psn_0_438379') that
-    # macOS does sometimes pass upon first launch when run as a
-    # binary downloaded from the internet.
-    args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
-    
-    # Parse CLI arguments
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--shell',
-        help='Start a CLI shell after opening a project.',
-        action='store_true',
-    )
-    parser.add_argument(
-        '--serve',
-        help='Start serving the project immediately.',
-        action='store_true',
-    )
-    parser.add_argument(
-        '--cookie',
-        help='HTTP Cookie header value when downloading resources.',
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        '--readonly',
-        help='Whether to open the project as read-only.',
-        action='store_true',
-    )
-    parser.add_argument(
-        'filepath',
-        help='Optional. Path to a *.crystalproj to open.',
-        type=str,
-        default=None,
-        nargs='?',
-    )
-    parsed_args = parser.parse_args(args)  # may raise SystemExit
     
     # If project to open was passed on the command-line, use it
     if parsed_args.filepath is not None:
