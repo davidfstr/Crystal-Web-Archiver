@@ -17,12 +17,13 @@ except ImportError:
     TYPE_CHECKING = False
 
 if TYPE_CHECKING:
+    from crystal.browser import MainWindow
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
     from typing import List, Optional
     import wx
 
-
+    
 _APP_NAME = 'Crystal Web Archiver'
 _APP_AUTHOR = 'DaFoster'
 
@@ -99,6 +100,9 @@ def main(args: List[str]) -> None:
     )
     parsed_args = parser.parse_args(args)  # may raise SystemExit
     
+    # Start shell if requested
+    shell = _Shell() if parsed_args.shell else None
+    
     # Start GUI subsystem
     import wx
     
@@ -148,7 +152,7 @@ def main(args: List[str]) -> None:
             # type: (Optional[str]) -> None
             self._did_finish_launch = True
             
-            _did_launch(parsed_args, filepath)
+            _did_launch(parsed_args, shell, filepath)
             
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
@@ -160,7 +164,7 @@ def main(args: List[str]) -> None:
         app.MainLoop()  # will raise SystemExit if user quits
         
         # Re-launch, reopening the initial dialog
-        _did_launch(parsed_args)
+        _did_launch(parsed_args, shell)
 
 def _check_environment():
     # Check Python version
@@ -191,7 +195,7 @@ def _running_as_bundle():
     """
     return hasattr(sys, 'frozen')
 
-def _did_launch(parsed_args, filepath: Optional[str]=None) -> None:
+def _did_launch(parsed_args, shell: Optional[_Shell], filepath: Optional[str]=None) -> None:
     """
     Raises:
     * SystemExit -- if the user quits
@@ -201,15 +205,44 @@ def _did_launch(parsed_args, filepath: Optional[str]=None) -> None:
     if parsed_args.filepath is not None:
         filepath = parsed_args.filepath  # reinterpret
     
-    # Setup proxy variables for shell
-    from crystal.model import Project
-    from crystal.browser import MainWindow
-    _Proxy.patch_help()
-    project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
-    window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
+    # Open/create a project
+    project: Project
+    window: MainWindow
+    from crystal.progress import OpenProjectProgressDialog
+    with OpenProjectProgressDialog() as progress_listener:
+        # Get a project
+        project_kwargs = dict(
+            readonly=parsed_args.readonly,
+        )
+        if filepath is None:
+            project = _prompt_for_project(progress_listener, **project_kwargs)
+        else:
+            project = _load_project(filepath, progress_listener, **project_kwargs)
+        assert project is not None
+        
+        # Configure project
+        project.request_cookie = parsed_args.cookie
+        
+        # Create main window
+        from crystal.browser import MainWindow
+        window = MainWindow(project, progress_listener)
     
-    # Start shell if requested
-    if parsed_args.shell:
+    if shell is not None:
+        shell.attach(project, window)
+    
+    # Start serving immediately if requested
+    if parsed_args.serve:
+        project.start_server()
+
+class _Shell(object):
+    def __init__(self) -> None:
+        # Setup proxy variables for shell
+        from crystal.model import Project
+        from crystal.browser import MainWindow
+        _Proxy.patch_help()
+        self._project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
+        self._window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
+        
         # Define exit instructions,
         # based on site.setquit()'s definition in Python 3.8
         if os.sep == '\\':
@@ -233,38 +266,17 @@ def _did_launch(parsed_args, filepath: Optional[str]=None) -> None:
                     f'{exit_instructions}.'
                 ),
                 local=dict(
-                    project=project_proxy,
-                    window=window_proxy,
+                    project=self._project_proxy,
+                    window=self._window_proxy,
                 ),
                 exitmsg='now waiting for main window to close...',
             ),
             daemon=False,
         ).start()
     
-    # Open/create a project
-    from crystal.progress import OpenProjectProgressDialog
-    with OpenProjectProgressDialog() as progress_listener:
-        # Get a project
-        project_kwargs = dict(
-            readonly=parsed_args.readonly,
-        )
-        if filepath is None:
-            project = _prompt_for_project(progress_listener, **project_kwargs)
-        else:
-            project = _load_project(filepath, progress_listener, **project_kwargs)
-        assert project is not None
-        project_proxy.initialize_proxy(project)
-        
-        # Configure project
-        project.request_cookie = parsed_args.cookie
-        
-        # Create main window
-        window = MainWindow(project, progress_listener)
-        window_proxy.initialize_proxy(window)
-    
-    # Start serving immediately if requested
-    if parsed_args.serve:
-        project.start_server()
+    def attach(self, project: Project, window: MainWindow) -> None:
+        self._project_proxy.initialize_proxy(project, reinit_okay=True)
+        self._window_proxy.initialize_proxy(window, reinit_okay=True)
 
 class _Proxy(object):
     _unset_repr: str
@@ -289,11 +301,12 @@ class _Proxy(object):
         super().__setattr__('_unset_repr', unset_repr)
         super().__setattr__('_value', None)
     
-    def initialize_proxy(self, value) -> None:
+    def initialize_proxy(self, value, *, reinit_okay: bool=False) -> None:
         if value is None:
             raise ValueError('Must initialize proxy with non-None value')
         if self._value is not None:
-            raise ValueError('Proxy already initialized')
+            if not reinit_okay:
+                raise ValueError('Proxy already initialized')
         super().__setattr__('_value', value)
     
     def __repr__(self) -> str:
