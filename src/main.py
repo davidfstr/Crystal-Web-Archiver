@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from typing import List, Optional
     import wx
 
-    
+
 _APP_NAME = 'Crystal Web Archiver'
 _APP_AUTHOR = 'DaFoster'
 
@@ -162,6 +162,8 @@ def main(args: List[str]) -> None:
     while True:
         # Process main loop until no more windows or dialogs are open
         app.MainLoop()  # will raise SystemExit if user quits
+        if shell is not None:
+            shell.detach()
         
         # Re-launch, reopening the initial dialog
         _did_launch(parsed_args, shell)
@@ -277,6 +279,10 @@ class _Shell(object):
     def attach(self, project: Project, window: MainWindow) -> None:
         self._project_proxy.initialize_proxy(project, reinit_okay=True)
         self._window_proxy.initialize_proxy(window, reinit_okay=True)
+    
+    def detach(self) -> None:
+        self._project_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
+        self._window_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
 
 class _Proxy(object):
     _unset_repr: str
@@ -301,9 +307,14 @@ class _Proxy(object):
         super().__setattr__('_unset_repr', unset_repr)
         super().__setattr__('_value', None)
     
-    def initialize_proxy(self, value, *, reinit_okay: bool=False) -> None:
+    def initialize_proxy(self,
+            value,
+            *, reinit_okay: bool=False,
+            unset_okay: bool=False,
+            ) -> None:
         if value is None:
-            raise ValueError('Must initialize proxy with non-None value')
+            if not unset_okay:
+                raise ValueError('Must initialize proxy with non-None value')
         if self._value is not None:
             if not reinit_okay:
                 raise ValueError('Proxy already initialized')
