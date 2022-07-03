@@ -64,7 +64,7 @@ def main(args: List[str]) -> None:
     # Start GUI subsystem
     import wx
     
-    # Run GUI
+    # Create wx.App and call app.OnInit(), opening the initial dialog
     class MyApp(wx.App):
         def __init__(self, *args, **kwargs):
             self._keepalive_frame = None
@@ -115,7 +115,14 @@ def main(args: List[str]) -> None:
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
     app = MyApp(redirect=False)
-    app.MainLoop()
+    
+    # Run GUI
+    while True:
+        # Process main loop until no more windows or dialogs are open
+        app.MainLoop()  # will raise SystemExit if user quits
+        
+        # Re-launch, reopening the initial dialog
+        _did_launch(args)
 
 def _check_environment():
     # Check Python version
@@ -147,6 +154,11 @@ def _running_as_bundle():
     return hasattr(sys, 'frozen')
 
 def _did_launch(args: List[str], filepath: Optional[str]=None) -> None:
+    """
+    Raises:
+    * SystemExit -- if the user quits
+    """
+    
     # Filter out strange "psn" argument (ex: '-psn_0_438379') that
     # macOS does sometimes pass upon first launch when run as a
     # binary downloaded from the internet.
@@ -185,7 +197,7 @@ def _did_launch(args: List[str], filepath: Optional[str]=None) -> None:
     )
     parsed_args = parser.parse_args(args)  # may raise SystemExit
     
-    # If project to open passed on the command-line, use it
+    # If project to open was passed on the command-line, use it
     if parsed_args.filepath is not None:
         filepath = parsed_args.filepath  # reinterpret
     
@@ -314,6 +326,10 @@ class _Proxy(object):
 
 def _prompt_for_project(progress_listener, **project_kwargs):
     # type: (OpenProjectProgressListener, object) -> Project
+    """
+    Raises:
+    * SystemExit -- if the user quits rather than providing a project
+    """
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     import wx
     
@@ -340,17 +356,36 @@ def _prompt_for_project(progress_listener, **project_kwargs):
         }  # reinterpret
     
     try:
-        if choice == wx.ID_YES:
-            return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
-        elif choice == wx.ID_NO:
-            return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
-        else:  # wx.ID_CANCEL
-            sys.exit()
+        while True:
+            choice = dialog.ShowModal()
+            
+            if dialog.IsCheckBoxChecked():
+                project_kwargs = {
+                    **project_kwargs,
+                    **dict(readonly=True),
+                }  # reinterpret
+            
+            if choice == wx.ID_YES:
+                try:
+                    return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
+                except SystemExit:
+                    continue
+            elif choice == wx.ID_NO:
+                try:
+                    return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
+                except SystemExit:
+                    continue
+            else:  # wx.ID_CANCEL
+                sys.exit()
     finally:
         dialog.Destroy()
 
 def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
     # type: (wx.Window, OpenProjectProgressListener, object) -> Project
+    """
+    Raises:
+    * SystemExit -- if the user cancels the prompt early
+    """
     from crystal.model import Project
     import os.path
     import shutil
@@ -374,6 +409,10 @@ def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
 
 def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
     # type: (wx.Window, OpenProjectProgressListener, object) -> Project
+    """
+    Raises:
+    * SystemExit -- if the user cancels the prompt early
+    """
     from crystal.model import Project
     from crystal.os import project_appears_as_package_file
     import os.path
