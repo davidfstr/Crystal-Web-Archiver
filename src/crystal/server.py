@@ -257,6 +257,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
             pass
     
     def _do_GET(self) -> None:
+        readonly = self.project.readonly  # cache
+        dynamic_ok = (self.headers.get('X-Crystal-Dynamic', 'True') == 'True')
+        
         # Parse self.path using RFC 2616 rules,
         # which in particular allows it to be an absolute URI!
         if self.path == '*':
@@ -318,7 +321,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 # existing resource group, presume that the user is interested 
                 # in downloading it immediately upon access
                 matching_rg = self._find_group_matching_archive_url(archive_url)
-                if matching_rg is not None and not self.project.readonly:
+                if matching_rg is not None and not readonly and dynamic_ok:
                     print_warning('*** Dynamically downloading new resource in group %r: %s' % (
                         matching_rg.name,
                         archive_url,
@@ -336,7 +339,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 stale_ok=True if self.project.readonly else False
             ))  # type: Optional[ResourceRevision]
             if revision is None:
-                if not self.project.readonly:
+                if not readonly and dynamic_ok:
                     # If the existing resource is also a root resource,
                     # presume that the user is interested 
                     # in downloading it immediately upon access
@@ -371,7 +374,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         # Dynamically rewrite incoming link from archived resource revision
         referer = self.referer  # cache
-        if referer is not None:
+        if referer is not None and dynamic_ok:
             referer_urlparts = urlparse(referer)
             if ((referer_urlparts.netloc == '' and referer_urlparts.path.startswith('/')) or 
                     referer_urlparts.netloc == self._server_host):
