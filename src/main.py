@@ -106,6 +106,8 @@ def main(args: List[str]) -> None:
     # Start GUI subsystem
     import wx
     
+    last_project = None  # type: Optional[Project]
+    
     # Create wx.App and call app.OnInit(), opening the initial dialog
     class MyApp(wx.App):
         def __init__(self, *args, **kwargs):
@@ -152,7 +154,8 @@ def main(args: List[str]) -> None:
             # type: (Optional[str]) -> None
             self._did_finish_launch = True
             
-            _did_launch(parsed_args, shell, filepath)
+            nonlocal last_project
+            last_project = _did_launch(parsed_args, shell, filepath)
             
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
@@ -162,11 +165,16 @@ def main(args: List[str]) -> None:
     while True:
         # Process main loop until no more windows or dialogs are open
         app.MainLoop()  # will raise SystemExit if user quits
+        
+        # Clean up
         if shell is not None:
             shell.detach()
+        if last_project is not None:
+            last_project.close()
+            last_project = None
         
         # Re-launch, reopening the initial dialog
-        _did_launch(parsed_args, shell)
+        last_project = _did_launch(parsed_args, shell)
 
 def _check_environment():
     # Check Python version
@@ -197,7 +205,11 @@ def _running_as_bundle():
     """
     return hasattr(sys, 'frozen')
 
-def _did_launch(parsed_args, shell: Optional[_Shell], filepath: Optional[str]=None) -> None:
+def _did_launch(
+        parsed_args,
+        shell: Optional[_Shell],
+        filepath: Optional[str]=None
+        ) -> Project:
     """
     Raises:
     * SystemExit -- if the user quits
@@ -235,6 +247,8 @@ def _did_launch(parsed_args, shell: Optional[_Shell], filepath: Optional[str]=No
     # Start serving immediately if requested
     if parsed_args.serve:
         project.start_server()
+    
+    return project
 
 class _Shell(object):
     def __init__(self) -> None:

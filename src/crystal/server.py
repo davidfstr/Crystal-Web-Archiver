@@ -3,6 +3,8 @@ Implements an HTTP server that serves resource revisions from a Project.
 Runs on its own daemon thread.
 """
 
+from __future__ import annotations
+
 from crystal.cli import (
     print_error,
     print_info,
@@ -28,21 +30,28 @@ from .xthreading import bg_call_later, fg_call_and_wait
 
 _SERVER_PORT = 2797
 
-def start(project: Project) -> None:
+def start(project: Project) -> ProjectServer:
     """
     Starts the archive server on a daemon thread.
     """
-    port = _SERVER_PORT
-    address = ('', port)
-    server = _HttpServer(address, _RequestHandler)
-    server.project = project
-    def bg_task():
-        try:
-            print_success('Server started on port %s.' % port)
-            server.serve_forever()
-        finally:
-            server.server_close()
-    bg_call_later(bg_task, daemon=True)
+    return ProjectServer(project)
+
+class ProjectServer(object):
+    def __init__(self, project: Project) -> None:
+        port = _SERVER_PORT
+        address = ('', port)
+        self._server = _HttpServer(address, _RequestHandler)
+        self._server.project = project
+        def bg_task():
+            try:
+                print_success('Server started on port %s.' % port)
+                self._server.serve_forever()
+            finally:
+                self._server.server_close()
+        bg_call_later(bg_task, daemon=True)
+    
+    def close(self) -> None:
+        self._server.server_close()
 
 def get_request_url(archive_url: str, project: Project) -> str:
     """

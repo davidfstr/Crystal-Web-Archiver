@@ -40,6 +40,7 @@ from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
+    from crystal.server import ProjectServer
     from crystal.task import DownloadResourceTask, DownloadResourceGroupTask, Task
 
 class Project(object):
@@ -180,7 +181,7 @@ class Project(object):
         crystal.task.start_schedule_forever(self.root_task)
         
         # Hold on to the server connection
-        self.server_running = False
+        self._server = None  # type: Optional[ProjectServer]
         
         # Define initial configuration
         self.request_cookie = None  # type: Optional[str]
@@ -341,14 +342,27 @@ class Project(object):
     
     # === Server ===
     
-    def start_server(self):
+    def start_server(self) -> ProjectServer:
         """
         Starts an HTTP server that serves pages from this project.
+        
+        If an HTTP server is already running, does nothing.
         """
-        if not self.server_running:
+        if self._server is None:
             import crystal.server
-            crystal.server.start(self)
-            self.server_running = True
+            self._server = crystal.server.start(self)
+        return self._server
+    
+    @property
+    def server_running(self) -> bool:
+        return self._server is not None
+    
+    # === Close ===
+    
+    def close(self) -> None:
+        if self._server is not None:
+            self._server.close()
+            self._server = None
 
 class CrossProjectReferenceError(Exception):
     pass
