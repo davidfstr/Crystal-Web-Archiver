@@ -371,7 +371,6 @@ def _prompt_for_project(progress_listener, **project_kwargs):
         yes_label='Open',
         no_label='Create',
         escape_is_cancel=True)
-    choice = dialog.ShowModal()
     
     if dialog.IsCheckBoxChecked():
         project_kwargs = {
