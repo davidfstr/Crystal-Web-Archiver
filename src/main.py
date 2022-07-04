@@ -3,6 +3,8 @@
 Home of the main function, which starts the program.
 """
 
+from __future__ import annotations
+
 # NOTE: Do not add any imports that fail under Python 2.x.
 #       This would prevent the version-checking code from running.
 #       
@@ -15,9 +17,10 @@ except ImportError:
     TYPE_CHECKING = False
 
 if TYPE_CHECKING:
+    from crystal.browser import MainWindow
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
-    from typing import Optional
+    from typing import List, Optional
     import wx
 
 
@@ -25,7 +28,7 @@ _APP_NAME = 'Crystal Web Archiver'
 _APP_AUTHOR = 'DaFoster'
 
 
-def main(args):
+def main(args: List[str]) -> None:
     """
     Main function. Starts the program.
     """
@@ -34,7 +37,7 @@ def main(args):
     # If running as Mac app or as Windows executable, redirect stdout and 
     # stderr to file, since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
-    if hasattr(sys, 'frozen') and sys.frozen in ['macosx_app', 'windows_exe']:
+    if getattr(sys, 'frozen', None) in ['macosx_app', 'windows_exe']:
         if sys.stdout is None or sys.stderr is None:
             from appdirs import user_log_dir
             log_dirpath = user_log_dir(_APP_NAME, _APP_AUTHOR)
@@ -59,10 +62,51 @@ def main(args):
         except ImportError:
             sys.exit('Can\'t find the main "crystal" package on your Python path.')
     
+    # Filter out strange "psn" argument (ex: '-psn_0_438379') that
+    # macOS does sometimes pass upon first launch when run as a
+    # binary downloaded from the internet.
+    args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
+    
+    # Parse CLI arguments
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--shell',
+        help='Start a CLI shell after opening a project.',
+        action='store_true',
+    )
+    parser.add_argument(
+        '--serve',
+        help='Start serving the project immediately.',
+        action='store_true',
+    )
+    parser.add_argument(
+        '--cookie',
+        help='HTTP Cookie header value when downloading resources.',
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
+        '--readonly',
+        help='Whether to open the project as read-only.',
+        action='store_true',
+    )
+    parser.add_argument(
+        'filepath',
+        help='Optional. Path to a *.crystalproj to open.',
+        type=str,
+        default=None,
+        nargs='?',
+    )
+    parsed_args = parser.parse_args(args)  # may raise SystemExit
+    
+    # Start shell if requested
+    shell = _Shell() if parsed_args.shell else None
+    
     # Start GUI subsystem
     import wx
     
-    # Run GUI
+    # Create wx.App and call app.OnInit(), opening the initial dialog
     class MyApp(wx.App):
         def __init__(self, *args, **kwargs):
             self._keepalive_frame = None
@@ -108,118 +152,21 @@ def main(args):
             # type: (Optional[str]) -> None
             self._did_finish_launch = True
             
-            # Filter out strange "psn" argument (ex: '-psn_0_438379') that
-            # macOS does sometimes pass upon first launch when run as a
-            # binary downloaded from the internet.
-            nonlocal args
-            args = [a for a in args if not a.startswith('-psn_')]
-            
-            # Parse CLI arguments
-            import argparse
-            parser = argparse.ArgumentParser()
-            parser.add_argument(
-                '--shell',
-                help='Start a CLI shell after opening a project.',
-                action='store_true',
-            )
-            parser.add_argument(
-                '--serve',
-                help='Start serving the project immediately.',
-                action='store_true',
-            )
-            parser.add_argument(
-                '--cookie',
-                help='HTTP Cookie header value when downloading resources.',
-                type=str,
-                default=None,
-            )
-            parser.add_argument(
-                '--readonly',
-                help='Whether to open the project as read-only.',
-                action='store_true',
-            )
-            parser.add_argument(
-                'filepath',
-                help='Optional. Path to a *.crystalproj to open.',
-                type=str,
-                default=None,
-                nargs='?',
-            )
-            parsed_args = parser.parse_args(args)  # may raise SystemExit
-            
-            # If project to open passed on the command-line, use it
-            if parsed_args.filepath is not None:
-                filepath = parsed_args.filepath
-            
-            # Setup proxy variables for shell
-            from crystal.model import Project
-            from crystal.browser import MainWindow
-            _Proxy.patch_help()
-            project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
-            window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
-            
-            # Start shell if requested
-            if parsed_args.shell:
-                # Define exit instructions,
-                # based on site.setquit()'s definition in Python 3.8
-                if os.sep == '\\':
-                    eof = 'Ctrl-Z plus Return'
-                else:
-                    eof = 'Ctrl-D (i.e. EOF)'
-                exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
-                
-                from crystal import __version__ as crystal_version
-                from sys import version_info as python_version_info
-                python_version = '.'.join([str(x) for x in python_version_info[:3]])
-                
-                import code
-                import threading
-                threading.Thread(
-                    target=lambda: code.interact(
-                        banner=(
-                            f'Crystal {crystal_version} (Python {python_version})\n'
-                            'Type "help" for more information.\n'
-                            'Variables "project" and "window" are available.\n'
-                            f'{exit_instructions}.'
-                        ),
-                        local=dict(
-                            project=project_proxy,
-                            window=window_proxy,
-                        ),
-                        exitmsg='now waiting for main window to close...',
-                    ),
-                    daemon=False,
-                ).start()
-            
-            # Open/create a project
-            from crystal.progress import OpenProjectProgressDialog
-            with OpenProjectProgressDialog() as progress_listener:
-                # Get a project
-                project_kwargs = dict(
-                    readonly=parsed_args.readonly,
-                )
-                if filepath is None:
-                    project = _prompt_for_project(progress_listener, **project_kwargs)
-                else:
-                    project = _load_project(filepath, progress_listener, **project_kwargs)
-                assert project is not None
-                project_proxy.initialize_proxy(project)
-                
-                # Configure project
-                project.request_cookie = parsed_args.cookie
-                
-                # Create main window
-                window = MainWindow(project, progress_listener)
-                window_proxy.initialize_proxy(window)
-            
-            # Start serving immediately if requested
-            if parsed_args.serve:
-                project.start_server()
+            _did_launch(parsed_args, shell, filepath)
             
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
     app = MyApp(redirect=False)
-    app.MainLoop()
+    
+    # Run GUI
+    while True:
+        # Process main loop until no more windows or dialogs are open
+        app.MainLoop()  # will raise SystemExit if user quits
+        if shell is not None:
+            shell.detach()
+        
+        # Re-launch, reopening the initial dialog
+        _did_launch(parsed_args, shell)
 
 def _check_environment():
     # Check Python version
@@ -250,6 +197,93 @@ def _running_as_bundle():
     """
     return hasattr(sys, 'frozen')
 
+def _did_launch(parsed_args, shell: Optional[_Shell], filepath: Optional[str]=None) -> None:
+    """
+    Raises:
+    * SystemExit -- if the user quits
+    """
+    
+    # If project to open was passed on the command-line, use it
+    if parsed_args.filepath is not None:
+        filepath = parsed_args.filepath  # reinterpret
+    
+    # Open/create a project
+    project: Project
+    window: MainWindow
+    from crystal.progress import OpenProjectProgressDialog
+    with OpenProjectProgressDialog() as progress_listener:
+        # Get a project
+        project_kwargs = dict(
+            readonly=parsed_args.readonly,
+        )
+        if filepath is None:
+            project = _prompt_for_project(progress_listener, **project_kwargs)
+        else:
+            project = _load_project(filepath, progress_listener, **project_kwargs)
+        assert project is not None
+        
+        # Configure project
+        project.request_cookie = parsed_args.cookie
+        
+        # Create main window
+        from crystal.browser import MainWindow
+        window = MainWindow(project, progress_listener)
+    
+    if shell is not None:
+        shell.attach(project, window)
+    
+    # Start serving immediately if requested
+    if parsed_args.serve:
+        project.start_server()
+
+class _Shell(object):
+    def __init__(self) -> None:
+        # Setup proxy variables for shell
+        from crystal.model import Project
+        from crystal.browser import MainWindow
+        _Proxy.patch_help()
+        self._project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
+        self._window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
+        
+        # Define exit instructions,
+        # based on site.setquit()'s definition in Python 3.8
+        if os.sep == '\\':
+            eof = 'Ctrl-Z plus Return'
+        else:
+            eof = 'Ctrl-D (i.e. EOF)'
+        exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
+        
+        from crystal import __version__ as crystal_version
+        from sys import version_info as python_version_info
+        python_version = '.'.join([str(x) for x in python_version_info[:3]])
+        
+        import code
+        import threading
+        threading.Thread(
+            target=lambda: code.interact(
+                banner=(
+                    f'Crystal {crystal_version} (Python {python_version})\n'
+                    'Type "help" for more information.\n'
+                    'Variables "project" and "window" are available.\n'
+                    f'{exit_instructions}.'
+                ),
+                local=dict(
+                    project=self._project_proxy,
+                    window=self._window_proxy,
+                ),
+                exitmsg='now waiting for main window to close...',
+            ),
+            daemon=False,
+        ).start()
+    
+    def attach(self, project: Project, window: MainWindow) -> None:
+        self._project_proxy.initialize_proxy(project, reinit_okay=True)
+        self._window_proxy.initialize_proxy(window, reinit_okay=True)
+    
+    def detach(self) -> None:
+        self._project_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
+        self._window_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
+
 class _Proxy(object):
     _unset_repr: str
     _value: 'Optional[object]'
@@ -273,11 +307,17 @@ class _Proxy(object):
         super().__setattr__('_unset_repr', unset_repr)
         super().__setattr__('_value', None)
     
-    def initialize_proxy(self, value) -> None:
+    def initialize_proxy(self,
+            value,
+            *, reinit_okay: bool=False,
+            unset_okay: bool=False,
+            ) -> None:
         if value is None:
-            raise ValueError('Must initialize proxy with non-None value')
+            if not unset_okay:
+                raise ValueError('Must initialize proxy with non-None value')
         if self._value is not None:
-            raise ValueError('Proxy already initialized')
+            if not reinit_okay:
+                raise ValueError('Proxy already initialized')
         super().__setattr__('_value', value)
     
     def __repr__(self) -> str:
@@ -310,6 +350,10 @@ class _Proxy(object):
 
 def _prompt_for_project(progress_listener, **project_kwargs):
     # type: (OpenProjectProgressListener, object) -> Project
+    """
+    Raises:
+    * SystemExit -- if the user quits rather than providing a project
+    """
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     import wx
     
@@ -336,17 +380,36 @@ def _prompt_for_project(progress_listener, **project_kwargs):
         }  # reinterpret
     
     try:
-        if choice == wx.ID_YES:
-            return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
-        elif choice == wx.ID_NO:
-            return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
-        else:  # wx.ID_CANCEL
-            sys.exit()
+        while True:
+            choice = dialog.ShowModal()
+            
+            if dialog.IsCheckBoxChecked():
+                project_kwargs = {
+                    **project_kwargs,
+                    **dict(readonly=True),
+                }  # reinterpret
+            
+            if choice == wx.ID_YES:
+                try:
+                    return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
+                except SystemExit:
+                    continue
+            elif choice == wx.ID_NO:
+                try:
+                    return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
+                except SystemExit:
+                    continue
+            else:  # wx.ID_CANCEL
+                sys.exit()
     finally:
         dialog.Destroy()
 
 def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
     # type: (wx.Window, OpenProjectProgressListener, object) -> Project
+    """
+    Raises:
+    * SystemExit -- if the user cancels the prompt early
+    """
     from crystal.model import Project
     import os.path
     import shutil
@@ -370,6 +433,10 @@ def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
 
 def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
     # type: (wx.Window, OpenProjectProgressListener, object) -> Project
+    """
+    Raises:
+    * SystemExit -- if the user cancels the prompt early
+    """
     from crystal.model import Project
     from crystal.os import project_appears_as_package_file
     import os.path
