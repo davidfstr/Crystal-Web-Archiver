@@ -42,10 +42,18 @@ def _create_profiled_callable(callable, *args):
                     root_callable = root_callable.callable
                 
                 import inspect
+                try:
+                    file = inspect.getsourcefile(root_callable)
+                except Exception:
+                    file = '?'
+                try:
+                    start_line_number = inspect.getsourcelines(root_callable)[-1]
+                except Exception:
+                    start_line_number = '?'
                 print("*** Foreground task took %.02fs to execute: %s @ [%s:%s]" % (
                     delta_time, root_callable,
-                    inspect.getsourcefile(root_callable),
-                    inspect.getsourcelines(root_callable)[-1]))
+                    file,
+                    start_line_number))
     return profiled_callable
 
 # TODO: Consider renaming this to 'fg_call_soon' and have the
