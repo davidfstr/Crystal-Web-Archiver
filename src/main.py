@@ -46,6 +46,14 @@ def main(args: List[str]) -> None:
             sys.stdout = open(os.path.join(log_dirpath, 'stdout.log'), 'w', buffering=1)
             sys.stderr = open(os.path.join(log_dirpath, 'stderr.log'), 'w', buffering=1)
     
+    # If running as Windows executable, also look for command line arguments
+    # in a text file in the current directory
+    if getattr(sys, 'frozen', None) == 'windows_exe':
+        if os.path.exists('arguments.txt'):
+            with open('arguments.txt', 'r') as f:
+                args_line = f.read()
+            args = args_line.strip().split(' ')  # reinterpret
+    
     # 1. Enable terminal colors on Windows, by wrapping stdout and stderr
     # 2. Strip colorizing ANSI escape sequences when printing to a log file
     import colorama
