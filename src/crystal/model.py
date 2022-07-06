@@ -363,6 +363,7 @@ class Project(object):
         if self._server is not None:
             self._server.close()
             self._server = None
+        self._db.close()
 
 class CrossProjectReferenceError(Exception):
     pass
