@@ -37,14 +37,18 @@ def main(args: List[str]) -> None:
     # If running as Mac app or as Windows executable, redirect stdout and 
     # stderr to file, since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
-    if getattr(sys, 'frozen', None) in ['macosx_app', 'windows_exe']:
-        if sys.stdout is None or sys.stderr is None:
-            from appdirs import user_log_dir
-            log_dirpath = user_log_dir(_APP_NAME, _APP_AUTHOR)
-            os.makedirs(log_dirpath, exist_ok=True)
-            
-            sys.stdout = open(os.path.join(log_dirpath, 'stdout.log'), 'w', buffering=1)
-            sys.stderr = open(os.path.join(log_dirpath, 'stderr.log'), 'w', buffering=1)
+    log_to_file = (
+        (getattr(sys, 'frozen', None) == 'macosx_app' and 
+            (sys.stdout is None or sys.stderr is None)) or
+        (getattr(sys, 'frozen', None) == 'windows_exe')
+    )
+    if log_to_file:
+        from appdirs import user_log_dir
+        log_dirpath = user_log_dir(_APP_NAME, _APP_AUTHOR)
+        os.makedirs(log_dirpath, exist_ok=True)
+        
+        sys.stdout = open(os.path.join(log_dirpath, 'stdout.log'), 'w', buffering=1)
+        sys.stderr = open(os.path.join(log_dirpath, 'stderr.log'), 'w', buffering=1)
     
     # If running as Windows executable, also look for command line arguments
     # in a text file in the current directory
