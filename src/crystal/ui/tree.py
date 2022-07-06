@@ -303,19 +303,33 @@ class NodeViewPeer(tuple):
         return self[1]
     
     def SetItemData(self, obj: NodeView) -> None:
-        self.tree_peer.SetItemData(self.node_id, obj)
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            self.tree_peer.SetItemData(node_id, obj)
     
     def SetItemText(self, text: str) -> None:
-        self.tree_peer.SetItemText(self.node_id, text)
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            self.tree_peer.SetItemText(node_id, text)
     
     def SetItemHasChildren(self, has: bool) -> None:
-        self.tree_peer.SetItemHasChildren(self.node_id, has)
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            self.tree_peer.SetItemHasChildren(node_id, has)
     
-    def GetFirstChild(self):
-        return self.tree_peer.GetFirstChild(self.node_id)
+    def GetFirstChild(self) -> Tuple[wx.TreeItemId, object]:
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            return self.tree_peer.GetFirstChild(node_id)
+        else:
+            raise ValueError('Tree item no longer exists')
     
     def AppendItem(self, text: str, *args) -> wx.TreeItemId:
-        return self.tree_peer.AppendItem(self.node_id, text, *args)
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            return self.tree_peer.AppendItem(node_id, text, *args)
+        else:
+            raise ValueError('Tree item no longer exists')
     
     def SetItemImage(self, image: ImageIndex, which: wx.TreeItemIcon) -> None:
         node_id = self.node_id  # cache
@@ -323,7 +337,11 @@ class NodeViewPeer(tuple):
             self.tree_peer.SetItemImage(node_id, image, which)
     
     def Delete(self) -> None:
-        self.tree_peer.Delete(self.node_id)
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            self.tree_peer.Delete(node_id)
     
     def SortChildren(self) -> None:
-        self.tree_peer.SortChildren(self.node_id)
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            self.tree_peer.SortChildren(node_id)
