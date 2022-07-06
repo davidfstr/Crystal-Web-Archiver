@@ -51,7 +51,7 @@ class ProjectServer(object):
         bg_call_later(bg_task, daemon=True)
     
     def close(self) -> None:
-        self._server.server_close()
+        self._server.shutdown()
 
 def get_request_url(archive_url: str, project: Project) -> str:
     """
