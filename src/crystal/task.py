@@ -287,7 +287,7 @@ _TASK_DISPOSED_EXCEPTION = TaskDisposedException()
 from crystal.model import Resource
 from urllib.parse import urljoin
 
-_DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
+DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
 
 def _get_abstract_resource_title(abstract_resource):
     """
@@ -358,7 +358,7 @@ class DownloadResourceBodyTask(Task):
             return body_revision
         finally:
             self.subtitle = 'Waiting before performing next request...'
-            sleep(_DELAY_BETWEEN_DOWNLOADS)
+            sleep(DELAY_BETWEEN_DOWNLOADS)
 
 class CannotDownloadWhenProjectReadOnlyError(Exception):
     pass

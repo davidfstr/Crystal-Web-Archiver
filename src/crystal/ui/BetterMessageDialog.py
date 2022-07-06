@@ -18,6 +18,7 @@ class BetterMessageDialog(wx.Dialog):
             yes_label: Optional[str]=None, 
             no_label: Optional[str]=None, 
             escape_is_cancel: bool=False,
+            name: Optional[str]=None,
             ) -> None:
         """
         Arguments:
@@ -29,7 +30,7 @@ class BetterMessageDialog(wx.Dialog):
         yes_label -- label for the wx.YES button.
         no_label -- label for the wx.NO button.
         """
-        wx.Dialog.__init__(self, parent, title=title)
+        wx.Dialog.__init__(self, parent, title=title, name=name)
         self_sizer = wx.BoxSizer(wx.VERTICAL); self.SetSizer(self_sizer)
         self.Bind(wx.EVT_BUTTON, self._on_button)
         
@@ -42,7 +43,9 @@ class BetterMessageDialog(wx.Dialog):
         if checkbox_label is None:
             self._checkbox = None
         else:
-            self._checkbox = wx.CheckBox(self, label=checkbox_label)
+            self._checkbox = wx.CheckBox(
+                self, label=checkbox_label,
+                **(dict(name=f'{name}__checkbox') if name else dict()))
             if on_checkbox_clicked is not None:
                 self._checkbox.Bind(wx.EVT_CHECKBOX, on_checkbox_clicked)
         self_sizer.Add(
