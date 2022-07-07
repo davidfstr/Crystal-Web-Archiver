@@ -202,6 +202,9 @@ def main(args: List[str]) -> None:
             last_project.close()
             last_project = None
         
+        # Clear first-only launch arguments
+        parsed_args.filepath = None
+        
         # Re-launch, reopening the initial dialog
         last_project = _did_launch(parsed_args, shell)
 
