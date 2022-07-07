@@ -22,7 +22,7 @@ class MainWindow(object):
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         
-        splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_LIVE_UPDATE, name='cr-main-window-splitter')
+        splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE, name='cr-main-window-splitter')
         splitter.SetSashGravity(1.0)
         splitter.SetMinimumPaneSize(20)
         
