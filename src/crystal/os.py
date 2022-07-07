@@ -12,3 +12,6 @@ def project_appears_as_package_file():
 
 def is_mac_os() -> bool:
     return (platform.system() == 'Darwin')
+
+def is_windows() -> bool:
+    return (platform.system() == 'Windows')

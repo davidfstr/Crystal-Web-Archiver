@@ -1,9 +1,10 @@
+from crystal import __version__ as crystal_version
 from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree
 from crystal.browser.tasktree import TaskTree
 from crystal.model import Project, Resource, ResourceGroup, RootResource
-from crystal.os import is_mac_os
+from crystal.os import is_mac_os, is_windows
 from crystal.progress import OpenProjectProgressListener
 from crystal.task import RootTask
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
@@ -34,7 +35,7 @@ class MainWindow(object):
         frame_sizer.Add(
             self._create_status_bar(frame),
             proportion=0,
-            flag=wx.ALIGN_RIGHT)
+            flag=wx.EXPAND)
         
         frame.Fit()
         frame.Show(True)
@@ -278,13 +279,25 @@ class MainWindow(object):
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
         pane.SetSizer(pane_sizer)
         
-        read_write_icon = wx.StaticText(pane, label='🔒' if readonly else '✏️', name='cr-read-write-icon')
-        read_write_icon.SetToolTip('Read only project' if readonly else 'Writable project')
+        version_label = wx.StaticText(pane, label=f'v{crystal_version}')
+        
+        if readonly:
+            rwi_label = '🔒' if not is_windows() else 'Read only'
+            rwi_tooltip = 'Read only project'
+        else:
+            rwi_label = '✏️' if not is_windows() else 'Writable'
+            rwi_tooltip = 'Writable project'
+        read_write_icon = wx.StaticText(pane, label=rwi_label, name='cr-read-write-icon')
+        read_write_icon.SetToolTip(rwi_tooltip)
         
         pane_sizer.Add(
-            read_write_icon, 
-            proportion=1, 
-            flag=wx.EXPAND|wx.ALL, 
+            version_label,
+            proportion=1,
+            flag=wx.EXPAND|wx.ALL,
+            border=_WINDOW_INNER_PADDING)
+        pane_sizer.Add(
+            read_write_icon,
+            flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         
         return pane

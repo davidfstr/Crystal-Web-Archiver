@@ -567,11 +567,12 @@ class MainWindow(object):
     @property
     def readonly(self) -> bool:
         label = self.read_write_icon.Label  # cache
-        if label == '🔒':
+        if label in ['🔒', 'Read only']:
             return True
-        if label == '✏️':
+        elif label in ['✏️', 'Writable']:
             return False
-        raise AssertionError()
+        else:
+            raise AssertionError()
     
     async def close(self) -> None:
         self.main_window.Close()
