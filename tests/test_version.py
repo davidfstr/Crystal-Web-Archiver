@@ -11,7 +11,7 @@ def test_version_is_expected_value():
 def test_version_in_pyproject_toml_is_consistent_with_package_version():
     pyproject_toml_filepath = os.path.join(
         os.path.dirname(__file__), '..', 'pyproject.toml')
-    with open(pyproject_toml_filepath, 'r') as f:
+    with open(pyproject_toml_filepath, 'r', encoding='utf-8') as f:
         pyproject_toml = f.read()
     
     m = re.search(r'\nversion *= *"([^"]+)"\n', pyproject_toml)
@@ -28,12 +28,12 @@ def test_version_and_copyright_in_mac_binary_is_correct():
 def test_version_and_copyright_in_windows_binary_is_correct():
     iss_filepath = os.path.join(
         os.path.dirname(__file__), '..', 'setup', 'win-installer.iss')
-    with open(iss_filepath, 'r') as f:
+    with open(iss_filepath, 'r', encoding='utf-8') as f:
         iss = f.read()
     
     setup_settings_filepath = os.path.join(
         os.path.dirname(__file__), '..', 'setup', 'setup_settings.py')
-    with open(setup_settings_filepath, 'r') as f:
+    with open(setup_settings_filepath, 'r', encoding='utf-8') as f:
         exec(f.read())
     COPYRIGHT_STRING_ = locals()['COPYRIGHT_STRING']  # HACK
     

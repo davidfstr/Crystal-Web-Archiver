@@ -47,14 +47,18 @@ def main(args: List[str]) -> None:
         log_dirpath = user_log_dir(_APP_NAME, _APP_AUTHOR)
         os.makedirs(log_dirpath, exist_ok=True)
         
-        sys.stdout = open(os.path.join(log_dirpath, 'stdout.log'), 'w', buffering=1)
-        sys.stderr = open(os.path.join(log_dirpath, 'stderr.log'), 'w', buffering=1)
+        sys.stdout = open(
+            os.path.join(log_dirpath, 'stdout.log'), 
+            'w', encoding='utf-8', buffering=1)
+        sys.stderr = open(
+            os.path.join(log_dirpath, 'stderr.log'), 
+            'w', encoding='utf-8', buffering=1)
     
     # If running as Windows executable, also look for command line arguments
     # in a text file in the current directory
     if getattr(sys, 'frozen', None) == 'windows_exe':
         if os.path.exists('arguments.txt'):
-            with open('arguments.txt', 'r') as f:
+            with open('arguments.txt', 'r', encoding='utf-8') as f:
                 args_line = f.read()
             args = args_line.strip().split(' ')  # reinterpret
     

@@ -19,7 +19,7 @@ See the tutorial for py2exe for more information about this DLL.
 from setuptools import setup
 import sys
 
-with open('./setup_settings.py', 'r') as f:
+with open('./setup_settings.py', 'r', encoding='utf-8') as f:
     exec(f.read())
 
 if sys.platform == 'darwin':
