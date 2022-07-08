@@ -1,0 +1,157 @@
+name: push-github-action
+on: [push, pull_request]
+jobs:
+
+  build-macos:
+    strategy:
+      matrix:
+        os:
+          # NOTE: Earliest macOS supported by Crystal is 'macos-10.14' but GitHub Actions
+          #       takes more than 45 min to give me a runner for that OS, so I
+          #       am not including it in Continuous Integration for now.
+          #- macos-10.14
+          - macos-10.15
+        python-version: [3.8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
+      - name: Display pip version
+        run: python -m pip --version
+
+      - name: Get pip version
+        id: pip-version
+        run: echo "::set-output name=PIP_VERSION::$(python -m pip --version | cut -f 2 -d ' ')"
+
+      - name: Install Poetry
+        uses: Gr1N/setup-poetry@v7
+
+      - name: Display Poetry version
+        run: poetry --version
+
+      - name: Get Poetry version
+        id: poetry-version
+        run: echo "::set-output name=POETRY_VERSION::$(poetry --version | cut -f 3- -d ' ')"
+
+      # NOTE: Necessary to cache pip files because the cached pypoetry
+      #       virtualenv does depend on them.
+      - name: Cache pip files
+        id: cache-pip
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/pip
+          key:      pip--os-${{ matrix.os }}-python-${{ matrix.python-version }}-pip-${{ steps.pip-version.outputs.PIP_VERSION }}-poetry-${{ steps.poetry-version.outputs.POETRY_VERSION }}-lock-${{ hashFiles('poetry.lock') }}
+
+      - name: Cache installed dependencies
+        id: cache-pypoetry
+        uses: actions/cache@v2
+        with:
+          path: .venv
+          key: pypoetry--os-${{ matrix.os }}-python-${{ matrix.python-version }}-pip-${{ steps.pip-version.outputs.PIP_VERSION }}-poetry-${{ steps.poetry-version.outputs.POETRY_VERSION }}-lock-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies with Poetry
+        if: ${{ (steps.cache-pip.outputs.cache-hit != 'true') || (steps.cache-pypoetry.outputs.cache-hit != 'true') }}
+        run: |
+          poetry config virtualenvs.in-project true
+          poetry install
+
+      - name: Run non-UI tests
+        run: poetry run python -m pytest
+
+      - name: Build .app and disk image
+        working-directory: "./setup"
+        run: "poetry run ./make-mac.sh"
+
+      - name: Run UI tests
+        run: '"setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test'
+
+  build-windows:
+    strategy:
+      matrix:
+        os:
+          # NOTE: Earliest Windows supported by Crystal is Windows 7,
+          #       or approximately 'windows-2012-r2', but GitHub Actions
+          #       takes a long time to give me a runner for that OS.
+          #       So I am not including it in Continuous Integration for now.
+          #- windows-2012-r2  # based on Windows 7
+          - windows-2016  # based on Windows 8.1
+          - windows-2019  # based on Windows 10
+        python-version: [3.8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
+      - name: Display pip version
+        run: python -m pip --version
+
+      - name: Get pip version
+        id: pip-version
+        run: echo "::set-output name=PIP_VERSION::$(python -m pip --version | cut -f 2 -d ' ')"
+
+      - name: Install Poetry
+        uses: Gr1N/setup-poetry@v7
+
+      - name: Display Poetry version
+        run: poetry --version
+
+      - name: Get Poetry version
+        id: poetry-version
+        run: echo "::set-output name=POETRY_VERSION::$(poetry --version | cut -f 3- -d ' ')"
+
+      # NOTE: Necessary to cache pip files because the cached pypoetry
+      #       virtualenv does depend on them.
+      - name: Cache pip files
+        id: cache-pip
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/pip
+          key:      pip--os-${{ matrix.os }}-python-${{ matrix.python-version }}-pip-${{ steps.pip-version.outputs.PIP_VERSION }}-poetry-${{ steps.poetry-version.outputs.POETRY_VERSION }}-lock-${{ hashFiles('poetry.lock') }}
+
+      - name: Cache installed dependencies
+        id: cache-pypoetry
+        uses: actions/cache@v2
+        with:
+          path: .venv
+          key: pypoetry--os-${{ matrix.os }}-python-${{ matrix.python-version }}-pip-${{ steps.pip-version.outputs.PIP_VERSION }}-poetry-${{ steps.poetry-version.outputs.POETRY_VERSION }}-lock-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies with Poetry
+        if: ${{ (steps.cache-pip.outputs.cache-hit != 'true') || (steps.cache-pypoetry.outputs.cache-hit != 'true') }}
+        run: |
+          poetry config virtualenvs.in-project true
+          poetry install
+
+      - name: Run non-UI tests
+        run: poetry run python -m pytest
+
+      - name: Display Inno Setup in Program Files
+        run: |
+          dir "C:\Program Files (x86)"
+          dir "C:\Program Files (x86)\Inno Setup 6"
+
+      - name: Build .exe and installer
+        working-directory: ".\\setup"
+        run: "poetry run .\\make-win.bat"
+
+      - name: Run UI tests
+        working-directory: ".\\setup"
+        run: |
+          $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
+          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "--" --test

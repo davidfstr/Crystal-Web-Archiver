@@ -10,3 +10,6 @@ venv
 
 # Poetry
 /dist
+
+# GitHub Actions
+/setup/arguments.txt
