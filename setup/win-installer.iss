@@ -11,8 +11,10 @@ OutputBaseFilename=crystal-win-1.2.0b
 OutputDir=dist-win
 DisableProgramGroupPage=yes
 
+; NOTE: To regenerate file list: poetry run python make_win_installer.py
 [Files]
-; NOTE: To regenerate file list: cd dist ; ls -l *.pyd *.dll *.exe
+Source: "dist\Crystal Web Archiver.exe"; DestDir: "{app}"
+Source: "dist\MSVCP140.dll"; DestDir: "{app}"
 Source: "dist\_asyncio.pyd"; DestDir: "{app}"
 Source: "dist\_bz2.pyd"; DestDir: "{app}"
 Source: "dist\_ctypes.pyd"; DestDir: "{app}"
@@ -28,11 +30,10 @@ Source: "dist\_sqlite3.pyd"; DestDir: "{app}"
 Source: "dist\_ssl.pyd"; DestDir: "{app}"
 Source: "dist\_testcapi.pyd"; DestDir: "{app}"
 Source: "dist\_tkinter.pyd"; DestDir: "{app}"
-Source: "dist\Crystal Web Archiver.exe"; DestDir: "{app}"
+Source: "dist\cacert.pem"; DestDir: "{app}"
 Source: "dist\libcrypto-1_1.dll"; DestDir: "{app}"
 Source: "dist\libffi-7.dll"; DestDir: "{app}"
 Source: "dist\libssl-1_1.dll"; DestDir: "{app}"
-Source: "dist\MSVCP140.dll"; DestDir: "{app}"
 Source: "dist\pyexpat.pyd"; DestDir: "{app}"
 Source: "dist\python38.dll"; DestDir: "{app}"
 Source: "dist\select.pyd"; DestDir: "{app}"
@@ -46,10 +47,10 @@ Source: "dist\wx._core.pyd"; DestDir: "{app}"
 Source: "dist\wx._html.pyd"; DestDir: "{app}"
 Source: "dist\wx._msw.pyd"; DestDir: "{app}"
 Source: "dist\wx.siplib.pyd"; DestDir: "{app}"
-Source: "dist\wxbase315u_net_vc140_x64.dll"; DestDir: "{app}"
-Source: "dist\wxbase315u_vc140_x64.dll"; DestDir: "{app}"
-Source: "dist\wxmsw315u_core_vc140_x64.dll"; DestDir: "{app}"
-Source: "dist\wxmsw315u_html_vc140_x64.dll"; DestDir: "{app}"
+Source: "dist\wxbase315u_net_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxbase315u_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxmsw315u_core_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxmsw315u_html_vc140.dll"; DestDir: "{app}"
 
 [Icons]
 Name: "{group}\Crystal Web Archiver"; Filename: "{app}\Crystal Web Archiver.exe"
