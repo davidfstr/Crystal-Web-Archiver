@@ -11,6 +11,7 @@ jobs:
           #       am not including it in Continuous Integration for now.
           #- macos-10.14
           - macos-10.15
+          - macos-latest  # whatever the latest macOS is
         python-version: [3.8]
     runs-on: ${{ matrix.os }}
     steps:
@@ -85,6 +86,7 @@ jobs:
           #- windows-2012-r2  # based on Windows 7
           - windows-2016  # based on Windows 8.1
           - windows-2019  # based on Windows 10
+          - windows-latest  # whatever the latest Windows is
         python-version: [3.8]
     runs-on: ${{ matrix.os }}
     steps:
