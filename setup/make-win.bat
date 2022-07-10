@@ -1,4 +1,4 @@
-set INNO_COMPILER="C:\Program Files (x86)\Inno Setup 5\Compil32.exe"
+set INNO_COMPILER="C:\Program Files (x86)\Inno Setup 6\Compil32.exe"
 
 rmdir /s /q build dist dist-win
 

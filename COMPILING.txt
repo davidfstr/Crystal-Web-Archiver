@@ -30,7 +30,7 @@ Windows 7, 8, 10:
             C:\Users\__YOUR_USERNAME__\.poetry\bin
         - Ensure Poetry works in Command Prompt:
             $ poetry --version
-    * Inno Setup 5 (Unicode version), from https://files.jrsoftware.org/is/5/
+    * Inno Setup 6.2.1+, from https://jrsoftware.org/isdl.php
 2. Run the following commands in a Command Prompt window from this directory:
     $ poetry install
     $ cd setup
