@@ -1,4 +1,4 @@
-set INNO_COMPILER="C:\Program Files (x86)\Inno Setup 6\Compil32.exe"
+set INNO_COMPILER="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
 rmdir /s /q build dist dist-win
 
@@ -10,7 +10,7 @@ IF %ERRORLEVEL% NEQ 0 (
 
 copy media\vcruntime140.dll dist\vcruntime140.dll
 
-%INNO_COMPILER% /cc win-installer.iss
+%INNO_COMPILER% win-installer.iss
 IF %ERRORLEVEL% NEQ 0 (
     echo "Inno Setup compiler failed."
     exit %ERRORLEVEL%
