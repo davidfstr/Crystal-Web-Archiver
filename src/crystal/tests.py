@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager, contextmanager
-from crystal.os import project_appears_as_package_file
+from crystal.os import is_mac_os, project_appears_as_package_file
 from crystal.xthreading import fg_call_and_wait
 import re
 import tempfile
@@ -518,7 +518,11 @@ class OpenOrCreateDialog(object):
         with package_dialog_returning(project_dirpath):
             click_button(self.open_button)
             
-            mw = await MainWindow.wait_for()
+            timeout = (
+                4 if is_mac_os()  # sometimes seems to take longer on macOS
+                else 2
+            )
+            mw = await MainWindow.wait_for(timeout=timeout)
         
         yield mw
         
@@ -537,9 +541,11 @@ class MainWindow(object):
     read_write_icon: wx.StaticText
     
     @staticmethod
-    async def wait_for() -> MainWindow:
+    async def wait_for(*, timeout: Optional[float]=None) -> MainWindow:
         self = MainWindow(ready=True)
-        self.main_window = await wait_for(window_condition('cr-main-window'))
+        self.main_window = await wait_for(
+            window_condition('cr-main-window'),
+            timeout=timeout)
         assert isinstance(self.main_window, wx.Frame)
         self.entity_tree = self.main_window.FindWindowByName('cr-entity-tree')
         assert isinstance(self.entity_tree, wx.TreeCtrl)
