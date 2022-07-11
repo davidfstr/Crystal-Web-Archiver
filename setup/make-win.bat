@@ -11,7 +11,7 @@ call poetry run python setup.py py2exe
 )
 
 @echo Copying in C runtime DLL...
-copy media\vcruntime140.dll dist\vcruntime140.dll
+copy media\vcruntime140\*.dll dist\
 
 @echo Built files:
 dir dist
