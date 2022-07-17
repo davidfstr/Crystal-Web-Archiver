@@ -20,7 +20,10 @@ _PROFILE_FG_TASKS = True
 # exceeds this threshold.
 _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
 
-def _wx_main_thread_exists():
+def is_foreground_thread() -> bool:
+    return _foreground_thread_exists() and wx.IsMainThread()
+
+def _foreground_thread_exists() -> bool:
     return wx.GetApp() is not None
 
 def _create_profiled_callable(callable, *args):
@@ -73,7 +76,7 @@ def fg_call_later(callable, force=False, *args):
         callable = _create_profiled_callable(callable, *args);
         args=()
     
-    if not _wx_main_thread_exists() or (wx.IsMainThread() and not force):
+    if not _foreground_thread_exists() or (wx.IsMainThread() and not force):
         callable(*args)
     else:
         wx.CallAfter(callable, *args)
@@ -86,7 +89,7 @@ def fg_call_and_wait(callable, *args):
     Returns the result of the callable.
     If the callable raises an exception, it will be reraised by this method.
     """
-    if not _wx_main_thread_exists() or wx.IsMainThread():
+    if not _foreground_thread_exists() or wx.IsMainThread():
         return callable(*args)
     else:
         condition = threading.Condition()
