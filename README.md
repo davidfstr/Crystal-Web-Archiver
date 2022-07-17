@@ -52,12 +52,14 @@ To download a website that requires login (ex: [The Pragmatic Engineer](https://
 * Select the page's URL in the Network pane.
 * Scroll down to see the "Request Headers" section and look for a "cookie" request header.
 * Copy the value of the "cookie" request header to a text file for safekeeping.
-* Download and launch the command-line version of Crystal.
+* Download and launch the [command-line] version of Crystal.
   Passing the saved "cookie" request header value to the `--cookie` command-line option:
     * `poetry run python3 src/main.py --cookie __COOKIE_HEADER_VALUE__`
 * Now download pages using Crystal as you would normally. The specified cookie
   header value (which logs you in to the remote server) will be used as you
   download pages.
+
+[command-line]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Command-Line-Interface
 
 Known Issues 🐞
 ------------
