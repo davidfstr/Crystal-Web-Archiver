@@ -184,7 +184,7 @@ class Project(object):
         self._server = None  # type: Optional[ProjectServer]
         
         # Define initial configuration
-        self.request_cookie = None  # type: Optional[str]
+        self._request_cookie = None  # type: Optional[str]
     
     @staticmethod
     def is_valid(path):
@@ -213,6 +213,16 @@ class Project(object):
     
     @property
     def readonly(self) -> bool:
+        """
+        Whether this project has been opened as read-only during the current session.
+        
+        When opened as read-only, no modifications to the project's content on disk
+        will be attempted. In particular:
+        * no new resources can be added,
+        * no new resource revisions can be downloaded, and
+        * no database schema migrations can be performed,
+        * among other restrictions.
+        """
         return self._readonly
     
     def _get_property(self, name: str, default: str) -> str:
@@ -249,7 +259,25 @@ class Project(object):
         else:
             return url
     
+    def _get_request_cookie(self) -> Optional[str]:
+        return self._request_cookie
+    def _set_request_cookie(self, request_cookie: Optional[str]) -> None:
+        self._request_cookie = request_cookie
+    request_cookie = property(_get_request_cookie, _set_request_cookie, doc=
+        """
+        The current Cookie HTTP header value to use for authenticating to
+        resources fetched from this project's default domain (as specified
+        in this project's Default URL Prefix).
+        
+        This header value is configured only for the current session
+        and is not persisted.
+        """)
+    
     def request_cookie_applies_to(self, url: str) -> bool:
+        """
+        Whether this project's request_cookie should be used when fetching
+        a resource at the specified URL.
+        """
         default_url_prefix = self.default_url_prefix  # capture
         return (
             default_url_prefix is not None and
