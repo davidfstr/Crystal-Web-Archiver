@@ -4,6 +4,7 @@ import code
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
+from crystal.xthreading import fg_call_and_wait, is_foreground_thread
 import os
 from sys import version_info as python_version_info
 import threading
@@ -28,7 +29,7 @@ class Shell(object):
         python_version = '.'.join([str(x) for x in python_version_info[:3]])
         
         threading.Thread(
-            target=lambda: code.interact(
+            target=lambda: fg_interact(
                 banner=(
                     f'Crystal {crystal_version} (Python {python_version})\n'
                     'Type "help" for more information.\n'
@@ -116,3 +117,25 @@ class _Proxy(object):
             raise AttributeError
         else:
             return getattr(value, attr_name)
+
+
+def fg_interact(banner=None, local=None, exitmsg=None):
+    """
+    Similar to code.interact(), but evaluates code on the foreground thread.
+    """
+    assert not is_foreground_thread()
+    
+    console = _FgInteractiveConsole(local)
+    try:
+        import readline
+    except ImportError:
+        pass
+    console.interact(banner, exitmsg)
+
+
+class _FgInteractiveConsole(code.InteractiveConsole):
+    """
+    Similar to code.InteractiveConsole, but evaluates code on the foreground thread.
+    """
+    def runcode(self, code):
+        fg_call_and_wait(lambda: super(_FgInteractiveConsole, self).runcode(code))
