@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from crystal.browser import MainWindow
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
+    from crystal.shell import Shell
     from typing import List, Optional
     import wx
 
@@ -122,7 +123,11 @@ def main(args: List[str]) -> None:
     parsed_args = parser.parse_args(args)  # may raise SystemExit
     
     # Start shell if requested
-    shell = _Shell() if parsed_args.shell else None
+    if parsed_args.shell:
+        from crystal.shell import Shell
+        shell = Shell()
+    else:
+        shell = None
     
     # Start GUI subsystem
     import wx
@@ -246,7 +251,7 @@ def _running_as_bundle():
 
 def _did_launch(
         parsed_args,
-        shell: Optional[_Shell],
+        shell: Optional[Shell],
         filepath: Optional[str]=None
         ) -> Project:
     """
@@ -288,118 +293,6 @@ def _did_launch(
         project.start_server()
     
     return project
-
-class _Shell(object):
-    def __init__(self) -> None:
-        # Setup proxy variables for shell
-        from crystal.model import Project
-        from crystal.browser import MainWindow
-        _Proxy.patch_help()
-        self._project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
-        self._window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
-        
-        # Define exit instructions,
-        # based on site.setquit()'s definition in Python 3.8
-        if os.sep == '\\':
-            eof = 'Ctrl-Z plus Return'
-        else:
-            eof = 'Ctrl-D (i.e. EOF)'
-        exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
-        
-        from crystal import __version__ as crystal_version
-        from sys import version_info as python_version_info
-        python_version = '.'.join([str(x) for x in python_version_info[:3]])
-        
-        import code
-        import threading
-        threading.Thread(
-            target=lambda: code.interact(
-                banner=(
-                    f'Crystal {crystal_version} (Python {python_version})\n'
-                    'Type "help" for more information.\n'
-                    'Variables "project" and "window" are available.\n'
-                    f'{exit_instructions}.'
-                ),
-                local=dict(
-                    project=self._project_proxy,
-                    window=self._window_proxy,
-                ),
-                exitmsg='now waiting for main window to close...',
-            ),
-            daemon=False,
-        ).start()
-    
-    def attach(self, project: Project, window: MainWindow) -> None:
-        self._project_proxy.initialize_proxy(project, reinit_okay=True)
-        self._window_proxy.initialize_proxy(window, reinit_okay=True)
-    
-    def detach(self) -> None:
-        self._project_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
-        self._window_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
-
-class _Proxy(object):
-    _unset_repr: str
-    _value: 'Optional[object]'
-    
-    @staticmethod
-    def patch_help() -> None:
-        """Patch help() such that it understands _Proxy objects."""
-        import pydoc
-        old_resolve = pydoc.resolve  # capture
-        def new_resolve(thing, *args, **kwargs):
-            if isinstance(thing, _Proxy):
-                if thing._value is None:
-                    return old_resolve(thing, *args, **kwargs)  # the _Proxy itself
-                else:
-                    return old_resolve(thing._value, *args, **kwargs)
-            else:
-                return old_resolve(thing, *args, **kwargs)
-        pydoc.resolve = new_resolve  # monkeypatch
-    
-    def __init__(self, unset_repr: str) -> None:
-        super().__setattr__('_unset_repr', unset_repr)
-        super().__setattr__('_value', None)
-    
-    def initialize_proxy(self,
-            value,
-            *, reinit_okay: bool=False,
-            unset_okay: bool=False,
-            ) -> None:
-        if value is None:
-            if not unset_okay:
-                raise ValueError('Must initialize proxy with non-None value')
-        if self._value is not None:
-            if not reinit_okay:
-                raise ValueError('Proxy already initialized')
-        super().__setattr__('_value', value)
-    
-    def __repr__(self) -> str:
-        value = self._value  # cache
-        if value is None:
-            return self._unset_repr
-        else:
-            return repr(value)
-    
-    def __dir__(self):
-        value = self._value  # cache
-        if value is None:
-            return super().__dir__()
-        else:
-            return dir(value)
-    
-    def __setattr__(self, attr_name: str, attr_value):
-        value = self._value  # cache
-        if value is None:
-            raise AttributeError
-        else:
-            setattr(value, attr_name, attr_value)
-    
-    def __getattr__(self, attr_name: str):
-        value = self._value  # cache
-        if value is None:
-            raise AttributeError
-        else:
-            return getattr(value, attr_name)
 
 def _prompt_for_project(progress_listener, **project_kwargs):
     # type: (OpenProjectProgressListener, object) -> Project

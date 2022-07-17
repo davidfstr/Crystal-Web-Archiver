@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from crystal.os import is_mac_os, project_appears_as_package_file
-from crystal.xthreading import fg_call_and_wait
+from crystal.xthreading import fg_call_and_wait, is_foreground_thread
 import re
 import tempfile
 import time
@@ -22,7 +22,7 @@ _T = TypeVar('_T')
 # === Test Runner ===
 
 def run_test(async_test_func: Callable[[], Awaitable[None]]) -> None:
-    if wx.IsMainThread():
+    if is_foreground_thread():
         raise ValueError(
             'run_test() does not support being called on the wx main thread')
     
@@ -52,7 +52,7 @@ def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
     Switch to a background thread, sleep for the specified duration, and
     then resume this foreground thread.
     """
-    assert wx.IsMainThread()
+    assert is_foreground_thread()
     
     none_or_error = yield SleepCommand(duration)
     if none_or_error is None:
@@ -72,7 +72,7 @@ def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
     Switch to a background thread, fetch the specified URL, and
     then resume this foreground thread.
     """
-    assert wx.IsMainThread()
+    assert is_foreground_thread()
     
     page_or_error = yield FetchUrlCommand(url, headers, timeout)
     if isinstance(page_or_error, WebPage):
@@ -91,7 +91,7 @@ class SleepCommand(Command[None]):
         self._delay = delay
     
     def run(self) -> None:
-        assert not wx.IsMainThread()
+        assert not is_foreground_thread()
         
         time.sleep(self._delay)
 
@@ -102,7 +102,7 @@ class FetchUrlCommand(Command['WebPage']):
         self._timeout = timeout
     
     def run(self) -> WebPage:
-        assert not wx.IsMainThread()
+        assert not is_foreground_thread()
         
         try:
             response_stream = urllib.request.urlopen(
@@ -125,7 +125,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
     
     Example site: https://xkcd.com/
     """
-    assert wx.IsMainThread()
+    assert is_foreground_thread()
     
     # TODO: Use a pre-downloaded version of xkcd rather than the real xkcd
     if True:
