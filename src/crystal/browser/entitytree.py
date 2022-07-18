@@ -7,6 +7,7 @@ from crystal.progress import (
 )
 from crystal.task import CannotDownloadWhenProjectReadOnlyError
 from crystal.ui.tree import *
+from crystal.util.wx_bind import bind
 from crystal.xcollections import defaultordereddict
 from crystal.xthreading import bg_call_later, fg_call_later
 import threading
@@ -101,7 +102,7 @@ class EntityTree(object):
         
         # Create popup menu
         menu = wx.Menu()
-        menu.Bind(wx.EVT_MENU, self._on_popup_menuitem_selected)
+        bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
         if self._project.default_url_prefix == (
                 EntityTree._get_url_prefix_for_resource(node.resource)):
             menu.Append(_ID_CLEAR_PREFIX, 'Clear Default URL Prefix')

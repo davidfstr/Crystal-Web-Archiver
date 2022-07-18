@@ -1,3 +1,4 @@
+from crystal.util.wx_bind import bind
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -21,8 +22,8 @@ class AddRootUrlDialog(object):
         dialog = self.dialog = wx.Dialog(parent, title='Add Root URL', name='cr-add-url-dialog')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
-        dialog.Bind(wx.EVT_BUTTON, self._on_button)
-        dialog.Bind(wx.EVT_CLOSE, self._on_close)
+        bind(dialog, wx.EVT_BUTTON, self._on_button)
+        bind(dialog, wx.EVT_CLOSE, self._on_close)
         
         dialog_sizer.Add(self._create_fields(dialog, initial_url), flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)

@@ -10,6 +10,7 @@ This abstraction provides:
 from __future__ import annotations
 
 from crystal.progress import OpenProjectProgressListener
+from crystal.util.wx_bind import bind
 from crystal.xthreading import is_foreground_thread
 from typing import Dict, List, NewType, Optional, Tuple
 import wx
@@ -84,7 +85,7 @@ class TreeView(object):
         
         # Listen for events on peer
         for event_type in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR:
-            self.peer.Bind(event_type, self._dispatch_event, self.peer)
+            bind(self.peer, event_type, self._dispatch_event, self.peer)
     
     def _get_root(self) -> NodeView:
         return self._root

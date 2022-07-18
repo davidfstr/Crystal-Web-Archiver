@@ -8,6 +8,7 @@ from crystal.os import is_mac_os, is_windows
 from crystal.progress import OpenProjectProgressListener
 from crystal.task import RootTask
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
+from crystal.util.wx_bind import bind
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -73,7 +74,7 @@ class MainWindow(object):
     
     def _create_entity_tree(self, parent: wx.Window, progress_listener: OpenProjectProgressListener):
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
-        self.entity_tree.peer.Bind(wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
+        bind(self.entity_tree.peer, wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
         
         return self.entity_tree.peer
     
@@ -81,29 +82,29 @@ class MainWindow(object):
         readonly = self._readonly  # cache
         
         add_url_button = wx.Button(parent, label='Add URL', name='cr-add-url-button')
-        add_url_button.Bind(wx.EVT_BUTTON, self._on_add_url)
+        bind(add_url_button, wx.EVT_BUTTON, self._on_add_url)
         if readonly:
             add_url_button.Disable()
         
         add_group_button = wx.Button(parent, label='Add Group', name='cr-add-group-button')
-        add_group_button.Bind(wx.EVT_BUTTON, self._on_add_group)
+        bind(add_group_button, wx.EVT_BUTTON, self._on_add_group)
         if readonly:
             add_group_button.Disable()
         
         self._remove_entity_button = wx.Button(parent, label='Forget', name='cr-forget-button')
-        self._remove_entity_button.Bind(wx.EVT_BUTTON, self._on_remove_entity)
+        bind(self._remove_entity_button, wx.EVT_BUTTON, self._on_remove_entity)
         self._remove_entity_button.Disable()
         
         self._download_button = wx.Button(parent, label='Download', name='cr-download-button')
-        self._download_button.Bind(wx.EVT_BUTTON, self._on_download_entity)
+        bind(self._download_button, wx.EVT_BUTTON, self._on_download_entity)
         self._download_button.Disable()
         
         self._update_membership_button = wx.Button(parent, label='Update Membership', name='cr-update-membership-button')
-        self._update_membership_button.Bind(wx.EVT_BUTTON, self._on_update_group_membership)
+        bind(self._update_membership_button, wx.EVT_BUTTON, self._on_update_group_membership)
         self._update_membership_button.Disable()
         
         self._view_button = wx.Button(parent, label='View', name='cr-view-button')
-        self._view_button.Bind(wx.EVT_BUTTON, self._on_view_entity)
+        bind(self._view_button, wx.EVT_BUTTON, self._on_view_entity)
         self._view_button.Disable()
         
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)

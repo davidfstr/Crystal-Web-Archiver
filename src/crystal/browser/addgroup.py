@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from crystal.model import ResourceGroup
+from crystal.util.wx_bind import bind
 import sys
 import wx
 
@@ -30,8 +31,8 @@ class AddGroupDialog(object):
             name='cr-add-group-dialog')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
-        dialog.Bind(wx.EVT_BUTTON, self._on_button)
-        dialog.Bind(wx.EVT_CLOSE, self._on_close)
+        bind(dialog, wx.EVT_BUTTON, self._on_button)
+        bind(dialog, wx.EVT_CLOSE, self._on_close)
         
         # Mac: Requires wx 2.9 to appear in native look & feel
         preview_box = wx.CollapsiblePane(
@@ -82,7 +83,7 @@ class AddGroupDialog(object):
         self.pattern_field = wx.TextCtrl(
             parent, value=initial_url, size=(300,-1),  # width hint
             name='cr-add-group-dialog__pattern-field')
-        self.pattern_field.Bind(wx.EVT_TEXT, self._on_pattern_field_changed)
+        bind(self.pattern_field, wx.EVT_TEXT, self._on_pattern_field_changed)
         self.pattern_field.SetSelection(-1, -1)
         pattern_field_sizer.Add(self.pattern_field, flag=wx.EXPAND)
         pattern_field_sizer.Add(wx.StaticText(parent, label='# = digit, @ = alpha, * = any nonslash, ** = any'), flag=wx.EXPAND)

@@ -1,3 +1,4 @@
+from crystal.util.wx_bind import bind
 from typing import Callable, Optional
 import wx
 
@@ -32,7 +33,7 @@ class BetterMessageDialog(wx.Dialog):
         """
         wx.Dialog.__init__(self, parent, title=title, name=name)
         self_sizer = wx.BoxSizer(wx.VERTICAL); self.SetSizer(self_sizer)
-        self.Bind(wx.EVT_BUTTON, self._on_button)
+        bind(self, wx.EVT_BUTTON, self._on_button)
         
         message_label = wx.StaticText(self, label=message)
         message_label.Wrap(400)
@@ -47,7 +48,7 @@ class BetterMessageDialog(wx.Dialog):
                 self, label=checkbox_label,
                 **(dict(name=f'{name}__checkbox') if name else dict()))
             if on_checkbox_clicked is not None:
-                self._checkbox.Bind(wx.EVT_CHECKBOX, on_checkbox_clicked)
+                bind(self._checkbox, wx.EVT_CHECKBOX, on_checkbox_clicked)
         self_sizer.Add(
             self._checkbox,
             flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_LEFT,
