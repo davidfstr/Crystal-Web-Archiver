@@ -283,7 +283,7 @@ class TaskDisposedException(Exception):
 
 _TASK_DISPOSED_EXCEPTION = TaskDisposedException()
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 from crystal.model import Resource
 from urllib.parse import urljoin
 
@@ -611,7 +611,7 @@ class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
             prefinish=True,
         )
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 from crystal.model import Resource, ResourceGroup, RootResource
 
 class UpdateResourceGroupMembersTask(Task):
@@ -713,7 +713,7 @@ class DownloadResourceGroupTask(Task):
         if self.num_children_complete == len(self.children):
             self.finish()
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 class RootTask(Task):
     """
@@ -741,7 +741,7 @@ class RootTask(Task):
         if all(c.complete for c in self.children):
             self.clear_children()
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 # TODO: Eliminate polling by adding logic to sleep appropriately until the
 #       root task has more children to process.

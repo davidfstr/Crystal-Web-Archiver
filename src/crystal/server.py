@@ -62,7 +62,7 @@ def get_request_url(archive_url: str, project: Project) -> str:
     return _RequestHandler.get_request_url_with_host(
         archive_url, request_host, project.default_url_prefix)
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 _REQUEST_PATH_IN_ARCHIVE_RE = re.compile(r'^/_/([^/]+)/(.+)$')
 
