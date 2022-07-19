@@ -174,6 +174,23 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Downloading improvements
+    * Can force redownload of older URLs using the `--stale-before` CLI option.
+
+* CLI improvements
+    * The [shell] now runs commands on the foreground thread by default,
+      making it easy to interact with the `project` and `window` variables.
+
+* Stability improvements
+    * Two issues that could cause Crystal to crash with a Segmentation Fault
+      were fixed:
+        * Updates to tasks now do manipulate the related tree nodes
+          on the foreground thread correctly.
+        * Crashes that occur in wx.Bind() event handlers no longer
+          destabilize the program.
+
 ### v1.3.0b <small>(July 10, 2022)</small>
 
 This release allows more kinds of advanced sites to be downloaded,
@@ -191,7 +208,8 @@ Last but not least, [Substack]-based sites are now recognized specially and can 
 downloaded effectively without creating an explosion of URL combinations.
 
 * Regular downloading improvements
-    * Can now download sites that require cookie-based login.
+    * Can now download sites that require cookie-based login
+      using the `--cookie` CLI option.
 
 * Dynamic downloading improvements
     * Can identify URL references inside JSON responses.
