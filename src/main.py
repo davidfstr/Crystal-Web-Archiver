@@ -217,8 +217,7 @@ def main(args: List[str]) -> None:
             else:
                 self._finish_launch(filepath)
         
-        def _finish_launch(self, filepath=None):
-            # type: (Optional[str]) -> None
+        def _finish_launch(self, filepath: Optional[str]=None) -> None:
             self._did_finish_launch = True
             
             nonlocal last_project
@@ -316,8 +315,10 @@ def _did_launch(
     
     return project
 
-def _prompt_for_project(progress_listener, **project_kwargs):
-    # type: (OpenProjectProgressListener, object) -> Project
+def _prompt_for_project(
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
     """
     Raises:
     * SystemExit -- if the user quits rather than providing a project
@@ -372,8 +373,11 @@ def _prompt_for_project(progress_listener, **project_kwargs):
     finally:
         dialog.Destroy()
 
-def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
-    # type: (wx.Window, OpenProjectProgressListener, object) -> Project
+def _prompt_to_create_project(
+        parent: wx.Window,
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
     """
     Raises:
     * SystemExit -- if the user cancels the prompt early
@@ -397,8 +401,11 @@ def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
         shutil.rmtree(project_path)
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
-def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
-    # type: (wx.Window, OpenProjectProgressListener, object) -> Project
+def _prompt_to_open_project(
+        parent: wx.Window,
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
     """
     Raises:
     * SystemExit -- if the user cancels the prompt early
@@ -440,8 +447,11 @@ def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
     
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
-def _load_project(project_path, progress_listener, **project_kwargs):
-    # type: (str, OpenProjectProgressListener, object) -> Project
+def _load_project(
+        project_path: str,
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
     from crystal.model import Project
     
     if not os.path.exists(project_path):
