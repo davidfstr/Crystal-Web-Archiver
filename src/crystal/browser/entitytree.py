@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 _ID_SET_PREFIX = 101
 _ID_CLEAR_PREFIX = 102
 
-class EntityTree(object):
+class EntityTree:
     """
     Displays a tree of top-level project entities.
     """
@@ -161,7 +161,7 @@ def _sequence_with_matching_elements_replaced(new_seq, old_seq):
 
 NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
 
-class Node(object):
+class Node:
     def __init__(self):
         self._children = []  # type: List[Node]
     

@@ -10,7 +10,7 @@ SCHEDULING_STYLE_NONE = 0
 SCHEDULING_STYLE_SEQUENTIAL = 1
 SCHEDULING_STYLE_ROUND_ROBIN = 2
 
-class Task(object):
+class Task:
     """
     Encapsulates a long-running process that reports its status occasionally.
     A task may depend on the results of a child task during its execution.
@@ -283,7 +283,7 @@ class TaskDisposedException(Exception):
 
 _TASK_DISPOSED_EXCEPTION = TaskDisposedException()
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 from crystal.model import Resource
 from urllib.parse import urljoin
 
@@ -611,7 +611,7 @@ class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
             prefinish=True,
         )
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 from crystal.model import Resource, ResourceGroup, RootResource
 
 class UpdateResourceGroupMembersTask(Task):
@@ -713,7 +713,7 @@ class DownloadResourceGroupTask(Task):
         if self.num_children_complete == len(self.children):
             self.finish()
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 class RootTask(Task):
     """
@@ -733,7 +733,7 @@ class RootTask(Task):
         if len(self.children) == 0:
             return None
         
-        return super(RootTask, self).try_get_next_task_unit()
+        return super().try_get_next_task_unit()
     
     def child_task_did_complete(self, task):
         task.dispose()
@@ -741,7 +741,7 @@ class RootTask(Task):
         if all(c.complete for c in self.children):
             self.clear_children()
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 # TODO: Eliminate polling by adding logic to sleep appropriately until the
 #       root task has more children to process.

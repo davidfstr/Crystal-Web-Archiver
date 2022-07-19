@@ -9,7 +9,7 @@ _WINDOW_INNER_PADDING = 10
 _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
 
-class AddGroupDialog(object):
+class AddGroupDialog:
     # === Init ===
     
     def __init__(self, parent, on_finish, project, initial_url=None, initial_source=None):

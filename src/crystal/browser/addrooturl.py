@@ -5,7 +5,7 @@ _WINDOW_INNER_PADDING = 10
 _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
 
-class AddRootUrlDialog(object):
+class AddRootUrlDialog:
     # === Init ===
     
     def __init__(self, parent, on_finish, initial_url=None):

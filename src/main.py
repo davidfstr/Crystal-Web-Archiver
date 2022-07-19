@@ -5,13 +5,21 @@ Home of the main function, which starts the program.
 
 from __future__ import annotations
 
-# NOTE: Do not add any imports that fail under Python 2.x.
-#       This would prevent the version-checking code from running.
+# NOTE: Avoid importing anything outside the Python standard library
+#       at the top-level of this module, in case the import itself fails.
+#       Import failure is more common in py2app and py2exe contexts and
+#       is easier to debug when it does NOT happen at the top-level.
 #       
-#       Therefore most imports in this file should occur directly within functions.
+#       Therefore many imports in this file should occur directly within functions.
+import argparse
 import datetime
+import locale
 import os
+import os.path
+import shutil
 import sys
+import threading
+import time
 try:
     from typing import TYPE_CHECKING
 except ImportError:
@@ -86,7 +94,6 @@ def main(args: List[str]) -> None:
     args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
     
     # Parse CLI arguments
-    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--shell',
@@ -186,7 +193,6 @@ def main(args: List[str]) -> None:
             # Workaround wxPython >4.0.7 plus Python 3.8 breaking locale
             # https://discuss.wxpython.org/t/wxpython4-1-1-python3-8-locale-wxassertionerror/35168
             if sys.platform.startswith('win') and sys.version_info >= (3, 8):
-                import locale
                 locale.setlocale(locale.LC_ALL, 'C')
             
             # Activate wx keepalive until self._finish_launch() is called
@@ -195,12 +201,10 @@ def main(args: List[str]) -> None:
             # Call self._finish_launch() after a short delay if it isn't
             # called in the meantime by MacOpenFile
             def wait_for_maybe_open_file():
-                import time
                 time.sleep(.2)
                 
                 if not self._did_finish_launch:
                     wx.CallAfter(lambda: self._finish_launch())
-            import threading
             thread = threading.Thread(target=wait_for_maybe_open_file, daemon=False)
             thread.start()
             
@@ -213,8 +217,7 @@ def main(args: List[str]) -> None:
             else:
                 self._finish_launch(filepath)
         
-        def _finish_launch(self, filepath=None):
-            # type: (Optional[str]) -> None
+        def _finish_launch(self, filepath: Optional[str]=None) -> None:
             self._did_finish_launch = True
             
             nonlocal last_project
@@ -243,11 +246,6 @@ def main(args: List[str]) -> None:
         last_project = _did_launch(parsed_args, shell)
 
 def _check_environment():
-    # Check Python version
-    py3 = hasattr(sys, 'version_info') and sys.version_info >= (3,0)
-    if not py3:
-        sys.exit('This application requires Python 3.x.')
-    
     # Check for dependencies
     if not _running_as_bundle():
         try:
@@ -317,8 +315,10 @@ def _did_launch(
     
     return project
 
-def _prompt_for_project(progress_listener, **project_kwargs):
-    # type: (OpenProjectProgressListener, object) -> Project
+def _prompt_for_project(
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
     """
     Raises:
     * SystemExit -- if the user quits rather than providing a project
@@ -373,15 +373,16 @@ def _prompt_for_project(progress_listener, **project_kwargs):
     finally:
         dialog.Destroy()
 
-def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
-    # type: (wx.Window, OpenProjectProgressListener, object) -> Project
+def _prompt_to_create_project(
+        parent: wx.Window,
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
     """
     Raises:
     * SystemExit -- if the user cancels the prompt early
     """
     from crystal.model import Project
-    import os.path
-    import shutil
     import wx
     
     dialog = wx.FileDialog(parent,
@@ -400,15 +401,17 @@ def _prompt_to_create_project(parent, progress_listener, **project_kwargs):
         shutil.rmtree(project_path)
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
-def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
-    # type: (wx.Window, OpenProjectProgressListener, object) -> Project
+def _prompt_to_open_project(
+        parent: wx.Window,
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
     """
     Raises:
     * SystemExit -- if the user cancels the prompt early
     """
     from crystal.model import Project
     from crystal.os import project_appears_as_package_file
-    import os.path
     import wx
     
     if project_appears_as_package_file():
@@ -444,10 +447,12 @@ def _prompt_to_open_project(parent, progress_listener, **project_kwargs):
     
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
-def _load_project(project_path, progress_listener, **project_kwargs):
-    # type: (str, OpenProjectProgressListener, object) -> Project
+def _load_project(
+        project_path: str,
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
     from crystal.model import Project
-    import os.path
     
     if not os.path.exists(project_path):
         sys.exit('File not found: %s' % project_path)
@@ -456,7 +461,7 @@ def _load_project(project_path, progress_listener, **project_kwargs):
     #       present them to the user nicely
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
-# ----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     main(sys.argv[1:])

@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from crystal.server import ProjectServer
     from crystal.task import DownloadResourceTask, DownloadResourceGroupTask, Task
 
-class Project(object):
+class Project:
     """
     Groups together a set of resources that are downloaded and any associated settings.
     Persisted and auto-saved.
@@ -427,7 +427,7 @@ class ProjectFormatError(Exception):
 class ProjectReadOnlyError(Exception):
     pass
 
-class _WeakTaskRef(object):
+class _WeakTaskRef:
     """
     Holds a reference to a Task until that task completes.
     """
@@ -448,7 +448,7 @@ class _WeakTaskRef(object):
     def task_did_complete(self, task):
         self.task = None
 
-class Resource(object):
+class Resource:
     """
     Represents an entity, potentially downloadable.
     Either created manually or discovered through a link from another resource.
@@ -834,7 +834,7 @@ class Resource(object):
     def __repr__(self):
         return "Resource(%s)" % (repr(self.url),)
 
-class RootResource(object):
+class RootResource:
     """
     Represents a resource whose existence is manually defined by the user.
     Persisted and auto-saved.
@@ -924,7 +924,7 @@ class RootResource(object):
         """
         pass
 
-class ResourceRevision(object):
+class ResourceRevision:
     """
     A downloaded revision of a `Resource`. Immutable.
     Persisted. Loaded on demand.
@@ -1382,7 +1382,7 @@ class _PersistedError(Exception):
 
 ResourceGroupSource = Union['RootResource', 'ResourceGroup', None]
 
-class ResourceGroup(object):
+class ResourceGroup:
     """
     Groups resource whose url matches a particular pattern.
     Persisted and auto-saved.

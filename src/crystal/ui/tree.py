@@ -51,7 +51,7 @@ _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR = dict(zip(
     _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR.values()
 ))
 
-class TreeView(object):
+class TreeView:
     """
     Displays a tree of nodes.
     
@@ -142,7 +142,7 @@ class _OrderedTreeCtrl(wx.TreeCtrl):
         assert isinstance(order_index_1, int) and isinstance(order_index_2, int)
         return order_index_1 - order_index_2
 
-class NodeView(object):
+class NodeView:
     """
     Node that is (or will be) in a TreeView.
     
