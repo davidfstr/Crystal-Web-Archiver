@@ -463,7 +463,7 @@ def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -> None
 
 # === Utility: Window Abstractions ===
 
-class OpenOrCreateDialog(object):
+class OpenOrCreateDialog:
     open_or_create_project_dialog: wx.Dialog
     open_as_readonly: wx.CheckBox
     open_button: wx.Button
@@ -528,7 +528,7 @@ class OpenOrCreateDialog(object):
         
         await mw.close()
 
-class MainWindow(object):
+class MainWindow:
     main_window: wx.Frame
     entity_tree: wx.TreeCtrl
     add_url_button: wx.Button
@@ -586,7 +586,7 @@ class MainWindow(object):
         await wait_for(lambda: not self.main_window.IsShown)
         await wait_for(not_condition(window_condition('cr-main-window')))
 
-class AddGroupDialog(object):
+class AddGroupDialog:
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
     source_field: wx.Choice
@@ -915,7 +915,7 @@ def get_children_of_tree_item(tree: wx.TreeCtrl, tii: wx.TreeItemId) -> List[Tre
         next_child_tii = tree.GetNextSibling(next_child_tii)  # reinterpret
     return children
 
-class TreeItem(object):
+class TreeItem:
     __slots__ = ['tree', 'id']
     
     def __init__(self, tree: wx.TreeCtrl, id: wx.TreeItemId) -> None:
@@ -1002,7 +1002,7 @@ async def fetch_archive_url(
         timeout = _DEFAULT_WAIT_TIMEOUT
     return await bg_fetch_url(get_request_url(archive_url), headers=headers, timeout=timeout)
 
-class WebPage(object):
+class WebPage:
     def __init__(self, status: int, content: str) -> None:
         self._status = status
         self._content = content

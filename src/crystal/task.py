@@ -10,7 +10,7 @@ SCHEDULING_STYLE_NONE = 0
 SCHEDULING_STYLE_SEQUENTIAL = 1
 SCHEDULING_STYLE_ROUND_ROBIN = 2
 
-class Task(object):
+class Task:
     """
     Encapsulates a long-running process that reports its status occasionally.
     A task may depend on the results of a child task during its execution.

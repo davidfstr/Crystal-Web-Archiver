@@ -11,7 +11,7 @@ import threading
 from typing import Optional
 
 
-class Shell(object):
+class Shell:
     def __init__(self) -> None:
         # Setup proxy variables for shell
         _Proxy.patch_help()
@@ -54,7 +54,7 @@ class Shell(object):
         self._window_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
 
 
-class _Proxy(object):
+class _Proxy:
     _unset_repr: str
     _value: 'Optional[object]'
     

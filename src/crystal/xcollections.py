@@ -5,7 +5,7 @@ extended collections in the standard `collections` module.
 
 from collections import OrderedDict
 
-class simpleorderedset(object):
+class simpleorderedset:
     """Ordered set that supports a limited set of operations."""
     
     def __init__(self):

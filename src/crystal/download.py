@@ -56,7 +56,7 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
             request_cookie
         )
 
-class ResourceRequest(object):
+class ResourceRequest:
     """
     Encapsulates a request to fetch a resource.
     """
@@ -122,7 +122,7 @@ class HttpResourceRequest(ResourceRequest):
         # TODO: Defining a class inline like this is probably expensive,
         #       especially in memory usage. Please define class externally
         #       and just instantiate here.
-        class HttpResourceBodyStream(object):
+        class HttpResourceBodyStream:
             close = conn.close
             read = response.read
             fileno = response.fileno

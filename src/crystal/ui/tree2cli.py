@@ -4,7 +4,7 @@ Provides a tree UI with an API similar to the 'tree' module, but with two differ
 * the UI is a CLI instead of a GUI.
 """
 
-class TreeView(object):
+class TreeView:
     def __init__(self):
         self.root = NodeView()
     
@@ -25,7 +25,7 @@ class TreeView(object):
         _print_node(self.root, 0)
         print()
 
-class NodeView(object):
+class NodeView:
     def __init__(self):
         self._tree = None
         self._title = ''

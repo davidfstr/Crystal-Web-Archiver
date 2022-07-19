@@ -13,7 +13,7 @@ import wx
 
 _WINDOW_INNER_PADDING = 10
 
-class MainWindow(object):
+class MainWindow:
     entity_tree: EntityTree
     
     def __init__(self, project: Project, progress_listener: OpenProjectProgressListener) -> None:

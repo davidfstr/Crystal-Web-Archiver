@@ -36,7 +36,7 @@ def start(project: Project) -> ProjectServer:
     """
     return ProjectServer(project)
 
-class ProjectServer(object):
+class ProjectServer:
     def __init__(self, project: Project) -> None:
         port = _SERVER_PORT
         address = ('', port)
