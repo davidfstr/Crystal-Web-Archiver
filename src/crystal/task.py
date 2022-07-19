@@ -733,7 +733,7 @@ class RootTask(Task):
         if len(self.children) == 0:
             return None
         
-        return super(RootTask, self).try_get_next_task_unit()
+        return super().try_get_next_task_unit()
     
     def child_task_did_complete(self, task):
         task.dispose()

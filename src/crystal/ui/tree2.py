@@ -10,7 +10,7 @@ from crystal.ui.tree import TreeView
 
 class NodeView(NodeView1):
     def __init__(self):
-        super(NodeView, self).__init__()
+        super().__init__()
         self.__title = ''
         self.__subtitle = ''
     
@@ -31,4 +31,4 @@ class NodeView(NodeView1):
     def _update_base_title(self):
         # HACK: Call property implementation directly, since calling properties
         #       on the super() object doesn't seem to work.
-        super(NodeView, self)._set_title('%s -- %s' % (self.__title, self.__subtitle))
+        super()._set_title('%s -- %s' % (self.__title, self.__subtitle))

@@ -30,7 +30,7 @@ class simpleorderedset:
 
 class defaultordereddict(OrderedDict):
     def __init__(self, default_factory=None):
-        super(defaultordereddict, self).__init__()
+        super().__init__()
         self.default_factory = default_factory
     
     def __missing__(self, key):
