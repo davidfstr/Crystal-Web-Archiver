@@ -9,6 +9,7 @@ from __future__ import annotations
 #       This would prevent the version-checking code from running.
 #       
 #       Therefore most imports in this file should occur directly within functions.
+import datetime
 import os
 import sys
 try:
@@ -109,6 +110,19 @@ def main(args: List[str]) -> None:
         action='store_true',
     )
     parser.add_argument(
+        '--stale-before',
+        help=(
+            'If specified then any resource revision older than this datetime '
+            'will be considered stale and a new revision will be downloaded '
+            'if a download of the related resource is requested. '
+            
+            'Can be an ISO date like "2022-07-17", "2022-07-17T12:47:42", '
+            'or "2022-07-17T12:47:42+00:00".'
+        ),
+        type=datetime.datetime.fromisoformat,
+        default=None,
+    )
+    parser.add_argument(
         '--test',
         help='Run automated tests.',
         action='store_true',
@@ -121,6 +135,14 @@ def main(args: List[str]) -> None:
         nargs='?',
     )
     parsed_args = parser.parse_args(args)  # may raise SystemExit
+    
+    # Interpret --stale-before datetime as in local timezone if no UTC offset specified
+    if parsed_args.stale_before is not None:
+        from crystal.util.xdatetime import datetime_is_aware
+        if not datetime_is_aware(parsed_args.stale_before):
+            from tzlocal import get_localzone
+            parsed_args.stale_before = parsed_args.stale_before.replace(
+                tzinfo=get_localzone())  # reinterpret
     
     # Start shell if requested
     if parsed_args.shell:
@@ -280,6 +302,7 @@ def _did_launch(
         
         # Configure project
         project.request_cookie = parsed_args.cookie
+        project.min_fetch_date = parsed_args.stale_before
         
         # Create main window
         from crystal.browser import MainWindow

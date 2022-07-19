@@ -38,15 +38,17 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
             resource.url, 
             request_cookie
         )()
-        
-        # TODO: Provide incremental feedback such as '7 KB of 15 KB'
-        progress_listener.subtitle = 'Receiving response...'
-        return ResourceRevision.create_from_response(
-            resource,
-            metadata,
-            body_stream,
-            request_cookie
-        )
+        try:
+            # TODO: Provide incremental feedback such as '7 KB of 15 KB'
+            progress_listener.subtitle = 'Receiving response...'
+            return ResourceRevision.create_from_response(
+                resource,
+                metadata,
+                body_stream,
+                request_cookie
+            )
+        finally:
+            body_stream.close()
     except Exception as error:
         return ResourceRevision.create_from_error(
             resource,

@@ -23,9 +23,13 @@ from crystal.plugins import (
 )   
 from crystal.progress import DummyOpenProjectProgressListener, OpenProjectProgressListener
 from crystal.urls import is_unrewritable_url, requote_uri
+from crystal.util import http_date
+from crystal.util.xdatetime import datetime_is_aware
 from crystal.xfutures import Future
 from crystal.xthreading import bg_call_later, fg_call_and_wait
 import cgi
+import datetime
+import io
 import json
 import mimetypes
 import os
@@ -222,6 +226,9 @@ class Project(object):
         * no new resource revisions can be downloaded, and
         * no database schema migrations can be performed,
         * among other restrictions.
+        
+        This property is configured only for the current session
+        and is not persisted.
         """
         return self._readonly
     
@@ -269,7 +276,7 @@ class Project(object):
         resources fetched from this project's default domain (as specified
         in this project's Default URL Prefix).
         
-        This header value is configured only for the current session
+        This property is configured only for the current session
         and is not persisted.
         """)
     
@@ -284,6 +291,24 @@ class Project(object):
             not default_url_prefix.endswith('/') and
             url.startswith(default_url_prefix + '/')
         )
+    
+    def _get_min_fetch_date(self) -> Optional[datetime.datetime]:
+        return self._min_fetch_date
+    def _set_min_fetch_date(self, min_fetch_date: Optional[datetime.datetime]) -> None:
+        if min_fetch_date is not None:
+            if not datetime_is_aware(min_fetch_date):
+                raise ValueError('Expected an aware datetime (with a UTC offset)')
+        self._min_fetch_date = min_fetch_date
+    min_fetch_date = property(
+        _get_min_fetch_date,
+        _set_min_fetch_date,
+        doc="""
+        If non-None then any resource fetched <= this datetime
+        will be considered stale and subject to being redownloaded.
+        
+        This property is configured only for the current session
+        and is not persisted.
+        """)
     
     @property
     def resources(self) -> Iterable[Resource]:
@@ -664,22 +689,6 @@ class Resource(object):
         task_ref.task = task
         return task
     
-    # TODO: This should ideally be a cheap operation, not requiring a database hit.
-    #       Convert to property once this "cheapening" has been done.
-    def up_to_date(self):
-        """
-        Returns whether this resource is "up-to-date".
-        
-        An "up-to-date" resource is one that whose most recent local revision is estimated
-        to be the same (in content) as the remote version at the time of invocation.
-        """
-        # NOTE: Presently there is a hard-coded assumption that remote resources never change.
-        #       Therefore a downloaded revision is always considered "up-to-date".
-        #       This will likely require reconfiguring by the user in the future.
-        return self.has_any_revisions()
-    
-    # TODO: This should ideally be a cheap operation, not requiring a database hit.
-    #       Convert to property once this "cheapening" has been done.
     def has_any_revisions(self) -> bool:
         """
         Returns whether any revisions of this resource have been downloaded.
@@ -708,6 +717,14 @@ class Resource(object):
                 revision_is_stale = False
                 if project.request_cookie_applies_to(self.url) and project.request_cookie is not None:
                     if revision.request_cookie != project.request_cookie:
+                        revision_is_stale = True  # reinterpret
+                if project.min_fetch_date is not None:
+                    # TODO: Consider storing the fetch date explicitly
+                    #       rather than trying to derive it from the 
+                    #       Date and Age HTTP headers
+                    fetch_date = revision.date_plus_age  # cache
+                    if (fetch_date is not None and 
+                            fetch_date <= project.min_fetch_date):
                         revision_is_stale = True  # reinterpret
                 
                 if not revision_is_stale:
@@ -914,7 +931,7 @@ class ResourceRevision(object):
     """
     resource: Resource
     request_cookie: Optional[str]
-    error: Exception
+    error: Optional[Exception]
     metadata: Optional[ResourceRevisionMetadata]
     _id: int
     has_body: bool
@@ -922,7 +939,11 @@ class ResourceRevision(object):
     # === Init ===
     
     @staticmethod
-    def create_from_error(resource, error, request_cookie=None) -> ResourceRevision:
+    def create_from_error(
+            resource: Resource,
+            error: Exception,
+            request_cookie: Optional[str]=None
+            ) -> ResourceRevision:
         """
         Creates a revision that encapsulates the error encountered when fetching the revision.
         
@@ -934,7 +955,12 @@ class ResourceRevision(object):
             error=error)
     
     @staticmethod
-    def create_from_response(resource, metadata, body_stream, request_cookie=None) -> ResourceRevision:
+    def create_from_response(
+            resource: Resource,
+            metadata: Optional[ResourceRevisionMetadata],
+            body_stream: io.BytesIO,
+            request_cookie: Optional[str]=None
+            ) -> ResourceRevision:
         """
         Creates a revision with the specified metadata and body.
         
@@ -947,16 +973,35 @@ class ResourceRevision(object):
         body_stream -- file-like object containing the revision body.
         """
         try:
-            return ResourceRevision._create(
+            self = ResourceRevision._create(
                 resource,
                 request_cookie=request_cookie,
                 metadata=metadata,
                 body_stream=body_stream)
         except Exception as e:
             return ResourceRevision.create_from_error(resource, e, request_cookie)
+        else:
+            # If no HTTP Date header was returned by the origin server,
+            # auto-populate it with the current datetime, as per RFC 7231
+            date_str = self._get_first_value_of_http_header('date')
+            if date_str is None:
+                if self.metadata is not None:
+                    self.metadata['headers'].append((
+                        'date',
+                        http_date.format(datetime.datetime.now(datetime.timezone.utc))
+                    ))
+                    assert self.date is not None
+            
+            return self
     
     @staticmethod
-    def _create(resource, *, request_cookie=None, error=None, metadata=None, body_stream=None) -> ResourceRevision:
+    def _create(
+            resource: Resource,
+            *, request_cookie: Optional[str]=None,
+            error: Optional[Exception]=None,
+            metadata: Optional[ResourceRevisionMetadata]=None,
+            body_stream: Optional[io.BytesIO]=None
+            ) -> ResourceRevision:
         self = ResourceRevision()
         self.resource = resource
         self.request_cookie = request_cookie
@@ -1001,7 +1046,12 @@ class ResourceRevision(object):
         return self
     
     @staticmethod
-    def load(resource, request_cookie, error, metadata, id) -> ResourceRevision:
+    def load(
+            resource: Resource,
+            request_cookie: Optional[str],
+            error: Optional[Exception],
+            metadata: Optional[ResourceRevisionMetadata],
+            id: int) -> ResourceRevision:
         self = ResourceRevision()
         self.resource = resource
         self.request_cookie = request_cookie
@@ -1089,15 +1139,17 @@ class ResourceRevision(object):
         """Returns whether this resource is a redirect."""
         return self.is_http and (self.metadata['status_code'] // 100) == 3
     
-    def _get_first_value_of_http_header(self, name):
-        name = name.lower()
+    def _get_first_value_of_http_header(self, name: str) -> Optional[str]:
+        name = name.lower()  # reinterpret
+        if self.metadata is None:
+            return None
         for (cur_name, cur_value) in self.metadata['headers']:
             if name == cur_name.lower():
                 return cur_value
         return None
     
     @property
-    def redirect_url(self):
+    def redirect_url(self) -> Optional[str]:
         """
         Returns the resource to which this resource redirects,
         or None if it cannot be determined or this is not a redirect.
@@ -1108,9 +1160,12 @@ class ResourceRevision(object):
             return None
     
     @property
-    def _redirect_title(self):
+    def _redirect_title(self) -> Optional[str]:
         if self.is_redirect:
-            return '%s %s' % (self.metadata['status_code'], self.metadata['reason_phrase'])
+            metadata = self.metadata  # cache
+            if metadata is None:
+                return None
+            return '%s %s' % (metadata['status_code'], metadata['reason_phrase'])
         else:
             return None
     
@@ -1164,6 +1219,61 @@ class ResourceRevision(object):
     def is_json(self) -> bool:
         """Returns whether this resource is JSON."""
         return self.content_type == 'application/json'
+    
+    @property
+    def date(self) -> Optional[datetime.datetime]:
+        """
+        The datetime this revision was generated by the original origin server,
+        or None if unknown.
+        """
+        date_str = self._get_first_value_of_http_header('date')
+        if date_str is None:
+            # No Date HTTP header
+            return None
+        try:
+            date = http_date.parse(date_str)
+        except ValueError:
+            # Invalid Date HTTP header
+            return None
+        else:
+            return date.replace(tzinfo=datetime.timezone.utc)
+    
+    @property
+    def age(self) -> Optional[int]:
+        """
+        The time in seconds this revision was in a proxy cache,
+        or None if unknown.
+        """
+        age_str = self._get_first_value_of_http_header('age')
+        if age_str is None:
+            # No Age HTTP header
+            return None
+        try:
+            age = int(age_str)  # may raise ValueError
+            if age < 0:
+                raise ValueError()
+            return age
+        except ValueError:
+            # Invalid Age HTTP header
+            return None
+    
+    @property
+    def date_plus_age(self) -> Optional[datetime.datetime]:
+        """
+        The datetime this revision was generated by the intermediate
+        server it was fetched from, in server time, or None if unknown.
+        
+        Should approximately equal the datetime this revision was fetched.
+        """
+        date = self.date  # cache
+        if date is None:
+            # No Date HTTP header
+            return None
+        age = self.age  # cache
+        if age is None:
+            return date
+        else:
+            return date + datetime.timedelta(seconds=age)
     
     # === Body ===
     

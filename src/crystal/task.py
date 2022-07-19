@@ -322,12 +322,9 @@ class DownloadResourceBodyTask(Task):
         CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
         """
-        # If the resource is already up-to-date, return its default revision
+        # Return the resource's fresh (already-downloaded) default revision if available
         def fg_task():
-            if self._resource.up_to_date():
-                return self._resource.default_revision(stale_ok=False)
-            else:
-                return None
+            return self._resource.default_revision(stale_ok=False)
         body_revision = fg_call_and_wait(fg_task)
         if body_revision is not None:
             return body_revision
