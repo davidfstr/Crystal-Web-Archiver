@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import Callable, Iterator, NoReturn
+from typing import Callable, Iterator, NoReturn, Optional
 
 
 def is_wrapped_object_deleted_error(e: Exception) -> bool:
@@ -23,7 +23,13 @@ def wrapped_object_deleted_error_ignored() -> Iterator[None]:
 
 
 @contextmanager
-def wrapped_object_deleted_error_raising(raiser: Callable[[], NoReturn]) -> Iterator[None]:
+def wrapped_object_deleted_error_raising(
+        raiser: Optional[Callable[[], NoReturn]]=None
+        ) -> Iterator[None]:
+    if raiser is None:
+        def default_raiser() -> NoReturn:
+            raise WindowDeletedError()
+        raiser = default_raiser
     try:
         yield
     except Exception as e:

@@ -12,6 +12,7 @@ from __future__ import annotations
 from crystal.progress import OpenProjectProgressListener
 from crystal.util.wx_bind import bind
 from crystal.util.wx_error import (
+    is_wrapped_object_deleted_error,
     WindowDeletedError,
     wrapped_object_deleted_error_ignored,
     wrapped_object_deleted_error_raising
@@ -103,7 +104,13 @@ class TreeView:
     
     @property
     def selected_node(self) -> Optional[NodeView]:
-        selected_node_id = self.peer.GetSelection()
+        try:
+            selected_node_id = self.peer.GetSelection()
+        except Exception as e:
+            if is_wrapped_object_deleted_error(e):
+                return None
+            else:
+                raise
         return self.peer.GetItemData(selected_node_id) if selected_node_id.IsOk() else None
     
     def get_image_id_for_bitmap(self, bitmap: wx.Bitmap) -> ImageIndex:
