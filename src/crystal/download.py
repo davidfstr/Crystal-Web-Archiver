@@ -69,7 +69,7 @@ class ResourceRequest:
     def create(url: str, request_cookie: Optional[str]=None) -> 'ResourceRequest':
         """
         Raises:
-        urllib.error.URLError -- if URL scheme not supported.
+        * urllib.error.URLError -- if URL scheme not supported.
         """
         url_parts = urlparse(url)
         if url_parts.scheme in ('http', 'https'):

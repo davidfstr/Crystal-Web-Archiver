@@ -331,7 +331,7 @@ class DownloadResourceBodyTask(Task):
     def __call__(self):
         """
         Raises:
-        CannotDownloadWhenProjectReadOnlyError --
+        * CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
         """
         # Return the resource's fresh (already-downloaded) default revision if available

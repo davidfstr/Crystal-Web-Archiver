@@ -626,7 +626,7 @@ class Resource:
         A top-level Task will be created internally to display the progress.
         
         Future Raises:
-        CannotDownloadWhenProjectReadOnlyError --
+        * CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
         """
         task = self.create_download_body_task()
@@ -665,7 +665,7 @@ class Resource:
         which enables additional optimizations.
         
         Future Raises:
-        CannotDownloadWhenProjectReadOnlyError --
+        * CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
         """
         task = self.create_download_task(needs_result=needs_result)
@@ -860,10 +860,10 @@ class RootResource:
         resource -- `Resource`.
         
         Raises:
-        CrossProjectReferenceError -- if `resource` belongs to a different project.
-        RootResource.AlreadyExists -- if there is already a `RootResource` associated
-                                      with the specified resource.
-        ProjectReadOnlyError
+        * CrossProjectReferenceError -- if `resource` belongs to a different project.
+        * RootResource.AlreadyExists -- 
+            if there is already a `RootResource` associated with the specified resource.
+        * ProjectReadOnlyError
         """
         
         if resource.project != project:
