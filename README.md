@@ -190,6 +190,9 @@ Release Notes ⋮
           on the foreground thread correctly.
         * Crashes that occur in wx.Bind() event handlers no longer
           destabilize the program.
+    * Various errors of the form
+      `wrapped C/C++ object of type X has been deleted` that could be raised
+      while Crystal is closing a project are now handled correctly.
 
 ### v1.3.0b <small>(July 10, 2022)</small>
 

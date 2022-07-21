@@ -225,7 +225,7 @@ class Task:
                 return None
         else:
             if len(self.children) == 0:
-                raise ValueError('Container task has no children tasks.')
+                raise ValueError(f'Container task has no children tasks: {self!r}')
             
             if self.scheduling_style == SCHEDULING_STYLE_NONE:
                 raise ValueError('Container task has not specified a scheduling style.')

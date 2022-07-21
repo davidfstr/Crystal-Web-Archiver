@@ -11,8 +11,13 @@ from __future__ import annotations
 
 from crystal.progress import OpenProjectProgressListener
 from crystal.util.wx_bind import bind
+from crystal.util.wx_error import (
+    WindowDeletedError,
+    wrapped_object_deleted_error_ignored,
+    wrapped_object_deleted_error_raising
+)
 from crystal.util.xthreading import is_foreground_thread
-from typing import Dict, List, NewType, Optional, Tuple
+from typing import Dict, List, NewType, NoReturn, Optional, Tuple
 import wx
 
 
@@ -228,35 +233,38 @@ class NodeView:
         old_children = self._children
         self._children = new_children
         if self.peer:
-            if not self.peer.GetFirstChild()[0].IsOk():
-                # Add initial children
-                part_index = 0
-                for (index, child) in enumerate(new_children):
-                    # TODO: Consider storing _order_index in a separate
-                    #       child_2_order_index dict rather than annotating
-                    #       the child object directly
-                    child._order_index = index  # type: ignore[attr-defined]
-                    if progress_listener is not None:
-                        progress_listener.creating_entity_tree_node(part_index)
-                        part_index += len(child.children)
-                    child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
-            else:
-                # Replace existing children, preserving old ones that match new ones
-                old_children_set = set(old_children)
-                
-                children_to_delete = old_children_set - set(new_children)
-                for child in children_to_delete:
-                    if child.peer is not None:
-                        child.peer.Delete()
-                
-                children_to_add = [new_child for new_child in new_children if new_child not in old_children_set]
-                for child in children_to_add:
-                    child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
-                
-                # Reorder children
-                for (index, child) in enumerate(new_children):
-                    child._order_index = index  # type: ignore[attr-defined]
-                self.peer.SortChildren()
+            try:
+                if not self.peer.GetFirstChild()[0].IsOk():
+                    # Add initial children
+                    part_index = 0
+                    for (index, child) in enumerate(new_children):
+                        # TODO: Consider storing _order_index in a separate
+                        #       child_2_order_index dict rather than annotating
+                        #       the child object directly
+                        child._order_index = index  # type: ignore[attr-defined]
+                        if progress_listener is not None:
+                            progress_listener.creating_entity_tree_node(part_index)
+                            part_index += len(child.children)
+                        child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
+                else:
+                    # Replace existing children, preserving old ones that match new ones
+                    old_children_set = set(old_children)
+                    
+                    children_to_delete = old_children_set - set(new_children)
+                    for child in children_to_delete:
+                        if child.peer is not None:
+                            child.peer.Delete()
+                    
+                    children_to_add = [new_child for new_child in new_children if new_child not in old_children_set]
+                    for child in children_to_add:
+                        child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
+                    
+                    # Reorder children
+                    for (index, child) in enumerate(new_children):
+                        child._order_index = index  # type: ignore[attr-defined]
+                    self.peer.SortChildren()
+            except WindowDeletedError:
+                pass
     
     def append_child(self, child: NodeView) -> None:
         self.children = self.children + [child]
@@ -313,50 +321,61 @@ class NodeViewPeer(tuple):
         assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
-            self.tree_peer.SetItemData(node_id, obj)
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.SetItemData(node_id, obj)
     
     def SetItemText(self, text: str) -> None:
         assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
-            self.tree_peer.SetItemText(node_id, text)
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.SetItemText(node_id, text)
     
     def SetItemHasChildren(self, has: bool) -> None:
         assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
-            self.tree_peer.SetItemHasChildren(node_id, has)
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.SetItemHasChildren(node_id, has)
     
     def GetFirstChild(self) -> Tuple[wx.TreeItemId, object]:
         assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
-            return self.tree_peer.GetFirstChild(node_id)
+            with wrapped_object_deleted_error_raising(self._raise_no_longer_exists):
+                return self.tree_peer.GetFirstChild(node_id)
         else:
-            raise ValueError('Tree item no longer exists')
+            self._raise_no_longer_exists()
     
     def AppendItem(self, text: str, *args) -> wx.TreeItemId:
         assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
-            return self.tree_peer.AppendItem(node_id, text, *args)
+            with wrapped_object_deleted_error_raising(self._raise_no_longer_exists):
+                return self.tree_peer.AppendItem(node_id, text, *args)
         else:
-            raise ValueError('Tree item no longer exists')
+            self._raise_no_longer_exists()
     
     def SetItemImage(self, image: ImageIndex, which: wx.TreeItemIcon) -> None:
         assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
-            self.tree_peer.SetItemImage(node_id, image, which)
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.SetItemImage(node_id, image, which)
     
     def Delete(self) -> None:
         assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
-            self.tree_peer.Delete(node_id)
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.Delete(node_id)
     
     def SortChildren(self) -> None:
         assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
-            self.tree_peer.SortChildren(node_id)
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.SortChildren(node_id)
+    
+    def _raise_no_longer_exists(self) -> NoReturn:
+        raise WindowDeletedError('Tree item no longer exists')
