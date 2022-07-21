@@ -17,8 +17,10 @@ from urllib.parse import urljoin, urlparse, urlunparse
 if TYPE_CHECKING:
     from crystal.model import ResourceGroup, RootResource
 
+
 _ID_SET_PREFIX = 101
 _ID_CLEAR_PREFIX = 102
+
 
 class EntityTree:
     """
@@ -149,6 +151,7 @@ class EntityTree:
         new_url_components[2] = new_path
         return urlunparse(new_url_components)
 
+
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     """
     Returns copy of `new_seq`, replacing each element with an equivalent member of
@@ -159,7 +162,9 @@ def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     old_seq_selfdict = dict([(x, x) for x in old_seq])
     return [old_seq_selfdict.get(x, x) for x in new_seq]
 
+
 NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
+
 
 class Node:
     def __init__(self):
@@ -228,6 +233,7 @@ class Node:
     def __repr__(self):
         return '<%s titled %s at %s>' % (type(self).__name__, repr(self.view.title), hex(id(self)))
 
+
 class RootNode(Node):
     def __init__(self, project: Project, view: NodeView, progress_listener: OpenProjectProgressListener) -> None:
         super().__init__()
@@ -259,6 +265,7 @@ class RootNode(Node):
         
         self.set_children(children, progress_listener)
 
+
 class _LoadingNode(Node):
     def __init__(self):
         super().__init__()
@@ -269,6 +276,7 @@ class _LoadingNode(Node):
     def update_children(self):
         pass
 
+
 class _ChildrenUnavailableBecauseReadOnlyNode(Node):
     def __init__(self):
         super().__init__()
@@ -278,6 +286,7 @@ class _ChildrenUnavailableBecauseReadOnlyNode(Node):
     
     def update_children(self):
         pass
+
 
 class _ResourceNode(Node):
     """Base class for `Node`s whose children is derived from the links in a `Resource`."""
@@ -416,6 +425,7 @@ class _ResourceNode(Node):
         
         self.children = children
 
+
 class RootResourceNode(_ResourceNode):
     def __init__(self, root_resource):
         self.root_resource = root_resource
@@ -437,6 +447,7 @@ class RootResourceNode(_ResourceNode):
     def __hash__(self):
         return hash(self.root_resource)
 
+
 class NormalResourceNode(_ResourceNode):
     def __init__(self, resource):
         self.resource = resource
@@ -455,6 +466,7 @@ class NormalResourceNode(_ResourceNode):
             self.resource == other.resource)
     def __hash__(self):
         return hash(self.resource)
+
 
 class LinkedResourceNode(_ResourceNode):
     def __init__(self, resource, links):
@@ -485,6 +497,7 @@ class LinkedResourceNode(_ResourceNode):
     def __hash__(self):
         return hash(self.resource) ^ hash(self.links)
 
+
 class ClusterNode(Node):
     def __init__(self, title, children, icon_set=None):
         super().__init__()
@@ -502,6 +515,7 @@ class ClusterNode(Node):
             self.children == other.children)
     def __hash__(self):
         return hash(self._children_tuple)
+
 
 class ResourceGroupNode(Node):
     def __init__(self, resource_group):
@@ -542,6 +556,7 @@ class ResourceGroupNode(Node):
     def __hash__(self):
         return hash(self.resource_group)
 
+
 class GroupedLinkedResourcesNode(Node):
     def __init__(self, resource_group, root_rsrc_nodes, linked_rsrc_nodes):
         self.resource_group = resource_group
@@ -569,6 +584,7 @@ class GroupedLinkedResourcesNode(Node):
             self.children == other.children)
     def __hash__(self):
         return hash(self._children_tuple)
+
 
 # ------------------------------------------------------------------------------
 

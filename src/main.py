@@ -245,6 +245,7 @@ def main(args: List[str]) -> None:
         # Re-launch, reopening the initial dialog
         last_project = _did_launch(parsed_args, shell)
 
+
 def _check_environment():
     # Check for dependencies
     if not _running_as_bundle():
@@ -262,12 +263,14 @@ def _check_environment():
                 'This application requires BeautifulSoup to be installed. ' +
                 'Download it from http://www.crummy.com/software/BeautifulSoup/')
 
+
 def _running_as_bundle():
     """
     Returns whether we are running in a bundled environment,
     such as py2exe or py2app.
     """
     return hasattr(sys, 'frozen')
+
 
 def _did_launch(
         parsed_args,
@@ -314,6 +317,7 @@ def _did_launch(
         project.start_server()
     
     return project
+
 
 def _prompt_for_project(
         progress_listener: OpenProjectProgressListener,
@@ -373,6 +377,7 @@ def _prompt_for_project(
     finally:
         dialog.Destroy()
 
+
 def _prompt_to_create_project(
         parent: wx.Window,
         progress_listener: OpenProjectProgressListener,
@@ -400,6 +405,7 @@ def _prompt_to_create_project(
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
+
 
 def _prompt_to_open_project(
         parent: wx.Window,
@@ -447,6 +453,7 @@ def _prompt_to_open_project(
     
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
+
 def _load_project(
         project_path: str,
         progress_listener: OpenProjectProgressListener,
@@ -460,6 +467,7 @@ def _load_project(
     # TODO: If errors while loading a project (ex: bad format),
     #       present them to the user nicely
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
+
 
 # ------------------------------------------------------------------------------
 

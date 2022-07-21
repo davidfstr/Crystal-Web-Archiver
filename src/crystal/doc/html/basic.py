@@ -8,6 +8,7 @@ from crystal.doc.generic import Document, Link
 import re
 from typing import Optional
 
+
 def parse_html_and_links(
         html_bytes: bytes, 
         declared_charset: Optional[str]=None
@@ -34,12 +35,14 @@ def parse_html_and_links(
     
     return (BasicDocument(dividers_and_links), links)
 
+
 class BasicDocument(Document):
     def __init__(self, dividers_and_links: 'list[str | BasicLink]') -> None:
         self._dividers_and_links = dividers_and_links
     
     def __str__(self) -> str:
         return ''.join([str(item) for item in self._dividers_and_links])
+
 
 class BasicLink(Link):
     def __init__(self, quoted_href: str) -> None:

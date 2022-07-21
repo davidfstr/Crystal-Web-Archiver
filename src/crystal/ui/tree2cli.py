@@ -25,6 +25,7 @@ class TreeView:
         _print_node(self.root, 0)
         print()
 
+
 class NodeView:
     def __init__(self):
         self._tree = None

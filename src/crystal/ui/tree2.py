@@ -8,6 +8,7 @@ from crystal.ui.tree import NodeView as NodeView1
 # Clients should be able to import TreeView from this package
 from crystal.ui.tree import TreeView
 
+
 class NodeView(NodeView1):
     def __init__(self):
         super().__init__()

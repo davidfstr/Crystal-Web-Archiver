@@ -2,7 +2,9 @@ from crystal.util.wx_bind import bind
 from typing import Callable, Optional
 import wx
 
+
 _WINDOW_INNER_PADDING = 10
+
 
 class BetterMessageDialog(wx.Dialog):
     """

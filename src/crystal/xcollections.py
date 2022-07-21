@@ -5,6 +5,7 @@ extended collections in the standard `collections` module.
 
 from collections import OrderedDict
 
+
 class simpleorderedset:
     """Ordered set that supports a limited set of operations."""
     
@@ -27,6 +28,7 @@ class simpleorderedset:
     
     def __iter__(self):
         return self.items.__iter__()
+
 
 class defaultordereddict(OrderedDict):
     def __init__(self, default_factory=None):

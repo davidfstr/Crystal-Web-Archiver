@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Callable
 
+
 class DatabaseConnection:
     """Wraps a sqlite3.dbapi2.Connection, ensuring that it is used correctly."""
     
@@ -18,6 +19,7 @@ class DatabaseConnection:
     
     def __getattr__(self, attr_name: str):
         return getattr(self._db, attr_name)
+
 
 class DatabaseCursor:
     """Wraps a sqlite3.dbapi2.Cursor, ensuring that it is used correctly."""
@@ -53,6 +55,7 @@ class DatabaseCursor:
     def __getattr__(self, attr_name: str):
         return getattr(self._c, attr_name)
 
+
 def get_column_names_of_table(c: DatabaseCursor, table_name: str) -> list[str]:
     return [
         column_name
@@ -60,6 +63,7 @@ def get_column_names_of_table(c: DatabaseCursor, table_name: str) -> list[str]:
         # NOTE: Cannot use regular '?' placeholder in this PRAGMA
         in c.execute('PRAGMA table_info(%s)' % (table_name,))
     ]
+
 
 def is_no_such_column_error_for(column_name: str, e: Exception) -> bool:
     return (

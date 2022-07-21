@@ -28,13 +28,16 @@ from typing import Dict, Generator, List, Optional
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 from .xthreading import bg_call_later, fg_call_and_wait
 
+
 _SERVER_PORT = 2797
+
 
 def start(project: Project) -> ProjectServer:
     """
     Starts the archive server on a daemon thread.
     """
     return ProjectServer(project)
+
 
 class ProjectServer:
     def __init__(self, project: Project) -> None:
@@ -53,6 +56,7 @@ class ProjectServer:
     def close(self) -> None:
         self._server.shutdown()
 
+
 def get_request_url(archive_url: str, project: Project) -> str:
     """
     Given the absolute URL of a resource, returns the URL that should be used to
@@ -61,6 +65,7 @@ def get_request_url(archive_url: str, project: Project) -> str:
     request_host = 'localhost:%s' % _SERVER_PORT
     return _RequestHandler.get_request_url_with_host(
         archive_url, request_host, project.default_url_prefix)
+
 
 # ------------------------------------------------------------------------------
 
@@ -200,8 +205,10 @@ _HEADER_DENYLIST = set([
 # consistent value, allowing those generated URLs to be cached effectively.
 _ENABLE_PIN_DATE_MITIGATION = True
 
+
 class _HttpServer(HTTPServer):
     project: Project
+
 
 class _RequestHandler(BaseHTTPRequestHandler):
     # Prevent slow/broken request from blocking all other requests
@@ -762,6 +769,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):  # override
         print_info(format % args)
 
+
 _PIN_DATE_JS_TEMPLATE = dedent(
     """
     window.Date = (function() {
@@ -788,5 +796,6 @@ _PIN_DATE_JS_TEMPLATE = dedent(
 
 def _pin_date_js(timestamp: int) -> str:
     return _PIN_DATE_JS_TEMPLATE % timestamp
+
 
 # ------------------------------------------------------------------------------

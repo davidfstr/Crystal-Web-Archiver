@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
-
 from crystal.model import ResourceGroup
 from crystal.util.wx_bind import bind
 import sys
 import wx
 
+
 _WINDOW_INNER_PADDING = 10
 _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
+
 
 class AddGroupDialog:
     # === Init ===

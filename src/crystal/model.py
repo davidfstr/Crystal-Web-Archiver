@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from crystal.server import ProjectServer
     from crystal.task import DownloadResourceTask, DownloadResourceGroupTask, Task
 
+
 class Project:
     """
     Groups together a set of resources that are downloaded and any associated settings.
@@ -418,14 +419,18 @@ class Project:
             self._server = None
         self._db.close()
 
+
 class CrossProjectReferenceError(Exception):
     pass
+
 
 class ProjectFormatError(Exception):
     pass
 
+
 class ProjectReadOnlyError(Exception):
     pass
+
 
 class _WeakTaskRef:
     """
@@ -447,6 +452,7 @@ class _WeakTaskRef:
     
     def task_did_complete(self, task):
         self.task = None
+
 
 class Resource:
     """
@@ -834,6 +840,7 @@ class Resource:
     def __repr__(self):
         return "Resource(%s)" % (repr(self.url),)
 
+
 class RootResource:
     """
     Represents a resource whose existence is manually defined by the user.
@@ -923,6 +930,7 @@ class RootResource:
         that is already associated with an existing `RootResource`.
         """
         pass
+
 
 class ResourceRevision:
     """
@@ -1364,11 +1372,13 @@ class ResourceRevision:
     def __repr__(self):
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
 
+
 class ResourceRevisionMetadata(TypedDict):
     http_version: int  # 10 for HTTP/1.0, 11 for HTTP/1.1
     status_code: int
     reason_phrase: str
     headers: list[tuple[str, str]]  # email.message.EmailMessage
+
 
 class _PersistedError(Exception):
     """
@@ -1380,7 +1390,9 @@ class _PersistedError(Exception):
         self.message = message
         self.type = type
 
+
 ResourceGroupSource = Union['RootResource', 'ResourceGroup', None]
+
 
 class ResourceGroup:
     """

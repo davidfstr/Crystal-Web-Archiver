@@ -15,6 +15,7 @@ from crystal.xthreading import is_foreground_thread
 from typing import Dict, List, NewType, Optional, Tuple
 import wx
 
+
 IconSet = Tuple[Tuple[wx.TreeItemIcon, wx.Bitmap], ...]
 ImageIndex = NewType('ImageIndex', int)
 
@@ -50,6 +51,7 @@ _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR = dict(zip(
     [et.typeId for et in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR],
     _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR.values()
 ))
+
 
 class TreeView:
     """
@@ -129,6 +131,7 @@ class TreeView:
             if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
                 getattr(self.delegate, delegate_callable_attr)(event, node_view)
 
+
 class _OrderedTreeCtrl(wx.TreeCtrl):
     def OnCompareItems(self, item1, item2):
         (item1_view, item2_view) = (self.GetItemData(item1), self.GetItemData(item2))
@@ -141,6 +144,7 @@ class _OrderedTreeCtrl(wx.TreeCtrl):
             return 0
         assert isinstance(order_index_1, int) and isinstance(order_index_2, int)
         return order_index_1 - order_index_2
+
 
 class NodeView:
     """
@@ -285,6 +289,7 @@ class NodeView:
             delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
             if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
                 getattr(self.delegate, delegate_callable_attr)(event)
+
 
 class NodeViewPeer(tuple):
     def __new__(cls, tree: TreeView, node_id: wx.TreeItemId):

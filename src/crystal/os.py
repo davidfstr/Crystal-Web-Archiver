@@ -1,5 +1,6 @@
 import platform
 
+
 def project_appears_as_package_file():
     """
     Returns whether *.crystalproj items appear as package files on this platform.
@@ -10,8 +11,10 @@ def project_appears_as_package_file():
     """
     return is_mac_os()
 
+
 def is_mac_os() -> bool:
     return (platform.system() == 'Darwin')
+
 
 def is_windows() -> bool:
     return (platform.system() == 'Windows')

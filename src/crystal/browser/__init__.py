@@ -13,6 +13,7 @@ import wx
 
 _WINDOW_INNER_PADDING = 10
 
+
 class MainWindow:
     entity_tree: EntityTree
     

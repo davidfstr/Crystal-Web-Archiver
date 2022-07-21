@@ -4,6 +4,7 @@ Provides services for downloading a ResourceRevision.
 
 from collections import defaultdict
 from crystal import __version__
+from crystal.os import is_windows
 from crystal.model import Resource, ResourceRevision, ResourceRevisionMetadata
 from http.client import HTTPConnection, HTTPSConnection
 import io
@@ -14,8 +15,10 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
+
 # The User-Agent string to use for downloads, or None to omit.
 _USER_AGENT_STRING = 'Crystal/%s (https://dafoster.net/projects/crystal-web-archiver/)' % __version__
+
 
 def download_resource_revision(resource: Resource, progress_listener) -> ResourceRevision:
     """
@@ -56,6 +59,7 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
             request_cookie
         )
 
+
 class ResourceRequest:
     """
     Encapsulates a request to fetch a resource.
@@ -84,6 +88,7 @@ class ResourceRequest:
         Raises any Exception.
         """
         raise NotImplementedError
+
 
 class HttpResourceRequest(ResourceRequest):
     def __init__(self, url: str, request_cookie: Optional[str]=None) -> None:
@@ -132,6 +137,7 @@ class HttpResourceRequest(ResourceRequest):
     def __repr__(self):
         return 'HttpResourceRequest(%s)' % repr(self.url)
 
+
 class UrlResourceRequest(ResourceRequest):
     def __init__(self, url):
         self.url = url
@@ -150,7 +156,7 @@ _SSL_CONTEXT = None
 def get_ssl_context():
     global _SSL_CONTEXT
     if _SSL_CONTEXT is None:
-        if platform.system() == 'Windows':
+        if is_windows():
             # Use Windows default CA certificates
             cafile = None
         else:

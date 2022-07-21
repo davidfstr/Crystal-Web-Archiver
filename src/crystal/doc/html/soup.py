@@ -10,6 +10,7 @@ import json
 import re
 from typing import Optional
 
+
 _ANY_RE = re.compile(r'.*')
 
 _INPUT_RE = re.compile(r'(?i)input')
@@ -23,6 +24,7 @@ _QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")((?:https?:)?\\?/\\?/[^/][^"]+)"
 ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
 PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
+
 
 def parse_html_and_links(
         html_bytes: bytes, 
@@ -174,6 +176,7 @@ def parse_html_and_links(
     
     return (HtmlDocument(html), links)
 
+
 def _get_image_tag_title(tag):
     if 'alt' in tag.attrs:
         return tag['alt']
@@ -181,6 +184,7 @@ def _get_image_tag_title(tag):
         return tag['title']
     else:
         return None
+
 
 class HtmlDocument(Document):
     def __init__(self, html: BeautifulSoup) -> None:
@@ -199,6 +203,7 @@ class HtmlDocument(Document):
     
     def __str__(self) -> str:
         return str(self._html)
+
 
 # TODO: Split this internally into three subclasses
 class HtmlLink(Link):

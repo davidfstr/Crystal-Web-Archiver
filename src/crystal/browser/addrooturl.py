@@ -1,9 +1,11 @@
 from crystal.util.wx_bind import bind
 import wx
 
+
 _WINDOW_INNER_PADDING = 10
 _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
+
 
 class AddRootUrlDialog:
     # === Init ===

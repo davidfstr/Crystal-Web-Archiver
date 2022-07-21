@@ -11,6 +11,7 @@ import sys
 import threading
 import wx
 
+
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.
 _PROFILE_FG_TASKS = True
@@ -20,11 +21,14 @@ _PROFILE_FG_TASKS = True
 # exceeds this threshold.
 _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
 
+
 def is_foreground_thread() -> bool:
     return _foreground_thread_exists() and wx.IsMainThread()
 
+
 def _foreground_thread_exists() -> bool:
     return wx.GetApp() is not None
+
 
 def _create_profiled_callable(callable, *args):
     """
@@ -59,6 +63,7 @@ def _create_profiled_callable(callable, *args):
                     start_line_number))
     return profiled_callable
 
+
 # TODO: Consider renaming this to 'fg_call_soon' and have the
 #       (force == True) variant still be called 'fg_call_later'.
 #       This new naming stresses that the "soon" variant could
@@ -80,6 +85,7 @@ def fg_call_later(callable, force=False, *args):
         callable(*args)
     else:
         wx.CallAfter(callable, *args)
+
 
 def fg_call_and_wait(callable, *args):
     """
@@ -122,6 +128,7 @@ def fg_call_and_wait(callable, *args):
             raise exc_info[1].with_traceback(exc_info[2])
         
         return callable_result[0]
+
 
 def bg_call_later(callable, daemon=False, *args):
     """

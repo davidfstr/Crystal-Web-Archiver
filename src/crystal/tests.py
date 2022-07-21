@@ -17,9 +17,12 @@ import urllib.request
 import urllib.error
 import wx
 
+
 _T = TypeVar('_T')
 
-# === Test Runner ===
+
+# ------------------------------------------------------------------------------
+# Test Runner
 
 def run_test(async_test_func: Callable[[], Awaitable[None]]) -> None:
     if is_foreground_thread():
@@ -44,6 +47,7 @@ def run_test(async_test_func: Callable[[], Awaitable[None]]) -> None:
         except Exception as e:
             last_command_result = e
 
+
 @asyncio.coroutine
 def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
         duration: float
@@ -61,6 +65,7 @@ def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
         raise none_or_error
     else:
         raise AssertionError()
+
 
 @asyncio.coroutine
 def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
@@ -82,9 +87,11 @@ def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
     else:
         raise AssertionError()
 
+
 class Command(Generic[_T]):  # abstract
     def run(self) -> _T:
         raise NotImplementedError()
+
 
 class SleepCommand(Command[None]):
     def __init__(self, delay: float) -> None:
@@ -94,6 +101,7 @@ class SleepCommand(Command[None]):
         assert not is_foreground_thread()
         
         time.sleep(self._delay)
+
 
 class FetchUrlCommand(Command['WebPage']):
     def __init__(self, url: str, headers: Optional[Dict[str, str]], timeout: float) -> None:
@@ -117,7 +125,9 @@ class FetchUrlCommand(Command['WebPage']):
             response_text = response.read().decode('utf-8')
         return WebPage(response_stream.status, response_text)
 
-# === Tests ===
+
+# ------------------------------------------------------------------------------
+# Tests
 
 async def test_can_download_and_serve_a_static_site() -> None:
     """
@@ -450,8 +460,9 @@ async def test_can_download_and_serve_a_static_site() -> None:
             # Test can still view resource (that has a downloaded revision)
             assert False == (await is_url_not_in_archive(atom_feed_url))
 
+
 @skip('not yet automated')
-def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -> None:
+async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -> None:
     """
     Tests that can successfully download and serve a site containing
     JavaScript which dynamically fetches URLs that cannot be discovered
@@ -461,7 +472,9 @@ def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -> None
     """
     pass
 
-# === Utility: Window Abstractions ===
+
+# ------------------------------------------------------------------------------
+# Utility: Window Abstractions
 
 class OpenOrCreateDialog:
     open_or_create_project_dialog: wx.Dialog
@@ -528,6 +541,7 @@ class OpenOrCreateDialog:
         
         await mw.close()
 
+
 class MainWindow:
     main_window: wx.Frame
     entity_tree: wx.TreeCtrl
@@ -586,6 +600,7 @@ class MainWindow:
         await wait_for(lambda: not self.main_window.IsShown)
         await wait_for(not_condition(window_condition('cr-main-window')))
 
+
 class AddGroupDialog:
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
@@ -619,7 +634,9 @@ class AddGroupDialog:
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-add-group-dialog')))
 
-# === Utility: Wait for Download ===
+
+# ------------------------------------------------------------------------------
+# Utility: Wait for Download
 
 async def wait_for_download_to_start_and_finish(
         task_tree: wx.TreeCtrl,
@@ -698,7 +715,9 @@ async def wait_for_download_to_start_and_finish(
     # Ensure did finish downloading
     assert tree_has_no_children_condition(task_tree)()
 
-# === Utility: Wait While ===
+
+# ------------------------------------------------------------------------------
+# Utility: Wait While
 
 async def wait_while(
         progression_func: Callable[[], Optional[_T]],
@@ -762,6 +781,7 @@ async def wait_while(
                 else WaitTimedOut()
             )
 
+
 def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], Optional[str]]:
     def first_task_title():
         root_ti = TreeItem.GetRootItem(task_tree)
@@ -772,10 +792,13 @@ def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], Optiona
         return first_task_ti.Text
     return first_task_title
 
-# === Utility: Wait For ===
+
+# ------------------------------------------------------------------------------
+# Utility: Wait For
 
 _DEFAULT_WAIT_TIMEOUT = 2.0  # arbitrary
 _DEFAULT_WAIT_PERIOD = 0.1  # arbitrary
+
 
 async def wait_for(
         condition: Callable[[], Optional[_T]],
@@ -811,8 +834,10 @@ async def wait_for(
         
         await bg_sleep(period)
 
+
 class WaitTimedOut(Exception):
     pass
+
 
 def window_condition(name: str, *, hidden_ok: bool=False) -> Callable[[], Optional[wx.Window]]:
     def window() -> Optional[wx.Window]:
@@ -823,6 +848,7 @@ def window_condition(name: str, *, hidden_ok: bool=False) -> Callable[[], Option
             return None
         return window
     return window
+
 
 def first_child_of_tree_item_is_not_loading_condition(
         ti: TreeItem
@@ -836,15 +862,18 @@ def first_child_of_tree_item_is_not_loading_condition(
         return first_child_ti
     return first_child_of_tree_item_is_not_loading
 
+
 def tree_has_children_condition(
         tree: wx.TreeCtrl, 
         ) -> Callable[[], Optional[bool]]:
     return not_condition(tree_has_no_children_condition(tree))
 
+
 def tree_has_no_children_condition(
         tree: wx.TreeCtrl, 
         ) -> Callable[[], Optional[bool]]:
     return tree_item_has_no_children_condition(tree, tree.GetRootItem())
+
 
 def tree_item_has_no_children_condition(
         # TODO: Use TreeItem rather than (wx.TreeCtrl, wx.TreeItemId) pair
@@ -859,6 +888,7 @@ def tree_item_has_no_children_condition(
             return None
     return tree_item_has_no_children
 
+
 def not_condition(condition: Callable[[], Optional[_T]]) -> Callable[[], Optional[bool]]:
     def not_() -> Optional[bool]:
         if condition():
@@ -867,7 +897,9 @@ def not_condition(condition: Callable[[], Optional[_T]]) -> Callable[[], Optiona
             return True
     return not_
 
-# === Utility: Controls: wx.Button ===
+
+# ------------------------------------------------------------------------------
+# Utility: Controls: wx.Button
 
 def click_button(button: wx.Button) -> None:
     event = wx.PyCommandEvent(wx.EVT_BUTTON.typeId, button.GetId())
@@ -876,7 +908,9 @@ def click_button(button: wx.Button) -> None:
     
     button.Command(event)
 
-# === Utility: Controls: wx.FileDialog, wx.DirDialog ===
+
+# ------------------------------------------------------------------------------
+# Utility: Controls: wx.FileDialog, wx.DirDialog
 
 @contextmanager
 def package_dialog_returning(filepath: str) -> Iterator[None]:
@@ -887,6 +921,7 @@ def package_dialog_returning(filepath: str) -> Iterator[None]:
         with dir_dialog_returning(filepath):
             yield
 
+
 @contextmanager
 def file_dialog_returning(filepath: str) -> Iterator[None]:
     with unittest.mock.patch('wx.FileDialog', spec=True) as MockFileDialog:
@@ -895,6 +930,7 @@ def file_dialog_returning(filepath: str) -> Iterator[None]:
         instance.GetPath.return_value = filepath
         
         yield
+
 
 @contextmanager
 def dir_dialog_returning(filepath: str) -> Iterator[None]:
@@ -905,7 +941,9 @@ def dir_dialog_returning(filepath: str) -> Iterator[None]:
         
         yield
 
-# === Utility: Controls: wx.TreeCtrl ===
+
+# ------------------------------------------------------------------------------
+# Utility: Controls: wx.TreeCtrl
 
 def get_children_of_tree_item(tree: wx.TreeCtrl, tii: wx.TreeItemId) -> List[TreeItem]:
     children = []  # type: List[TreeItem]
@@ -914,6 +952,7 @@ def get_children_of_tree_item(tree: wx.TreeCtrl, tii: wx.TreeItemId) -> List[Tre
         children.append(TreeItem(tree, next_child_tii))
         next_child_tii = tree.GetNextSibling(next_child_tii)  # reinterpret
     return children
+
 
 class TreeItem:
     __slots__ = ['tree', 'id']
@@ -966,13 +1005,16 @@ class TreeItem:
         # wx.TreeItemId does not support equality comparison on Windows
         return NotImplemented
 
-# === Utility: Server ===
+
+# ------------------------------------------------------------------------------
+# Utility: Server
 
 @contextmanager
 def assert_does_open_webbrowser_to(request_url: str) -> Iterator[None]:
     with unittest.mock.patch('webbrowser.open', spec=True) as mock_open:
         yield
         mock_open.assert_called_with(request_url)
+
 
 def get_request_url(archive_url: str) -> str:
     from crystal.model import Project
@@ -987,11 +1029,13 @@ def get_request_url(archive_url: str) -> str:
     request_url = crystal.server.get_request_url(archive_url, project)
     return request_url
 
+
 async def is_url_not_in_archive(archive_url: str) -> bool:
     server_page = await fetch_archive_url(
         archive_url, 
         headers={'X-Crystal-Dynamic': 'False'})
     return server_page.is_not_in_archive
+
 
 async def fetch_archive_url(
         archive_url: str,
@@ -1001,6 +1045,7 @@ async def fetch_archive_url(
     if timeout is None:
         timeout = _DEFAULT_WAIT_TIMEOUT
     return await bg_fetch_url(get_request_url(archive_url), headers=headers, timeout=timeout)
+
 
 class WebPage:
     def __init__(self, status: int, content: str) -> None:
@@ -1022,3 +1067,6 @@ class WebPage:
             return None
         else:
             return m.group(1).strip()
+
+
+# ------------------------------------------------------------------------------

@@ -6,9 +6,14 @@ from typing import List, Optional, Union
 from .xfutures import Future
 from .xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 
+
+# ------------------------------------------------------------------------------
+# Task
+
 SCHEDULING_STYLE_NONE = 0
 SCHEDULING_STYLE_SEQUENTIAL = 1
 SCHEDULING_STYLE_ROUND_ROBIN = 2
+
 
 class Task:
     """
@@ -278,16 +283,22 @@ class Task:
         
         task.listeners.remove(self)
 
+
 class TaskDisposedException(Exception):
     pass
 
 _TASK_DISPOSED_EXCEPTION = TaskDisposedException()
 
+
 # ------------------------------------------------------------------------------
+# DownloadResourceTask
+
 from crystal.model import Resource
 from urllib.parse import urljoin
 
+
 DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
+
 
 def _get_abstract_resource_title(abstract_resource):
     """
@@ -299,6 +310,7 @@ def _get_abstract_resource_title(abstract_resource):
         return '%s - %s' % (resource.url, abstract_resource.name)
     else:
         return '%s' % (resource.url)
+
 
 class DownloadResourceBodyTask(Task):
     """
@@ -357,8 +369,10 @@ class DownloadResourceBodyTask(Task):
             self.subtitle = 'Waiting before performing next request...'
             sleep(DELAY_BETWEEN_DOWNLOADS)
 
+
 class CannotDownloadWhenProjectReadOnlyError(Exception):
     pass
+
 
 class DownloadResourceTask(Task):
     """
@@ -534,6 +548,7 @@ class DownloadResourceTask(Task):
             cur_task = cur_task.parent
         return ancestors
 
+
 class ParseResourceRevisionLinks(Task):
     """
     Parses the list of linked resources from the specified ResourceRevision.
@@ -556,6 +571,7 @@ class ParseResourceRevisionLinks(Task):
     def dispose(self) -> None:
         super().dispose()
         self._resource_revision = None
+
 
 _NO_VALUE = object()
 
@@ -584,8 +600,10 @@ class _PlaceholderTask(Task):  # abstract
         else:
             return None  # default value
 
+
 class _AlreadyDownloadedException(Exception):
     pass
+
 
 class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
     """
@@ -596,6 +614,7 @@ class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
             title='Already downloaded',
             exception=_AlreadyDownloadedException().with_traceback(None),
         )    
+
 
 class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
     """
@@ -611,8 +630,12 @@ class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
             prefinish=True,
         )
 
+
 # ------------------------------------------------------------------------------
+# DownloadResourceGroupTask
+
 from crystal.model import Resource, ResourceGroup, RootResource
+
 
 class UpdateResourceGroupMembersTask(Task):
     """
@@ -641,6 +664,7 @@ class UpdateResourceGroupMembersTask(Task):
         
         if self.num_children_complete == len(self.children):
             self.finish()
+
 
 class DownloadResourceGroupMembersTask(Task):
     """
@@ -682,6 +706,7 @@ class DownloadResourceGroupMembersTask(Task):
         if self.num_children_complete == len(self.children) and self._done_updating_group:
             self.finish()
 
+
 class DownloadResourceGroupTask(Task):
     """
     Downloads a resource group. This involves updating the groups set of
@@ -713,7 +738,9 @@ class DownloadResourceGroupTask(Task):
         if self.num_children_complete == len(self.children):
             self.finish()
 
+
 # ------------------------------------------------------------------------------
+# RootTask
 
 class RootTask(Task):
     """
@@ -741,11 +768,14 @@ class RootTask(Task):
         if all(c.complete for c in self.children):
             self.clear_children()
 
+
 # ------------------------------------------------------------------------------
+# Schedule
 
 # TODO: Eliminate polling by adding logic to sleep appropriately until the
 #       root task has more children to process.
 _ROOT_TASK_POLL_INTERVAL = .1 # secs
+
 
 def schedule_forever(task):
     """
@@ -762,6 +792,7 @@ def schedule_forever(task):
                 sleep(_ROOT_TASK_POLL_INTERVAL)
                 continue
         unit()
+
 
 def start_schedule_forever(task):
     """
@@ -783,3 +814,6 @@ def start_schedule_forever(task):
                     continue
             unit()  # Run unit directly on this bg thread
     bg_call_later(bg_task, daemon=True)
+
+
+# ------------------------------------------------------------------------------

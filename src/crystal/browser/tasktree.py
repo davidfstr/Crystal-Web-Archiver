@@ -3,6 +3,7 @@ from crystal.ui.tree2 import TreeView, NodeView
 from crystal.xthreading import fg_call_later
 import wx
 
+
 class TaskTree:
     """
     View controller for the task tree
@@ -19,6 +20,7 @@ class TaskTree:
     def peer(self) -> wx.TreeCtrl:
         """The wx.TreeCtrl controlled by this class."""
         return self.tree.peer
+
 
 class TaskTreeNode:
     """
