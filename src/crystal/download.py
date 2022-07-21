@@ -4,8 +4,8 @@ Provides services for downloading a ResourceRevision.
 
 from collections import defaultdict
 from crystal import __version__
-from crystal.os import is_windows
 from crystal.model import Resource, ResourceRevision, ResourceRevisionMetadata
+from crystal.util.xos import is_windows
 from http.client import HTTPConnection, HTTPSConnection
 import io
 import platform

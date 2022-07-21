@@ -4,7 +4,7 @@ import code
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
-from crystal.xthreading import fg_call_and_wait, is_foreground_thread
+from crystal.util.xthreading import fg_call_and_wait, is_foreground_thread
 import os
 from sys import version_info as python_version_info
 import threading

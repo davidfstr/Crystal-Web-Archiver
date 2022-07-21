@@ -1,6 +1,6 @@
 from crystal.task import Task
 from crystal.ui.tree2 import TreeView, NodeView
-from crystal.xthreading import fg_call_later
+from crystal.util.xthreading import fg_call_later
 import wx
 
 

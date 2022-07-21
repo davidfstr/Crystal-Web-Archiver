@@ -4,11 +4,11 @@ from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree
 from crystal.browser.tasktree import TaskTree
 from crystal.model import Project, Resource, ResourceGroup, RootResource
-from crystal.os import is_mac_os, is_windows
 from crystal.progress import OpenProjectProgressListener
 from crystal.task import RootTask
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.util.wx_bind import bind
+from crystal.util.xos import is_mac_os, is_windows
 import wx
 
 _WINDOW_INNER_PADDING = 10

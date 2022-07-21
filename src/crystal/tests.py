@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager, contextmanager
-from crystal.os import is_mac_os, project_appears_as_package_file
-from crystal.xthreading import fg_call_and_wait, is_foreground_thread
+from crystal.util.xos import is_mac_os, project_appears_as_package_file
+from crystal.util.xthreading import fg_call_and_wait, is_foreground_thread
 import re
 import tempfile
 import time

@@ -5,16 +5,17 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
-from crystal.cli import (
+from crystal.doc.generic import Document, Link
+from crystal.doc.html.soup import HtmlDocument
+from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
+from crystal.task import schedule_forever
+from crystal.util.cli import (
     print_error,
     print_info,
     print_success,
     print_warning,
 )
-from crystal.doc.generic import Document, Link
-from crystal.doc.html.soup import HtmlDocument
-from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
-from crystal.task import schedule_forever
+from crystal.util.xthreading import bg_call_later, fg_call_and_wait
 import datetime
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
@@ -26,7 +27,6 @@ import shutil
 from textwrap import dedent
 from typing import Dict, Generator, List, Optional
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
-from .xthreading import bg_call_later, fg_call_and_wait
 
 
 _SERVER_PORT = 2797

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from crystal.util.xfutures import Future
+from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 import sys
 from time import sleep
 from typing import List, Optional, Union
-from .xfutures import Future
-from .xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 
 
 # ------------------------------------------------------------------------------

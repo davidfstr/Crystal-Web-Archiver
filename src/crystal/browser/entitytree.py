@@ -8,8 +8,8 @@ from crystal.progress import (
 from crystal.task import CannotDownloadWhenProjectReadOnlyError
 from crystal.ui.tree import *
 from crystal.util.wx_bind import bind
-from crystal.xcollections import defaultordereddict
-from crystal.xthreading import bg_call_later, fg_call_later
+from crystal.util.xcollections import defaultordereddict
+from crystal.util.xthreading import bg_call_later, fg_call_later
 import threading
 from typing import List, Optional, TYPE_CHECKING, Union
 from urllib.parse import urljoin, urlparse, urlunparse

@@ -11,22 +11,22 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 from __future__ import annotations
 
 from collections import OrderedDict
-from crystal.db import (
-    DatabaseConnection,
-    DatabaseCursor,
-    get_column_names_of_table,
-    is_no_such_column_error_for,
-)
 from crystal.plugins import (
     phpbb as plugins_phpbb,
     substack as plugins_substack,
 )   
 from crystal.progress import DummyOpenProjectProgressListener, OpenProjectProgressListener
-from crystal.urls import is_unrewritable_url, requote_uri
 from crystal.util import http_date
+from crystal.util.db import (
+    DatabaseConnection,
+    DatabaseCursor,
+    get_column_names_of_table,
+    is_no_such_column_error_for,
+)
+from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.xdatetime import datetime_is_aware
-from crystal.xfutures import Future
-from crystal.xthreading import bg_call_later, fg_call_and_wait
+from crystal.util.xfutures import Future
+from crystal.util.xthreading import bg_call_later, fg_call_and_wait
 import cgi
 import datetime
 import io

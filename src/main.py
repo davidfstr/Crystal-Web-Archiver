@@ -163,7 +163,7 @@ def main(args: List[str]) -> None:
     
     # Starts tests if requested
     if parsed_args.test:
-        from crystal.xthreading import bg_call_later, fg_call_later
+        from crystal.util.xthreading import bg_call_later, fg_call_later
         def bg_task():
             is_ok = False
             try:
@@ -417,7 +417,7 @@ def _prompt_to_open_project(
     * SystemExit -- if the user cancels the prompt early
     """
     from crystal.model import Project
-    from crystal.os import project_appears_as_package_file
+    from crystal.util.xos import project_appears_as_package_file
     import wx
     
     if project_appears_as_package_file():

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from crystal.progress import OpenProjectProgressListener
 from crystal.util.wx_bind import bind
-from crystal.xthreading import is_foreground_thread
+from crystal.util.xthreading import is_foreground_thread
 from typing import Dict, List, NewType, Optional, Tuple
 import wx
 
