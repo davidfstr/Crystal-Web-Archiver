@@ -1,4 +1,4 @@
-from crystal.util.xdatetime import datetime_is_aware
+from crystal.util.xdatetime import datetime_is_aware, datetime_is_in_utc
 import datetime
 
 
@@ -19,4 +19,5 @@ def parse(date_str: str) -> datetime.datetime:
 
 def format(date: datetime.datetime) -> str:
     assert datetime_is_aware(date)
+    assert datetime_is_in_utc(date)
     return date.strftime(_DATE_HEADER_FORMAT)
