@@ -611,24 +611,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 headers.append(['content-type', content_type_with_options])
         
         # Try extract revision datetime from Date header
-        revision_datetime: Optional[datetime.datetime]
-        date_str = None  # type: Optional[str]
-        for (k, v) in headers:
-            if k.lower() == 'date':
-                date_str = v
-                break
-        if date_str is not None:
-            try:
-                revision_datetime = datetime.datetime.strptime(
-                    date_str,
-                    '%a, %d %b %Y %H:%M:%S %Z'
-                ).replace(tzinfo=datetime.timezone.utc)
-            except ValueError:
-                # Invalid Date header
-                revision_datetime = None
-        else:
-            # Missing Date header
-            revision_datetime = None
+        revision_datetime = revision.date
         
         # Send status line
         self.send_response(metadata['status_code'], metadata['reason_phrase'])
