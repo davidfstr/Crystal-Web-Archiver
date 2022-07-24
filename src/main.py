@@ -167,8 +167,9 @@ def main(args: List[str]) -> None:
         def bg_task():
             is_ok = False
             try:
-                import crystal.tests as t
-                t.run_test(t.test_can_download_and_serve_a_static_site)
+                import crystal.tests.test_workflows as t
+                from crystal.tests.util.runner import run_test
+                run_test(t.test_can_download_and_serve_a_static_site)
                 
                 is_ok = True
                 print('OK')
