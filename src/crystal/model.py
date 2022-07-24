@@ -418,6 +418,14 @@ class Project:
             self._server.close()
             self._server = None
         self._db.close()
+    
+    # === Context Manager ===
+    
+    def __enter__(self) -> Project:
+        return self
+    
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+        self.close()
 
 
 class CrossProjectReferenceError(Exception):
@@ -1366,7 +1374,6 @@ class ResourceRevision:
         
         return (doc, links, content_type_with_options)
     
-    # NOTE: Only used from a Python REPL at the moment
     def delete(self):
         project = self.project
         

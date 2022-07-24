@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from crystal.model import Project
 from crystal.tests.util.controls import TreeItem, click_button
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, get_request_url, is_url_not_in_archive,
@@ -38,6 +39,9 @@ async def test_can_download_and_serve_a_static_site() -> None:
         atom_feed_url = 'https://xkcd.com/atom.xml'
         rss_feed_url = 'https://xkcd.com/rss.xml'
         feed_pattern = 'https://xkcd.com/*.xml'
+        
+        feed_item_pattern = 'https://xkcd.com/##/'
+        assert feed_item_pattern != comic_pattern
     
     with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         # 1. Test can create project
@@ -116,9 +120,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 
                 assert '' == agd.name_field.Value  # default name = (nothing)
                 assert comic1_url == agd.pattern_field.Value  # default pattern = (from resource)
-                selection_ci = agd.source_field.GetSelection()
-                assert selection_ci != wx.NOT_FOUND
-                assert 'Home' == agd.source_field.GetString(selection_ci)  # default source = (from resource parent)
+                assert 'Home' == agd.source  # default source = (from resource parent)
                 assert agd.name_field.HasFocus  # default focused field
                 
                 agd.name_field.Value = 'Comic'
@@ -182,7 +184,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 
                 comic_group_ti.Collapse()
             
-            # Test can download resource group
+            # Test can download resource group, when root resource is source
             if True:
                 # Create small resource group (with only 2 members)
                 if True:
@@ -237,6 +239,53 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 
                 assert False == (await is_url_not_in_archive(atom_feed_url))
                 assert False == (await is_url_not_in_archive(rss_feed_url))
+        
+        # Test can update membership of resource group, when other resource group is source
+        if True:
+            # Undownload all members of the feed group
+            with Project(project_dirpath) as project:
+                for feed_url in [atom_feed_url, rss_feed_url]:
+                    feed_resource = project.get_resource(feed_url)
+                    assert feed_resource is not None
+                    feed_revision = feed_resource.default_revision()
+                    assert feed_revision is not None
+                    feed_revision.delete(); del feed_revision
+                    assert feed_resource.default_revision() is None
+            
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+                assert False == mw.readonly
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                assert root_ti is not None
+                
+                # Create feed item group, with feed group as source
+                if True:
+                    click_button(mw.add_group_button)
+                    agd = await AddGroupDialog.wait_for()
+                    
+                    agd.name_field.Value = 'Feed Item'
+                    agd.pattern_field.Value = feed_item_pattern
+                    agd.source = 'Feed'
+                    await agd.ok()
+                    
+                    (feed_item_group_ti,) = [
+                        child for child in root_ti.Children
+                        if child.Text.startswith(f'{feed_item_pattern} - ')
+                    ]
+                
+                # Update members of feed item group,
+                # which should download members of feed group automatically
+                assert tree_has_no_children_condition(mw.task_tree)()
+                feed_item_group_ti.SelectItem()
+                click_button(mw.update_membership_button)
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            # Ensure members of the feed group were downloaded
+            with Project(project_dirpath) as project:
+                for feed_url in [atom_feed_url, rss_feed_url]:
+                    feed_resource = project.get_resource(feed_url)
+                    assert feed_resource is not None
+                    assert feed_resource.default_revision() is not None
         
         # Test can open project (as writable)
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:

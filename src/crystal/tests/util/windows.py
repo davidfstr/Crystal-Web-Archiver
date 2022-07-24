@@ -169,6 +169,16 @@ class AddGroupDialog:
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use AddGroupDialog.wait_for()?'
     
+    def _get_source(self) -> Optional[str]:
+        selection_ci = self.source_field.GetSelection()
+        if selection_ci == wx.NOT_FOUND:
+            return None
+        return self.source_field.GetString(selection_ci)
+    def _set_source(self, source_title: str) -> None:
+        selection_ci = self.source_field.GetStrings().index(source_title)
+        self.source_field.SetSelection(selection_ci)
+    source = property(_get_source, _set_source)
+    
     async def ok(self) -> None:
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-add-group-dialog')))
