@@ -19,6 +19,24 @@ from urllib.parse import urlparse
 # The User-Agent string to use for downloads, or None to omit.
 _USER_AGENT_STRING = 'Crystal/%s (https://dafoster.net/projects/crystal-web-archiver/)' % __version__
 
+# Whether to log verbose output related to HTTP requests and responses.
+# Can be used to inspect the exact request & response lines and headers exchanged.
+# 
+# For temporary experimentation in the shell.
+# 
+# TODO: Alter the format of the verbose output to be as easy to read as
+#       curl's similar -v option.
+_VERBOSE_HTTP_REQUESTS_AND_RESPONSES = False
+
+# Extra HTTP headers to add to every request, overriding any standard headers.
+# 
+# For temporary experimentation in the shell.
+# 
+# WARNING: These headers will NOT be persisted in the downloaded ResourceRevision
+#          and therefore it will not be possible to repeat a similar request in
+#          the future to get a more up-to-date version of a prior revision.
+_EXTRA_HEADERS = dict()  # type: Dict[str, str]
+
 
 def download_resource_revision(resource: Resource, progress_listener) -> ResourceRevision:
     """
@@ -109,11 +127,16 @@ class HttpResourceRequest(ResourceRequest):
         else:
             raise ValueError('Not an HTTP(S) URL.')
         
+        if _VERBOSE_HTTP_REQUESTS_AND_RESPONSES:
+            conn.set_debuglevel(1)
+        
         headers = {}
         if _USER_AGENT_STRING is not None:
             headers['User-Agent'] = _USER_AGENT_STRING
         if self._request_cookie is not None:
             headers['Cookie'] = self._request_cookie
+        for (k, v) in _EXTRA_HEADERS.items():
+            headers[k] = v
         
         conn.request('GET', self.url, headers=headers)
         response = conn.getresponse()
