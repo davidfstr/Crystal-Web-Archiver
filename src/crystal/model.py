@@ -2,7 +2,6 @@
 Persistent data model.
 
 Unless otherwise specified, all changes to models are auto-saved.
-[TODO: Encapsulate read-only properties.]
 
 Model objects may only be manipulated on the foreground thread.
 Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
