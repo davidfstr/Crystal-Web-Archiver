@@ -1331,7 +1331,7 @@ class ResourceRevision:
                 doc_and_links = parse_html_and_links(body, self.declared_charset)
             if doc_and_links is not None:
                 (doc, links) = doc_and_links
-                options = 'text/html; charset=utf-8'  # type: Optional[str]
+                content_type_with_options = 'text/html; charset=utf-8'  # type: Optional[str]
         elif self.is_css and self.has_body:
             with self.open() as body:
                 body_bytes = body.read()
