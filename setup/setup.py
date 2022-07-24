@@ -94,6 +94,11 @@ elif sys.platform == 'win32':
         # Combine 'library.zip' into the generated exe
         zipfile=None,
         options={'py2exe': {
+            'includes': [
+                # lxml
+                # https://stackoverflow.com/questions/5308760/py2exe-lxml-woes#5309733
+                'lxml.etree', 'lxml._elementpath', 'gzip',
+            ],
             'ignores': [
                 # Mac junk
                 'Carbon', 'Carbon.Files',

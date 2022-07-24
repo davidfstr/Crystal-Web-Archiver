@@ -44,6 +44,7 @@ colorama = "^0.4.4"
 certifi = "*"
 overrides = "^3.1.0"
 tzlocal = "^4.2"
+lxml = "^4.9.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.0"
