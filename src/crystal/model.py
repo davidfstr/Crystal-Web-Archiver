@@ -1002,7 +1002,7 @@ class ResourceRevision:
             if date_str is None:
                 if self.metadata is not None:
                     self.metadata['headers'].append((
-                        'date',
+                        'Date',
                         http_date.format(datetime.datetime.now(datetime.timezone.utc))
                     ))
                     assert self.date is not None
