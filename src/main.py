@@ -167,11 +167,8 @@ def main(args: List[str]) -> None:
         def bg_task():
             is_ok = False
             try:
-                import crystal.tests as t
-                t.run_test(t.test_can_download_and_serve_a_static_site)
-                
-                is_ok = True
-                print('OK')
+                from crystal.tests.index import run_all_tests
+                is_ok = run_all_tests()
             finally:
                 fg_call_later(lambda: sys.exit(0 if is_ok else 1))
         bg_call_later(bg_task)
