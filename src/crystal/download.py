@@ -119,6 +119,7 @@ class HttpResourceRequest(ResourceRequest):
         url_parts = urlparse(self.url)
         scheme = url_parts.scheme
         host_and_port = url_parts.netloc
+        path = url_parts.path or '/'
         
         if scheme == 'http':
             conn = HTTPConnection(host_and_port)
@@ -138,7 +139,7 @@ class HttpResourceRequest(ResourceRequest):
         for (k, v) in _EXTRA_HEADERS.items():
             headers[k] = v
         
-        conn.request('GET', self.url, headers=headers)
+        conn.request('GET', path, headers=headers)
         response = conn.getresponse()
         
         metadata = ResourceRevisionMetadata({

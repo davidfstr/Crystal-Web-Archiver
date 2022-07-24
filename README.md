@@ -178,6 +178,9 @@ Release Notes ⋮
 
 * Downloading improvements
     * Can force redownload of older URLs using the `--stale-before` CLI option.
+    * Fix to send URL path rather than absolute URL in HTTP GET requests,
+      improving conformance to RFC 2616 (HTTP/1.1).
+        * This helps download WordPress sites successfully.
 
 * Parsing improvements
     * Can identify URL references inside Atom feeds and RSS feeds.
