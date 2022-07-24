@@ -275,7 +275,7 @@ class HtmlLink(Link):
             # NOTE: Immediately strip whitespace from relative URLs inside HTML tags,
             #       before they are resolved against any base URL. Both preceding
             #       and trailing whitespace has been observed in the wild.
-            return self._tag[self._attr_name].strip()
+            return self._attr_value.strip()
     def _set_relative_url(self, url):
         if self._relative_url and not self._replace_url_in_old_attr_value:
             self._relative_url = url

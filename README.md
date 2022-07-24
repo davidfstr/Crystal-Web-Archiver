@@ -179,6 +179,9 @@ Release Notes ⋮
 * Downloading improvements
     * Can force redownload of older URLs using the `--stale-before` CLI option.
 
+* Parsing improvements
+    * Can identify URL references inside Atom feeds and RSS feeds.
+
 * CLI improvements
     * The [shell] now runs commands on the foreground thread by default,
       making it easy to interact with the `project` and `window` variables.
