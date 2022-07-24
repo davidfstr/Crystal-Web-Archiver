@@ -13,3 +13,6 @@ venv
 
 # GitHub Actions
 /setup/arguments.txt
+
+# PyCharm
+.idea
