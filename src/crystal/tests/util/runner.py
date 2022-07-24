@@ -22,7 +22,7 @@ _T = TypeVar('_T')
 def run_test(async_test_func: Callable[[], Awaitable[None]]) -> None:
     if is_foreground_thread():
         raise ValueError(
-            'run_test() does not support being called on the wx main thread')
+            'run_test() does not support being called on the foreground thread')
     
     test_co = async_test_func()  # should be a Generator[Command, None, None]
     last_command_result = None  # type: Union[object, Exception]
