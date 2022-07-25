@@ -147,7 +147,9 @@ run `poetry install` once in Terminal (Mac) or in Command Prompt (Windows), and
 
 To **build new binaries** for Mac or Windows, follow the instructions at [COMPILING.txt].
 
-To **run tests**, run `poetry run pytest` in Terminal (Mac) or in Command Prompt (Windows).
+To **run non-UI tests**, run `poetry run pytest` in Terminal (Mac) or in Command Prompt (Windows).
+
+To **run UI tests**, run `poetry run python src/main.py --test` in Terminal (Mac) or in Command Prompt (Windows).
 
 To **typecheck**, run `poetry run mypy` in Terminal (Mac) or in Command Prompt (Windows).
 
