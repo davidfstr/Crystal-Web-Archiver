@@ -3,15 +3,16 @@ Crystal Web Archiver
 
 <img src="README/logo.png" title="Crystal Web Archiver icon" align="right" />
 
-Crystal is a program to download websites for long-term archival. It works best
-on traditional websites made of distinct pages (rather than infinitely scrolling
-feeds of content) which make limited use of JavaScript. This includes most
-static websites, blogs, and wikis and excludes most social media sites.
+Crystal is a tool that downloads high fidelity copies of websites for long-term archival.
 
-> This project is **beta quality**, and in particular requires additional
-> documentation to be realistically usable by most people. If you'd like to
-> take the plunge anyway, please see the "Quickstart" section below.
+It works best on traditional websites made of distinct pages which make limited
+use of JavaScript (such as blogs, wikis, and other static websites)
+although it can also download more dynamic sites which have infinitely 
+scrolling feeds of content (such as social media sites).
 
+If you are an early adopter and want to get started creating your first project
+with Crystal, please see the Tutorial below.
+Additional documentation will be available once Crystal is no longer **in beta**.
 
 Download ⬇︎
 --------
@@ -21,8 +22,8 @@ Download ⬇︎
 * [Windows 7, 8, 10](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.3.0b/crystal-win-1.3.0b.exe)
 
 
-Quickstart ⭐
-----------
+Tutorial ⭐
+--------
 
 To download a simple static website (ex: [xkcd](https://xkcd.com)):
 
@@ -199,6 +200,9 @@ Release Notes ⋮
     * Various errors of the form
       `wrapped C/C++ object of type X has been deleted` that could be raised
       while Crystal is closing a project are now handled correctly.
+
+* Miscellaneous
+    * Improved introduction in the README.
 
 ### v1.3.0b <small>(July 10, 2022)</small>
 
