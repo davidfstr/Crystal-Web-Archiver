@@ -16,6 +16,8 @@ import urllib.request
 from urllib.parse import urlparse
 
 
+_HTTP_REQUEST_TIMEOUT = 10  # seconds
+
 # The User-Agent string to use for downloads, or None to omit.
 _USER_AGENT_STRING = 'Crystal/%s (https://dafoster.net/projects/crystal-web-archiver/)' % __version__
 
@@ -122,9 +124,16 @@ class HttpResourceRequest(ResourceRequest):
         path = url_parts.path or '/'
         
         if scheme == 'http':
-            conn = HTTPConnection(host_and_port)
+            conn = HTTPConnection(
+                host_and_port,
+                timeout=_HTTP_REQUEST_TIMEOUT,
+            )
         elif scheme == 'https':
-            conn = HTTPSConnection(host_and_port, context=get_ssl_context())
+            conn = HTTPSConnection(
+                host_and_port,
+                timeout=_HTTP_REQUEST_TIMEOUT,
+                context=get_ssl_context(),
+            )
         else:
             raise ValueError('Not an HTTP(S) URL.')
         
