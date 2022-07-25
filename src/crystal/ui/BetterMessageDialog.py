@@ -25,13 +25,12 @@ class BetterMessageDialog(wx.Dialog):
             ) -> None:
         """
         Arguments:
-        parent -- parent window.
-        message -- the message displayed in the dialog.
-        title -- the title displayed in the dialog's titlebar.
-        style -- the set of buttons to display.
-                 See wx.Dialog.CreateButtonSizer() for all options.
-        yes_label -- label for the wx.YES button.
-        no_label -- label for the wx.NO button.
+        * parent -- parent window.
+        * message -- the message displayed in the dialog.
+        * title -- the title displayed in the dialog's titlebar.
+        * style -- the set of buttons to display. See wx.Dialog.CreateButtonSizer() for all options.
+        * yes_label -- label for the wx.YES button.
+        * no_label -- label for the wx.NO button.
         """
         wx.Dialog.__init__(self, parent, title=title, name=name)
         self_sizer = wx.BoxSizer(wx.VERTICAL); self.SetSizer(self_sizer)

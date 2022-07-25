@@ -13,9 +13,9 @@ class AddRootUrlDialog:
     def __init__(self, parent, on_finish, initial_url=None):
         """
         Arguments:
-        parent -- parent wx.Window that this dialog is attached to.
-        on_finish -- called when OK pressed on dialog. Is a callable(name, url).
-        initial_url -- overrides the initial URL displayed.
+        * parent -- parent wx.Window that this dialog is attached to.
+        * on_finish -- called when OK pressed on dialog. Is a callable(name, url).
+        * initial_url -- overrides the initial URL displayed.
         """
         self._on_finish = on_finish
         if initial_url is None:

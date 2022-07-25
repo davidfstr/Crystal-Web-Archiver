@@ -27,8 +27,8 @@ def parse_html_and_links(
     * embedded : bool -- whether this link refers to an embedded resource.
     
     Arguments:
-    html_bytes -- HTML bytestring or file object.
-    declared_charset -- the encoding that the HTML document is declared to be in.
+    * html_bytes -- HTML bytestring or file object.
+    * declared_charset -- the encoding that the HTML document is declared to be in.
     """    
     import crystal.doc.html.basic as basic
     import crystal.doc.html.soup as soup

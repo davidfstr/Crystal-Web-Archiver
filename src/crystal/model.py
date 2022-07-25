@@ -67,8 +67,9 @@ class Project:
         Loads a project from the specified filepath, or creates a new one if none is found.
         
         Arguments:
-        path -- path to a directory (ideally with the `FILE_EXTENSION` extension)
-                from which the project is to be loaded.
+        * path -- 
+            path to a directory (ideally with the `FILE_EXTENSION` extension)
+            from which the project is to be loaded.
         """
         if progress_listener is None:
             progress_listener = DummyOpenProjectProgressListener()
@@ -481,8 +482,8 @@ class Resource:
         one if no preexisting resource matches.
         
         Arguments:
-        project -- associated `Project`.
-        url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
+        * project -- associated `Project`.
+        * url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
         """
         
         if _id is None:
@@ -862,9 +863,9 @@ class RootResource:
         Creates a new root resource.
         
         Arguments:
-        project -- associated `Project`.
-        name -- display name.
-        resource -- `Resource`.
+        * project -- associated `Project`.
+        * name -- display name.
+        * resource -- `Resource`.
         
         Raises:
         * CrossProjectReferenceError -- if `resource` belongs to a different project.
@@ -983,9 +984,9 @@ class ResourceRevision:
         so it is recommended that this method be invoked on a background thread.
         
         Arguments:
-        resource -- resource that this is a revision of.
-        metadata -- JSON-encodable dictionary of resource metadata.
-        body_stream -- file-like object containing the revision body.
+        * resource -- resource that this is a revision of.
+        * metadata -- JSON-encodable dictionary of resource metadata.
+        * body_stream -- file-like object containing the revision body.
         """
         try:
             self = ResourceRevision._create(
@@ -1425,9 +1426,9 @@ class ResourceGroup:
             _id: Optional[int]=None) -> None:
         """
         Arguments:
-        project -- associated `Project`.
-        name -- name of this group.
-        url_pattern -- url pattern matched by this group.
+        * project -- associated `Project`.
+        * name -- name of this group.
+        * url_pattern -- url pattern matched by this group.
         """
         self.project = project
         self.name = name

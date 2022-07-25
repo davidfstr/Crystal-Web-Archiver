@@ -44,8 +44,8 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
     For internal use by DownloadResourceBodyTask.
     
     Arguments:
-    resource -- the resource to download.
-    progress_listener -- the DownloadResourceBodyTask that progress updates will be sent to.
+    * resource -- the resource to download.
+    * progress_listener -- the DownloadResourceBodyTask that progress updates will be sent to.
     """
     
     if resource.project.request_cookie_applies_to(resource.url):

@@ -15,11 +15,11 @@ class AddGroupDialog:
     def __init__(self, parent, on_finish, project, initial_url=None, initial_source=None):
         """
         Arguments:
-        parent -- parent wx.Window that this dialog is attached to.
-        on_finish -- called when OK pressed on dialog. Is a callable(name, url_pattern).
-        project -- the project.
-        initial_url -- overrides the initial URL displayed.
-        initial_source -- overrides the initial source displayed.
+        * parent -- parent wx.Window that this dialog is attached to.
+        * on_finish -- called when OK pressed on dialog. Is a callable(name, url_pattern).
+        * project -- the project.
+        * initial_url -- overrides the initial URL displayed.
+        * initial_source -- overrides the initial source displayed.
         """
         self._project = project
         self._on_finish = on_finish

@@ -135,8 +135,9 @@ def bg_call_later(callable, daemon=False, *args):
     Calls the argument on a new background thread.
     
     Arguments:
-    daemon -- if True, forces the background thread to be a daemon,
-              and not prevent program termination while it is running.
+    * daemon -- 
+        if True, forces the background thread to be a daemon,
+        and not prevent program termination while it is running.
     """
     thread = threading.Thread(target=callable, args=args)
     if daemon:

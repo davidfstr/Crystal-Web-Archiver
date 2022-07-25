@@ -216,10 +216,10 @@ class HtmlLink(Link):
         Creates a link that is derived from the attribute of an HTML element.
         
         Arguments:
-        relative_url - URL or URI referenced by this link, often relative.
-        type_title - displayed title for this link's type.
-        title - displayed title for this link, or None.
-        embedded - whether this link refers to an embedded resource.
+        * relative_url - URL or URI referenced by this link, often relative.
+        * type_title - displayed title for this link's type.
+        * title - displayed title for this link, or None.
+        * embedded - whether this link refers to an embedded resource.
         """
         if (tag is None or attr_name is None or type_title is None or
                 embedded not in (True, False)):
@@ -233,7 +233,7 @@ class HtmlLink(Link):
         See HtmlLink.create_from_tag()
         
         Extra Arguments:
-        replace_url_in_old_attr_value --
+        * replace_url_in_old_attr_value --
             function that takes a URL and returns the appropriate
             value for the underlying tag's attribute.
         """
@@ -248,10 +248,10 @@ class HtmlLink(Link):
         Creates a external link that is not reflected in the original HTML content.
         
         Arguments:
-        relative_url - URL or URI referenced by this link, often relative.
-        type_title - displayed title for this link's type.
-        title - displayed title for this link, or None.
-        embedded - whether this link refers to an embedded resource.
+        * relative_url - URL or URI referenced by this link, often relative.
+        * type_title - displayed title for this link's type.
+        * title - displayed title for this link, or None.
+        * embedded - whether this link refers to an embedded resource.
         """
         if relative_url is None or type_title is None or embedded not in (True, False):
             raise ValueError

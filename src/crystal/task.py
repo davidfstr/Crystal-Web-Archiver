@@ -303,7 +303,7 @@ DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
 def _get_abstract_resource_title(abstract_resource):
     """
     Arguments:
-    abstract_resource -- a Resource or a RootResource.
+    * abstract_resource -- a Resource or a RootResource.
     """
     resource = abstract_resource.resource
     if hasattr(abstract_resource, 'name'):
@@ -323,7 +323,7 @@ class DownloadResourceBodyTask(Task):
     def __init__(self, abstract_resource: Union[Resource, RootResource]) -> None:
         """
         Arguments:
-        abstract_resource -- a Resource or a RootResource.
+        * abstract_resource -- a Resource or a RootResource.
         """
         Task.__init__(self, title='Downloading body: ' + _get_abstract_resource_title(abstract_resource))
         self._resource = abstract_resource.resource  # type: Resource
@@ -385,7 +385,7 @@ class DownloadResourceTask(Task):
     def __init__(self, abstract_resource, *, needs_result: bool=True):
         """
         Arguments:
-        abstract_resource -- a Resource or a RootResource.
+        * abstract_resource -- a Resource or a RootResource.
         """
         Task.__init__(self, 'Downloading: ' + _get_abstract_resource_title(abstract_resource))
         self._abstract_resource = abstract_resource
@@ -558,8 +558,8 @@ class ParseResourceRevisionLinks(Task):
     def __init__(self, abstract_resource, resource_revision):
         """
         Arguments:
-        abstract_resource -- a Resource or a RootResource.
-        resource_revision -- a ResourceRevision.
+        * abstract_resource -- a Resource or a RootResource.
+        * resource_revision -- a ResourceRevision.
         """
         Task.__init__(self, title='Finding links in: ' + _get_abstract_resource_title(abstract_resource))
         self._resource_revision = resource_revision
