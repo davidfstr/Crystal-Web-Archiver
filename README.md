@@ -67,7 +67,7 @@ Known Issues 🐞
 
 * The UI does not allow a group to be changed once it is defined. In particular
   the source of a group cannot be changed in the UI.
-    * As a workaround, create a new group with the desired changes and delete the old group.
+    * As a workaround, add a new group with the desired changes and forget the old group.
 
 * robots.txt is not obeyed.
   [(#31)](https://github.com/davidfstr/Crystal-Web-Archiver/issues/31)
