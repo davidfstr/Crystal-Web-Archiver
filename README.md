@@ -409,7 +409,7 @@ some older macOS versions and Windows XP.
     * Don't attempt to rewrite mailto or javascript URLs.
     * Don't print error if browser drops connection early.
     * Avoid printing binary data to console when handling incoming binary protocol message.
-        * This can happen if archived JavaScript attempts to force fetching a 
+        * This can happen if archived JavaScript attempts to fetch a 
           archived resource over HTTPS from an http:// URL.
     * Colorize logged output by default. 🎨
 
