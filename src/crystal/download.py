@@ -10,7 +10,7 @@ from http.client import HTTPConnection, HTTPSConnection
 import io
 import platform
 import ssl
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
