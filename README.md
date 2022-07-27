@@ -189,6 +189,7 @@ Release Notes ⋮
           which tend to be dead links.
 
 * Parsing improvements
+    * Can identify rel="stylesheet" references inside CSS that don't end in .css
     * Can identify URL references inside Atom feeds and RSS feeds.
 
 * CLI improvements

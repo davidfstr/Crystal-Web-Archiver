@@ -9,6 +9,7 @@ from crystal.doc.generic import Document, Link
 import json
 import re
 from typing import Optional
+from urllib.parse import urlparse
 
 
 _ANY_RE = re.compile(r'.*')
@@ -44,7 +45,6 @@ def parse_html_and_links(
     
     # <* background=*>
     for tag in html.findAll(_ANY_RE, background=_ANY_RE):
-        relative_url = tag['background']
         embedded = True
         title = None
         type_title = 'Background Image'
@@ -52,7 +52,6 @@ def parse_html_and_links(
     
     # <* src=*>
     for tag in html.findAll(_ANY_RE, src=_ANY_RE):
-        relative_url = tag['src']
         embedded = True
         if tag.name == 'img':
             title = _get_image_tag_title(tag)
@@ -71,24 +70,25 @@ def parse_html_and_links(
     # <* href=*>
     for tag in html.findAll(_ANY_RE, href=_ANY_RE):
         relative_url = tag['href']
+        relative_url_path = urlparse(relative_url).path
         embedded = False
         if tag.name == 'a':
             title = tag.string
             type_title = 'Link'
         elif tag.name == 'link' and (
-                ('rel' in tag.attrs and tag['rel'] == 'stylesheet') or (
+                ('rel' in tag.attrs and 'stylesheet' in tag['rel']) or (
                  'type' in tag.attrs and tag['type'] == 'text/css') or (
-                 relative_url.endswith('.css'))):
+                 relative_url_path.endswith('.css'))):
             title = None
             type_title = 'Stylesheet'
             embedded = True
         elif tag.name == 'link' and (
-                    ('rel' in tag.attrs and tag['rel'] in (
+                    ('rel' in tag.attrs and any([x in tag['rel'] for x in (
                         'shortcut icon',
                         'icon',
-                        'apple-touch-icon')) or 
-                    (relative_url.endswith('.ico') or 
-                        relative_url.endswith('.png'))
+                        'apple-touch-icon')])) or 
+                    (relative_url_path.endswith('.ico') or 
+                        relative_url_path.endswith('.png'))
                 ):
             title = None
             type_title = 'Icon'
