@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 from crystal.model import Project
+from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import TreeItem, click_button
 from crystal.tests.util.server import (
-    assert_does_open_webbrowser_to, get_request_url, is_url_not_in_archive,
+    assert_does_open_webbrowser_to, fetch_archive_url, get_request_url,
+    is_url_not_in_archive,
 )
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
     wait_for, window_condition, first_child_of_tree_item_is_not_loading_condition,
     tree_has_no_children_condition,
 )
-from crystal.tests.util.windows import OpenOrCreateDialog, AddGroupDialog
+from crystal.tests.util.windows import (
+    AddGroupDialog, AddUrlDialog, MainWindow, OpenOrCreateDialog,
+)
 from crystal.util.xthreading import is_foreground_thread
 import tempfile
+from typing import List, Union
 from unittest import skip
 import wx
 
@@ -56,17 +61,11 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 assert root_ti.GetFirstChild() is None  # no entities
                 
                 click_button(mw.add_url_button)
-                add_url_dialog = await wait_for(window_condition('cr-add-url-dialog'))  # type: wx.Window
-                name_field = add_url_dialog.FindWindowByName('cr-add-url-dialog__name-field')
-                assert isinstance(name_field, wx.TextCtrl)
-                url_field = add_url_dialog.FindWindowByName('cr-add-url-dialog__url-field')
-                assert isinstance(url_field, wx.TextCtrl)
-                ok_button = add_url_dialog.FindWindowById(wx.ID_OK)
-                assert isinstance(ok_button, wx.Button)
+                aud = await AddUrlDialog.wait_for()
                 
-                name_field.Value = 'Home'
-                url_field.Value = home_url
-                click_button(ok_button)
+                aud.name_field.Value = 'Home'
+                aud.url_field.Value = home_url
+                await aud.ok()
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None  # entity was created
                 assert f'{home_url} - Home' == home_ti.Text
@@ -240,20 +239,10 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 assert False == (await is_url_not_in_archive(atom_feed_url))
                 assert False == (await is_url_not_in_archive(rss_feed_url))
         
-        # Test can update membership of resource group, when other resource group is source
-        if True:
-            # Undownload all members of the feed group
-            with Project(project_dirpath) as project:
-                for feed_url in [atom_feed_url, rss_feed_url]:
-                    feed_resource = project.get_resource(feed_url)
-                    assert feed_resource is not None
-                    feed_revision = feed_resource.default_revision()
-                    assert feed_revision is not None
-                    feed_revision.delete(); del feed_revision
-                    assert feed_resource.default_revision() is None
-            
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-                assert False == mw.readonly
+            # Test can update membership of resource group, when other resource group is source
+            if True:
+                # Undownload all members of the feed group
+                await _undownload_url([atom_feed_url, rss_feed_url], mw, project_dirpath)
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree)
                 assert root_ti is not None
@@ -400,16 +389,275 @@ async def test_can_download_and_serve_a_static_site() -> None:
             assert False == (await is_url_not_in_archive(atom_feed_url))
 
 
-@skip('not yet automated')
 async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -> None:
     """
     Tests that can successfully download and serve a site containing
     JavaScript which dynamically fetches URLs that cannot be discovered
     statically by Crystal.
-    
-    Example site: https://bongo.cat/
     """
+    if True:
+        home_url = 'https://xkcd.com/'
+        target_url = 'https://c.xkcd.com/xkcd/news'
+        
+        # NOTE: Crystal IS actually smart enough to discover that a link to
+        #       this URL does exist in the <script> tag. However it is NOT 
+        #       smart enough to determine that the link should be considered
+        #       EMBEDDED, so Crystal will not automatically download it.
+        target_reference = f'''client.open("GET", "{get_request_url(target_url)}", true);'''
+        
+        target_group_name = 'Target Group'
+        target_group_pattern = target_url + '*'
+        
+        target_root_resource_name = 'Target'
+    
+    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+            root_ti = TreeItem.GetRootItem(mw.entity_tree)
+            assert root_ti is not None
+            assert root_ti.GetFirstChild() is None  # no entities
+            
+            # Download home page
+            if True:
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                aud.name_field.Value = 'Home'
+                aud.url_field.Value = home_url
+                await aud.ok()
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None  # entity was created
+                assert f'{home_url} - Home' == home_ti.Text
+                
+                home_ti.SelectItem()
+                click_button(mw.download_button)
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+                
+                # Start server
+                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                    click_button(mw.view_button)
+                
+                assert False == (await is_url_not_in_archive(home_url))
+                
+                # Ensure home page ONLY has <script> reference to target
+                if True:
+                    # Ensure home page has <script> reference to target
+                    home_page = await fetch_archive_url(home_url)
+                    assert target_reference in home_page.content
+                    
+                    # Ensure target was not discovered as embedded resource of home page
+                    assert False == (await is_url_not_in_archive(home_url))
+                    assert True == (await is_url_not_in_archive(target_url))
+            
+            def start_server_again():
+                nonlocal root_ti
+                nonlocal home_ti
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                assert root_ti is not None
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None
+                home_ti.SelectItem()
+                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                    click_button(mw.view_button)
+            
+            # View the home page.
+            # Ensure console does reveal that target was not downloaded successfully.
+            if True:
+                # Simulate opening home page in browser,
+                # which should evaluate the <script>-only reference,
+                # and try to fetch the target automatically
+                with console_output_copied() as console_output:
+                    home_page = await fetch_archive_url(home_url)
+                    target_page = await fetch_archive_url(target_url)
+                
+                # Ensure console does log that target in not in the archive
+                # so that user knows they must take special action to download it
+                assert (
+                    f'*** Requested resource not in archive: '
+                    f'{target_url}'
+                ) in console_output.getvalue()
+            
+            # Test will dynamically download a new resource group member upon request
+            if True:
+                assert True == (await is_url_not_in_archive(target_url))
+                
+                # Undiscover the target
+                await _undiscover_url(target_url, mw, project_dirpath)
+                start_server_again()
+                
+                # Add resource group matching target
+                click_button(mw.add_group_button)
+                agd = await AddGroupDialog.wait_for()
+                agd.name_field.Value = target_group_name
+                agd.pattern_field.Value = target_group_pattern
+                await agd.ok()
+                
+                # Refresh the home page.
+                # Ensure console does log that target is being dynamically fetched.
+                if True:
+                    # Simulate refreshing home page in browser,
+                    # which should evaluate the <script>-only reference,
+                    # and try to fetch the target automatically
+                    with console_output_copied() as console_output:
+                        home_page = await fetch_archive_url(home_url)
+                        # TODO: Use a *dynamic* timeout that looks for progress in
+                        #       download tasks in the UI, similar to
+                        #       wait_for_download_to_start_and_finish
+                        target_page = await fetch_archive_url(target_url, timeout=6)
+                    
+                    # Ensure console does log that target is being dynamically fetched,
+                    # so that user knows they were successful in creating a matching group
+                    assert (
+                        f'*** Dynamically downloading new resource in group '
+                        f'{target_group_name!r}: {target_url}'
+                    ) in console_output.getvalue()
+                    
+                assert False == (await is_url_not_in_archive(target_url))
+                
+                # Undownload target
+                await _undownload_url(target_url, mw, project_dirpath)
+                start_server_again()
+            
+            # Test will dynamically download an existing resource group member upon request
+            if True:
+                # Refresh the home page.
+                # Ensure console does log that target is being dynamically fetched.
+                if True:
+                    # Simulate refreshing home page in browser,
+                    # which should evaluate the <script>-only reference,
+                    # and try to fetch the target automatically
+                    with console_output_copied() as console_output:
+                        home_page = await fetch_archive_url(home_url)
+                        target_page = await fetch_archive_url(target_url)
+                    
+                    # Ensure console does log that target is being dynamically fetched,
+                    # so that user knows they were successful in creating a matching group
+                    assert (
+                        f'*** Dynamically downloading existing resource in group '
+                        f'{target_group_name!r}: {target_url}'
+                    ) in console_output.getvalue()
+                
+                assert False == (await is_url_not_in_archive(target_url))
+                
+                # Forget resource group matching target
+                (target_group_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{target_group_pattern} - ')
+                ]
+                target_group_ti.SelectItem()
+                click_button(mw.forget_button)
+                
+                # Undownload target
+                await _undownload_url(target_url, mw, project_dirpath)
+                start_server_again()
+            
+            # Test will dynamically download a root resource upon request
+            if True:
+                assert True == (await is_url_not_in_archive(target_url))
+                
+                # Add root resource: https://c.xkcd.com/xkcd/news
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                aud.name_field.Value = target_root_resource_name
+                aud.url_field.Value = target_url
+                await aud.ok()
+                
+                # Refresh the home page.
+                # Ensure console does log that target is being dynamically fetched.
+                if True:
+                    # Simulate refreshing home page in browser,
+                    # which should evaluate the <script>-only reference,
+                    # and try to fetch the target automatically
+                    with console_output_copied() as console_output:
+                        home_page = await fetch_archive_url(home_url)
+                        target_page = await fetch_archive_url(target_url)
+                    
+                    # Ensure console does log that target is being dynamically fetched,
+                    # so that user knows they were successful in creating a matching root resource
+                    assert (
+                        f'*** Dynamically downloading root resource '
+                        f'{target_root_resource_name!r}: {target_url}'
+                    ) in console_output.getvalue()
+                
+                assert False == (await is_url_not_in_archive(target_url))
+                
+                # Forget root resource matching target
+                (target_rr_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{target_url} - ')
+                ]
+                target_rr_ti.SelectItem()
+                click_button(mw.forget_button)
+                
+                # Undownload target
+                await _undownload_url(target_url, mw, project_dirpath)
+
+
+@skip('not yet automated')
+async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() -> None:
     pass
+
+
+@skip('not yet automated')
+async def test_cannot_download_anything_given_project_is_opened_as_readonly() -> None:
+    # Some cases:
+    #   - cannot select resource in UI and press Download button, because button is disabled
+    #   - cannot select group in UI and press Download button, because button is disabled
+    #   - when expand undownloaded resource node, does show read-only error node
+    #   - when browsing a served site, no resources are ever dynamically downloaded
+    #     (although dynamic link rewriting still should work)
+    pass
+
+
+# ------------------------------------------------------------------------------
+# Utility
+
+async def _undownload_url(
+        url_or_urls: Union[str, List[str]],
+        mw: MainWindow,
+        project_dirpath: str
+        ) -> None:
+    """
+    Deletes the default revision of the specified resource(s).
+    
+    Note that the prior main window will need to be temporarily closed
+    and later reopened to perform the deletion.
+    """
+    if isinstance(url_or_urls, str):
+        url_or_urls = [url_or_urls]  # reinterpret
+    
+    # TODO: Make it possible to do this from the UI:
+    #       https://github.com/davidfstr/Crystal-Web-Archiver/issues/73
+    async with mw.temporarily_closed(project_dirpath):
+        with Project(project_dirpath) as project:
+            for url in url_or_urls:
+                resource = project.get_resource(url)
+                assert resource is not None
+                revision = resource.default_revision()
+                assert revision is not None
+                revision.delete(); del revision
+                assert resource.default_revision() is None
+
+
+async def _undiscover_url(
+        url_or_urls: Union[str, List[str]],
+        mw: MainWindow,
+        project_dirpath: str
+        ) -> None:
+    """
+    Deletes the specified resource(s), along with any related resource revisions.
+    
+    Note that the prior main window will need to be temporarily closed
+    and later reopened to perform the deletion.
+    """
+    if isinstance(url_or_urls, str):
+        url_or_urls = [url_or_urls]  # reinterpret
+    
+    async with mw.temporarily_closed(project_dirpath):
+        with Project(project_dirpath) as project:
+            for url in url_or_urls:
+                resource = project.get_resource(url)
+                assert resource is not None
+                resource.delete(); del resource
 
 
 # ------------------------------------------------------------------------------

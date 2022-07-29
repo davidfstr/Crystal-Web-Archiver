@@ -62,7 +62,8 @@ class OpenOrCreateDialog:
     @asynccontextmanager
     async def open(self, 
             project_dirpath: str, 
-            *, readonly: Optional[bool]=None
+            *, readonly: Optional[bool]=None,
+            autoclose: bool=True,
             ) -> AsyncIterator[MainWindow]:
         if readonly is not None:
             self.open_as_readonly.Value = readonly
@@ -78,10 +79,13 @@ class OpenOrCreateDialog:
         
         yield mw
         
-        await mw.close()
+        if autoclose:
+            await mw.close()
 
 
 class MainWindow:
+    _connect_timeout: Optional[float]
+    
     main_window: wx.Frame
     entity_tree: wx.TreeCtrl
     add_url_button: wx.Button
@@ -96,9 +100,14 @@ class MainWindow:
     @staticmethod
     async def wait_for(*, timeout: Optional[float]=None) -> MainWindow:
         self = MainWindow(ready=True)
+        self._connect_timeout = timeout
+        await self._connect()
+        return self
+    
+    async def _connect(self) -> None:
         self.main_window = await wait_for(
             window_condition('cr-main-window'),
-            timeout=timeout)
+            timeout=self._connect_timeout)
         assert isinstance(self.main_window, wx.Frame)
         self.entity_tree = self.main_window.FindWindowByName('cr-entity-tree')
         assert isinstance(self.entity_tree, wx.TreeCtrl)
@@ -118,7 +127,6 @@ class MainWindow:
         assert isinstance(self.task_tree, wx.TreeCtrl)
         self.read_write_icon = self.main_window.FindWindowByName('cr-read-write-icon')
         assert isinstance(self.read_write_icon, wx.StaticText)
-        return self
     
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use MainWindow.wait_for()?'
@@ -138,6 +146,41 @@ class MainWindow:
         await wait_for(lambda: self.main_window.IsBeingDeleted)
         await wait_for(lambda: not self.main_window.IsShown)
         await wait_for(not_condition(window_condition('cr-main-window')))
+    
+    @asynccontextmanager
+    async def temporarily_closed(self, project_dirpath: str) -> AsyncIterator[None]:
+        await self.close()
+        try:
+            yield
+        finally:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, autoclose=False):
+                pass
+            await self._connect()  # reconnect self
+
+
+class AddUrlDialog:
+    name_field: wx.TextCtrl
+    url_field: wx.TextCtrl
+    ok_button: wx.Button
+    
+    @staticmethod
+    async def wait_for() -> AddUrlDialog:
+        self = AddUrlDialog(ready=True)
+        add_url_dialog = await wait_for(window_condition('cr-add-url-dialog'))  # type: wx.Window
+        self.name_field = add_url_dialog.FindWindowByName('cr-add-url-dialog__name-field')
+        assert isinstance(self.name_field, wx.TextCtrl)
+        self.url_field = add_url_dialog.FindWindowByName('cr-add-url-dialog__url-field')
+        assert isinstance(self.url_field, wx.TextCtrl)
+        self.ok_button = add_url_dialog.FindWindowById(wx.ID_OK)
+        assert isinstance(self.ok_button, wx.Button)
+        return self
+    
+    def __init__(self, *, ready: bool=False) -> None:
+        assert ready, 'Did you mean to use AddUrlDialog.wait_for()?'
+    
+    async def ok(self) -> None:
+        click_button(self.ok_button)
+        await wait_for(not_condition(window_condition('cr-add-url-dialog')))
 
 
 class AddGroupDialog:

@@ -69,6 +69,10 @@ class WebPage:
             return None
         else:
             return m.group(1).strip()
+    
+    @property
+    def content(self) -> str:
+        return self._content
 
 
 # ------------------------------------------------------------------------------
