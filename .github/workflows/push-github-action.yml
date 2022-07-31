@@ -71,9 +71,18 @@ jobs:
       - name: Build .app and disk image
         working-directory: "./setup"
         run: "poetry run ./make-mac.sh"
-
+      
       - name: Run UI tests
-        run: '"setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test'
+        run: |
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
+
+      - name: Upload screenshot if test failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore
 
   build-windows:
     strategy:

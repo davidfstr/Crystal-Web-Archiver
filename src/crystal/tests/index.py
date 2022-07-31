@@ -1,5 +1,6 @@
 from crystal.tests import test_workflows
 from crystal.tests.util.runner import run_test
+import os
 import sys
 import time
 import traceback
@@ -32,6 +33,8 @@ def run_all_tests() -> bool:
     start_time = time.time()  # capture
     for test_func in _TEST_FUNCS:
         test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
+        
+        os.environ['CRYSTAL_SCREENSHOT_ID'] = f'{test_func_id[0]}.{test_func_id[1]}'
         
         print('=' * 70)
         print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]})')

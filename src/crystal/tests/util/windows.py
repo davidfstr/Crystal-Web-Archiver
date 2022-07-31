@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from crystal.tests.util.controls import (
     file_dialog_returning, click_button, package_dialog_returning,
 )
+from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.wait import wait_for, window_condition, not_condition
 from crystal.util.xos import is_mac_os
 import tempfile
@@ -53,7 +54,8 @@ class OpenOrCreateDialog:
         with file_dialog_returning(project_dirpath):
             click_button(self.create_button)
             
-            mw = await MainWindow.wait_for()
+            with screenshot_if_raises():
+                mw = await MainWindow.wait_for()
         
         yield (mw, project_dirpath)
         
@@ -75,7 +77,8 @@ class OpenOrCreateDialog:
                 4 if is_mac_os()  # sometimes seems to take longer on macOS
                 else 2
             )
-            mw = await MainWindow.wait_for(timeout=timeout)
+            with screenshot_if_raises():
+                mw = await MainWindow.wait_for(timeout=timeout)
         
         yield mw
         

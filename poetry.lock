@@ -271,6 +271,17 @@ python-versions = ">=3.6.8"
 diagrams = ["railroad-diagrams", "jinja2"]
 
 [[package]]
+name = "pyscreeze"
+version = "0.1.28"
+description = "A simple, cross-platform screenshot module for Python 2 and 3."
+category = "dev"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+Pillow = {version = ">=6.2.1", markers = "python_version == \"3.8\""}
+
+[[package]]
 name = "pytest"
 version = "6.2.5"
 description = "pytest: simple powerful testing with Python"
@@ -426,7 +437,7 @@ six = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8,<3.9"
-content-hash = "e3d202cdb6776ec374e5b6f0eca8f73bb5a9adb8e23aef357257b9b5de7bd4e0"
+content-hash = "0bcf6af178ded250f62c26376e1f21bdb57581fd72cccd6e0ee1ad750d4032a5"
 
 [metadata.files]
 altgraph = [
@@ -603,6 +614,7 @@ pyparsing = [
     {file = "pyparsing-3.0.9-py3-none-any.whl", hash = "sha256:5026bae9a10eeaefb61dab2f09052b9f4307d44aee4eda64b309723d8d206bbc"},
     {file = "pyparsing-3.0.9.tar.gz", hash = "sha256:2b020ecf7d21b687f219b71ecad3631f644a47f01403fa1d1036b0c6416d70fb"},
 ]
+pyscreeze = []
 pytest = []
 pytz-deprecation-shim = []
 six = [
