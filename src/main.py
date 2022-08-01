@@ -351,7 +351,8 @@ def _prompt_for_project(
     
     try:
         while True:
-            choice = dialog.ShowModal()
+            from crystal.util.wx_dialog import ShowModal
+            choice = ShowModal(dialog)
             
             if dialog.IsCheckBoxChecked():
                 project_kwargs = {

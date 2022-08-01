@@ -29,6 +29,8 @@ def run_all_tests() -> bool:
     The format of the summary report is designed to be similar
     to that used by Python's unittest module.
     """
+    os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
+    
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.time()  # capture
     for test_func in _TEST_FUNCS:
