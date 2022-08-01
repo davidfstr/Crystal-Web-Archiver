@@ -17,6 +17,8 @@ import wx
 # Utility: Window Abstractions
 
 class OpenOrCreateDialog:
+    _TIMEOUT_FOR_OPEN_MAIN_WINDOW = 2
+    
     open_or_create_project_dialog: wx.Dialog
     open_as_readonly: wx.CheckBox
     open_button: wx.Button
@@ -55,7 +57,7 @@ class OpenOrCreateDialog:
             click_button(self.create_button)
             
             with screenshot_if_raises():
-                mw = await MainWindow.wait_for()
+                mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
         yield (mw, project_dirpath)
         
@@ -73,12 +75,8 @@ class OpenOrCreateDialog:
         with package_dialog_returning(project_dirpath):
             click_button(self.open_button)
             
-            timeout = (
-                4 if is_mac_os()  # sometimes seems to take longer on macOS
-                else 2
-            )
             with screenshot_if_raises():
-                mw = await MainWindow.wait_for(timeout=timeout)
+                mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
         yield mw
         
