@@ -86,11 +86,17 @@ elif sys.platform == 'win32':
     extra_setup_options = dict(
         setup_requires=['py2exe'],
         windows=[{
-            'script': '..\src\main.py',
-            'icon_resources': [(0, 'media/AppIconWin.ico')],
+            'script': r'..\src\main.py',
+            'icon_resources': [(0, r'media\AppIconWin.ico')],
             # Executable name
             'dest_base': APP_NAME,
         }],
+        data_files=[
+            # crystal.tests.test_data
+            (r'lib\crystal\tests\test_data', [
+                r'..\src\crystal\tests\test_data\banner.txt',
+            ]),
+        ],
         # Combine 'library.zip' into the generated exe
         zipfile=None,
         options={'py2exe': {
