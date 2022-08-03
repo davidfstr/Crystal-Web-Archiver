@@ -94,7 +94,7 @@ elif sys.platform == 'win32':
         data_files=[
             # crystal.tests.test_data
             (r'lib\crystal\tests\test_data', [
-                r'..\src\crystal\tests\test_data\banner.txt',
+                r'..\src\crystal\tests\test_data\xkcd.crystalproj.zip',
             ]),
         ],
         # Combine 'library.zip' into the generated exe

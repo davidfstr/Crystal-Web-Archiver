@@ -29,19 +29,20 @@ from typing import Dict, Generator, List, Optional
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 
 
-_SERVER_PORT = 2797
-
-
-def start(project: Project) -> ProjectServer:
-    """
-    Starts the archive server on a daemon thread.
-    """
-    return ProjectServer(project)
+_DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
 
 
 class ProjectServer:
-    def __init__(self, project: Project) -> None:
-        port = _SERVER_PORT
+    """
+    Runs the archive server on a daemon thread.
+    """
+    def __init__(self, project: Project, port: Optional[int]=None) -> None:
+        if port is None:
+            port = _DEFAULT_SERVER_PORT
+        
+        self._project = project
+        self._port = port
+        
         address = ('', port)
         self._server = _HttpServer(address, _RequestHandler)
         self._server.project = project
@@ -55,16 +56,30 @@ class ProjectServer:
     
     def close(self) -> None:
         self._server.shutdown()
+    
+    def get_request_url(self, archive_url: str) -> str:
+        """
+        Given the absolute URL of a resource, returns the URL that should be used to
+        request it from the project server.
+        """
+        return get_request_url(archive_url, self._port, self._project.default_url_prefix)
 
 
-def get_request_url(archive_url: str, project: Project) -> str:
+def get_request_url(
+        archive_url: str,
+        port: Optional[int]=None,
+        project_default_url_prefix: Optional[str]=None,
+        ) -> str:
     """
     Given the absolute URL of a resource, returns the URL that should be used to
-    request it from the archive server.
+    request it from the project server.
     """
-    request_host = 'localhost:%s' % _SERVER_PORT
+    if port is None:
+        port = _DEFAULT_SERVER_PORT
+    
+    request_host = 'localhost:%s' % port
     return _RequestHandler.get_request_url_with_host(
-        archive_url, request_host, project.default_url_prefix)
+        archive_url, request_host, project_default_url_prefix)
 
 
 # ------------------------------------------------------------------------------
@@ -715,7 +730,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def get_request_url_with_host(
             archive_url: str,
             request_host: str,
-            default_url_prefix: str,
+            default_url_prefix: Optional[str],
             ) -> str:
         """
         Given the absolute URL of a resource, returns the URL that should be used to

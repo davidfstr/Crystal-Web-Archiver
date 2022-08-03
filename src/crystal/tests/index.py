@@ -31,11 +31,6 @@ def run_all_tests() -> bool:
     """
     os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
     
-    # FIXME: Try load test data
-    import crystal.tests.test_data as test_data
-    banner = test_data.open_text('banner.txt').read()
-    print(banner)
-    
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.time()  # capture
     for test_func in _TEST_FUNCS:

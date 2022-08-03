@@ -396,7 +396,7 @@ class Project:
     
     # === Server ===
     
-    def start_server(self) -> ProjectServer:
+    def start_server(self, port: Optional[int]=None) -> ProjectServer:
         """
         Starts an HTTP server that serves pages from this project.
         
@@ -404,7 +404,7 @@ class Project:
         """
         if self._server is None:
             import crystal.server
-            self._server = crystal.server.start(self)
+            self._server = crystal.server.ProjectServer(self, port)
         return self._server
     
     @property
