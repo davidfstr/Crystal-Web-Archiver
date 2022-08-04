@@ -639,7 +639,10 @@ def served_project(zipped_project_filename: str) -> Iterator[ProjectServer]:
         with Project(project_filepath, readonly=True) as project:
             
             # Start server
-            yield project.start_server(port=2798)  # CRYT on telephone keypad
+            yield project.start_server(
+                port=2798,  # CRYT on telephone keypad
+                verbosity='indent',
+            )
 
 
 async def _undownload_url(
