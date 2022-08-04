@@ -59,9 +59,10 @@ class OpenOrCreateDialog:
             with screenshot_if_raises():
                 mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
-        yield (mw, project_dirpath)
-        
-        await mw.close()
+        try:
+            yield (mw, project_dirpath)
+        finally:
+            await mw.close()
     
     @asynccontextmanager
     async def open(self, 
@@ -78,10 +79,11 @@ class OpenOrCreateDialog:
             with screenshot_if_raises():
                 mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
-        yield mw
-        
-        if autoclose:
-            await mw.close()
+        try:
+            yield mw
+        finally:
+            if autoclose:
+                await mw.close()
 
 
 class MainWindow:
