@@ -147,6 +147,7 @@ class MainWindow:
         await wait_for(lambda: self.main_window.IsBeingDeleted)
         await wait_for(lambda: not self.main_window.IsShown)
         await wait_for(not_condition(window_condition('cr-main-window')))
+        await OpenOrCreateDialog.wait_for()
     
     @asynccontextmanager
     async def temporarily_closed(self, project_dirpath: str) -> AsyncIterator[None]:
