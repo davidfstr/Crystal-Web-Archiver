@@ -478,7 +478,10 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                     # and try to fetch the target automatically
                     with console_output_copied() as console_output:
                         home_page = await fetch_archive_url(home_url)
-                        target_page = await fetch_archive_url(target_url)
+                        # TODO: Use a *dynamic* timeout that looks for progress in
+                        #       download tasks in the UI, similar to
+                        #       wait_for_download_to_start_and_finish
+                        target_page = await fetch_archive_url(target_url, timeout=10)
                     
                     # Ensure console does log that target in not in the archive
                     # so that user knows they must take special action to download it
@@ -513,7 +516,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                             # TODO: Use a *dynamic* timeout that looks for progress in
                             #       download tasks in the UI, similar to
                             #       wait_for_download_to_start_and_finish
-                            target_page = await fetch_archive_url(target_url, timeout=6)
+                            target_page = await fetch_archive_url(target_url, timeout=10)
                         
                         # Ensure console does log that target is being dynamically fetched,
                         # so that user knows they were successful in creating a matching group
@@ -538,7 +541,10 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                         # and try to fetch the target automatically
                         with console_output_copied() as console_output:
                             home_page = await fetch_archive_url(home_url)
-                            target_page = await fetch_archive_url(target_url)
+                            # TODO: Use a *dynamic* timeout that looks for progress in
+                            #       download tasks in the UI, similar to
+                            #       wait_for_download_to_start_and_finish
+                            target_page = await fetch_archive_url(target_url, timeout=10)
                         
                         # Ensure console does log that target is being dynamically fetched,
                         # so that user knows they were successful in creating a matching group
@@ -580,7 +586,10 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                         # and try to fetch the target automatically
                         with console_output_copied() as console_output:
                             home_page = await fetch_archive_url(home_url)
-                            target_page = await fetch_archive_url(target_url)
+                            # TODO: Use a *dynamic* timeout that looks for progress in
+                            #       download tasks in the UI, similar to
+                            #       wait_for_download_to_start_and_finish
+                            target_page = await fetch_archive_url(target_url, timeout=10)
                         
                         # Ensure console does log that target is being dynamically fetched,
                         # so that user knows they were successful in creating a matching root resource
