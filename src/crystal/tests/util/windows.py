@@ -6,7 +6,10 @@ from crystal.tests.util.controls import (
     file_dialog_returning, click_button, package_dialog_returning,
 )
 from crystal.tests.util.screenshots import screenshot_if_raises
-from crystal.tests.util.wait import wait_for, window_condition, not_condition
+from crystal.tests.util.wait import (
+    tree_has_no_children_condition,
+    wait_for, WaitTimedOut, window_condition, not_condition
+)
 from crystal.util.xos import is_mac_os
 import tempfile
 from typing import AsyncIterator, Optional, Tuple
@@ -145,6 +148,17 @@ class MainWindow:
             raise AssertionError()
     
     async def close(self) -> None:
+        # Try wait for any lingering tasks to complete.
+        # 
+        # Does workaround: https://github.com/davidfstr/Crystal-Web-Archiver/issues/74
+        try:
+            await wait_for(
+                tree_has_no_children_condition(self.task_tree),
+                timeout=4.0)  # wait only briefly
+        except WaitTimedOut:
+            print('*** MainWindow: Closing while tasks are still running. May deadlock!')
+            # (continue)
+        
         self.main_window.Close()
         await wait_for(lambda: self.main_window.IsBeingDeleted)
         await wait_for(lambda: not self.main_window.IsShown)
