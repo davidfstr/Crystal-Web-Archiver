@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from crystal.tests.util.runner import bg_sleep
+import datetime
 import time
 from typing import Callable, Optional, TYPE_CHECKING, TypeVar
 import wx
@@ -39,21 +40,27 @@ async def wait_while(
     if total_timeout is None:
         total_timeout = DEFAULT_WAIT_TIMEOUT
     
+    def print_new_status(status: object) -> None:
+        print('[' + datetime.datetime.now().strftime('%H:%M:%S.%f') + ']' + ' ' + str(status))
+    
     last_status = progression_func()
     if last_status is None:
         return  # done
+    print_new_status(last_status)
     
     def do_check_status() -> Optional[bool]:
         nonlocal last_status
         
         current_status = progression_func()
         if current_status is None:
+            print_new_status('DONE')
             return True  # done
         
         changed_status = (current_status != last_status)  # capture
         last_status = current_status  # reinterpret
         
         if changed_status:
+            print_new_status(current_status)
             return False  # progress
         else:
             return None  # no progress

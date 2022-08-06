@@ -296,6 +296,12 @@ Release Notes ⋮
     * Various errors of the form
       `wrapped C/C++ object of type X has been deleted` that could be raised
       while Crystal is closing a project are now handled correctly.
+    * Automated UI tests pass consistently:
+        * Tests no longer rely on network access or real websites.
+        * Did workaround wxDialog.ShowModal() hang on macOS.
+        * Did workaround deadlock that can happen when closing a main window
+          while there are still lingering tasks running.
+        * Did add longer timeouts to accomodate slow test VMs on GitHub Actions.
 
 * Documentation improvements
     * Improved introduction in the README.

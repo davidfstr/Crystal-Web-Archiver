@@ -25,29 +25,36 @@ import os
 import re
 import shutil
 from textwrap import dedent
-from typing import Dict, Generator, List, Optional
+from typing import Dict, Generator, List, Literal, Optional
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 
 
-_SERVER_PORT = 2797
+_DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
 
 
-def start(project: Project) -> ProjectServer:
-    """
-    Starts the archive server on a daemon thread.
-    """
-    return ProjectServer(project)
+Verbosity = Literal['normal', 'indent']
 
 
 class ProjectServer:
-    def __init__(self, project: Project) -> None:
-        port = _SERVER_PORT
+    """
+    Runs the archive server on a daemon thread.
+    """
+    def __init__(self, project: Project, port: Optional[int]=None, verbosity: Verbosity='normal') -> None:
+        if port is None:
+            port = _DEFAULT_SERVER_PORT
+        
+        self._project = project
+        self._port = port
+        self._verbosity = verbosity
+        
         address = ('', port)
         self._server = _HttpServer(address, _RequestHandler)
         self._server.project = project
+        self._server.verbosity = verbosity
         def bg_task():
             try:
-                print_success('Server started on port %s.' % port)
+                if verbosity == 'normal':
+                    print_success('Server started on port %s.' % port)
                 self._server.serve_forever()
             finally:
                 self._server.server_close()
@@ -55,16 +62,30 @@ class ProjectServer:
     
     def close(self) -> None:
         self._server.shutdown()
+    
+    def get_request_url(self, archive_url: str) -> str:
+        """
+        Given the absolute URL of a resource, returns the URL that should be used to
+        request it from the project server.
+        """
+        return get_request_url(archive_url, self._port, self._project.default_url_prefix)
 
 
-def get_request_url(archive_url: str, project: Project) -> str:
+def get_request_url(
+        archive_url: str,
+        port: Optional[int]=None,
+        project_default_url_prefix: Optional[str]=None,
+        ) -> str:
     """
     Given the absolute URL of a resource, returns the URL that should be used to
-    request it from the archive server.
+    request it from the project server.
     """
-    request_host = 'localhost:%s' % _SERVER_PORT
+    if port is None:
+        port = _DEFAULT_SERVER_PORT
+    
+    request_host = 'localhost:%s' % port
     return _RequestHandler.get_request_url_with_host(
-        archive_url, request_host, project.default_url_prefix)
+        archive_url, request_host, project_default_url_prefix)
 
 
 # ------------------------------------------------------------------------------
@@ -208,11 +229,14 @@ _ENABLE_PIN_DATE_MITIGATION = True
 
 class _HttpServer(HTTPServer):
     project: Project
+    verbosity: Verbosity
 
 
 class _RequestHandler(BaseHTTPRequestHandler):
     # Prevent slow/broken request from blocking all other requests
     timeout = 1  # second
+    
+    server: _HttpServer
     
     @property
     def project(self) -> Project:
@@ -329,7 +353,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 # in downloading it immediately upon access
                 matching_rg = self._find_group_matching_archive_url(archive_url)
                 if matching_rg is not None and not readonly and dynamic_ok:
-                    print_warning('*** Dynamically downloading new resource in group %r: %s' % (
+                    self._print_warning('*** Dynamically downloading new resource in group %r: %s' % (
                         matching_rg.name,
                         archive_url,
                     ))
@@ -352,7 +376,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     # in downloading it immediately upon access
                     matching_rr = self._find_root_resource_matching_archive_url(archive_url)
                     if matching_rr is not None:
-                        print_warning('*** Dynamically downloading root resource %r: %s' % (
+                        self._print_warning('*** Dynamically downloading root resource %r: %s' % (
                             matching_rr.name,
                             archive_url,
                         ))
@@ -362,7 +386,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     # in downloading it immediately upon access
                     matching_rg = self._find_group_matching_archive_url(archive_url)
                     if matching_rg is not None:
-                        print_warning('*** Dynamically downloading existing resource in group %r: %s' % (
+                        self._print_warning('*** Dynamically downloading existing resource in group %r: %s' % (
                             matching_rg.name,
                             archive_url,
                         ))
@@ -396,7 +420,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 )
                 redirect_url = self.get_request_url(requested_archive_url)
                 
-                print_warning('*** Dynamically rewriting link from %s: %s' % (
+                self._print_warning('*** Dynamically rewriting link from %s: %s' % (
                     referer_archive_url,
                     requested_archive_url,
                 ))
@@ -526,7 +550,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             'archive_url': archive_url
         }).encode('utf-8'))
         
-        print_error('*** Requested resource not in archive: ' + archive_url)
+        self._print_error('*** Requested resource not in archive: ' + archive_url)
     
     def send_redirect(self, redirect_url: str, *, vary_referer: bool=False) -> None:
         self.send_response(307)
@@ -585,7 +609,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             'archive_url': archive_url
         }).encode('utf-8'))
         
-        print_error('*** Requested resource was fetched with error: ' + archive_url)
+        self._print_error('*** Requested resource was fetched with error: ' + archive_url)
     
     def send_http_revision(self, revision: ResourceRevision) -> None:
         metadata = revision.metadata
@@ -626,7 +650,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 self.send_header(name, value)
             else:
                 if name.lower() not in _HEADER_DENYLIST:
-                    print_warning(
+                    self._print_warning(
                         '*** Ignoring unknown header in archive: %s: %s' % (name, value))
                 continue
         self.end_headers()
@@ -715,7 +739,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def get_request_url_with_host(
             archive_url: str,
             request_host: str,
-            default_url_prefix: str,
+            default_url_prefix: Optional[str],
             ) -> str:
         """
         Given the absolute URL of a resource, returns the URL that should be used to
@@ -747,10 +771,31 @@ class _RequestHandler(BaseHTTPRequestHandler):
     # === Logging ===
     
     def log_error(self, format, *args):  # override
-        print_error(format % args)
+        self._print_error(format % args)
     
     def log_message(self, format, *args):  # override
-        print_info(format % args)
+        self._print_info(format % args)
+    
+    # === Print ===
+    
+    def _print_info(self, message: str) -> None:
+        if self._verbosity == 'indent':
+            message = '    ' + message  # reinterpret
+        print_info(message)
+    
+    def _print_warning(self, message: str) -> None:
+        if self._verbosity == 'indent':
+            message = '    ' + message  # reinterpret
+        print_warning(message)
+    
+    def _print_error(self, message: str) -> None:
+        if self._verbosity == 'indent':
+            message = '    ' + message  # reinterpret
+        print_error(message)
+    
+    @property
+    def _verbosity(self) -> Verbosity:
+        return self.server.verbosity
 
 
 _PIN_DATE_JS_TEMPLATE = dedent(

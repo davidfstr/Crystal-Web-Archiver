@@ -89,6 +89,7 @@ Source: "dist\wxbase315u_net_vc140.dll"; DestDir: "{app}"
 Source: "dist\wxbase315u_vc140.dll"; DestDir: "{app}"
 Source: "dist\wxmsw315u_core_vc140.dll"; DestDir: "{app}"
 Source: "dist\wxmsw315u_html_vc140.dll"; DestDir: "{app}"
+Source: "dist\lib\crystal\tests\test_data\xkcd.crystalproj.zip"; DestDir: "{app}\lib\crystal\tests\test_data"
 
 [Icons]
 Name: "{group}\Crystal Web Archiver"; Filename: "{app}\Crystal Web Archiver.exe"

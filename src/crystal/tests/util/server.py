@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from crystal.server import get_request_url
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 import re
@@ -16,20 +17,6 @@ def assert_does_open_webbrowser_to(request_url: str) -> Iterator[None]:
     with unittest.mock.patch('webbrowser.open', spec=True) as mock_open:
         yield
         mock_open.assert_called_with(request_url)
-
-
-def get_request_url(archive_url: str) -> str:
-    from crystal.model import Project
-    import crystal.server
-    
-    # TODO: Alter API crystal.server.get_request_url() to accept
-    #       default_url_prefix as parameter rather than a whole Project,
-    #       so that we don't have to mock a whole Project here.
-    project = unittest.mock.MagicMock(spec=Project)
-    project.default_url_prefix = None
-    
-    request_url = crystal.server.get_request_url(archive_url, project)
-    return request_url
 
 
 async def is_url_not_in_archive(archive_url: str) -> bool:

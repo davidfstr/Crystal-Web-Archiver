@@ -221,12 +221,12 @@ class MainWindow:
         
         # TODO: If the server couldn't be started (ex: due to the default port being in
         #       use), report an appropriate error.
-        self.project.start_server()
+        project_server = self.project.start_server()
         
         selected_entity = self.entity_tree.selected_entity
         assert isinstance(selected_entity, (Resource, RootResource))
         archive_url = selected_entity.resource.url
-        request_url = crystal.server.get_request_url(archive_url, self.project)
+        request_url = project_server.get_request_url(archive_url)
         webbrowser.open(request_url)
     
     def _on_selected_entity_changed(self, event):
