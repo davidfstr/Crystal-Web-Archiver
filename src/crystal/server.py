@@ -623,6 +623,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self._print_error('*** Requested resource was fetched with error: ' + archive_url)
     
     def send_http_revision(self, revision: ResourceRevision) -> None:
+        if revision.is_http_304:
+            def do_resolve_http_304():
+                nonlocal revision
+                revision = revision.resolve_http_304()  # reinterpret
+            fg_call_and_wait(do_resolve_http_304)
+        
         metadata = revision.metadata
         assert metadata is not None
         

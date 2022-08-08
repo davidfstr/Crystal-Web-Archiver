@@ -10,6 +10,7 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 from __future__ import annotations
 
 from collections import OrderedDict
+import copy
 from crystal.plugins import (
     phpbb as plugins_phpbb,
     substack as plugins_substack,
@@ -795,6 +796,19 @@ class Resource:
                 id=id))
         return revs
     
+    def revision_for_etag(self) -> Dict[str, ResourceRevision]:
+        """
+        Returns a map of each known ETag to a matching ResourceRevision that is NOT an HTTP 304.
+        """
+        revision_for_etag = {}
+        for revision in self.revisions():
+            if revision.is_http_304:
+                continue
+            etag = revision.etag
+            if etag is not None:
+                revision_for_etag[etag] = revision
+        return revision_for_etag
+    
     # NOTE: Only used from a Python REPL at the moment
     def try_normalize_url(self) -> bool:
         """
@@ -977,7 +991,7 @@ class ResourceRevision:
         
         Threadsafe.
         """
-        return ResourceRevision._create(
+        return ResourceRevision._create_from_stream(
             resource,
             request_cookie=request_cookie,
             error=error)
@@ -1001,7 +1015,7 @@ class ResourceRevision:
         * body_stream -- file-like object containing the revision body.
         """
         try:
-            self = ResourceRevision._create(
+            self = ResourceRevision._create_from_stream(
                 resource,
                 request_cookie=request_cookie,
                 metadata=metadata,
@@ -1009,6 +1023,10 @@ class ResourceRevision:
         except Exception as e:
             return ResourceRevision.create_from_error(resource, e, request_cookie)
         else:
+            # TODO: I don't think the following code actually works,
+            #       because the Date header it's trying to add won't actually
+            #       be saved to the database...
+            # 
             # If no HTTP Date header was returned by the origin server,
             # auto-populate it with the current datetime, as per RFC 7231
             date_str = self._get_first_value_of_http_header('date')
@@ -1023,7 +1041,7 @@ class ResourceRevision:
             return self
     
     @staticmethod
-    def _create(
+    def _create_from_stream(
             resource: Resource,
             *, request_cookie: Optional[str]=None,
             error: Optional[Exception]=None,
@@ -1071,6 +1089,20 @@ class ResourceRevision:
                 fg_call_and_wait(fg_task)
                 raise
         
+        return self
+    
+    @staticmethod
+    def _create_from_revision_and_new_metadata(
+            revision: ResourceRevision,
+            metadata: ResourceRevisionMetadata
+            ) -> ResourceRevision:
+        self = ResourceRevision()
+        self.resource = revision.resource
+        self.request_cookie = revision.request_cookie
+        self.error = revision.error
+        self.metadata = metadata
+        self._id = revision._id
+        self.has_body = revision.has_body
         return self
     
     @staticmethod
@@ -1308,6 +1340,10 @@ class ResourceRevision:
         else:
             return date + datetime.timedelta(seconds=age)
     
+    @property
+    def etag(self) -> Optional[str]:
+        return self._get_first_value_of_http_header('etag')
+    
     # === Body ===
     
     def size(self):
@@ -1385,6 +1421,52 @@ class ResourceRevision:
             links.append(create_external_link(redirect_url, self._redirect_title, 'Redirect', True))
         
         return (doc, links, content_type_with_options)
+    
+    # === Operations ===
+    
+    @property
+    def is_http_304(self) -> bool:
+        metadata = self.metadata  # cache
+        return metadata is not None and metadata['status_code'] == 304
+    
+    def resolve_http_304(self) -> ResourceRevision:
+        """
+        If this revision is an HTTP 304 Not Modified which redirects to a
+        valid known revision of the same resource, returns a new ResourceRevision
+        representing the target revision plus various headers of the HTTP 304
+        overlaid on top of it.
+        
+        Otherwise returns self (which could still be an HTTP 304).
+        """
+        if not self.is_http_304:
+            return self
+        
+        target_etag = self._get_first_value_of_http_header('etag')
+        if target_etag is None:
+            # Target ETag missing
+            return self  # is the original HTTP 304
+        
+        target_revision = self.resource.revision_for_etag().get(target_etag)
+        if target_revision is None:
+            # Target ETag did not correspond to known revision of resource
+            return self  # is the original HTTP 304
+        
+        # Replace various headers in the target revision (from RFC 7232 §4.1)
+        # with updated values for those headers from this HTTP 304 revision
+        assert target_revision.metadata is not None
+        new_metadata = copy.deepcopy(target_revision.metadata)
+        for header_name in ['Cache-Control', 'Content-Location', 'Date', 'ETag', 'Expires', 'Vary']:
+            header_value = self._get_first_value_of_http_header(header_name)
+            if header_value is not None:
+                # Set header_name = header_value in new_metadata, replacing any older value
+                header_name_lower = header_name.lower()  # cache
+                new_metadata['headers'] = [
+                    (k, v)
+                    for (k, v) in new_metadata['headers']
+                    if k.lower() != header_name_lower
+                ] + [(header_name, header_value)]
+        
+        return ResourceRevision._create_from_revision_and_new_metadata(target_revision, new_metadata)
     
     def delete(self):
         project = self.project

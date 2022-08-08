@@ -6,11 +6,12 @@ from collections import defaultdict
 from crystal import __version__
 from crystal.model import Resource, ResourceRevision, ResourceRevisionMetadata
 from crystal.util.xos import is_windows
+from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
 import io
 import platform
 import ssl
-from typing import Dict, Optional, Tuple
+from typing import cast, Dict, Iterable, Optional, Tuple
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -55,13 +56,31 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
     else:
         request_cookie = None
     
+    known_etags = fg_call_and_wait(lambda: resource.revision_for_etag().keys())
+    
     try:
         progress_listener.subtitle = 'Waiting for response...'
         (metadata, body_stream) = ResourceRequest.create(
             resource.url, 
-            request_cookie
+            request_cookie,
+            known_etags,
         )()
         try:
+            # If an HTTP 304 response was received without an ETag,
+            # try to populate the ETag value so that future calls to
+            # ResourceRevision.resolve_http_304() will actually be
+            # able to find the original revision
+            if metadata is not None and metadata['status_code'] == 304:
+                response_etags = [
+                    cur_value
+                    for (cur_name, cur_value) in metadata['headers']
+                    if cur_name.lower() == 'etag'
+                ]
+                response_etag = response_etags[0] if len(response_etags) > 0 else None
+                if response_etag is None and len(known_etags) == 1:
+                    (known_etag,) = known_etags
+                    metadata['headers'].append(('ETag', known_etag))
+            
             # TODO: Provide incremental feedback such as '7 KB of 15 KB'
             progress_listener.subtitle = 'Receiving response...'
             return ResourceRevision.create_from_response(
@@ -86,14 +105,18 @@ class ResourceRequest:
     """
     
     @staticmethod
-    def create(url: str, request_cookie: Optional[str]=None) -> 'ResourceRequest':
+    def create(
+            url: str,
+            request_cookie: Optional[str]=None,
+            known_etags: Iterable[str]=()
+            ) -> 'ResourceRequest':
         """
         Raises:
         * urllib.error.URLError -- if URL scheme not supported.
         """
         url_parts = urlparse(url)
         if url_parts.scheme in ('http', 'https'):
-            return HttpResourceRequest(url, request_cookie)
+            return HttpResourceRequest(url, request_cookie, known_etags)
         elif url_parts.scheme == 'ftp':
             return UrlResourceRequest(url)
         else:
@@ -111,13 +134,18 @@ class ResourceRequest:
 
 
 class HttpResourceRequest(ResourceRequest):
-    def __init__(self, url: str, request_cookie: Optional[str]=None) -> None:
+    def __init__(self, 
+            url: str,
+            request_cookie: Optional[str]=None,
+            known_etags: Iterable[str]=()
+            ) -> None:
         if urlparse(url).scheme not in ('http', 'https'):
             raise ValueError
         self.url = url
         self._request_cookie = request_cookie
+        self._known_etags = known_etags
     
-    def __call__(self):
+    def __call__(self) -> Tuple[ResourceRevisionMetadata, io.BytesIO]:
         url_parts = urlparse(self.url)
         scheme = url_parts.scheme
         host_and_port = url_parts.netloc
@@ -148,6 +176,9 @@ class HttpResourceRequest(ResourceRequest):
             headers['User-Agent'] = _USER_AGENT_STRING
         if self._request_cookie is not None:
             headers['Cookie'] = self._request_cookie
+        if_none_match_value = ', '.join(self._known_etags)
+        if if_none_match_value != '':
+            headers['If-None-Match'] = if_none_match_value
         for (k, v) in _EXTRA_HEADERS.items():
             headers[k] = v
         
@@ -168,7 +199,7 @@ class HttpResourceRequest(ResourceRequest):
             read = response.read
             fileno = response.fileno
             mode = 'rb'
-        return (metadata, HttpResourceBodyStream())
+        return (metadata, cast(io.BytesIO, HttpResourceBodyStream()))
     
     def __repr__(self):
         return 'HttpResourceRequest(%s)' % repr(self.url)

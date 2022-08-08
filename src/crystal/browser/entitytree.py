@@ -330,6 +330,8 @@ class _ResourceNode(Node):
                 except CannotDownloadWhenProjectReadOnlyError:
                     self.children = [_ChildrenUnavailableBecauseReadOnlyNode()]
                 else:
+                    revision = revision.resolve_http_304()  # reinterpret
+                    
                     def bg_task():
                         # Link parsing is I/O intensive, so do it on a background thread
                         self.resource_links = revision.links()
