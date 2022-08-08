@@ -271,7 +271,7 @@ Release Notes ⋮
 
 * Downloading improvements
     * Can force redownload of older URLs using the `--stale-before` CLI option.
-    * Fix to send URL path rather than absolute URL in HTTP GET requests,
+    * Fix to send URL path and query rather than absolute URL in HTTP GET requests,
       improving conformance to RFC 2616 (HTTP/1.1).
         * This helps download WordPress sites successfully.
     * Give up if it takes more than 10 seconds to start downloading an URL.

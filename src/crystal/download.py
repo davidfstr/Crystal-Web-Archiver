@@ -121,7 +121,10 @@ class HttpResourceRequest(ResourceRequest):
         url_parts = urlparse(self.url)
         scheme = url_parts.scheme
         host_and_port = url_parts.netloc
-        path = url_parts.path or '/'
+        path_and_query = (
+            (url_parts.path or '/') + 
+            ('' if url_parts.query == '' else f'?{url_parts.query}')
+        )
         
         if scheme == 'http':
             conn = HTTPConnection(
@@ -148,7 +151,7 @@ class HttpResourceRequest(ResourceRequest):
         for (k, v) in _EXTRA_HEADERS.items():
             headers[k] = v
         
-        conn.request('GET', path, headers=headers)
+        conn.request('GET', path_and_query, headers=headers)
         response = conn.getresponse()
         
         metadata = ResourceRevisionMetadata({
