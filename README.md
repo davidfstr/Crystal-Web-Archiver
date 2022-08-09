@@ -270,7 +270,8 @@ Release Notes ⋮
 ### main
 
 * Downloading improvements
-    * Can force redownload of older URLs using the `--stale-before` CLI option.
+    * Can redownload newer versions of existing URLs using the UI or `--stale-before` CLI option.
+    * Can download sites that require cookie-based login using the UI.
     * Fix to send URL path and query rather than absolute URL in HTTP GET requests,
       improving conformance to RFC 2616 (HTTP/1.1).
         * This helps download WordPress sites successfully.
@@ -324,7 +325,7 @@ Last but not least, [Substack]-based sites are now recognized specially and can 
 downloaded effectively without creating an explosion of URL combinations.
 
 * Regular downloading improvements
-    * Can now download sites that require cookie-based login
+    * Can download sites that require cookie-based login
       using the `--cookie` CLI option.
 
 * Dynamic downloading improvements

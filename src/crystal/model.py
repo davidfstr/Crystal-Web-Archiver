@@ -293,6 +293,18 @@ class Project:
             url.startswith(default_url_prefix + '/')
         )
     
+    def request_cookies_in_use(self, *, most_recent_first: bool=True) -> List[str]:
+        """
+        Returns all distinct Cookie HTTP header values used by revisions in this project.
+        """
+        ordering = 'desc' if most_recent_first else 'asc'
+        
+        c = self._db.cursor()
+        return [
+            rc for (rc,) in
+            c.execute(f'select distinct request_cookie from resource_revision where request_cookie is not null order by id {ordering}')
+        ]
+    
     def _get_min_fetch_date(self) -> Optional[datetime.datetime]:
         return self._min_fetch_date
     def _set_min_fetch_date(self, min_fetch_date: Optional[datetime.datetime]) -> None:

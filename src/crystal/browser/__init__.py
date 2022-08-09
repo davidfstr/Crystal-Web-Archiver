@@ -2,6 +2,7 @@ from crystal import __version__ as crystal_version
 from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree
+from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.progress import OpenProjectProgressListener
@@ -283,6 +284,9 @@ class MainWindow:
         
         version_label = wx.StaticText(pane, label=f'v{crystal_version}')
         
+        preferences_button = wx.Button(pane, label='Preferences...')
+        bind(preferences_button, wx.EVT_BUTTON, lambda event: PreferencesDialog(self.frame, self.project))
+        
         if readonly:
             rwi_label = '🔒' if not is_windows() else 'Read only'
             rwi_tooltip = 'Read only project'
@@ -295,11 +299,15 @@ class MainWindow:
         pane_sizer.Add(
             version_label,
             proportion=1,
-            flag=wx.EXPAND|wx.ALL,
+            flag=wx.CENTER|wx.EXPAND|wx.ALL,
+            border=_WINDOW_INNER_PADDING)
+        pane_sizer.Add(
+            preferences_button,
+            flag=wx.CENTER|wx.ALL &~ wx.RIGHT,
             border=_WINDOW_INNER_PADDING)
         pane_sizer.Add(
             read_write_icon,
-            flag=wx.EXPAND|wx.ALL,
+            flag=wx.CENTER|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         
         return pane
