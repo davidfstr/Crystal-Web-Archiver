@@ -284,7 +284,7 @@ class MainWindow:
         
         version_label = wx.StaticText(pane, label=f'v{crystal_version}')
         
-        preferences_button = wx.Button(pane, label='Preferences...')
+        preferences_button = wx.Button(pane, label='Preferences...', name='cr-preferences-button')
         bind(preferences_button, wx.EVT_BUTTON, lambda event: PreferencesDialog(self.frame, self.project))
         
         if readonly:

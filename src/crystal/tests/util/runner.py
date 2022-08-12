@@ -122,7 +122,7 @@ class FetchUrlCommand(Command['WebPage']):
             response_stream = e
         with response_stream as response:
             response_text = response.read().decode('utf-8')
-        return WebPage(response_stream.status, response_text)
+        return WebPage(response_stream.status, response_stream.headers, response_text)
 
 
 # ------------------------------------------------------------------------------

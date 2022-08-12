@@ -15,6 +15,8 @@ _TEST_FUNCS = [
     test_workflows.test_can_download_and_serve_a_site_requiring_dynamic_url_discovery,
     test_workflows.test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting,
     test_workflows.test_cannot_download_anything_given_project_is_opened_as_readonly,
+    test_workflows.test_can_update_downloaded_site_with_newer_page_revisions,
+    test_workflows.test_can_download_and_serve_a_site_requiring_cookie_authentication,
 ]
 
 

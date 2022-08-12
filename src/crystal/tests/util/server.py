@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from crystal.server import get_request_url
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+from email.message import EmailMessage
 import re
 from typing import Dict, Iterator, Optional
 import unittest.mock
@@ -37,8 +38,9 @@ async def fetch_archive_url(
 
 
 class WebPage:
-    def __init__(self, status: int, content: str) -> None:
+    def __init__(self, status: int, headers: EmailMessage, content: str) -> None:
         self._status = status
+        self._headers = headers
         self._content = content
     
     @property
@@ -47,6 +49,10 @@ class WebPage:
             self._status == 404 and
             self.title == 'Not in Archive | Crystal Web Archiver'
         )
+    
+    @property
+    def etag(self) -> Optional[str]:
+        return self._headers.get('ETag')
     
     @property
     def title(self) -> Optional[str]:

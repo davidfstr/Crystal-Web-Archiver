@@ -16,7 +16,7 @@ from crystal.tests.util.wait import (
     tree_has_no_children_condition,
 )
 from crystal.tests.util.windows import (
-    AddGroupDialog, AddUrlDialog, MainWindow, OpenOrCreateDialog,
+    AddGroupDialog, AddUrlDialog, MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
 from crystal.util.xthreading import is_foreground_thread
 import os
@@ -625,6 +625,133 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
     #   - when expand undownloaded resource node, does show read-only error node
     #   - when browsing a served site, no resources are ever dynamically downloaded
     #     (although dynamic link rewriting still should work)
+    pass
+
+
+async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
+    # Define original URLs
+    home_original_url = 'https://xkcd.com/'
+    comic1_original_url = 'https://xkcd.com/1/'
+    
+    # Define versions
+    home_v1_etag = '"62e1f036-1edc"'
+    home_v2_etag = '"62e1f036-1f64"'
+    comic1_v1_etag = '"62e1f036-1f21"'
+    
+    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+            # Start xkcd v1
+            with served_project('xkcd.crystalproj.zip') as sp1:
+                # Define URLs
+                home_url = sp1.get_request_url(home_original_url)
+                comic1_url = sp1.get_request_url(comic1_original_url)
+                
+                # Download: Home, Comic #1
+                if True:
+                    click_button(mw.add_url_button)
+                    aud = await AddUrlDialog.wait_for()
+                    aud.name_field.Value = 'Home'
+                    aud.url_field.Value = home_url
+                    await aud.ok()
+                    
+                    click_button(mw.add_url_button)
+                    aud = await AddUrlDialog.wait_for()
+                    aud.name_field.Value = 'Comic #1'
+                    aud.url_field.Value = comic1_url
+                    await aud.ok()
+                    
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                    assert root_ti is not None
+                    (home_ti, comic1_ti) = root_ti.Children
+                    
+                    home_ti.SelectItem()
+                    click_button(mw.download_button)
+                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                    
+                    comic1_ti.SelectItem()
+                    click_button(mw.download_button)
+                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                
+                # Start server
+                home_ti.SelectItem()
+                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                    click_button(mw.view_button)
+                
+                # Verify etag is v1 for both
+                assert home_v1_etag == (await fetch_archive_url(home_url)).etag
+                assert comic1_v1_etag == (await fetch_archive_url(comic1_url)).etag
+            
+            # Start xkcd v2
+            with served_project('xkcd-v2.crystalproj.zip') as sp2:
+                # Define URLs
+                assert home_url == sp2.get_request_url(home_original_url)
+                assert comic1_url == sp2.get_request_url(comic1_original_url)
+                
+                # Download: Home, Comic #1
+                if True:
+                    home_ti.SelectItem()
+                    click_button(mw.download_button)
+                    await wait_for_download_to_start_and_finish(mw.task_tree,
+                        immediate_finish_ok=True)
+                    
+                    comic1_ti.SelectItem()
+                    click_button(mw.download_button)
+                    await wait_for_download_to_start_and_finish(mw.task_tree,
+                        immediate_finish_ok=True)
+                
+                # Verify etag is still v1 for both
+                assert home_v1_etag == (await fetch_archive_url(home_url)).etag
+                assert comic1_v1_etag == (await fetch_archive_url(comic1_url)).etag
+                
+                # Change preferences: Stale if downloaded before today
+                click_button(mw.preferences_button)
+                pd = await PreferencesDialog.wait_for()
+                pd.stale_before_checkbox.Value = True
+                await pd.ok()
+                
+                # Download: Home, Comic #1
+                if True:
+                    home_ti.SelectItem()
+                    click_button(mw.download_button)
+                    await wait_for_download_to_start_and_finish(mw.task_tree,
+                        immediate_finish_ok=True)
+                    
+                    comic1_ti.SelectItem()
+                    click_button(mw.download_button)
+                    await wait_for_download_to_start_and_finish(mw.task_tree,
+                        immediate_finish_ok=True)
+                
+                # Change preferences: Undo: Stale if downloaded before today
+                click_button(mw.preferences_button)
+                pd = await PreferencesDialog.wait_for()
+                pd.stale_before_checkbox.Value = False
+                await pd.ok()
+                
+                # Verify etag is v2 for Home, but still v1 for Comic #1
+                assert home_v2_etag == (await fetch_archive_url(home_url)).etag
+                assert comic1_v1_etag == (await fetch_archive_url(comic1_url)).etag
+        
+        with Project(project_dirpath) as project:
+            # Ensure Home was downloaded twice, each time with HTTP 200
+            home_r = project.get_resource(home_url)
+            assert home_r is not None
+            (home_rr1, home_rr2) = home_r.revisions()
+            assert 200 == home_rr1.status_code
+            assert 200 == home_rr2.status_code
+            
+            # Ensure Comic #1 was downloaded twice, first with HTTP 200, then with HTTP 304
+            comic1_r = project.get_resource(comic1_url)
+            assert comic1_r is not None
+            (comic1_rr1, comic1_rr2) = comic1_r.revisions()
+            assert 200 == comic1_rr1.status_code
+            assert 304 == comic1_rr2.status_code
+            
+            # Ensure Comic #1's second revision does redirect to its first revision
+            assert comic1_rr1.etag == comic1_rr2.resolve_http_304().etag
+
+
+@skip('not yet automated')
+async def test_can_download_and_serve_a_site_requiring_cookie_authentication() -> None:
     pass
 
 

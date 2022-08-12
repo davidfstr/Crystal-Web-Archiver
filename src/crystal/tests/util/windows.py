@@ -12,8 +12,11 @@ from crystal.tests.util.wait import (
 )
 from crystal.util.xos import is_mac_os
 import tempfile
-from typing import AsyncIterator, Optional, Tuple
+from typing import AsyncIterator, Optional, Tuple, TYPE_CHECKING
 import wx
+
+if TYPE_CHECKING:
+    import wx.adv
 
 
 # ------------------------------------------------------------------------------
@@ -101,6 +104,7 @@ class MainWindow:
     update_membership_button: wx.Button
     view_button: wx.Button
     task_tree: wx.TreeCtrl
+    preferences_button: wx.Button
     read_write_icon: wx.StaticText
     
     @staticmethod
@@ -131,6 +135,8 @@ class MainWindow:
         assert isinstance(self.view_button, wx.Button)
         self.task_tree = self.main_window.FindWindowByName('cr-task-tree')
         assert isinstance(self.task_tree, wx.TreeCtrl)
+        self.preferences_button = self.main_window.FindWindowByName('cr-preferences-button')
+        assert isinstance(self.preferences_button, wx.Button)
         self.read_write_icon = self.main_window.FindWindowByName('cr-read-write-icon')
         assert isinstance(self.read_write_icon, wx.StaticText)
     
@@ -243,6 +249,36 @@ class AddGroupDialog:
     async def ok(self) -> None:
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-add-group-dialog')))
+
+
+class PreferencesDialog:
+    stale_before_checkbox: wx.CheckBox
+    stale_before_date_picker: 'wx.adv.DatePickerCtrl'
+    cookie_field: wx.ComboBox
+    ok_button: wx.Button
+    
+    @staticmethod
+    async def wait_for() -> PreferencesDialog:
+        import wx.adv
+        
+        self = PreferencesDialog(ready=True)
+        preferences_dialog = await wait_for(window_condition('cr-preferences-dialog'))  # type: wx.Window
+        self.stale_before_checkbox = preferences_dialog.FindWindowByName('cr-preferences-dialog__stale-before-checkbox')
+        assert isinstance(self.stale_before_checkbox, wx.CheckBox)
+        self.stale_before_date_picker = preferences_dialog.FindWindowByName('cr-preferences-dialog__stale-before-date-picker')
+        assert isinstance(self.stale_before_date_picker, wx.adv.DatePickerCtrl)
+        self.cookie_field = preferences_dialog.FindWindowByName('cr-preferences-dialog__cookie-field')
+        assert isinstance(self.cookie_field, wx.ComboBox)
+        self.ok_button = preferences_dialog.FindWindowById(wx.ID_OK)
+        assert isinstance(self.ok_button, wx.Button)
+        return self
+    
+    def __init__(self, *, ready: bool=False) -> None:
+        assert ready, 'Did you mean to use PreferencesDialog.wait_for()?'
+    
+    async def ok(self) -> None:
+        click_button(self.ok_button)
+        await wait_for(not_condition(window_condition('cr-preferences-dialog')))
 
 
 # ------------------------------------------------------------------------------

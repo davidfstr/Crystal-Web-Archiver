@@ -4,7 +4,7 @@ from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, tree_has_children_condition, 
-    tree_has_no_children_condition, wait_for, wait_while,
+    tree_has_no_children_condition, wait_for, wait_while, WaitTimedOut
 )
 import re
 from typing import Callable, List, Optional
@@ -16,6 +16,7 @@ import wx
 
 async def wait_for_download_to_start_and_finish(
         task_tree: wx.TreeCtrl,
+        *, immediate_finish_ok: bool=False,
         ) -> None:
     from crystal.task import DELAY_BETWEEN_DOWNLOADS
     
@@ -30,7 +31,13 @@ async def wait_for_download_to_start_and_finish(
     period = DEFAULT_WAIT_PERIOD
     
     # Wait for start of download
-    await wait_for(tree_has_children_condition(task_tree))
+    try:
+        await wait_for(tree_has_children_condition(task_tree))
+    except WaitTimedOut:
+        if immediate_finish_ok:
+            return
+        else:
+            raise
     
     # Determine how many items are being downloaded
     item_count: int
@@ -39,6 +46,8 @@ async def wait_for_download_to_start_and_finish(
     while True:
         download_task_title = first_task_title_func()
         if download_task_title is None:
+            if immediate_finish_ok:
+                return
             raise AssertionError(
                 'Download finished early without finding sub-resources. '
                 'Did the download fail? '
