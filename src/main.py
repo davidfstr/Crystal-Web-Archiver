@@ -132,7 +132,8 @@ def main(args: List[str]) -> None:
     parser.add_argument(
         '--test',
         help='Run automated tests.',
-        action='store_true',
+        action='store',
+        nargs='*',
     )
     parser.add_argument(
         'filepath',
@@ -162,13 +163,13 @@ def main(args: List[str]) -> None:
     import wx
     
     # Starts tests if requested
-    if parsed_args.test:
+    if parsed_args.test is not None:
         from crystal.util.xthreading import bg_call_later, fg_call_later
         def bg_task():
             is_ok = False
             try:
-                from crystal.tests.index import run_all_tests
-                is_ok = run_all_tests()
+                from crystal.tests.index import run_tests
+                is_ok = run_tests(parsed_args.test)
             finally:
                 fg_call_later(lambda: sys.exit(0 if is_ok else 1))
         bg_call_later(bg_task)

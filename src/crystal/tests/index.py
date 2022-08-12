@@ -4,7 +4,7 @@ import os
 import sys
 import time
 import traceback
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from unittest import SkipTest
 
 
@@ -21,9 +21,9 @@ _TEST_FUNCS = [
 _TestFuncId = Tuple[str, str]  # (module, func_name)
 
 
-def run_all_tests() -> bool:
+def run_tests(test_names: List[str]) -> bool:
     """
-    Runs all automated UI tests, printing a summary report,
+    Runs automated UI tests, printing a summary report,
     and returning whether the run was OK.
     
     The format of the summary report is designed to be similar
@@ -33,10 +33,18 @@ def run_all_tests() -> bool:
     
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.time()  # capture
+    run_count = 0
     for test_func in _TEST_FUNCS:
         test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
+        test_name = f'{test_func_id[0]}.{test_func_id[1]}'
         
-        os.environ['CRYSTAL_SCREENSHOT_ID'] = f'{test_func_id[0]}.{test_func_id[1]}'
+        # Only run test if it was requested (or if all tests are to be run)
+        if len(test_names) > 0:
+            if test_name not in test_names:
+                continue
+        run_count += 1
+        
+        os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
         
         print('=' * 70)
         print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]})')
@@ -108,7 +116,7 @@ def run_all_tests() -> bool:
     print()
     
     print('-' * 70)
-    print(f'Ran {len(_TEST_FUNCS)} tests in {"%.3f" % delta_time}s')
+    print(f'Ran {run_count} tests in {"%.3f" % delta_time}s')
     print()
     print(f'{"OK" if is_ok else "FAILURE"}{suffix}')
     
