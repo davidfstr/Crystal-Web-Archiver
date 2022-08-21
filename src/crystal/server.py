@@ -638,7 +638,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
         revision_datetime = revision.date
         
         # Send status line
-        self.send_response(metadata['status_code'], metadata['reason_phrase'])
+        self.send_response_without_extra_headers(
+            metadata['status_code'],
+            metadata['reason_phrase'])
         
         # Send headers
         for (name, value) in headers:
@@ -713,6 +715,20 @@ class _RequestHandler(BaseHTTPRequestHandler):
             except BrokenPipeError:
                 # Browser did disconnect early
                 return
+    
+    # === Send Response ===
+    
+    def send_response_without_extra_headers(self, code, message=None) -> None:
+        """
+        Similar to BaseHTTPRequestHandler.send_response(),
+        but does not send its own {Server, Date} headers.
+        
+        The caller should still attempt to send its own Date header
+        to conform with RFC 7231 §7.1.1.2, which requires that origin servers
+        with a reliable clock to generate a Date header.
+        """
+        self.log_request(code)
+        self.send_response_only(code, message)
     
     # === URL Transformation ===
     
