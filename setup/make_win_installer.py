@@ -26,20 +26,29 @@ else:
 if True:
     new_source_lines = []
     
+    # Include files directly inside "dist" with certain extensions
     INCLUDE_EXTENSIONS = ['.pyd', '.dll', '.exe', '.pem']
     for filename in sorted(os.listdir('dist')):
         if any([filename.endswith(ext) for ext in INCLUDE_EXTENSIONS]):
             new_source_lines.append(f'Source: "dist\\{filename}"; DestDir: "{{app}}"\r\n')
     
-    for (parent_dirpath, dirnames, filenames) in os.walk(os.path.join('dist', 'lib', 'crystal')):
-        for filename in sorted(filenames):  # traverse in sorted order
-            source_filepath = os.path.relpath(os.path.join(parent_dirpath, filename), start='.')
-            source_filepath_nt = source_filepath.replace(os.sep, '\\')
-            dest_dirpath = os.path.dirname(source_filepath)
-            dest_dirpath_nt = dest_dirpath.replace(os.sep, '\\')
-            dest_app_dirpath_nt = '{app}' + dest_dirpath_nt[len('dist'):]
-            new_source_lines.append(f'Source: "{source_filepath_nt}"; DestDir: "{dest_app_dirpath_nt}"\r\n')
-        dirnames[:] = sorted(dirnames)  # traverse in sorted order
+    # Include all files in certain subdirectories of "dist"
+    INCLUDE_DIRPATHS = [
+        os.path.join('dist', 'lib', 'crystal'),
+        os.path.join('dist', 'lib', 'tzdata'),
+    ]
+    EXCLUDE_DIRNAMES = ['__pycache__']
+    for include_dirpath in INCLUDE_DIRPATHS:
+        for (parent_dirpath, dirnames, filenames) in os.walk(include_dirpath):
+            for filename in sorted(filenames):  # traverse in sorted order
+                source_filepath = os.path.relpath(os.path.join(parent_dirpath, filename), start='.')
+                source_filepath_nt = source_filepath.replace(os.sep, '\\')
+                dest_dirpath = os.path.dirname(source_filepath)
+                dest_dirpath_nt = dest_dirpath.replace(os.sep, '\\')
+                dest_app_dirpath_nt = '{app}' + dest_dirpath_nt[len('dist'):]
+                new_source_lines.append(f'Source: "{source_filepath_nt}"; DestDir: "{dest_app_dirpath_nt}"\r\n')
+            dirnames[:] = sorted(dirnames)  # traverse in sorted order
+            dirnames[:] = [dn for dn in dirnames if dn not in EXCLUDE_DIRNAMES]
     
     if len(new_source_lines) == 0:
         raise ValueError('No valid source files found')

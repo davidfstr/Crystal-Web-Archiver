@@ -64,6 +64,11 @@ def main(args: List[str]) -> None:
             os.path.join(log_dirpath, 'stderr.log'), 
             'w', encoding='utf-8', buffering=1)
     
+    # If running as Windows executable, also load .py files and adjacent
+    # resources from the "lib" directory. Notably "tzinfo" data.
+    if getattr(sys, 'frozen', None) == 'windows_exe':
+        sys.path.insert(0, os.path.join(os.path.dirname(sys.executable), 'lib'))
+    
     # If running as Windows executable, also look for command line arguments
     # in a text file in the current directory
     if getattr(sys, 'frozen', None) == 'windows_exe':

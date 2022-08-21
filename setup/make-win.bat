@@ -13,6 +13,9 @@ call poetry run python setup.py py2exe
 @echo Copying in C runtime DLL...
 copy media\vcruntime140\*.dll dist\
 
+@echo Copying in tzdata...
+call poetry run python -c "import os, shutil, tzdata; shutil.copytree(tzdata.__path__[0], os.path.join('dist', 'lib', 'tzdata'))"
+
 @echo Built files:
 dir dist
 
