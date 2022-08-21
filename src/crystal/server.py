@@ -400,6 +400,17 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     self.send_resource_not_in_archive(archive_url)
                     return
             
+            # If client did make a conditional request which did match the revision,
+            # send a short HTTP 304 response rather than the whole revision
+            if_none_match = self.headers['If-None-Match']
+            if if_none_match is not None:
+                etag = revision.etag
+                # NOTE: Only an If-None-Match containing a single ETag is supported for now
+                if etag is not None and etag == if_none_match:
+                    self.send_response(304)
+                    self.end_headers()
+                    return
+            
             self.send_revision(revision, archive_url)
             return
         
