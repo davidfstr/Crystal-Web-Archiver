@@ -299,6 +299,15 @@ from urllib.parse import urljoin
 
 DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
 
+# Unfortunately changing Project.min_fetch_date can cause resources
+# downloaded within the same session to no longer be fresh.
+# So the only correct value for this constant is False.
+# But a False value does disable a optimization which is *usually* valid.
+# 
+# TODO: Find a way to safely reenable the optimization that a False
+#       value here does disable.
+ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH = False
+
 
 def _get_abstract_resource_title(abstract_resource):
     """
@@ -414,7 +423,8 @@ class DownloadResourceTask(Task):
         # Prevent other DownloadResourceTasks created during this session from
         # attempting to redownload this resource since they would duplicate
         # the same actions and waste time
-        self._resource.already_downloaded_this_session = True
+        if ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH:
+            self._resource.already_downloaded_this_session = True
     
     @property
     def future(self) -> Future:
