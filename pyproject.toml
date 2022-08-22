@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "crystal"
-version = "1.3.0b"
+version = "1.4.0b"
 description = "Downloads websites for long-term archival."
 authors = ["David Foster <david@dafoster.net>"]
 readme = "README.md"
