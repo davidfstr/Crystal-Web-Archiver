@@ -121,7 +121,7 @@ Eliminate "Page not found" message:
 * With the "Home" URL selected, press the "View" button to open it again in the web browser.
 * It should have opened in the web browser at URL <http://localhost:2797/>,
   with a path component of `/` just like the real URL.
-* There also should be no further "Page not found" message.
+* There also should be no further "Page not found" messages.
 
 Final testing:
 
