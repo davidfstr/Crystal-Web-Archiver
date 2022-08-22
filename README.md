@@ -138,9 +138,10 @@ Final testing:
 * Select the page's URL in the Network pane.
 * Scroll down to see the "Request Headers" section and look for a "cookie" request header.
 * Copy the value of the "cookie" request header to a text file for safekeeping.
-* Download and launch the [command-line] version of Crystal.
-  Passing the saved "cookie" request header value to the `--cookie` command-line option:
-    * `poetry run python3 src/main.py --cookie __COOKIE_HEADER_VALUE__`
+* Open Crystal, either creating a new project or opening an existing project.
+* Click the "Preferences..." button, paste the cookie value in the text box, and click "OK".
+    * This cookie value will be remembered only while the project remains open.
+      If you reopen Crystal again later you'll need to paste the cookie value in again.
 * Now download pages using Crystal as you would normally. The specified cookie
   header value (which logs you in to the remote server) will be used as you
   download pages.
