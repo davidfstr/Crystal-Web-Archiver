@@ -152,25 +152,6 @@ Final testing:
 [access the server log from the regular UI]: https://github.com/davidfstr/Crystal-Web-Archiver/issues/44
 [Single Page Application]: https://developer.mozilla.org/en-US/docs/Glossary/SPA
 
-Known Issues 🐞
-------------
-
-* The UI does not allow a group to be changed once it is defined. In particular
-  the source of a group cannot be changed in the UI.
-    * As a workaround, add a new group with the desired changes and forget the old group.
-
-* robots.txt is not obeyed.
-  [(#31)](https://github.com/davidfstr/Crystal-Web-Archiver/issues/31)
-    * In practice this isn't a big issue since the user is required to explicitly define
-      which pages should be downloaded.
-    * Furthermore, there is a hardcoded delay of 1 second between downloads of pages,
-      to avoid taxing site infrastructure and to avoid unintentional denial of service
-      attacks.
-
-* Large projects (with 10,000+ resources) take a few seconds to open
-  because all project resource URLs are loaded into memory immediately.
-  [(#30)](https://github.com/davidfstr/Crystal-Web-Archiver/issues/30)
-
 
 History 📖
 -------
