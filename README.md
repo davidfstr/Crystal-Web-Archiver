@@ -249,7 +249,16 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### v1.4.0b <small>(August 22, 2022)</small>
+
+This release adds early support for [incrementally redownloading sites
+with new page versions](https://github.com/davidfstr/Crystal-Web-Archiver/issues/80).
+
+It is also now possible to download sites requiring login from the UI
+and a tutorial has been added showing how to do that.
+
+There are also many stability improvements, with fewer wxPython-related
+Segmentation Faults and dramatically improved automated test coverage.
 
 * Downloading improvements
     * Can redownload newer versions of existing URLs using the UI or `--stale-before` CLI option.
