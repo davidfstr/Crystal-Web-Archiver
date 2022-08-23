@@ -6,12 +6,15 @@ from crystal.tests.util.controls import (
     file_dialog_returning, click_button, package_dialog_returning,
 )
 from crystal.tests.util.screenshots import screenshot_if_raises
+from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
     tree_has_no_children_condition,
     wait_for, WaitTimedOut, window_condition, not_condition
 )
 from crystal.util.xos import is_mac_os
+import sys
 import tempfile
+import traceback
 from typing import AsyncIterator, Optional, Tuple, TYPE_CHECKING
 import wx
 
@@ -65,10 +68,14 @@ class OpenOrCreateDialog:
             with screenshot_if_raises():
                 mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
+        exc_info_while_close = None
         try:
             yield (mw, project_dirpath)
+        except:
+            exc_info_while_close = sys.exc_info()
+            raise
         finally:
-            await mw.close()
+            await mw.close(exc_info_while_close)
     
     @asynccontextmanager
     async def open(self, 
@@ -85,11 +92,15 @@ class OpenOrCreateDialog:
             with screenshot_if_raises():
                 mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
+        exc_info_while_close = None
         try:
             yield mw
+        except:
+            exc_info_while_close = sys.exc_info()
+            raise
         finally:
             if autoclose:
-                await mw.close()
+                await mw.close(exc_info_while_close)
 
 
 class MainWindow:
@@ -153,7 +164,7 @@ class MainWindow:
         else:
             raise AssertionError()
     
-    async def close(self) -> None:
+    async def close(self, exc_info=None) -> None:
         # Try wait for any lingering tasks to complete.
         # 
         # Does workaround: https://github.com/davidfstr/Crystal-Web-Archiver/issues/74
@@ -162,7 +173,17 @@ class MainWindow:
                 tree_has_no_children_condition(self.task_tree),
                 timeout=4.0)  # wait only briefly
         except WaitTimedOut:
-            print('*** MainWindow: Closing while tasks are still running. May deadlock!')
+            first_task_title = first_task_title_progression(self.task_tree)()
+            print(f'*** MainWindow: Closing while tasks are still running. May deadlock! Current task: {first_task_title}')
+            
+            # Print traceback or current exception that is being handled immediately
+            # because impending deadlock may prevent traceback from being printed
+            # in the usual manner
+            if exc_info is None:
+                traceback.print_stack()
+            else:
+                traceback.print_exception(*exc_info)
+            
             # (continue)
         
         self.main_window.Close()
