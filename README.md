@@ -249,6 +249,17 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Distribution improvements
+    * Can install Crystal using pipx:
+        * `pipx install crystal-web`
+        * `crystal`
+    * Can run Crystal using `crystal` binary:
+        * `poetry run crystal`
+    * Can run Crystal using `python -m crystal`:
+        * `poetry run python -m crystal`
+
 ### v1.4.0b <small>(August 22, 2022)</small>
 
 This release adds early support for [incrementally redownloading sites

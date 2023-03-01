@@ -27,8 +27,14 @@ classifiers = [
 ]
 packages = [
     { include = "crystal", from = "src" },
+    
+    # Included for backward compatibility
     { include = "main.py", from = "src" },
 ]
+
+[tool.poetry.scripts]
+# Install "crystal" binary as CLI command. Allow installation via "pipx".
+crystal = 'crystal.__main__:main'
 
 [tool.poetry.dependencies]
 # NOTE: Python 3.8 is the last Python to support Windows 7
