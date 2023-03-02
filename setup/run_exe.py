@@ -13,7 +13,7 @@ _POLL_INTERVAL = 1  # seconds
 def main(args: List[str]) -> None:
     # Recognize special "--" argument
     try:
-        remainder_start = args.index('--')
+        remainder_start = args.index('---')
     except ValueError:
         extra_remaining_args = []
     else:

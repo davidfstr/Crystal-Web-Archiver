@@ -160,4 +160,4 @@ jobs:
         working-directory: ".\\setup"
         run: |
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
-          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "--" --test
+          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
