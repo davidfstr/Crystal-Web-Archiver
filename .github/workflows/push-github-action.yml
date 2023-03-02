@@ -47,6 +47,56 @@ jobs:
           path: screenshots
           if-no-files-found: ignore
 
+  build-linux:
+    strategy:
+      matrix:
+        os:
+          # NOTE: Earliest Linux supported by Crystal is Ubuntu 22.04
+          - ubuntu-latest
+        python-version: [3.8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: poetry
+
+      - name: Install wxPython dependencies
+        run: sudo apt-get install -y libgtk-3-dev
+
+      # Install wxPython from precompiled wagon because installing
+      # wxPython from source takes about 40 minutes on GitHub Actions
+      - name: Install dependency wxPython from wagon
+        run: |
+          poetry run pip3 install wagon
+          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.0-py38-none-linux_x86_64.wgn
+          poetry run wagon install wxPython-4.2.0-py38-none-linux_x86_64.wgn
+
+      - name: Install dependencies with Poetry
+        run: poetry install
+
+      - name: Run non-UI tests
+        run: poetry run python -m pytest
+
+      - name: Run UI tests
+        run: |
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test
+
+      - name: Upload screenshot if test failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore
+
   build-windows:
     strategy:
       matrix:

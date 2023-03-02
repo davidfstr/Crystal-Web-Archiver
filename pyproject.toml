@@ -38,8 +38,10 @@ crystal = 'crystal.__main__:main'
 
 [tool.poetry.dependencies]
 # NOTE: Python 3.8 is the last Python to support Windows 7
-python = ">=3.8,<3.9"
-wxPython = "^4.1.1"
+# NOTE: Python 3.11 is the latest Python supported by py2exe 0.11.1.1
+python = ">=3.8,<3.11"
+wxPython = "^4.2.0"
+attrdict = "*"  # undeclared dependency of wxPython
 beautifulsoup4 = "^4.9.3"
 py2app = { version = "^0.23", markers = "sys_platform == 'darwin'" }
 py2exe = { version = "^0.11.1.1", markers = "sys_platform == 'win32'" }
