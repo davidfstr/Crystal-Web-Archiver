@@ -1,7 +1,7 @@
 [Setup]
 AppName=Crystal Web Archiver
 AppVersion=1.4.0b
-AppCopyright=Copyright (C) 2011-2022 David Foster. All Rights Reserved
+AppCopyright=Copyright (C) 2011-2023 David Foster. All Rights Reserved
 DefaultDirName={pf}\Crystal Web Archiver
 DefaultGroupName=Crystal Web Archiver
 UninstallDisplayIcon={app}\Crystal Web Archiver.exe
