@@ -69,7 +69,7 @@ jobs:
       - name: Build .app and disk image
         working-directory: "./setup"
         run: "poetry run ./make-mac.sh"
-      
+
       - name: Run UI tests
         run: |
           CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
@@ -160,4 +160,13 @@ jobs:
         working-directory: ".\\setup"
         run: |
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
+          $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
           poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
+
+      - name: Upload screenshot if test failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore
