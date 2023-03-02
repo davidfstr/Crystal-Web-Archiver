@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -29,7 +29,7 @@ jobs:
 
       - name: Get pip version
         id: pip-version
-        run: echo "::set-output name=PIP_VERSION::$(python -m pip --version | cut -f 2 -d ' ')"
+        run: echo "PIP_VERSION=$(python -m pip --version | cut -f 2 -d ' ')" >> $GITHUB_OUTPUT
 
       - name: Install Poetry
         uses: Gr1N/setup-poetry@v7
@@ -39,20 +39,20 @@ jobs:
 
       - name: Get Poetry version
         id: poetry-version
-        run: echo "::set-output name=POETRY_VERSION::$(poetry --version | cut -f 3- -d ' ')"
+        run: echo "POETRY_VERSION=$(poetry --version | cut -f 3- -d ' ')" >> $GITHUB_OUTPUT
 
       # NOTE: Necessary to cache pip files because the cached pypoetry
       #       virtualenv does depend on them.
       - name: Cache pip files
         id: cache-pip
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key:      pip--os-${{ matrix.os }}-python-${{ matrix.python-version }}-pip-${{ steps.pip-version.outputs.PIP_VERSION }}-poetry-${{ steps.poetry-version.outputs.POETRY_VERSION }}-lock-${{ hashFiles('poetry.lock') }}
 
       - name: Cache installed dependencies
         id: cache-pypoetry
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .venv
           key: pypoetry--os-${{ matrix.os }}-python-${{ matrix.python-version }}-pip-${{ steps.pip-version.outputs.PIP_VERSION }}-poetry-${{ steps.poetry-version.outputs.POETRY_VERSION }}-lock-${{ hashFiles('poetry.lock') }}
@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -110,7 +110,7 @@ jobs:
 
       - name: Get pip version
         id: pip-version
-        run: echo "::set-output name=PIP_VERSION::$(python -m pip --version | cut -f 2 -d ' ')"
+        run: echo "PIP_VERSION=$(python -m pip --version | cut -f 2 -d ' ')" >> $GITHUB_OUTPUT
 
       - name: Install Poetry
         uses: Gr1N/setup-poetry@v7
@@ -120,20 +120,20 @@ jobs:
 
       - name: Get Poetry version
         id: poetry-version
-        run: echo "::set-output name=POETRY_VERSION::$(poetry --version | cut -f 3- -d ' ')"
+        run: echo "POETRY_VERSION=$(poetry --version | cut -f 3- -d ' ')" >> $GITHUB_OUTPUT
 
       # NOTE: Necessary to cache pip files because the cached pypoetry
       #       virtualenv does depend on them.
       - name: Cache pip files
         id: cache-pip
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key:      pip--os-${{ matrix.os }}-python-${{ matrix.python-version }}-pip-${{ steps.pip-version.outputs.PIP_VERSION }}-poetry-${{ steps.poetry-version.outputs.POETRY_VERSION }}-lock-${{ hashFiles('poetry.lock') }}
 
       - name: Cache installed dependencies
         id: cache-pypoetry
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .venv
           key: pypoetry--os-${{ matrix.os }}-python-${{ matrix.python-version }}-pip-${{ steps.pip-version.outputs.PIP_VERSION }}-poetry-${{ steps.poetry-version.outputs.POETRY_VERSION }}-lock-${{ hashFiles('poetry.lock') }}
