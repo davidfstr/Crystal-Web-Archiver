@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import crystal.task
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.wait import (
@@ -18,11 +19,9 @@ async def wait_for_download_to_start_and_finish(
         task_tree: wx.TreeCtrl,
         *, immediate_finish_ok: bool=False,
         ) -> None:
-    from crystal.task import DELAY_BETWEEN_DOWNLOADS
-    
     max_download_duration_per_standard_item = (
         4 +  # fetch + parse time
-        DELAY_BETWEEN_DOWNLOADS
+        crystal.task.DELAY_BETWEEN_DOWNLOADS
     ) * 2  # fudge factor
     max_download_duration_per_large_item = (
         max_download_duration_per_standard_item * 4  # TODO: allow caller to tune
