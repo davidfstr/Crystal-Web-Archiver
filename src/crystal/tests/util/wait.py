@@ -118,11 +118,17 @@ async def wait_for(
         
         delta_time = time.time() - start_time
         if delta_time > timeout:
-            raise (
-                WaitTimedOut(message())
-                if message is not None
-                else WaitTimedOut()
-            )
+            message_str = None
+            if message is not None:
+                # Use caller-provided failure message if available
+                message_str = message()
+            elif hasattr(condition, 'description'):
+                condition_description = condition.description  # type: ignore[attr-defined]
+                message_str = f'Timed out waiting {timeout}s for {condition_description}'
+            else:
+                message_str = f'Timed out waiting {timeout}s for {condition!r}'
+            
+            raise WaitTimedOut(message_str)
         
         await bg_sleep(period)
 
@@ -139,6 +145,11 @@ def window_condition(name: str, *, hidden_ok: bool=False) -> Callable[[], Option
         if not hidden_ok and not window.IsShown():
             return None
         return window
+    window.description = (  # type: ignore[attr-defined]
+        f'window {name!r} to appear'
+        if not hidden_ok
+        else f'window {name!r} to be created'
+    )
     return window
 
 
