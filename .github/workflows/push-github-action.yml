@@ -12,6 +12,7 @@ jobs:
           - macos-latest
         python-version: [3.8]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10  # normally takes 4 min, as of 2023-03-03
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -55,6 +56,7 @@ jobs:
           - ubuntu-latest
         python-version: [3.8]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10  # normally takes 2 min, as of 2023-03-03
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -73,13 +75,21 @@ jobs:
 
       # Install wxPython from precompiled wagon because installing
       # wxPython from source takes about 40 minutes on GitHub Actions
+      # 
+      # NOTE: To recompile the .wgn, see instructions in: doc/how_to_make_wxpython_wagon.md
       - name: Install dependency wxPython from wagon
         run: |
           poetry run pip3 install wagon
-          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.0-py38-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.0-py38-none-linux_x86_64.wgn
+          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.1.1-py38-none-linux_x86_64.wgn
+          poetry run wagon install wxPython-4.1.1-py38-none-linux_x86_64.wgn
 
-      - name: Install dependencies with Poetry
+      - name: Install remaining dependencies with Poetry
+        # If build takes a very long time, the precompiled .wgn in the 
+        # previous build step may no longer be installing the correct
+        # dependency versions that are consistent with pyproject.toml and
+        # poetry.lock. In that case you'll need to rebuild the .wgn using
+        # instructions from: doc/how_to_make_wxpython_wagon.md
+        timeout-minutes: 3  # normally takes 6s, as of 2023-03-03
         run: poetry install
 
       - name: Run non-UI tests
@@ -108,6 +118,7 @@ jobs:
           - windows-latest
         python-version: [3.8]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15  # normally takes 10 min, as of 2023-03-03
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
