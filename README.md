@@ -21,10 +21,12 @@ Download ⬇︎
     * You will need to [right-click or Control-click on the application and select "Open" to open it for the first time](https://github.com/davidfstr/Crystal-Web-Archiver/issues/20).
 * [Windows 7, 8, 10](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/crystal-win-1.4.0b.exe)
 * Linux
-    * Install Python >=3.8,<3.11 and pip from your package manager
+    * Install Python >=3.8,<3.12 and pip from your package manager
         * Ubuntu 22.04: `apt-get update; apt-get install -y python3 python3-pip python3-venv`
+        * Fedora 37: `yum update -y; yum install -y python3 python3-pip`
     * Install dependencies of wxPython from your package manager
         * Ubuntu 22.04: `apt-get install -y libgtk-3-dev`
+        * Fedora 37: `yum install -y wxGTK-devel gcc gcc-c++ which python3-devel`
     * Install pipx
         * `pip install pipx`
     * Install Crystal with pipx
