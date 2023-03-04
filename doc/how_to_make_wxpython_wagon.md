@@ -8,28 +8,61 @@ To compile a new wagon containing wxPython:
 * Start a Linux container
 
 ```bash
-docker run -it --rm -v $(pwd):/usr/src ubuntu:latest
+docker run -it --rm -v $(pwd):/usr/src ubuntu:22.04
 ```
 
-* Install Python 3.8, wxPython dependencies, and wagon
+* Install Python 3.8, if appropriate for this .wgn
 
 ```bash
 # Install Python 3.8 (from source)
-apt update
-apt install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libsqlite3-dev libreadline-dev libffi-dev curl libbz2-dev
+apt-get update
+apt-get install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libsqlite3-dev libreadline-dev libffi-dev curl libbz2-dev
 curl -O https://www.python.org/ftp/python/3.8.2/Python-3.8.2.tar.xz
 tar -xf Python-3.8.2.tar.xz
 cd Python-3.8.2
 ./configure
 make -j
-make install  # maybe use "altinstall" instead? (to avoid override of system Python)
+make install
 python3.8 --version
+```
 
+* Install Python 3.9, if appropriate for this .wgn
+
+```bash
+# Install Python 3.9 (from source)
+apt-get update
+apt-get install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libsqlite3-dev libreadline-dev libffi-dev curl libbz2-dev
+curl -O https://www.python.org/ftp/python/3.9.16/Python-3.9.16.tar.xz
+tar -xf Python-3.9.16.tar.xz
+cd Python-3.9.16
+./configure
+make  # NOTE: -j seems to crash Docker
+make install
+python3.9 --version
+```
+
+* Install Python 3.10, if appropriate for this .wgn
+
+TODO: Add instructions, probably based on the Python 3.11 instructions below
+
+* Install Python 3.11, if appropriate for this .wgn
+
+```bash
+# Install Python 3.11 and pip
+apt-get update
+apt-get install -y python3.11 build-essential wget
+wget https://bootstrap.pypa.io/get-pip.py
+python3.11 get-pip.py
+```
+
+* Install wxPython dependencies and wagon
+
+```bash
 # Install wxPython dependencies
 apt-get install -y libgtk-3-dev
 
 # Install wagon
-pip3.8 install wagon[dist]
+pip3 install wagon[dist]  # or: python3.x -m pip install wagon[dist]
 ```
 
 * Compile wagon

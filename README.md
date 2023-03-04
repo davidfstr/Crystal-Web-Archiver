@@ -30,6 +30,10 @@ Download ⬇︎
     * Install pipx
         * `pip install pipx`
     * Install Crystal with pipx
+        * NOTE: The following step will take a long time (10+ minutes)
+          because installing wxPython (which is a dependency of Crystal)
+          will need to be built from source, since it does not offer
+          precompiled wheels for Linux.
         * `pipx install crystal-web`
     * Run Crystal:
         * `crystal`

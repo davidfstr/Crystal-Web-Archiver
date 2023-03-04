@@ -40,12 +40,15 @@ crystal = 'crystal.__main__:main'
 # NOTE: Python 3.8 is the last Python to support Windows 7
 # NOTE: Python 3.11 is the latest Python supported by py2exe 0.13.0.0
 python = ">=3.8,<3.12"
+# NOTE: When changing the version of wxPython to Y, you'll need to make sure
+#       there is a precompiled wheel for {Python 3.X, wxPython Y, OS}
+#       for every {Python 3.X, OS} in continuous integration (CI) jobs
+#       (defined by push-github-action.yml) so that CI jobs don't take
+#       a very long time to complete. If wheels are missing (which is common
+#       for Linux) you'll need to precompile a .wgn yourself for the platform.
+#       See instructions in: doc/how_to_make_wxpython_wagon.md
 # NOTE: wxPython 4.2.0 does not install successfully in Python 3.10 because of
 #       https://github.com/wxWidgets/Phoenix/issues/2225
-# NOTE: If you update the version of wxPython, be sure to rebuild the
-#       precompiled wxPython wagon used in push-github-action.yml so that Linux
-#       continuous integration jobs continue to complete quickly.
-#       See instructions in: doc/how_to_make_wxpython_wagon.md
 wxPython = "==4.1.1"
 beautifulsoup4 = "^4.9.3"
 py2app = { version = "^0.23", markers = "sys_platform == 'darwin'" }
