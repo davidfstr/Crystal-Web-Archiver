@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.model import Project, Resource
 from crystal.progress import (
     DummyOpenProjectProgressListener,
@@ -273,6 +274,9 @@ class _LoadingNode(Node):
         super().__init__()
         
         self.view = NodeView()
+        self.view.icon_set = (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_loading']),
+        )
         self.view.title = 'Loading...'
     
     def update_children(self):
@@ -284,6 +288,9 @@ class _ChildrenUnavailableBecauseReadOnlyNode(Node):
         super().__init__()
         
         self.view = NodeView()
+        self.view.icon_set = (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_warning']),
+        )
         self.view.title = 'Cannot download children: Project is read only'
     
     def update_children(self):
@@ -293,10 +300,13 @@ class _ChildrenUnavailableBecauseReadOnlyNode(Node):
 class _ResourceNode(Node):
     """Base class for `Node`s whose children is derived from the links in a `Resource`."""
     
-    def __init__(self, title, resource):
+    def __init__(self, title: str, resource: Resource, icon_set: Optional[IconSet]=None) -> None:
         super().__init__()
         
         self.view = NodeView()
+        self.view.icon_set = icon_set or (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_resource']),
+        )
         self.view.title = title
         self.view.expandable = True
         # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
@@ -419,21 +429,27 @@ class _ResourceNode(Node):
             subchildren = []
             for (r, links_to_r) in lowpri_offsite_resources:
                 subchildren.append(LinkedResourceNode(r, links_to_r))
-            children.append(ClusterNode('(Low-priority: Offsite)', subchildren))
+            children.append(ClusterNode('(Low-priority: Offsite)', subchildren, (
+                (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_cluster_offsite']),
+            )))
         
         if hidden_embedded_resources:
             subchildren = []
             for (r, links_to_r) in hidden_embedded_resources:
                 subchildren.append(LinkedResourceNode(r, links_to_r))
-            children.append(ClusterNode('(Hidden: Embedded)', subchildren))
+            children.append(ClusterNode('(Hidden: Embedded)', subchildren, (
+                (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_cluster_embedded']),
+            )))
         
         self.children = children
 
 
 class RootResourceNode(_ResourceNode):
-    def __init__(self, root_resource):
+    def __init__(self, root_resource: RootResource) -> None:
         self.root_resource = root_resource
-        super().__init__(self.calculate_title(), root_resource.resource)
+        super().__init__(self.calculate_title(), root_resource.resource, (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_root_resource']),
+        ))
     
     def calculate_title(self):
         project = self.root_resource.project
@@ -503,7 +519,7 @@ class LinkedResourceNode(_ResourceNode):
 
 
 class ClusterNode(Node):
-    def __init__(self, title, children, icon_set=None):
+    def __init__(self, title: str, children, icon_set: Optional[IconSet]=None) -> None:
         super().__init__()
         
         self.view = NodeView()
