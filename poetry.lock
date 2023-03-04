@@ -540,21 +540,20 @@ modulegraph = ">=0.17"
 
 [[package]]
 name = "py2exe"
-version = "0.11.1.1"
+version = "0.13.0.0"
 description = "Build standalone executables for Windows"
 category = "main"
 optional = false
-python-versions = ">=3.7, <3.11"
+python-versions = ">=3.7, <3.12"
 files = [
-    {file = "py2exe-0.11.1.1-cp310-cp310-win32.whl", hash = "sha256:04cb0b2f9ff4a443b6cde171a617f5b2306c1529cff58e90a8e046474abb2ca4"},
-    {file = "py2exe-0.11.1.1-cp310-cp310-win_amd64.whl", hash = "sha256:31423d29dfc767c9d523037f2b0c8c65343b600eb6cd7913a1e80e2e2edd4ca9"},
-    {file = "py2exe-0.11.1.1-cp37-cp37m-win32.whl", hash = "sha256:55daf0a721ebb3eeebccffc22e3402a72f485ba32b9a826c4a16199a65847d93"},
-    {file = "py2exe-0.11.1.1-cp37-cp37m-win_amd64.whl", hash = "sha256:5e1786411b02854a4cbb1dd3e1d16f6ff1920457170b3f33a67ade1a76d00ed8"},
-    {file = "py2exe-0.11.1.1-cp38-cp38-win32.whl", hash = "sha256:3b156daf52de3bc24261ff05969148460fc04cc50e17b207c6cb78fe193958a3"},
-    {file = "py2exe-0.11.1.1-cp38-cp38-win_amd64.whl", hash = "sha256:3811065e043e3f9a588320ace57403d8a97917c8fe0f51759da71960abc441c2"},
-    {file = "py2exe-0.11.1.1-cp39-cp39-win32.whl", hash = "sha256:beacf6d496eab738d55df9701eb60623e11169993552d9cb8d1f20c279d2b323"},
-    {file = "py2exe-0.11.1.1-cp39-cp39-win_amd64.whl", hash = "sha256:13962fef7b185fe7aaef3b857d925950b49e60b801e1cf995135c8fe146b2dd3"},
-    {file = "py2exe-0.11.1.1.tar.gz", hash = "sha256:210018c7f99fa74f9542d7ef5248abc1e19e7deac706e600fdbbbf1aac09cc91"},
+    {file = "py2exe-0.13.0.0-cp310-cp310-win32.whl", hash = "sha256:dd7607f35008e8f71f7c68a24233ea1640eb5a4f09518628939a5a1c8fa5c0cc"},
+    {file = "py2exe-0.13.0.0-cp310-cp310-win_amd64.whl", hash = "sha256:07ae96b371f9af145a47ce5486eafe693842e7c77cf8830fa1cb688ed53191fd"},
+    {file = "py2exe-0.13.0.0-cp311-cp311-win32.whl", hash = "sha256:6e47a457fd0f191eeb91f928c271536f71e643571d1a0da8cc2ee8f617190ff1"},
+    {file = "py2exe-0.13.0.0-cp311-cp311-win_amd64.whl", hash = "sha256:da32760a4b479eb4ba6c2638a02a9b1c1b413b7975d5ffa097558811047a9a8b"},
+    {file = "py2exe-0.13.0.0-cp38-cp38-win32.whl", hash = "sha256:dfe70625c5dac1bd3d48006703ceb69bbe8ec6b4ea98e47388b0a8b1dced81b4"},
+    {file = "py2exe-0.13.0.0-cp38-cp38-win_amd64.whl", hash = "sha256:c3f56edda962b4e1a90d6502277bf4b7cb195a8fc55f8e355f76928d9b7bbb9c"},
+    {file = "py2exe-0.13.0.0-cp39-cp39-win32.whl", hash = "sha256:e7a7f1e061d1a925d83c687764f3550ecdd15057e49d2afb7341b96fae66dac4"},
+    {file = "py2exe-0.13.0.0-cp39-cp39-win_amd64.whl", hash = "sha256:0094278df7af3ff0f8603067a2c19b9bc6beecd6a804b87c14b2f1d16da260f4"},
 ]
 
 [package.dependencies]
@@ -814,5 +813,5 @@ six = "*"
 
 [metadata]
 lock-version = "2.0"
-python-versions = ">=3.8,<3.11"
-content-hash = "af53496f38522643b3d99cd394eee1c4bbcb73d89d81db0a22f24ca97f4776fc"
+python-versions = ">=3.8,<3.12"
+content-hash = "eef107d1632ec3f99428fc7e029644b838a2179bbb59210d6d6d99940aaa5ab1"
