@@ -269,6 +269,7 @@ Release Notes ⋮
 ### main
 
 * Distribution improvements
+    * Add support for Linux platform (Ubuntu 22.04)
     * Can install Crystal using pipx:
         * `pipx install crystal-web`
         * `crystal`
