@@ -38,13 +38,22 @@ crystal = 'crystal.__main__:main'
 
 [tool.poetry.dependencies]
 # NOTE: Python 3.8 is the last Python to support Windows 7
-# NOTE: Python 3.11 is the latest Python supported by py2exe 0.11.1.1
-python = ">=3.8,<3.11"
-wxPython = "^4.2.0"
-attrdict = "*"  # undeclared dependency of wxPython
+# NOTE: Python 3.11 is the latest Python supported by py2exe 0.13.0.0
+python = ">=3.8,<3.12"
+# NOTE: When changing the version of wxPython to Y, you'll need to make sure
+#       there is a precompiled wheel for {Python 3.X, wxPython Y, OS}
+#       for every {Python 3.X, OS} in continuous integration (CI) jobs
+#       (defined by push-github-action.yml) so that CI jobs don't take
+#       a very long time to complete. If wheels are missing (which is common
+#       for Linux) you'll need to precompile a .wgn yourself for the platform.
+#       See instructions in: doc/how_to_make_wxpython_wagon.md
+# NOTE: wxPython 4.2.0 does not install successfully in Python 3.10 because of
+#       https://github.com/wxWidgets/Phoenix/issues/2225
+wxPython = "==4.1.1"
 beautifulsoup4 = "^4.9.3"
 py2app = { version = "^0.23", markers = "sys_platform == 'darwin'" }
-py2exe = { version = "^0.11.1.1", markers = "sys_platform == 'win32'" }
+# NOTE: py2exe 0.13.0.0 is the earliest version that supports Python 3.11
+py2exe = { version = "^0.13.0.0", markers = "sys_platform == 'win32'" }
 tinycss2 = "^1.1.0"
 appdirs = "^1.4.4"
 colorama = "^0.4.4"
