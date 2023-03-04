@@ -20,6 +20,17 @@ Download ⬇︎
 * [macOS 10.14 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/crystal-mac-1.4.0b.dmg)
     * You will need to [right-click or Control-click on the application and select "Open" to open it for the first time](https://github.com/davidfstr/Crystal-Web-Archiver/issues/20).
 * [Windows 7, 8, 10](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/crystal-win-1.4.0b.exe)
+* Linux
+    * Install Python >=3.8,<3.11 and pip from your package manager
+        * Ubuntu 22.04: `apt-get update; apt-get install -y python3 python3-pip python3-venv`
+    * Install dependencies of wxPython from your package manager
+        * Ubuntu 22.04: `apt-get install -y libgtk-3-dev`
+    * Install pipx
+        * `pip install pipx`
+    * Install Crystal with pipx
+        * `pipx install crystal-web`
+    * Run Crystal:
+        * `crystal`
 
 
 Tutorial ⭐
