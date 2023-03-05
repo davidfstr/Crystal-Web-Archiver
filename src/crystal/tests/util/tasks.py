@@ -22,7 +22,7 @@ async def wait_for_download_to_start_and_finish(
     max_download_duration_per_standard_item = (
         4 +  # fetch + parse time
         crystal.task.DELAY_BETWEEN_DOWNLOADS
-    ) * 2  # fudge factor
+    ) * 2.5  # fudge factor
     max_download_duration_per_large_item = (
         max_download_duration_per_standard_item * 4  # TODO: allow caller to tune
     )
