@@ -9,12 +9,22 @@ def TREE_NODE_ICONS() -> Dict[str, wx.Bitmap]:
     return OrderedDict([
         (icon_name, _get_tree_node_icon(icon_name))
         for icon_name in [
+            # Entity Tree Icons
             'entitytree_cluster_embedded',
             'entitytree_cluster_offsite',
             'entitytree_loading',
             'entitytree_resource',
             'entitytree_root_resource',
             'entitytree_warning',
+            
+            # Task Tree Icons
+            'tasktree_done',
+            'tasktree_download_group_members',
+            'tasktree_download_group',
+            'tasktree_download_resource_body',
+            'tasktree_download_resource',
+            'tasktree_parse',
+            'tasktree_update_group',
         ]
     ])
 

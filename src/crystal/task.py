@@ -56,15 +56,16 @@ class Task:
     be sure to save the task's future *before* scheduling it.
     """
     
-    def __init__(self, title):
+    def __init__(self, title: str, icon_name: Optional[str]) -> None:
+        self._icon_name = icon_name
         self._title = title
         self._subtitle = 'Queued'
         self.scheduling_style = SCHEDULING_STYLE_NONE
-        self._parent = None
-        self._children = []
+        self._parent = None  # type: Optional[Task]
+        self._children = []  # type: List[Task]
         self._num_children_complete = 0
         self._complete = False
-        self.listeners = []
+        self.listeners = []  # type: List[object]
         
         self._did_yield_self = False            # used by leaf tasks
         self._future = Future()                 # used by leaf tasks
@@ -75,7 +76,15 @@ class Task:
     # === Properties ===
     
     @property
-    def title(self):
+    def icon_name(self) -> Optional[str]:
+        """
+        The name of the icon resource used for this task,
+        or None to use the default icon.
+        """
+        return self._icon_name
+    
+    @property
+    def title(self) -> str:
         """
         The title of this task. Fixed upon initialization.
         """
@@ -150,7 +159,7 @@ class Task:
         
         for lis in self.listeners:
             if hasattr(lis, 'task_did_append_child'):
-                lis.task_did_append_child(self, child)
+                lis.task_did_append_child(self, child)  # type: ignore[attr-defined]
     
     def finish(self) -> None:
         """
@@ -164,7 +173,7 @@ class Task:
             # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
             for lis in list(self.listeners):
                 if hasattr(lis, 'task_did_complete'):
-                    lis.task_did_complete(self) 
+                    lis.task_did_complete(self)  # type: ignore[attr-defined]
         fg_call_later(fg_task)
     
     def finalize_children(self, final_children: List[Task]) -> None:
@@ -197,7 +206,7 @@ class Task:
         
         for lis in self.listeners:
             if hasattr(lis, 'task_did_clear_children'):
-                lis.task_did_clear_children(self)
+                lis.task_did_clear_children(self)  # type: ignore[attr-defined]
     
     # === Public Operations ===
     
@@ -334,7 +343,9 @@ class DownloadResourceBodyTask(Task):
         Arguments:
         * abstract_resource -- a Resource or a RootResource.
         """
-        Task.__init__(self, title='Downloading body: ' + _get_abstract_resource_title(abstract_resource))
+        super().__init__(
+            title='Downloading body: ' + _get_abstract_resource_title(abstract_resource),
+            icon_name='tasktree_download_resource_body')
         self._resource = abstract_resource.resource  # type: Resource
     
     def __call__(self):
@@ -396,7 +407,9 @@ class DownloadResourceTask(Task):
         Arguments:
         * abstract_resource -- a Resource or a RootResource.
         """
-        Task.__init__(self, 'Downloading: ' + _get_abstract_resource_title(abstract_resource))
+        super().__init__(
+            title='Downloading: ' + _get_abstract_resource_title(abstract_resource),
+            icon_name='tasktree_download_resource')
         self._abstract_resource = abstract_resource
         self._resource = resource = abstract_resource.resource
         
@@ -571,7 +584,9 @@ class ParseResourceRevisionLinks(Task):
         * abstract_resource -- a Resource or a RootResource.
         * resource_revision -- a ResourceRevision.
         """
-        Task.__init__(self, title='Finding links in: ' + _get_abstract_resource_title(abstract_resource))
+        super().__init__(
+            title='Finding links in: ' + _get_abstract_resource_title(abstract_resource),
+            icon_name='tasktree_parse')
         self._resource_revision = resource_revision
     
     def __call__(self):
@@ -594,7 +609,7 @@ class _PlaceholderTask(Task):  # abstract
             value: object=_NO_VALUE,
             exception: Optional[Exception]=None,
             prefinish: bool=False) -> None:
-        super().__init__(title)
+        super().__init__(title=title, icon_name='tasktree_done')
         self._value = value
         self._exception = exception
         
@@ -657,7 +672,9 @@ class UpdateResourceGroupMembersTask(Task):
     task is being run.
     """
     def __init__(self, group: ResourceGroup) -> None:
-        Task.__init__(self, title='Finding members of group: %s' % group.name)
+        super().__init__(
+            title='Finding members of group: %s' % group.name,
+            icon_name='tasktree_update_group')
         self.group = group
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
@@ -683,7 +700,9 @@ class DownloadResourceGroupMembersTask(Task):
     additional child tasks will be created to download any additional group members.
     """
     def __init__(self, group: ResourceGroup) -> None:
-        Task.__init__(self, title='Downloading members of group: %s' % group.name)
+        super().__init__(
+            title='Downloading members of group: %s' % group.name,
+            icon_name='tasktree_download_group_members')
         self.group = group
         self.group.listeners.append(self)
         self._done_updating_group = False
@@ -723,7 +742,9 @@ class DownloadResourceGroupTask(Task):
     members and downloading them, in parallel.
     """
     def __init__(self, group):
-        Task.__init__(self, title='Downloading group: %s' % group.name)
+        super().__init__(
+            title='Downloading group: %s' % group.name,
+            icon_name='tasktree_download_group')
         self._update_members_task = UpdateResourceGroupMembersTask(group)
         self._download_members_task = DownloadResourceGroupMembersTask(group)
         self._started_downloading_members = False
@@ -760,7 +781,7 @@ class RootTask(Task):
     This task never completes.
     """
     def __init__(self):
-        Task.__init__(self, title='ROOT')
+        super().__init__(title='ROOT', icon_name=None)
         self.subtitle = 'Running'
         
         self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
