@@ -474,7 +474,9 @@ class _ResourceNode(Node):
                 try:
                     revision = future.result()
                 except CannotDownloadWhenProjectReadOnlyError:
-                    self.children = [_ChildrenUnavailableBecauseReadOnlyNode()]
+                    def fg_task():
+                        self.children = [_ChildrenUnavailableBecauseReadOnlyNode()]
+                    fg_call_later(fg_task)
                 else:
                     revision = revision.resolve_http_304()  # reinterpret
                     
