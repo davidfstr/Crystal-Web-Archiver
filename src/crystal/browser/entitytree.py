@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from crystal.browser.icons import TREE_NODE_ICONS
+from crystal.browser.icons import BADGED_TREE_NODE_ICON, TREE_NODE_ICONS
 from crystal.model import Project, Resource
 from crystal.progress import (
     DummyOpenProjectProgressListener,
@@ -305,7 +305,9 @@ class _ResourceNode(Node):
         
         self.view = NodeView()
         self.view.icon_set = icon_set or (
-            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_resource']),
+            (wx.TreeItemIcon_Normal, BADGED_TREE_NODE_ICON(
+                'entitytree_resource',
+                self.calculate_status_badge_name(resource))),
         )
         self.view.title = title
         self.view.expandable = True
@@ -315,6 +317,28 @@ class _ResourceNode(Node):
         self.resource = resource
         self.download_future = None
         self.resource_links = None
+    
+    @staticmethod
+    def calculate_status_badge_name(resource: Resource) -> Optional[str]:
+        # NOTE: Inefficient. Performs 2 queries (via 2 calls to
+        #       default_revision) when only 1 could be used
+        any_rr = resource.default_revision(stale_ok=True)
+        if any_rr is None:
+            # Not downloaded
+            return 'new'
+        else:
+            non_stale_rr = resource.default_revision(stale_ok=False)
+            if non_stale_rr is None:
+                # Stale
+                return 'stale'
+            else:
+                # Fresh
+                if non_stale_rr.error is None:
+                    # OK
+                    return None
+                else:
+                    # Error
+                    return 'warning'
     
     @property
     def entity(self):
@@ -448,7 +472,9 @@ class RootResourceNode(_ResourceNode):
     def __init__(self, root_resource: RootResource) -> None:
         self.root_resource = root_resource
         super().__init__(self.calculate_title(), root_resource.resource, (
-            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_root_resource']),
+            (wx.TreeItemIcon_Normal, BADGED_TREE_NODE_ICON(
+                'entitytree_root_resource',
+                self.calculate_status_badge_name(root_resource.resource))),
         ))
     
     def calculate_title(self):
