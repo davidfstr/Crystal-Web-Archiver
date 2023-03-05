@@ -105,11 +105,12 @@ class EntityTree:
         # Create popup menu
         menu = wx.Menu()
         bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
-        if self._project.default_url_prefix == (
-                EntityTree._get_url_prefix_for_resource(node.resource)):
-            menu.Append(_ID_CLEAR_PREFIX, 'Clear Default URL Prefix')
-        else:
-            menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
+        if isinstance(node, _ResourceNode):
+            if self._project.default_url_prefix == (
+                    EntityTree._get_url_prefix_for_resource(node.resource)):
+                menu.Append(_ID_CLEAR_PREFIX, 'Clear Default URL Prefix')
+            else:
+                menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
         
         # Show popup menu
         if menu.GetMenuItemCount() > 0:
