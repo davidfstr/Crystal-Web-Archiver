@@ -16,6 +16,7 @@ following error is encountered:
 See the tutorial for py2exe for more information about this DLL.
 """
 
+import os
 from setuptools import setup
 import sys
 
@@ -94,8 +95,8 @@ elif sys.platform == 'win32':
         data_files=[
             # crystal.tests.test_data
             (r'lib\crystal\tests\test_data', [
-                r'..\src\crystal\tests\test_data\xkcd-v2.crystalproj.zip',
-                r'..\src\crystal\tests\test_data\xkcd.crystalproj.zip',
+                r'..\src\crystal\tests\test_data' + '\\' + filename
+                for filename in os.listdir(r'..\src\crystal\tests\test_data')
             ]),
         ],
         # Combine 'library.zip' into the generated exe
