@@ -567,16 +567,19 @@ class GroupedLinkedResourcesNode(Node):
         super().__init__()
         
         self.view = NodeView()
-        self.view.title = self.calculate_title()
+        #self.view.title = ... (set below)
         self.view.expandable = True
         
         self.children = root_rsrc_nodes + linked_rsrc_nodes
         self._children_tuple = tuple(self.children)
+        
+        self.view.title = self.calculate_title()  # after self.children is initialized
     
     def calculate_title(self):
         project = self.resource_group.project
-        return '%s - %s' % (
+        return '%s - %d of %s' % (
             project.get_display_url(self.resource_group.url_pattern),
+            len(self.children),
             self.resource_group.name)
     
     @property
