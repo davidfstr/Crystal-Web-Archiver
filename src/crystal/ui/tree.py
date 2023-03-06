@@ -18,7 +18,7 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_raising
 )
 from crystal.util.xthreading import is_foreground_thread
-from typing import Dict, List, NewType, NoReturn, Optional, Tuple
+from typing import Callable, Dict, List, NewType, NoReturn, Optional, Tuple, Union
 import wx
 
 
@@ -181,6 +181,7 @@ class NodeView:
         self.peer = None  # type: Optional[NodeViewPeer]
         self._title = ''
         self._expandable = False
+        self._icon_set_func = None  # type: Optional[Callable[[], Optional[IconSet]]]
         self._icon_set = None  # type: Optional[IconSet]
         self._children = []  # type: List[NodeView]
     
@@ -209,8 +210,20 @@ class NodeView:
         to this node in various states. If None, then a default icon set is used, depending on
         whether this node is expandable.
         """
+        if self._icon_set_func is not None:
+            self._icon_set = self._icon_set_func()
+            self._icon_set_func = None
         return self._icon_set
-    def _set_icon_set(self, value: Optional[IconSet]) -> None:
+    def _set_icon_set(self,
+            value: Union[
+                Optional[IconSet],
+                Callable[[], Optional[IconSet]]  # deferred value
+            ]) -> None:
+        if callable(value):
+            self._icon_set_func = value
+            self._icon_set = None
+            return
+        
         self._icon_set = value
         if self.peer:
             effective_value = (

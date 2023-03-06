@@ -87,7 +87,10 @@ class EntityTree:
     
     # === Event: Resource Did Instantiate ===
     
-    def _refresh_group_nodes(self):
+    def resource_did_instantiate(self, resource: Resource) -> None:
+        self._refresh_group_nodes()
+    
+    def _refresh_group_nodes(self) -> None:
         # Coalesce multiple refreshes that happen in succession
         if self._group_nodes_need_updating:
             return
@@ -95,7 +98,7 @@ class EntityTree:
             self._group_nodes_need_updating = True
             fg_call_later(self._refresh_group_nodes_now, force=True)
     
-    def _refresh_group_nodes_now(self):
+    def _refresh_group_nodes_now(self) -> None:
         try:
             for rgn in self.root.children:
                 if type(rgn) is not ResourceGroupNode:
@@ -103,9 +106,6 @@ class EntityTree:
                 rgn.update_children()
         finally:
             self._group_nodes_need_updating = False
-    
-    def resource_did_instantiate(self, resource):
-        self._refresh_group_nodes()
     
     # === Event: Right Click ===
     
@@ -349,12 +349,15 @@ class _ResourceNode(Node):
             tree_node_icon_name: str='entitytree_resource') -> None:
         super().__init__()
         
-        self._status_badge_name = self.calculate_status_badge_name(resource)  # cache
+        self._status_badge_name_calculated = False
+        self._status_badge_name_value = None  # type: Optional[str]
         
         self.view = NodeView()
-        self.view.icon_set = (
+        # NOTE: Defer expensive calculation until if/when the icon_set is used
+        self.view.icon_set = lambda: (
             (wx.TreeItemIcon_Normal, BADGED_TREE_NODE_ICON(
                 tree_node_icon_name,
+                # NOTE: Expensive to calculate _status_badge_name
                 self._status_badge_name)),
         )
         self.view.title = title
@@ -370,27 +373,37 @@ class _ResourceNode(Node):
     
     @property
     def icon_tooltip(self) -> Optional[str]:
+        return '%s %s' % (self._status_badge_tooltip, self._entity_tooltip)
+    
+    @property
+    def _status_badge_tooltip(self) -> str:
         status_badge_name = self._status_badge_name  # cache
         if status_badge_name is None:
-            status_badge_tooltip = 'Fresh'
+            return 'Fresh'
         elif status_badge_name == 'new':
-            status_badge_tooltip = 'Undownloaded'
+            return 'Undownloaded'
         elif status_badge_name == 'stale':
-            status_badge_tooltip = 'Stale'
+            return 'Stale'
         elif status_badge_name == 'warning':
-            status_badge_tooltip = 'Error'
+            return 'Error'
         else:
             raise AssertionError('Unknown resource status badge: ' + status_badge_name)
-        
-        return '%s %s' % (status_badge_tooltip, self._entity_tooltip)
     
     @property
     def _entity_tooltip(self) -> str:  # abstract
         raise NotImplementedError()
     
-    @staticmethod
-    def calculate_status_badge_name(resource: Resource) -> Optional[str]:
-        # NOTE: Inefficient. Performs 2 queries (via 2 calls to
+    @property
+    def _status_badge_name(self) -> Optional[str]:
+        if not self._status_badge_name_calculated:
+            self._status_badge_name_value = self._calculate_status_badge_name()
+            self._status_badge_name_calculated = True
+        return self._status_badge_name_value
+    
+    def _calculate_status_badge_name(self) -> Optional[str]:
+        resource = self.resource  # cache
+        
+        # NOTE: Inefficient. Performs 2 database queries (via 2 calls to
         #       default_revision) when only 1 could be used
         any_rr = resource.default_revision(stale_ok=True)
         if any_rr is None:
