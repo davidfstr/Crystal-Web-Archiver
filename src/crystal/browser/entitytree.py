@@ -124,13 +124,14 @@ class EntityTree:
         if item_id == _ID_SET_PREFIX:
             self._project.default_url_prefix = (
                 EntityTree._get_url_prefix_for_resource(node.resource))
-            self._update_titles_of_descendants()
+            self._did_change_default_url_prefix()
         elif item_id == _ID_CLEAR_PREFIX:
             self._project.default_url_prefix = None
-            self._update_titles_of_descendants()
+            self._did_change_default_url_prefix()
     
-    def _update_titles_of_descendants(self):
-        self.root.update_title_of_descendants()
+    def _did_change_default_url_prefix(self) -> None:
+        self.root.update_descendants()  # update "Offsite" ClusterNodes
+        self.root.update_title_of_descendants()  # update URLs in titles
     
     @staticmethod
     def _get_url_prefix_for_resource(resource):
