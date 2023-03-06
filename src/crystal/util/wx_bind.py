@@ -28,7 +28,7 @@ def bind_target() -> Iterator[None]:
     
     It has been observed at least on macOS that uncaught exceptions
     that make it to wx can put it into an invalid state that will
-    cause a segmentation fault later (especially with Python exits).
+    cause a segmentation fault later (especially when Python exits).
     """
     try:
         yield
