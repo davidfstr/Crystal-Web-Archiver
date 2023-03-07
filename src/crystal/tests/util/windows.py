@@ -26,8 +26,8 @@ if TYPE_CHECKING:
 # Utility: Window Abstractions
 
 class OpenOrCreateDialog:
-    # NOTE: 6.0 isn't long enough for Windows test runners on GitHub Actions
-    _TIMEOUT_FOR_OPEN_MAIN_WINDOW = 8.0
+    # NOTE: 8.0 isn't long enough for Windows test runners on GitHub Actions
+    _TIMEOUT_FOR_OPEN_MAIN_WINDOW = 10.0
     
     open_or_create_project_dialog: wx.Dialog
     open_as_readonly: wx.CheckBox
