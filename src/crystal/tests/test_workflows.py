@@ -20,6 +20,7 @@ from crystal.tests.util.windows import (
 )
 from crystal.util.xthreading import is_foreground_thread
 import os
+import re
 import tempfile
 from typing import Iterator, List, Union
 from unittest import skip
@@ -158,7 +159,9 @@ async def test_can_download_and_serve_a_static_site() -> None:
                             child for child in home_ti.Children
                             if child.Text.startswith(f'{comic_pattern} - ')
                         ]  # ensure did find grouped sub-resources
-                        assert f'{comic_pattern} - Comic' == grouped_subresources_ti.Text  # title format of grouped sub-resources
+                        assert re.fullmatch(
+                            rf'{re.escape(comic_pattern)} - \d+ of Comic',  # title format of grouped sub-resources
+                            grouped_subresources_ti.Text)
                         
                         grouped_subresources_ti.Expand()
                         await wait_for(first_child_of_tree_item_is_not_loading_condition(grouped_subresources_ti))

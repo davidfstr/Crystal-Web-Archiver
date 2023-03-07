@@ -1,3 +1,4 @@
+from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import Task
 from crystal.ui.tree2 import TreeView, NodeView
 from crystal.util.xthreading import fg_call_later
@@ -31,6 +32,10 @@ class TaskTreeNode:
         self.task.listeners.append(self)
         
         self.tree_node = NodeView()
+        if self.task.icon_name is not None:
+            self.tree_node.icon_set = (
+                (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()[self.task.icon_name]),
+            )
         self.tree_node.title = self.task.title
         self.tree_node.subtitle = self.task.subtitle
         self.tree_node.expandable = not callable(task)

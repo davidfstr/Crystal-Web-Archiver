@@ -18,7 +18,7 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_raising
 )
 from crystal.util.xthreading import is_foreground_thread
-from typing import Dict, List, NewType, NoReturn, Optional, Tuple
+from typing import Callable, Dict, List, NewType, NoReturn, Optional, Tuple, Union
 import wx
 
 
@@ -82,10 +82,11 @@ class TreeView:
             ))  # type: wx.TreeCtrl
         
         # Setup node image registration
-        self.bitmap_2_image_id = dict()  # type: Dict[wx.Bitmap, ImageIndex]
-        tree_icon_size = _DEFAULT_TREE_ICON_SIZE
-        self.tree_imagelist = wx.ImageList(tree_icon_size[0], tree_icon_size[1])
-        self.peer.AssignImageList(self.tree_imagelist)
+        # NOTE: In wxPython 4.2.0, wx.Bitmap icons will be superceded by wx.BitmapBundle,
+        #       and wx.ImageList will be superceded by a plain list of wx.BitmapBundles.
+        self._bitmap_2_image_id = dict()  # type: Dict[wx.Bitmap, ImageIndex]
+        self._tree_imagelist = wx.ImageList(*_DEFAULT_TREE_ICON_SIZE)
+        self.peer.AssignImageList(self._tree_imagelist)
         
         # Create root node's view
         self._root_peer = NodeViewPeer(self, self.peer.AddRoot(''))
@@ -118,11 +119,11 @@ class TreeView:
         Given a wx.Bitmap, returns an image ID suitable to use as an node icon.
         Calling this multiple times with the same wx.Bitmap will return the same image ID.
         """
-        if bitmap in self.bitmap_2_image_id:
-            image_id = self.bitmap_2_image_id[bitmap]
+        if bitmap in self._bitmap_2_image_id:
+            image_id = self._bitmap_2_image_id[bitmap]
         else:
-            image_id = self.tree_imagelist.Add(bitmap)
-            self.bitmap_2_image_id[bitmap] = ImageIndex(image_id)
+            image_id = self._tree_imagelist.Add(bitmap)
+            self._bitmap_2_image_id[bitmap] = ImageIndex(image_id)
         return image_id
     
     def expand(self, node_view):
@@ -180,6 +181,7 @@ class NodeView:
         self.peer = None  # type: Optional[NodeViewPeer]
         self._title = ''
         self._expandable = False
+        self._icon_set_func = None  # type: Optional[Callable[[], Optional[IconSet]]]
         self._icon_set = None  # type: Optional[IconSet]
         self._children = []  # type: List[NodeView]
     
@@ -208,8 +210,20 @@ class NodeView:
         to this node in various states. If None, then a default icon set is used, depending on
         whether this node is expandable.
         """
+        if self._icon_set_func is not None:
+            self._icon_set = self._icon_set_func()
+            self._icon_set_func = None
         return self._icon_set
-    def _set_icon_set(self, value: Optional[IconSet]) -> None:
+    def _set_icon_set(self,
+            value: Union[
+                Optional[IconSet],
+                Callable[[], Optional[IconSet]]  # deferred value
+            ]) -> None:
+        if callable(value):
+            self._icon_set_func = value
+            self._icon_set = None
+            return
+        
         self._icon_set = value
         if self.peer:
             effective_value = (

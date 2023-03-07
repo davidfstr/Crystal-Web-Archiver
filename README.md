@@ -268,15 +268,23 @@ Release Notes ⋮
 
 ### main
 
+* UI Improvements
+    * Icons and tooltips added to all tree nodes in the main window,
+      clarifying the different types of entities, links, and tasks that exist.
+        * Easy to distinguish between URLs and groups.
+        * Easy to see whether a URL was downloaded,
+          and whether it was downloaded successfully.
+    * URL clusters now show in their title how many members they contain
+
 * Distribution improvements
-    * Add support for Linux platform (Ubuntu 22.04)
-    * Can install Crystal using pipx:
+    * Can install Crystal using pipx and pip, from PyPI:
         * `pipx install crystal-web`
         * `crystal`
     * Can run Crystal using `crystal` binary:
         * `poetry run crystal`
     * Can run Crystal using `python -m crystal`:
         * `poetry run python -m crystal`
+    * Add support for Linux platform (Ubuntu 22.04, Fedora 37)
 
 ### v1.4.0b <small>(August 22, 2022)</small>
 

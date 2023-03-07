@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from crystal.model import Project, Resource
+from crystal.browser.icons import BADGED_TREE_NODE_ICON, TREE_NODE_ICONS
+from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
 from crystal.progress import (
     DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
@@ -11,11 +12,8 @@ from crystal.util.wx_bind import bind
 from crystal.util.xcollections import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import threading
-from typing import List, Optional, TYPE_CHECKING, Union
+from typing import cast, List, Optional, Union
 from urllib.parse import urljoin, urlparse, urlunparse
-
-if TYPE_CHECKING:
-    from crystal.model import ResourceGroup, RootResource
 
 
 _ID_SET_PREFIX = 101
@@ -40,6 +38,10 @@ class EntityTree:
         project.listeners.append(self)
         
         self.peer.SetInitialSize((550, 300))
+        
+        bind(self.peer, wx.EVT_MOTION, self._on_mouse_motion)
+    
+    # === Properties ===
     
     @property
     def peer(self) -> wx.TreeCtrl:
@@ -72,13 +74,20 @@ class EntityTree:
         
         return parent_node.entity
     
+    # === Updates ===
+    
     def update(self):
         """
         Updates the nodes in this tree, usually due to a project change.
         """
         self.root.update_descendants()
     
-    def _refresh_group_nodes(self):
+    # === Event: Resource Did Instantiate ===
+    
+    def resource_did_instantiate(self, resource: Resource) -> None:
+        self._refresh_group_nodes()
+    
+    def _refresh_group_nodes(self) -> None:
         # Coalesce multiple refreshes that happen in succession
         if self._group_nodes_need_updating:
             return
@@ -86,17 +95,21 @@ class EntityTree:
             self._group_nodes_need_updating = True
             fg_call_later(self._refresh_group_nodes_now, force=True)
     
-    def _refresh_group_nodes_now(self):
+    def _refresh_group_nodes_now(self) -> None:
         try:
             for rgn in self.root.children:
-                if type(rgn) is not ResourceGroupNode:
-                    continue
-                rgn.update_children()
+                if type(rgn) is ResourceGroupNode:
+                    rgn.update_children()
         finally:
             self._group_nodes_need_updating = False
     
-    def resource_did_instantiate(self, resource):
-        self._refresh_group_nodes()
+    # === Event: Resource Revision Did Instantiate ===
+    
+    def resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
+        fg_call_later(lambda:
+            self.root.update_icon_set_of_descendants_with_resource(revision.resource))
+    
+    # === Event: Right Click ===
     
     def on_right_click(self, event, node_view):
         node = node_view.delegate
@@ -152,6 +165,20 @@ class EntityTree:
         new_url_components = list(url_components)
         new_url_components[2] = new_path
         return urlunparse(new_url_components)
+    
+    # === Event: Mouse Motion ===
+    
+    # Update the tooltip whenever hovering the mouse over a tree node icon
+    def _on_mouse_motion(self, event: wx.MouseEvent) -> None:
+        (tree_item_id, hit_flags) = self.peer.HitTest(event.Position)
+        if (hit_flags & wx.TREE_HITTEST_ONITEMICON) != 0:
+            node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
+            node = cast(Node, node_view.delegate)
+            new_tooltip = node.icon_tooltip
+        else:
+            new_tooltip = None
+        
+        self.peer.SetToolTip(new_tooltip)
 
 
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
@@ -171,6 +198,8 @@ NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
 class Node:
     def __init__(self):
         self._children = []  # type: List[Node]
+    
+    # === Properties ===
     
     def _get_view(self) -> NodeView:
         return self._view
@@ -193,11 +222,20 @@ class Node:
         self.view.set_children([child.view for child in value], progress_listener)
     
     @property
+    def icon_tooltip(self) -> Optional[str]:
+        """
+        The tooltip to display when the mouse hovers over this node's icon.
+        """
+        return None
+    
+    @property
     def entity(self) -> Optional[NodeEntity]:
         """
         The entity represented by this node, or None if not applicable.
         """
         return None
+    
+    # === Updates ===
     
     def update_descendants(self) -> None:
         """
@@ -210,6 +248,16 @@ class Node:
         Updates the title of this node's descendants, usually due to a project change.
         """
         self._call_on_descendants('update_title')
+    
+    def update_icon_set_of_descendants_with_resource(self, resource: Resource) -> None:
+        """
+        Updates the icon set of this node's descendants, usually due to a project change.
+        """
+        if isinstance(self.entity, (RootResource, Resource)):
+            if self.entity.resource == resource:
+                self.update_icon_set()
+        for child in self.children:
+            child.update_icon_set_of_descendants_with_resource(resource)
     
     def _call_on_descendants(self, method_name) -> None:
         getattr(self, method_name)()
@@ -232,6 +280,15 @@ class Node:
         if hasattr(self, 'calculate_title'):
             self.view.title = self.calculate_title()  # type: ignore[attr-defined]
     
+    def update_icon_set(self) -> None:
+        """
+        Updates this node's icon set. Usually due to a project change.
+        """
+        if hasattr(self, 'calculate_icon_set'):
+            self.view.icon_set = self.calculate_icon_set()  # type: ignore[attr-defined]
+    
+    # === Utility ===
+    
     def __repr__(self):
         return '<%s titled %s at %s>' % (type(self).__name__, repr(self.view.title), hex(id(self)))
 
@@ -247,6 +304,8 @@ class RootNode(Node):
         self._project = project
         
         self.update_children(progress_listener)
+    
+    # === Updates ===
     
     def update_children(self, 
             progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
@@ -273,7 +332,12 @@ class _LoadingNode(Node):
         super().__init__()
         
         self.view = NodeView()
+        self.view.icon_set = (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_loading']),
+        )
         self.view.title = 'Loading...'
+    
+    # === Updates ===
     
     def update_children(self):
         pass
@@ -284,7 +348,12 @@ class _ChildrenUnavailableBecauseReadOnlyNode(Node):
         super().__init__()
         
         self.view = NodeView()
+        self.view.icon_set = (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_warning']),
+        )
         self.view.title = 'Cannot download children: Project is read only'
+    
+    # === Updates ===
     
     def update_children(self):
         pass
@@ -293,10 +362,20 @@ class _ChildrenUnavailableBecauseReadOnlyNode(Node):
 class _ResourceNode(Node):
     """Base class for `Node`s whose children is derived from the links in a `Resource`."""
     
-    def __init__(self, title, resource):
+    def __init__(self,
+            title: str,
+            resource: Resource,
+            tree_node_icon_name: str='entitytree_resource') -> None:
         super().__init__()
         
+        self._tree_node_icon_name = tree_node_icon_name
+        
+        self._status_badge_name_calculated = False
+        self._status_badge_name_value = None  # type: Optional[str]
+        
         self.view = NodeView()
+        # NOTE: Defer expensive calculation until if/when the icon_set is used
+        self.view.icon_set = self.calculate_icon_set
         self.view.title = title
         self.view.expandable = True
         # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
@@ -306,9 +385,76 @@ class _ResourceNode(Node):
         self.download_future = None
         self.resource_links = None
     
+    # === Properties ===
+    
+    def calculate_icon_set(self) -> Optional[IconSet]:
+        return (
+            (wx.TreeItemIcon_Normal, BADGED_TREE_NODE_ICON(
+                self._tree_node_icon_name,
+                # NOTE: Expensive to calculate _status_badge_name
+                self._status_badge_name(force_recalculate=True))),
+        )
+    
+    def _status_badge_name(self, *, force_recalculate: bool=False) -> Optional[str]:
+        if not self._status_badge_name_calculated or force_recalculate:
+            self._status_badge_name_value = self._calculate_status_badge_name()
+            self._status_badge_name_calculated = True
+        return self._status_badge_name_value
+    
+    def _calculate_status_badge_name(self) -> Optional[str]:
+        resource = self.resource  # cache
+        
+        # NOTE: Inefficient. Performs 2 database queries (via 2 calls to
+        #       default_revision) when only 1 could be used
+        any_rr = resource.default_revision(stale_ok=True)
+        if any_rr is None:
+            # Not downloaded
+            return 'new'
+        else:
+            non_stale_rr = resource.default_revision(stale_ok=False)
+            if non_stale_rr is None:
+                # Stale
+                return 'stale'
+            else:
+                # Fresh
+                if non_stale_rr.error is None:
+                    # OK
+                    return None
+                else:
+                    # Error
+                    return 'warning'
+    
+    @property
+    def icon_tooltip(self) -> Optional[str]:
+        return '%s %s' % (self._status_badge_tooltip, self._entity_tooltip)
+    
+    @property
+    def _status_badge_tooltip(self) -> str:
+        status_badge_name = self._status_badge_name()  # cache
+        if status_badge_name is None:
+            return 'Fresh'
+        elif status_badge_name == 'new':
+            return 'Undownloaded'
+        elif status_badge_name == 'stale':
+            return 'Stale'
+        elif status_badge_name == 'warning':
+            return 'Error'
+        else:
+            raise AssertionError('Unknown resource status badge: ' + status_badge_name)
+    
+    @property
+    def _entity_tooltip(self) -> str:  # abstract
+        raise NotImplementedError()
+    
     @property
     def entity(self):
         return self.resource
+    
+    @property
+    def _project(self):
+        return self.resource.project
+    
+    # === Comparison ===
     
     def __eq__(self, other):
         return isinstance(other, _ResourceNode) and (
@@ -316,9 +462,7 @@ class _ResourceNode(Node):
     def __hash__(self):
         return hash(self.view.title) ^ hash(self.resource)
     
-    @property
-    def _project(self):
-        return self.resource.project
+    # === Events ===
     
     def on_expanded(self, event):
         # If this is the first expansion attempt, start an asynchronous task to fetch
@@ -340,6 +484,8 @@ class _ResourceNode(Node):
                         fg_call_later(self.update_children)
                     bg_call_later(bg_task)
             self.download_future.add_done_callback(download_done)
+    
+    # === Updates ===
     
     def update_children(self):
         """
@@ -419,21 +565,34 @@ class _ResourceNode(Node):
             subchildren = []
             for (r, links_to_r) in lowpri_offsite_resources:
                 subchildren.append(LinkedResourceNode(r, links_to_r))
-            children.append(ClusterNode('(Low-priority: Offsite)', subchildren))
+            children.append(ClusterNode('(Low-priority: Offsite)', subchildren, (
+                (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_cluster_offsite']),
+            ), 'Offsite URLs'))
         
         if hidden_embedded_resources:
             subchildren = []
             for (r, links_to_r) in hidden_embedded_resources:
                 subchildren.append(LinkedResourceNode(r, links_to_r))
-            children.append(ClusterNode('(Hidden: Embedded)', subchildren))
+            children.append(ClusterNode('(Hidden: Embedded)', subchildren, (
+                (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_cluster_embedded']),
+            ), 'Embedded URLs'))
         
         self.children = children
 
 
 class RootResourceNode(_ResourceNode):
-    def __init__(self, root_resource):
+    def __init__(self, root_resource: RootResource) -> None:
         self.root_resource = root_resource
-        super().__init__(self.calculate_title(), root_resource.resource)
+        super().__init__(
+            self.calculate_title(),
+            root_resource.resource,
+            'entitytree_root_resource')
+    
+    # === Properties ===
+    
+    @property
+    def _entity_tooltip(self) -> str:
+        return 'root URL'
     
     def calculate_title(self):
         project = self.root_resource.project
@@ -444,6 +603,8 @@ class RootResourceNode(_ResourceNode):
     @property
     def entity(self):
         return self.root_resource
+    
+    # === Comparison ===
     
     def __eq__(self, other):
         return isinstance(other, RootResourceNode) and (
@@ -457,6 +618,12 @@ class NormalResourceNode(_ResourceNode):
         self.resource = resource
         super().__init__(self.calculate_title(), resource)
     
+    # === Properties ===
+    
+    @property
+    def _entity_tooltip(self) -> str:
+        return 'URL'
+    
     def calculate_title(self):
         project = self.resource.project
         return '%s' % project.get_display_url(self.resource.url)
@@ -464,6 +631,8 @@ class NormalResourceNode(_ResourceNode):
     @property
     def entity(self):
         return self.resource
+    
+    # === Comparison ===
     
     def __eq__(self, other):
         return isinstance(other, NormalResourceNode) and (
@@ -477,6 +646,12 @@ class LinkedResourceNode(_ResourceNode):
         self.resource = resource
         self.links = tuple(links)
         super().__init__(self.calculate_title(), resource)
+    
+    # === Properties ===
+    
+    @property
+    def _entity_tooltip(self) -> str:
+        return 'URL'
     
     def calculate_title(self):
         project = self.resource.project
@@ -495,6 +670,8 @@ class LinkedResourceNode(_ResourceNode):
     def entity(self):
         return self.resource
     
+    # === Comparison ===
+    
     def __eq__(self, other):
         return isinstance(other, LinkedResourceNode) and (
             self.resource == other.resource and self.links == other.links)
@@ -503,8 +680,10 @@ class LinkedResourceNode(_ResourceNode):
 
 
 class ClusterNode(Node):
-    def __init__(self, title, children, icon_set=None):
+    def __init__(self, title: str, children, icon_set: IconSet, icon_tooltip: str) -> None:
         super().__init__()
+        
+        self._icon_tooltip = icon_tooltip
         
         self.view = NodeView()
         self.view.icon_set = icon_set
@@ -513,6 +692,14 @@ class ClusterNode(Node):
         
         self.children = children
         self._children_tuple = tuple(self.children)
+    
+    # === Properties ===
+    
+    @property
+    def icon_tooltip(self) -> Optional[str]:
+        return self._icon_tooltip
+    
+    # === Comparison ===
     
     def __eq__(self, other):
         return isinstance(other, ClusterNode) and (
@@ -532,6 +719,12 @@ class ResourceGroupNode(Node):
         
         self.update_children()
     
+    # === Properties ===
+    
+    @property
+    def icon_tooltip(self) -> Optional[str]:
+        return 'Group'
+    
     def calculate_title(self):
         project = self.resource_group.project
         return '%s - %s' % (
@@ -541,6 +734,8 @@ class ResourceGroupNode(Node):
     @property
     def entity(self):
         return self.resource_group
+    
+    # === Update ===
     
     def update_children(self) -> None:
         children_rrs = []  # type: List[Node]
@@ -553,6 +748,8 @@ class ResourceGroupNode(Node):
             else:
                 children_rrs.append(RootResourceNode(rr))
         self.children = children_rrs + children_rs
+    
+    # === Comparison ===
     
     def __eq__(self, other):
         return isinstance(other, ResourceGroupNode) and (
@@ -567,21 +764,32 @@ class GroupedLinkedResourcesNode(Node):
         super().__init__()
         
         self.view = NodeView()
-        self.view.title = self.calculate_title()
+        #self.view.title = ... (set below)
         self.view.expandable = True
         
         self.children = root_rsrc_nodes + linked_rsrc_nodes
         self._children_tuple = tuple(self.children)
+        
+        self.view.title = self.calculate_title()  # after self.children is initialized
+    
+    # === Properties ===
+    
+    @property
+    def icon_tooltip(self) -> Optional[str]:
+        return 'Grouped URLs'
     
     def calculate_title(self):
         project = self.resource_group.project
-        return '%s - %s' % (
+        return '%s - %d of %s' % (
             project.get_display_url(self.resource_group.url_pattern),
+            len(self.children),
             self.resource_group.name)
     
     @property
     def entity(self):
         return self.resource_group
+    
+    # === Comparison ===
     
     def __eq__(self, other):
         return isinstance(other, GroupedLinkedResourcesNode) and (
