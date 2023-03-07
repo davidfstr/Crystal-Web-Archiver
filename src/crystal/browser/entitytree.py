@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from crystal.browser.icons import BADGED_TREE_NODE_ICON, TREE_NODE_ICONS
-from crystal.model import Project, Resource
+from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
 from crystal.progress import (
     DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
@@ -12,11 +12,8 @@ from crystal.util.wx_bind import bind
 from crystal.util.xcollections import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import threading
-from typing import cast, List, Optional, TYPE_CHECKING, Union
+from typing import cast, List, Optional, Union
 from urllib.parse import urljoin, urlparse, urlunparse
-
-if TYPE_CHECKING:
-    from crystal.model import ResourceGroup, RootResource
 
 
 _ID_SET_PREFIX = 101
@@ -101,11 +98,16 @@ class EntityTree:
     def _refresh_group_nodes_now(self) -> None:
         try:
             for rgn in self.root.children:
-                if type(rgn) is not ResourceGroupNode:
-                    continue
-                rgn.update_children()
+                if type(rgn) is ResourceGroupNode:
+                    rgn.update_children()
         finally:
             self._group_nodes_need_updating = False
+    
+    # === Event: Resource Revision Did Instantiate ===
+    
+    def resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
+        fg_call_later(lambda:
+            self.root.update_icon_set_of_descendants_with_resource(revision.resource))
     
     # === Event: Right Click ===
     
@@ -247,6 +249,16 @@ class Node:
         """
         self._call_on_descendants('update_title')
     
+    def update_icon_set_of_descendants_with_resource(self, resource: Resource) -> None:
+        """
+        Updates the icon set of this node's descendants, usually due to a project change.
+        """
+        if isinstance(self.entity, (RootResource, Resource)):
+            if self.entity.resource == resource:
+                self.update_icon_set()
+        for child in self.children:
+            child.update_icon_set_of_descendants_with_resource(resource)
+    
     def _call_on_descendants(self, method_name) -> None:
         getattr(self, method_name)()
         for child in self.children:
@@ -267,6 +279,13 @@ class Node:
         """
         if hasattr(self, 'calculate_title'):
             self.view.title = self.calculate_title()  # type: ignore[attr-defined]
+    
+    def update_icon_set(self) -> None:
+        """
+        Updates this node's icon set. Usually due to a project change.
+        """
+        if hasattr(self, 'calculate_icon_set'):
+            self.view.icon_set = self.calculate_icon_set()  # type: ignore[attr-defined]
     
     # === Utility ===
     
@@ -349,17 +368,14 @@ class _ResourceNode(Node):
             tree_node_icon_name: str='entitytree_resource') -> None:
         super().__init__()
         
+        self._tree_node_icon_name = tree_node_icon_name
+        
         self._status_badge_name_calculated = False
         self._status_badge_name_value = None  # type: Optional[str]
         
         self.view = NodeView()
         # NOTE: Defer expensive calculation until if/when the icon_set is used
-        self.view.icon_set = lambda: (
-            (wx.TreeItemIcon_Normal, BADGED_TREE_NODE_ICON(
-                tree_node_icon_name,
-                # NOTE: Expensive to calculate _status_badge_name
-                self._status_badge_name)),
-        )
+        self.view.icon_set = self.calculate_icon_set
         self.view.title = title
         self.view.expandable = True
         # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
@@ -371,31 +387,16 @@ class _ResourceNode(Node):
     
     # === Properties ===
     
-    @property
-    def icon_tooltip(self) -> Optional[str]:
-        return '%s %s' % (self._status_badge_tooltip, self._entity_tooltip)
+    def calculate_icon_set(self) -> Optional[IconSet]:
+        return (
+            (wx.TreeItemIcon_Normal, BADGED_TREE_NODE_ICON(
+                self._tree_node_icon_name,
+                # NOTE: Expensive to calculate _status_badge_name
+                self._status_badge_name(force_recalculate=True))),
+        )
     
-    @property
-    def _status_badge_tooltip(self) -> str:
-        status_badge_name = self._status_badge_name  # cache
-        if status_badge_name is None:
-            return 'Fresh'
-        elif status_badge_name == 'new':
-            return 'Undownloaded'
-        elif status_badge_name == 'stale':
-            return 'Stale'
-        elif status_badge_name == 'warning':
-            return 'Error'
-        else:
-            raise AssertionError('Unknown resource status badge: ' + status_badge_name)
-    
-    @property
-    def _entity_tooltip(self) -> str:  # abstract
-        raise NotImplementedError()
-    
-    @property
-    def _status_badge_name(self) -> Optional[str]:
-        if not self._status_badge_name_calculated:
+    def _status_badge_name(self, *, force_recalculate: bool=False) -> Optional[str]:
+        if not self._status_badge_name_calculated or force_recalculate:
             self._status_badge_name_value = self._calculate_status_badge_name()
             self._status_badge_name_calculated = True
         return self._status_badge_name_value
@@ -422,6 +423,28 @@ class _ResourceNode(Node):
                 else:
                     # Error
                     return 'warning'
+    
+    @property
+    def icon_tooltip(self) -> Optional[str]:
+        return '%s %s' % (self._status_badge_tooltip, self._entity_tooltip)
+    
+    @property
+    def _status_badge_tooltip(self) -> str:
+        status_badge_name = self._status_badge_name()  # cache
+        if status_badge_name is None:
+            return 'Fresh'
+        elif status_badge_name == 'new':
+            return 'Undownloaded'
+        elif status_badge_name == 'stale':
+            return 'Stale'
+        elif status_badge_name == 'warning':
+            return 'Error'
+        else:
+            raise AssertionError('Unknown resource status badge: ' + status_badge_name)
+    
+    @property
+    def _entity_tooltip(self) -> str:  # abstract
+        raise NotImplementedError()
     
     @property
     def entity(self):

@@ -371,7 +371,7 @@ class Project:
     
     # === Tasks ===
     
-    def add_task(self, task):
+    def add_task(self, task: Task) -> None:
         """
         Schedules the specified top-level task for execution, if not already done.
         """
@@ -390,6 +390,13 @@ class Project:
         for lis in self.listeners:
             if hasattr(lis, 'resource_did_instantiate'):
                 lis.resource_did_instantiate(resource)  # type: ignore[attr-defined]
+    
+    # Called when a new ResourceRevision is created after the project has loaded
+    def _resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'resource_revision_did_instantiate'):
+                lis.resource_revision_did_instantiate(revision)  # type: ignore[attr-defined]
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
@@ -1088,6 +1095,9 @@ class ResourceRevision:
                     project._db.commit()
                 fg_call_and_wait(fg_task)
                 raise
+        
+        if not project._loading:
+            project._resource_revision_did_instantiate(self)
         
         return self
     
