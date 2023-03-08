@@ -175,6 +175,14 @@ def _main(args: List[str]) -> None:
     if parsed_args.test is not None:
         from crystal.util.xthreading import bg_call_later, fg_call_later
         def bg_task():
+            # Wait for wx.App to initialize
+            start_time = time.time()
+            while wx.GetApp() is not None:
+                delta_time = time.time() - start_time
+                if delta_time > 5:  # timeout
+                    raise Exception('Timed out waiting for wx.GetApp() to initialize')
+                time.sleep(.2)
+            
             is_ok = False
             try:
                 from crystal.tests.index import run_tests
@@ -338,6 +346,10 @@ def _prompt_for_project(
     import wx
     
     def on_checkbox_clicked(event: wx.CommandEvent) -> None:
+        # HACK: Simulate toggle of value during dispatch of wx.CHECKBOX event
+        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+            dialog._checkbox.Value = not dialog._checkbox.Value
+        
         readonly_checkbox_checked = dialog.IsCheckBoxChecked()
         create_button = dialog.FindWindowById(wx.ID_NO)
         create_button.Enabled = not readonly_checkbox_checked
