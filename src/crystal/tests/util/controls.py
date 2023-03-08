@@ -11,11 +11,37 @@ import wx
 # Utility: Controls: wx.Button
 
 def click_button(button: wx.Button) -> None:
+    # Dispatch wx.EVT_BUTTON event
     event = wx.PyCommandEvent(wx.EVT_BUTTON.typeId, button.GetId())
     event.SetEventObject(button)
     assert event.GetEventObject().GetId() == button.GetId()
-    
     button.Command(event)
+
+
+# ------------------------------------------------------------------------------
+# Utility: Controls: wx.CheckBox
+
+def set_checkbox_value(checkbox: wx.CheckBox, value: bool) -> None:
+    """
+    Changes the value of a checkbox in a way that fires a realistic
+    wx.EVT_CHECKBOX event if appropriate.
+    """
+    if checkbox.Value != value:
+        click_checkbox(checkbox)
+        assert checkbox.Value == value
+
+
+def click_checkbox(checkbox: wx.CheckBox) -> None:
+    old_value = checkbox.Value  # capture
+    
+    # Dispatch wx.EVT_CHECKBOX event
+    event = wx.PyCommandEvent(wx.EVT_CHECKBOX.typeId, checkbox.GetId())
+    event.SetEventObject(checkbox)
+    assert event.GetEventObject().GetId() == checkbox.GetId()
+    checkbox.Command(event)
+    
+    new_value = checkbox.Value  # capture
+    assert new_value != old_value, 'Expected checkbox to toggle value'
 
 
 # ------------------------------------------------------------------------------

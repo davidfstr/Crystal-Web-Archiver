@@ -5,7 +5,9 @@ from crystal.model import Project
 from crystal.server import get_request_url, ProjectServer
 import crystal.tests.test_data as test_data
 from crystal.tests.util.console import console_output_copied
-from crystal.tests.util.controls import TreeItem, click_button
+from crystal.tests.util.controls import (
+    click_button, set_checkbox_value, TreeItem
+)
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url,
     is_url_not_in_archive,
@@ -620,15 +622,130 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
     pass
 
 
-@skip('not yet automated')
 async def test_cannot_download_anything_given_project_is_opened_as_readonly() -> None:
-    # Some cases:
-    #   - cannot select resource in UI and press Download button, because button is disabled
-    #   - cannot select group in UI and press Download button, because button is disabled
-    #   - when expand undownloaded resource node, does show read-only error node
-    #   - when browsing a served site, no resources are ever dynamically downloaded
-    #     (although dynamic link rewriting still should work)
-    pass
+    """
+    Test that can open project in a read-only mode. In this mode it should be
+    impossible to download anything or make any kind of project change.
+    Various parts of the UI should be disabled to reflect this limitation.
+    """
+    
+    with served_project('xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic2_url = sp.get_request_url('https://xkcd.com/2/')
+            comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+        
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                assert root_ti is not None
+                assert root_ti.GetFirstChild() is None  # no entities
+                
+                # Download home page
+                if True:
+                    click_button(mw.add_url_button)
+                    aud = await AddUrlDialog.wait_for()
+                    aud.name_field.Value = 'Home'
+                    aud.url_field.Value = home_url
+                    await aud.ok()
+                    home_ti = root_ti.GetFirstChild()
+                    assert home_ti is not None  # entity was created
+                    assert f'{home_url} - Home' == home_ti.Text
+                    
+                    home_ti.SelectItem()
+                    click_button(mw.download_button)
+                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                
+                # Ensure home page has link to Comic #1
+                home_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                await wait_for(tree_has_no_children_condition(mw.task_tree))
+                (comic1_ti,) = [
+                    child for child in home_ti.Children
+                    if child.Text.startswith(f'{comic1_url} - ')
+                ]  # ensure did find sub-resource for Comic #1
+                
+                # Create group Comic
+                if True:
+                    click_button(mw.add_group_button)
+                    agd = await AddGroupDialog.wait_for()
+                    
+                    agd.name_field.Value = 'Comic'
+                    agd.pattern_field.Value = comic_pattern
+                    await agd.ok()
+            
+            # Ensure "Create" is disabled when preparing to open/create in read-only mode
+            ocd = await OpenOrCreateDialog.wait_for()
+            set_checkbox_value(ocd.open_as_readonly, True)
+            assert False == ocd.create_button.Enabled
+            
+            async with ocd.open(project_dirpath) as mw:
+                # Ensure icon shows that project is read-only
+                assert True == mw.readonly, 'Expected read-only icon to be visible'
+                
+                # Ensure "Add URL" and "Add Group" are disabled
+                assert False == mw.add_url_button.Enabled
+                assert False == mw.add_group_button.Enabled
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                assert root_ti is not None
+                
+                # Ensure "Forget" and "Download" are disabled when resource is selected
+                (home_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{home_url} - ')
+                ]
+                home_ti.SelectItem()
+                assert False == mw.forget_button.Enabled
+                assert False == mw.download_button.Enabled
+                
+                # 1. Ensure can expand a downloaded resource (Home)
+                # 2. Ensure home page has reference to Comic #1
+                home_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                await wait_for(tree_has_no_children_condition(mw.task_tree))
+                (linked_comic_group_ti,) = [
+                    child for child in home_ti.Children
+                    if child.Text.startswith(f'{comic_pattern} - ')
+                ]
+                linked_comic_group_ti.Expand()
+                (comic1_ti,) = [
+                    child for child in linked_comic_group_ti.Children
+                    if child.Text.startswith(f'{comic1_url} - ')
+                ]  # ensure did find sub-resource for Comic #1
+                
+                # Ensure expanding an undownloaded resource (Comic #1)
+                # does show a "Cannot download" placeholder node
+                comic1_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(comic1_ti))
+                cannot_download_ti = comic1_ti.GetFirstChild()
+                assert cannot_download_ti is not None
+                assert 'Cannot download children: Project is read only' == cannot_download_ti.Text
+                
+                # Ensure "Forget" and "Download" are disabled when group is selected
+                (comic_group_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{comic_pattern} - ')
+                ]  # ensure did find resource group at root of entity tree
+                comic_group_ti.SelectItem()
+                assert False == mw.forget_button.Enabled
+                assert False == mw.download_button.Enabled
+                
+                # Ensure can serve downloaded resource (Home)
+                home_ti.SelectItem()
+                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                    click_button(mw.view_button)
+                assert False == (await is_url_not_in_archive(home_url))
+                
+                # Ensure does NOT dynamically download a resource (Comic #1)
+                # matching an existing group (Comic) when in read-only mode
+                comic1_ti.SelectItem()
+                with assert_does_open_webbrowser_to(get_request_url(comic1_url)):
+                    click_button(mw.view_button)
+                assert True == (await is_url_not_in_archive(comic1_url))
 
 
 async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
