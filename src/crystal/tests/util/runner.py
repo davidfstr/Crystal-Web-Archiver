@@ -85,6 +85,28 @@ def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
         raise AssertionError()
 
 
+@asyncio.coroutine
+def pump_wx_events(  # type: ignore[misc]  # ignore non-Generator return type here
+        ) -> Awaitable[None]:  # or Generator[Command, object, None]
+    """
+    Process all pending events on the wx event queue.
+    """
+    assert is_foreground_thread()
+    
+    yield PumpWxEventsCommand()
+
+
+@asyncio.coroutine
+def bg_breakpoint(  # type: ignore[misc]  # ignore non-Generator return type here
+        ) -> Awaitable[None]:  # or Generator[Command, object, None]
+    """
+    Stops the program in the debugger, with the foreground thread released.
+    """
+    assert is_foreground_thread()
+    
+    yield BreakpointCommand()
+
+
 class Command(Generic[_T]):  # abstract
     def run(self) -> _T:
         raise NotImplementedError()
@@ -123,6 +145,21 @@ class FetchUrlCommand(Command['WebPage']):
         with response_stream as response:
             response_text = response.read().decode('utf-8')
         return WebPage(response_stream.status, response_stream.headers, response_text)
+
+
+class PumpWxEventsCommand(Command[None]):
+    def run(self) -> None:
+        assert not is_foreground_thread()
+        
+        fg_call_and_wait(lambda: None)
+
+
+class BreakpointCommand(Command[None]):
+    def run(self) -> None:
+        assert not is_foreground_thread()
+        
+        import pdb
+        pdb.set_trace()
 
 
 # ------------------------------------------------------------------------------

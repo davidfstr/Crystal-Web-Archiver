@@ -14,10 +14,26 @@ from crystal.util.xthreading import bg_call_later, fg_call_later
 import threading
 from typing import cast, List, Optional, Union
 from urllib.parse import urljoin, urlparse, urlunparse
+import wx
+import wx.lib.newevent
 
 
 _ID_SET_PREFIX = 101
 _ID_CLEAR_PREFIX = 102
+
+
+# Similar to wx's EVT_TREE_ITEM_GETTOOLTIP event,
+# but cross-platform and focused on the icon specifically
+GetTooltipEvent, EVT_TREE_ITEM_ICON_GETTOOLTIP = wx.lib.newevent.NewEvent()
+
+# NOTE: For use by automated tests
+async def get_tree_item_icon_tooltip(tree: wx.TreeCtrl, tree_item_id) -> Optional[str]:
+    from crystal.tests.util.runner import pump_wx_events
+    
+    event = GetTooltipEvent(tree_item_id=tree_item_id, tooltip_cell=[None])
+    wx.PostEvent(tree, event)  # callee should set: event.tooltip_cell[0]
+    await pump_wx_events()
+    return event.tooltip_cell[0]
 
 
 class EntityTree:
@@ -40,6 +56,7 @@ class EntityTree:
         self.peer.SetInitialSize((550, 300))
         
         bind(self.peer, wx.EVT_MOTION, self._on_mouse_motion)
+        bind(self.peer, EVT_TREE_ITEM_ICON_GETTOOLTIP, self._on_get_tooltip_event)
     
     # === Properties ===
     
@@ -109,6 +126,12 @@ class EntityTree:
         fg_call_later(lambda:
             self.root.update_icon_set_of_descendants_with_resource(revision.resource))
     
+    # === Event: Min Fetch Date Did Change ===
+    
+    def min_fetch_date_did_change(self) -> None:
+        fg_call_later(lambda:
+            self.root.update_icon_set_of_descendants_with_resource(None))
+    
     # === Event: Right Click ===
     
     def on_right_click(self, event, node_view):
@@ -166,20 +189,25 @@ class EntityTree:
         new_url_components[2] = new_path
         return urlunparse(new_url_components)
     
-    # === Event: Mouse Motion ===
+    # === Event: Mouse Motion, Get Tooltip ===
     
     # Update the tooltip whenever hovering the mouse over a tree node icon
     def _on_mouse_motion(self, event: wx.MouseEvent) -> None:
         (tree_item_id, hit_flags) = self.peer.HitTest(event.Position)
         if (hit_flags & wx.TREE_HITTEST_ONITEMICON) != 0:
-            node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
-            node = cast(Node, node_view.delegate)
-            new_tooltip = node.icon_tooltip
+            new_tooltip = self._icon_tooltip_for_tree_item_id(tree_item_id)
         else:
             new_tooltip = None
         
         self.peer.SetToolTip(new_tooltip)
-
+    
+    def _on_get_tooltip_event(self, event: wx.Event) -> None:
+        event.tooltip_cell[0] = self._icon_tooltip_for_tree_item_id(event.tree_item_id)
+    
+    def _icon_tooltip_for_tree_item_id(self, tree_item_id) -> Optional[str]:
+        node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
+        node = cast(Node, node_view.delegate)
+        return node.icon_tooltip
 
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     """
@@ -249,12 +277,15 @@ class Node:
         """
         self._call_on_descendants('update_title')
     
-    def update_icon_set_of_descendants_with_resource(self, resource: Resource) -> None:
+    def update_icon_set_of_descendants_with_resource(self, resource: Optional[Resource]) -> None:
         """
         Updates the icon set of this node's descendants, usually due to a project change.
+        
+        Only update if the entity's resource matches the specified resource
+        or update all resources if `resource` is None.
         """
         if isinstance(self.entity, (RootResource, Resource)):
-            if self.entity.resource == resource:
+            if resource is None or self.entity.resource == resource:
                 self.update_icon_set()
         for child in self.children:
             child.update_icon_set_of_descendants_with_resource(resource)

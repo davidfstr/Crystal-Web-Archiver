@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from copy import deepcopy
+from crystal.browser.entitytree import get_tree_item_icon_tooltip
 from crystal.model import Project
 from crystal.server import get_request_url, ProjectServer
 import crystal.tests.test_data as test_data
@@ -20,11 +22,15 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import (
     AddGroupDialog, AddUrlDialog, MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
+from crystal.util import http_date
+from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xthreading import is_foreground_thread
+import datetime
+import json
 import os
 import re
 import tempfile
-from typing import Iterator, List, Union
+from typing import Iterator, List, Optional, Union
 from unittest import skip
 import wx
 from zipfile import ZipFile
@@ -784,6 +790,10 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                     assert root_ti is not None
                     (home_ti, comic1_ti) = root_ti.Children
                     
+                    # Ensure resource status badge says URL is undownloaded
+                    await _assert_tree_item_icon_tooltip_contains(home_ti, 'Undownloaded')
+                    await _assert_tree_item_icon_tooltip_contains(comic1_ti, 'Undownloaded')
+                    
                     home_ti.SelectItem()
                     click_button(mw.download_button)
                     await wait_for_download_to_start_and_finish(mw.task_tree)
@@ -791,6 +801,10 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                     comic1_ti.SelectItem()
                     click_button(mw.download_button)
                     await wait_for_download_to_start_and_finish(mw.task_tree)
+                    
+                    # Ensure resource status badge says URL is fresh
+                    await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
+                    await _assert_tree_item_icon_tooltip_contains(comic1_ti, 'Fresh')
                 
                 # Start server
                 home_ti.SelectItem()
@@ -802,7 +816,9 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 assert comic1_v1_etag == (await fetch_archive_url(comic1_url)).etag
             
             # Start xkcd v2
-            with served_project('xkcd-v2.crystalproj.zip') as sp2:
+            with served_project(
+                    'xkcd-v2.crystalproj.zip',
+                    fetch_date_of_resources_set_to=datetime.datetime.now(datetime.timezone.utc)) as sp2:
                 # Define URLs
                 assert home_url == sp2.get_request_url(home_original_url)
                 assert comic1_url == sp2.get_request_url(comic1_original_url)
@@ -823,11 +839,19 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 assert home_v1_etag == (await fetch_archive_url(home_url)).etag
                 assert comic1_v1_etag == (await fetch_archive_url(comic1_url)).etag
                 
+                # Ensure resource status badge says URL is fresh
+                await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
+                await _assert_tree_item_icon_tooltip_contains(comic1_ti, 'Fresh')
+                
                 # Change preferences: Stale if downloaded before today
                 click_button(mw.preferences_button)
                 pd = await PreferencesDialog.wait_for()
                 pd.stale_before_checkbox.Value = True
                 await pd.ok()
+                
+                # Ensure resource status badge says URL is stale
+                await _assert_tree_item_icon_tooltip_contains(home_ti, 'Stale')
+                await _assert_tree_item_icon_tooltip_contains(comic1_ti, 'Stale')
                 
                 # Download: Home, Comic #1
                 if True:
@@ -840,6 +864,10 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                     click_button(mw.download_button)
                     await wait_for_download_to_start_and_finish(mw.task_tree,
                         immediate_finish_ok=True)
+                
+                # Ensure resource status badge says URL is fresh
+                await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
+                await _assert_tree_item_icon_tooltip_contains(comic1_ti, 'Fresh')
                 
                 # Change preferences: Undo: Stale if downloaded before today
                 click_button(mw.preferences_button)
@@ -879,7 +907,14 @@ async def test_can_download_and_serve_a_site_requiring_cookie_authentication() -
 # Utility
 
 @contextmanager
-def served_project(zipped_project_filename: str) -> Iterator[ProjectServer]:
+def served_project(
+        zipped_project_filename: str,
+        *, fetch_date_of_resources_set_to: Optional[datetime.datetime]=None,
+        ) -> Iterator[ProjectServer]:
+    if fetch_date_of_resources_set_to is not None:
+        if not datetime_is_aware(fetch_date_of_resources_set_to):
+            raise ValueError('Expected fetch_date_of_resources_set_to to be an aware datetime')
+    
     with tempfile.TemporaryDirectory() as project_parent_dirpath:
         # Extract project
         with test_data.open_binary(zipped_project_filename) as zipped_project_file:
@@ -893,6 +928,38 @@ def served_project(zipped_project_filename: str) -> Iterator[ProjectServer]:
         ]
         project_filepath = os.path.join(project_parent_dirpath, project_filename)
         with Project(project_filepath, readonly=True) as project:
+            # Alter the fetch date of every ResourceRevision in the project
+            # to match "fetch_date_of_resources_set_to", if provided
+            if fetch_date_of_resources_set_to is not None:
+                for r in project.resources:
+                    for rr in r.revisions():
+                        if rr.metadata is None:
+                            print(
+                                f'Warning: Unable to alter fetch date of '
+                                f'resource revision lacking HTTP headers: {rr}')
+                            continue
+                        
+                        rr_new_date = http_date.format(fetch_date_of_resources_set_to)
+                        
+                        # New Metadata = Old Metadata with Date and Age headers replaced
+                        rr_new_metadata = deepcopy(rr.metadata)
+                        rr_new_metadata['headers'] = [
+                            (cur_name, cur_value)
+                            for (cur_name, cur_value) in
+                            rr_new_metadata['headers']
+                            if cur_name.lower() not in ['date', 'age']
+                        ] + [('Date', rr_new_date)]
+                        
+                        # Alter ResourceRevision's metadata in memory
+                        rr.metadata = rr_new_metadata
+                        
+                        # Alter ResourceRevision's metadata in database
+                        c = project._db.cursor()
+                        c.execute(
+                            'update resource_revision set metadata = ? where id = ?',
+                            (json.dumps(rr_new_metadata), rr._id),  # type: ignore[attr-defined]
+                            ignore_readonly=True)
+                        project._db.commit()
             
             # Start server
             yield project.start_server(
@@ -948,6 +1015,12 @@ async def _undiscover_url(
                 resource = project.get_resource(url)
                 assert resource is not None
                 resource.delete(); del resource
+
+
+async def _assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
+    tooltip = await get_tree_item_icon_tooltip(ti.tree, ti.id)
+    assert tooltip is not None and value in tooltip, \
+        f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
 
 
 # ------------------------------------------------------------------------------

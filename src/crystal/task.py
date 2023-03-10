@@ -4,7 +4,10 @@ from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 import sys
 from time import sleep
-from typing import List, Optional, Union
+from typing import List, Optional, TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    from crystal.model import ResourceRevision
 
 
 # ------------------------------------------------------------------------------
@@ -348,7 +351,7 @@ class DownloadResourceBodyTask(Task):
             icon_name='tasktree_download_resource_body')
         self._resource = abstract_resource.resource  # type: Resource
     
-    def __call__(self):
+    def __call__(self) -> ResourceRevision:
         """
         Raises:
         * CannotDownloadWhenProjectReadOnlyError --

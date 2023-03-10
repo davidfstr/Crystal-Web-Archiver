@@ -29,9 +29,11 @@ class DatabaseCursor:
         self._readonly = readonly
     
     def execute(self, command: str, *args, **kwargs) -> DatabaseCursor:
+        ignore_readonly = bool(kwargs.pop('ignore_readonly', False))
+        
         # Ensure that caller does disallow commands that write to the database
         # if the project is readonly
-        if self._readonly:
+        if self._readonly and not ignore_readonly:
             command_lower = command.lower()  # cache
             command_is_read = (
                 command_lower.startswith('select ') or

@@ -87,6 +87,8 @@ class Project:
         def initially_readonly(can_write_db: bool) -> bool:
             return readonly or not can_write_db
         
+        self._min_fetch_date = None
+        
         progress_listener.opening_project(os.path.basename(path))
         
         self._loading = True
@@ -313,6 +315,10 @@ class Project:
             if not datetime_is_aware(min_fetch_date):
                 raise ValueError('Expected an aware datetime (with a UTC offset)')
         self._min_fetch_date = min_fetch_date
+        if not self._loading:
+            for lis in self.listeners:
+                if hasattr(lis, 'min_fetch_date_did_change'):
+                    lis.min_fetch_date_did_change()  # type: ignore[attr-defined]
     min_fetch_date = property(
         _get_min_fetch_date,
         _set_min_fetch_date,
