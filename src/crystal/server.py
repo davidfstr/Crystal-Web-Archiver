@@ -63,6 +63,14 @@ class ProjectServer:
     def close(self) -> None:
         self._server.shutdown()
     
+    # === Properties ===
+    
+    @property
+    def port(self) -> int:
+        return self._port
+    
+    # === Utility ===
+    
     def get_request_url(self, archive_url: str) -> str:
         """
         Given the absolute URL of a resource, returns the URL that should be used to

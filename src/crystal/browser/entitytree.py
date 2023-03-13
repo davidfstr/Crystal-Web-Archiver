@@ -11,6 +11,7 @@ from crystal.ui.tree import *
 from crystal.util.wx_bind import bind
 from crystal.util.xcollections import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
+import os
 import threading
 from typing import cast, List, Optional, Union
 from urllib.parse import urljoin, urlparse, urlunparse
@@ -25,15 +26,6 @@ _ID_CLEAR_PREFIX = 102
 # Similar to wx's EVT_TREE_ITEM_GETTOOLTIP event,
 # but cross-platform and focused on the icon specifically
 GetTooltipEvent, EVT_TREE_ITEM_ICON_GETTOOLTIP = wx.lib.newevent.NewEvent()
-
-# NOTE: For use by automated tests
-async def get_tree_item_icon_tooltip(tree: wx.TreeCtrl, tree_item_id) -> Optional[str]:
-    from crystal.tests.util.runner import pump_wx_events
-    
-    event = GetTooltipEvent(tree_item_id=tree_item_id, tooltip_cell=[None])
-    wx.PostEvent(tree, event)  # callee should set: event.tooltip_cell[0]
-    await pump_wx_events()
-    return event.tooltip_cell[0]
 
 
 class EntityTree:
@@ -56,7 +48,10 @@ class EntityTree:
         self.peer.SetInitialSize((550, 300))
         
         bind(self.peer, wx.EVT_MOTION, self._on_mouse_motion)
+        # For tests only
         bind(self.peer, EVT_TREE_ITEM_ICON_GETTOOLTIP, self._on_get_tooltip_event)
+        # For tests only
+        bind(self.peer, wx.EVT_MENU, self._on_popup_menuitem_selected)
     
     # === Properties ===
     
@@ -150,7 +145,10 @@ class EntityTree:
         
         # Show popup menu
         if menu.GetMenuItemCount() > 0:
-            self.peer.PopupMenu(menu, event.GetPoint())
+            if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'False':
+                self.peer.PopupMenu(menu, event.GetPoint())
+            else:
+                print('(Suppressing popup menu while CRYSTAL_RUNNING_TESTS=True)')
         menu.Destroy()
     
     def _on_popup_menuitem_selected(self, event):

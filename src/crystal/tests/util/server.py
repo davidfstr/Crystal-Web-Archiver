@@ -38,10 +38,11 @@ async def fetch_archive_url(
 
 
 class WebPage:
-    def __init__(self, status: int, headers: EmailMessage, content: str) -> None:
+    def __init__(self, status: int, headers: EmailMessage, content_bytes: bytes) -> None:
         self._status = status
         self._headers = headers
-        self._content = content
+        self._content_bytes = content_bytes
+        self._content = None  # type: Optional[str]
     
     @property
     def is_not_in_archive(self) -> bool:
@@ -57,15 +58,21 @@ class WebPage:
     @property
     def title(self) -> Optional[str]:
         # TODO: Use an HTML parser to improve robustness
-        m = re.search(r'<title>([^<]*)</title>', self._content)
+        m = re.search(r'<title>([^<]*)</title>', self.content)
         if m is None:
             return None
         else:
             return m.group(1).strip()
     
     @property
-    def content(self) -> str:
+    def content(self) -> str:  # lazy
+        if self._content is None:
+            self._content = self._content_bytes.decode('utf-8')
         return self._content
+    
+    @property
+    def content_bytes(self) -> bytes:
+        return self._content_bytes
 
 
 # ------------------------------------------------------------------------------

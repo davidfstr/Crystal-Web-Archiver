@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from crystal.tests.util.controls import (
     file_dialog_returning, click_button, package_dialog_returning,
 )
+from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
 
 # ------------------------------------------------------------------------------
-# Utility: Window Abstractions
+# Window & Dialog Abstractions
 
 class OpenOrCreateDialog:
     # NOTE: 8.0 isn't long enough for Windows test runners on GitHub Actions
@@ -108,7 +109,7 @@ class MainWindow:
     _connect_timeout: Optional[float]
     
     main_window: wx.Frame
-    entity_tree: wx.TreeCtrl
+    entity_tree: 'EntityTree'
     add_url_button: wx.Button
     add_group_button: wx.Button
     forget_button: wx.Button
@@ -131,8 +132,9 @@ class MainWindow:
             window_condition('cr-main-window'),
             timeout=self._connect_timeout)
         assert isinstance(self.main_window, wx.Frame)
-        self.entity_tree = self.main_window.FindWindowByName('cr-entity-tree')
-        assert isinstance(self.entity_tree, wx.TreeCtrl)
+        entity_tree_window = self.main_window.FindWindowByName('cr-entity-tree')
+        assert isinstance(entity_tree_window, wx.TreeCtrl)
+        self.entity_tree = EntityTree(entity_tree_window)
         self.add_url_button = self.main_window.FindWindowByName('cr-add-url-button')
         assert isinstance(self.add_url_button, wx.Button)
         self.add_group_button = self.main_window.FindWindowByName('cr-add-group-button')
@@ -301,6 +303,40 @@ class PreferencesDialog:
     async def ok(self) -> None:
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-preferences-dialog')))
+
+
+# ------------------------------------------------------------------------------
+# Panel Abstractions
+
+class EntityTree:
+    def __init__(self, window: wx.TreeCtrl) -> None:
+        self.window = window
+    
+    async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> Optional[str]:
+        from crystal.browser.entitytree import GetTooltipEvent
+        
+        if tree_item.tree != self.window:
+            raise ValueError()
+        
+        event = GetTooltipEvent(tree_item_id=tree_item.id, tooltip_cell=[None])
+        wx.PostEvent(self.window, event)  # callee should set: event.tooltip_cell[0]
+        await pump_wx_events()
+        return event.tooltip_cell[0]
+    
+    async def set_default_url_prefix_to_resource_at_tree_item(self, tree_item: TreeItem) -> None:
+        # TODO: Publicize constant
+        from crystal.browser.entitytree import _ID_SET_PREFIX
+        
+        if tree_item.tree != self.window:
+            raise ValueError()
+        
+        # Simulate right-click on tree node, opening (and closing) a menu
+        wx.PostEvent(self.window, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.window, tree_item.id))
+        await pump_wx_events()
+        
+        # Simulate click on menuitem "Set As Default URL Prefix"
+        wx.PostEvent(self.window, wx.MenuEvent(type=wx.EVT_MENU.typeId, id=_ID_SET_PREFIX, menu=None))
+        await pump_wx_events()
 
 
 # ------------------------------------------------------------------------------
