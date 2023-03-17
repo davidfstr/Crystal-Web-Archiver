@@ -100,7 +100,12 @@ def pump_wx_events(  # type: ignore[misc]  # ignore non-Generator return type he
 def bg_breakpoint(  # type: ignore[misc]  # ignore non-Generator return type here
         ) -> Awaitable[None]:  # or Generator[Command, object, None]
     """
-    Stops the program in the debugger, with the foreground thread released.
+    Stops the program in the debugger, with the foreground thread released,
+    allowing the user to interact with the UI while the debugger has the program paused.
+    
+    Example usage:
+        from crystal.tests.util.runner import bg_breakpoint
+        await bg_breakpoint()
     """
     assert is_foreground_thread()
     
@@ -143,8 +148,8 @@ class FetchUrlCommand(Command['WebPage']):
         except urllib.error.HTTPError as e:
             response_stream = e
         with response_stream as response:
-            response_text = response.read().decode('utf-8')
-        return WebPage(response_stream.status, response_stream.headers, response_text)
+            response_bytes = response.read()
+        return WebPage(response_stream.status, response_stream.headers, response_bytes)
 
 
 class PumpWxEventsCommand(Command[None]):

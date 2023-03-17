@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
-from crystal.browser.entitytree import get_tree_item_icon_tooltip
 from crystal.model import Project
 from crystal.server import get_request_url, ProjectServer
 import crystal.tests.test_data as test_data
@@ -10,17 +9,21 @@ from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
     click_button, set_checkbox_value, TreeItem
 )
+from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url,
     is_url_not_in_archive,
 )
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
-    wait_for, window_condition, first_child_of_tree_item_is_not_loading_condition,
+    DEFAULT_WAIT_TIMEOUT,
+    first_child_of_tree_item_is_not_loading_condition,
     tree_has_no_children_condition,
+    wait_for, window_condition,
 )
 from crystal.tests.util.windows import (
-    AddGroupDialog, AddUrlDialog, MainWindow, OpenOrCreateDialog, PreferencesDialog,
+    AddGroupDialog, AddUrlDialog, EntityTree,
+    MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
 from crystal.util import http_date
 from crystal.util.xdatetime import datetime_is_aware
@@ -32,6 +35,7 @@ import re
 import tempfile
 from typing import Iterator, List, Optional, Union
 from unittest import skip
+from urllib.parse import urljoin
 import wx
 from zipfile import ZipFile
 
@@ -47,7 +51,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
     """
     assert is_foreground_thread()
     
-    with served_project('xkcd.crystalproj.zip') as sp:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         if True:
             home_url = sp.get_request_url('https://xkcd.com/')
@@ -71,7 +75,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 
                 # Test can create root resource
                 if True:
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     assert root_ti is not None
                     assert root_ti.GetFirstChild() is None  # no entities
                     
@@ -97,7 +101,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 assert True == (await is_url_not_in_archive(home_url))
                 
                 # Test can download root resource (using download button)
-                assert home_ti.id == mw.entity_tree.GetSelection()
+                assert home_ti.id == mw.entity_tree.window.GetSelection()
                 click_button(mw.download_button)
                 await wait_for_download_to_start_and_finish(mw.task_tree)
                 
@@ -264,7 +268,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     # Undownload all members of the feed group
                     await _undownload_url([atom_feed_url, rss_feed_url], mw, project_dirpath)
                     
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     assert root_ti is not None
                     
                     # Create feed item group, with feed group as source
@@ -300,7 +304,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
                 assert False == mw.readonly
                 
-                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti is not None
                 
                 # Start server
@@ -364,12 +368,12 @@ async def test_can_download_and_serve_a_static_site() -> None:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
                 assert True == mw.readonly
                 
-                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti is not None
                 
                 # 1. Test cannot add new root resource in read-only project
                 # 2. Test cannot add new resource group in read-only project
-                selected_ti = TreeItem.GetSelection(mw.entity_tree)
+                selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
                 # NOTE: Cannot test the selection on Windows
                 #assert (selected_ti is None) or (selected_ti == root_ti)
                 assert False == mw.add_url_button.IsEnabled()
@@ -415,7 +419,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
     JavaScript which dynamically fetches URLs that cannot be discovered
     statically by Crystal.
     """
-    with served_project('xkcd.crystalproj.zip') as sp:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         if True:
             home_url = sp.get_request_url('https://xkcd.com/')
@@ -434,7 +438,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
         
         with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti is not None
                 assert root_ti.GetFirstChild() is None  # no entities
                 
@@ -473,7 +477,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                     nonlocal root_ti
                     nonlocal home_ti
                     
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     assert root_ti is not None
                     home_ti = root_ti.GetFirstChild()
                     assert home_ti is not None
@@ -623,9 +627,126 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                     await _undownload_url(target_url, mw, project_dirpath)
 
 
-@skip('not yet automated')
 async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() -> None:
-    pass
+    # Define original URLs
+    home_original_url = 'https://bongo.cat/'
+    sound1_original_url = 'https://bongo.cat/sounds/bongo0.mp3'
+    
+    with served_project('testdata_bongo.cat.crystalproj.zip') as sp:
+        # Define URLs
+        if True:
+            home_url = sp.get_request_url(home_original_url)
+            sound1_href = '/sounds/bongo0.mp3'
+            sound1_url = sp.get_request_url(sound1_original_url)
+            
+            sound_group_name = 'Sound'
+            sound_pattern = sp.get_request_url('https://bongo.cat/sounds/*')
+        
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                assert root_ti.GetFirstChild() is None  # no entities
+                
+                # Download home page
+                if True:
+                    click_button(mw.add_url_button)
+                    aud = await AddUrlDialog.wait_for()
+                    aud.name_field.Value = 'Home'
+                    aud.url_field.Value = home_url
+                    await aud.ok()
+                    home_ti = root_ti.GetFirstChild()
+                    assert home_ti is not None  # entity was created
+                    assert f'{home_url} - Home' == home_ti.Text
+                    
+                    home_ti.SelectItem()
+                    click_button(mw.download_button)
+                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                
+                # Home page has JavaScript that will load sound URLs when
+                # executed, but Crystal isn't smart enough to find those
+                # sound URLs in advance
+                
+                # Ensure sound file not detected as embedded resource
+                # and not downloaded
+                if True:
+                    # Ensure home page has no normal link to Sound #1
+                    home_ti.Expand()
+                    await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                    await wait_for(tree_has_no_children_condition(mw.task_tree))
+                    () = [
+                        child for child in home_ti.Children
+                        if child.Text.startswith(f'{sound1_url} - ')
+                    ]
+                    
+                    # Ensure home page has no embedded link to Sound #1
+                    (embedded_cluster_ti,) = [
+                        child for child in home_ti.Children
+                        if child.Text == '(Hidden: Embedded)'
+                    ]
+                    embedded_cluster_ti.Expand()
+                    await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                    await wait_for(tree_has_no_children_condition(mw.task_tree))
+                    () = [
+                        child for child in embedded_cluster_ti.Children
+                        if child.Text.startswith(f'{sound1_url} - ')
+                    ]
+                    
+                    home_ti.Collapse()
+                
+                # Create group Sound,
+                # so that dynamic requests to sound resources within the group
+                # by JavaScript will be downloaded automatically
+                if True:
+                    click_button(mw.add_group_button)
+                    agd = await AddGroupDialog.wait_for()
+                    
+                    agd.name_field.Value = sound_group_name
+                    agd.pattern_field.Value = sound_pattern
+                    await agd.ok()
+                
+                # Set home page as default URL prefix,
+                # so that dynamic requests to *site-relative* sound URLs by JavaScript
+                # can be dynamically rewritten to use the correct domain
+                home_ti.SelectItem()
+                await mw.entity_tree.set_default_url_prefix_to_resource_at_tree_item(home_ti)
+                new_default_url_prefix = home_url[:-1]  # without trailing /
+                
+                # Start server
+                home_ti.SelectItem()
+                with assert_does_open_webbrowser_to(get_request_url(
+                        home_url,
+                        project_default_url_prefix=new_default_url_prefix)):
+                    click_button(mw.view_button)
+                
+                # View the home page.
+                # Ensure console does reveal that link to sound was dynamically rewritten.
+                if True:
+                    # Simulate opening home page in browser,
+                    # which should evaluate the <script>-only reference,
+                    # and try to fetch the sound automatically
+                    with console_output_copied() as console_output:
+                        home_page = await fetch_archive_url(home_url)
+                        
+                        request_scheme = 'http'
+                        request_host = 'localhost:%s' % sp.port
+                        request_path = sound1_href
+                        sound1_request_url = f'{request_scheme}://{request_host}{request_path}'
+                        sound1_data = await bg_fetch_url(
+                            sound1_request_url,
+                            headers={
+                                'Referer': home_url
+                            },
+                            timeout=DEFAULT_WAIT_TIMEOUT)
+                    
+                    # Ensure console does log that link to sound is being dynamically rewriten
+                    assert (
+                        f'*** Dynamically rewriting link from {home_original_url}: '
+                        f'{sound1_original_url}'
+                    ) in console_output.getvalue()
+                    
+                    # Ensure sound did actually download
+                    assert len(sound1_data.content_bytes) == 10258  # magic
 
 
 async def test_cannot_download_anything_given_project_is_opened_as_readonly() -> None:
@@ -635,7 +756,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
     Various parts of the UI should be disabled to reflect this limitation.
     """
     
-    with served_project('xkcd.crystalproj.zip') as sp:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         if True:
             home_url = sp.get_request_url('https://xkcd.com/')
@@ -646,7 +767,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
         
         with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti is not None
                 assert root_ti.GetFirstChild() is None  # no entities
                 
@@ -696,7 +817,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 assert False == mw.add_url_button.Enabled
                 assert False == mw.add_group_button.Enabled
                 
-                root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti is not None
                 
                 # Ensure "Forget" and "Download" are disabled when resource is selected
@@ -767,7 +888,7 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
     with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
             # Start xkcd v1
-            with served_project('xkcd.crystalproj.zip') as sp1:
+            with served_project('testdata_xkcd.crystalproj.zip') as sp1:
                 # Define URLs
                 home_url = sp1.get_request_url(home_original_url)
                 comic1_url = sp1.get_request_url(comic1_original_url)
@@ -786,7 +907,7 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                     aud.url_field.Value = comic1_url
                     await aud.ok()
                     
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree)
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     assert root_ti is not None
                     (home_ti, comic1_ti) = root_ti.Children
                     
@@ -817,7 +938,7 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
             
             # Start xkcd v2
             with served_project(
-                    'xkcd-v2.crystalproj.zip',
+                    'testdata_xkcd-v2.crystalproj.zip',
                     fetch_date_of_resources_set_to=datetime.datetime.now(datetime.timezone.utc)) as sp2:
                 # Define URLs
                 assert home_url == sp2.get_request_url(home_original_url)
@@ -1017,8 +1138,9 @@ async def _undiscover_url(
                 resource.delete(); del resource
 
 
+# NOTE: Only for use with tree items in EntityTree
 async def _assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
-    tooltip = await get_tree_item_icon_tooltip(ti.tree, ti.id)
+    tooltip = await (EntityTree(ti.tree).get_tree_item_icon_tooltip(ti))
     assert tooltip is not None and value in tooltip, \
         f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
 
