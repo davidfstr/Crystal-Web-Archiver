@@ -3,9 +3,10 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from crystal.tests.util.controls import (
-    file_dialog_returning, click_button, package_dialog_returning,
+    click_button, file_dialog_returning, package_dialog_returning,
+    TreeItem
 )
-from crystal.tests.util.runner import pump_wx_events
+from crystal.tests.util.runner import bg_sleep, pump_wx_events
 from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
@@ -318,9 +319,17 @@ class EntityTree:
         if tree_item.tree != self.window:
             raise ValueError()
         
-        event = GetTooltipEvent(tree_item_id=tree_item.id, tooltip_cell=[None])
+        event = GetTooltipEvent(tree_item_id=tree_item.id, tooltip_cell=[Ellipsis])
         wx.PostEvent(self.window, event)  # callee should set: event.tooltip_cell[0]
-        await pump_wx_events()
+        # Try multiple times, since Windows sometimes doesn't seem to pump
+        # all events immediately
+        for _ in range(3):
+            await pump_wx_events()
+            if event.tooltip_cell[0] is not Ellipsis:
+                break
+            await bg_sleep(50/1000)
+        else:
+            raise AssertionError('GetTooltipEvent did not return tooltip')
         return event.tooltip_cell[0]
     
     async def set_default_url_prefix_to_resource_at_tree_item(self, tree_item: TreeItem) -> None:
