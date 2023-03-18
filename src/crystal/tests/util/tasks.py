@@ -7,6 +7,7 @@ from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, tree_has_children_condition, 
     tree_has_no_children_condition, wait_for, wait_while, WaitTimedOut
 )
+import math
 import re
 from typing import Callable, List, Optional
 import wx
@@ -19,14 +20,16 @@ async def wait_for_download_to_start_and_finish(
         task_tree: wx.TreeCtrl,
         *, immediate_finish_ok: bool=False,
         ) -> None:
+    # TODO: Allow caller to tune "max_download_duration_per_item"
     max_download_duration_per_standard_item = (
         4 +  # fetch + parse time
         crystal.task.DELAY_BETWEEN_DOWNLOADS
     ) * 2.5  # fudge factor
     max_download_duration_per_large_item = (
-        max_download_duration_per_standard_item * 8  # TODO: allow caller to tune
+        max_download_duration_per_standard_item * 
+        4
     )
-    max_large_item_count = 1  # TODO: allow caller to tune
+    
     period = DEFAULT_WAIT_PERIOD
     
     # Wait for start of download
@@ -38,7 +41,7 @@ async def wait_for_download_to_start_and_finish(
         else:
             raise
     
-    # Determine how many items are being downloaded
+    # Wait until download task is observed that says how many items are being downloaded
     item_count: int
     first_task_title_func = first_task_title_progression(task_tree)
     observed_titles = []  # type: List[str]
@@ -64,32 +67,20 @@ async def wait_for_download_to_start_and_finish(
         if m.group(4) is not None:
             pass  # keep waiting
         else:
+            # NOTE: Currently unused. Just proving that we can calculate it.
             item_count = int(m.group(3))
             break
         
         await bg_sleep(period)
         continue
     
-    large_item_count = min(max_large_item_count, item_count)
-    standard_item_count = item_count - large_item_count
-    
     # Wait while downloading
     await wait_while(
         first_task_title_func,
-        total_timeout=(
-            (max_download_duration_per_standard_item * standard_item_count) +
-            (max_download_duration_per_large_item * large_item_count)
-        ),
-        total_timeout_message=lambda: (
-            f'Resource download timed out: '
-            f'Gave up at status: {first_task_title_func()!r}'
-        ),
-        progress_timeout=max(
-            max_download_duration_per_standard_item,
-            max_download_duration_per_large_item,
-        ),
+        total_timeout=math.inf,  # progress timeout is sufficient
+        progress_timeout=max_download_duration_per_large_item,
         progress_timeout_message=lambda: (
-            f'Subresource download timed out: '
+            f'Subresource download timed out after {max_download_duration_per_large_item:.1f}s: '
             f'Stuck at status: {first_task_title_func()!r}'
         ),
         period=period,
