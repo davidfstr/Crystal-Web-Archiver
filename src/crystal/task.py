@@ -811,7 +811,7 @@ class RootTask(Task):
 _ROOT_TASK_POLL_INTERVAL = .1 # secs
 
 
-def schedule_forever(task):
+def schedule_forever(task: Task) -> None:
     """
     Runs the specified task synchronously until it completes.
     
@@ -828,7 +828,7 @@ def schedule_forever(task):
         unit()
 
 
-def start_schedule_forever(task):
+def start_schedule_forever(task: Task) -> None:
     """
     Asynchronously runs the specified task until it completes.
     
