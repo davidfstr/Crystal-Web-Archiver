@@ -171,29 +171,10 @@ def _main(args: List[str]) -> None:
     # Start GUI subsystem
     import wx
     
-    # Starts tests if requested
-    if parsed_args.test is not None:
-        from crystal.util.xthreading import bg_call_later, fg_call_later
-        def bg_task():
-            # Wait for wx.App to initialize
-            start_time = time.time()
-            while wx.GetApp() is not None:
-                delta_time = time.time() - start_time
-                if delta_time > 5:  # timeout
-                    raise Exception('Timed out waiting for wx.GetApp() to initialize')
-                time.sleep(.2)
-            
-            is_ok = False
-            try:
-                from crystal.tests.index import run_tests
-                is_ok = run_tests(parsed_args.test)
-            finally:
-                fg_call_later(lambda: sys.exit(0 if is_ok else 1))
-        bg_call_later(bg_task)
-    
     last_project = None  # type: Optional[Project]
     
-    # Create wx.App and call app.OnInit(), opening the initial dialog
+    # 1. Create wx.App and call app.OnInit(), opening the initial dialog
+    # 2. Initialize the foreground thread
     class MyApp(wx.App):
         def __init__(self, *args, **kwargs):
             self._keepalive_frame = None
@@ -241,6 +222,23 @@ def _main(args: List[str]) -> None:
             # Deactivate wx keepalive
             self._keepalive_frame.Destroy()
     app = MyApp(redirect=False)
+    
+    # Starts tests if requested
+    # NOTE: Must do this after initializing the foreground thread
+    if parsed_args.test is not None:
+        from crystal.util.xthreading import bg_call_later, fg_call_later, is_foreground_thread
+        def bg_task():
+            # Ensure wx is initialized and we appear to be on a background thread
+            assert wx.GetApp() is not None
+            assert not is_foreground_thread()
+            
+            is_ok = False
+            try:
+                from crystal.tests.index import run_tests
+                is_ok = run_tests(parsed_args.test)
+            finally:
+                fg_call_later(lambda: sys.exit(0 if is_ok else 1))
+        bg_call_later(bg_task)
     
     # Run GUI
     while True:
