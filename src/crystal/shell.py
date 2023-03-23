@@ -4,6 +4,7 @@ import code
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
+import crystal.util.xsite as site
 from crystal.util.xthreading import fg_call_and_wait, is_foreground_thread
 import os
 from sys import version_info as python_version_info
@@ -27,6 +28,11 @@ class Shell:
         exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
         
         python_version = '.'.join([str(x) for x in python_version_info[:3]])
+        
+        # Ensure help(), exit(), and quit() are available,
+        # even when running as a frozen .app or .exe
+        site.sethelper()  # help
+        site.setquit()  # quit, exit
         
         threading.Thread(
             target=lambda: fg_interact(
