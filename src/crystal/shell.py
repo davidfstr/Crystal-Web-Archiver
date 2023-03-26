@@ -46,7 +46,7 @@ class Shell:
                     project=self._project_proxy,
                     window=self._window_proxy,
                 ),
-                exitmsg='now waiting for main window to close...',
+                exitmsg='now waiting for all windows to close...',
             ),
             daemon=False,
         ).start()
