@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from crystal.util.xthreading import fg_call_and_wait, is_foreground_thread
 import time
+from types import coroutine
 from typing import (
     Awaitable, Callable, Dict, Generic, Optional, TYPE_CHECKING, TypeVar, Union
 )
@@ -19,20 +20,21 @@ _T = TypeVar('_T')
 # ------------------------------------------------------------------------------
 # Test Runner
 
-def run_test(async_test_func: Callable[[], Awaitable[None]]) -> None:
+def run_test(async_test_func: Callable[[], Awaitable[_T]]) -> _T:
     if is_foreground_thread():
         raise ValueError(
             'run_test() does not support being called on the foreground thread')
     
-    test_co = async_test_func()  # should be a Generator[Command, None, None]
+    test_co = async_test_func()  # should be a Generator[Command, None, _T]
     last_command_result = None  # type: Union[object, Exception]
     while True:
         try:
             command = fg_call_and_wait(
-                lambda: test_co.send(last_command_result)  # type: ignore[attr-defined]
+                lambda: test_co.send(last_command_result),  # type: ignore[attr-defined]
+                no_profile=True
             )
-        except StopIteration:
-            break
+        except StopIteration as e:
+            return e.value
         if not isinstance(command, Command):
             raise ValueError(
                 'Async test function did yield something that was '
@@ -43,7 +45,7 @@ def run_test(async_test_func: Callable[[], Awaitable[None]]) -> None:
             last_command_result = e
 
 
-@asyncio.coroutine
+@coroutine
 def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
         duration: float
         ) -> Awaitable[None]:  # or Generator[Command, object, None]
@@ -62,7 +64,7 @@ def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
         raise AssertionError()
 
 
-@asyncio.coroutine
+@coroutine
 def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
     url: str,
     *, headers: Optional[Dict[str, str]]=None,
@@ -85,7 +87,7 @@ def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
         raise AssertionError()
 
 
-@asyncio.coroutine
+@coroutine
 def pump_wx_events(  # type: ignore[misc]  # ignore non-Generator return type here
         ) -> Awaitable[None]:  # or Generator[Command, object, None]
     """
@@ -96,7 +98,7 @@ def pump_wx_events(  # type: ignore[misc]  # ignore non-Generator return type he
     yield PumpWxEventsCommand()
 
 
-@asyncio.coroutine
+@coroutine
 def bg_breakpoint(  # type: ignore[misc]  # ignore non-Generator return type here
         ) -> Awaitable[None]:  # or Generator[Command, object, None]
     """

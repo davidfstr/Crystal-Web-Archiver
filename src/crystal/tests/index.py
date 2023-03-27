@@ -1,17 +1,32 @@
 from contextlib import contextmanager
 import crystal.task
-from crystal.tests import test_workflows
+from crystal.tests import (
+    test_shell,
+    test_workflows,
+)
 from crystal.tests.util.runner import run_test
+from functools import wraps
 import os
 import sys
 import time
 import traceback
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Coroutine, Dict, Iterator, List, Optional, Tuple
 from unittest import SkipTest
+
+
+def as_async(sync_test_func: Callable[[], None]) -> Callable[[], Coroutine[Any, Any, None]]:
+    @wraps(sync_test_func)
+    async def wrapper() -> None:
+        return sync_test_func()
+    return wrapper
 
 
 # TODO: Avoid the need to manually enumerate all test functions individually
 _TEST_FUNCS = [
+    # test_shell
+    as_async(test_shell.test_can_launch_with_shell),
+    as_async(test_shell.test_shell_exits_with_expected_message),
+    
     # test_workflows
     test_workflows.test_can_download_and_serve_a_static_site,
     test_workflows.test_can_download_and_serve_a_site_requiring_dynamic_url_discovery,

@@ -78,6 +78,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: poetry
 
+      # HACK: Suppress warning "Error retrieving accessibility bus
+      #       address: org.freedesktop.DBus.Error.ServiceUnknown:
+      #       The name org.a11y.Bus was not provided by any .service files"
+      #       when running tests later
+      - name: Install at-spi2-core
+        run: sudo apt-get install -y at-spi2-core
+
       - name: Install wxPython dependencies
         run: sudo apt-get install -y libgtk-3-dev
 
@@ -106,7 +113,7 @@ jobs:
         # instructions from: doc/how_to_make_wxpython_wagon.md
         timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
         run: poetry install
-
+ 
       - name: Run non-UI tests
         run: poetry run python -m pytest
 
