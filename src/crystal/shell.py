@@ -14,7 +14,7 @@ from typing import Optional
 class Shell:
     def __init__(self) -> None:
         # Setup proxy variables for shell
-        _Proxy.patch_help()
+        _Proxy._patch_help()
         self._project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
         self._window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
         
@@ -46,12 +46,12 @@ class Shell:
         ).start()
     
     def attach(self, project: Project, window: MainWindow) -> None:
-        self._project_proxy.initialize_proxy(project, reinit_okay=True)
-        self._window_proxy.initialize_proxy(window, reinit_okay=True)
+        self._project_proxy._initialize_proxy(project, reinit_okay=True)
+        self._window_proxy._initialize_proxy(window, reinit_okay=True)
     
     def detach(self) -> None:
-        self._project_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
-        self._window_proxy.initialize_proxy(None, reinit_okay=True, unset_okay=True)
+        self._project_proxy._initialize_proxy(None, reinit_okay=True, unset_okay=True)
+        self._window_proxy._initialize_proxy(None, reinit_okay=True, unset_okay=True)
 
 
 class _Proxy:
@@ -59,7 +59,7 @@ class _Proxy:
     _value: 'Optional[object]'
     
     @staticmethod
-    def patch_help() -> None:
+    def _patch_help() -> None:
         """Patch help() such that it understands _Proxy objects."""
         import pydoc
         old_resolve = pydoc.resolve  # capture
@@ -77,7 +77,7 @@ class _Proxy:
         super().__setattr__('_unset_repr', unset_repr)
         super().__setattr__('_value', None)
     
-    def initialize_proxy(self,
+    def _initialize_proxy(self,
             value,
             *, reinit_okay: bool=False,
             unset_okay: bool=False,
