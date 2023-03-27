@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from crystal.util.xfutures import Future
-from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
+from crystal.util.xthreading import (
+    bg_call_later, fg_call_and_wait, fg_call_later, NoForegroundThreadError
+)
 import sys
 from time import sleep
 from typing import List, Optional, TYPE_CHECKING, Union
@@ -838,7 +840,10 @@ def start_schedule_forever(task: Task) -> None:
         while True:
             def fg_task():
                 return (task.try_get_next_task_unit(), task.complete)
-            (unit, task_complete) = fg_call_and_wait(fg_task)
+            try:
+                (unit, task_complete) = fg_call_and_wait(fg_task)
+            except NoForegroundThreadError:
+                return
             
             if unit is None:
                 if task_complete:

@@ -6,7 +6,8 @@ from crystal.browser import MainWindow
 from crystal.model import Project
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
-    fg_call_and_wait, has_foreground_thread, is_foreground_thread
+    fg_call_and_wait, has_foreground_thread, is_foreground_thread,
+    NoForegroundThreadError,
 )
 import os
 import sys
@@ -156,11 +157,14 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         if _main_loop_has_exited():
             fg_runcode()
         else:
-            fg_call_and_wait(
-                fg_runcode,
-                # Don't complain if fg_runcode() takes a long time to run.
-                # For example the help() command blocks for a long time.
-                no_profile=True)
+            try:
+                fg_call_and_wait(
+                    fg_runcode,
+                    # Don't complain if fg_runcode() takes a long time to run.
+                    # For example the help() command blocks for a long time.
+                    no_profile=True)
+            except NoForegroundThreadError:
+                fg_runcode()
 
 
 def _main_loop_has_exited() -> bool:

@@ -97,17 +97,28 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
     
     If the current thread is the foreground thread, the argument is executed immediately
     unless the 'force' parameter is True.
+    
+    Raises:
+    * NoForegroundThreadError
     """
     if _PROFILE_FG_TASKS and not no_profile:
         callable = _create_profiled_callable(callable, *args);
         args=()
     
-    # TODO: Consider raising when (wx.GetApp() is None) rather than
-    #       running the callable on the current NON-foreground thread.
-    if (is_foreground_thread() and not force) or wx.GetApp() is None:
+    if not has_foreground_thread():
+        raise NoForegroundThreadError()
+    
+    if is_foreground_thread() and not force:
         callable(*args)
     else:
-        wx.CallAfter(callable, *args)
+        try:
+            wx.CallAfter(callable, *args)
+        except Exception as e:
+            # ex: RuntimeError: wrapped C/C++ object of type PyApp has been deleted
+            if str(e) == 'wrapped C/C++ object of type PyApp has been deleted':
+                raise NoForegroundThreadError()
+            else:
+                raise
 
 
 def fg_call_and_wait(callable, no_profile: bool=False, *args):
@@ -117,7 +128,13 @@ def fg_call_and_wait(callable, no_profile: bool=False, *args):
     
     Returns the result of the callable.
     If the callable raises an exception, it will be reraised by this method.
+    
+    Raises:
+    * NoForegroundThreadError
     """
+    if not has_foreground_thread():
+        raise NoForegroundThreadError()
+    
     if is_foreground_thread():
         return callable(*args)
     else:
@@ -166,3 +183,7 @@ def bg_call_later(callable, daemon=False, *args):
     if daemon:
         thread.daemon = True
     thread.start()
+
+
+class NoForegroundThreadError(ValueError):
+    pass

@@ -235,6 +235,7 @@ def _main(args: List[str]) -> None:
                 # Deactivate wx keepalive
                 self._keepalive_frame.Destroy()
     
+    app = None  # type: Optional[wx.App]
     from crystal.util.xthreading import set_foreground_thread
     set_foreground_thread(threading.current_thread())
     try:
@@ -277,7 +278,15 @@ def _main(args: List[str]) -> None:
             # Re-launch, reopening the initial dialog
             last_project = _did_launch(parsed_args, shell)  # raises SystemExit if user quits
     finally:
+        # Stop any further events from being scheduled on the main loop
         set_foreground_thread(None)
+    
+    # Drain any lingering events from the main loop
+    if app is not None:
+        if app.HasPendingEvents():
+            app.ProcessPendingEvents()
+            if app.HasPendingEvents():
+                print('Warning: Exiting app while some pending events still exist')
 
 
 def _check_environment():
