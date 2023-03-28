@@ -274,7 +274,11 @@ Release Notes ⋮
         * Easy to distinguish between URLs and groups.
         * Easy to see whether a URL was downloaded,
           and whether it was downloaded successfully.
-    * URL clusters now show in their title how many members they contain
+    * URL clusters now show in their title how many members they contain.
+    * Fixed "Offsite" cluster nodes to update children appropriately whenever
+      the Default URL Prefix is changed.
+    * Fixed right-click on non-URL node to no longer print a traceback.
+    * Fixed attempt to download a group with no source to no longer print a traceback.
 
 * Distribution improvements
     * Can install Crystal using pipx and pip, from PyPI:
@@ -285,6 +289,18 @@ Release Notes ⋮
     * Can run Crystal using `python -m crystal`:
         * `poetry run python -m crystal`
     * Add support for Linux platform (Ubuntu 22.04, Fedora 37)
+
+* CLI improvements
+    * Fixed shell to not hang if exited before UI exited, under certain circumstances.
+    * Fixed {help, exit, quit} functions to be available when Crystal runs as an .app or .exe.
+    * Altered exiting message while windows open to be more accurate.
+    * Pinned the public API of `Project` and `MainWindow`.
+
+* Testing improvements
+    * Tests are much faster now that download delays are minimized while running tests.
+    * Failure messages are improved whenever a WaitTimedOut.
+    * A screenshot is taken whenever a test fails.
+    * Several race conditions related to accessing the foreground thread are fixed.
 
 ### v1.4.0b <small>(August 22, 2022)</small>
 
