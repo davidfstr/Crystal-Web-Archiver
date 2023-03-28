@@ -4,12 +4,12 @@ import pytest
 import re
 
 
-def test_version_is_expected_value():
+def test_version_is_expected_value() -> None:
     assert __version__ == '1.4.0b', \
         'Version in crystal/__init__.py is not the expected value'
 
 
-def test_version_in_pyproject_toml_is_consistent_with_package_version():
+def test_version_in_pyproject_toml_is_consistent_with_package_version() -> None:
     pyproject_toml_filepath = os.path.join(
         os.path.dirname(__file__), '..', 'pyproject.toml')
     with open(pyproject_toml_filepath, 'r', encoding='utf-8') as f:
@@ -23,11 +23,11 @@ def test_version_in_pyproject_toml_is_consistent_with_package_version():
 
 
 @pytest.mark.skip('not yet automated')
-def test_version_and_copyright_in_mac_binary_is_correct():
+def test_version_and_copyright_in_mac_binary_is_correct() -> None:
     pass
 
 
-def test_version_and_copyright_in_windows_binary_is_correct():
+def test_version_and_copyright_in_windows_binary_is_correct() -> None:
     iss_filepath = os.path.join(
         os.path.dirname(__file__), '..', 'setup', 'win-installer.iss')
     with open(iss_filepath, 'r', encoding='utf-8') as f:

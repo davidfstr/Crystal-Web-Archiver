@@ -9,6 +9,7 @@ This thread is responsible for:
 
 import sys
 import threading
+from typing import Optional
 import wx
 
 
@@ -22,12 +23,32 @@ _PROFILE_FG_TASKS = True
 _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
 
 
+_fg_thread = None  # type: Optional[threading.Thread]
+
+
+def set_foreground_thread(fg_thread: Optional[threading.Thread]) -> None:
+    global _fg_thread
+    _fg_thread = fg_thread
+
+
 def is_foreground_thread() -> bool:
-    return _foreground_thread_exists() and wx.IsMainThread()
+    """
+    Returns whether the current thread is the foreground thread
+    (with the active wx.App object).
+    """
+    # NOTE: It has been observed that wx.IsMainThread() is unreliable,
+    #       returning True for all threads, when there is no running main loop.
+    #       Therefore Crystal keeps track of the main thread itself.
+    return threading.current_thread() == _fg_thread
 
 
-def _foreground_thread_exists() -> bool:
-    return wx.GetApp() is not None
+def has_foreground_thread() -> bool:
+    """
+    Returns whether any foreground thread exists.
+    
+    If it doesn't exist, it may not have been created yet or it may have exited.
+    """
+    return _fg_thread is not None
 
 
 def _create_profiled_callable(callable, *args):
@@ -69,7 +90,7 @@ def _create_profiled_callable(callable, *args):
 #       This new naming stresses that the "soon" variant could
 #       potentially call the argument immediately whereas the
 #       "later" variant will never do that.
-def fg_call_later(callable, force=False, *args):
+def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) -> None:
     """
     Schedules the argument to be called on the foreground thread.
     This should be called by background threads that need to access the UI or model.
@@ -77,17 +98,19 @@ def fg_call_later(callable, force=False, *args):
     If the current thread is the foreground thread, the argument is executed immediately
     unless the 'force' parameter is True.
     """
-    if _PROFILE_FG_TASKS:
+    if _PROFILE_FG_TASKS and not no_profile:
         callable = _create_profiled_callable(callable, *args);
         args=()
     
-    if not _foreground_thread_exists() or (wx.IsMainThread() and not force):
+    # TODO: Consider raising when (wx.GetApp() is None) rather than
+    #       running the callable on the current NON-foreground thread.
+    if (is_foreground_thread() and not force) or wx.GetApp() is None:
         callable(*args)
     else:
         wx.CallAfter(callable, *args)
 
 
-def fg_call_and_wait(callable, *args):
+def fg_call_and_wait(callable, no_profile: bool=False, *args):
     """
     Calls the argument on the foreground thread and waits for it to complete.
     This should be called by background threads that need to access the UI or model.
@@ -95,7 +118,7 @@ def fg_call_and_wait(callable, *args):
     Returns the result of the callable.
     If the callable raises an exception, it will be reraised by this method.
     """
-    if not _foreground_thread_exists() or wx.IsMainThread():
+    if is_foreground_thread():
         return callable(*args)
     else:
         condition = threading.Condition()
@@ -114,8 +137,8 @@ def fg_call_and_wait(callable, *args):
             with condition:
                 callable_done[0] = True
                 condition.notify()
-        fg_task.callable = callable
-        fg_call_later(fg_task)
+        fg_task.callable = callable  # type: ignore[attr-defined]
+        fg_call_later(fg_task, no_profile=no_profile)
         
         # Wait for signal
         with condition:

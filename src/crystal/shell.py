@@ -4,9 +4,12 @@ import code
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
-from crystal.util.xthreading import fg_call_and_wait, is_foreground_thread
+import crystal.util.xsite as site
+from crystal.util.xthreading import (
+    fg_call_and_wait, has_foreground_thread, is_foreground_thread
+)
 import os
-from sys import version_info as python_version_info
+import sys
 import threading
 from typing import Optional
 
@@ -26,7 +29,12 @@ class Shell:
             eof = 'Ctrl-D (i.e. EOF)'
         exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
         
-        python_version = '.'.join([str(x) for x in python_version_info[:3]])
+        python_version = '.'.join([str(x) for x in sys.version_info[:3]])
+        
+        # Ensure help(), exit(), and quit() are available,
+        # even when running as a frozen .app or .exe
+        site.sethelper()  # help
+        site.setquit()  # quit, exit
         
         threading.Thread(
             target=lambda: fg_interact(
@@ -40,7 +48,7 @@ class Shell:
                     project=self._project_proxy,
                     window=self._window_proxy,
                 ),
-                exitmsg='now waiting for main window to close...',
+                exitmsg='now waiting for all windows to close...',
             ),
             daemon=False,
         ).start()
@@ -130,12 +138,30 @@ def fg_interact(banner=None, local=None, exitmsg=None):
         import readline
     except ImportError:
         pass
-    console.interact(banner, exitmsg)
+    try:
+        console.interact(banner, exitmsg='')
+    finally:
+        if not _main_loop_has_exited():
+            console.write('%s\n' % exitmsg)
 
 
 class _FgInteractiveConsole(code.InteractiveConsole):
     """
     Similar to code.InteractiveConsole, but evaluates code on the foreground thread.
     """
-    def runcode(self, code):
-        fg_call_and_wait(lambda: super(_FgInteractiveConsole, self).runcode(code))
+    def runcode(self, code) -> None:
+        def fg_runcode():
+            super(_FgInteractiveConsole, self).runcode(code)
+        
+        if _main_loop_has_exited():
+            fg_runcode()
+        else:
+            fg_call_and_wait(
+                fg_runcode,
+                # Don't complain if fg_runcode() takes a long time to run.
+                # For example the help() command blocks for a long time.
+                no_profile=True)
+
+
+def _main_loop_has_exited() -> bool:
+    return not has_foreground_thread()

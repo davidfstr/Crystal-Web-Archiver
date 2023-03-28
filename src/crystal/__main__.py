@@ -79,6 +79,7 @@ def _main(args: List[str]) -> None:
         if os.path.exists('arguments.txt'):
             with open('arguments.txt', 'r', encoding='utf-8') as f:
                 args_line = f.read()
+            # TODO: Consider using shlex.split() here to support quoted arguments
             args = args_line.strip().split(' ')  # reinterpret
     
     # 1. Enable terminal colors on Windows, by wrapping stdout and stderr
@@ -172,6 +173,7 @@ def _main(args: List[str]) -> None:
     import wx
     
     last_project = None  # type: Optional[Project]
+    did_quit_during_first_launch = False
     
     # 1. Create wx.App and call app.OnInit(), opening the initial dialog
     # 2. Initialize the foreground thread
@@ -216,47 +218,66 @@ def _main(args: List[str]) -> None:
         def _finish_launch(self, filepath: Optional[str]=None) -> None:
             self._did_finish_launch = True
             
-            nonlocal last_project
-            last_project = _did_launch(parsed_args, shell, filepath)
-            
-            # Deactivate wx keepalive
-            self._keepalive_frame.Destroy()
-    app = MyApp(redirect=False)
-    
-    # Starts tests if requested
-    # NOTE: Must do this after initializing the foreground thread
-    if parsed_args.test is not None:
-        from crystal.util.xthreading import bg_call_later, fg_call_later, is_foreground_thread
-        def bg_task():
-            # Ensure wx is initialized and we appear to be on a background thread
-            assert wx.GetApp() is not None
-            assert not is_foreground_thread()
-            
-            is_ok = False
             try:
-                from crystal.tests.index import run_tests
-                is_ok = run_tests(parsed_args.test)
+                nonlocal last_project
+                last_project = _did_launch(parsed_args, shell, filepath)
+            except SystemExit:
+                nonlocal did_quit_during_first_launch
+                did_quit_during_first_launch = True
+                return
+            except Exception:
+                # wx doesn't like it when exceptions escape functions invoked
+                # directly on the foreground thread. So just handle here.
+                import traceback
+                traceback.print_exc()
+                return
             finally:
-                fg_call_later(lambda: sys.exit(0 if is_ok else 1))
-        bg_call_later(bg_task)
+                # Deactivate wx keepalive
+                self._keepalive_frame.Destroy()
     
-    # Run GUI
-    while True:
-        # Process main loop until no more windows or dialogs are open
-        app.MainLoop()  # will raise SystemExit if user quits
+    from crystal.util.xthreading import set_foreground_thread
+    set_foreground_thread(threading.current_thread())
+    try:
+        app = MyApp(redirect=False)
         
-        # Clean up
-        if shell is not None:
-            shell.detach()
-        if last_project is not None:
-            last_project.close()
-            last_project = None
+        # Starts tests if requested
+        # NOTE: Must do this after initializing the foreground thread
+        if parsed_args.test is not None:
+            from crystal.util.xthreading import bg_call_later, fg_call_later, is_foreground_thread
+            def bg_task():
+                # Ensure wx is initialized and we appear to be on a background thread
+                assert wx.GetApp() is not None
+                assert not is_foreground_thread()
+                
+                is_ok = False
+                try:
+                    from crystal.tests.index import run_tests
+                    is_ok = run_tests(parsed_args.test)
+                finally:
+                    fg_call_later(lambda: sys.exit(0 if is_ok else 1))
+            bg_call_later(bg_task)
         
-        # Clear first-only launch arguments
-        parsed_args.filepath = None
-        
-        # Re-launch, reopening the initial dialog
-        last_project = _did_launch(parsed_args, shell)
+        # Run GUI
+        while True:
+            # Process main loop until no more windows or dialogs are open
+            app.MainLoop()
+            if did_quit_during_first_launch:
+                break
+            
+            # Clean up
+            if shell is not None:
+                shell.detach()
+            if last_project is not None:
+                last_project.close()
+                last_project = None
+            
+            # Clear first-only launch arguments
+            parsed_args.filepath = None
+            
+            # Re-launch, reopening the initial dialog
+            last_project = _did_launch(parsed_args, shell)  # raises SystemExit if user quits
+    finally:
+        set_foreground_thread(None)
 
 
 def _check_environment():

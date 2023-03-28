@@ -42,12 +42,13 @@ class OpenOrCreateDialog:
         open_or_create_project_dialog = await wait_for(window_condition(
             'cr-open-or-create-project'))  # type: wx.Window
         assert isinstance(open_or_create_project_dialog, wx.Dialog)
-        self.open_as_readonly = open_or_create_project_dialog.FindWindowByName(
+        self.open_or_create_project_dialog = open_or_create_project_dialog
+        self.open_as_readonly = self.open_or_create_project_dialog.FindWindowByName(
             'cr-open-or-create-project__checkbox')
         assert isinstance(self.open_as_readonly, wx.CheckBox)
-        self.open_button = open_or_create_project_dialog.FindWindowById(wx.ID_YES)
+        self.open_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_YES)
         assert isinstance(self.open_button, wx.Button)
-        self.create_button = open_or_create_project_dialog.FindWindowById(wx.ID_NO)
+        self.create_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_NO)
         assert isinstance(self.create_button, wx.Button)
         return self
     
@@ -65,11 +66,7 @@ class OpenOrCreateDialog:
                     yield (mw, project_dirpath)
             return
         
-        with file_dialog_returning(project_dirpath):
-            click_button(self.create_button)
-            
-            with screenshot_if_raises():
-                mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
+        mw = await self.create_and_leave_open(project_dirpath)
         
         exc_info_while_close = None
         try:
@@ -79,6 +76,14 @@ class OpenOrCreateDialog:
             raise
         finally:
             await mw.close(exc_info_while_close)
+    
+    async def create_and_leave_open(self, project_dirpath: str) -> MainWindow:
+        with file_dialog_returning(project_dirpath):
+            click_button(self.create_button)
+            
+            with screenshot_if_raises():
+                mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
+        return mw
     
     @asynccontextmanager
     async def open(self, 
