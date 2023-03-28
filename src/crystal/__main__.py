@@ -245,11 +245,8 @@ def _main(args: List[str]) -> None:
         # NOTE: Must do this after initializing the foreground thread
         if parsed_args.test is not None:
             from crystal.util.xthreading import bg_call_later, fg_call_later, is_foreground_thread
+            assert is_foreground_thread()
             def bg_task():
-                # Ensure wx is initialized and we appear to be on a background thread
-                assert wx.GetApp() is not None
-                assert not is_foreground_thread()
-                
                 is_ok = False
                 try:
                     from crystal.tests.index import run_tests
