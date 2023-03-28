@@ -352,7 +352,11 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
 
         t = Thread(target=lambda: get_result(result_cell))
         t.start()
-        '''), stop_suffix=_OK_THREAD_STOP_SUFFIX)
+        '''),
+        stop_suffix=_OK_THREAD_STOP_SUFFIX,
+        # NOTE: 2.0 was observed to sometimes not be long enough on macOS
+        timeout=4.0
+    )
     assert "<class 'crystal.tests.util.windows.MainWindow'>" == \
         _py_eval(crystal, 'type(result_cell[0])')
 
@@ -423,14 +427,18 @@ def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
         crystal.kill()
 
 
-def _py_eval(python: subprocess.Popen, py_code: str, stop_suffix: Optional[Union[str, Tuple[str, ...]]]=None) -> str:
+def _py_eval(
+        python: subprocess.Popen,
+        py_code: str,
+        stop_suffix: Optional[Union[str, Tuple[str, ...]]]=None,
+        *, timeout: Optional[float]=None) -> str:
     if stop_suffix is None:
         stop_suffix = '\n>>> '
     
     assert isinstance(python.stdin, TextIOBase)
     assert isinstance(python.stdout, TextIOBase)
     python.stdin.write(f'{py_code}\n'); python.stdin.flush()
-    (result, found_stop_suffix) = _read_until(python.stdout, stop_suffix)
+    (result, found_stop_suffix) = _read_until(python.stdout, stop_suffix, timeout=timeout)
     return result[:-len(found_stop_suffix)]
 
 
