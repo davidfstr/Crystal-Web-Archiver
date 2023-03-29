@@ -266,19 +266,14 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### v1.5.0b <small>(April 2, 2023)</small>
 
-* UI Improvements
-    * Icons and tooltips added to all tree nodes in the main window,
-      clarifying the different types of entities, links, and tasks that exist.
-        * Easy to distinguish between URLs and groups.
-        * Easy to see whether a URL was downloaded,
-          and whether it was downloaded successfully.
-    * URL clusters now show in their title how many members they contain.
-    * Fixed "Offsite" cluster nodes to update children appropriately whenever
-      the Default URL Prefix is changed.
-    * Fixed right-click on non-URL node to no longer print a traceback.
-    * Fixed attempt to download a group with no source to no longer print a traceback.
+This release focuses on making it easy to install Crystal from PyPI,
+adds support for running on Linux from source (but not from a binary),
+and fixes many bugs with the built-in CLI shell.
+
+Additionally items in the main window are easier to understand
+because icons and tooltips have been added for all tree nodes.
 
 * Distribution improvements
     * Can install Crystal using pipx and pip, from PyPI:
@@ -301,6 +296,18 @@ Release Notes ⋮
     * Failure messages are improved whenever a WaitTimedOut.
     * A screenshot is taken whenever a test fails.
     * Several race conditions related to accessing the foreground thread are fixed.
+
+* UI Improvements
+    * Icons and tooltips added to all tree nodes in the main window,
+      clarifying the different types of entities, links, and tasks that exist.
+        * Easy to distinguish between URLs and groups.
+        * Easy to see whether a URL was downloaded,
+          and whether it was downloaded successfully.
+    * URL clusters now show in their title how many members they contain.
+    * Fixed "Offsite" cluster nodes to update children appropriately whenever
+      the Default URL Prefix is changed.
+    * Fixed right-click on non-URL node to no longer print a traceback.
+    * Fixed attempt to download a group with no source to no longer print a traceback.
 
 ### v1.4.0b <small>(August 22, 2022)</small>
 
