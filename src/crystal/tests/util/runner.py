@@ -20,12 +20,21 @@ _T = TypeVar('_T')
 # ------------------------------------------------------------------------------
 # Test Runner
 
-def run_test(async_test_func: Callable[[], Awaitable[_T]]) -> _T:
+def run_test(test_func: Union[Callable[[], Awaitable[_T]], Callable[[], _T]]) -> _T:
+    """
+    Runs the specified test function.
+    
+    If the test function is async then it is run on the foreground thread.
+    
+    If the test function is sync then it is run on the (current) background thread.
+    """
     if is_foreground_thread():
         raise ValueError(
             'run_test() does not support being called on the foreground thread')
     
-    test_co = async_test_func()  # should be a Generator[Command, None, _T]
+    test_co = test_func()  # if async func then should be a Generator[Command, None, _T]
+    if not asyncio.iscoroutine(test_co):
+        return test_co
     last_command_result = None  # type: Union[object, Exception]
     while True:
         try:

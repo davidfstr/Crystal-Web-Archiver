@@ -9,6 +9,7 @@ from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 from crystal.util import http_date
 from crystal.util.xdatetime import datetime_is_aware
+from crystal.util.xthreading import fg_call_and_wait
 import datetime
 from email.message import EmailMessage
 import json
@@ -44,45 +45,50 @@ def served_project(
             if fn.endswith('.crystalproj')
         ]
         project_filepath = os.path.join(project_parent_dirpath, project_filename)
-        with Project(project_filepath, readonly=True) as project:
+        project = fg_call_and_wait(lambda: Project(project_filepath, readonly=True))
+        try:
             # Alter the fetch date of every ResourceRevision in the project
             # to match "fetch_date_of_resources_set_to", if provided
             if fetch_date_of_resources_set_to is not None:
-                for r in project.resources:
-                    for rr in r.revisions():
-                        if rr.metadata is None:
-                            print(
-                                f'Warning: Unable to alter fetch date of '
-                                f'resource revision lacking HTTP headers: {rr}')
-                            continue
-                        
-                        rr_new_date = http_date.format(fetch_date_of_resources_set_to)
-                        
-                        # New Metadata = Old Metadata with Date and Age headers replaced
-                        rr_new_metadata = deepcopy(rr.metadata)
-                        rr_new_metadata['headers'] = [
-                            (cur_name, cur_value)
-                            for (cur_name, cur_value) in
-                            rr_new_metadata['headers']
-                            if cur_name.lower() not in ['date', 'age']
-                        ] + [('Date', rr_new_date)]
-                        
-                        # Alter ResourceRevision's metadata in memory
-                        rr.metadata = rr_new_metadata
-                        
-                        # Alter ResourceRevision's metadata in database
-                        c = project._db.cursor()
-                        c.execute(
-                            'update resource_revision set metadata = ? where id = ?',
-                            (json.dumps(rr_new_metadata), rr._id),  # type: ignore[attr-defined]
-                            ignore_readonly=True)
-                        project._db.commit()
+                def fg_task():
+                    for r in project.resources:
+                        for rr in r.revisions():
+                            if rr.metadata is None:
+                                print(
+                                    f'Warning: Unable to alter fetch date of '
+                                    f'resource revision lacking HTTP headers: {rr}')
+                                continue
+                            
+                            rr_new_date = http_date.format(fetch_date_of_resources_set_to)
+                            
+                            # New Metadata = Old Metadata with Date and Age headers replaced
+                            rr_new_metadata = deepcopy(rr.metadata)
+                            rr_new_metadata['headers'] = [
+                                (cur_name, cur_value)
+                                for (cur_name, cur_value) in
+                                rr_new_metadata['headers']
+                                if cur_name.lower() not in ['date', 'age']
+                            ] + [('Date', rr_new_date)]
+                            
+                            # Alter ResourceRevision's metadata in memory
+                            rr.metadata = rr_new_metadata
+                            
+                            # Alter ResourceRevision's metadata in database
+                            c = project._db.cursor()
+                            c.execute(
+                                'update resource_revision set metadata = ? where id = ?',
+                                (json.dumps(rr_new_metadata), rr._id),  # type: ignore[attr-defined]
+                                ignore_readonly=True)
+                            project._db.commit()
+                fg_call_and_wait(fg_task)
             
             # Start server
             yield project.start_server(
                 port=2798,  # CRYT on telephone keypad
                 verbosity='indent',
             )
+        finally:
+            fg_call_and_wait(lambda: project.close())
 
 
 @contextmanager

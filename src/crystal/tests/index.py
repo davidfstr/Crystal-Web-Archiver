@@ -13,18 +13,13 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 from unittest import SkipTest
 
 
-def as_async(sync_test_func: Callable[[], None]) -> Callable[[], Coroutine[Any, Any, None]]:
-    @wraps(sync_test_func)
-    async def wrapper() -> None:
-        return sync_test_func()
-    return wrapper
-
-
 # TODO: Avoid the need to manually enumerate all test functions individually
 _TEST_FUNCS = [
     # test_shell
-    as_async(test_shell.test_can_launch_with_shell),
-    as_async(test_shell.test_shell_exits_with_expected_message),
+    test_shell.test_can_launch_with_shell,
+    test_shell.test_shell_exits_with_expected_message,
+    test_shell.test_can_read_project_with_shell,
+    test_shell.test_can_write_project_with_shell,
     
     # test_workflows
     test_workflows.test_can_download_and_serve_a_static_site,

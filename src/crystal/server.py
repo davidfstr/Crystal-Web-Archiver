@@ -66,6 +66,10 @@ class ProjectServer:
     # === Properties ===
     
     @property
+    def project(self) -> Project:
+        return self._project
+    
+    @property
     def port(self) -> int:
         return self._port
     
