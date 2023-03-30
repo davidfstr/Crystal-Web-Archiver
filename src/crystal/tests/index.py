@@ -1,16 +1,15 @@
-from contextlib import contextmanager
-import crystal.task
 from crystal.tests import (
     test_shell,
     test_workflows,
 )
+from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from functools import wraps
 import os
 import sys
 import time
 import traceback
-from typing import Any, Callable, Coroutine, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 from unittest import SkipTest
 
 
@@ -48,7 +47,7 @@ def run_tests(test_names: List[str]) -> bool:
     The format of the summary report is designed to be similar
     to that used by Python's unittest module.
     """
-    with _delay_between_downloads_minimized():
+    with delay_between_downloads_minimized():
         return _run_tests(test_names)
 
 
@@ -147,13 +146,3 @@ def _run_tests(test_names: List[str]) -> bool:
     return is_ok
 
 
-@contextmanager
-def _delay_between_downloads_minimized() -> Iterator[None]:
-    old_value = crystal.task.DELAY_BETWEEN_DOWNLOADS
-    # NOTE: Must be long enough so that download tasks stay around long enough
-    #       to be observed, but short enough to provide a speed boost
-    crystal.task.DELAY_BETWEEN_DOWNLOADS = 0.2
-    try:
-        yield
-    finally:
-        crystal.task.DELAY_BETWEEN_DOWNLOADS = old_value
