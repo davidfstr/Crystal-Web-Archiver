@@ -1,6 +1,9 @@
+from ast import literal_eval
 from contextlib import contextmanager
 from crystal import __version__ as crystal_version
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, WaitTimedOut
+from crystal.tests.util.server import served_project
+from crystal.util.xthreading import fg_call_and_wait
 from functools import wraps
 from io import StringIO, TextIOBase
 import os
@@ -8,11 +11,13 @@ import platform
 import re
 import subprocess
 import sys
+import tempfile
 import textwrap
 import time
 import traceback
 from typing import Callable, Iterator, List, Optional, Tuple, Union
 from unittest import skip, SkipTest, TestCase
+from unittest.mock import ANY
 
 
 _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
@@ -63,6 +68,19 @@ skipTest = TestCase().skipTest
 
 
 # ------------------------------------------------------------------------------
+# Utility: Skip on Windows
+
+def skip_on_windows(func):
+    """Decorator for tests that should be skipped on Windows."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if platform.system() == 'Windows':
+            skipTest('not supported on Windows')
+        func(*args, **kwargs)
+    return wrapper
+
+
+# ------------------------------------------------------------------------------
 # Utility: Subtests
 
 class SubtestsContext:
@@ -72,8 +90,28 @@ class SubtestsContext:
     
     @contextmanager
     def test(self, msg: Optional[str]=None, **kwargs: object) -> Iterator[None]:
+        """
+        Context in which a subtest runs.
+        
+        The subtest is in failure output by its `msg`, `kwargs`, or both.
+        
+        If an exception is raised within a subtest context,
+        by default the context is exited but the parent test continues
+        executing after the context. If you want the parent test to
+        exit instead, pass return_if_failure=True.
+        
+        Arguments:
+        * msg --
+            (Optional) Identifies this subtest in output.
+        * return_if_failure --
+            (Optional) Whether to return if an exception is raised in this context.
+            Defaults to False.
+        * kwargs --
+            (Optional) Identifies this subtest in output.
+        """
         if msg is None and len(kwargs) == 0:
             raise ValueError()
+        return_if_failure = bool(kwargs.pop('return_if_failure', False))
         
         try:
             yield
@@ -99,12 +137,20 @@ class SubtestsContext:
             if exc_traceback_useful:
                 traceback.print_exc(file=self._report)
             print(exc_category, file=self._report)
+            
+            if return_if_failure:
+                raise _SubtestReturn()
         else:
             # Passed. No output.
             pass
-            
+
+
+class _SubtestReturn(BaseException):
+    pass
+
 
 def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], None]:
+    """Decorates a test function which can use subtests."""
     test_func_id = (test_func.__module__, test_func.__name__)
     test_name = f'{test_func_id[0]}.{test_func_id[1]}'
     
@@ -115,6 +161,8 @@ def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], 
         raised_exc = True
         try:
             test_func(subtests)
+            raised_exc = False
+        except _SubtestReturn:
             raised_exc = False
         finally:
             subtest_report = subtests._report.getvalue()
@@ -129,11 +177,9 @@ def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], 
 # ------------------------------------------------------------------------------
 # Tests
 
+@skip_on_windows
 @with_subtests
 def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
-    if platform.system() == 'Windows':
-        skipTest('--shell is not supported on Windows')
-    
     with crystal_shell() as (crystal, banner):
         with subtests.test(msg='with informative banner'):
             # ...containing Crystal's version
@@ -153,16 +199,16 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
             ), banner
         
         with subtests.test(msg='and {project, window} can be used as placeholders, before main window appears'):
-            assertEqual('<unset crystal.model.Project proxy>', _py_eval(crystal, 'project'))
-            assertEqual('<unset crystal.browser.MainWindow proxy>', _py_eval(crystal, 'window'))
+            assertEqual('<unset crystal.model.Project proxy>\n', _py_eval(crystal, 'project'))
+            assertEqual('<unset crystal.browser.MainWindow proxy>\n', _py_eval(crystal, 'window'))
             
             assertIn('Help on _Proxy in module ', _py_eval(crystal, 'help(project)'))
             assertIn('Help on _Proxy in module ', _py_eval(crystal, 'help(window)'))
             
             # Ensure public members match expected set
-            assertEqual(repr(_EXPECTED_PROXY_PUBLIC_MEMBERS),
+            assertEqual(repr(_EXPECTED_PROXY_PUBLIC_MEMBERS) + '\n',
                 _py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]"))
-            assertEqual(repr(_EXPECTED_PROXY_PUBLIC_MEMBERS),
+            assertEqual(repr(_EXPECTED_PROXY_PUBLIC_MEMBERS) + '\n',
                 _py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]"))
         
         # Open MainWindow by creating new empty project
@@ -170,32 +216,30 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
         
         with subtests.test(msg='and {project, window} can be used for real, after main window appears'):
             assert re.fullmatch(
-                r'^<crystal\.model\.Project object at 0x[0-9a-f]+>$',
+                r'^<crystal\.model\.Project object at 0x[0-9a-f]+>\n$',
                 _py_eval(crystal, 'project'))
             assert re.fullmatch(
-                r'^<crystal\.browser\.MainWindow object at 0x[0-9a-f]+>$',
+                r'^<crystal\.browser\.MainWindow object at 0x[0-9a-f]+>\n$',
                 _py_eval(crystal, 'window'))
             
             assertIn('Help on Project in module crystal.model object:', _py_eval(crystal, 'help(project)'))
             assertIn('Help on MainWindow in module crystal.browser object:', _py_eval(crystal, 'help(window)'))
             
             # Ensure public members match expected set
-            assertEqual(repr(_EXPECTED_PROJECT_PUBLIC_MEMBERS),
+            assertEqual(repr(_EXPECTED_PROJECT_PUBLIC_MEMBERS) + '\n',
                 _py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]"))
-            assertEqual(repr(_EXPECTED_WINDOW_PUBLIC_MEMBERS),
+            assertEqual(repr(_EXPECTED_WINDOW_PUBLIC_MEMBERS) + '\n',
                 _py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]"))
 
 
+@skip_on_windows
 @with_subtests
 def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
-    if platform.system() == 'Windows':
-        skipTest('--shell is not supported on Windows')
-    
     with subtests.test(case='test when first open/create dialog is closed given shell is running then shell remains running'):
         with crystal_shell() as (crystal, _):
             _close_open_or_create_dialog(crystal)
             
-            assert '4' == _py_eval(crystal, '2 + 2')
+            assert '4\n' == _py_eval(crystal, '2 + 2')
     
     with subtests.test(case='test when main window or non-first open/create dialog is closed given shell is running then shell remains running'):
         with crystal_shell() as (crystal, _):
@@ -204,7 +248,7 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
             
             _close_open_or_create_dialog(crystal)
             
-            assert '4' == _py_eval(crystal, '2 + 2')
+            assert '4\n' == _py_eval(crystal, '2 + 2')
     
     for exit_method in ('exit()', 'Ctrl-D'):
         with subtests.test(case=f'test when {exit_method} given first open/create dialog is already closed then exits'):
@@ -311,6 +355,169 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                     raise AssertionError('Timed out waiting for Crystal to exit')
 
 
+@skip_on_windows
+@with_subtests
+def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = 'https://xkcd.com/'
+        
+        project_path = sp.project.path  # capture
+        fg_call_and_wait(lambda: sp.project.close())
+        
+        with crystal_shell() as (crystal, _):
+            with subtests.test(case='test can open project', return_if_failure=True):
+                # Test can import Project
+                assertEqual('', _py_eval(crystal, 'from crystal.model import Project'))
+                # Test can open project
+                assertEqual('', _py_eval(crystal, f'p = Project({sp.project.path!r})'))
+            
+            with subtests.test(case='test can list project entities'):
+                assertEqual(
+                    "[RootResource('Home','https://xkcd.com/')]\n",
+                    _py_eval(crystal, 'list(p.root_resources)[:1]'))
+                assertEqual(
+                    "[ResourceGroup('Comics','https://xkcd.com/#/')]\n",
+                    _py_eval(crystal, 'list(p.resource_groups)'))
+                assertEqual(
+                    '71\n',
+                    _py_eval(crystal, 'len(p.resources)'))
+                assertEqual(
+                    "Resource('https://xkcd.com/')\n",
+                    _py_eval(crystal, 'list(p.resources)[0]'))
+            
+            with subtests.test(case='test can get project entities', return_if_failure=True):
+                assertEqual(
+                    "Resource('https://xkcd.com/')\n",
+                    _py_eval(crystal, f'r = p.get_resource({home_url!r}); r'))
+                
+                assertEqual(
+                    "[<ResourceRevision 1 for 'https://xkcd.com/'>]\n",
+                    _py_eval(crystal, f'r.revisions()'))
+                assertEqual(
+                    "<ResourceRevision 1 for 'https://xkcd.com/'>\n",
+                    _py_eval(crystal, f'rr = r.default_revision(); rr'))
+                
+                assertEqual(
+                    "RootResource('Home','https://xkcd.com/')\n",
+                    _py_eval(crystal, f'root_r = p.get_root_resource(r); root_r'))
+                
+                assertEqual(
+                    "ResourceGroup('Comics','https://xkcd.com/#/')\n",
+                    _py_eval(crystal, f'rg = p.get_resource_group("Comics"); rg'))
+                assertEqual(
+                    '14\n',
+                    _py_eval(crystal, f'len(rg.members)'))
+                assertEqual(
+                    "Resource('https://xkcd.com/1/')\n",
+                    _py_eval(crystal, f'list(rg.members)[0]'))
+            
+            with subtests.test(case='test can read content of resource revision'):
+                assertEqual(
+                    {
+                        'http_version': 11,
+                        'status_code': 200,
+                        'reason_phrase': 'OK',
+                        'headers': ANY
+                    },
+                    literal_eval(_py_eval(crystal, f'rr.metadata')))
+                _py_eval(crystal, f'with rr.open() as f:\n    body = f.read()\n')
+                assertEqual(
+                    r"""b'<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" type="text/css" href="/s/7d94e0.css" title="Default"/>\n<title>xkcd: Air Gap</title>\n'""" + '\n',
+                    _py_eval(crystal, f'body[:137]'))
+
+
+@skip_on_windows
+@with_subtests
+def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic2_url = sp.get_request_url('https://xkcd.com/2/')
+            comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+        
+        # Create named temporary directory that won't be deleted automatically
+        with tempfile.NamedTemporaryFile(suffix='.crystalproj', delete=False) as project_td:
+            pass
+        os.remove(project_td.name)
+        project_dirpath = project_td.name
+        
+        with crystal_shell() as (crystal, _):
+            with subtests.test(case='test can create project', return_if_failure=True):
+                # Test can import Project
+                assertEqual('', _py_eval(crystal, 'from crystal.model import Project'))
+                # Test can create project
+                assertEqual('', _py_eval(crystal, f'p = Project({project_dirpath!r})'))
+            
+            with subtests.test(case='test can create project entities', return_if_failure=True):
+                # Test can import Resource
+                assertEqual('', _py_eval(crystal, 'from crystal.model import Resource'))
+                # Test can create Resource
+                assertEqual(
+                    "Resource('http://localhost:2798/_/https/xkcd.com/')\n",
+                    _py_eval(crystal, f'r = Resource(p, {home_url!r}); r'))
+                
+                # Test can import RootResource
+                assertEqual('', _py_eval(crystal, 'from crystal.model import RootResource'))
+                # Test can create RootResource
+                assertEqual(
+                    "RootResource('Home','http://localhost:2798/_/https/xkcd.com/')\n",
+                    _py_eval(crystal, f'root_r = RootResource(p, "Home", r); root_r'))
+                
+                # Test can download ResourceRevision
+                with _delay_between_downloads_minimized(crystal):
+                    assertEqual('', _py_eval(crystal, 'rr_future = r.download()'))
+                    while True:
+                        is_done = (literal_eval(_py_eval(crystal, 'rr_future.done()')) == True)
+                        if is_done:
+                            break
+                        time.sleep(.2)
+                    assertIn('<ResourceRevision ', _py_eval(crystal, 'rr = rr_future.result(); rr'))
+                
+                # Test can import ResourceGroup
+                assertEqual('', _py_eval(crystal, 'from crystal.model import ResourceGroup'))
+                # Test can create ResourceGroup
+                assertEqual(
+                    "ResourceGroup('Comic','http://localhost:2798/_/https/xkcd.com/#/')\n",
+                    _py_eval(crystal, f'rg = ResourceGroup(p, "Comic", {comic_pattern!r}); rg'))
+                # Ensure ResourceGroup includes some members discovered by downloading resource Home
+                assertEqual(
+                    '9\n',
+                    _py_eval(crystal, f'len(rg.members)'))
+            
+            with subtests.test(case='test can delete project entities', return_if_failure=True):
+                # Test can delete ResourceGroup
+                assertEqual('', _py_eval(crystal, f'rg_m = list(rg.members)[0]'))
+                assertEqual('', _py_eval(crystal, f'rg.delete()'))
+                # Ensure ResourceGroup itself is deleted
+                assertEqual('', _py_eval(crystal, f'p.get_resource_group(rg.name)'))
+                # Ensure former members of ResourceGroup still exist
+                assertEqual('True\n', _py_eval(crystal, f'p.get_resource(rg_m.url) == rg_m'))
+                
+                # Test can delete RootResource
+                assertEqual('', _py_eval(crystal, f'root_r_r = root_r.resource'))
+                assertEqual('', _py_eval(crystal, f'root_r.delete()'))
+                # Ensure RootResource itself is deleted
+                assertEqual('', _py_eval(crystal, f'p.get_root_resource(root_r_r)'))
+                # Ensure former target of RootResource still exists
+                assertEqual('True\n', _py_eval(crystal, f'p.get_resource(root_r_r.url) == root_r_r'))
+                
+                # Test can delete ResourceRevision
+                assertEqual('', _py_eval(crystal, f'rr_r = rr.resource'))
+                assertEqual('1\n', _py_eval(crystal, f'len(rr_r.revisions())'))
+                assertEqual('', _py_eval(crystal, f'rr.delete()'))
+                # Ensure ResourceRevision itself is deleted
+                assertEqual('0\n', _py_eval(crystal, f'len(rr_r.revisions())'))
+                
+                # Test can delete Resource
+                assertEqual('', _py_eval(crystal, f'r.delete()'))
+                # Ensure Resource itself is deleted
+                assertEqual('', _py_eval(crystal, f'p.get_resource(r.url)'))
+
+
 # ------------------------------------------------------------------------------
 # Utility: Windows
 
@@ -357,7 +564,7 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
         # NOTE: 2.0 was observed to sometimes not be long enough on macOS
         timeout=4.0
     )
-    assert "<class 'crystal.tests.util.windows.MainWindow'>" == \
+    assert "<class 'crystal.tests.util.windows.MainWindow'>\n" == \
         _py_eval(crystal, 'type(result_cell[0])')
 
 
@@ -401,6 +608,20 @@ def _close_main_window(crystal: subprocess.Popen, *, after_delay: Optional[float
         '''), stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '')
 
 
+@contextmanager
+def _delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[None]:
+    # NOTE: Uses private API, including the entire crystal.tests package
+    _py_eval(crystal, textwrap.dedent(f'''\
+        from crystal.tests.util.downloads import delay_between_downloads_minimized as D
+        download_ctx = D()
+        download_ctx.__enter__()
+        '''))
+    try:
+        yield
+    finally:
+        _py_eval(crystal, 'download_ctx.__exit__(None, None, None)')
+
+
 # ------------------------------------------------------------------------------
 # Utility: Shell
 
@@ -433,7 +654,7 @@ def _py_eval(
         stop_suffix: Optional[Union[str, Tuple[str, ...]]]=None,
         *, timeout: Optional[float]=None) -> str:
     if stop_suffix is None:
-        stop_suffix = '\n>>> '
+        stop_suffix = '>>> '
     
     assert isinstance(python.stdin, TextIOBase)
     assert isinstance(python.stdout, TextIOBase)

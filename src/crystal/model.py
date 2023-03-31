@@ -37,7 +37,7 @@ import re
 import shutil
 import sqlite3
 from typing import (
-    Any, Callable, cast, Dict, Iterable, List, Optional, TYPE_CHECKING, Tuple,
+    Any, Callable, cast, Dict, Iterable, List, Optional, Pattern, TYPE_CHECKING, Tuple,
     TypedDict, Union
 )
 from urllib.parse import urlparse, urlunparse
@@ -365,7 +365,7 @@ class Project:
     def resource_groups(self) -> Iterable[ResourceGroup]:
         return self._resource_groups
     
-    def get_resource_group(self, name):
+    def get_resource_group(self, name: str) -> Optional[ResourceGroup]:
         """Returns the `ResourceGroup` with the specified name or None if no such resource exists."""
         # PERF: O(n) when it could be O(1)
         return next((rg for rg in self._resource_groups if rg.name == name), None)
@@ -630,7 +630,7 @@ class Resource:
         return alternatives
     
     @property
-    def resource(self):
+    def resource(self) -> Resource:
         """
         Returns self.
         
@@ -897,7 +897,7 @@ class RootResource:
     name: str
     resource: Resource
     
-    def __new__(cls, project, name, resource, _id=None) -> RootResource:
+    def __new__(cls, project: Project, name: str, resource: Resource, _id=None) -> RootResource:
         """
         Creates a new root resource.
         
@@ -936,7 +936,7 @@ class RootResource:
             project._root_resources[resource] = self
             return self
     
-    def delete(self):
+    def delete(self) -> None:
         """
         Deletes this root resource.
         If it is referenced as a source, it will be replaced with None.
@@ -955,7 +955,7 @@ class RootResource:
         del self.project._root_resources[self.resource]
     
     @property
-    def url(self):
+    def url(self) -> str:
         return self.resource.url
     
     # TODO: Create the underlying task with the full RootResource
@@ -1567,7 +1567,7 @@ class ResourceGroup:
     def _init_source(self, source: ResourceGroupSource) -> None:
         self._source = source
     
-    def delete(self):
+    def delete(self) -> None:
         """
         Deletes this resource group.
         If it is referenced as a source, it will be replaced with None.
@@ -1617,7 +1617,7 @@ class ResourceGroup:
     source = cast(ResourceGroupSource, property(_get_source, _set_source))
     
     @staticmethod
-    def create_re_for_url_pattern(url_pattern):
+    def create_re_for_url_pattern(url_pattern: str) -> Pattern:
         """Converts a url pattern to a regex which matches it."""
         
         # Escape regex characters

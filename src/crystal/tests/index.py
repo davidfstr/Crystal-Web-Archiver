@@ -1,31 +1,25 @@
-from contextlib import contextmanager
-import crystal.task
 from crystal.tests import (
     test_shell,
     test_workflows,
 )
+from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from functools import wraps
 import os
 import sys
 import time
 import traceback
-from typing import Any, Callable, Coroutine, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 from unittest import SkipTest
-
-
-def as_async(sync_test_func: Callable[[], None]) -> Callable[[], Coroutine[Any, Any, None]]:
-    @wraps(sync_test_func)
-    async def wrapper() -> None:
-        return sync_test_func()
-    return wrapper
 
 
 # TODO: Avoid the need to manually enumerate all test functions individually
 _TEST_FUNCS = [
     # test_shell
-    as_async(test_shell.test_can_launch_with_shell),
-    as_async(test_shell.test_shell_exits_with_expected_message),
+    test_shell.test_can_launch_with_shell,
+    test_shell.test_shell_exits_with_expected_message,
+    test_shell.test_can_read_project_with_shell,
+    test_shell.test_can_write_project_with_shell,
     
     # test_workflows
     test_workflows.test_can_download_and_serve_a_static_site,
@@ -48,7 +42,7 @@ def run_tests(test_names: List[str]) -> bool:
     The format of the summary report is designed to be similar
     to that used by Python's unittest module.
     """
-    with _delay_between_downloads_minimized():
+    with delay_between_downloads_minimized():
         return _run_tests(test_names)
 
 
@@ -147,13 +141,3 @@ def _run_tests(test_names: List[str]) -> bool:
     return is_ok
 
 
-@contextmanager
-def _delay_between_downloads_minimized() -> Iterator[None]:
-    old_value = crystal.task.DELAY_BETWEEN_DOWNLOADS
-    # NOTE: Must be long enough so that download tasks stay around long enough
-    #       to be observed, but short enough to provide a speed boost
-    crystal.task.DELAY_BETWEEN_DOWNLOADS = 0.2
-    try:
-        yield
-    finally:
-        crystal.task.DELAY_BETWEEN_DOWNLOADS = old_value
