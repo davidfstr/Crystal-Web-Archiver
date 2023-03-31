@@ -153,16 +153,16 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
             ), banner
         
         with subtests.test(msg='and {project, window} can be used as placeholders, before main window appears'):
-            assertEqual('<unset crystal.model.Project proxy>', _py_eval(crystal, 'project'))
-            assertEqual('<unset crystal.browser.MainWindow proxy>', _py_eval(crystal, 'window'))
+            assertEqual('<unset crystal.model.Project proxy>\n', _py_eval(crystal, 'project'))
+            assertEqual('<unset crystal.browser.MainWindow proxy>\n', _py_eval(crystal, 'window'))
             
             assertIn('Help on _Proxy in module ', _py_eval(crystal, 'help(project)'))
             assertIn('Help on _Proxy in module ', _py_eval(crystal, 'help(window)'))
             
             # Ensure public members match expected set
-            assertEqual(repr(_EXPECTED_PROXY_PUBLIC_MEMBERS),
+            assertEqual(repr(_EXPECTED_PROXY_PUBLIC_MEMBERS) + '\n',
                 _py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]"))
-            assertEqual(repr(_EXPECTED_PROXY_PUBLIC_MEMBERS),
+            assertEqual(repr(_EXPECTED_PROXY_PUBLIC_MEMBERS) + '\n',
                 _py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]"))
         
         # Open MainWindow by creating new empty project
@@ -170,19 +170,19 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
         
         with subtests.test(msg='and {project, window} can be used for real, after main window appears'):
             assert re.fullmatch(
-                r'^<crystal\.model\.Project object at 0x[0-9a-f]+>$',
+                r'^<crystal\.model\.Project object at 0x[0-9a-f]+>\n$',
                 _py_eval(crystal, 'project'))
             assert re.fullmatch(
-                r'^<crystal\.browser\.MainWindow object at 0x[0-9a-f]+>$',
+                r'^<crystal\.browser\.MainWindow object at 0x[0-9a-f]+>\n$',
                 _py_eval(crystal, 'window'))
             
             assertIn('Help on Project in module crystal.model object:', _py_eval(crystal, 'help(project)'))
             assertIn('Help on MainWindow in module crystal.browser object:', _py_eval(crystal, 'help(window)'))
             
             # Ensure public members match expected set
-            assertEqual(repr(_EXPECTED_PROJECT_PUBLIC_MEMBERS),
+            assertEqual(repr(_EXPECTED_PROJECT_PUBLIC_MEMBERS) + '\n',
                 _py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]"))
-            assertEqual(repr(_EXPECTED_WINDOW_PUBLIC_MEMBERS),
+            assertEqual(repr(_EXPECTED_WINDOW_PUBLIC_MEMBERS) + '\n',
                 _py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]"))
 
 
@@ -195,7 +195,7 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
         with crystal_shell() as (crystal, _):
             _close_open_or_create_dialog(crystal)
             
-            assert '4' == _py_eval(crystal, '2 + 2')
+            assert '4\n' == _py_eval(crystal, '2 + 2')
     
     with subtests.test(case='test when main window or non-first open/create dialog is closed given shell is running then shell remains running'):
         with crystal_shell() as (crystal, _):
@@ -204,7 +204,7 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
             
             _close_open_or_create_dialog(crystal)
             
-            assert '4' == _py_eval(crystal, '2 + 2')
+            assert '4\n' == _py_eval(crystal, '2 + 2')
     
     for exit_method in ('exit()', 'Ctrl-D'):
         with subtests.test(case=f'test when {exit_method} given first open/create dialog is already closed then exits'):
@@ -357,7 +357,7 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
         # NOTE: 2.0 was observed to sometimes not be long enough on macOS
         timeout=4.0
     )
-    assert "<class 'crystal.tests.util.windows.MainWindow'>" == \
+    assert "<class 'crystal.tests.util.windows.MainWindow'>\n" == \
         _py_eval(crystal, 'type(result_cell[0])')
 
 
@@ -433,7 +433,7 @@ def _py_eval(
         stop_suffix: Optional[Union[str, Tuple[str, ...]]]=None,
         *, timeout: Optional[float]=None) -> str:
     if stop_suffix is None:
-        stop_suffix = '\n>>> '
+        stop_suffix = '>>> '
     
     assert isinstance(python.stdin, TextIOBase)
     assert isinstance(python.stdout, TextIOBase)
