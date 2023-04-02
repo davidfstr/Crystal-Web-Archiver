@@ -27,9 +27,12 @@ classifiers = [
 ]
 packages = [
     { include = "crystal", from = "src" },
-    
     # Included for backward compatibility
     { include = "main.py", from = "src" },
+]
+include = [
+    "README/logo.png",
+    "README/logo@2x.png",
 ]
 
 [tool.poetry.scripts]
