@@ -15,7 +15,7 @@ def test_version_in_pyproject_toml_is_consistent_with_package_version() -> None:
     with open(pyproject_toml_filepath, 'r', encoding='utf-8') as f:
         pyproject_toml = f.read()
     
-    m = re.search(r'\nversion *= *"([^"]+)"\n', pyproject_toml)
+    m = re.search(r'\nversion *= *"([^"]+?)(\.post\d+)?\"\n', pyproject_toml)
     assert m is not None, 'Unable to find version in pyproject.toml'
     pyproject_toml_version = m.group(1)
     assert __version__ == pyproject_toml_version, \
