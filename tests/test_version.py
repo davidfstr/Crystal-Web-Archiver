@@ -5,7 +5,7 @@ import re
 
 
 def test_version_is_expected_value() -> None:
-    assert __version__ == '1.4.0b', \
+    assert __version__ == '1.5.0b', \
         'Version in crystal/__init__.py is not the expected value'
 
 
