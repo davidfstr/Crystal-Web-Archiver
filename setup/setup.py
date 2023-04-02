@@ -97,6 +97,7 @@ elif sys.platform == 'win32':
             (r'lib\crystal\tests\test_data', [
                 r'..\src\crystal\tests\test_data' + '\\' + filename
                 for filename in os.listdir(r'..\src\crystal\tests\test_data')
+                if filename not in ['__pycache__'] and not filename.startswith('.')
             ]),
         ],
         # Combine 'library.zip' into the generated exe
