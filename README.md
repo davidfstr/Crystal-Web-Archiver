@@ -1,7 +1,7 @@
 Crystal Web Archiver
 ====================
 
-<img src="README/logo.png" title="Crystal Web Archiver icon" align="right" />
+<img src="https://github.com/davidfstr/Crystal-Web-Archiver/blob/main/README/logo.png" title="Crystal Web Archiver icon" align="right" />
 
 Crystal is a tool that downloads high fidelity copies of websites for long-term archival.
 
@@ -266,7 +266,7 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### v1.5.0b <small>(April 2, 2023)</small>
+### v1.5.0b (April 2, 2023)
 
 This release focuses on making it easy to install Crystal from PyPI,
 adds support for running on Linux from source (but not from a binary),
@@ -309,7 +309,7 @@ because icons and tooltips have been added for all tree nodes.
     * Fixed right-click on non-URL node to no longer print a traceback.
     * Fixed attempt to download a group with no source to no longer print a traceback.
 
-### v1.4.0b <small>(August 22, 2022)</small>
+### v1.4.0b (August 22, 2022)
 
 This release adds early support for [incrementally redownloading sites
 with new page versions](https://github.com/davidfstr/Crystal-Web-Archiver/issues/80).
@@ -359,7 +359,7 @@ Segmentation Faults and dramatically improved automated test coverage.
     * Improved introduction in the README.
     * Added tutorial: To download a dynamic website
 
-### v1.3.0b <small>(July 10, 2022)</small>
+### v1.3.0b (July 10, 2022)
 
 This release allows more kinds of advanced sites to be downloaded,
 including sites requiring login and sites relying on JSON APIs,
@@ -441,7 +441,7 @@ downloaded effectively without creating an explosion of URL combinations.
 [Substack]: https://substack.com/
 [Content-Disposition]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition
 
-### v1.2.0b <small>(April 12, 2021)</small>
+### v1.2.0b (April 12, 2021)
 
 This release primarily features better support for large projects and groups.
 Downloads of large groups are dramatically faster and now only require a
@@ -485,7 +485,7 @@ phpBB support is still experimental and likely requires additional tuning.
     * Specially recognize and normalize phpBB URLs.
     * Disallow delete of Resource if it is referenced by a RootResource.
 
-### v1.1.1b <small>(April 2, 2021)</small>
+### v1.1.1b (April 2, 2021)
 
 Several first-time-launch issues were fixed. And domains are now recognized
 in a case-insensitive fashion, eliminating duplicate URLs within some sites.
@@ -507,7 +507,7 @@ in a case-insensitive fashion, eliminating duplicate URLs within some sites.
     * Can delete entire resources from the Crystal CLI, 
       in addition to resource revisions.
 
-### v1.1.0b <small>(March 22, 2021)</small>
+### v1.1.0b (March 22, 2021)
 
 Our first beta release brings support for downloading more complex static sites,
 recognizing vastly more link types than ever before. It also supports various 
@@ -588,6 +588,6 @@ some older macOS versions and Windows XP.
     * Documentation improvements to the README
     * Upgrade development status from Alpha -> Beta 🎉
 
-### v1.0.0a <small>(January 24, 2012)</small>
+### v1.0.0a (January 24, 2012)
 
 * Initial version
