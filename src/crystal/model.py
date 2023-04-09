@@ -502,7 +502,7 @@ class Resource:
     already_downloaded_this_session: bool
     _id: int  # or None if deleted
     
-    def __new__(cls, project: Project, url: str, _id=None) -> Resource:
+    def __new__(cls, project: Project, url: str, _id: Optional[int]=None) -> Resource:
         """
         Looks up an existing resource with the specified URL or creates a new
         one if no preexisting resource matches.
@@ -537,6 +537,7 @@ class Resource:
         self.already_downloaded_this_session = False
         
         if project._loading:
+            assert _id is not None
             self._id = _id
         else:
             if project.readonly:
@@ -896,8 +897,9 @@ class RootResource:
     project: Project
     name: str
     resource: Resource
+    _id: int  # or None if deleted
     
-    def __new__(cls, project: Project, name: str, resource: Resource, _id=None) -> RootResource:
+    def __new__(cls, project: Project, name: str, resource: Resource, _id: Optional[int]=None) -> RootResource:
         """
         Creates a new root resource.
         
@@ -925,6 +927,7 @@ class RootResource:
             self.resource = resource
             
             if project._loading:
+                assert _id is not None
                 self._id = _id
             else:
                 if project.readonly:
@@ -950,7 +953,7 @@ class RootResource:
         c = self.project._db.cursor()
         c.execute('delete from root_resource where id=?', (self._id,))
         self.project._db.commit()
-        self._id = None
+        self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         del self.project._root_resources[self.resource]
     
@@ -988,7 +991,7 @@ class ResourceRevision:
     request_cookie: Optional[str]
     error: Optional[Exception]
     metadata: Optional[ResourceRevisionMetadata]
-    _id: int
+    _id: int  # or None if deleted
     has_body: bool
     
     # === Init ===
@@ -1496,7 +1499,7 @@ class ResourceRevision:
         c = project._db.cursor()
         c.execute('delete from resource_revision where id=?', (self._id,))
         project._db.commit()
-        self._id = None
+        self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
     
     def __repr__(self):
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
@@ -1581,7 +1584,7 @@ class ResourceGroup:
         c = self.project._db.cursor()
         c.execute('delete from resource_group where id=?', (self._id,))
         self.project._db.commit()
-        self._id = None
+        self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.project._resource_groups.remove(self)
     
