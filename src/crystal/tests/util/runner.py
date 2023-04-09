@@ -34,7 +34,7 @@ def run_test(test_func: Union[Callable[[], Awaitable[_T]], Callable[[], _T]]) ->
     
     test_co = test_func()  # if async func then should be a Generator[Command, None, _T]
     if not asyncio.iscoroutine(test_co):
-        return test_co
+        return test_co  # type: ignore[return-value]
     last_command_result = None  # type: Union[object, Exception]
     while True:
         try:
