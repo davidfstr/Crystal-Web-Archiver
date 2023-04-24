@@ -114,8 +114,14 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
         try:
             wx.CallAfter(callable, *args)
         except Exception as e:
+            if not has_foreground_thread():
+                raise NoForegroundThreadError()
+            
             # ex: RuntimeError: wrapped C/C++ object of type PyApp has been deleted
             if str(e) == 'wrapped C/C++ object of type PyApp has been deleted':
+                raise NoForegroundThreadError()
+            # ex: AssertionError: No wx.App created yet
+            elif str(e) == 'No wx.App created yet':
                 raise NoForegroundThreadError()
             else:
                 raise
