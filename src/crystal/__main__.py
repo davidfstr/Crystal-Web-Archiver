@@ -391,22 +391,15 @@ def _prompt_for_project(
         escape_is_cancel=True,
         name='cr-open-or-create-project')
     
-    if dialog.IsCheckBoxChecked():
-        project_kwargs = {
-            **project_kwargs,
-            **dict(readonly=True),
-        }  # reinterpret
-    
-    try:
+    with dialog:
         while True:
             from crystal.util.wx_dialog import ShowModal
             choice = ShowModal(dialog)
             
-            if dialog.IsCheckBoxChecked():
-                project_kwargs = {
-                    **project_kwargs,
-                    **dict(readonly=True),
-                }  # reinterpret
+            project_kwargs = {
+                **project_kwargs,
+                **dict(readonly=dialog.IsCheckBoxChecked()),
+            }  # reinterpret
             
             if choice == wx.ID_YES:
                 try:
@@ -420,8 +413,6 @@ def _prompt_for_project(
                     continue
             else:  # wx.ID_CANCEL
                 sys.exit()
-    finally:
-        dialog.Destroy()
 
 
 def _prompt_to_create_project(
@@ -440,13 +431,13 @@ def _prompt_to_create_project(
         message='',
         wildcard='*' + Project.FILE_EXTENSION,
         style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
-    if not dialog.ShowModal() == wx.ID_OK:
-        sys.exit()
-    
-    project_path = dialog.GetPath()
-    if not project_path.endswith(Project.FILE_EXTENSION):
-        project_path += Project.FILE_EXTENSION
-    dialog.Destroy()
+    with dialog:
+        if not dialog.ShowModal() == wx.ID_OK:
+            sys.exit()
+        
+        project_path = dialog.GetPath()
+        if not project_path.endswith(Project.FILE_EXTENSION):
+            project_path += Project.FILE_EXTENSION
     
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
@@ -477,11 +468,11 @@ def _prompt_to_open_project(
         dialog = wx.DirDialog(parent,
             message='Choose a project',
             style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
-    if not dialog.ShowModal() == wx.ID_OK:
-        sys.exit()
-    
-    project_path = dialog.GetPath()
-    dialog.Destroy()
+    with dialog:
+        if not dialog.ShowModal() == wx.ID_OK:
+            sys.exit()
+        
+        project_path = dialog.GetPath()
     
     if not os.path.exists(project_path):
         raise AssertionError
@@ -493,8 +484,8 @@ def _prompt_to_open_project(
             title='Invalid Project',
             style=wx.OK,
             name='cr-invalid-project')
-        dialog.ShowModal()
-        dialog.Destroy()
+        with dialog:
+            dialog.ShowModal()
         sys.exit()
     
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
