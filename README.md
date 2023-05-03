@@ -266,6 +266,10 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Linux: Fix dialog that appears on app launch to be sized correctly.
+
 ### v1.5.0b (April 2, 2023)
 
 This release focuses on making it easy to install Crystal from PyPI,

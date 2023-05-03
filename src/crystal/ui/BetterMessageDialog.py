@@ -1,4 +1,5 @@
 from crystal.util.wx_bind import bind
+from crystal.util.xos import is_wx_gtk
 from typing import Callable, Optional
 import wx
 
@@ -71,7 +72,13 @@ class BetterMessageDialog(wx.Dialog):
         if escape_is_cancel:
             self.SetEscapeId(wx.ID_CANCEL)
         
+        # HACK: wxGTK won't compute size of first dialog shown correctly
+        #       unless it is explicitly shown during a Fit()
+        if is_wx_gtk():
+            self.Show()
         self.Fit()
+        if is_wx_gtk():
+            self.Hide()
     
     def IsCheckBoxChecked(self) -> bool:
         if self._checkbox is None:
