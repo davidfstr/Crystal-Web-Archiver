@@ -1,3 +1,4 @@
+from contextlib import contextmanager, nullcontext
 from crystal import __version__ as crystal_version
 from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
@@ -6,10 +7,14 @@ from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.progress import OpenProjectProgressListener
+import crystal.server
 from crystal.task import RootTask
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.util.wx_bind import bind
-from crystal.util.xos import is_mac_os, is_windows
+from crystal.util.xos import is_linux, is_mac_os, is_windows
+import os
+from typing import ContextManager, Iterator
+import webbrowser
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -217,9 +222,6 @@ class MainWindow:
             return False
     
     def _on_view_entity(self, event) -> None:
-        import crystal.server
-        import webbrowser
-        
         # TODO: If the server couldn't be started (ex: due to the default port being in
         #       use), report an appropriate error.
         project_server = self.project.start_server()
@@ -228,7 +230,29 @@ class MainWindow:
         assert isinstance(selected_entity, (Resource, RootResource))
         archive_url = selected_entity.resource.url
         request_url = project_server.get_request_url(archive_url)
-        webbrowser.open(request_url)
+        
+        if is_linux():
+            # HACK: Firefox on Linux starts with an error if
+            #       the current working directory is not writable,
+            #       so make sure the current working directory is
+            #       writable before potentially starting Firefox
+            open_browser_context = self._cwd_set_to_writable_dir()  # type: ContextManager
+        else:
+            open_browser_context = nullcontext()
+        with open_browser_context:
+            # NOTE: Can block for as long as 3 seconds on Linux
+            webbrowser.open(request_url)
+    
+    @contextmanager
+    def _cwd_set_to_writable_dir(self) -> Iterator[None]:
+        assert is_linux(), 'This function only supports Linux'
+        new_cwd = os.environ.get('HOME', '/')
+        old_cwd = os.getcwd()  # capture
+        os.chdir(new_cwd)
+        try:
+            yield
+        finally:
+            os.chdir(old_cwd)
     
     def _on_selected_entity_changed(self, event):
         selected_entity = self.entity_tree.selected_entity  # cache
