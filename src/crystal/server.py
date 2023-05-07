@@ -8,7 +8,6 @@ from __future__ import annotations
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
-from crystal.task import schedule_forever
 from crystal.util.cli import (
     print_error,
     print_info,

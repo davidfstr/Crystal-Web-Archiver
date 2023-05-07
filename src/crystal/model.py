@@ -44,7 +44,6 @@ from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
-    from crystal.server import ProjectServer
     from crystal.task import DownloadResourceTask, DownloadResourceGroupTask, Task
 
 
