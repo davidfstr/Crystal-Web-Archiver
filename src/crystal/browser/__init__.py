@@ -21,7 +21,10 @@ _WINDOW_INNER_PADDING = 10
 
 
 class MainWindow:
+    project: Project
+    frame: wx.Frame
     entity_tree: EntityTree
+    task_tree: TaskTree
     
     def __init__(self, project: Project, progress_listener: OpenProjectProgressListener) -> None:
         self.project = project
