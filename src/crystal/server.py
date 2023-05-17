@@ -726,9 +726,15 @@ class _RequestHandler(BaseHTTPRequestHandler):
             base_url = revision.resource.url
             for link in links:
                 relative_url = link.relative_url
-                absolute_url = urljoin(base_url, relative_url)
-                request_url = self.get_request_url(absolute_url)
-                link.relative_url = request_url
+                if relative_url.startswith('#'):
+                    # Don't rewrite links to anchors on the same page,
+                    # because some pages use JavaScript libraries
+                    # that treat such "local anchor links" specially
+                    pass
+                else:
+                    absolute_url = urljoin(base_url, relative_url)
+                    request_url = self.get_request_url(absolute_url)
+                    link.relative_url = request_url
             
             if _ENABLE_PIN_DATE_MITIGATION:
                 # TODO: Add try_insert_script() to Document interface

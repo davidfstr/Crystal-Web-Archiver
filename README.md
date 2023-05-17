@@ -268,8 +268,14 @@ Release Notes ⋮
 
 ### main
 
-* Linux: Fix dialog that appears on app launch to be sized correctly.
-* Linux: Fix View button to open browser even if Crystal run from read-only volume.
+* Critical fixes
+    * Linux: Fix dialog that appears on app launch to be sized correctly.
+    * Linux: Fix View button to open browser even if Crystal run from read-only volume.
+
+* Serving improvements
+    * Links to anchors on the same page are no longer rewritten,
+      for better compatibility with JavaScript libraries that
+      treat such links specially.
 
 ### v1.5.0b (April 2, 2023)
 
