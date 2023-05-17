@@ -272,6 +272,9 @@ Release Notes ⋮
     * Linux: Fix dialog that appears on app launch to be sized correctly.
     * Linux: Fix View button to open browser even if Crystal run from read-only volume.
 
+* Parsing improvements
+    * Can identify URL references inside `<img srcset="...">`.
+
 * Serving improvements
     * Links to anchors on the same page are no longer rewritten,
       for better compatibility with JavaScript libraries that

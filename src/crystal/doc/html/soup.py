@@ -8,12 +8,13 @@ from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 import json
 import re
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlparse
 
 
 _ANY_RE = re.compile(r'.*')
 
+_IMG_RE = re.compile(r'(?i)img')
 _INPUT_RE = re.compile(r'(?i)input')
 _BUTTON_RE = re.compile(r'(?i)button')
 # TODO: Make this an r'...' string
@@ -67,6 +68,10 @@ def parse_html_and_links(
             type_title = 'Unknown Embedded (%s)' % tag.name
         links.append(HtmlLink.create_from_tag(tag, 'src', type_title, title, embedded))
     
+    # <img srcset=*>
+    for tag in html.findAll(_IMG_RE, srcset=_ANY_RE):
+        links.extend(_process_srcset_attr(tag))
+    
     # <* href=*>
     for tag in html.findAll(_ANY_RE, href=_ANY_RE):
         relative_url = tag['href']
@@ -103,7 +108,7 @@ def parse_html_and_links(
     for tag in html.findAll(_INPUT_RE, type=_BUTTON_RE, onclick=_ON_CLICK_RE):
         matcher = _ON_CLICK_RE.search(tag['onclick'])
         def process_match(matcher) -> None:
-            def replace_url_in_old_attr_value(url, old_attr_value):
+            def replace_url_in_old_attr_value(url: str, old_attr_value: str) -> str:
                 q = matcher.group(2)
                 return matcher.group(1) + ' = ' + q + url + q
             
@@ -130,11 +135,12 @@ def parse_html_and_links(
                 q = match[0] or match[2]
                 old_string_literal = q + (match[1] or match[3]) + q
                 
-                def replace_url_in_old_attr_value(url, old_attr_value):
+                def replace_url_in_old_attr_value(url: str, old_attr_value: str) -> str:
+                    quoted_url = json.dumps(url)  # type: ignore[attr-defined]
                     if q == "'":
-                        new_string_literal = q + json.dumps(url)[1:-1].replace(q, '\\' + q) + q
+                        new_string_literal = q + quoted_url[1:-1].replace(q, '\\' + q) + q
                     else:  # q == '"' or something else
-                        new_string_literal = json.dumps(url)
+                        new_string_literal = quoted_url
                     
                     return old_attr_value.replace(old_string_literal, new_string_literal)
                 
@@ -184,6 +190,54 @@ def _get_image_tag_title(tag):
         return tag['title']
     else:
         return None
+
+
+def _process_srcset_attr(img_tag) -> 'List[HtmlLink]':
+    srcset = _parse_srcset_str(img_tag['srcset'])
+    if srcset is None:
+        return []
+    
+    links = []
+    
+    def process_candidate(parts: List[str]):
+        nonlocal links, srcset
+        
+        def replace_url_in_old_attr_value(url: str, old_attr_value: str) -> str:
+            nonlocal parts, srcset
+            parts[0] = url  # reinterpret
+            assert srcset is not None  # help mypy
+            return _format_srcset_str(srcset)
+        
+        relative_url = parts[0]
+        title = _get_image_tag_title(img_tag)
+        type_title = 'Image'
+        embedded = True
+        links.append(HtmlLink.create_from_complex_tag(
+            img_tag, 'srcset', type_title, title, embedded,
+            relative_url, replace_url_in_old_attr_value))
+    
+    candidates = srcset
+    for c in candidates:
+        parts = c
+        process_candidate(parts)
+    
+    return links
+
+
+def _parse_srcset_str(srcset_str: str) -> Optional[List[List[str]]]:
+    candidates = []
+    candidate_strs = [c.strip() for c in srcset_str.split(',')]
+    for c_str in candidate_strs:
+        parts = [p for p in c_str.split(' ') if len(p) != 0]
+        if not (1 <= len(parts) <= 2):
+            # Failed to parse srcset
+            return None
+        candidates.append(parts)
+    return candidates
+
+
+def _format_srcset_str(srcset: List[List[str]]) -> str:
+    return ','.join([' '.join(parts) for parts in srcset])
 
 
 class HtmlDocument(Document):
