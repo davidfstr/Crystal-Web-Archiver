@@ -85,6 +85,6 @@ class BetterMessageDialog(wx.Dialog):
             raise ValueError()
         return self._checkbox.Value
     
-    def _on_button(self, event):
-        self.EndModal(event.GetEventObject().GetId())
+    def _on_button(self, event: wx.CommandEvent) -> None:
+        self.EndModal(event.GetId())
         self.Hide()

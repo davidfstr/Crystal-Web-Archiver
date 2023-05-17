@@ -384,21 +384,31 @@ def _prompt_for_project(
             dialog._checkbox.Value = not dialog._checkbox.Value
         
         readonly_checkbox_checked = dialog.IsCheckBoxChecked()
-        create_button = dialog.FindWindowById(wx.ID_NO)
+        create_button = dialog.FindWindowById(wx.ID_YES)
         create_button.Enabled = not readonly_checkbox_checked
     
     dialog = BetterMessageDialog(None,
-        message='Open an existing project or create a new project?',
+        message='Create a new project or open an existing project?',
         title='Select a Project',
-        checkbox_label='Open as read only',
+        # TODO: Make it possible to check/uncheck this box by pressing the R key,
+        #       and draw underline under R letter to signal that such a
+        #       keyboard shortcut exists
+        checkbox_label='Open as &read only',
         on_checkbox_clicked=on_checkbox_clicked,
         style=wx.YES_NO,
-        yes_label='Open',
-        no_label='Create',
+        yes_label='&New Project',
+        no_label='&Open',
         escape_is_cancel=True,
         name='cr-open-or-create-project')
-    
     with dialog:
+        dialog.SetAcceleratorTable(wx.AcceleratorTable([
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O'), wx.ID_NO),
+            # TODO: Cannot use a normal accelerator to toggle a checkbox.
+            #       Workaround.
+            #wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('R'), dialog._checkbox.Id),
+        ]))
+        
         while True:
             from crystal.util.wx_dialog import ShowModal
             choice = ShowModal(dialog)
@@ -410,12 +420,12 @@ def _prompt_for_project(
             
             if choice == wx.ID_YES:
                 try:
-                    return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
+                    return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
                 except SystemExit:
                     continue
             elif choice == wx.ID_NO:
                 try:
-                    return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
+                    return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
                 except SystemExit:
                     continue
             else:  # wx.ID_CANCEL

@@ -268,6 +268,9 @@ Release Notes ⋮
 
 ### main
 
+* First-time-run experience improvements
+    * Default to creating a new project rather than opening an existing one.
+
 * Critical fixes
     * Linux: Fix dialog that appears on app launch to be sized correctly.
     * Linux: Fix View button to open browser even if Crystal run from read-only volume.

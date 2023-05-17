@@ -46,9 +46,9 @@ class OpenOrCreateDialog:
         self.open_as_readonly = self.open_or_create_project_dialog.FindWindowByName(
             'cr-open-or-create-project__checkbox')
         assert isinstance(self.open_as_readonly, wx.CheckBox)
-        self.open_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_YES)
+        self.open_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_NO)
         assert isinstance(self.open_button, wx.Button)
-        self.create_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_NO)
+        self.create_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_YES)
         assert isinstance(self.create_button, wx.Button)
         return self
     
