@@ -309,7 +309,7 @@ class MainWindow:
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
         pane.SetSizer(pane_sizer)
         
-        version_label = wx.StaticText(pane, label=f'v{crystal_version}')
+        version_label = wx.StaticText(pane, label=f'Crystal v{crystal_version}')
         
         preferences_button = wx.Button(pane, label='Preferences...', name='cr-preferences-button')
         bind(preferences_button, wx.EVT_BUTTON, lambda event: PreferencesDialog(self.frame, self.project))
