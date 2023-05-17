@@ -30,6 +30,7 @@ class MainWindow:
         self.project = project
         
         frame = wx.Frame(None, title=project.title, name='cr-main-window')
+        frame.SetRepresentedFilename(project.path)
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         

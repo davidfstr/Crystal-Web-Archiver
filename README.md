@@ -270,6 +270,8 @@ Release Notes ⋮
 
 * First-time-run experience improvements
     * Default to creating a new project rather than opening an existing one.
+    * macOS: Add proxy icon to the project window, making it easier to navigate
+      to the project in the Finder.
 
 * Critical fixes
     * Linux: Fix dialog that appears on app launch to be sized correctly.
