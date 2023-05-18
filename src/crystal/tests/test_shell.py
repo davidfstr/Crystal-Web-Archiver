@@ -58,13 +58,16 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
 # ------------------------------------------------------------------------------
 # Utility: Assertions
 
+class _DummyTestCase(TestCase):
+    maxDiff = None
+
 # All of these assert methods provide a better error message upon failure
 # than a bare assert statement
-assertEqual = TestCase().assertEqual
-assertIn = TestCase().assertIn
+assertEqual = _DummyTestCase().assertEqual
+assertIn = _DummyTestCase().assertIn
 
 # Not a true assertion, but similar
-skipTest = TestCase().skipTest
+skipTest = _DummyTestCase().skipTest
 
 
 # ------------------------------------------------------------------------------
