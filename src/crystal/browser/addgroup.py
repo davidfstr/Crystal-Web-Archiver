@@ -27,7 +27,7 @@ class AddGroupDialog:
             initial_url = 'http://'
         
         dialog = self.dialog = wx.Dialog(
-            parent, title='Add Group',
+            parent, title='New Group',
             name='cr-add-group-dialog')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)

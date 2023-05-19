@@ -13,7 +13,7 @@ from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import os
-from typing import ContextManager, Iterator
+from typing import ContextManager, Iterator, List
 import webbrowser
 import wx
 
@@ -22,15 +22,22 @@ _WINDOW_INNER_PADDING = 10
 
 class MainWindow:
     project: Project
+    _accelerators: List[wx.AcceleratorEntry]
     frame: wx.Frame
     entity_tree: EntityTree
     task_tree: TaskTree
     
     def __init__(self, project: Project, progress_listener: OpenProjectProgressListener) -> None:
         self.project = project
+        self._accelerators = []
         
-        frame = wx.Frame(None, title=project.title, name='cr-main-window')
-        frame.SetRepresentedFilename(project.path)
+        raw_frame = wx.Frame(None, title=project.title, name='cr-main-window')
+        raw_frame.SetRepresentedFilename(project.path)
+        
+        # NOTE: Add all controls to a root wx.Panel rather than to the
+        #       raw wx.Frame directly so that tab traversal between child
+        #       components works correctly.
+        frame = wx.Panel(raw_frame)
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         
@@ -49,10 +56,21 @@ class MainWindow:
             proportion=0,
             flag=wx.EXPAND)
         
-        frame.Fit()
-        frame.Show(True)
+        # TODO: Make it possible to close the window with the Escape key.
+        # TODO: Also make it possible to close the window with Ctrl-W
+        #       once the associated menuitem has been created.
+        #self._accelerators.append(wx.AcceleratorEntry(
+        #    wx.ACCEL_NORMAL, wx.WXK_ESCAPE, wx.ID_CLOSE_FRAME))
         
-        self.frame = frame
+        # Finalize accelerators
+        raw_frame.SetAcceleratorTable(wx.AcceleratorTable(self._accelerators))
+        self._accelerators = []  # free
+        
+        frame.Fit()
+        raw_frame.Fit()
+        raw_frame.Show(True)
+        
+        self.frame = raw_frame
     
     @property
     def _readonly(self) -> bool:
@@ -92,31 +110,41 @@ class MainWindow:
     def _create_button_bar(self, parent: wx.Window):
         readonly = self._readonly  # cache
         
-        add_url_button = wx.Button(parent, label='Add URL', name='cr-add-url-button')
+        add_url_button = wx.Button(parent, label='New &Root URL...', name='cr-add-url-button')
         bind(add_url_button, wx.EVT_BUTTON, self._on_add_url)
         if readonly:
             add_url_button.Disable()
+        self._accelerators.append(wx.AcceleratorEntry(
+            wx.ACCEL_CTRL, ord('R'), add_url_button.Id))
         
-        add_group_button = wx.Button(parent, label='Add Group', name='cr-add-group-button')
+        add_group_button = wx.Button(parent, label='New &Group...', name='cr-add-group-button')
         bind(add_group_button, wx.EVT_BUTTON, self._on_add_group)
         if readonly:
             add_group_button.Disable()
+        self._accelerators.append(wx.AcceleratorEntry(
+            wx.ACCEL_CTRL, ord('G'), add_group_button.Id))
         
-        self._remove_entity_button = wx.Button(parent, label='Forget', name='cr-forget-button')
+        self._remove_entity_button = wx.Button(parent, label='&Forget', name='cr-forget-button')
         bind(self._remove_entity_button, wx.EVT_BUTTON, self._on_remove_entity)
         self._remove_entity_button.Disable()
+        self._accelerators.append(wx.AcceleratorEntry(
+            wx.ACCEL_CTRL, wx.WXK_BACK, self._remove_entity_button.Id))
         
-        self._download_button = wx.Button(parent, label='Download', name='cr-download-button')
+        self._download_button = wx.Button(parent, label='&Download', name='cr-download-button')
         bind(self._download_button, wx.EVT_BUTTON, self._on_download_entity)
         self._download_button.Disable()
+        self._accelerators.append(wx.AcceleratorEntry(
+            wx.ACCEL_CTRL, wx.WXK_RETURN, self._download_button.Id))
         
-        self._update_membership_button = wx.Button(parent, label='Update Membership', name='cr-update-membership-button')
+        self._update_membership_button = wx.Button(parent, label='Update &Membership', name='cr-update-membership-button')
         bind(self._update_membership_button, wx.EVT_BUTTON, self._on_update_group_membership)
         self._update_membership_button.Disable()
         
-        self._view_button = wx.Button(parent, label='View', name='cr-view-button')
+        self._view_button = wx.Button(parent, label='&View', name='cr-view-button')
         bind(self._view_button, wx.EVT_BUTTON, self._on_view_entity)
         self._view_button.Disable()
+        self._accelerators.append(wx.AcceleratorEntry(
+            wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('O'), self._view_button.Id))
         
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
         content_sizer.Add(add_url_button)
@@ -303,17 +331,20 @@ class MainWindow:
     
     # === Status Bar: Init ===
     
-    def _create_status_bar(self, parent: wx.Window) -> wx.Window:
+    def _create_status_bar(self, parent: wx.Window) -> wx.Sizer:
         readonly = self._readonly  # cache
         
-        pane = wx.Panel(parent)
+        pane = parent
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        pane.SetSizer(pane_sizer)
         
         version_label = wx.StaticText(pane, label=f'Crystal v{crystal_version}')
         
-        preferences_button = wx.Button(pane, label='Preferences...', name='cr-preferences-button')
+        # TODO: Cannot type Alt-P to press this on Windows for some reason
+        #       unless it is already focused. Investigate & fix.
+        preferences_button = wx.Button(pane, label='&Preferences...', name='cr-preferences-button')
         bind(preferences_button, wx.EVT_BUTTON, lambda event: PreferencesDialog(self.frame, self.project))
+        self._accelerators.append(wx.AcceleratorEntry(
+            wx.ACCEL_CTRL, ord(','), preferences_button.Id))
         
         if readonly:
             rwi_label = '🔒' if not is_windows() else 'Read only'
@@ -338,4 +369,4 @@ class MainWindow:
             flag=wx.CENTER|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         
-        return pane
+        return pane_sizer

@@ -21,7 +21,7 @@ class AddRootUrlDialog:
         if initial_url is None:
             initial_url = 'http://'
         
-        dialog = self.dialog = wx.Dialog(parent, title='Add Root URL', name='cr-add-url-dialog')
+        dialog = self.dialog = wx.Dialog(parent, title='New Root URL', name='cr-add-url-dialog')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
         bind(dialog, wx.EVT_BUTTON, self._on_button)
