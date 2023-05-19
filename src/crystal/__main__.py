@@ -243,7 +243,7 @@ def _main(args: List[str]) -> None:
                 self._keepalive_frame.Destroy()
     
     app = None  # type: Optional[wx.App]
-    from crystal.util.xthreading import set_foreground_thread
+    from crystal.util.xthreading import is_quitting, set_foreground_thread
     set_foreground_thread(threading.current_thread())
     try:
         app = MyApp(redirect=False)
@@ -275,6 +275,10 @@ def _main(args: List[str]) -> None:
             if last_project is not None:
                 last_project.close()
                 last_project = None
+            
+            # Quit?
+            if is_quitting():
+                break
             
             # Clear first-only launch arguments
             parsed_args.filepath = None

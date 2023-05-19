@@ -23,6 +23,24 @@ _PROFILE_FG_TASKS = True
 _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
 
 
+# ------------------------------------------------------------------------------
+# Quitting
+
+_is_quitting = False
+
+
+def is_quitting() -> bool:
+    return _is_quitting
+
+
+def set_is_quitting() -> None:
+    global _is_quitting
+    _is_quitting = True
+
+
+# ------------------------------------------------------------------------------
+# Access Foreground Thread
+
 _fg_thread = None  # type: Optional[threading.Thread]
 
 
@@ -50,6 +68,9 @@ def has_foreground_thread() -> bool:
     """
     return _fg_thread is not None
 
+
+# ------------------------------------------------------------------------------
+# Call on Foreground Thread
 
 def _create_profiled_callable(callable, *args):
     """
@@ -193,3 +214,6 @@ def bg_call_later(callable, daemon=False, *args):
 
 class NoForegroundThreadError(ValueError):
     pass
+
+
+# ------------------------------------------------------------------------------
