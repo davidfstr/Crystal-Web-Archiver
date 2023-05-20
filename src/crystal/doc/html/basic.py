@@ -23,7 +23,7 @@ def parse_html_and_links(
     dividers_and_urls = re.split(r'(?i)([\'"][^\'"]+\.s?html?[\'"])', html)
     
     dividers_and_links = []
-    links = []
+    links = []  # type: list[Link]
     for (i, old_item) in enumerate(dividers_and_urls):
         if i & 1 == 0:
             new_item = old_item

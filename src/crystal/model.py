@@ -44,6 +44,7 @@ from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
+    from crystal.server import ProjectServer
     from crystal.task import DownloadResourceTask, DownloadResourceGroupTask, Task
 
 
@@ -421,7 +422,7 @@ class Project:
     
     # === Server ===
     
-    def start_server(self, **server_kwargs) -> ProjectServer:
+    def start_server(self, **server_kwargs) -> 'ProjectServer':
         """
         Starts an HTTP server that serves pages from this project.
         
@@ -1404,7 +1405,7 @@ class ResourceRevision:
         from crystal.doc.xml import parse_xml_and_links
         
         # Extract links from HTML, if applicable
-        (doc, links) = (None, [])
+        (doc, links) = (None, [])  # type: tuple[Optional[Document], list[Link]]
         content_type_with_options = None  # type: Optional[str]
         if self.is_html and self.has_body:
             with self.open() as body:
@@ -1436,7 +1437,9 @@ class ResourceRevision:
         # Add pseudo-link for redirect, if applicable
         redirect_url = self.redirect_url
         if redirect_url is not None:
-            links.append(create_external_link(redirect_url, self._redirect_title, 'Redirect', True))
+            redirect_title = self._redirect_title
+            assert redirect_title is not None
+            links.append(create_external_link(redirect_url, redirect_title, 'Redirect', True))
         
         return (doc, links, content_type_with_options)
     

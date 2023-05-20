@@ -73,7 +73,7 @@ class Task:
         self.listeners = []  # type: List[object]
         
         self._did_yield_self = False            # used by leaf tasks
-        self._future = Future()                 # used by leaf tasks
+        self._future = Future()  # type: Future # used by leaf tasks
         # TODO: Consider merging the following two fields
         self._first_incomplete_child_index = 0  # used by SCHEDULING_STYLE_SEQUENTIAL
         self._next_child_index = 0              # used by SCHEDULING_STYLE_ROUND_ROBIN

@@ -18,7 +18,7 @@ def parse_css_and_links(
         body_bytes,
         protocol_encoding=declared_charset)
     
-    links = []
+    links = []  # type: list[Link]
     for rule in rules:
         if isinstance(rule, ast.QualifiedRule) or isinstance(rule, ast.AtRule):
             if rule.content is not None:  # has been observed as None in the wild sometimes

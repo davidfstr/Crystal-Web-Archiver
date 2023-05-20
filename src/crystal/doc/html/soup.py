@@ -31,7 +31,7 @@ PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
 def parse_html_and_links(
         html_bytes: bytes, 
         declared_charset: Optional[str]=None
-        ) -> 'Optional[tuple[HtmlDocument, list[HtmlLink]]]':
+        ) -> 'Optional[tuple[Document, list[Link]]]':
     try:
         html = BeautifulSoup(
             html_bytes,
