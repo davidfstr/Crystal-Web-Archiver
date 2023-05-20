@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from crystal import __version__ as crystal_version
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, WaitTimedOut
 from crystal.tests.util.server import served_project
+from crystal.tests.util.xos import skip_on_windows
 from crystal.util.xthreading import fg_call_and_wait
 from functools import wraps
 from io import StringIO, TextIOBase
@@ -65,22 +66,6 @@ class _DummyTestCase(TestCase):
 # than a bare assert statement
 assertEqual = _DummyTestCase().assertEqual
 assertIn = _DummyTestCase().assertIn
-
-# Not a true assertion, but similar
-skipTest = _DummyTestCase().skipTest
-
-
-# ------------------------------------------------------------------------------
-# Utility: Skip on Windows
-
-def skip_on_windows(func):
-    """Decorator for tests that should be skipped on Windows."""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if platform.system() == 'Windows':
-            skipTest('not supported on Windows')
-        func(*args, **kwargs)
-    return wrapper
 
 
 # ------------------------------------------------------------------------------
@@ -634,6 +619,11 @@ def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
     Context which starts "crystal --shell" upon enter
     and cleans up the associated process upon exit.
     """
+    if platform.system() == 'Windows':
+        # Windows doesn't provide stdout for graphical processes,
+        # which is needed by the current implementation
+        raise AssertionError('not supported on Windows')
+    
     python = sys.executable
     crystal = subprocess.Popen(
         [python, '-m', 'crystal', '--shell'],
@@ -652,7 +642,7 @@ def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
         (banner, _) = _read_until(crystal.stdout, '\n>>> ')
         yield (crystal, banner)
     finally:
-        crystal.kill()
+        crystal.kill()        
 
 
 def _py_eval(
