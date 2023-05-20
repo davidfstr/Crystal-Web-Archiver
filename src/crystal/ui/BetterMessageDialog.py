@@ -54,10 +54,10 @@ class BetterMessageDialog(wx.Dialog):
                 **(dict(name=f'{name}__checkbox') if name else dict()))
             if on_checkbox_clicked is not None:
                 bind(self._checkbox, wx.EVT_CHECKBOX, on_checkbox_clicked)
-        self_sizer.Add(
-            self._checkbox,
-            flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_LEFT,
-            border=_WINDOW_INNER_PADDING)
+            self_sizer.Add(
+                self._checkbox,
+                flag=wx.LEFT | wx.BOTTOM | wx.ALIGN_LEFT,
+                border=_WINDOW_INNER_PADDING)
         self_sizer.Add(
             self.CreateButtonSizer(style),
             flag=wx.BOTTOM | wx.ALIGN_RIGHT,
