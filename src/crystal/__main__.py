@@ -68,6 +68,13 @@ def _main(args: List[str]) -> None:
             os.path.join(log_dirpath, 'stderr.log'), 
             'w', encoding='utf-8', buffering=1)
     
+    # If CRYSTAL_FAULTHANDLER == True or running from source,
+    # enable automatic dumping of Python tracebacks if wx has a segmentation fault
+    if (os.environ.get('CRYSTAL_FAULTHANDLER', 'False') == 'True' or
+            getattr(sys, 'frozen', None) is None):
+        import faulthandler
+        faulthandler.enable()
+    
     # If running as Windows executable, also load .py files and adjacent
     # resources from the "lib" directory. Notably "tzinfo" data.
     if getattr(sys, 'frozen', None) == 'windows_exe':

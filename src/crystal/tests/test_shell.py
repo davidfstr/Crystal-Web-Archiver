@@ -637,7 +637,11 @@ def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        encoding='utf-8')
+        encoding='utf-8',
+        env={
+            **os.environ,
+            **{'CRYSTAL_FAULTHANDLER': 'True'}
+        })
     try:
         assert isinstance(crystal.stdout, TextIOBase)
         os.set_blocking(crystal.stdout.fileno(), False)
