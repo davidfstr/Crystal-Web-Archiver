@@ -1,6 +1,7 @@
 from crystal.tests import (
     test_menus,
     test_shell,
+    test_tasks,
     test_workflows,
 )
 from crystal.tests.util.downloads import delay_between_downloads_minimized
@@ -26,6 +27,10 @@ _TEST_FUNCS = [
     test_shell.test_shell_exits_with_expected_message,
     test_shell.test_can_read_project_with_shell,
     test_shell.test_can_write_project_with_shell,
+    
+    # test_tasks
+    test_tasks.test_when_download_resource_then_displays_estimated_time_remaining,
+    test_tasks.test_when_download_resource_group_members_then_displays_estimated_time_remaining,
     
     # test_workflows
     test_workflows.test_can_download_and_serve_a_static_site,

@@ -58,7 +58,7 @@ async def wait_for_download_to_start_and_finish(
             observed_titles.append(download_task_title)
         
         m = re.fullmatch(
-            r'^(?:Downloading(?: group)?|Finding members of group): (.*?) -- (?:(\d+) of (?:at least )?(\d+) item\(s\)|(.*))$',
+            r'^(?:Downloading(?: group)?|Finding members of group): (.*?) -- (?:(\d+) of (?:at least )?(\d+) item\(s\)(?: -- .+)?|(.*))$',
             download_task_title)
         if m is None:
             raise AssertionError(

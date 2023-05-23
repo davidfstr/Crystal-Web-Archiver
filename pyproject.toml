@@ -65,6 +65,7 @@ certifi = "*"
 overrides = "^3.1.0"
 tzlocal = "^4.2"
 lxml = "^4.9.1"
+tqdm = "^4.65.0"
 
 [tool.poetry.dev-dependencies]
 # NOTE: pytest ^7.0 (7.2.2) failed to install on any Windows with error:

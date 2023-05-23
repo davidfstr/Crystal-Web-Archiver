@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
 from crystal.util.xthreading import (
     bg_call_later, fg_call_and_wait, fg_call_later, NoForegroundThreadError
@@ -417,6 +418,7 @@ class DownloadResourceTask(Task):
             icon_name='tasktree_download_resource')
         self._abstract_resource = abstract_resource
         self._resource = resource = abstract_resource.resource
+        self._pbc = None  # type: Optional[ProgressBarCalculator]
         
         self._download_body_task = (
             None
@@ -525,6 +527,12 @@ class DownloadResourceTask(Task):
                     # or when a chain of embedded resources links to itself
                     continue
                 self.append_child(resource.create_download_task(needs_result=False))
+            
+            # Start computing estimated time remaining
+            self._pbc = ProgressBarCalculator(
+                initial=self.num_children_complete,
+                total=len(self.children),
+            )
         
         else:
             assert isinstance(task, (
@@ -533,8 +541,22 @@ class DownloadResourceTask(Task):
                 _AlreadyDownloadedPlaceholderTask
             ))
             task.dispose()
+            
+            if isinstance(task, DownloadResourceTask):
+                # Revise estimated time remaining
+                assert self._pbc is not None
+                self._pbc.update(1)
         
-        self.subtitle = '%s of %s item(s)' % (self.num_children_complete, len(self.children))
+        if self._pbc is None:
+            subtitle_suffix = ''
+        else:
+            subtitle_suffix = ' -- %s remaining' % self._pbc.remaining_str()
+        
+        self.subtitle = '%s of %s item(s)%s' % (
+            self.num_children_complete,
+            len(self.children),
+            subtitle_suffix,
+        )
         
         if self.num_children_complete == len(self.children):
             # Complete self._download_body_with_embedded_future,
@@ -575,6 +597,11 @@ class DownloadResourceTask(Task):
                 ancestors.append(cur_task._resource)
             cur_task = cur_task.parent
         return ancestors
+    
+    def finish(self) -> None:
+        if self._pbc is not None:
+            self._pbc.close()
+        super().finish()
 
 
 class ParseResourceRevisionLinks(Task):
@@ -715,10 +742,15 @@ class DownloadResourceGroupMembersTask(Task):
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         for member in group.members:
             self.append_child(member.create_download_task(needs_result=False))
+        self._pbc = ProgressBarCalculator(
+            initial=0,
+            total=len(self.children),
+        )
         self._update_subtitle()
     
     def group_did_add_member(self, group, member):
         self.append_child(member.create_download_task(needs_result=False))
+        self._pbc.total += 1
         self._update_subtitle()
     
     def group_did_finish_updating(self):
@@ -729,16 +761,26 @@ class DownloadResourceGroupMembersTask(Task):
     def child_task_did_complete(self, task):
         task.dispose()
         
+        self._pbc.update(1)  # self._pbc.n += 1
         self._update_subtitle()
         self._update_completed_status()
     
     def _update_subtitle(self):
         of_phrase = 'of at least' if not self._done_updating_group else 'of'
-        self.subtitle = '%s %s %s item(s)' % (self.num_children_complete, of_phrase, len(self.children))
+        self.subtitle = '%s %s %s item(s) -- %s remaining' % (
+            self.num_children_complete,
+            of_phrase,
+            len(self.children),
+            self._pbc.remaining_str(),
+        )
     
     def _update_completed_status(self):
         if self.num_children_complete == len(self.children) and self._done_updating_group:
             self.finish()
+    
+    def finish(self) -> None:
+        self._pbc.close()
+        super().finish()
 
 
 class DownloadResourceGroupTask(Task):
