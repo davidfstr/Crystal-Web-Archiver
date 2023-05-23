@@ -268,6 +268,21 @@ Release Notes ⋮
 
 ### main
 
+* First-time-run experience improvements
+    * Improve defaults
+        * New/Open Project Dialog: Default to creating a new project rather 
+          than opening an existing one.
+        * New Group Dialog: Expand "Preview Members" by default.
+    * Polish user interface
+        * Use consistent words to refer to common concepts
+            * {Create, Add} -> New
+            * {URL, Root URL} -> Root URL
+        * macOS: Add standard application menus
+        * macOS: Add proxy icon to the project window, making it easier to navigate
+          to the project in the Finder.
+        * Add app name to version label in lower-left corner of project window.
+    * Add keyboard shortcuts everywhere
+
 * Critical fixes
     * Linux: Fix dialog that appears on app launch to be sized correctly.
     * Linux: Fix View button to open browser even if Crystal run from read-only volume.

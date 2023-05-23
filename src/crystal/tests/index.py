@@ -1,4 +1,5 @@
 from crystal.tests import (
+    test_menus,
     test_shell,
     test_workflows,
 )
@@ -15,6 +16,11 @@ from unittest import SkipTest
 
 # TODO: Avoid the need to manually enumerate all test functions individually
 _TEST_FUNCS = [
+    # test_menus
+    test_menus.test_can_close_project_with_menuitem,
+    test_menus.test_can_quit_with_menuitem,
+    test_menus.test_can_open_preferences_with_menuitem,
+    
     # test_shell
     test_shell.test_can_launch_with_shell,
     test_shell.test_shell_exits_with_expected_message,

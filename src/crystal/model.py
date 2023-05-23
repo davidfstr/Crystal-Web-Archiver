@@ -75,6 +75,11 @@ class Project:
         if progress_listener is None:
             progress_listener = DummyOpenProjectProgressListener()
         
+        # Remove any trailing slash from the path
+        (head, tail) = os.path.split(path)
+        if len(tail) == 0:
+            path = head  # reinterpret
+        
         self.path = path
         self.listeners = []  # type: List[object]
         

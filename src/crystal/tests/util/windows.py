@@ -46,9 +46,9 @@ class OpenOrCreateDialog:
         self.open_as_readonly = self.open_or_create_project_dialog.FindWindowByName(
             'cr-open-or-create-project__checkbox')
         assert isinstance(self.open_as_readonly, wx.CheckBox)
-        self.open_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_YES)
+        self.open_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_NO)
         assert isinstance(self.open_button, wx.Button)
-        self.create_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_NO)
+        self.create_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_YES)
         assert isinstance(self.create_button, wx.Button)
         return self
     
@@ -57,7 +57,8 @@ class OpenOrCreateDialog:
     
     @asynccontextmanager
     async def create(self, 
-            project_dirpath: Optional[str]=None
+            project_dirpath: Optional[str]=None,
+            *, autoclose: bool=True,
             ) -> AsyncIterator[Tuple[MainWindow, str]]:
         if project_dirpath is None:
             with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
@@ -75,7 +76,8 @@ class OpenOrCreateDialog:
             exc_info_while_close = sys.exc_info()
             raise
         finally:
-            await mw.close(exc_info_while_close)
+            if autoclose:
+                await mw.close(exc_info_while_close)
     
     async def create_and_leave_open(self, project_dirpath: str) -> MainWindow:
         with file_dialog_returning(project_dirpath):
@@ -196,6 +198,14 @@ class MainWindow:
             # (continue)
         
         self.main_window.Close()
+        await self.wait_for_close()
+    
+    async def close_with_menuitem(self) -> None:
+        close_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_CLOSE)
+        wx.PostEvent(close_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, close_menuitem.Id))
+        await self.wait_for_close()
+    
+    async def wait_for_close(self) -> None:
         await wait_for(lambda: self.main_window.IsBeingDeleted)
         await wait_for(lambda: not self.main_window.IsShown)
         await wait_for(not_condition(window_condition('cr-main-window')))
@@ -210,6 +220,17 @@ class MainWindow:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, autoclose=False):
                 pass
             await self._connect()  # reconnect self
+    
+    async def open_preferences_with_menuitem(self) -> PreferencesDialog:
+        prefs_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_PREFERENCES)
+        wx.PostEvent(self.main_window, wx.CommandEvent(wx.EVT_MENU.typeId, prefs_menuitem.Id))
+        return await PreferencesDialog.wait_for()
+    
+    async def quit_with_menuitem(self) -> None:
+        quit_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_EXIT)
+        wx.PostEvent(self.main_window, wx.CommandEvent(wx.EVT_MENU.typeId, quit_menuitem.Id))
+        
+        await self.wait_for_close()
 
 
 class AddUrlDialog:

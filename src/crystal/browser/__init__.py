@@ -9,11 +9,13 @@ from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.progress import OpenProjectProgressListener
 import crystal.server
 from crystal.task import RootTask
+from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_linux, is_mac_os, is_windows
+from crystal.util.xthreading import set_is_quitting
 import os
-from typing import ContextManager, Iterator
+from typing import ContextManager, Iterator, List
 import webbrowser
 import wx
 
@@ -29,7 +31,15 @@ class MainWindow:
     def __init__(self, project: Project, progress_listener: OpenProjectProgressListener) -> None:
         self.project = project
         
-        frame = wx.Frame(None, title=project.title, name='cr-main-window')
+        self._create_actions()
+        
+        raw_frame = wx.Frame(None, title=project.title, name='cr-main-window')
+        raw_frame.SetRepresentedFilename(project.path)
+        
+        # NOTE: Add all controls to a root wx.Panel rather than to the
+        #       raw wx.Frame directly so that tab traversal between child
+        #       components works correctly.
+        frame = wx.Panel(raw_frame)
         frame_sizer = wx.BoxSizer(wx.VERTICAL)
         frame.SetSizer(frame_sizer)
         
@@ -48,14 +58,152 @@ class MainWindow:
             proportion=0,
             flag=wx.EXPAND)
         
-        frame.Fit()
-        frame.Show(True)
+        raw_frame.MenuBar = self._create_menu_bar(raw_frame)
         
-        self.frame = frame
+        bind(raw_frame, wx.EVT_CLOSE, self._on_close_frame)
+        
+        frame.Fit()
+        raw_frame.Fit()
+        raw_frame.Show(True)
+        
+        self.frame = raw_frame
     
     @property
     def _readonly(self) -> bool:
         return self.project.readonly
+    
+    # === Actions ===
+    
+    def _create_actions(self) -> None:
+        # File
+        self._new_project_action = Action(
+            wx.ID_NEW,
+            '&New Project...',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N')),
+            # TODO: Support multiple open projects
+            action_func=None,
+            enabled=False)
+        self._open_project_action = Action(
+            wx.ID_OPEN,
+            '&Open Project...',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O')),
+            # TODO: Support multiple open projects
+            action_func=None,
+            enabled=False)
+        self._close_project_action = Action(
+            wx.ID_CLOSE,
+            '',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W')),
+            action_func=self._on_close_project,
+            enabled=True)
+        self._save_project_action = Action(
+            wx.ID_SAVE,
+            '',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('S')),
+            # TODO: Support untitled projects (that require an initial save)
+            action_func=None,
+            enabled=False)
+        self._quit_action = Action(
+            wx.ID_EXIT,
+            '',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('Q')),
+            # NOTE: Action is bound to self._on_quit later manually
+            action_func=None,
+            enabled=True)
+        
+        # Edit
+        self._preferences_action = Action(
+            wx.ID_PREFERENCES,
+            '',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord(',')),
+            # NOTE: Action is bound to self._on_preferences later manually
+            action_func=None,
+            enabled=True,
+            button_label='&Preferences...')
+        
+        # Entity
+        self._new_root_url_action = Action(wx.ID_ANY,
+            'New &Root URL...',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('R')),
+            self._on_add_url,
+            enabled=(not self._readonly))
+        self._new_group_action = Action(wx.ID_ANY,
+            'New &Group...',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('G')),
+            self._on_add_group,
+            enabled=(not self._readonly))
+        self._forget_action = Action(wx.ID_ANY,
+            '&Forget',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_BACK),
+            self._on_remove_entity,
+            enabled=False)
+        self._download_action = Action(wx.ID_ANY,
+            '&Download',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_RETURN),
+            self._on_download_entity,
+            enabled=False)
+        self._update_membership_action = Action(wx.ID_ANY,
+            'Update &Membership',
+            accel=None,
+            action_func=self._on_update_group_membership,
+            enabled=False)
+        self._view_action = Action(wx.ID_ANY,
+            '&View',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('O')),
+            self._on_view_entity,
+            enabled=False)
+        
+        # HACK: Gather all actions indirectly by inspecting fields
+        self._actions = [a for a in self.__dict__.values() if isinstance(a, Action)]
+    
+    # === Menubar ===
+    
+    def _create_menu_bar(self, raw_frame: wx.Frame) -> wx.MenuBar:
+        file_menu = wx.Menu()
+        self._new_project_action.append_menuitem_to(file_menu)
+        self._open_project_action.append_menuitem_to(file_menu)
+        file_menu.AppendSeparator()
+        self._close_project_action.append_menuitem_to(file_menu)
+        self._save_project_action.append_menuitem_to(file_menu)
+        # Append Quit menuitem
+        if True:
+            self._quit_action.append_menuitem_to(file_menu)
+            # NOTE: Can only intercept wx.EVT_MENU for wx.ID_EXIT on an wx.Frame
+            #       on macOS. In particular cannot intercept on the File wx.Menu.
+            bind(raw_frame, wx.EVT_MENU, self._on_quit)
+        
+        edit_menu = wx.Menu()
+        edit_menu.Append(wx.ID_UNDO, '').Enabled = False
+        edit_menu.Append(wx.ID_REDO, '').Enabled = False
+        edit_menu.AppendSeparator()
+        edit_menu.Append(wx.ID_CUT, '').Enabled = False
+        edit_menu.Append(wx.ID_COPY, '').Enabled = False
+        edit_menu.Append(wx.ID_PASTE, '').Enabled = False
+        # Append Preferences menuitem
+        if True:
+            if not is_mac_os():
+                edit_menu.AppendSeparator()
+            # NOTE: On macOS the Preferences menuitem will actually be positioned
+            #       in the [Application Name] menu rather than the Edit menu.
+            self._preferences_action.append_menuitem_to(edit_menu)
+            # NOTE: Can only intercept wx.EVT_MENU for wx.ID_PREFERENCES on an wx.Frame
+            #       on macOS. In particular cannot intercept on the Edit wx.Menu.
+            bind(raw_frame, wx.EVT_MENU, self._on_preferences)
+        
+        entity_menu = wx.Menu()
+        self._new_root_url_action.append_menuitem_to(entity_menu)
+        self._new_group_action.append_menuitem_to(entity_menu)
+        self._forget_action.append_menuitem_to(entity_menu)
+        entity_menu.AppendSeparator()
+        self._download_action.append_menuitem_to(entity_menu)
+        self._update_membership_action.append_menuitem_to(entity_menu)
+        self._view_action.append_menuitem_to(entity_menu)
+        
+        menubar = wx.MenuBar()
+        menubar.Append(file_menu, 'File')
+        menubar.Append(edit_menu, 'Edit')
+        menubar.Append(entity_menu, 'Entity')
+        return menubar
     
     # === Entity Pane: Init ===
     
@@ -91,45 +239,32 @@ class MainWindow:
     def _create_button_bar(self, parent: wx.Window):
         readonly = self._readonly  # cache
         
-        add_url_button = wx.Button(parent, label='Add URL', name='cr-add-url-button')
-        bind(add_url_button, wx.EVT_BUTTON, self._on_add_url)
-        if readonly:
-            add_url_button.Disable()
+        add_url_button = self._new_root_url_action.create_button(parent, name='cr-add-url-button')
         
-        add_group_button = wx.Button(parent, label='Add Group', name='cr-add-group-button')
-        bind(add_group_button, wx.EVT_BUTTON, self._on_add_group)
-        if readonly:
-            add_group_button.Disable()
+        add_group_button = self._new_group_action.create_button(parent, name='cr-add-group-button')
         
-        self._remove_entity_button = wx.Button(parent, label='Forget', name='cr-forget-button')
-        bind(self._remove_entity_button, wx.EVT_BUTTON, self._on_remove_entity)
-        self._remove_entity_button.Disable()
+        remove_entity_button = self._forget_action.create_button(parent, name='cr-forget-button')
         
-        self._download_button = wx.Button(parent, label='Download', name='cr-download-button')
-        bind(self._download_button, wx.EVT_BUTTON, self._on_download_entity)
-        self._download_button.Disable()
+        download_button = self._download_action.create_button(parent, name='cr-download-button')
         
-        self._update_membership_button = wx.Button(parent, label='Update Membership', name='cr-update-membership-button')
-        bind(self._update_membership_button, wx.EVT_BUTTON, self._on_update_group_membership)
-        self._update_membership_button.Disable()
+        update_membership_button = self._update_membership_action.create_button(
+            parent, name='cr-update-membership-button')
         
-        self._view_button = wx.Button(parent, label='View', name='cr-view-button')
-        bind(self._view_button, wx.EVT_BUTTON, self._on_view_entity)
-        self._view_button.Disable()
+        view_button = self._view_action.create_button(parent, name='cr-view-button')
         
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
         content_sizer.Add(add_url_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
         content_sizer.Add(add_group_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(self._remove_entity_button)
+        content_sizer.Add(remove_entity_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING * 2)
         content_sizer.AddStretchSpacer()
-        content_sizer.Add(self._download_button)
+        content_sizer.Add(download_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(self._update_membership_button)
+        content_sizer.Add(update_membership_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(self._view_button)
+        content_sizer.Add(view_button)
         return content_sizer
     
     # === Entity Pane: Properties ===
@@ -158,9 +293,29 @@ class MainWindow:
         else:
             return None
     
+    # === File Menu: Events ===
+    
+    def _on_close_project(self, event: wx.CommandEvent) -> None:
+        self.frame.Close()
+    
+    def _on_quit(self, event: wx.CommandEvent) -> None:
+        if event.Id == wx.ID_EXIT:
+            set_is_quitting()
+            self.frame.Close()
+        else:
+            event.Skip()
+    
+    def _on_close_frame(self, event: wx.CloseEvent) -> None:
+        # Dispose actions early so that they don't try to interact with
+        # wx.Objects in the frame while the frame is being deleted
+        for a in self._actions:
+            a.dispose()
+        
+        event.Skip()  # continue dispose of frame
+    
     # === Entity Pane: Events ===
     
-    def _on_add_url(self, event):
+    def _on_add_url(self, event: wx.CommandEvent) -> None:
         AddRootUrlDialog(
             self.frame, self._on_add_url_dialog_ok,
             initial_url=self._selection_initial_url)
@@ -260,16 +415,16 @@ class MainWindow:
     def _on_selected_entity_changed(self, event):
         selected_entity = self.entity_tree.selected_entity  # cache
         readonly = self._readonly  # cache
-        self._remove_entity_button.Enable(
+        self._forget_action.enabled = (
             (not readonly) and
             type(selected_entity) in (ResourceGroup, RootResource))
-        self._download_button.Enable(
+        self._download_action.enabled = (
             (not readonly) and
             selected_entity is not None)
-        self._update_membership_button.Enable(
+        self._update_membership_action.enabled = (
             (not readonly) and
             type(selected_entity) is ResourceGroup)
-        self._view_button.Enable(
+        self._view_action.enabled = (
             type(selected_entity) in (Resource, RootResource))
     
     # === Task Pane: Init ===
@@ -302,17 +457,16 @@ class MainWindow:
     
     # === Status Bar: Init ===
     
-    def _create_status_bar(self, parent: wx.Window) -> wx.Window:
+    def _create_status_bar(self, parent: wx.Window) -> wx.Sizer:
         readonly = self._readonly  # cache
         
-        pane = wx.Panel(parent)
+        pane = parent
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        pane.SetSizer(pane_sizer)
         
-        version_label = wx.StaticText(pane, label=f'v{crystal_version}')
+        version_label = wx.StaticText(pane, label=f'Crystal v{crystal_version}')
         
-        preferences_button = wx.Button(pane, label='Preferences...', name='cr-preferences-button')
-        bind(preferences_button, wx.EVT_BUTTON, lambda event: PreferencesDialog(self.frame, self.project))
+        preferences_button = self._preferences_action.create_button(pane, name='cr-preferences-button')
+        bind(preferences_button, wx.EVT_BUTTON, self._on_preferences)
         
         if readonly:
             rwi_label = '🔒' if not is_windows() else 'Read only'
@@ -337,4 +491,12 @@ class MainWindow:
             flag=wx.CENTER|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         
-        return pane
+        return pane_sizer
+    
+    # === Status Bar: Events ===
+    
+    def _on_preferences(self, event: wx.CommandEvent) -> None:
+        if event.Id == wx.ID_PREFERENCES or isinstance(event.EventObject, wx.Button):
+            PreferencesDialog(self.frame, self.project)
+        else:
+            event.Skip()

@@ -27,17 +27,17 @@ class AddGroupDialog:
             initial_url = 'http://'
         
         dialog = self.dialog = wx.Dialog(
-            parent, title='Add Group',
+            parent, title='New Group',
             name='cr-add-group-dialog')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
         bind(dialog, wx.EVT_BUTTON, self._on_button)
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         
-        # Mac: Requires wx 2.9 to appear in native look & feel
         preview_box = wx.CollapsiblePane(
             dialog, label='Preview Members',
             name='cr-add-group-dialog__preview-members')
+        preview_box.Expand()
         preview_box_root = preview_box.GetPane()
         preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
         preview_box_root.SetSizer(preview_box_root_sizer)
