@@ -750,6 +750,8 @@ class ClusterNode(Node):
 
 
 class ResourceGroupNode(Node):
+    _MAX_VISIBLE_CHILDREN = 100
+    
     def __init__(self, resource_group):
         self.resource_group = resource_group
         super().__init__()
@@ -779,16 +781,31 @@ class ResourceGroupNode(Node):
     # === Update ===
     
     def update_children(self) -> None:
+        members = self.resource_group.members  # cache
+        
+        children = self.children  # cache
+        if len(children) > self._MAX_VISIBLE_CHILDREN:
+            more_placeholder_node = children[-1]
+            assert isinstance(more_placeholder_node, MorePlaceholderNode)
+            more_placeholder_node.more_count = len(members) - self._MAX_VISIBLE_CHILDREN
+            return
+        
         children_rrs = []  # type: List[Node]
         children_rs = []  # type: List[Node]
-        project = self.resource_group.project
-        for r in self.resource_group.members:
+        project = self.resource_group.project  # cache
+        for r in members[:self._MAX_VISIBLE_CHILDREN]:
             rr = project.get_root_resource(r)
             if rr is None:
                 children_rs.append(NormalResourceNode(r))
             else:
                 children_rrs.append(RootResourceNode(rr))
-        self.children = children_rrs + children_rs
+        if len(members) > self._MAX_VISIBLE_CHILDREN:
+            children_extra = [
+                MorePlaceholderNode(len(members) - self._MAX_VISIBLE_CHILDREN),
+            ]  # type: List[Node]
+        else:
+            children_extra = []
+        self.children = children_rrs + children_rs + children_extra
     
     # === Comparison ===
     
@@ -837,6 +854,40 @@ class GroupedLinkedResourcesNode(Node):
             self.children == other.children)
     def __hash__(self):
         return hash(self._children_tuple)
+
+
+class MorePlaceholderNode(Node):
+    def __init__(self, more_count: int) -> None:
+        super().__init__()
+        self._more_count = -1
+        
+        self.view = NodeView()
+        #self.view.title = ... (set below)
+        self.view.icon_set = (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_more']),
+        )
+        self.view.expandable = False
+        
+        self.more_count = more_count  # sets self.view.title too
+    
+    def _get_more_count(self) -> int:
+        return self._more_count
+    def _set_more_count(self, more_count: int) -> None:
+        if more_count == self._more_count:
+            return
+        self._more_count = more_count
+        self.view.title = '%d more' % more_count
+    more_count = property(_get_more_count, _set_more_count)
+    
+    # === Comparison ===
+    
+    def __eq__(self, other) -> bool:
+        return (
+            isinstance(other, MorePlaceholderNode) and 
+            self._more_count == other._more_count
+        )
+    def __hash__(self) -> int:
+        return self._more_count
 
 
 # ------------------------------------------------------------------------------

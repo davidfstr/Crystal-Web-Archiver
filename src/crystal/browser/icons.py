@@ -16,6 +16,7 @@ def TREE_NODE_ICONS() -> Dict[str, wx.Bitmap]:
             'entitytree_cluster_embedded',
             'entitytree_cluster_offsite',
             'entitytree_loading',
+            'entitytree_more',
             'entitytree_resource',
             'entitytree_root_resource',
             'entitytree_warning',
