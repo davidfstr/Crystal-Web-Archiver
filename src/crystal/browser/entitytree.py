@@ -760,7 +760,9 @@ class ResourceGroupNode(Node):
         self.view.title = self.calculate_title()
         self.view.expandable = True
         
-        self.update_children()
+        # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
+        self.children = [_LoadingNode()]
+        assert not self._children_loaded
     
     # === Properties ===
     
@@ -780,7 +782,18 @@ class ResourceGroupNode(Node):
     
     # === Update ===
     
-    def update_children(self) -> None:
+    @property
+    def _children_loaded(self) -> bool:
+        if len(self.children) >= 1 and isinstance(self.children[0], _LoadingNode):
+            return False
+        else:
+            return True
+    
+    def update_children(self, force_populate: bool=False) -> None:
+        if not force_populate:
+            if not self._children_loaded:
+                return
+        
         members = self.resource_group.members  # cache
         
         children = self.children  # cache
@@ -807,12 +820,19 @@ class ResourceGroupNode(Node):
             children_extra = []
         self.children = children_rrs + children_rs + children_extra
     
+    # === Events ===
+    
+    def on_expanded(self, event) -> None:
+        # If this is the first expansion attempt, populate the children
+        if not self._children_loaded:
+            self.update_children(force_populate=True)
+    
     # === Comparison ===
     
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return isinstance(other, ResourceGroupNode) and (
             self.resource_group == other.resource_group)
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.resource_group)
 
 
