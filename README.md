@@ -364,7 +364,8 @@ Release Notes ⋮
         * Avoid querying the database for revisions of an URL if it is already
           known that there are no revisions because of other information
           cached in memory
-        * Precompile node selectors used to parse links from HTML 
+        * Precompile node selectors used to parse links from HTML
+        * Maximum download speed increased from 1 item/sec to 2 items/sec
 
 * Parsing improvements
     * Links are parsed in about 18% as much time as before.
