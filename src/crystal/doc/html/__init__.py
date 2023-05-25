@@ -6,12 +6,22 @@ from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
 from io import BytesIO
-from typing import Optional, Union
+from typing import Literal, Optional, Tuple, Union
+
+
+# HTML parsing library to use. See comparison between options at: 
+# https://beautiful-soup-4.readthedocs.io/en/latest/#installing-a-parser
+HtmlParserType = Literal['lxml', 'html_parser']
+
+HTML_PARSER_TYPE_CHOICES = (
+    HtmlParserType.__args__  # type: ignore[attr-defined]
+)  # type: Tuple[HtmlParserType, ...]
 
 
 def parse_html_and_links(
         html_bytes: Union[bytes, BytesIO], 
-        declared_charset: Optional[str]=None
+        declared_charset: Optional[str],
+        parser_type: HtmlParserType,
         ) -> Optional[tuple[Document, list[Link]]]:
     """
     Parses the specified HTML bytestring, returning a 2-tuple containing
@@ -43,4 +53,5 @@ def parse_html_and_links(
     if (b'frameset' in html_bytes) or (b'FRAMESET' in html_bytes):
         return basic.parse_html_and_links(html_bytes, declared_charset)
     else:
-        return soup.parse_html_and_links(html_bytes, declared_charset)
+        return soup.parse_html_and_links(
+            html_bytes, declared_charset, parser_type)

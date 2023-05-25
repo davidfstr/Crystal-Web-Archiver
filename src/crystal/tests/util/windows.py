@@ -360,6 +360,7 @@ class AddGroupDialog:
 
 
 class PreferencesDialog:
+    html_parser_field: wx.Choice
     stale_before_checkbox: wx.CheckBox
     stale_before_date_picker: 'wx.adv.DatePickerCtrl'
     cookie_field: wx.ComboBox
@@ -371,11 +372,17 @@ class PreferencesDialog:
         
         self = PreferencesDialog(ready=True)
         preferences_dialog = await wait_for(window_condition('cr-preferences-dialog'))  # type: wx.Window
-        self.stale_before_checkbox = preferences_dialog.FindWindowByName('cr-preferences-dialog__stale-before-checkbox')
+        self.html_parser_field = preferences_dialog.FindWindowByName(
+            'cr-preferences-dialog__html-parser-field')
+        assert isinstance(self.html_parser_field, wx.Choice)
+        self.stale_before_checkbox = preferences_dialog.FindWindowByName(
+            'cr-preferences-dialog__stale-before-checkbox')
         assert isinstance(self.stale_before_checkbox, wx.CheckBox)
-        self.stale_before_date_picker = preferences_dialog.FindWindowByName('cr-preferences-dialog__stale-before-date-picker')
+        self.stale_before_date_picker = preferences_dialog.FindWindowByName(
+            'cr-preferences-dialog__stale-before-date-picker')
         assert isinstance(self.stale_before_date_picker, wx.adv.DatePickerCtrl)
-        self.cookie_field = preferences_dialog.FindWindowByName('cr-preferences-dialog__cookie-field')
+        self.cookie_field = preferences_dialog.FindWindowByName(
+            'cr-preferences-dialog__cookie-field')
         assert isinstance(self.cookie_field, wx.ComboBox)
         self.ok_button = preferences_dialog.FindWindowById(wx.ID_OK)
         assert isinstance(self.ok_button, wx.Button)

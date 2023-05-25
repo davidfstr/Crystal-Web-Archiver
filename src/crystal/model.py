@@ -54,6 +54,7 @@ from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
+    from crystal.doc.html import HtmlParserType
     from crystal.server import ProjectServer
     from crystal.task import (
         DownloadResourceTask, DownloadResourceBodyTask,
@@ -170,6 +171,9 @@ class Project:
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
                 c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
                 c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
+                
+                # Default HTML parser for new projects, for Crystal >1.5.0
+                self.html_parser_type = 'lxml'
             
             # Load from existing project
             if True:
@@ -349,6 +353,8 @@ class Project:
         return self._properties.get(name, default)
     def _set_property(self, name: str, value: str) -> None:
         if not self._loading:
+            if self._properties.get(name) == value:
+                return
             if self.readonly:
                 raise ProjectReadOnlyError()
             c = self._db.cursor()
@@ -378,6 +384,25 @@ class Project:
             return url[len(default_url_prefix):]
         else:
             return url
+    
+    def _get_html_parser_type(self) -> 'HtmlParserType':
+        value = self._get_property(
+            'html_parser_type',
+            # Default HTML parser for classic projects from Crystal <=1.5.0
+            'html_parser')
+        from crystal.doc.html import HTML_PARSER_TYPE_CHOICES
+        if value not in HTML_PARSER_TYPE_CHOICES:
+            raise ValueError(f'Project requests HTML parser of unknown type: {value}')
+        return cast('HtmlParserType', value)
+    def _set_html_parser_type(self, value: 'HtmlParserType') -> None:
+        from crystal.doc.html import HTML_PARSER_TYPE_CHOICES
+        if value not in HTML_PARSER_TYPE_CHOICES:
+            raise ValueError(f'Unknown type of HTML parser: {value}')
+        self._set_property('html_parser_type', value)
+    html_parser_type = property(_get_html_parser_type, _set_html_parser_type, doc=
+        """
+        The type of parser used for parsing links from HTML documents.
+        """)
     
     def _get_request_cookie(self) -> Optional[str]:
         return self._request_cookie
@@ -1969,7 +1994,8 @@ class ResourceRevision:
         content_type_with_options = None  # type: Optional[str]
         if self.is_html and self.has_body:
             with self.open() as body:
-                doc_and_links = parse_html_and_links(body, self.declared_charset)
+                doc_and_links = parse_html_and_links(
+                    body, self.declared_charset, self.project.html_parser_type)
             if doc_and_links is not None:
                 (doc, links) = doc_and_links
                 content_type_with_options = 'text/html; charset=utf-8'

@@ -3,10 +3,11 @@ from crystal.util.wx_date_picker import fix_date_picker_size
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import datetime
 import wx
-from typing import Optional, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 from tzlocal import get_localzone
 
 if TYPE_CHECKING:
+    from crystal.doc.html import HtmlParserType
     from crystal.model import Project
 
 
@@ -16,6 +17,19 @@ _FORM_ROW_SPACING = 10
 
 
 class PreferencesDialog:
+    _LXML_ITEM = \
+        'Fastest - lxml'
+    _HTML_PARSER_BS4_ITEM = \
+        'Classic - html.parser (bs4)'
+    
+    _HTML_PARSER_TYPE_FOR_ITEM = {
+        _LXML_ITEM: 'lxml',
+        _HTML_PARSER_BS4_ITEM: 'html_parser',
+    }  # type: Dict[str, HtmlParserType]
+    _ITEM_FOR_HTML_PARSER_TYPE = {
+        v: k for (k, v) in _HTML_PARSER_TYPE_FOR_ITEM.items()
+    }
+    
     # === Init ===
     
     def __init__(self, parent: wx.Window, project: 'Project') -> None:
@@ -31,9 +45,14 @@ class PreferencesDialog:
         bind(dialog, wx.EVT_BUTTON, self._on_button)
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         
+        project_box_sizer = wx.StaticBoxSizer(wx.VERTICAL, dialog, label='Project')
+        project_box_sizer.Add(self._create_project_fields(project_box_sizer.GetStaticBox()))
+        dialog_sizer.Add(project_box_sizer, flag=wx.EXPAND|wx.ALL,
+            border=_WINDOW_INNER_PADDING)
+        
         session_box_sizer = wx.StaticBoxSizer(wx.VERTICAL, dialog, label='Session')
         session_box_sizer.Add(self._create_session_fields(session_box_sizer.GetStaticBox()))
-        dialog_sizer.Add(session_box_sizer, flag=wx.EXPAND|wx.ALL,
+        dialog_sizer.Add(session_box_sizer, flag=wx.EXPAND|(wx.ALL & ~wx.TOP),
             border=_WINDOW_INNER_PADDING)
         
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
@@ -42,24 +61,57 @@ class PreferencesDialog:
         dialog.Show(True)
         dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
     
+    def _create_project_fields(self, parent: wx.Window) -> wx.Sizer:
+        fields_sizer = wx.GridBagSizer(
+            vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
+        
+        fields_sizer.Add(
+            wx.StaticText(parent, label='These preferences are saved with the project.'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
+            border=5 if is_windows() else 0)
+        
+        fields_sizer.Add(
+            wx.StaticText(parent, label='HTML Parser:'),
+            flag=wx.EXPAND, pos=wx.GBPosition(1, 0))
+        self.html_parser_field = wx.Choice(
+            parent,
+            name='cr-preferences-dialog__html-parser-field')
+        self.html_parser_field.SetItems([
+            self._LXML_ITEM,
+            self._HTML_PARSER_BS4_ITEM,
+        ])
+        self._old_html_parser_type = self._project.html_parser_type
+        self.html_parser_field.Selection = self.html_parser_field.Items.index(
+            self._ITEM_FOR_HTML_PARSER_TYPE[self._old_html_parser_type])
+        fields_sizer.Add(
+            self.html_parser_field,
+            flag=wx.EXPAND, pos=wx.GBPosition(1, 1))
+        
+        return _wrap_static_box_sizer_child(fields_sizer)
+    
     def _create_session_fields(self, parent: wx.Window) -> wx.Sizer:
         fields_sizer = wx.GridBagSizer(
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         
         fields_sizer.Add(
-            wx.StaticText(parent, label='For redownloading URLs:'),
+            wx.StaticText(parent, label='These preferences reset when Crystal quits.'),
             flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
             border=5 if is_windows() else 0)
-        fields_sizer.Add(
-            self._create_stale_before_field(parent),
-            flag=wx.EXPAND, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2))
         
         fields_sizer.Add(
-            wx.StaticText(parent, label='For sites requiring login:'),
+            wx.StaticText(parent, label='To redownload URLs, provide:'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2),
+            border=8)
+        fields_sizer.Add(
+            self._create_stale_before_field(parent),
             flag=wx.EXPAND, pos=wx.GBPosition(2, 0), span=wx.GBSpan(1, 2))
+        
+        fields_sizer.Add(
+            wx.StaticText(parent, label='To download a site requiring login, provide:'),
+            flag=wx.EXPAND, pos=wx.GBPosition(3, 0), span=wx.GBSpan(1, 2))
         fields_sizer.Add(
             wx.StaticText(parent, label='Cookie:'),
-            flag=wx.EXPAND, pos=wx.GBPosition(3, 0))
+            flag=wx.EXPAND, pos=wx.GBPosition(4, 0))
         self.cookie_field = wx.ComboBox(
             parent,
             name='cr-preferences-dialog__cookie-field')
@@ -68,16 +120,9 @@ class PreferencesDialog:
         self.cookie_field.Value = self._project.request_cookie or ''
         fields_sizer.Add(
             self.cookie_field,
-            flag=wx.EXPAND, pos=wx.GBPosition(3, 1))
+            flag=wx.EXPAND, pos=wx.GBPosition(4, 1))
         
-        if is_linux():
-            # Add padding around contents of wx.StaticBoxSizer because
-            # wxGTK does not do this automatically, unlike macOS and Windows
-            container_sizer = wx.BoxSizer(wx.VERTICAL)
-            container_sizer.Add(fields_sizer, flag=wx.ALL, border=8)
-            return container_sizer
-        else:
-            return fields_sizer
+        return _wrap_static_box_sizer_child(fields_sizer)
     
     def _create_stale_before_field(self, parent: wx.Window) -> wx.Sizer:
         import wx.adv  # import late because does print spurious messages on macOS
@@ -125,6 +170,14 @@ class PreferencesDialog:
         self._on_cancel(event)
     
     def _on_ok(self, event: wx.CommandEvent) -> None:
+        # Save project fields
+        new_html_parser_type = \
+            self._HTML_PARSER_TYPE_FOR_ITEM[
+                self.html_parser_field.Items[self.html_parser_field.Selection]]
+        if new_html_parser_type != self._old_html_parser_type:
+            self._project.html_parser_type = new_html_parser_type
+        
+        # Save session fields
         self._project.request_cookie = self.cookie_field.Value or None
         if self.stale_before_checkbox.Value:
             stale_before_wdt = self.stale_before_date_picker.Value
@@ -141,3 +194,14 @@ class PreferencesDialog:
     
     def _on_cancel(self, event: wx.Event) -> None:
         self.dialog.Destroy()
+
+
+def _wrap_static_box_sizer_child(child: wx.Sizer) -> wx.Sizer:
+    if is_linux():
+        # Add padding around contents of wx.StaticBoxSizer because
+        # wxGTK does not do this automatically, unlike macOS and Windows
+        container = wx.BoxSizer(wx.VERTICAL)
+        container.Add(child, flag=wx.ALL, border=8)
+        return container
+    else:
+        return child

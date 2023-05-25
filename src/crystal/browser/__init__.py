@@ -6,7 +6,9 @@ from crystal.browser.entitytree import EntityTree
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import Project, Resource, ResourceGroup, RootResource
-from crystal.progress import OpenProjectProgressListener
+from crystal.progress import (
+    DummyOpenProjectProgressListener, OpenProjectProgressListener,
+)
 import crystal.server
 from crystal.task import RootTask
 from crystal.ui.actions import Action
@@ -18,7 +20,7 @@ from crystal.util.xthreading import (
 )
 import os
 import time
-from typing import ContextManager, Iterator, List
+from typing import ContextManager, Iterator, List, Optional
 import webbrowser
 import wx
 
@@ -31,11 +33,17 @@ class MainWindow:
     entity_tree: EntityTree
     task_tree: TaskTree
     
-    def __init__(self, project: Project, progress_listener: OpenProjectProgressListener) -> None:
+    def __init__(self,
+            project: Project,
+            progress_listener: Optional[OpenProjectProgressListener]=None,
+            ) -> None:
         """
         Raises:
         * CancelOpenProject
         """
+        if progress_listener is None:
+            progress_listener = DummyOpenProjectProgressListener()
+        
         self.project = project
         
         self._create_actions()
@@ -316,6 +324,23 @@ class MainWindow:
             return selected_entity.source
         else:
             return None
+    
+    # === Operations ===
+    
+    def close(self) -> None:
+        """
+        Closes this window.
+        
+        The caller is still responsible for closing the underlying Project.
+        """
+        dummy_event = wx.CommandEvent()
+        self._on_close_project(dummy_event)
+    
+    def __enter__(self) -> 'MainWindow':
+        return self
+    
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+        self.close()
     
     # === File Menu: Events ===
     

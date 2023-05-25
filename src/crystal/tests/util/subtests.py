@@ -14,6 +14,24 @@ class SubtestsContext:
         self._test_name = test_name
         self._report = StringIO()
     
+    # TODO: Allow with-statement to be used on SubtestsContext directly,
+    #       eliminating the need to call run() in the API.
+    @contextmanager
+    def run(self) -> 'Iterator[SubtestsContext]':
+        raised_exc = True
+        try:
+            yield self
+            raised_exc = False
+        except _SubtestReturn:
+            raised_exc = False
+        finally:
+            subtest_report = self._report.getvalue()
+            if len(subtest_report) != 0:
+                print(subtest_report, end='')
+                print('-' * 70)
+                if not raised_exc:
+                    raise Exception('Subtests did fail')
+    
     @contextmanager
     def test(self, msg: Optional[str]=None, **kwargs: object) -> Iterator[None]:
         """
@@ -84,19 +102,8 @@ def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], 
     
     @wraps(test_func)
     def wrapper():
-        raised_exc = True
-        try:
+        with subtests.run():
             test_func(subtests)
-            raised_exc = False
-        except _SubtestReturn:
-            raised_exc = False
-        finally:
-            subtest_report = subtests._report.getvalue()
-            if len(subtest_report) != 0:
-                print(subtest_report, end='')
-                print('-' * 70)
-                if not raised_exc:
-                    raise Exception('Subtests did fail')
     return wrapper
 
 

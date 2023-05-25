@@ -3,9 +3,11 @@ HTML parser implementation that uses BeautifulSoup.
 """
 
 from crystal.doc.generic import Document, Link
+from crystal.doc.html import HtmlParserType
 from crystal.util.fastsoup import (
-    BeautifulFastSoup, FastSoup, LxmlFastSoup, parse_html, Tag
+    BeautifulFastSoup, FastSoup, FindFunc, LxmlFastSoup, parse_html, Tag
 )
+from dataclasses import dataclass
 import json
 import re
 from typing import (
@@ -14,16 +16,10 @@ from typing import (
 from urllib.parse import urlparse
 
 
-# HTML parsing library to use. See comparison between options at: 
-# https://beautiful-soup-4.readthedocs.io/en/latest/#installing-a-parser
-# 
-# TODO: Consider migrating to 'lxml' parser for additional speed
-_PARSER_LIBRARY = 'html.parser'  # type: Literal['lxml', 'html5lib', 'html.parser']
-_PARSER_LIBRARY_T = (
-    LxmlFastSoup
-    if _PARSER_LIBRARY == 'lxml'
-    else BeautifulFastSoup
-)  # type: Type[FastSoup]
+_PARSER_LIBRARY_T_CHOICES = (
+    LxmlFastSoup,
+    BeautifulFastSoup,
+)  # type: Tuple[Type[FastSoup], ...]
 
 
 _ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z]*\.(?:href|location)) *= *(['"])([^'"]*)['"] *;?$''')
@@ -34,45 +30,60 @@ ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)$')
 
 
-_BACKGROUND_EQ_STAR_XP = _PARSER_LIBRARY_T.find_all_compile(
-    background=True)
-_SRC_EQ_STAR_XP = _PARSER_LIBRARY_T.find_all_compile(
-    src=True)
-_IMG_SRCSET_EQ_STAR_XP = _PARSER_LIBRARY_T.find_all_compile(
-    'img', srcset=True)
-_HREF_EQ_STAR_XP = _PARSER_LIBRARY_T.find_all_compile(
-    href=True)
-_INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP = _PARSER_LIBRARY_T.find_all_compile(
-    'input', type='button', onclick=_ON_CLICK_RE)
-_SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP = _PARSER_LIBRARY_T.find_all_compile(
-    'script', string=_QUOTED_HTTP_LINK_RE)
-_STAR_XP = _PARSER_LIBRARY_T.find_all_compile()
+@dataclass
+class _XPaths:
+    BACKGROUND_EQ_STAR_XP: FindFunc
+    SRC_EQ_STAR_XP: FindFunc
+    IMG_SRCSET_EQ_STAR_XP: FindFunc
+    HREF_EQ_STAR_XP: FindFunc
+    INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP: FindFunc
+    SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP: FindFunc
+    STAR_XP: FindFunc
+
+_XPS_FOR_PARSER_LIBRARY_T = {T: _XPaths(
+    BACKGROUND_EQ_STAR_XP = T.find_all_compile(
+        background=True),
+    SRC_EQ_STAR_XP = T.find_all_compile(
+        src=True),
+    IMG_SRCSET_EQ_STAR_XP = T.find_all_compile(
+        'img', srcset=True),
+    HREF_EQ_STAR_XP = T.find_all_compile(
+        href=True),
+    INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP = T.find_all_compile(
+        'input', type='button', onclick=_ON_CLICK_RE),
+    SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP = T.find_all_compile(
+        'script', string=_QUOTED_HTTP_LINK_RE),
+    STAR_XP = T.find_all_compile(),
+) for T in _PARSER_LIBRARY_T_CHOICES}
 
 
 def parse_html_and_links(
         html_bytes: bytes, 
-        declared_charset: Optional[str]=None
+        declared_charset: Optional[str],
+        parser_type: HtmlParserType,
         ) -> 'Optional[Tuple[Document, List[Link]]]':
     try:
         html = parse_html(
             html_bytes,
             from_encoding=declared_charset,
-            features=_PARSER_LIBRARY,
+            parser_type=parser_type,
         )
     except Exception as e:
         return None
     
+    XPS = _XPS_FOR_PARSER_LIBRARY_T[type(html)]
+    
     links = []
     
     # <* background=*>
-    for tag in _BACKGROUND_EQ_STAR_XP(html):
+    for tag in XPS.BACKGROUND_EQ_STAR_XP(html):
         embedded = True
         title = None
         type_title = 'Background Image'
         links.append(HtmlLink.create_from_tag(tag, html, 'background', type_title, title, embedded))
     
     # <* src=*>
-    for tag in _SRC_EQ_STAR_XP(html):
+    for tag in XPS.SRC_EQ_STAR_XP(html):
         tag_name = html.tag_name(tag)  # cache
         tag_attrs = html.tag_attrs(tag)  # cache
         
@@ -95,11 +106,11 @@ def parse_html_and_links(
         links.append(HtmlLink.create_from_tag(tag, html, 'src', type_title, title, embedded))
     
     # <img srcset=*>
-    for tag in _IMG_SRCSET_EQ_STAR_XP(html):
+    for tag in XPS.IMG_SRCSET_EQ_STAR_XP(html):
         links.extend(_process_srcset_attr(html, tag))
     
     # <* href=*>
-    for tag in _HREF_EQ_STAR_XP(html):
+    for tag in XPS.HREF_EQ_STAR_XP(html):
         tag_name = html.tag_name(tag)  # cache
         tag_attrs = html.tag_attrs(tag)  # cache
         
@@ -134,7 +145,7 @@ def parse_html_and_links(
     
     # <input type='button' onclick='*.location = "*";'>
     # This type of link is used on: fanfiction.net
-    for tag in _INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP(html):
+    for tag in XPS.INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP(html):
         tag_attrs = html.tag_attrs(tag)  # cache
         
         matcher = _ON_CLICK_RE.search(_assert_str(tag_attrs['onclick']))
@@ -157,7 +168,7 @@ def parse_html_and_links(
     #   - This type of link is used on: http://*.daportfolio.com/
     # 2. <script [type="text/javascript"]>..."//**"...</script>
     #   - This type of link is used on: https://blog.calm.com/take-a-deep-breath
-    for tag in _SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP(html):
+    for tag in XPS.SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP(html):
         tag_attrs = html.tag_attrs(tag)  # cache
         
         if 'type' in tag_attrs:
@@ -201,7 +212,7 @@ def parse_html_and_links(
     seen_tags_and_attr_names = set([
         (_IdentityKey(link.tag), link.attr_name) for link in links
     ])  # capture
-    for tag in _STAR_XP(html):
+    for tag in XPS.STAR_XP(html):
         tag_ident = _IdentityKey(tag)  # cache
         for (attr_name, attr_value) in html.tag_attrs(tag).items():
             if (tag_ident, attr_name) in seen_tags_and_attr_names:

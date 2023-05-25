@@ -3,35 +3,36 @@ from bs4 import BeautifulSoup
 import lxml.html
 from typing import (
     Callable, Dict, Iterable, List, Literal, MutableMapping, Optional,
-    Pattern, Union
+    Pattern, TYPE_CHECKING, Union
 )
+
+if TYPE_CHECKING:
+    from crystal.doc.html import HtmlParserType
 
 
 def parse_html(
         html_bytes: bytes,
         from_encoding: Optional[str],
-        features: Literal['lxml', 'html5lib', 'html.parser'],
+        parser_type: 'HtmlParserType',
         ) -> 'FastSoup':
     """
     Parses an HTML document, returning a FastSoup object that can be
     examined through a BeautifulSoup-compatible API.
-    
-    Returns None if there was a parsing error.
     """
-    if features == 'lxml':
+    if parser_type == 'lxml':
         parser = lxml.html.HTMLParser(encoding=from_encoding)
         root = lxml.html.document_fromstring(html_bytes, parser=parser)
         return LxmlFastSoup(root)
-    elif features in ['html5lib', 'html.parser']:
+    elif parser_type == 'html_parser':
         # TODO: Consider supporting 'html.parser' without using the
         #       real BeautifulSoup API to wrap it, which would probably
         #       be faster to parse.
-        #       (No current version of Crystal uses 'html5lib', so there's
-        #       no drive to optimize that particular parser at this time.)
+        # NOTE: Although the native BeautifulSoup API also supports the
+        #       'html5lib' parser, no version of Crystal has used it so far.
         return BeautifulFastSoup(BeautifulSoup(
-            html_bytes, from_encoding=from_encoding, features=features))
+            html_bytes, from_encoding=from_encoding, features='html.parser'))
     else:
-        raise ValueError(f'Unrecognized value for features: {features}')
+        raise ValueError(f'Unrecognized value for parser_type: {parser_type}')
 
 
 Tag = Union[lxml.html.HtmlElement, bs4.Tag]

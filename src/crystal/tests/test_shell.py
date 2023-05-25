@@ -33,6 +33,7 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'get_resource',
     'get_resource_group',
     'get_root_resource',
+    'html_parser_type',
     'is_valid',
     'listeners',
     'min_fetch_date',
@@ -53,8 +54,9 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
 ]
 
 _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
+    'close',
     'entity_tree',
-    'frame',
+    'frame',  # TODO: Recommend remove from API. Too low level.
     'project',
     'task_tree'
 ]
@@ -127,9 +129,11 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
         with subtests.test(msg='and {project, window} have expected public API'):
             # Ensure public members match expected set
             assertEqual(_EXPECTED_PROJECT_PUBLIC_MEMBERS,
-                literal_eval(_py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]")))
+                literal_eval(_py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]")),
+                'Project public API changed')
             assertEqual(_EXPECTED_WINDOW_PUBLIC_MEMBERS,
-                literal_eval(_py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]")))
+                literal_eval(_py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]")),
+                'MainWindow public API changed')
 
 
 @skip_on_windows
