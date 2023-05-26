@@ -17,8 +17,9 @@ async def test_can_close_project_with_menuitem() -> None:
             await mw.close_with_menuitem()
 
 
-@skip_on_windows  # crystal_shell doesn't support Windows
 async def test_can_quit_with_menuitem() -> None:
+    skip_on_windows()()  # crystal_shell doesn't support Windows
+    
     with crystal_shell() as (crystal, _):
         _create_new_empty_project(crystal)
         

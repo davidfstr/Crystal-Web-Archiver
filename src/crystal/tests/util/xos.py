@@ -9,7 +9,7 @@ skipTest = TestCase().skipTest
 # ------------------------------------------------------------------------------
 # Utility: Skip on Windows
 
-def skip_on_windows(func):
+def skip_on_windows(func=lambda: None):
     """Decorator for tests that should be skipped on Windows."""
     @wraps(func)
     def wrapper(*args, **kwargs):
