@@ -97,23 +97,17 @@ class Task:
         """
         return self._title
     
-    def _get_subtitle(self):
+    def _get_subtitle(self) -> str:
         """
         The subtitle for this task.
         The setter (but not the getter) is threadsafe.
         """
         return self._subtitle
-    def _set_subtitle(self, value):
-        # TODO: Why is this code being run on the fg thread?
-        #       Is one of the listeners depending on that behavior?
-        def fg_task():
-            #print('%s -> %s' % (self, value))
-            self._subtitle = value
-            
-            for lis in self.listeners:
-                if hasattr(lis, 'task_subtitle_did_change'):
-                    lis.task_subtitle_did_change(self)
-        fg_call_later(fg_task)
+    def _set_subtitle(self, value: str) -> None:
+        self._subtitle = value
+        for lis in self.listeners:
+            if hasattr(lis, 'task_subtitle_did_change'):
+                lis.task_subtitle_did_change(self)  # type: ignore[attr-defined]
     subtitle = property(_get_subtitle, _set_subtitle)
     
     @property
