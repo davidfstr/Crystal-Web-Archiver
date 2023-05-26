@@ -93,6 +93,9 @@ class TreeItem:
     __slots__ = ['tree', 'id']
     
     def __init__(self, tree: wx.TreeCtrl, id: wx.TreeItemId) -> None:
+        if not id.IsOk():
+            raise ValueError('TreeItemId is invalid')
+        
         self.tree = tree
         self.id = id
     

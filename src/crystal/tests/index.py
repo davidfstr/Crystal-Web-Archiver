@@ -3,6 +3,7 @@ from crystal.tests import (
     test_menus,
     test_shell,
     test_tasks,
+    test_tasktree,
     test_workflows,
 )
 from crystal.tests.util.downloads import delay_between_downloads_minimized
@@ -25,6 +26,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_menus) +
     _test_functions_in_module(test_shell) +
     _test_functions_in_module(test_tasks) +
+    _test_functions_in_module(test_tasktree) +
     _test_functions_in_module(test_workflows) +
     []
 )

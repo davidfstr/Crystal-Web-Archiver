@@ -10,26 +10,32 @@ from crystal.ui.tree import TreeView
 
 
 class NodeView(NodeView1):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.__title = ''
         self.__subtitle = ''
     
-    def _get_title(self):
+    def _get_title(self) -> str:
         return self.__title
-    def _set_title(self, value):
+    def _set_title(self, value: str) -> None:
         self.__title = value
         self._update_base_title()
     title = property(_get_title, _set_title)
     
-    def _get_subtitle(self):
+    def _get_subtitle(self) -> str:
         return self.__subtitle
-    def _set_subtitle(self, value):
+    def _set_subtitle(self, value: str) -> None:
         self.__subtitle = value
         self._update_base_title()
     subtitle = property(_get_subtitle, _set_subtitle)
     
-    def _update_base_title(self):
+    def _update_base_title(self) -> None:
+        subtitle = self.__subtitle  # cache
+        combined_title = (
+            '%s -- %s' % (self.__title, subtitle)
+            if len(subtitle) != 0
+            else self.__title
+        )
         # HACK: Call property implementation directly, since calling properties
         #       on the super() object doesn't seem to work.
-        super()._set_title('%s -- %s' % (self.__title, self.__subtitle))
+        super()._set_title(combined_title)

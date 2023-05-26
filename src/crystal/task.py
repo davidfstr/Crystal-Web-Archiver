@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 # ------------------------------------------------------------------------------
 # Task
 
+# TODO: Move these constants inside Task
 SCHEDULING_STYLE_NONE = 0
 SCHEDULING_STYLE_SEQUENTIAL = 1
 SCHEDULING_STYLE_ROUND_ROBIN = 2
@@ -103,6 +104,8 @@ class Task:
         """
         return self._subtitle
     def _set_subtitle(self, value):
+        # TODO: Why is this code being run on the fg thread?
+        #       Is one of the listeners depending on that behavior?
         def fg_task():
             #print('%s -> %s' % (self, value))
             self._subtitle = value
@@ -122,11 +125,11 @@ class Task:
         return self._children
     
     @property
-    def num_children_complete(self):
+    def num_children_complete(self) -> int:
         return self._num_children_complete
     
     @property
-    def complete(self):
+    def complete(self) -> bool:
         """
         Whether this task is complete.
         """
@@ -172,6 +175,8 @@ class Task:
         Marks this task as completed.
         Threadsafe.
         """
+        # TODO: Why is this code being run on the fg thread?
+        #       Is one of the listeners depending on that behavior?
         def fg_task():
             self._complete = True
             self.subtitle = 'Complete'
@@ -295,7 +300,10 @@ class Task:
         
         if hasattr(self, 'child_task_did_complete'):
             self.child_task_did_complete(task)
-        
+        for lis in self.listeners:
+            if hasattr(lis, 'task_child_did_complete'):
+                lis.task_child_did_complete(self, task)  # type: ignore[attr-defined]
+            
         task.listeners.remove(self)
 
 
