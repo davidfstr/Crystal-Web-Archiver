@@ -360,9 +360,9 @@ class DownloadResourceBodyTask(Task):
             If resource is not already downloaded and project is read-only.
         """
         # Return the resource's fresh (already-downloaded) default revision if available
-        def fg_task():
+        def fg_task_1() -> Optional[ResourceRevision]:
             return self._resource.default_revision(stale_ok=False)
-        body_revision = fg_call_and_wait(fg_task)
+        body_revision = fg_call_and_wait(fg_task_1)
         if body_revision is not None:
             return body_revision
         
@@ -382,12 +382,12 @@ class DownloadResourceBodyTask(Task):
             urls = [urljoin(r.url, link.relative_url) for link in links]
             
             self.subtitle = 'Recording links...'
-            def fg_task():
+            def fg_task_2() -> None:
                 # PERF: This is taking 1-2 sec to execute on THEM's Review List page.
                 #       Need to look at optimizing this to avoid blocking the UI.
                 for url in urls:
                     Resource(r.project, url)
-            fg_call_and_wait(fg_task)
+            fg_call_and_wait(fg_task_2)
             
             return body_revision
         finally:
