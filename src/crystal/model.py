@@ -1092,7 +1092,8 @@ class ResourceRevision:
                 (resource._id, request_cookie, RR._encode_error(error), RR._encode_metadata(metadata)))
             project._db.commit()
             self._id = c.lastrowid
-        fg_call_and_wait(fg_task)
+        # NOTE: Use no_profile=True because no obvious further optimizations exist
+        fg_call_and_wait(fg_task, no_profile=True)
         
         if body_stream:
             try:
