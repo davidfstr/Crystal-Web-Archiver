@@ -295,6 +295,12 @@ Release Notes ⋮
       for better compatibility with JavaScript libraries that
       treat such links specially.
 
+* Backward-incompatible API changes
+    * `Resource.revisions()` now returns `Iterable[ResourceRevision]` instead
+      of `List[ResourceRevision]` to support streaming results.
+        * If the old behavior is desired, wrap calls to `Resource.revisions()`
+          inside of a `list(...)` expression.
+
 ### v1.5.0b (April 2, 2023)
 
 This release focuses on making it easy to install Crystal from PyPI,

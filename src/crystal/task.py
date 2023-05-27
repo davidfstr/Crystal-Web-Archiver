@@ -365,7 +365,8 @@ class DownloadResourceBodyTask(Task):
         # Return the resource's fresh (already-downloaded) default revision if available
         def fg_task_1() -> Optional[ResourceRevision]:
             return self._resource.default_revision(stale_ok=False)
-        body_revision = fg_call_and_wait(fg_task_1)
+        # NOTE: Use no_profile=True because no obvious further optimizations exist
+        body_revision = fg_call_and_wait(fg_task_1, no_profile=True)
         if body_revision is not None:
             return body_revision
         
