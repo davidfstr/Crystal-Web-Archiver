@@ -387,9 +387,13 @@ class DownloadResourceBodyTask(Task):
             
             self.subtitle = 'Recording links...'
             def fg_task_2() -> None:
-                # PERF: This is taking 1-2 sec to execute on THEM's Review List page.
+                # TODO: Optimize. This is taking 1-2 sec to execute on THEM's Review List page.
                 #       Need to look at optimizing this to avoid blocking the UI.
                 for url in urls:
+                    # TODO: Optimize EntityTree.resource_did_instantiate() in
+                    #       the way that its contained TODO comment describes.
+                    #       That function is currently indirectly called by
+                    #       Resource.__new__() here.
                     Resource(r.project, url)
             fg_call_and_wait(fg_task_2)
             

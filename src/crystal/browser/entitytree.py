@@ -97,6 +97,8 @@ class EntityTree:
     # === Event: Resource Did Instantiate ===
     
     def resource_did_instantiate(self, resource: Resource) -> None:
+        # TODO: Optimize to only refresh those groups that could potentially
+        #       be affected by this particular resource being instantiated
         self._refresh_group_nodes()
     
     def _refresh_group_nodes(self) -> None:
