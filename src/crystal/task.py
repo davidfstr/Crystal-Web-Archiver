@@ -721,11 +721,11 @@ class UpdateResourceGroupMembersTask(Task):
             raise ValueError('Expected group with a source')
         self.append_child(group.source.create_download_task(needs_result=False))
     
-    def child_task_subtitle_did_change(self, task):
+    def child_task_subtitle_did_change(self, task: Task) -> None:
         if not task.complete:
             self.subtitle = task.subtitle
     
-    def child_task_did_complete(self, task):
+    def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
         if self.num_children_complete == len(self.children):
@@ -765,7 +765,7 @@ class DownloadResourceGroupMembersTask(Task):
         self._update_subtitle()
         self._update_completed_status()
     
-    def child_task_did_complete(self, task):
+    def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
         self._pbc.update(1)  # self._pbc.n += 1
@@ -807,14 +807,14 @@ class DownloadResourceGroupTask(Task):
         self.append_child(self._update_members_task)
         self.append_child(self._download_members_task)
     
-    def child_task_subtitle_did_change(self, task):
+    def child_task_subtitle_did_change(self, task: Task) -> None:
         if task == self._update_members_task and not self._started_downloading_members:
             self.subtitle = 'Updating group members...'
         elif task == self._download_members_task:
             self.subtitle = task.subtitle
             self._started_downloading_members = True
     
-    def child_task_did_complete(self, task):
+    def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
         if task == self._update_members_task:
@@ -847,7 +847,7 @@ class RootTask(Task):
         
         return super().try_get_next_task_unit()
     
-    def child_task_did_complete(self, task):
+    def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
         if all(c.complete for c in self.children):
