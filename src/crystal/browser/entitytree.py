@@ -512,6 +512,7 @@ class _ResourceNode(Node):
             self.download_future = self.resource.download()
             
             def download_done(future):
+                # TODO: Gracefully handle ProjectFreeSpaceTooLowError here
                 try:
                     revision = future.result()
                 except CannotDownloadWhenProjectReadOnlyError:

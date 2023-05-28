@@ -45,7 +45,10 @@ from urllib.parse import urlparse, urlunparse
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
     from crystal.server import ProjectServer
-    from crystal.task import DownloadResourceTask, DownloadResourceGroupTask, Task
+    from crystal.task import (
+        DownloadResourceTask, DownloadResourceBodyTask,
+        DownloadResourceGroupTask, Task,
+    )
 
 
 class Project:
@@ -698,9 +701,9 @@ class Resource:
     def normalized_url(self) -> str:
         return self.resource_url_alternatives(self.project, self._url)[-1]
     
-    def download_body(self):
+    def download_body(self) -> 'Future[ResourceRevision]':
         """
-        Returns a Future<ResourceRevision> that downloads (if necessary) and returns an
+        Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
         up-to-date version of this resource's body.
         
         The returned Future may invoke its callbacks on any thread.
@@ -710,12 +713,15 @@ class Resource:
         Future Raises:
         * CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
+        * ProjectFreeSpaceTooLowError --
+            If the project does not have enough free disk space to safely
+            download more resources.
         """
         task = self.create_download_body_task()
         self.project.add_task(task)
         return task.future
     
-    def create_download_body_task(self):
+    def create_download_body_task(self) -> 'DownloadResourceBodyTask':
         """
         Creates a Task to download this resource's body.
         
@@ -727,7 +733,7 @@ class Resource:
             return DownloadResourceBodyTask(self)
         return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
-    def download(self, wait_for_embedded: bool=False, needs_result: bool=True) -> Future:
+    def download(self, wait_for_embedded: bool=False, needs_result: bool=True) -> 'Future[ResourceRevision]':
         """
         Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
         up-to-date version of this resource's body. If a download is performed, all
@@ -749,12 +755,15 @@ class Resource:
         Future Raises:
         * CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
+        * ProjectFreeSpaceTooLowError --
+            If the project does not have enough free disk space to safely
+            download more resources.
         """
         task = self.create_download_task(needs_result=needs_result)
         self.project.add_task(task)
         return task.get_future(wait_for_embedded)
     
-    def create_download_task(self, needs_result: bool=True) -> DownloadResourceTask:
+    def create_download_task(self, needs_result: bool=True) -> 'DownloadResourceTask':
         """
         Creates a Task to download this resource and all its embedded resources.
         
@@ -769,7 +778,7 @@ class Resource:
             task_factory
         )
     
-    def _get_task_or_create(self, task_ref, task_factory):
+    def _get_task_or_create(self, task_ref: _WeakTaskRef, task_factory):
         if task_ref.task is not None:
             return task_ref.task
         

@@ -5,6 +5,7 @@ from crystal.util.xfutures import Future
 from crystal.util.xthreading import (
     bg_call_later, fg_call_and_wait, fg_call_later, NoForegroundThreadError
 )
+import shutil
 import sys
 from time import sleep
 from typing import List, Optional, TYPE_CHECKING, Union
@@ -341,6 +342,14 @@ DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
 #       value here does disable.
 ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH = False
 
+# For small disks/filesystems,
+# the minimum fraction of total disk space required to download any more resources
+_SMALL_DISK_MIN_PROJECT_FREE_FRACTION = 0.05
+
+# For large disks/filesystems,
+# the minimum free disk space required to download any more resources
+_LARGE_DISK_MIN_PROJECT_FREE_BYTES = 1024 * 1024 * 1024 * 4  # 4 GiB
+
 
 def _get_abstract_resource_title(abstract_resource):
     """
@@ -377,6 +386,9 @@ class DownloadResourceBodyTask(Task):
         Raises:
         * CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
+        * ProjectFreeSpaceTooLowError --
+            If the project does not have enough free disk space to safely
+            download more resources.
         """
         # Return the resource's fresh (already-downloaded) default revision if available
         def fg_task_1() -> Optional[ResourceRevision]:
@@ -388,6 +400,14 @@ class DownloadResourceBodyTask(Task):
         
         if self._resource.project.readonly:
             raise CannotDownloadWhenProjectReadOnlyError()
+        
+        disk_usage = shutil.disk_usage(self._resource.project.path)
+        min_free_bytes = min(
+            int(disk_usage.total * _SMALL_DISK_MIN_PROJECT_FREE_FRACTION),
+            _LARGE_DISK_MIN_PROJECT_FREE_BYTES
+        )
+        if disk_usage.free < min_free_bytes:
+            raise ProjectFreeSpaceTooLowError()
         
         # TODO: Report errors (embedded in the ResourceRevision) using the completion subtitle.
         #       Need to add support for this behavior to Task.
@@ -420,6 +440,10 @@ class DownloadResourceBodyTask(Task):
 
 
 class CannotDownloadWhenProjectReadOnlyError(Exception):
+    pass
+
+
+class ProjectFreeSpaceTooLowError(Exception):
     pass
 
 

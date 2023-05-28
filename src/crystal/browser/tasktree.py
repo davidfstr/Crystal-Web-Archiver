@@ -2,6 +2,7 @@ from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import SCHEDULING_STYLE_SEQUENTIAL, Task
 from crystal.ui.tree2 import TreeView, NodeView
 from crystal.util.xthreading import fg_call_later
+from typing import List
 import wx
 
 

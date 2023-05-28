@@ -59,7 +59,7 @@ def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
         duration: float
         ) -> Awaitable[None]:  # or Generator[Command, object, None]
     """
-    Switch to a background thread, sleep for the specified duration, and
+    Switch to a background thread, sleep for the specified duration (in seconds), and
     then resume this foreground thread.
     """
     assert is_foreground_thread()
@@ -130,7 +130,7 @@ class Command(Generic[_T]):  # abstract
 
 class SleepCommand(Command[None]):
     def __init__(self, delay: float) -> None:
-        self._delay = delay
+        self._delay = delay  # in seconds
     
     def run(self) -> None:
         assert not is_foreground_thread()
