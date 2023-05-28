@@ -919,6 +919,9 @@ class Resource:
     def delete(self) -> None:
         project = self.project
         
+        if project.readonly:
+            raise ProjectReadOnlyError()
+        
         # Ensure not referenced by a RootResource
         c = project._db.cursor()
         root_resource_ids = [
@@ -934,8 +937,6 @@ class Resource:
             rev.delete()
         
         # Delete Resource itself
-        if project.readonly:
-            raise ProjectReadOnlyError()
         c = project._db.cursor()
         c.execute('delete from resource where id=?', (self._id,))
         project._db.commit()
@@ -1555,12 +1556,13 @@ class ResourceRevision:
     def delete(self):
         project = self.project
         
+        if project.readonly:
+            raise ProjectReadOnlyError()
+        
         body_filepath = self._body_filepath  # cache
         if os.path.exists(body_filepath):
             os.remove(body_filepath)
         
-        if project.readonly:
-            raise ProjectReadOnlyError()
         c = project._db.cursor()
         c.execute('delete from resource_revision where id=?', (self._id,))
         project._db.commit()
