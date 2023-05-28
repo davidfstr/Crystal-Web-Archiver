@@ -751,10 +751,12 @@ class ClusterNode(Node):
 
 class ResourceGroupNode(Node):
     _MAX_VISIBLE_CHILDREN = 100
+    _MORE_CHILDREN_TO_SHOW = 20
     
-    def __init__(self, resource_group):
+    def __init__(self, resource_group: ResourceGroup) -> None:
         self.resource_group = resource_group
         super().__init__()
+        self._max_visible_children = self._MAX_VISIBLE_CHILDREN
         
         self.view = NodeView()
         self.view.title = self.calculate_title()
@@ -797,24 +799,24 @@ class ResourceGroupNode(Node):
         members = self.resource_group.members  # cache
         
         children = self.children  # cache
-        if len(children) > self._MAX_VISIBLE_CHILDREN:
+        if len(children) > self._max_visible_children:
             more_placeholder_node = children[-1]
             assert isinstance(more_placeholder_node, MorePlaceholderNode)
-            more_placeholder_node.more_count = len(members) - self._MAX_VISIBLE_CHILDREN
+            more_placeholder_node.more_count = len(members) - self._max_visible_children
             return
         
         children_rrs = []  # type: List[Node]
         children_rs = []  # type: List[Node]
         project = self.resource_group.project  # cache
-        for r in members[:self._MAX_VISIBLE_CHILDREN]:
+        for r in members[:self._max_visible_children]:
             rr = project.get_root_resource(r)
             if rr is None:
                 children_rs.append(NormalResourceNode(r))
             else:
                 children_rrs.append(RootResourceNode(rr))
-        if len(members) > self._MAX_VISIBLE_CHILDREN:
+        if len(members) > self._max_visible_children:
             children_extra = [
-                MorePlaceholderNode(len(members) - self._MAX_VISIBLE_CHILDREN),
+                MorePlaceholderNode(len(members) - self._max_visible_children, self),
             ]  # type: List[Node]
         else:
             children_extra = []
@@ -826,6 +828,21 @@ class ResourceGroupNode(Node):
         # If this is the first expansion attempt, populate the children
         if not self._children_loaded:
             self.update_children(force_populate=True)
+    
+    def on_more_expanded(self, more_node: MorePlaceholderNode) -> None:
+        # Save selected node
+        old_children_len = len(self.children)  # capture
+        more_node_was_selected = more_node.view.peer.IsSelected()  # capture
+        if more_node_was_selected:
+            more_node.view.peer.SelectItem(False)
+        
+        self._max_visible_children += self._MORE_CHILDREN_TO_SHOW
+        self.update_children()
+        
+        # Restore selected node
+        if more_node_was_selected:
+            node_in_position_of_old_more_node = self.children[old_children_len - 1]
+            node_in_position_of_old_more_node.view.peer.SelectItem()
     
     # === Comparison ===
     
@@ -877,18 +894,22 @@ class GroupedLinkedResourcesNode(Node):
 
 
 class MorePlaceholderNode(Node):
-    def __init__(self, more_count: int) -> None:
+    def __init__(self, more_count: int, delegate: Optional[object]=None) -> None:
         super().__init__()
         self._more_count = -1
+        self._delegate = delegate
         
         self.view = NodeView()
         #self.view.title = ... (set below)
         self.view.icon_set = (
             (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_more']),
         )
-        self.view.expandable = False
+        self.view.expandable = True
         
         self.more_count = more_count  # sets self.view.title too
+        
+        # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
+        self.children = [_LoadingNode()]
     
     def _get_more_count(self) -> int:
         return self._more_count
@@ -898,6 +919,12 @@ class MorePlaceholderNode(Node):
         self._more_count = more_count
         self.view.title = '%d more' % more_count
     more_count = property(_get_more_count, _set_more_count)
+    
+    # === Events ===
+    
+    def on_expanded(self, event):
+        if hasattr(self._delegate, 'on_more_expanded'):
+            self._delegate.on_more_expanded(self)  # type: ignore[attr-defined]
     
     # === Comparison ===
     
