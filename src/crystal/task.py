@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from crystal.util.caffeination import Caffeination
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
 from crystal.util.xthreading import (
@@ -8,7 +9,7 @@ from crystal.util.xthreading import (
 import shutil
 import sys
 from time import sleep
-from typing import List, Optional, TYPE_CHECKING, Union
+from typing import Callable, List, Optional, Tuple, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from crystal.model import ResourceRevision
@@ -937,25 +938,37 @@ def start_schedule_forever(task: Task) -> None:
     
     This function is intended for testing, until a full scheduler class is written.
     """
-    def bg_task():
+    def bg_task() -> None:
         while True:
-            def fg_task():
-                return (task.try_get_next_task_unit(), task.complete)
+            did_add_caffeine = False
             try:
-                (unit, task_complete) = fg_call_and_wait(fg_task)
-            except NoForegroundThreadError:
-                return
-            
-            if unit is None:
-                if task_complete:
-                    break
+                def fg_task() -> Tuple[Callable[[], None], bool]:
+                    return (task.try_get_next_task_unit(), task.complete)
+                try:
+                    (unit, task_complete) = fg_call_and_wait(fg_task)
+                except NoForegroundThreadError:
+                    return
+                
+                if unit is None:
+                    if did_add_caffeine:
+                        Caffeination.remove_caffeine()
+                        did_add_caffeine = False
+                    if task_complete:
+                        break
+                    else:
+                        sleep(_ROOT_TASK_POLL_INTERVAL)
+                        continue
                 else:
-                    sleep(_ROOT_TASK_POLL_INTERVAL)
-                    continue
-            try:
-                unit()  # Run unit directly on this bg thread
-            except NoForegroundThreadError:
-                return
+                    Caffeination.add_caffeine()
+                    did_add_caffeine = True
+                try:
+                    unit()  # Run unit directly on this bg thread
+                except NoForegroundThreadError:
+                    return
+            finally:
+                if did_add_caffeine:
+                    Caffeination.remove_caffeine()
+                    did_add_caffeine = False
     bg_call_later(bg_task, daemon=True)
 
 
