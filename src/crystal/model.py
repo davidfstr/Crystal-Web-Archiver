@@ -501,13 +501,18 @@ class _WeakTaskRef:
     """
     Holds a reference to a Task until that task completes.
     """
-    def __init__(self, task=None):
+    # Optimize per-instance memory use, since there many be very many
+    # _WeakTaskRef objects, because there may be very many Resource objects
+    # which each contain _WeakTaskRef instances
+    __slots__ = ('_task',)
+    
+    def __init__(self, task: Optional[Task]=None) -> None:
         self._task = None
         self.task = task
     
-    def _get_task(self):
+    def _get_task(self) -> Optional[Task]:
         return self._task
-    def _set_task(self, value):
+    def _set_task(self, value: Optional[Task]) -> None:
         if self._task:
             self._task.listeners.remove(self)
         self._task = value
@@ -515,7 +520,7 @@ class _WeakTaskRef:
             self._task.listeners.append(self)
     task = property(_get_task, _set_task)
     
-    def task_did_complete(self, task):
+    def task_did_complete(self, task: Task) -> None:
         self.task = None
 
 
@@ -525,6 +530,17 @@ class Resource:
     Either created manually or discovered through a link from another resource.
     Persisted and auto-saved.
     """
+    # Optimize per-instance memory use, since there many be very many Resource objects
+    __slots__ = (
+        'project',
+        '_url',
+        '_download_body_task_ref',
+        '_download_task_ref',
+        '_download_task_noresult_ref',
+        'already_downloaded_this_session',
+        '_id',
+    )
+    
     project: Project
     _url: str
     _download_body_task_ref: _WeakTaskRef
