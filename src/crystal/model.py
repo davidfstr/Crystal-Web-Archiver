@@ -101,7 +101,7 @@ class Project:
         def initially_readonly(can_write_db: bool) -> bool:
             return readonly or not can_write_db
         
-        self._min_fetch_date = None
+        self._min_fetch_date = None  # type: Optional[datetime.datetime]
         
         progress_listener.opening_project(os.path.basename(path))
         
@@ -362,6 +362,10 @@ class Project:
                 raise ValueError('Expected an aware datetime (with a UTC offset)')
         self._min_fetch_date = min_fetch_date
         if not self._loading:
+            from crystal.task import ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH
+            if ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH:
+                for r in self.resources:
+                    r.already_downloaded_this_session = False
             for lis in self.listeners:
                 if hasattr(lis, 'min_fetch_date_did_change'):
                     lis.min_fetch_date_did_change()  # type: ignore[attr-defined]
@@ -565,7 +569,7 @@ class Resource:
         '_download_body_task_ref',
         '_download_task_ref',
         '_download_task_noresult_ref',
-        'already_downloaded_this_session',
+        '_already_downloaded_this_session',
         '_id',
     )
     
@@ -574,7 +578,7 @@ class Resource:
     _download_body_task_ref: Optional[_WeakTaskRef]
     _download_task_ref: Optional[_WeakTaskRef]
     _download_task_noresult_ref: Optional[_WeakTaskRef]
-    already_downloaded_this_session: bool
+    _already_downloaded_this_session: bool
     _id: int  # or None if deleted
     
     def __new__(cls, project: Project, url: str, _id: Optional[int]=None) -> Resource:
@@ -609,7 +613,7 @@ class Resource:
         self._download_body_task_ref = None
         self._download_task_ref = None
         self._download_task_noresult_ref = None
-        self.already_downloaded_this_session = False
+        self._already_downloaded_this_session = False
         
         if project._loading:
             assert _id is not None
@@ -725,6 +729,21 @@ class Resource:
     @property
     def normalized_url(self) -> str:
         return self.resource_url_alternatives(self.project, self._url)[-1]
+    
+    def _get_already_downloaded_this_session(self) -> bool:
+        return self._already_downloaded_this_session
+    def _set_already_downloaded_this_session(self, value: bool) -> None:
+        if self._already_downloaded_this_session == value:
+            return
+        if not value:
+            # Invalidate any prior downloaded state
+            self._download_body_task_ref = None
+            self._download_task_ref = None
+            self._download_task_noresult_ref = None
+        self._already_downloaded_this_session = value
+    already_downloaded_this_session = property(
+        _get_already_downloaded_this_session,
+        _set_already_downloaded_this_session)
     
     def download_body(self) -> 'Future[ResourceRevision]':
         """

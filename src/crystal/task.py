@@ -379,14 +379,9 @@ from urllib.parse import urljoin
 
 DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
 
-# Unfortunately changing Project.min_fetch_date can cause resources
-# downloaded within the same session to no longer be fresh.
-# So the only correct value for this constant is False.
-# But a False value does disable a optimization which is *usually* valid.
-# 
-# TODO: Find a way to safely reenable the optimization that a False
-#       value here does disable.
-ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH = False
+# NOTE: This optimization is important for downloading large projects.
+#       Do not recommend disabling.
+ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH = True
 
 # For small disks/filesystems,
 # the minimum fraction of total disk space required to download any more resources
