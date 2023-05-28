@@ -928,7 +928,10 @@ def start_schedule_forever(task: Task) -> None:
                 else:
                     sleep(_ROOT_TASK_POLL_INTERVAL)
                     continue
-            unit()  # Run unit directly on this bg thread
+            try:
+                unit()  # Run unit directly on this bg thread
+            except NoForegroundThreadError:
+                return
     bg_call_later(bg_task, daemon=True)
 
 
