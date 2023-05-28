@@ -134,7 +134,12 @@ class Project:
                 # Load Resources
                 [(resource_count,)] = c.execute('select count(1) from resource')
                 progress_listener.loading_resources(resource_count)
-                for (url, id) in c.execute('select url, id from resource'):
+                batch_size = max(1, resource_count // 100)
+                next_index_to_report = 0
+                for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
+                    if index == next_index_to_report:
+                        progress_listener.loading_resource(index)
+                        next_index_to_report += batch_size
                     Resource(self, url, _id=id)
                 
                 # Load RootResources
