@@ -1705,10 +1705,10 @@ class ResourceGroup:
         patstr = patstr.replace(r'\@', r'$@$')
         
         # Replace tokens
-        patstr = patstr.replace(r'$**$', r'.*')
-        patstr = patstr.replace(r'$*$', r'[^/?=&]*')
-        patstr = patstr.replace(r'$#$', r'[0-9]+')
-        patstr = patstr.replace(r'$@$', r'[a-zA-Z]+')
+        patstr = patstr.replace(r'$**$', r'(.*)')
+        patstr = patstr.replace(r'$*$', r'([^/?=&]*)')
+        patstr = patstr.replace(r'$#$', r'([0-9]+)')
+        patstr = patstr.replace(r'$@$', r'([a-zA-Z]+)')
         
         return re.compile(r'^' + patstr + r'$')
     
