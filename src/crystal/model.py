@@ -1567,6 +1567,8 @@ class ResourceRevision:
         c.execute('delete from resource_revision where id=?', (self._id,))
         project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
+        
+        self.resource.already_downloaded_this_session = False
     
     def __repr__(self):
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
