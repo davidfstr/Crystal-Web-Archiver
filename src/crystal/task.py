@@ -231,6 +231,19 @@ class Task:
             if hasattr(lis, 'task_did_clear_children'):
                 lis.task_did_clear_children(self)  # type: ignore[attr-defined]
     
+    def clear_completed_children(self) -> None:
+        """
+        Clears all of this task's children which are complete.
+        Recommended only for use by RootTask.
+        """
+        child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
+        if len(child_indexes_to_remove) == 0:
+            return
+        self._children = [c for c in self.children if not c.complete]
+        for lis in self.listeners:
+            if hasattr(lis, 'task_did_clear_children'):
+                lis.task_did_clear_children(self, child_indexes_to_remove)  # type: ignore[attr-defined]
+    
     # === Public Operations ===
     
     def try_get_next_task_unit(self):
@@ -275,6 +288,13 @@ class Task:
                         return None
                 return None
             elif self.scheduling_style == SCHEDULING_STYLE_ROUND_ROBIN:
+                if self._next_child_index == 0:
+                    if hasattr(self, 'did_schedule_all_children'):
+                        self.did_schedule_all_children()
+                        # (Children count may have changed)
+                        if len(self.children) == 0:
+                            # Handle zero-children case in usual manner
+                            return self.try_get_next_task_unit()
                 cur_child_index = self._next_child_index
                 while True:
                     unit = self.children[cur_child_index].try_get_next_task_unit()
@@ -903,6 +923,10 @@ class RootTask(Task):
         
         if all(c.complete for c in self.children):
             self.clear_children()
+    
+    def did_schedule_all_children(self) -> None:
+        # Remove completed children after each scheduling pass
+        self.clear_completed_children()
 
 
 # ------------------------------------------------------------------------------

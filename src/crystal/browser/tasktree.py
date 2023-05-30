@@ -2,7 +2,7 @@ from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import SCHEDULING_STYLE_SEQUENTIAL, Task
 from crystal.ui.tree2 import TreeView, NodeView
 from crystal.util.xthreading import fg_call_later
-from typing import List
+from typing import List, Optional
 import wx
 
 
@@ -156,11 +156,30 @@ class TaskTreeNode:
                 self._num_visible_complete_children += 1
         fg_call_later(fg_task)
     
-    def task_did_clear_children(self, task: Task) -> None:
+    def task_did_clear_children(self,
+            task: Task,
+            child_indexes: Optional[List[int]]=None
+            ) -> None:
+        if task != self.task:
+            return
         def fg_task() -> None:
-            self.tree_node.children = []
-            self._num_visible_complete_children = 0
-            self._num_visible_children = 0
+            if child_indexes is None:
+                self.tree_node.children = []
+                self._num_visible_complete_children = 0
+                self._num_visible_children = 0
+            else:
+                if self.task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
+                    raise NotImplementedError()
+                self.tree_node.children = [
+                    c
+                    for (i, c) in enumerate(self.tree_node.children)
+                    if i not in child_indexes
+                ]
+                # HACK: The only current caller that passes non-None
+                #       child_indexes guarantees that no complete children
+                #       will remain
+                self._num_visible_complete_children = 0
+                self._num_visible_children = len(self.tree_node.children)
         fg_call_later(fg_task)
 
 

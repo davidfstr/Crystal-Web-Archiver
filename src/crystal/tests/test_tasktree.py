@@ -10,6 +10,7 @@ from crystal.model import Project, Resource, ResourceGroup, RootResource
 import math
 import tempfile
 from typing import Iterator, List, Optional
+from unittest import skip
 
 
 async def test_while_downloading_large_group_then_show_no_more_than_100_download_task_children_at_once() -> None:
@@ -130,6 +131,10 @@ async def test_while_downloading_large_group_then_show_no_more_than_100_download
                     )
                     await wait_for(tree_has_no_children_condition(mw.task_tree))
 
+
+@skip('not yet automated')
+async def test_when_top_level_task_finishes_then_is_removed_from_ui_soon(self) -> None:
+    pass
 
 @contextmanager
 def _attr_replaced_with(obj: object, attr_name: str, value: object) -> Iterator[None]:
