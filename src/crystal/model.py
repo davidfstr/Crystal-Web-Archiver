@@ -1429,12 +1429,12 @@ class ResourceRevision:
     
     # === Body ===
     
-    def size(self):
+    def size(self) -> int:
         """
         Returns the size of this resource's body.
         """
         self._ensure_has_body()
-        return os.path.size(self._body_filepath)
+        return os.path.getsize(self._body_filepath)
     
     def open(self):
         """
@@ -1443,7 +1443,7 @@ class ResourceRevision:
         self._ensure_has_body()
         return open(self._body_filepath, 'rb')
     
-    def links(self):
+    def links(self) -> list[Link]:
         """
         Returns list of Links found in this resource.
         
