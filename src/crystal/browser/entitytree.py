@@ -920,7 +920,7 @@ class MorePlaceholderNode(Node):
         if more_count == self._more_count:
             return
         self._more_count = more_count
-        self.view.title = '%d more' % more_count
+        self.view.title = f'{more_count:n} more'
     more_count = property(_get_more_count, _set_more_count)
     
     # === Events ===
