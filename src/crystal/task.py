@@ -612,10 +612,9 @@ class DownloadResourceTask(Task):
         else:
             subtitle_suffix = ' -- %s remaining' % self._pbc.remaining_str()
         
-        self.subtitle = '%s of %s item(s)%s' % (
-            self.num_children_complete,
-            len(self.children),
-            subtitle_suffix,
+        self.subtitle = (
+            f'{self.num_children_complete:n} of '
+            f'{len(self.children):n} item(s){subtitle_suffix}'
         )
         
         if self.num_children_complete == len(self.children):
@@ -827,11 +826,10 @@ class DownloadResourceGroupMembersTask(Task):
     
     def _update_subtitle(self):
         of_phrase = 'of at least' if not self._done_updating_group else 'of'
-        self.subtitle = '%s %s %s item(s) -- %s remaining' % (
-            self.num_children_complete,
-            of_phrase,
-            len(self.children),
-            self._pbc.remaining_str(),
+        self.subtitle = (
+            f'{self.num_children_complete:n} {of_phrase} '
+            f'{len(self.children):n} item(s) -- '
+            f'{self._pbc.remaining_str()} remaining'
         )
     
     def _update_completed_status(self):
