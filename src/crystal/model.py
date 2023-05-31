@@ -421,9 +421,13 @@ class Project:
     def add_task(self, task: Task) -> None:
         """
         Schedules the specified top-level task for execution, if not already done.
+        
+        The specified task is allowed to already be complete.
         """
         if task not in self.root_task.children:
-            self.root_task.append_child(task)
+            self.root_task.append_child(task, already_complete_ok=True)
+            if task.complete:
+                self.root_task.child_task_did_complete(task)
     
     # === Events ===
     
@@ -748,6 +752,8 @@ class Resource:
         
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
+        
+        This task is never complete immediately after initialization.
         """
         def task_factory():
             from crystal.task import DownloadResourceBodyTask
@@ -792,6 +798,8 @@ class Resource:
         
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
+        
+        This task may be complete immediately after initialization.
         """
         def task_factory():
             from crystal.task import DownloadResourceTask
@@ -1060,9 +1068,14 @@ class RootResource:
     def download(self, needs_result: bool=True) -> Future:
         return self.resource.download(needs_result=needs_result)
     
-    # TODO: Create the underlying task with the full RootResource
-    #       so that the correct subtitle is displayed.
     def create_download_task(self, needs_result: bool=True) -> Task:
+        """
+        Creates a task to download this root resource.
+        
+        This task may be complete immediately after initialization.
+        """
+        # TODO: Create the underlying task with the full RootResource
+        #       so that the correct subtitle is displayed.
         return self.resource.create_download_task(needs_result=needs_result)
     
     def __repr__(self):
@@ -1831,6 +1844,8 @@ class ResourceGroup:
         
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
+        
+        This task may be complete immediately after initialization.
         """
         if needs_result:
             raise ValueError('Download task for a group never has a result')
@@ -1840,7 +1855,7 @@ class ResourceGroup:
         from crystal.task import DownloadResourceGroupTask
         return DownloadResourceGroupTask(self)
     
-    def update_membership(self):
+    def update_membership(self) -> None:
         """
         Updates the membership of this group asynchronously.
         
