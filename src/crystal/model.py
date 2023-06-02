@@ -9,7 +9,6 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 
 from __future__ import annotations
 
-import bisect
 from collections import OrderedDict
 import copy
 from crystal.plugins import (
@@ -24,8 +23,8 @@ from crystal.util.db import (
     get_column_names_of_table,
     is_no_such_column_error_for,
 )
-from crystal.util.lazymap import lazymap
 from crystal.util.urls import is_unrewritable_url, requote_uri
+from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait
@@ -38,6 +37,7 @@ import mimetypes
 import os
 import re
 import shutil
+from sortedcontainers import SortedList
 import sqlite3
 from typing import (
     Any, Callable, cast, Dict, Iterable, List, Optional, Pattern, TYPE_CHECKING, Tuple,
@@ -94,6 +94,7 @@ class Project:
         
         self._properties = dict()               # type: Dict[str, str]
         self._resources = OrderedDict()         # type: Dict[str, Resource]
+        self._sorted_resource_urls = SortedList()  # type: SortedList[str]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
         self._readonly = True  # will reinitialize after database is located
@@ -166,7 +167,7 @@ class Project:
                 
                 # Index Resources (to load RootResources and ResourceGroups faster)
                 progress_listener.indexing_resources()
-                resources_sorted_by_url = sorted(self.resources, key=lambda r: r.url)
+                self._sorted_resource_urls.update(self._resources)
                 resource_for_id = {r._id: r for r in self.resources}
                 
                 # Load RootResources
@@ -183,7 +184,7 @@ class Project:
                 for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
                         'select name, url_pattern, source_type, source_id, id from resource_group')):
                     progress_listener.loading_resource_group(index)
-                    group = ResourceGroup(self, name, url_pattern, _id=id, _resources_sorted_by_url=resources_sorted_by_url)
+                    group = ResourceGroup(self, name, url_pattern, _id=id)
                     group_2_source[group] = (source_type, source_id)
                 for (group, (source_type, source_id)) in group_2_source.items():
                     if source_type is None:
@@ -382,14 +383,87 @@ class Project:
     
     @property
     def resources(self) -> Iterable[Resource]:
+        """Returns all Resources in the project in the order they were created."""
         return self._resources.values()
     
     def get_resource(self, url: str) -> Optional[Resource]:
         """Returns the `Resource` with the specified URL or None if no such resource exists."""
         return self._resources.get(url, None)
     
+    def resources_matching_pattern(self,
+            url_pattern_re: re.Pattern,
+            literal_prefix: str,
+            ) -> List[Resource]:
+        """
+        Returns all Resources in the project whose URL matches the specified
+        regular expression and literal prefix, in the order they were created.
+        """
+        sorted_resource_urls = self._sorted_resource_urls  # cache
+        resource_for_url = self._resources  # cache
+        
+        # NOTE: The following calculation is equivalent to
+        #           members = [r for r in self.resources if url_pattern_re.fullmatch(r.url) is not None]
+        #       but runs faster on average,
+        #       in O(log(r) + s + g*log(g)) time rather than O(r) time, where
+        #           r = (# of Resources in Project),
+        #           s = (# of Resources in Project matching the literal prefix), and
+        #           g = (# of Resources in the resulting group).
+        members = []
+        start_index = sorted_resource_urls.bisect_left(literal_prefix)
+        for cur_url in sorted_resource_urls.islice(start=start_index):
+            if not cur_url.startswith(literal_prefix):
+                break
+            if url_pattern_re.fullmatch(cur_url):
+                r = resource_for_url[cur_url]
+                members.append(r)
+        members.sort(key=lambda r: r._id)
+        return members
+    
+    def urls_matching_pattern(self,
+            url_pattern_re: re.Pattern,
+            literal_prefix: str,
+            limit: Optional[int]=None,
+            ) -> Tuple[List[str], int]:
+        """
+        Returns all resource URLs in the project which match the specified
+        regular expression and literal prefix, ordered by URL value.
+        
+        If limit is not None than at most `limit` URLs will be returned.
+        
+        Also returns the number of matching URLs if limit is None,
+        or an upper bound on the number of matching URLs if limit is not None.
+        """
+        sorted_resource_urls = self._sorted_resource_urls  # cache
+        
+        # NOTE: When limit is None, the following calculation is equivalent to
+        #           members = sorted([r.url for r in self.resources if url_pattern_re.fullmatch(r.url) is not None])
+        #       but runs faster on average,
+        #       in O(log(r) + s) time rather than O(r) time, where
+        #           r = (# of Resources in Project) and
+        #           s = (# of Resources in Project matching the literal prefix).
+        member_urls = []
+        start_index = sorted_resource_urls.bisect_left(literal_prefix)
+        for cur_url in sorted_resource_urls.islice(start=start_index):
+            if not cur_url.startswith(literal_prefix):
+                break
+            if url_pattern_re.fullmatch(cur_url):
+                member_urls.append(cur_url)
+                if limit is not None and len(member_urls) == limit:
+                    break
+        if limit is None:
+            return (member_urls, len(member_urls))
+        else:
+            end_index = bisect_key_right(
+                sorted_resource_urls,  # type: ignore[misc]
+                literal_prefix,
+                order_preserving_key=lambda url: url[:len(literal_prefix)])  # type: ignore[index]
+            
+            approx_member_count = end_index - start_index + 1
+            return (member_urls, approx_member_count)
+    
     @property
     def root_resources(self) -> Iterable[RootResource]:
+        """Returns all RootResources in the project in the order they were created."""
         return self._root_resources.values()
     
     def get_root_resource(self, resource: Resource) -> Optional[RootResource]:
@@ -398,26 +472,27 @@ class Project:
     
     def _get_root_resource_with_id(self, root_resource_id):
         """Returns the `RootResource` with the specified ID or None if no such root resource exists."""
-        # PERF: O(n) when it could be O(1)
+        # PERF: O(n) when it could be O(1), where n = # of RootResources
         return next((rr for rr in self._root_resources.values() if rr._id == root_resource_id), None)
     
     def _get_root_resource_with_name(self, name):
         """Returns the `RootResource` with the specified name or None if no such root resource exists."""
-        # PERF: O(n) when it could be O(1)
+        # PERF: O(n) when it could be O(1), where n = # of RootResources
         return next((rr for rr in self._root_resources.values() if rr.name == name), None)
     
     @property
     def resource_groups(self) -> Iterable[ResourceGroup]:
+        """Returns all ResourceGroups in the project in the order they were created."""
         return self._resource_groups
     
     def get_resource_group(self, name: str) -> Optional[ResourceGroup]:
         """Returns the `ResourceGroup` with the specified name or None if no such resource exists."""
-        # PERF: O(n) when it could be O(1)
+        # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
         return next((rg for rg in self._resource_groups if rg.name == name), None)
     
     def _get_resource_group_with_id(self, resource_group_id):
         """Returns the `ResourceGroup` with the specified ID or None if no such resource exists."""
-        # PERF: O(n) when it could be O(1)
+        # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
         return next((rg for rg in self._resource_groups if rg._id == resource_group_id), None)
     
     # === Tasks ===
@@ -458,12 +533,16 @@ class Project:
         del self._resources[old_url]
         self._resources[new_url] = resource
         
+        self._sorted_resource_urls.remove(old_url)
+        self._sorted_resource_urls.add(new_url)
+        
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
             rg._resource_did_alter_url(resource, old_url, new_url)
     
     def _resource_did_delete(self, resource: Resource) -> None:
         del self._resources[resource.url]
+        self._sorted_resource_urls.remove(resource.url)
         
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
@@ -627,6 +706,11 @@ class Resource:
             assert c.lastrowid is not None
             self._id = c.lastrowid
         project._resources[normalized_url] = self
+        if not project._loading:
+            project._sorted_resource_urls.add(normalized_url)
+        else:
+            # Caller is responsible for updating Project._sorted_resource_urls
+            pass
         
         if not project._loading:
             project._resource_did_instantiate(self)
@@ -1668,8 +1752,7 @@ class ResourceGroup:
             project: Project, 
             name: str, 
             url_pattern: str, 
-            _id: Optional[int]=None,
-            _resources_sorted_by_url: Optional[List[Resource]]=None) -> None:
+            _id: Optional[int]=None) -> None:
         """
         Arguments:
         * project -- associated `Project`.
@@ -1683,34 +1766,9 @@ class ResourceGroup:
         self._source = None  # type: ResourceGroupSource
         self.listeners = []  # type: List[object]
         
-        # Calculate members
-        # 
-        # NOTE: The following calculation is equivalent to
-        #           members = [r for r in self.project.resources if self.contains_url(r.url)]
-        #       but runs faster on average,
-        #       in O(log(r) + s) time rather than O(r) time, where
-        #           r = (# of Resources in Project) and
-        #           s = (# of Resources in this ResourceGroup).
-        members = []
-        if True:
-            resources_sorted_by_url = (
-                _resources_sorted_by_url
-                if _resources_sorted_by_url is not None
-                else list(sorted(project.resources, key=lambda r: r.url))
-            )
-            url_pattern_re = self._url_pattern_re  # cache
-            
-            literal_prefix = ResourceGroup.literal_prefix_for_url_pattern(url_pattern)
-            resource_url_prefixes = lazymap(resources_sorted_by_url, lambda r: r.url[:len(literal_prefix)])
-            start_index = bisect.bisect_left(resource_url_prefixes, literal_prefix)
-            for i in range(start_index, len(resources_sorted_by_url)):
-                if resource_url_prefixes[i] != literal_prefix:
-                    break
-                r = resources_sorted_by_url[i]
-                if url_pattern_re.fullmatch(r.url):
-                    members.append(r)
-            members.sort(key=lambda r: r._id)
-        self._members = members
+        self._members = project.resources_matching_pattern(
+            url_pattern_re=self._url_pattern_re,
+            literal_prefix=ResourceGroup.literal_prefix_for_url_pattern(url_pattern))
         
         if project._loading:
             self._id = _id

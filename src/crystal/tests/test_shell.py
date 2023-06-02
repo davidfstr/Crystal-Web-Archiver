@@ -43,11 +43,13 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'request_cookies_in_use',
     'resource_groups',
     'resources',
+    'resources_matching_pattern',
     'root_resources',
     'root_task',
     'server_running',
     'start_server',
-    'title'
+    'title',
+    'urls_matching_pattern',
 ]
 
 _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
@@ -116,15 +118,17 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
             assert re.fullmatch(
                 r'^<crystal\.browser\.MainWindow object at 0x[0-9a-f]+>\n$',
                 _py_eval(crystal, 'window'))
-            
+        
+        with subtests.test(msg='and {project, window} can be used with help()'):
             assertIn('Help on Project in module crystal.model object:', _py_eval(crystal, 'help(project)'))
             assertIn('Help on MainWindow in module crystal.browser object:', _py_eval(crystal, 'help(window)'))
             
+        with subtests.test(msg='and {project, window} have expected public API'):
             # Ensure public members match expected set
-            assertEqual(repr(_EXPECTED_PROJECT_PUBLIC_MEMBERS) + '\n',
-                _py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]"))
-            assertEqual(repr(_EXPECTED_WINDOW_PUBLIC_MEMBERS) + '\n',
-                _py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]"))
+            assertEqual(_EXPECTED_PROJECT_PUBLIC_MEMBERS,
+                literal_eval(_py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]")))
+            assertEqual(_EXPECTED_WINDOW_PUBLIC_MEMBERS,
+                literal_eval(_py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]")))
 
 
 @skip_on_windows

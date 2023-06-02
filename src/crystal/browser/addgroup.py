@@ -10,6 +10,8 @@ _FORM_ROW_SPACING = 10
 
 
 class AddGroupDialog:
+    _MAX_VISIBLE_PREVIEW_URLS = 100
+    
     # === Init ===
     
     def __init__(self, parent, on_finish, project, initial_url=None, initial_source=None):
@@ -113,18 +115,31 @@ class AddGroupDialog:
     
     # === Operations ===
     
-    def _update_preview_urls(self):
+    def _update_preview_urls(self) -> None:
         url_pattern = self.pattern_field.GetValue()
         url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
+        literal_prefix = ResourceGroup.literal_prefix_for_url_pattern(url_pattern)
         
-        matching_urls = []
-        for r in self._project.resources:
-            if url_pattern_re.match(r.url) is not None:
-                matching_urls.append(r.url)
+        url_pattern_is_literal = (len(literal_prefix) == len(url_pattern))
+        if url_pattern_is_literal:
+            member = self._project.get_resource(literal_prefix)
+            if member is None:
+                (matching_urls, approx_match_count) = ([], 0)
+            else:
+                (matching_urls, approx_match_count) = ([member.url], 1)
+        else:
+            (matching_urls, approx_match_count) = self._project.urls_matching_pattern(
+                url_pattern_re, literal_prefix, limit=self._MAX_VISIBLE_PREVIEW_URLS)
         
         self.url_list.Clear()
         if len(matching_urls) > 0:  # avoid warning on Mac
-            self.url_list.InsertItems(sorted(matching_urls), 0)
+            more_count = approx_match_count - len(matching_urls)
+            more_items = (
+                [f'... about {more_count:n} more']
+                if more_count != 0
+                else []
+            )
+            self.url_list.InsertItems(matching_urls + more_items, 0)
     
     # === Events ===
     
