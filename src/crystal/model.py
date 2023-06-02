@@ -552,9 +552,9 @@ class Resource:
     
     project: Project
     _url: str
-    _download_body_task_ref: _WeakTaskRef
-    _download_task_ref: _WeakTaskRef
-    _download_task_noresult_ref: _WeakTaskRef
+    _download_body_task_ref: Optional[_WeakTaskRef]
+    _download_task_ref: Optional[_WeakTaskRef]
+    _download_task_noresult_ref: Optional[_WeakTaskRef]
     already_downloaded_this_session: bool
     _id: int  # or None if deleted
     
@@ -587,9 +587,9 @@ class Resource:
         self = object.__new__(cls)
         self.project = project
         self._url = normalized_url
-        self._download_body_task_ref = _WeakTaskRef()
-        self._download_task_ref = _WeakTaskRef()
-        self._download_task_noresult_ref = _WeakTaskRef()
+        self._download_body_task_ref = None
+        self._download_task_ref = None
+        self._download_task_noresult_ref = None
         self.already_downloaded_this_session = False
         
         if project._loading:
@@ -737,6 +737,8 @@ class Resource:
         def task_factory():
             from crystal.task import DownloadResourceBodyTask
             return DownloadResourceBodyTask(self)
+        if self._download_body_task_ref is None:
+            self._download_body_task_ref = _WeakTaskRef()
         return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
     def download(self, wait_for_embedded: bool=False, needs_result: bool=True) -> 'Future[ResourceRevision]':
@@ -779,8 +781,16 @@ class Resource:
         def task_factory():
             from crystal.task import DownloadResourceTask
             return DownloadResourceTask(self, needs_result=needs_result)
+        if needs_result:
+            if self._download_task_ref is None:
+                self._download_task_ref = _WeakTaskRef()
+            task_ref = self._download_task_ref
+        else:
+            if self._download_task_noresult_ref is None:
+                self._download_task_noresult_ref = _WeakTaskRef()
+            task_ref = self._download_task_noresult_ref
         return self._get_task_or_create(
-            self._download_task_ref if needs_result else self._download_task_noresult_ref,
+            task_ref,
             task_factory
         )
     
