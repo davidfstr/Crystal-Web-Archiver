@@ -1817,7 +1817,7 @@ class ResourceGroup:
             return url_pattern[:first_meta_index]
     
     def __contains__(self, resource: Resource) -> bool:
-        return resource in self._members
+        return self.contains_url(resource.url)
     
     def contains_url(self, resource_url: str) -> bool:
         return self._url_pattern_re.match(resource_url) is not None
