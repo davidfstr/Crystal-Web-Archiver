@@ -138,18 +138,31 @@ class Project:
                     self._set_property(name, value)
                 
                 # Load Resources
-                [(resource_count,)] = c.execute('select count(1) from resource')
-                progress_listener.loading_resources(resource_count)
-                batch_size = max(1, resource_count // 100)
+                # 
+                # NOTE: The following query to approximate row count is
+                #       significantly faster than the exact query
+                #       ('select count(1) from resource') because it
+                #       does not require a full table scan.
+                rows = list(c.execute('select id from resource order by id desc limit 1'))
+                if len(rows) == 1:
+                    [(approx_resource_count,)] = rows
+                else:
+                    assert len(rows) == 0
+                    approx_resource_count = 0
+                progress_listener.will_load_resources(approx_resource_count)
+                batch_size = max(1, approx_resource_count // 100)
                 next_index_to_report = 0
+                resource_count = 0
                 for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
                     if index == next_index_to_report:
                         progress_listener.loading_resource(index)
                         next_index_to_report += batch_size
                     # Create Resource and add to self._resources
                     Resource(self, url, _id=id)
+                    resource_count += 1
                 if resource_count != 0:
                     progress_listener.loading_resource(resource_count - 1)
+                progress_listener.did_load_resources(resource_count)
                 
                 # Index Resources (to load RootResources and ResourceGroups faster)
                 progress_listener.indexing_resources()
@@ -199,8 +212,10 @@ class Project:
                 
                 c = self._db.cursor()
                 c.execute('create table project_property (name text unique not null, value text)')
-                progress_listener.loading_resources(resource_count=0)
+                progress_listener.will_load_resources(approx_resource_count=0)
                 c.execute('create table resource (id integer primary key, url text unique not null)')
+                progress_listener.did_load_resources(resource_count=0)
+                progress_listener.indexing_resources()
                 progress_listener.loading_root_resources(root_resource_count=0)
                 c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
                 progress_listener.loading_resource_groups(resource_group_count=0)

@@ -8,10 +8,13 @@ class OpenProjectProgressListener:
     def opening_project(self, project_name: str) -> None:
         pass
     
-    def loading_resources(self, resource_count: int) -> None:
+    def will_load_resources(self, approx_resource_count: int) -> None:
         pass
     
     def loading_resource(self, index: int) -> None:
+        pass
+    
+    def did_load_resources(self, resource_count: int) -> None:
         pass
     
     def indexing_resources(self) -> None:
@@ -76,13 +79,12 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         self._dialog.Show()
     
     @overrides
-    def loading_resources(self, resource_count: int) -> None:
+    def will_load_resources(self, approx_resource_count: int) -> None:
         assert self._dialog is not None
-        self._resource_count = resource_count
-        self._dialog.SetRange(max(resource_count * 2, 1))
+        self._dialog.SetRange(max(approx_resource_count * 2, 1))
         self._dialog.Update(
             0,
-            f'Loading {resource_count:n} resource(s)...')
+            f'Loading about {approx_resource_count:n} resource(s)...')
     
     @overrides
     def loading_resource(self, index: int) -> None:
@@ -90,6 +92,12 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         (ok, _) = self._dialog.Update(index)
         if not ok:
             sys.exit()
+    
+    @overrides
+    def did_load_resources(self, resource_count: int) -> None:
+        assert self._dialog is not None
+        self._resource_count = resource_count
+        self._dialog.SetRange(max(resource_count * 2, 1))
     
     @overrides
     def indexing_resources(self) -> None:
