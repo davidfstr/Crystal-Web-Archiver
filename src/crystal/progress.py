@@ -14,6 +14,9 @@ class OpenProjectProgressListener:
     def loading_resource(self, index: int) -> None:
         pass
     
+    def indexing_resources(self) -> None:
+        pass
+    
     def loading_root_resources(self, root_resource_count: int) -> None:
         pass
     
@@ -87,6 +90,14 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         (ok, _) = self._dialog.Update(index)
         if not ok:
             sys.exit()
+    
+    @overrides
+    def indexing_resources(self) -> None:
+        assert self._dialog is not None
+        assert self._resource_count is not None
+        self._dialog.Update(
+            self._dialog.Value,
+            f'Indexing {self._resource_count:n} resources(s)...')
     
     @overrides
     def loading_root_resources(self, root_resource_count: int) -> None:

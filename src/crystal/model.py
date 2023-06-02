@@ -9,6 +9,7 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 
 from __future__ import annotations
 
+import bisect
 from collections import OrderedDict
 import copy
 from crystal.plugins import (
@@ -23,6 +24,7 @@ from crystal.util.db import (
     get_column_names_of_table,
     is_no_such_column_error_for,
 )
+from crystal.util.lazymap import lazymap
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
@@ -31,6 +33,7 @@ import cgi
 import datetime
 import io
 import json
+import math
 import mimetypes
 import os
 import re
@@ -143,13 +146,21 @@ class Project:
                     if index == next_index_to_report:
                         progress_listener.loading_resource(index)
                         next_index_to_report += batch_size
+                    # Create Resource and add to self._resources
                     Resource(self, url, _id=id)
+                if resource_count != 0:
+                    progress_listener.loading_resource(resource_count - 1)
+                
+                # Index Resources (to load RootResources and ResourceGroups faster)
+                progress_listener.indexing_resources()
+                resources_sorted_by_url = sorted(self.resources, key=lambda r: r.url)
+                resource_for_id = {r._id: r for r in self.resources}
                 
                 # Load RootResources
                 [(root_resource_count,)] = c.execute('select count(1) from root_resource')
                 progress_listener.loading_root_resources(root_resource_count)
                 for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
-                    resource = self._get_resource_with_id(resource_id)
+                    resource = resource_for_id[resource_id]
                     RootResource(self, name, resource, _id=id)
                 
                 # Load ResourceGroups
@@ -159,7 +170,7 @@ class Project:
                 for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
                         'select name, url_pattern, source_type, source_id, id from resource_group')):
                     progress_listener.loading_resource_group(index)
-                    group = ResourceGroup(self, name, url_pattern, _id=id)
+                    group = ResourceGroup(self, name, url_pattern, _id=id, _resources_sorted_by_url=resources_sorted_by_url)
                     group_2_source[group] = (source_type, source_id)
                 for (group, (source_type, source_id)) in group_2_source.items():
                     if source_type is None:
@@ -357,11 +368,6 @@ class Project:
     def get_resource(self, url: str) -> Optional[Resource]:
         """Returns the `Resource` with the specified URL or None if no such resource exists."""
         return self._resources.get(url, None)
-    
-    def _get_resource_with_id(self, resource_id):
-        """Returns the `Resource` with the specified ID or None if no such resource exists."""
-        # PERF: O(n) when it could be O(1)
-        return next((r for r in self._resources.values() if r._id == resource_id), None)
     
     @property
     def root_resources(self) -> Iterable[RootResource]:
@@ -1605,7 +1611,8 @@ class ResourceGroup:
             project: Project, 
             name: str, 
             url_pattern: str, 
-            _id: Optional[int]=None) -> None:
+            _id: Optional[int]=None,
+            _resources_sorted_by_url: Optional[List[Resource]]=None) -> None:
         """
         Arguments:
         * project -- associated `Project`.
@@ -1619,10 +1626,33 @@ class ResourceGroup:
         self._source = None  # type: ResourceGroupSource
         self.listeners = []  # type: List[object]
         
+        # Calculate members
+        # 
+        # NOTE: The following calculation is equivalent to
+        #           members = [r for r in self.project.resources if self.contains_url(r.url)]
+        #       but runs faster on average,
+        #       in O(log(r) + s) time rather than O(r) time, where
+        #           r = (# of Resources in Project) and
+        #           s = (# of Resources in this ResourceGroup).
         members = []
-        for r in self.project.resources:
-            if self.contains_url(r.url):
-                members.append(r)
+        if True:
+            resources_sorted_by_url = (
+                _resources_sorted_by_url
+                if _resources_sorted_by_url is not None
+                else list(sorted(project.resources, key=lambda r: r.url))
+            )
+            url_pattern_re = self._url_pattern_re  # cache
+            
+            literal_prefix = ResourceGroup.literal_prefix_for_url_pattern(url_pattern)
+            resource_url_prefixes = lazymap(resources_sorted_by_url, lambda r: r.url[:len(literal_prefix)])
+            start_index = bisect.bisect_left(resource_url_prefixes, literal_prefix)
+            for i in range(start_index, len(resources_sorted_by_url)):
+                if resource_url_prefixes[i] != literal_prefix:
+                    break
+                r = resources_sorted_by_url[i]
+                if url_pattern_re.fullmatch(r.url):
+                    members.append(r)
+            members.sort(key=lambda r: r._id)
         self._members = members
         
         if project._loading:
@@ -1711,6 +1741,23 @@ class ResourceGroup:
         patstr = patstr.replace(r'$@$', r'([a-zA-Z]+)')
         
         return re.compile(r'^' + patstr + r'$')
+    
+    @staticmethod
+    def literal_prefix_for_url_pattern(url_pattern: str) -> str:
+        """
+        Returns the longest prefix of the specified url pattern that consists
+        only of literal characters, possibly the empty string.
+        """
+        first_meta_index = math.inf
+        for metachar in ['**', '*', '#', '@']:
+            cur_meta_index = url_pattern.find(metachar)
+            if cur_meta_index != -1 and cur_meta_index < first_meta_index:
+                first_meta_index = cur_meta_index
+        if first_meta_index == math.inf:
+            return url_pattern
+        else:
+            assert isinstance(first_meta_index, int)
+            return url_pattern[:first_meta_index]
     
     def __contains__(self, resource: Resource) -> bool:
         return resource in self._members
