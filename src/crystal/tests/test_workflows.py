@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from crystal.model import Project
-from crystal.server import get_request_url
+from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
 from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
     click_button, set_checkbox_value, TreeItem
@@ -83,7 +83,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 home_ti.SelectItem()
                 home_request_url = get_request_url(home_url)
                 expected_home_request_url = (
-                    'http://localhost:2797/_/' + home_url.replace('://', '/')
+                    f"http://localhost:{_DEFAULT_SERVER_PORT}/_/{home_url.replace('://', '/')}"
                 )
                 assert expected_home_request_url == home_request_url
                 with assert_does_open_webbrowser_to(home_request_url):
