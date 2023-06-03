@@ -7,6 +7,7 @@ This thread is responsible for:
 (2) mediating access to model elements (including the underlying database).
 """
 
+import os
 import sys
 import threading
 from typing import Optional
@@ -102,7 +103,7 @@ def _create_profiled_callable(callable, *args):
                 print("*** Slow foreground task took %.02fs to execute: %s @ [%s:%s]" % (
                     delta_time, root_callable,
                     file,
-                    start_line_number))
+                    start_line_number), file=sys.stderr)
     return profiled_callable
 
 
@@ -122,7 +123,8 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
     Raises:
     * NoForegroundThreadError
     """
-    if _PROFILE_FG_TASKS and not no_profile:
+    if (_PROFILE_FG_TASKS and not no_profile and 
+            os.environ.get('CRYSTAL_NO_PROFILE', 'False') != 'True'):
         callable = _create_profiled_callable(callable, *args);
         args=()
     

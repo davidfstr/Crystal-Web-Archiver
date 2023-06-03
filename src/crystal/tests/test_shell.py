@@ -633,7 +633,11 @@ def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
         encoding='utf-8',
         env={
             **os.environ,
-            **{'CRYSTAL_FAULTHANDLER': 'True'}
+            **{
+                'CRYSTAL_FAULTHANDLER': 'True',
+                # Prevent profiling warnings from being mixed into output
+                'CRYSTAL_NO_PROFILE': 'True',
+            }
         })
     try:
         assert isinstance(crystal.stdout, TextIOBase)
