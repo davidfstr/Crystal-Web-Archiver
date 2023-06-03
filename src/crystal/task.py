@@ -62,6 +62,22 @@ class Task:
     So if you care about the result of a task you plan to schedule on a project, 
     be sure to save the task's future *before* scheduling it.
     """
+    # Optimize per-instance memory use, since there many be very many Task objects
+    __slots__ = (
+        '_icon_name',
+        '_title',
+        '_subtitle',
+        'scheduling_style',
+        '_parent',
+        '_children',
+        '_num_children_complete',
+        '_complete',
+        'listeners',
+        '_did_yield_self',
+        '_future',
+        '_first_incomplete_child_index',
+        '_next_child_index',
+    )
     
     def __init__(self, title: str, icon_name: Optional[str]) -> None:
         self._icon_name = icon_name
@@ -415,6 +431,18 @@ class DownloadResourceTask(Task):
     This is returned before all embedded resources have finished downloading,
     unless you specially use get_future(wait_for_embedded=True).
     """
+    # Optimize per-instance memory use, since there many be very many
+    # DownloadResourceTask objects
+    __slots__ = (
+        '_abstract_resource',
+        '_resource',
+        '_pbc',
+        '_download_body_task',
+        '_parse_links_task',
+        '_already_downloaded_task',
+        '_download_body_with_embedded_future',
+    )
+    
     def __init__(self, abstract_resource, *, needs_result: bool=True):
         """
         Arguments:
