@@ -277,15 +277,60 @@ Release Notes ⋮
         * Use consistent words to refer to common concepts
             * {Create, Add} -> New
             * {URL, Root URL} -> Root URL
-        * macOS: Add standard application menus
+        * Add menus
         * macOS: Add proxy icon to the project window, making it easier to navigate
           to the project in the Finder.
         * Add app name to version label in lower-left corner of project window.
     * Add keyboard shortcuts everywhere
+    * Task Tree: Remove top-level tasks that complete as they complete,
+      rather than waiting for all other outstanding tasks to complete first
+
+* Large project improvements (with 3,000,000+ URLs)
+    * Open projects containing many URLs in about 50% as much time as before:
+        * Approximate the URL count when loading a project in O(1) time
+          rather than getting an exact URL count in O(r) time,
+          where r = the number of URLs in the project
+        * Decrease the time to load groups from O(r·g) to about O(r + g·log(r)),
+          where r = the number of URLs in the project and
+          g = the number of groups in the project
+        * Defer creation of Entity Tree nodes corresponding to group members
+          until the group is actually expanded
+    * Speed up interacting with the Entity Tree and Task Tree when
+      there are very many URLs in a project:
+        * Entity Tree: Speed up expanding URL nodes when large groups exist,
+          now in O(k) time rather than O(r·k) time,
+          where k = the number of links originating from the URL node and
+          r = the number of URLs in the project.
+        * Entity Tree: Load only the first 100 members of each group, on demand
+        * Task Tree: Show only up to 100 children when downloading a group
+    * Speed up interacting with the Add Group dialog when
+      there are very many URLs in a project:
+        * When typing each character of a new URL pattern and no wildcard
+          has yet been typed, perform an O(1) search for matching URLs
+          in the preview pane.
+        * When typing each character of a new URL pattern and at least one
+          wildcard has been typed, perform an O(log(r)) search for matching URLs
+          in the preview pane, where r = the number of URLs in the project.
+        * Previously an O(r) search was performed in both of the above cases.
+    * Prevent system idle sleep while tasks are running (on macOS and Windows)
+    * Print large numbers with comma separators or whatever the appropriate
+      separator is for the current locale
+    * Optimize memory use when there are very many URLs in a project
+      by shrinking in-memory Resource and Task objects by defining explicit
+      `__slots__`
+    * If free disk space drops too low then refuse to download further resources
 
 * Critical fixes
     * Linux: Fix dialog that appears on app launch to be sized correctly.
     * Linux: Fix View button to open browser even if Crystal run from read-only volume.
+
+* Downloading improvements
+    * Show estimated time remaining and speed when downloading groups and URLs
+    * Reinstate the ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH
+      optimization that was disabled in v1.4.0b, which significantly speeds up
+      downloading groups of HTML pages that link to similar URLs
+    * Support immediate early completion of download tasks for URLs
+      that were downloaded in the current session or a recent session
 
 * Parsing improvements
     * Can identify URL references inside `<img srcset="...">`.
@@ -294,6 +339,15 @@ Release Notes ⋮
     * Links to anchors on the same page are no longer rewritten,
       for better compatibility with JavaScript libraries that
       treat such links specially.
+
+* CLI improvements
+    * Fewer profiling warnings on the command line.
+
+* Minor fixes
+    * When deleting a ResourceRevision, don't delete revision body if project
+      is read-only and properly related Resource as no longer being downloaded
+      this session
+    * When querying a ResourceRevision's size, don't crash with a traceback
 
 * Backward-incompatible API changes
     * `Resource.revisions()` now returns `Iterable[ResourceRevision]` instead
