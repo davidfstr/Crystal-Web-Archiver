@@ -60,6 +60,9 @@ class Project:
     _DB_FILENAME = 'database.sqlite'
     _RESOURCE_REVISION_DIRNAME = 'revisions'
     
+    # NOTE: Only tracked when tests are running
+    last_opened_project: Optional[Project]=None  # static
+    
     def __init__(self,
             path: str,
             progress_listener: Optional[OpenProjectProgressListener]=None,
@@ -198,6 +201,10 @@ class Project:
         
         # Define initial configuration
         self._request_cookie = None  # type: Optional[str]
+        
+        # Export reference to self
+        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+            Project.last_opened_project = self
     
     @staticmethod
     def is_valid(path):

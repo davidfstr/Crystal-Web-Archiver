@@ -398,5 +398,22 @@ class NodeViewPeer(tuple):
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SortChildren(node_id)
     
+    def SelectItem(self, select: bool=True) -> None:
+        assert is_foreground_thread()
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.SelectItem(node_id, select)
+    
+    def IsSelected(self) -> bool:
+        assert is_foreground_thread()
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            with wrapped_object_deleted_error_ignored():
+                return self.tree_peer.IsSelected(node_id)
+            return False
+        else:
+            return False
+    
     def _raise_no_longer_exists(self) -> NoReturn:
         raise WindowDeletedError('Tree item no longer exists')

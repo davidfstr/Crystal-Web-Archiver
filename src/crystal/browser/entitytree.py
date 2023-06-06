@@ -935,15 +935,3 @@ class MorePlaceholderNode(Node):
         )
     def __hash__(self) -> int:
         return self._more_count
-
-
-# ------------------------------------------------------------------------------
-
-# Informal unit test
-def _test(project):
-    app = wx.App()
-    frame = wx.Frame(None, title='Frame', size=(500,300))
-    et = EntityTree(frame, project)
-    frame.Show(True)
-    #app.MainLoop()
-    return app
