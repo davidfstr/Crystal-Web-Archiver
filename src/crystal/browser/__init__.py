@@ -325,7 +325,6 @@ class MainWindow:
         #       * Is name or url empty?
         #       * Is name or url already taken?
         RootResource(self.project, name, Resource(self.project, url))
-        self.entity_tree.update()
     
     def _on_add_group(self, event):
         AddGroupDialog(
@@ -334,16 +333,17 @@ class MainWindow:
             initial_url=self._selection_initial_url,
             initial_source=self._selection_initial_source)
     
-    def _on_add_group_dialog_ok(self, name, url_pattern, source):
+    def _on_add_group_dialog_ok(self, name: str, url_pattern: str, source):
         # TODO: Validate user input:
         #       * Is name or url_pattern empty?
         #       * Is name or url_pattern already taken?
         rg = ResourceGroup(self.project, name, url_pattern)
         rg.source = source
-        self.entity_tree.update()
     
     def _on_remove_entity(self, event):
         self.entity_tree.selected_entity.delete()
+        # TODO: This update() should happen in response to a delete
+        #       event fired by the entity itself.
         self.entity_tree.update()
     
     def _on_download_entity(self, event) -> None:

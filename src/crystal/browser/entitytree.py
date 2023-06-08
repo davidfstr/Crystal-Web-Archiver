@@ -121,6 +121,16 @@ class EntityTree:
         fg_call_later(lambda:
             self.root.update_icon_set_of_descendants_with_resource(revision.resource))
     
+    # === Event: Root Resource Did Instantiate ===
+    
+    def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
+        self.update()
+    
+    # === Event: Resource Group Did Instantiate ===
+    
+    def resource_group_did_instantiate(self, group: ResourceGroup) -> None:
+        self.update()
+    
     # === Event: Min Fetch Date Did Change ===
     
     def min_fetch_date_did_change(self) -> None:

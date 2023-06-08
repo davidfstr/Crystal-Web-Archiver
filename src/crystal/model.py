@@ -425,6 +425,20 @@ class Project:
         for rg in self.resource_groups:
             rg._resource_did_delete(resource)
     
+    # Called when a new RootResource is created after the project has loaded
+    def _root_resource_did_instantiate(self, root_resource: RootResource) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'root_resource_did_instantiate'):
+                lis.root_resource_did_instantiate(root_resource)  # type: ignore[attr-defined]
+    
+    # Called when a new ResourceGroup is created after the project has loaded
+    def _resource_group_did_instantiate(self, group: ResourceGroup) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'resource_group_did_instantiate'):
+                lis.resource_group_did_instantiate(group)  # type: ignore[attr-defined]
+    
     # === Server ===
     
     def start_server(self, **server_kwargs) -> 'ProjectServer':
@@ -942,6 +956,10 @@ class RootResource:
                 project._db.commit()
                 self._id = c.lastrowid
             project._root_resources[resource] = self
+            
+            if not project._loading:
+                project._root_resource_did_instantiate(self)
+            
             return self
     
     def delete(self) -> None:
@@ -1574,6 +1592,9 @@ class ResourceGroup:
             project._db.commit()
             self._id = c.lastrowid
         project._resource_groups.append(self)
+        
+        if not project._loading:
+            project._resource_group_did_instantiate(self)
     
     def _init_source(self, source: ResourceGroupSource) -> None:
         self._source = source
