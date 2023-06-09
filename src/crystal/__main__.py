@@ -195,10 +195,13 @@ def _main(args: List[str]) -> None:
             pass
         
         def OnInit(self):
-            # Workaround wxPython >4.0.7 plus Python 3.8 breaking locale
-            # https://discuss.wxpython.org/t/wxpython4-1-1-python3-8-locale-wxassertionerror/35168
             if sys.platform.startswith('win') and sys.version_info >= (3, 8):
+                # Workaround wxPython >4.0.7 plus Python 3.8 breaking locale
+                # https://discuss.wxpython.org/t/wxpython4-1-1-python3-8-locale-wxassertionerror/35168
                 locale.setlocale(locale.LC_ALL, 'C')
+            else:
+                # Auto-detect appropriate locale based on on.environ['LANG']
+                locale.setlocale(locale.LC_ALL, '')
             
             # Activate wx keepalive until self._finish_launch() is called
             self._keepalive_frame = wx.Frame(None, -1, 'Crystal Web Archiver')

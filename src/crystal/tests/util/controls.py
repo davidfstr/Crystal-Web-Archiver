@@ -103,6 +103,9 @@ class TreeItem:
     def SelectItem(self) -> None:
         self.tree.SelectItem(self.id)
     
+    def IsSelected(self) -> bool:
+        return self.tree.IsSelected(self.id)
+    
     @staticmethod
     def GetSelection(tree: wx.TreeCtrl) -> Optional[TreeItem]:
         selected_tii = tree.GetSelection()
@@ -116,6 +119,12 @@ class TreeItem:
     
     def Collapse(self) -> None:
         self.tree.Collapse(self.id)
+    
+    def IsExpanded(self) -> bool:
+        return self.tree.IsExpanded(self.id)
+    
+    def ScrollTo(self) -> None:
+        self.tree.ScrollTo(self.id)
     
     @staticmethod
     def GetRootItem(tree: wx.TreeCtrl) -> Optional[TreeItem]:

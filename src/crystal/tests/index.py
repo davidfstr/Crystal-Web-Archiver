@@ -1,4 +1,5 @@
 from crystal.tests import (
+    test_entitytree,
     test_menus,
     test_shell,
     test_tasks,
@@ -17,6 +18,14 @@ from unittest import SkipTest
 
 # TODO: Avoid the need to manually enumerate all test functions individually
 _TEST_FUNCS = [
+    # test_entitytree
+    test_entitytree.test_rgn_icon_looks_like_folder_and_has_correct_tooltip,
+    test_entitytree.test_rgn_title_shows_group_name_and_url,
+    test_entitytree.test_rgn_does_not_load_children_until_initially_expanded,
+    test_entitytree.test_rgn_only_shows_first_100_children_initially_and_has_a_more_node_showing_how_many_remain,
+    test_entitytree.test_when_expand_more_node_in_rgn_then_shows_20_more_children_and_a_new_more_node,
+    test_entitytree.test_given_more_node_selected_when_expand_more_node_then_first_newly_visible_child_is_selected,
+    
     # test_menus
     test_menus.test_can_close_project_with_menuitem,
     test_menus.test_can_quit_with_menuitem,

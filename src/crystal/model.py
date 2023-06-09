@@ -60,6 +60,9 @@ class Project:
     _DB_FILENAME = 'database.sqlite'
     _RESOURCE_REVISION_DIRNAME = 'revisions'
     
+    # NOTE: Only tracked when tests are running
+    last_opened_project: Optional[Project]=None  # static
+    
     def __init__(self,
             path: str,
             progress_listener: Optional[OpenProjectProgressListener]=None,
@@ -131,7 +134,12 @@ class Project:
                 # Load Resources
                 [(resource_count,)] = c.execute('select count(1) from resource')
                 progress_listener.loading_resources(resource_count)
-                for (url, id) in c.execute('select url, id from resource'):
+                batch_size = max(1, resource_count // 100)
+                next_index_to_report = 0
+                for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
+                    if index == next_index_to_report:
+                        progress_listener.loading_resource(index)
+                        next_index_to_report += batch_size
                     Resource(self, url, _id=id)
                 
                 # Load RootResources
@@ -198,6 +206,10 @@ class Project:
         
         # Define initial configuration
         self._request_cookie = None  # type: Optional[str]
+        
+        # Export reference to self
+        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+            Project.last_opened_project = self
     
     @staticmethod
     def is_valid(path):

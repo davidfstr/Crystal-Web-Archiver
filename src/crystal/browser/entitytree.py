@@ -750,15 +750,21 @@ class ClusterNode(Node):
 
 
 class ResourceGroupNode(Node):
-    def __init__(self, resource_group):
+    _MAX_VISIBLE_CHILDREN = 100
+    _MORE_CHILDREN_TO_SHOW = 20
+    
+    def __init__(self, resource_group: ResourceGroup) -> None:
         self.resource_group = resource_group
         super().__init__()
+        self._max_visible_children = self._MAX_VISIBLE_CHILDREN
         
         self.view = NodeView()
         self.view.title = self.calculate_title()
         self.view.expandable = True
         
-        self.update_children()
+        # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
+        self.children = [_LoadingNode()]
+        assert not self._children_loaded
     
     # === Properties ===
     
@@ -778,24 +784,72 @@ class ResourceGroupNode(Node):
     
     # === Update ===
     
-    def update_children(self) -> None:
+    @property
+    def _children_loaded(self) -> bool:
+        if len(self.children) >= 1 and isinstance(self.children[0], _LoadingNode):
+            return False
+        else:
+            return True
+    
+    def update_children(self, force_populate: bool=False) -> None:
+        if not force_populate:
+            if not self._children_loaded:
+                return
+        
+        members = self.resource_group.members  # cache
+        
+        children = self.children  # cache
+        if len(children) > self._max_visible_children:
+            more_placeholder_node = children[-1]
+            assert isinstance(more_placeholder_node, MorePlaceholderNode)
+            more_placeholder_node.more_count = len(members) - self._max_visible_children
+            return
+        
         children_rrs = []  # type: List[Node]
         children_rs = []  # type: List[Node]
-        project = self.resource_group.project
-        for r in self.resource_group.members:
+        project = self.resource_group.project  # cache
+        for r in members[:self._max_visible_children]:
             rr = project.get_root_resource(r)
             if rr is None:
                 children_rs.append(NormalResourceNode(r))
             else:
                 children_rrs.append(RootResourceNode(rr))
-        self.children = children_rrs + children_rs
+        if len(members) > self._max_visible_children:
+            children_extra = [
+                MorePlaceholderNode(len(members) - self._max_visible_children, self),
+            ]  # type: List[Node]
+        else:
+            children_extra = []
+        self.children = children_rrs + children_rs + children_extra
+    
+    # === Events ===
+    
+    def on_expanded(self, event) -> None:
+        # If this is the first expansion attempt, populate the children
+        if not self._children_loaded:
+            self.update_children(force_populate=True)
+    
+    def on_more_expanded(self, more_node: MorePlaceholderNode) -> None:
+        # Save selected node
+        old_children_len = len(self.children)  # capture
+        more_node_was_selected = more_node.view.peer.IsSelected()  # capture
+        if more_node_was_selected:
+            more_node.view.peer.SelectItem(False)
+        
+        self._max_visible_children += self._MORE_CHILDREN_TO_SHOW
+        self.update_children()
+        
+        # Restore selected node
+        if more_node_was_selected:
+            node_in_position_of_old_more_node = self.children[old_children_len - 1]
+            node_in_position_of_old_more_node.view.peer.SelectItem()
     
     # === Comparison ===
     
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return isinstance(other, ResourceGroupNode) and (
             self.resource_group == other.resource_group)
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.resource_group)
 
 
@@ -839,13 +893,45 @@ class GroupedLinkedResourcesNode(Node):
         return hash(self._children_tuple)
 
 
-# ------------------------------------------------------------------------------
-
-# Informal unit test
-def _test(project):
-    app = wx.App()
-    frame = wx.Frame(None, title='Frame', size=(500,300))
-    et = EntityTree(frame, project)
-    frame.Show(True)
-    #app.MainLoop()
-    return app
+class MorePlaceholderNode(Node):
+    def __init__(self, more_count: int, delegate: Optional[object]=None) -> None:
+        super().__init__()
+        self._more_count = -1
+        self._delegate = delegate
+        
+        self.view = NodeView()
+        #self.view.title = ... (set below)
+        self.view.icon_set = (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_more']),
+        )
+        self.view.expandable = True
+        
+        self.more_count = more_count  # sets self.view.title too
+        
+        # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
+        self.children = [_LoadingNode()]
+    
+    def _get_more_count(self) -> int:
+        return self._more_count
+    def _set_more_count(self, more_count: int) -> None:
+        if more_count == self._more_count:
+            return
+        self._more_count = more_count
+        self.view.title = '%d more' % more_count
+    more_count = property(_get_more_count, _set_more_count)
+    
+    # === Events ===
+    
+    def on_expanded(self, event):
+        if hasattr(self._delegate, 'on_more_expanded'):
+            self._delegate.on_more_expanded(self)  # type: ignore[attr-defined]
+    
+    # === Comparison ===
+    
+    def __eq__(self, other) -> bool:
+        return (
+            isinstance(other, MorePlaceholderNode) and 
+            self._more_count == other._more_count
+        )
+    def __hash__(self) -> int:
+        return self._more_count
