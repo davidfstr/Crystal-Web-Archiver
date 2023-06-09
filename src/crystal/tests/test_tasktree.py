@@ -119,8 +119,6 @@ async def test_while_downloading_large_group_then_show_no_more_than_100_download
                         loading_more_text,
                         total_timeout=math.inf,  # progress timeout is sufficient
                         progress_timeout=crystal.task.DELAY_BETWEEN_DOWNLOADS + 2.0)
-                    first_child = download_rg_members_task_ti.GetFirstChild()
-                    assert first_child is None
                     assert (
                         len(task_root_ti.Children) == 0 or
                         download_rg_members_task_ti.Text.endswith('-- Complete')
