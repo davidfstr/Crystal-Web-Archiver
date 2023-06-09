@@ -16,39 +16,18 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 from unittest import SkipTest
 
 
-# TODO: Avoid the need to manually enumerate all test functions individually
-_TEST_FUNCS = [
-    # test_entitytree
-    test_entitytree.test_rgn_icon_looks_like_folder_and_has_correct_tooltip,
-    test_entitytree.test_rgn_title_shows_group_name_and_url,
-    test_entitytree.test_rgn_does_not_load_children_until_initially_expanded,
-    test_entitytree.test_rgn_only_shows_first_100_children_initially_and_has_a_more_node_showing_how_many_remain,
-    test_entitytree.test_when_expand_more_node_in_rgn_then_shows_20_more_children_and_a_new_more_node,
-    test_entitytree.test_given_more_node_selected_when_expand_more_node_then_first_newly_visible_child_is_selected,
-    
-    # test_menus
-    test_menus.test_can_close_project_with_menuitem,
-    test_menus.test_can_quit_with_menuitem,
-    test_menus.test_can_open_preferences_with_menuitem,
-    
-    # test_shell
-    test_shell.test_can_launch_with_shell,
-    test_shell.test_shell_exits_with_expected_message,
-    test_shell.test_can_read_project_with_shell,
-    test_shell.test_can_write_project_with_shell,
-    
-    # test_tasks
-    test_tasks.test_when_download_resource_then_displays_estimated_time_remaining,
-    test_tasks.test_when_download_resource_group_members_then_displays_estimated_time_remaining,
-    
-    # test_workflows
-    test_workflows.test_can_download_and_serve_a_static_site,
-    test_workflows.test_can_download_and_serve_a_site_requiring_dynamic_url_discovery,
-    test_workflows.test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting,
-    test_workflows.test_cannot_download_anything_given_project_is_opened_as_readonly,
-    test_workflows.test_can_update_downloaded_site_with_newer_page_revisions,
-    test_workflows.test_can_download_and_serve_a_site_requiring_cookie_authentication,
-]
+def _test_functions_in_module(mod) -> List[Callable]:
+    return [f for f in mod.__dict__.values() if callable(f) and getattr(f, '__name__', '').startswith('test_')]
+
+# TODO: Avoid the need to manually enumerate all test modules individually
+_TEST_FUNCS = (
+    _test_functions_in_module(test_entitytree) +
+    _test_functions_in_module(test_menus) +
+    _test_functions_in_module(test_shell) +
+    _test_functions_in_module(test_tasks) +
+    _test_functions_in_module(test_workflows) +
+    []
+)
 
 
 _TestFuncId = Tuple[str, str]  # (module, func_name)
@@ -73,6 +52,8 @@ def _run_tests(test_names: List[str]) -> bool:
     start_time = time.time()  # capture
     run_count = 0
     for test_func in _TEST_FUNCS:
+        if not callable(test_func):
+            raise ValueError(f'Test function is not callable: {test_func}')
         test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
         test_name = f'{test_func_id[0]}.{test_func_id[1]}'
         
