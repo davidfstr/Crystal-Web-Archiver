@@ -53,7 +53,8 @@ class TaskTreeNode:
     def task_subtitle_did_change(self, task: Task) -> None:
         def fg_task() -> None:
             self.tree_node.subtitle = self.task.subtitle
-        fg_call_later(fg_task)
+        # NOTE: Use no_profile=True because no obvious further optimizations exist
+        fg_call_later(fg_task, no_profile=True)
     
     def task_did_complete(self, task: Task) -> None:
         self.task.listeners.remove(self)

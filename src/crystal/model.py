@@ -781,8 +781,10 @@ class Resource:
         """
         project = self.project  # cache
         
-        revisions = self.revisions()
-        for revision in reversed(revisions):  # prioritize most recently downloaded
+        reversed_revisions = self.revisions(
+            reversed=True  # prioritize most recently downloaded
+        )
+        for revision in reversed_revisions:
             if stale_ok:
                 return revision
             else:
@@ -803,7 +805,7 @@ class Resource:
                     return revision
         return None
     
-    def revisions(self) -> List[ResourceRevision]:
+    def revisions(self, *, reversed: bool=False) -> Iterable[ResourceRevision]:
         """
         Loads and returns a list of `ResourceRevision`s downloaded for this resource.
         If no such revisions exist, an empty list is returned.
@@ -813,40 +815,40 @@ class Resource:
         """
         RR = ResourceRevision
         
-        revs = []  # type: list[ResourceRevision]
+        ordering = 'asc' if not reversed else 'desc'
+        
         c = self.project._db.cursor()
         try:
             rows = c.execute(
-                'select request_cookie, error, metadata, id '
-                    'from resource_revision where resource_id=? order by id asc',
+                f'select request_cookie, error, metadata, id '
+                    f'from resource_revision where resource_id=? order by id {ordering}',
                 (self._id,)
             )  # type: Iterable[Tuple[Any, Any, Any, Any]]
         except Exception as e:
             if is_no_such_column_error_for('request_cookie', e):
                 # Fetch from <=1.2.0 database schema
                 old_rows = c.execute(
-                    'select error, metadata, id '
-                        'from resource_revision where resource_id=? order by id asc',
+                    f'select error, metadata, id '
+                        f'from resource_revision where resource_id=? order by id {ordering}',
                     (self._id,)
                 )  # type: Iterable[Tuple[Any, Any, Any]]
                 rows = ((None, c0, c1, c2) for (c0, c1, c2) in old_rows)
             else:
                 raise
         for (request_cookie, error, metadata, id) in rows:
-            revs.append(ResourceRevision.load(
+            yield ResourceRevision.load(
                 resource=self,
                 request_cookie=request_cookie,
                 error=RR._decode_error(error),
                 metadata=RR._decode_metadata(metadata),
-                id=id))
-        return revs
+                id=id)
     
     def revision_for_etag(self) -> Dict[str, ResourceRevision]:
         """
         Returns a map of each known ETag to a matching ResourceRevision that is NOT an HTTP 304.
         """
         revision_for_etag = {}
-        for revision in self.revisions():
+        for revision in list(self.revisions()):
             if revision.is_http_304:
                 continue
             etag = revision.etag
@@ -903,7 +905,7 @@ class Resource:
             raise ValueError(f'Cannot delete {self!r} referenced by RootResource {root_resource_ids!r}')
         
         # Delete ResourceRevision children
-        for rev in self.revisions():
+        for rev in list(self.revisions()):
             rev.delete()
         
         # Delete Resource itself

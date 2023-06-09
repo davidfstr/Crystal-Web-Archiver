@@ -185,17 +185,17 @@ class NodeView:
         self._icon_set = None  # type: Optional[IconSet]
         self._children = []  # type: List[NodeView]
     
-    def _get_title(self):
+    def _get_title(self) -> str:
         return self._title
-    def _set_title(self, value):
+    def _set_title(self, value: str) -> None:
         self._title = value
         if self.peer:
             self.peer.SetItemText(value)
     title = property(_get_title, _set_title)
     
-    def _get_expandable(self):
+    def _get_expandable(self) -> bool:
         return self._expandable
-    def _set_expandable(self, value):
+    def _set_expandable(self, value: bool) -> None:
         self._expandable = value
         if self.peer:
             self.peer.SetItemHasChildren(value)

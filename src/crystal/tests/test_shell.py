@@ -381,7 +381,7 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                 
                 assertEqual(
                     "[<ResourceRevision 1 for 'https://xkcd.com/'>]\n",
-                    _py_eval(crystal, f'r.revisions()'))
+                    _py_eval(crystal, f'list(r.revisions())'))
                 assertEqual(
                     "<ResourceRevision 1 for 'https://xkcd.com/'>\n",
                     _py_eval(crystal, f'rr = r.default_revision(); rr'))
@@ -495,10 +495,10 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 
                 # Test can delete ResourceRevision
                 assertEqual('', _py_eval(crystal, f'rr_r = rr.resource'))
-                assertEqual('1\n', _py_eval(crystal, f'len(rr_r.revisions())'))
+                assertEqual('1\n', _py_eval(crystal, f'len(list(rr_r.revisions()))'))
                 assertEqual('', _py_eval(crystal, f'rr.delete()'))
                 # Ensure ResourceRevision itself is deleted
-                assertEqual('0\n', _py_eval(crystal, f'len(rr_r.revisions())'))
+                assertEqual('0\n', _py_eval(crystal, f'len(list(rr_r.revisions()))'))
                 
                 # Test can delete Resource
                 assertEqual('', _py_eval(crystal, f'r.delete()'))

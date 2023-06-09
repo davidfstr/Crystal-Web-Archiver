@@ -52,7 +52,7 @@ def served_project(
             if fetch_date_of_resources_set_to is not None:
                 def fg_task():
                     for r in project.resources:
-                        for rr in r.revisions():
+                        for rr in list(r.revisions()):
                             if rr.metadata is None:
                                 print(
                                     f'Warning: Unable to alter fetch date of '
