@@ -99,7 +99,7 @@ def _create_profiled_callable(callable, *args):
                     start_line_number = inspect.getsourcelines(root_callable)[-1]
                 except Exception:
                     start_line_number = '?'
-                print("*** Foreground task took %.02fs to execute: %s @ [%s:%s]" % (
+                print("*** Slow foreground task took %.02fs to execute: %s @ [%s:%s]" % (
                     delta_time, root_callable,
                     file,
                     start_line_number))
