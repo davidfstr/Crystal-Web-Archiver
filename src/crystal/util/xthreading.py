@@ -25,21 +25,6 @@ _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
 
 
 # ------------------------------------------------------------------------------
-# Quitting
-
-_is_quitting = False
-
-
-def is_quitting() -> bool:
-    return _is_quitting
-
-
-def set_is_quitting() -> None:
-    global _is_quitting
-    _is_quitting = True
-
-
-# ------------------------------------------------------------------------------
 # Access Foreground Thread
 
 _fg_thread = None  # type: Optional[threading.Thread]
@@ -72,39 +57,6 @@ def has_foreground_thread() -> bool:
 
 # ------------------------------------------------------------------------------
 # Call on Foreground Thread
-
-def _create_profiled_callable(callable, *args):
-    """
-    Decorates the specified callable such that it prints
-    a warning to the console if its runtime is long.
-    """
-    def profiled_callable():
-        import time
-        start_time = time.time()
-        try:
-            callable(*args)
-        finally:
-            end_time = time.time()
-            delta_time = end_time - start_time
-            if delta_time > _FG_TASK_RUNTIME_THRESHOLD:
-                root_callable = callable
-                while hasattr(root_callable, 'callable'):
-                    root_callable = root_callable.callable
-                
-                import inspect
-                try:
-                    file = inspect.getsourcefile(root_callable)
-                except Exception:
-                    file = '?'
-                try:
-                    start_line_number = inspect.getsourcelines(root_callable)[-1]
-                except Exception:
-                    start_line_number = '?'
-                print("*** Slow foreground task took %.02fs to execute: %s @ [%s:%s]" % (
-                    delta_time, root_callable,
-                    file,
-                    start_line_number), file=sys.stderr)
-    return profiled_callable
 
 
 # TODO: Consider renaming this to 'fg_call_soon' and have the
@@ -199,7 +151,48 @@ def fg_call_and_wait(callable, no_profile: bool=False, *args):
         return callable_result[0]
 
 
-def bg_call_later(callable, daemon=False, *args):
+def _create_profiled_callable(callable, *args):
+    """
+    Decorates the specified callable such that it prints
+    a warning to the console if its runtime is long.
+    """
+    def profiled_callable():
+        import time
+        start_time = time.time()
+        try:
+            callable(*args)
+        finally:
+            end_time = time.time()
+            delta_time = end_time - start_time
+            if delta_time > _FG_TASK_RUNTIME_THRESHOLD:
+                root_callable = callable
+                while hasattr(root_callable, 'callable'):
+                    root_callable = root_callable.callable
+                
+                import inspect
+                try:
+                    file = inspect.getsourcefile(root_callable)
+                except Exception:
+                    file = '?'
+                try:
+                    start_line_number = inspect.getsourcelines(root_callable)[-1]
+                except Exception:
+                    start_line_number = '?'
+                print("*** Slow foreground task took %.02fs to execute: %s @ [%s:%s]" % (
+                    delta_time, root_callable,
+                    file,
+                    start_line_number), file=sys.stderr)
+    return profiled_callable
+
+
+class NoForegroundThreadError(ValueError):
+    pass
+
+
+# ------------------------------------------------------------------------------
+# Call on Background Thread
+
+def bg_call_later(callable, daemon: bool=False, *args) -> None:
     """
     Calls the argument on a new background thread.
     
@@ -214,8 +207,19 @@ def bg_call_later(callable, daemon=False, *args):
     thread.start()
 
 
-class NoForegroundThreadError(ValueError):
-    pass
+# ------------------------------------------------------------------------------
+# Quitting
+
+_is_quitting = False
+
+
+def is_quitting() -> bool:
+    return _is_quitting
+
+
+def set_is_quitting() -> None:
+    global _is_quitting
+    _is_quitting = True
 
 
 # ------------------------------------------------------------------------------
