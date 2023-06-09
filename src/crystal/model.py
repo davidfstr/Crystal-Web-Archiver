@@ -61,7 +61,7 @@ class Project:
     _RESOURCE_REVISION_DIRNAME = 'revisions'
     
     # NOTE: Only tracked when tests are running
-    last_opened_project: Optional[Project]=None  # static
+    _last_opened_project: Optional[Project]=None  # static
     
     def __init__(self,
             path: str,
@@ -209,7 +209,7 @@ class Project:
         
         # Export reference to self
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
-            Project.last_opened_project = self
+            Project._last_opened_project = self
     
     @staticmethod
     def is_valid(path):

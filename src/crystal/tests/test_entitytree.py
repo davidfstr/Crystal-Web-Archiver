@@ -77,7 +77,7 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
         
         with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project.last_opened_project
+                project = Project._last_opened_project
                 assert project is not None
                 
                 # Create future group members
