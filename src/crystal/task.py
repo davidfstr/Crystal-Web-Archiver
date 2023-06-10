@@ -63,6 +63,9 @@ class Task:
     will have its result automatically disposed once the task is complete.
     So if you care about the result of a task you plan to schedule on a project, 
     be sure to save the task's future *before* scheduling it.
+    
+    Tasks are not allowed to be complete immediately after initialization
+    unless explicitly documented in the Task class's docstring.
     """
     # Optimize per-instance memory use, since there many be very many Task objects
     __slots__ = (
@@ -172,7 +175,27 @@ class Task:
     
     # === Protected Operations ===
     
-    def append_child(self, child: Task) -> None:
+    def append_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
+        """
+        Appends the specified task at the end of this task's children.
+        
+        By default the specified child task is not permitted to already be
+        complete, because normally this task's listeners expect to receive a
+        "task_did_complete" event in the future when a child becomes complete.
+        If an already-complete task is added by this method then that event
+        won't be fired.
+        
+        If already_complete_ok=True then the specified child task is allowed
+        to already be complete and the caller is responsible for handling
+        any special behavior related to adding an already-complete task,
+        such as proactively firing the "task_did_complete" event on this task.
+        """
+        if child.complete and not already_complete_ok:
+            raise ValueError(
+                f'Child being appended is already complete, '
+                f'and already_completed_ok is False. '
+                f'self={self}, child={child}')
+        
         child._parent = self
         self._children.append(child)
         
@@ -187,10 +210,12 @@ class Task:
         Marks this task as completed.
         Threadsafe.
         """
+        # Mark as complete immediately, because caller may check this task's complete status
+        self._complete = True
+        
         # TODO: Why is this code being run on the fg thread?
         #       Is one of the listeners depending on that behavior?
         def fg_task():
-            self._complete = True
             self.subtitle = 'Complete'
             
             # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
@@ -203,14 +228,14 @@ class Task:
         """
         Replace all completed children with a new set of completed children.
         """
-        if not all(c.complete for c in self.children):
+        if not all([c.complete for c in self.children]):
             raise ValueError('Some children are not complete.')
-        if not all(c.complete for c in final_children):
+        if not all([c.complete for c in final_children]):
             raise ValueError('Some final children are not complete.')
         self.clear_children()
         
         for c in final_children:
-            self.append_child(c)
+            self.append_child(c, already_complete_ok=True)
     
     def clear_children(self) -> None:
         """
@@ -354,14 +379,9 @@ from urllib.parse import urljoin
 
 DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
 
-# Unfortunately changing Project.min_fetch_date can cause resources
-# downloaded within the same session to no longer be fresh.
-# So the only correct value for this constant is False.
-# But a False value does disable a optimization which is *usually* valid.
-# 
-# TODO: Find a way to safely reenable the optimization that a False
-#       value here does disable.
-ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH = False
+# NOTE: This optimization is important for downloading large projects.
+#       Do not recommend disabling.
+ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH = True
 
 # For small disks/filesystems,
 # the minimum fraction of total disk space required to download any more resources
@@ -390,6 +410,8 @@ class DownloadResourceBodyTask(Task):
     This is the most basic task, located at the leaves of the task tree.
     
     Returns a ResourceRevision.
+    
+    This task is never complete immediately after initialization.
     """
     
     def __init__(self, abstract_resource: Union[Resource, RootResource]) -> None:
@@ -475,6 +497,8 @@ class DownloadResourceTask(Task):
     Returns the ResourceRevision for the resource body.
     This is returned before all embedded resources have finished downloading,
     unless you specially use get_future(wait_for_embedded=True).
+    
+    This task may be complete immediately after initialization.
     """
     # Optimize per-instance memory use, since there many be very many
     # DownloadResourceTask objects
@@ -516,7 +540,7 @@ class DownloadResourceTask(Task):
         if self._download_body_task is not None:
             self.append_child(self._download_body_task)
         if self._already_downloaded_task is not None:
-            self.append_child(self._already_downloaded_task)
+            self.append_child(self._already_downloaded_task, already_complete_ok=True)
         
         self._download_body_with_embedded_future = Future()  # type: Future
         
@@ -525,6 +549,13 @@ class DownloadResourceTask(Task):
         # the same actions and waste time
         if ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH:
             self._resource.already_downloaded_this_session = True
+        
+        # Apply deferred child-complete actions
+        t = self._already_downloaded_task
+        if t is not None:
+            assert t.complete
+            self.task_did_complete(t)
+        # (NOTE: self.complete might be True now)
     
     @property
     def future(self) -> Future:
@@ -599,20 +630,27 @@ class DownloadResourceTask(Task):
                     link_resource = Resource(self._resource.project, link_url)
                     embedded_resources.append(link_resource)
             
-            ancestor_downloading_resources = self._ancestor_downloading_resources()
+            new_download_tasks = []
+            ancestor_downloading_resources = self._ancestor_downloading_resources()  # cache
             for resource in embedded_resources:
                 if resource in ancestor_downloading_resources:
                     # Avoid infinite recursion when resource identifies itself
                     # (probably incorrectly) as an embedded resource of itself,
                     # or when a chain of embedded resources links to itself
                     continue
-                self.append_child(resource.create_download_task(needs_result=False))
+                new_download_tasks.append(resource.create_download_task(needs_result=False))
+            for t in new_download_tasks:
+                self.append_child(t, already_complete_ok=True)
             
             # Start computing estimated time remaining
             self._pbc = ProgressBarCalculator(
                 initial=self.num_children_complete,
                 total=len(self.children),
             )
+            
+            for t in [t for t in new_download_tasks if t.complete]:
+                self.task_did_complete(t)
+            # (NOTE: self.complete might be True now)
         
         else:
             assert isinstance(task, (
@@ -637,7 +675,7 @@ class DownloadResourceTask(Task):
             f'{len(self.children):n} item(s){subtitle_suffix}'
         )
         
-        if self.num_children_complete == len(self.children):
+        if self.num_children_complete == len(self.children) and not self.complete:
             # Complete self._download_body_with_embedded_future,
             # with value of self._download_body_task.future
             if self._download_body_task is not None:
@@ -688,6 +726,8 @@ class ParseResourceRevisionLinks(Task):
     Parses the list of linked resources from the specified ResourceRevision.
     
     Returns a list of Resources.
+    
+    This task is never complete immediately after initialization.
     """
     def __init__(self, abstract_resource, resource_revision):
         """
@@ -714,6 +754,8 @@ _NO_VALUE = object()
 class _PlaceholderTask(Task):  # abstract
     """
     Leaf task that presents a fixed title and starts as completed.
+    
+    This task will be complete immediately after initialization iff prefinish=True.
     """
     def __init__(self,
             title: str,
@@ -744,11 +786,14 @@ class _AlreadyDownloadedException(Exception):
 class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
     """
     Placeholder task that marks resources that have already been downloaded.
+    
+    This task is always complete immediately after initialization.
     """
     def __init__(self) -> None:
         super().__init__(
             title='Already downloaded',
             exception=_AlreadyDownloadedException().with_traceback(None),
+            prefinish=True,
         )    
 
 
@@ -756,6 +801,8 @@ class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
     """
     Placeholder task that replaces 0 or more DownloadResourceTasks,
     allowing them to be garbage-collected.
+    
+    This task is always complete immediately after initialization.
     """
     def __init__(self, item_count: int) -> None:
         super().__init__(
@@ -781,6 +828,8 @@ class UpdateResourceGroupMembersTask(Task):
     
     This task primarily serves to provide a nice title describing why the child
     task is being run.
+    
+    This task may be complete immediately after initialization.
     """
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
@@ -789,9 +838,14 @@ class UpdateResourceGroupMembersTask(Task):
         self.group = group
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
+        
         if group.source is None:
             raise ValueError('Expected group with a source')
-        self.append_child(group.source.create_download_task(needs_result=False))
+        download_task = group.source.create_download_task(needs_result=False)
+        self.append_child(download_task, already_complete_ok=True)
+        if download_task.complete:
+            self.task_did_complete(download_task)
+        # (NOTE: self.complete might be True now)
     
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if not task.complete:
@@ -809,6 +863,8 @@ class DownloadResourceGroupMembersTask(Task):
     Downloads the members of a specified ResourceGroup.
     If the group's members change during the task execution,
     additional child tasks will be created to download any additional group members.
+    
+    This task may be complete immediately after initialization.
     """
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
@@ -819,18 +875,36 @@ class DownloadResourceGroupMembersTask(Task):
         self._done_updating_group = False
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
-        for member in group.members:
-            self.append_child(member.create_download_task(needs_result=False))
+        
+        member_download_tasks = [
+            member.create_download_task(needs_result=False)
+            for member in group.members
+        ]
+        for t in member_download_tasks:
+            self.append_child(t, already_complete_ok=True)
+        
         self._pbc = ProgressBarCalculator(
             initial=0,
             total=len(self.children),
         )
         self._update_subtitle()
+        
+        # Apply deferred child-complete actions
+        for t in [t for t in member_download_tasks if t.complete]:
+            self.task_did_complete(t)
+        # (NOTE: self.complete might be True now)
     
     def group_did_add_member(self, group, member):
-        self.append_child(member.create_download_task(needs_result=False))
+        download_task = member.create_download_task(needs_result=False)
+        self.append_child(download_task, already_complete_ok=True)
+        
         self._pbc.total += 1
         self._update_subtitle()
+        
+        # Apply deferred child-complete actions
+        if download_task.complete:
+            self.task_did_complete(download_task)
+        # (NOTE: self.complete might be True now)
     
     def group_did_finish_updating(self):
         self._done_updating_group = True
@@ -865,6 +939,8 @@ class DownloadResourceGroupTask(Task):
     """
     Downloads a resource group. This involves updating the groups set of
     members and downloading them, in parallel.
+    
+    This task may be complete immediately after initialization.
     """
     def __init__(self, group):
         super().__init__(
@@ -875,8 +951,13 @@ class DownloadResourceGroupTask(Task):
         self._started_downloading_members = False
         
         self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
-        self.append_child(self._update_members_task)
-        self.append_child(self._download_members_task)
+        self.append_child(self._update_members_task, already_complete_ok=True)
+        self.append_child(self._download_members_task, already_complete_ok=True)
+        
+        # Apply deferred child-complete actions
+        for t in [t for t in [self._update_members_task, self._download_members_task] if t.complete]:
+            self.task_did_complete(t)
+        # (NOTE: self.complete might be True now)
     
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task == self._update_members_task and not self._started_downloading_members:
@@ -891,7 +972,7 @@ class DownloadResourceGroupTask(Task):
         if task == self._update_members_task:
             self._download_members_task.group_did_finish_updating()
         
-        if self.num_children_complete == len(self.children):
+        if self.num_children_complete == len(self.children) and not self.complete:
             self.finish()
 
 

@@ -1,11 +1,17 @@
-from crystal.task import ProjectFreeSpaceTooLowError
-from crystal.tests.util.data import MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
+from crystal.task import (
+    ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
+    ProjectFreeSpaceTooLowError
+)
+from crystal.tests.util.data import (
+    MAX_TIME_TO_DOWNLOAD_404_URL,
+    MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
+)
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.model import Project, Resource
+from crystal.model import Project, Resource, ResourceGroup, RootResource
 import tempfile
 from typing import NamedTuple
 from unittest import skip
@@ -13,9 +19,80 @@ from unittest.mock import patch
 
 
 # ------------------------------------------------------------------------------
-# Test: DownloadResourceBodyTask
+# Test: Task
 
-# (TODO: Add basic tests)
+
+@awith_subtests
+async def test_some_tasks_may_complete_immediately(subtests) -> None:
+    assert True == ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH, \
+        'Expected optimization to be enabled: ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH'
+    
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        if True:
+            missing_url = sp.get_request_url('https://example.com/')
+            
+            comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+        
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                missing_r = Resource(project, missing_url)
+                
+                with subtests.test(task_type='DownloadResourceTask'):
+                    # Download the resource
+                    assert False == missing_r.already_downloaded_this_session
+                    missing_rr_future = missing_r.download()  # uses DownloadResourceTask
+                    await wait_for(
+                        lambda: missing_rr_future.done() or None,
+                        timeout=MAX_TIME_TO_DOWNLOAD_404_URL)
+                    assert True == missing_r.already_downloaded_this_session
+                    
+                    # Download the resource again, and ensure it downloads immediately
+                    dr_task = missing_r.create_download_task(needs_result=False)  # a DownloadResourceTask
+                    assert True == dr_task.complete
+                
+                with subtests.test(task_type='UpdateResourceGroupMembersTask'):
+                    # Covered by subtest: DownloadResourceGroupTask
+                    pass
+                
+                with subtests.test(task_type='DownloadResourceGroupMembersTask'):
+                    # Covered by subtest: DownloadResourceGroupTask
+                    pass
+                
+                with subtests.test(task_type='DownloadResourceGroupTask'):
+                    comic_rs = [
+                        Resource(project, comic_pattern.replace('#', str(ordinal)))
+                        for ordinal in [1, 2]
+                    ]
+                    
+                    comic_g = ResourceGroup(project, 'Comic', comic_pattern)
+                    # TODO: Support downloading a group lacking a source,
+                    #       so that this missing_r source isn't necessary
+                    comic_g.source = RootResource(project, 'Missing', missing_r)
+                    
+                    COMIC_G_FINAL_MEMBER_COUNT = 10
+                    
+                    # Download the group (and all of its currently known members)
+                    for r in comic_rs:
+                        assert False == r.already_downloaded_this_session
+                    drg_task = comic_g.create_download_task()  # a DownloadResourceGroupTask
+                    project.add_task(drg_task)
+                    await wait_for(
+                        lambda: drg_task.complete or None,
+                        timeout=(
+                            MAX_TIME_TO_DOWNLOAD_404_URL +
+                            (MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY * COMIC_G_FINAL_MEMBER_COUNT)
+                        ))
+                    assert COMIC_G_FINAL_MEMBER_COUNT == len(comic_g.members)
+                    for r in comic_rs:
+                        assert True == r.already_downloaded_this_session
+                    
+                    # Download the group again, and ensure it downloads immediately
+                    drg_task = comic_g.create_download_task()
+                    assert True == drg_task.complete
 
 
 # ------------------------------------------------------------------------------

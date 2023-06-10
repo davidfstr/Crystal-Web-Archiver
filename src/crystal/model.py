@@ -101,7 +101,7 @@ class Project:
         def initially_readonly(can_write_db: bool) -> bool:
             return readonly or not can_write_db
         
-        self._min_fetch_date = None
+        self._min_fetch_date = None  # type: Optional[datetime.datetime]
         
         progress_listener.opening_project(os.path.basename(path))
         
@@ -362,6 +362,10 @@ class Project:
                 raise ValueError('Expected an aware datetime (with a UTC offset)')
         self._min_fetch_date = min_fetch_date
         if not self._loading:
+            from crystal.task import ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH
+            if ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH:
+                for r in self.resources:
+                    r.already_downloaded_this_session = False
             for lis in self.listeners:
                 if hasattr(lis, 'min_fetch_date_did_change'):
                     lis.min_fetch_date_did_change()  # type: ignore[attr-defined]
@@ -421,9 +425,13 @@ class Project:
     def add_task(self, task: Task) -> None:
         """
         Schedules the specified top-level task for execution, if not already done.
+        
+        The specified task is allowed to already be complete.
         """
         if task not in self.root_task.children:
-            self.root_task.append_child(task)
+            self.root_task.append_child(task, already_complete_ok=True)
+            if task.complete:
+                self.root_task.child_task_did_complete(task)
     
     # === Events ===
     
@@ -561,7 +569,7 @@ class Resource:
         '_download_body_task_ref',
         '_download_task_ref',
         '_download_task_noresult_ref',
-        'already_downloaded_this_session',
+        '_already_downloaded_this_session',
         '_id',
     )
     
@@ -570,7 +578,7 @@ class Resource:
     _download_body_task_ref: Optional[_WeakTaskRef]
     _download_task_ref: Optional[_WeakTaskRef]
     _download_task_noresult_ref: Optional[_WeakTaskRef]
-    already_downloaded_this_session: bool
+    _already_downloaded_this_session: bool
     _id: int  # or None if deleted
     
     def __new__(cls, project: Project, url: str, _id: Optional[int]=None) -> Resource:
@@ -605,7 +613,7 @@ class Resource:
         self._download_body_task_ref = None
         self._download_task_ref = None
         self._download_task_noresult_ref = None
-        self.already_downloaded_this_session = False
+        self._already_downloaded_this_session = False
         
         if project._loading:
             assert _id is not None
@@ -722,6 +730,21 @@ class Resource:
     def normalized_url(self) -> str:
         return self.resource_url_alternatives(self.project, self._url)[-1]
     
+    def _get_already_downloaded_this_session(self) -> bool:
+        return self._already_downloaded_this_session
+    def _set_already_downloaded_this_session(self, value: bool) -> None:
+        if self._already_downloaded_this_session == value:
+            return
+        if not value:
+            # Invalidate any prior downloaded state
+            self._download_body_task_ref = None
+            self._download_task_ref = None
+            self._download_task_noresult_ref = None
+        self._already_downloaded_this_session = value
+    already_downloaded_this_session = property(
+        _get_already_downloaded_this_session,
+        _set_already_downloaded_this_session)
+    
     def download_body(self) -> 'Future[ResourceRevision]':
         """
         Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
@@ -748,6 +771,8 @@ class Resource:
         
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
+        
+        This task is never complete immediately after initialization.
         """
         def task_factory():
             from crystal.task import DownloadResourceBodyTask
@@ -792,6 +817,8 @@ class Resource:
         
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
+        
+        This task may be complete immediately after initialization.
         """
         def task_factory():
             from crystal.task import DownloadResourceTask
@@ -1060,9 +1087,14 @@ class RootResource:
     def download(self, needs_result: bool=True) -> Future:
         return self.resource.download(needs_result=needs_result)
     
-    # TODO: Create the underlying task with the full RootResource
-    #       so that the correct subtitle is displayed.
     def create_download_task(self, needs_result: bool=True) -> Task:
+        """
+        Creates a task to download this root resource.
+        
+        This task may be complete immediately after initialization.
+        """
+        # TODO: Create the underlying task with the full RootResource
+        #       so that the correct subtitle is displayed.
         return self.resource.create_download_task(needs_result=needs_result)
     
     def __repr__(self):
@@ -1831,6 +1863,8 @@ class ResourceGroup:
         
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
+        
+        This task may be complete immediately after initialization.
         """
         if needs_result:
             raise ValueError('Download task for a group never has a result')
@@ -1840,7 +1874,7 @@ class ResourceGroup:
         from crystal.task import DownloadResourceGroupTask
         return DownloadResourceGroupTask(self)
     
-    def update_membership(self):
+    def update_membership(self) -> None:
         """
         Updates the membership of this group asynchronously.
         
