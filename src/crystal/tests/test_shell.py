@@ -456,8 +456,8 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
         t.start()
         '''),
         stop_suffix=_OK_THREAD_STOP_SUFFIX,
-        # NOTE: 2.0 was observed to sometimes not be long enough on macOS
-        timeout=4.0
+        # NOTE: 4.0 was observed to sometimes not be long enough on macOS
+        timeout=6.0
     )
     assert "<class 'crystal.tests.util.windows.MainWindow'>\n" == \
         _py_eval(crystal, 'type(result_cell[0])')

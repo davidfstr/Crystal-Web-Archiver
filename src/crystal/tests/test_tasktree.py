@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from crystal.browser.tasktree import TaskTreeNode
 import crystal.task
 from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.data import MAX_TIME_TO_DOWNLOAD_404_URL
 from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wait_while
 from crystal.tests.util.windows import OpenOrCreateDialog
@@ -92,7 +93,7 @@ async def test_while_downloading_large_group_then_show_no_more_than_100_download
                     await wait_while(
                         leading_download_statuses,
                         total_timeout=math.inf,  # progress timeout is sufficient
-                        progress_timeout=crystal.task.DELAY_BETWEEN_DOWNLOADS + 2.0)
+                        progress_timeout=crystal.task.DELAY_BETWEEN_DOWNLOADS + MAX_TIME_TO_DOWNLOAD_404_URL)
                     children = download_rg_members_task_ti.Children
                     assert len(children) == N + 2
                     assert f'{1} more' == children[0].Text
@@ -118,7 +119,7 @@ async def test_while_downloading_large_group_then_show_no_more_than_100_download
                     await wait_while(
                         loading_more_text,
                         total_timeout=math.inf,  # progress timeout is sufficient
-                        progress_timeout=crystal.task.DELAY_BETWEEN_DOWNLOADS + 2.0)
+                        progress_timeout=crystal.task.DELAY_BETWEEN_DOWNLOADS + MAX_TIME_TO_DOWNLOAD_404_URL)
                     assert (
                         len(task_root_ti.Children) == 0 or
                         download_rg_members_task_ti.Text.endswith('-- Complete')

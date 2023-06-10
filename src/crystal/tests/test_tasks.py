@@ -1,4 +1,5 @@
 from crystal.task import ProjectFreeSpaceTooLowError
+from crystal.tests.util.data import MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
@@ -33,7 +34,7 @@ async def test_when_download_resource_then_displays_estimated_time_remaining() -
 #       condition. Currently the UI doesn't handle this condition well and
 #       silently fails downloads.
 @awith_subtests
-async def test_given_project_on_disk_with_low_space_free_when_try_to_download_resource_revision_then_raises_error(subtests: SubtestsContext) -> None:
+async def test_given_project_on_disk_with_low_space_free_when_try_to_download_resource_revision_then_raises_exception(subtests: SubtestsContext) -> None:
     async def try_download_with_disk_usage(du: _DiskUsage, *, expect_failure: bool) -> None:
         assert project is not None
         with patch('shutil.disk_usage', return_value=du):
@@ -42,7 +43,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
                 rr_future = r.download_body()
                 await wait_for(
                     lambda: rr_future.done() or None,
-                    timeout=2.0)
+                    timeout=MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY)
                 try:
                     rr = rr_future.result()
                 except ProjectFreeSpaceTooLowError:
