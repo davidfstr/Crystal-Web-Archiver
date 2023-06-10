@@ -1,3 +1,4 @@
+from typing import Tuple
 from tqdm import tqdm
 from tqdm.std import EMA
 
@@ -44,7 +45,7 @@ class ProgressBarCalculator:
         self._tqdm.total = total
     total = property(_get_total, _set_total)
     
-    def remaining_str(self) -> str:
+    def remaining_str_and_time_per_item_str(self) -> Tuple[str, str]:
         """Compute estimated remaining time, in format "MM:SS" or "HH:MM:SS"."""
         format_dict = self._tqdm.format_dict
         remaining_str = self._tqdm.format_meter(
@@ -73,7 +74,18 @@ class ProgressBarCalculator:
                 f'ema_dn={format_floatlike(self._tqdm._ema_dn())}, '
                 f'ema_dt={format_floatlike(self._tqdm._ema_dt())})'
             )
-        return remaining_str
+        
+        try:
+            time_per_item = self._tqdm._ema_dt() / self._tqdm._ema_dn()
+        except (ZeroDivisionError, TypeError):
+            time_per_item = None
+        time_per_item_str = (
+            f'{time_per_item:.2f}s'
+            if time_per_item is not None
+            else '?'
+        )
+        
+        return (remaining_str, time_per_item_str)
     
     # === Operations ===
     
