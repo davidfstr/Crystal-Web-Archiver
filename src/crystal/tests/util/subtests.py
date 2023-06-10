@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from functools import wraps
 from io import StringIO
 import traceback
-from typing import Callable, Iterator, Optional
+from typing import Awaitable, Callable, Iterator, Optional
 from unittest import SkipTest
 
 
@@ -87,6 +87,31 @@ def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], 
         raised_exc = True
         try:
             test_func(subtests)
+            raised_exc = False
+        except _SubtestReturn:
+            raised_exc = False
+        finally:
+            subtest_report = subtests._report.getvalue()
+            if len(subtest_report) != 0:
+                print(subtest_report, end='')
+                print('-' * 70)
+                if not raised_exc:
+                    raise Exception('Subtests did fail')
+    return wrapper
+
+
+def awith_subtests(test_func: Callable[[SubtestsContext], Awaitable[None]]) -> Callable[[], Awaitable[None]]:
+    """Decorates a test function which can use subtests."""
+    test_func_id = (test_func.__module__, test_func.__name__)
+    test_name = f'{test_func_id[0]}.{test_func_id[1]}'
+    
+    subtests = SubtestsContext(test_name)
+    
+    @wraps(test_func)
+    async def wrapper():
+        raised_exc = True
+        try:
+            await test_func(subtests)
             raised_exc = False
         except _SubtestReturn:
             raised_exc = False
