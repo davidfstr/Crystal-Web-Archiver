@@ -919,6 +919,9 @@ class Resource:
     def delete(self) -> None:
         project = self.project
         
+        if project.readonly:
+            raise ProjectReadOnlyError()
+        
         # Ensure not referenced by a RootResource
         c = project._db.cursor()
         root_resource_ids = [
@@ -934,8 +937,6 @@ class Resource:
             rev.delete()
         
         # Delete Resource itself
-        if project.readonly:
-            raise ProjectReadOnlyError()
         c = project._db.cursor()
         c.execute('delete from resource where id=?', (self._id,))
         project._db.commit()
@@ -1428,12 +1429,12 @@ class ResourceRevision:
     
     # === Body ===
     
-    def size(self):
+    def size(self) -> int:
         """
         Returns the size of this resource's body.
         """
         self._ensure_has_body()
-        return os.path.size(self._body_filepath)
+        return os.path.getsize(self._body_filepath)
     
     def open(self):
         """
@@ -1442,7 +1443,7 @@ class ResourceRevision:
         self._ensure_has_body()
         return open(self._body_filepath, 'rb')
     
-    def links(self):
+    def links(self) -> list[Link]:
         """
         Returns list of Links found in this resource.
         
@@ -1555,16 +1556,19 @@ class ResourceRevision:
     def delete(self):
         project = self.project
         
+        if project.readonly:
+            raise ProjectReadOnlyError()
+        
         body_filepath = self._body_filepath  # cache
         if os.path.exists(body_filepath):
             os.remove(body_filepath)
         
-        if project.readonly:
-            raise ProjectReadOnlyError()
         c = project._db.cursor()
         c.execute('delete from resource_revision where id=?', (self._id,))
         project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
+        
+        self.resource.already_downloaded_this_session = False
     
     def __repr__(self):
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
