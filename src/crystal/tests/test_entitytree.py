@@ -6,6 +6,8 @@ from crystal.tests.util.wait import (
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup
+import locale
+import os
 import tempfile
 from unittest import skip
 
@@ -144,6 +146,52 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
                 assert len(cg_children_tis) == 100 + 20 + 20 + 1
                 node_in_position_of_old_more_node = cg_children_tis[100 + 20]
                 assert True == node_in_position_of_old_more_node.IsSelected()
+
+
+async def test_given_more_node_with_large_item_count_then_displays_count_with_commas() -> None:
+    # Initialize locale based on LANG='en_US.UTF-8'
+    old_lang = os.environ.get('LANG')
+    os.environ['LANG'] = 'en_US.UTF-8'
+    old_locale = locale.setlocale(locale.LC_ALL)
+    locale.setlocale(locale.LC_ALL, '')
+    try:
+        with served_project('testdata_xkcd.crystalproj.zip') as sp:
+            # Define URLs
+            if True:
+                comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+            
+            with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+                async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                    project = Project._last_opened_project
+                    assert project is not None
+                    
+                    # Create future group members
+                    for i in range(1, 1200+1):
+                        Resource(project, comic_pattern.replace('#', str(i)))
+                    
+                    # Create group
+                    ResourceGroup(project, 'Comic', comic_pattern)
+                    
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                    assert root_ti is not None
+                    
+                    comic_group_ti = root_ti.GetFirstChild()
+                    assert comic_group_ti is not None
+                    assert f'{comic_pattern} - Comic' == comic_group_ti.Text
+                    
+                    comic_group_ti.Expand()
+                    await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
+                    
+                    cg_children_tis = comic_group_ti.Children
+                    more_ti = cg_children_tis[-1]
+                    more_ti.ScrollTo()
+                    assert '1,100 more' == more_ti.Text
+    finally:
+        if old_lang is None:
+            del os.environ['LANG']
+        else:
+            os.environ['LANG'] = old_lang
+        locale.setlocale(locale.LC_ALL, old_locale)
 
 
 # ------------------------------------------------------------------------------
