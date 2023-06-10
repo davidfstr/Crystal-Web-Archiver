@@ -180,5 +180,5 @@ class _MoreNodeView(NodeView):
         if more_count == self._more_count:
             return
         self._more_count = more_count
-        self.title = '%d more' % self._more_count
+        self.title = f'{self._more_count:n} more'
     more_count = property(_get_more_count, _set_more_count)
