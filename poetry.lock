@@ -139,6 +139,93 @@ files = [
 ]
 
 [[package]]
+name = "guppy3"
+version = "3.1.3"
+description = "Guppy 3 -- Guppy-PE ported to Python 3"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "guppy3-3.1.3-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:2870a4aecaebfabadee46352594c105e21a70d82e8e4de375940e84d98761e20"},
+    {file = "guppy3-3.1.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:94f74557608a3fe3cd6eaacfa3dfdfccc7caafed6190186c0a7c62d1b1dff82a"},
+    {file = "guppy3-3.1.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:1cf8b1d7b4f3ba9ba85a8ab5f7e1210ae2cb38dd5e5d65eb3e112fff115f3bad"},
+    {file = "guppy3-3.1.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0f6b0671c0eb2d8fd4a9430ef0fc43e853a39b87428b565f588eea435c22a13c"},
+    {file = "guppy3-3.1.3-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:e449ea1f47102c271d1b406c58e7f3874555680cf6c76a0e7201ab817b0d84b2"},
+    {file = "guppy3-3.1.3-cp310-cp310-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:733813937e5bc7b41feb3c01373b8bd477ff38f442f7bc9a9546cf72fc98c722"},
+    {file = "guppy3-3.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0b01a5546d8fb5b0fb04f2cd59f49897b0fbecc817b6fed3e8d8545c271c4c60"},
+    {file = "guppy3-3.1.3-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1fd57b3f0cf0e90fbfe1290be2e8c4501a281751f748f133861c917285b77865"},
+    {file = "guppy3-3.1.3-cp310-cp310-musllinux_1_1_aarch64.whl", hash = "sha256:7089ef673ac1a00cb66995bfccb488bd07dc51886e380b9bae394269827b113d"},
+    {file = "guppy3-3.1.3-cp310-cp310-musllinux_1_1_i686.whl", hash = "sha256:2a16c4a3f68e77a1b6a2ed6f4ab798b12def8b70f21bedd894a137bda0493ade"},
+    {file = "guppy3-3.1.3-cp310-cp310-musllinux_1_1_ppc64le.whl", hash = "sha256:ddb30ecf813da3dc118841433ae2d504cc7de72c2c0ab7a2f5841c16e2ed45d0"},
+    {file = "guppy3-3.1.3-cp310-cp310-musllinux_1_1_s390x.whl", hash = "sha256:69cc699515abea93c3006e4572a9d7c62d0a4a15e5b64e870481a6fdfff2204d"},
+    {file = "guppy3-3.1.3-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:b06e9ce59ce9968c5d98f28bc12228ff15cb326f647db3e07f1fc9d63d9a6794"},
+    {file = "guppy3-3.1.3-cp310-cp310-win32.whl", hash = "sha256:e2ccefe1aeecde1ccbaf9a35240910d0090390001fde35130f3b5dd06c609a09"},
+    {file = "guppy3-3.1.3-cp310-cp310-win_amd64.whl", hash = "sha256:097c5881df910a5a46ffbf9f853b2e19f0d816c1da25b822fb7aa83195baca04"},
+    {file = "guppy3-3.1.3-cp310-cp310-win_arm64.whl", hash = "sha256:d2aec03725574dde7d45936254ee4863e920459a66bdcd8cc10b2d788b3df013"},
+    {file = "guppy3-3.1.3-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:69cedf5c6dbcf0aba091d1600a159546739fa508bf4f487b1b952089bd48643a"},
+    {file = "guppy3-3.1.3-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:5918d2ca47c04b06577335a90627b94a765ee16d09802a7ae0be4de11a1d75d6"},
+    {file = "guppy3-3.1.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:df1760acd2ba4af84586e4dd2a8a265acd59f38c3f2c1ac4d4f6c5e1f45298ea"},
+    {file = "guppy3-3.1.3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e827b28d97c63ec336518d8451912b843f2ec73330bd9907da9fa4c81fb870c6"},
+    {file = "guppy3-3.1.3-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:2b2501fa46c3b831799c32e7695404e52cb3533a8f8fba348e5a1b81b0350410"},
+    {file = "guppy3-3.1.3-cp311-cp311-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:cd594247321b9f3d18fcaea375f400dd19e6683671f452ffacf424f16821b1b9"},
+    {file = "guppy3-3.1.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:853281ea80074fdf8b9e0f34329af6b0d5152412e3670cb410af665c6761c6a6"},
+    {file = "guppy3-3.1.3-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:2474ecd3c803e184882e49a389a6ec7582144dce886533389ef6ed5c76b7d7a3"},
+    {file = "guppy3-3.1.3-cp311-cp311-musllinux_1_1_aarch64.whl", hash = "sha256:8506810dc3ec1489400022cbdb15e7cef074c7ce6394e7ea5d50cd5da14c3576"},
+    {file = "guppy3-3.1.3-cp311-cp311-musllinux_1_1_i686.whl", hash = "sha256:f6e23a4c42ba99358cd6f76283387d51248b002da8a67be461a74fc5244afbb2"},
+    {file = "guppy3-3.1.3-cp311-cp311-musllinux_1_1_ppc64le.whl", hash = "sha256:845af61c017856a14199ef95e0aee6f0e8209a957cc95d764726ac1593e5008b"},
+    {file = "guppy3-3.1.3-cp311-cp311-musllinux_1_1_s390x.whl", hash = "sha256:ba58deae40d44e6fd697d6d11c295a2db06ebefeb85bc2f4e3633dbcdc192a75"},
+    {file = "guppy3-3.1.3-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:22782fac751f699ff7ab27743eb848f5b53c2c718935eb9ac15cd0f0292b1400"},
+    {file = "guppy3-3.1.3-cp311-cp311-win32.whl", hash = "sha256:f06a6cd6ed72828b847722c3246583e334c24b8c0651595fd14a02d27c3c9817"},
+    {file = "guppy3-3.1.3-cp311-cp311-win_amd64.whl", hash = "sha256:2ec2863478a7d71578655c69fd139c2274c137c4de1a6a1040c7983c7b1dc439"},
+    {file = "guppy3-3.1.3-cp311-cp311-win_arm64.whl", hash = "sha256:4219e2c4504e536d2ceff9018e97a4283f14a23062d94ff031fffa045953c49b"},
+    {file = "guppy3-3.1.3-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:b85a2d90943cb6210ceb1800076fc3d2ae5c8f41d7d0f8be56ca67dc5f352468"},
+    {file = "guppy3-3.1.3-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5331bc0bfd189db4c29f95b06c47199a67f5bc575e048576a0325c6d53d1d89b"},
+    {file = "guppy3-3.1.3-cp37-cp37m-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:d7dc1ba2e134276ae79eb0065fc1266eb166a1d29fad7f8a7cedd6d5c00aa0ee"},
+    {file = "guppy3-3.1.3-cp37-cp37m-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:b20a835faa4db99528937a9c5bdcb9e32295b006e1f52c99868a2b1e44713162"},
+    {file = "guppy3-3.1.3-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:be99e9bd52f9c78bac89d93725cb0c651a7b14c0680c773f41768f154a52efb0"},
+    {file = "guppy3-3.1.3-cp37-cp37m-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:446fc8b8258b07e7278ca508c5e4bd4bd9974ce2afabb9a88daedc8e3085f718"},
+    {file = "guppy3-3.1.3-cp37-cp37m-musllinux_1_1_aarch64.whl", hash = "sha256:b524eba2c0d286dde63fe1b94ab65e6396fd25b10665453279e1e6080b793150"},
+    {file = "guppy3-3.1.3-cp37-cp37m-musllinux_1_1_i686.whl", hash = "sha256:c956459efe47d37f80106fe367009674d3ec3ae64b690f65001b09275c807c44"},
+    {file = "guppy3-3.1.3-cp37-cp37m-musllinux_1_1_ppc64le.whl", hash = "sha256:6072f6981c5eb74fdaf7e5d3dba06681e739f7b8162c489ceb2e9cfcee555510"},
+    {file = "guppy3-3.1.3-cp37-cp37m-musllinux_1_1_s390x.whl", hash = "sha256:f7291b8479548876a4201c53c72d32cfdc38d82c69815286eab533372c6eca68"},
+    {file = "guppy3-3.1.3-cp37-cp37m-musllinux_1_1_x86_64.whl", hash = "sha256:c87ed1b01d2a551553ffc11294b091fa616d037b3aa8a72916880d832837bba7"},
+    {file = "guppy3-3.1.3-cp37-cp37m-win32.whl", hash = "sha256:055008dedb64667704fd2976c69da0ad39f1c1f40991332420740e87391eb2dc"},
+    {file = "guppy3-3.1.3-cp37-cp37m-win_amd64.whl", hash = "sha256:a863567df3b165cd09e182a825ca75b05717a299580a9783d5729e6cdd239d2a"},
+    {file = "guppy3-3.1.3-cp38-cp38-macosx_10_9_universal2.whl", hash = "sha256:457cc3a1f89be43c6c105e62fcc03da0c9993728b69ec8b92a6ff5d2395719c6"},
+    {file = "guppy3-3.1.3-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:dfdaf106ee238593fad5b2f781f029408a05569da34c31554d9efae092b4dfdc"},
+    {file = "guppy3-3.1.3-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:d39c41703eddb506f7ef5c1c1e5d6d297cb56435aebc8d882a77cca55d8a3ca4"},
+    {file = "guppy3-3.1.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:da4d6f3290efc27e2662a77f3eab01fd0dbf2d8c6fadcad3bf967185937c65d0"},
+    {file = "guppy3-3.1.3-cp38-cp38-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:e705a7abb2d2b3e1fa4fd9a26a8a8eb4556a8c0ba643b0ebf548adf394ffcef2"},
+    {file = "guppy3-3.1.3-cp38-cp38-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:9055c910ad4f1baf0ceafab460270409138f7945203b0ceff7ea737f2345a7a6"},
+    {file = "guppy3-3.1.3-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a63adf16d08b6c83ac14aa69134c81ace573a6d5d8d0d9f99ab84c173dd3d629"},
+    {file = "guppy3-3.1.3-cp38-cp38-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1768f9591fe617f2113fb6a9f8f785bfee4cfaaab1d518d13003d5fa0075193c"},
+    {file = "guppy3-3.1.3-cp38-cp38-musllinux_1_1_aarch64.whl", hash = "sha256:a78c15e64ade724f80964961d92d00e3e7f40902910fc77042474505ee60e18d"},
+    {file = "guppy3-3.1.3-cp38-cp38-musllinux_1_1_i686.whl", hash = "sha256:6c4b44f91ad8fd24ffc891b8ffd698b2c9a142d3e6f90af6bc9a1245fb0935fd"},
+    {file = "guppy3-3.1.3-cp38-cp38-musllinux_1_1_ppc64le.whl", hash = "sha256:d8efb81dbd9be4a0e06ae999d34094668ddd48868e748fd6e8d6cd92b64eecc9"},
+    {file = "guppy3-3.1.3-cp38-cp38-musllinux_1_1_s390x.whl", hash = "sha256:a9b12bf3859a72169f227e35cd393bf8676d444d445c22304445e5cb4e64b49d"},
+    {file = "guppy3-3.1.3-cp38-cp38-musllinux_1_1_x86_64.whl", hash = "sha256:48779219731dafb68c4935ace3d24135d25191d3b6d44984f2e425501eaabda0"},
+    {file = "guppy3-3.1.3-cp38-cp38-win32.whl", hash = "sha256:5cc180e3d50451e6581f88f060659dedc596c6f57cbdb4abe21c9ac26dab52f8"},
+    {file = "guppy3-3.1.3-cp38-cp38-win_amd64.whl", hash = "sha256:0c8771df77610bec1cd93c21e568a45b0cda0e1f56fbdfc32d857458e782ce31"},
+    {file = "guppy3-3.1.3-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:298ce6f70363af715ed61fb5b43506c40d066a90c88106f6e55970383a3c1f3f"},
+    {file = "guppy3-3.1.3-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:da6bd289ee2012b4c4095dd73f7a6c3d8745d73b0abfdba3749a5622fc5bed85"},
+    {file = "guppy3-3.1.3-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:0cdd08bba1274de9496fd50673ccb39b76a65545c68c65c33f8c13ab42615c5f"},
+    {file = "guppy3-3.1.3-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ac590294831f35f935c5da07b0cc2cc026cf3eb56b689e125bb4786c8b752c52"},
+    {file = "guppy3-3.1.3-cp39-cp39-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:41945bdb9e0118cb3aad38c1d3533d4438b91763dab999e2331e9b85dd9e8d56"},
+    {file = "guppy3-3.1.3-cp39-cp39-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:8b3e2b44b54348187af14a61265de20f4b289acc6156b640a3a5442ab83843cd"},
+    {file = "guppy3-3.1.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:59f2bd4505f1e34b2f7e9a6a03ef1869f93644ed6a8681b69614dba7d9ce6f8c"},
+    {file = "guppy3-3.1.3-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:cf8eccd82ebd817ed57b1c21b3840bd44d18067486366ea98a1750bb430a70b8"},
+    {file = "guppy3-3.1.3-cp39-cp39-musllinux_1_1_aarch64.whl", hash = "sha256:c169014296bc4d5c409d201908c7baa124794b65d7a2073a6e6d2450991fc88f"},
+    {file = "guppy3-3.1.3-cp39-cp39-musllinux_1_1_i686.whl", hash = "sha256:2ca12f5e2e99d230b2a88df813fcdf3399623ebf7a6221179a395671b3da6a42"},
+    {file = "guppy3-3.1.3-cp39-cp39-musllinux_1_1_ppc64le.whl", hash = "sha256:0132fc12e56359a9f0aa1e055155ddd1ccdab783af68678cdeb6ae6fb2465a4d"},
+    {file = "guppy3-3.1.3-cp39-cp39-musllinux_1_1_s390x.whl", hash = "sha256:cdcedaf3df7ac0d179d786e15e193f5c2795872a7201005b61591a3f745d9e83"},
+    {file = "guppy3-3.1.3-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:d7f78701ad8d30ec18d79c8268c207938a591d51331c1071888a6c14d6ef6922"},
+    {file = "guppy3-3.1.3-cp39-cp39-win32.whl", hash = "sha256:220aa40b4ce11681b51197d82c48b0262d18286c2449ff234023ff4741676b3e"},
+    {file = "guppy3-3.1.3-cp39-cp39-win_amd64.whl", hash = "sha256:ae0538cd6d0786c196ab40d7fed39ae42cfcc1f8bbb8513b3a7405dd3c69b598"},
+    {file = "guppy3-3.1.3-cp39-cp39-win_arm64.whl", hash = "sha256:a68b6d66f3b02798f3a85ad3433a5d687a72b7138e0b5ed08286b00de9a42fde"},
+    {file = "guppy3-3.1.3.tar.gz", hash = "sha256:f79779ef23f02303a1a70a8ef3b4eaffc487a37184889966903d6ae274c56f38"},
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.0.0"
 description = "brain-dead simple config-ini parsing"
@@ -847,4 +934,4 @@ six = "*"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.12"
-content-hash = "54c1804a89f9b404356d3eb8836c8e686813f1d8aff5e30e32ebe8c2c742fbd2"
+content-hash = "75170b76b0fecd4f9e432bd35936f062222e2eb7fb23d032eb5538aedec311d0"

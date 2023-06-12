@@ -69,6 +69,7 @@ class _DummyTestCase(TestCase):
 # than a bare assert statement
 assertEqual = _DummyTestCase().assertEqual
 assertIn = _DummyTestCase().assertIn
+assertNotIn = _DummyTestCase().assertNotIn
 
 
 # ------------------------------------------------------------------------------
@@ -415,6 +416,28 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 assertEqual('', _py_eval(crystal, f'r.delete()'))
                 # Ensure Resource itself is deleted
                 assertEqual('', _py_eval(crystal, f'p.get_resource(r.url)'))
+
+
+@skip_on_windows
+def test_can_import_guppy_in_shell() -> None:
+    with crystal_shell() as (crystal, _):
+        # Ensure can import guppy
+        import_result = literal_eval(_py_eval(crystal, 'import guppy; guppy.__version__'))
+        assert isinstance(import_result, str)
+        
+        # Ensure can create hpy instance
+        assertEqual('', _py_eval(crystal, 'from guppy import hpy; h = hpy()'))
+        
+        # Ensure can take memory sample
+        result = _py_eval(crystal, 'import gc; gc.collect(); heap = h.heap(); heap; _.more')
+        assertNotIn('Traceback', result)
+        
+        # Ensure can create checkpoint
+        assertEqual('', _py_eval(crystal, 'h.setref()'))
+        
+        # Ensure can take memory sample since checkpoint
+        result = _py_eval(crystal, 'import gc; gc.collect(); heap = h.heap(); heap; _.more')
+        assertNotIn('Traceback', result)
 
 
 # ------------------------------------------------------------------------------

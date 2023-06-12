@@ -342,6 +342,7 @@ Release Notes ⋮
 
 * CLI improvements
     * Fewer profiling warnings on the command line.
+    * Include [guppy] module for manual [memory leak profiling].
 
 * Minor fixes
     * When deleting a ResourceRevision, don't delete revision body if project
@@ -354,6 +355,9 @@ Release Notes ⋮
       of `List[ResourceRevision]` to support streaming results.
         * If the old behavior is desired, wrap calls to `Resource.revisions()`
           inside of a `list(...)` expression.
+
+[guppy]: https://pypi.org/project/guppy3/
+[memory leak profiling]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Testing-for-Memory-Leaks
 
 ### v1.5.0b (April 2, 2023)
 

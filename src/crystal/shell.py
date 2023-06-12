@@ -37,6 +37,8 @@ class Shell:
         site.sethelper()  # help
         site.setquit()  # quit, exit
         
+        self._ensure_guppy_available()
+        
         threading.Thread(
             target=lambda: fg_interact(
                 banner=(
@@ -53,6 +55,27 @@ class Shell:
             ),
             daemon=False,
         ).start()
+    
+    @staticmethod
+    def _ensure_guppy_available() -> None:
+        # Explicitly import guppy to tell py2app and py2exe to include it
+        # when building a binary
+        try:
+            import guppy
+            import guppy.heapy
+            import guppy.heapy.Use
+            import guppy.heapy.View
+            import guppy.heapy.ImpSet
+            import guppy.heapy.Target
+            import guppy.heapy.UniSet
+            import guppy.heapy.Doc
+            import guppy.heapy.Path
+            import guppy.heapy.RefPat
+            import guppy.heapy.Classifiers
+            import guppy.heapy.Part
+            import guppy.heapy.OutputHandling
+        except ImportError:
+            pass
     
     def attach(self, project: Project, window: MainWindow) -> None:
         self._project_proxy._initialize_proxy(project, reinit_okay=True)
