@@ -1008,8 +1008,21 @@ class RootTask(Task):
         self.subtitle = 'Running'
         
         self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
+        
+    def append_child(self, *args, **kwargs) -> None:
+        """
+        Raises:
+        * ProjectClosedError -- if this project is closed
+        """
+        if self.complete:
+            from crystal.model import ProjectClosedError
+            raise ProjectClosedError()
+        super().append_child(*args, **kwargs)
     
     def try_get_next_task_unit(self):
+        if self.complete:
+            return None
+        
         # Only the root task is allowed to have no children normally
         if len(self.children) == 0:
             return None
@@ -1025,6 +1038,10 @@ class RootTask(Task):
     def did_schedule_all_children(self) -> None:
         # Remove completed children after each scheduling pass
         self.clear_completed_children()
+    
+    def close(self) -> None:
+        """Stop all descendent tasks, asynchronously."""
+        self.finish()
 
 
 # ------------------------------------------------------------------------------

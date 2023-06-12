@@ -505,6 +505,9 @@ class Project:
         Schedules the specified top-level task for execution, if not already done.
         
         The specified task is allowed to already be complete.
+        
+        Raises:
+        * ProjectClosedError -- if this project is closed
         """
         if task not in self.root_task.children:
             self.root_task.append_child(task, already_complete_ok=True)
@@ -588,6 +591,9 @@ class Project:
         if self._server is not None:
             self._server.close()
             self._server = None
+        
+        self.root_task.close()
+        
         self._db.close()
     
     # === Context Manager ===
@@ -608,6 +614,10 @@ class ProjectFormatError(Exception):
 
 
 class ProjectReadOnlyError(Exception):
+    pass
+
+
+class ProjectClosedError(Exception):
     pass
 
 
@@ -851,6 +861,8 @@ class Resource:
         * ProjectFreeSpaceTooLowError --
             If the project does not have enough free disk space to safely
             download more resources.
+        * ProjectClosedError --
+            If the project is closed.
         """
         task = self.create_download_body_task()
         self.project.add_task(task)
@@ -897,6 +909,8 @@ class Resource:
         * ProjectFreeSpaceTooLowError --
             If the project does not have enough free disk space to safely
             download more resources.
+        * ProjectClosedError --
+            If the project is closed.
         """
         task = self.create_download_task(needs_result=needs_result)
         self.project.add_task(task)
@@ -1916,6 +1930,9 @@ class ResourceGroup:
         Downloads this group asynchronously.
         
         A top-level Task will be created internally to display the progress.
+        
+        Raises:
+        * ProjectClosedError -- If the project is closed.
         """
         if needs_result:
             raise ValueError('Download task for a group never has a result')
@@ -1944,6 +1961,9 @@ class ResourceGroup:
         Updates the membership of this group asynchronously.
         
         A top-level Task will be created internally to display the progress.
+        
+        Raises:
+        * ProjectClosedError -- If the project is closed.
         """
         if self.source is None:
             raise ValueError('Cannot update members of a group that lacks a source.')

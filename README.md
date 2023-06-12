@@ -295,6 +295,8 @@ Release Notes ⋮
           g = the number of groups in the project
         * Defer creation of Entity Tree nodes corresponding to group members
           until the group is actually expanded
+    * Close projects with very many queued tasks (such as download tasks)
+      in O(1) time rather than O(t) time, where t = the number of queued tasks
     * Speed up interacting with the Entity Tree and Task Tree when
       there are very many URLs in a project:
         * Entity Tree: Speed up expanding URL nodes when large groups exist,
