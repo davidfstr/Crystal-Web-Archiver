@@ -96,6 +96,27 @@ class ProgressBarCalculator:
     
     def close(self) -> None:
         self._tqdm.close()
+    
+    # === Utility ===
+    
+    @staticmethod
+    def format_interval(t: int) -> str:
+        """
+        Formats a number of seconds as a clock time,
+        `[H:]MM:SS` or `Dd + H:MM:SS`
+        """
+        mins, s = divmod(int(t), 60)
+        hours, m = divmod(mins, 60)
+        d, h = divmod(hours, 24)
+        if d:
+            # ex: '1d + 7:08:54'
+            return '{0:d}d + {1:d}:{2:02d}:{3:02d}'.format(d, h, m, s)
+        elif h:
+            # ex: '7:08:54'
+            return '{0:d}:{1:02d}:{2:02d}'.format(h, m, s)
+        else:
+            # ex: '08:54'
+            return '{0:02d}:{1:02d}'.format(m, s)
 
 
 class _TqdmWithoutDisplay(tqdm):
@@ -109,3 +130,10 @@ class _DevNullFile:
     
     def flush(self) -> None:
         pass
+
+
+# ------------------------------------------------------------------------------
+
+# Monkeypatch tqdm.format_interval() so that tqdm.format_meter() will use it
+# when formatting timedeltas
+tqdm.format_interval = ProgressBarCalculator.format_interval

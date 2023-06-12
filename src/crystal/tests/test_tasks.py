@@ -12,10 +12,12 @@ from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.util.progress import ProgressBarCalculator
 import tempfile
+from tqdm import tqdm
 from typing import NamedTuple
 from unittest import skip
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 
 
 # ------------------------------------------------------------------------------
@@ -105,6 +107,22 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
 @skip('not yet automated')
 async def test_when_download_resource_then_displays_estimated_time_remaining() -> None:
     pass
+
+
+def test_format_of_estimated_time_remaining() -> None:
+    def format_remaining_str(second_count: int) -> str:
+        with patch.object(tqdm, 'format_dict', new_callable=PropertyMock) as format_dict:
+            format_dict.return_value = dict(n=0, total=second_count, elapsed=1, rate=1)
+            
+            pbc = ProgressBarCalculator(initial=0, total=second_count)
+            (remaining_str, time_per_item_str) = pbc.remaining_str_and_time_per_item_str()
+        return remaining_str
+    
+    assert '00:01' == format_remaining_str(1)  # 1 second
+    assert '01:00' == format_remaining_str(60)  # 1 minute
+    assert '1:00:00' == format_remaining_str(60*60)  # 1 hr
+    assert '1d + 0:00:00' == format_remaining_str(24*60*60)  # 1 day
+    assert '1d + 1:01:01' == format_remaining_str(24*60*60 + 60*60 + 60 + 1)
 
 
 # TODO: Extend test to check how user-facing UI responds to ProjectFreeSpaceTooLowError
