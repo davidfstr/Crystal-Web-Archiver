@@ -7,6 +7,7 @@ from crystal.tests.util.data import (
     MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
 )
 from crystal.tests.util.runner import bg_sleep
+from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.wait import wait_for
@@ -47,9 +48,10 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     # Download the resource
                     assert False == missing_r.already_downloaded_this_session
                     missing_rr_future = missing_r.download()  # uses DownloadResourceTask
-                    await wait_for(
-                        lambda: missing_rr_future.done() or None,
-                        timeout=MAX_TIME_TO_DOWNLOAD_404_URL)
+                    with screenshot_if_raises():
+                        await wait_for(
+                            lambda: missing_rr_future.done() or None,
+                            timeout=MAX_TIME_TO_DOWNLOAD_404_URL)
                     assert True == missing_r.already_downloaded_this_session
                     
                     # Download the resource again, and ensure it downloads immediately
@@ -82,12 +84,13 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                         assert False == r.already_downloaded_this_session
                     drg_task = comic_g.create_download_task()  # a DownloadResourceGroupTask
                     project.add_task(drg_task)
-                    await wait_for(
-                        lambda: drg_task.complete or None,
-                        timeout=(
-                            MAX_TIME_TO_DOWNLOAD_404_URL +
-                            (MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY * COMIC_G_FINAL_MEMBER_COUNT)
-                        ))
+                    with screenshot_if_raises():
+                        await wait_for(
+                            lambda: drg_task.complete or None,
+                            timeout=(
+                                MAX_TIME_TO_DOWNLOAD_404_URL +
+                                (MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY * COMIC_G_FINAL_MEMBER_COUNT)
+                            ))
                     assert COMIC_G_FINAL_MEMBER_COUNT == len(comic_g.members)
                     for r in comic_rs:
                         assert True == r.already_downloaded_this_session
