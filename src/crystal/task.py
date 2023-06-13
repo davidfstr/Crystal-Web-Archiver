@@ -9,7 +9,7 @@ from crystal.util.xthreading import (
 import shutil
 import sys
 from time import sleep
-from typing import Callable, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Any, Callable, List, Optional, Tuple, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from crystal.model import ResourceRevision
@@ -96,7 +96,7 @@ class Task:
         self.listeners = []  # type: List[object]
         
         self._did_yield_self = False            # used by leaf tasks
-        self._future = Future()  # type: Future # used by leaf tasks
+        self._future = None  # type: Optional[Future]  # used by leaf tasks
         # TODO: Consider merging the following two fields
         self._first_incomplete_child_index = 0  # used by SCHEDULING_STYLE_SEQUENTIAL
         self._next_child_index = 0              # used by SCHEDULING_STYLE_ROUND_ROBIN
@@ -160,6 +160,8 @@ class Task:
         conceptually return a value.
         """
         if callable(self):
+            if self._future is None:
+                self._future = Future()
             return self._future
         else:
             raise ValueError('Container tasks do not define a result by default.')
@@ -170,8 +172,7 @@ class Task:
         TaskDisposedException, allowing the original future to be
         garbage-collected if it isn't referenced elsewhere.
         """
-        self._future = Future()
-        self._future.set_exception(_TASK_DISPOSED_EXCEPTION)
+        self._future = _FUTURE_WITH_TASK_DISPOSED_EXCEPTION  # garbage collect old value
     
     # === Protected Operations ===
     
@@ -335,6 +336,8 @@ class Task:
     
     def _call_self_and_record_result(self):
         # (Ignore client requests to cancel)
+        if self._future is None:
+            self._future = Future()
         if self._future.done():
             raise AssertionError(f'Future for {self!r} was already done')
         self._future.set_running_or_notify_cancel()
@@ -368,6 +371,9 @@ class TaskDisposedException(Exception):
     pass
 
 _TASK_DISPOSED_EXCEPTION = TaskDisposedException()
+
+_FUTURE_WITH_TASK_DISPOSED_EXCEPTION = Future()  # type: Future[Any]
+_FUTURE_WITH_TASK_DISPOSED_EXCEPTION.set_exception(_TASK_DISPOSED_EXCEPTION)
 
 
 # ------------------------------------------------------------------------------
@@ -542,7 +548,7 @@ class DownloadResourceTask(Task):
         if self._already_downloaded_task is not None:
             self.append_child(self._already_downloaded_task, already_complete_ok=True)
         
-        self._download_body_with_embedded_future = Future()  # type: Future
+        self._download_body_with_embedded_future = None  # type: Optional[Future]
         
         # Prevent other DownloadResourceTasks created during this session from
         # attempting to redownload this resource since they would duplicate
@@ -573,15 +579,16 @@ class DownloadResourceTask(Task):
             if not wait_for_embedded:
                 return self._download_body_task.future
             else:
+                if self._download_body_with_embedded_future is None:
+                    self._download_body_with_embedded_future = Future()
                 return self._download_body_with_embedded_future
     
     def dispose(self) -> None:
         super().dispose()
         if self._download_body_task is not None:
             self._download_body_task.dispose()
-        self._download_body_with_embedded_future = Future()
-        self._download_body_with_embedded_future.set_exception(
-            _TASK_DISPOSED_EXCEPTION)
+        self._download_body_with_embedded_future = \
+            _FUTURE_WITH_TASK_DISPOSED_EXCEPTION  # garbage collect old value
     
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task is self._download_body_task:
@@ -682,6 +689,8 @@ class DownloadResourceTask(Task):
             # with value of self._download_body_task.future
             if self._download_body_task is not None:
                 exc = self._download_body_task.future.exception()
+                if self._download_body_with_embedded_future is None:
+                    self._download_body_with_embedded_future = Future()
                 if not self._download_body_with_embedded_future.done():  # not disposed
                     if exc is not None:
                         self._download_body_with_embedded_future.set_exception(exc)
@@ -720,6 +729,7 @@ class DownloadResourceTask(Task):
     def finish(self) -> None:
         if self._pbc is not None:
             self._pbc.close()
+            self._pbc = None  # garbage collect
         super().finish()
 
 
@@ -888,7 +898,7 @@ class DownloadResourceGroupMembersTask(Task):
         self._pbc = ProgressBarCalculator(
             initial=0,
             total=len(self.children),
-        )
+        )  # type: Optional[ProgressBarCalculator]
         self._update_subtitle()
         
         # Apply deferred child-complete actions
@@ -916,6 +926,7 @@ class DownloadResourceGroupMembersTask(Task):
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
+        assert self._pbc is not None
         self._pbc.update(1)  # self._pbc.n += 1
         self._update_subtitle()
         self._update_completed_status()
@@ -935,7 +946,9 @@ class DownloadResourceGroupMembersTask(Task):
             self.finish()
     
     def finish(self) -> None:
-        self._pbc.close()
+        if self._pbc is not None:
+            self._pbc.close()
+            self._pbc = None  # garbage collect
         super().finish()
 
 

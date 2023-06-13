@@ -315,9 +315,11 @@ Release Notes ⋮
     * Prevent system idle sleep while tasks are running (on macOS and Windows)
     * Print large numbers with comma separators or whatever the appropriate
       separator is for the current locale
-    * Optimize memory use when there are very many URLs in a project
+    * Minimize memory use when there are very many URLs in a project
       by shrinking in-memory Resource and Task objects by defining explicit
       `__slots__`
+    * Minimize memory growth while downloading URLs in a project for
+      multiple hours or days
     * If free disk space drops too low then refuse to download further resources
 
 * Critical fixes
