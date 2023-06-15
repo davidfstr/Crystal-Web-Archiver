@@ -975,6 +975,9 @@ class DownloadResourceGroupTask(Task):
         for t in [t for t in [self._update_members_task, self._download_members_task] if t.complete]:
             self.task_did_complete(t)
         # (NOTE: self.complete might be True now)
+        
+        # Prevent system idle sleep while downloading a potentially large group
+        Caffeination.add_caffeine()
     
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task == self._update_members_task and not self._started_downloading_members:
@@ -991,6 +994,11 @@ class DownloadResourceGroupTask(Task):
         
         if self.num_children_complete == len(self.children) and not self.complete:
             self.finish()
+    
+    def finish(self) -> None:
+        Caffeination.remove_caffeine()
+        
+        super().finish()
 
 
 # ------------------------------------------------------------------------------
@@ -1077,35 +1085,23 @@ def start_schedule_forever(task: Task) -> None:
     """
     def bg_task() -> None:
         while True:
-            did_add_caffeine = False
+            def fg_task() -> Tuple[Callable[[], None], bool]:
+                return (task.try_get_next_task_unit(), task.complete)
             try:
-                def fg_task() -> Tuple[Callable[[], None], bool]:
-                    return (task.try_get_next_task_unit(), task.complete)
-                try:
-                    (unit, task_complete) = fg_call_and_wait(fg_task)
-                except NoForegroundThreadError:
-                    return
-                
-                if unit is None:
-                    if did_add_caffeine:
-                        Caffeination.remove_caffeine()
-                        did_add_caffeine = False
-                    if task_complete:
-                        break
-                    else:
-                        sleep(_ROOT_TASK_POLL_INTERVAL)
-                        continue
+                (unit, task_complete) = fg_call_and_wait(fg_task)
+            except NoForegroundThreadError:
+                return
+            
+            if unit is None:
+                if task_complete:
+                    break
                 else:
-                    Caffeination.add_caffeine()
-                    did_add_caffeine = True
-                try:
-                    unit()  # Run unit directly on this bg thread
-                except NoForegroundThreadError:
-                    return
-            finally:
-                if did_add_caffeine:
-                    Caffeination.remove_caffeine()
-                    did_add_caffeine = False
+                    sleep(_ROOT_TASK_POLL_INTERVAL)
+                    continue
+            try:
+                unit()  # Run unit directly on this bg thread
+            except NoForegroundThreadError:
+                return
     bg_call_later(bg_task, daemon=True)
 
 
