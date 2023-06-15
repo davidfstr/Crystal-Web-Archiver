@@ -154,12 +154,13 @@ class Project:
                 batch_size = max(1, approx_resource_count // 100)
                 next_index_to_report = 0
                 resource_count = 0
+                resources = []
                 for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
                     if index == next_index_to_report:
                         progress_listener.loading_resource(index)
                         next_index_to_report += batch_size
-                    # Create Resource and add to self._resources
-                    Resource(self, url, _id=id)
+                    # Create Resource
+                    resources.append(Resource(self, url, _id=id))
                     resource_count += 1
                 if resource_count != 0:
                     progress_listener.loading_resource(resource_count - 1)
@@ -167,8 +168,10 @@ class Project:
                 
                 # Index Resources (to load RootResources and ResourceGroups faster)
                 progress_listener.indexing_resources()
-                self._sorted_resource_urls.update(self._resources)
-                resource_for_id = {r._id: r for r in self.resources}
+                self._resources = {r.url: r for r in resources}
+                self._sorted_resource_urls.update(self._resources.keys())
+                resource_for_id = {r._id: r for r in resources}
+                del resources  # garbage collect early
                 
                 # Load RootResources
                 [(root_resource_count,)] = c.execute('select count(1) from root_resource')
@@ -705,13 +708,17 @@ class Resource:
             project._db.commit()
             assert c.lastrowid is not None
             self._id = c.lastrowid
-        project._resources[normalized_url] = self
+        
+        # Record self in Project
         if not project._loading:
+            project._resources[normalized_url] = self
             project._sorted_resource_urls.add(normalized_url)
         else:
-            # Caller is responsible for updating Project._sorted_resource_urls
+            # (Caller is responsible for updating Project._resources)
+            # (Caller is responsible for updating Project._sorted_resource_urls)
             pass
         
+        # Notify listeners that self did instantiate
         if not project._loading:
             project._resource_did_instantiate(self)
         
