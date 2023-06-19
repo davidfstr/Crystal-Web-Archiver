@@ -345,7 +345,11 @@ Release Notes ⋮
       treat such links specially.
 
 * CLI improvements
-    * Fewer profiling warnings on the command line.
+    * Profiling warnings:
+        * Several foreground tasks are optimized so that they
+          no longer print slow foreground task warnings
+        * Slow garbage collection operations now print a
+          profiling warning
     * Include [guppy] module for manual [memory leak profiling].
 
 * Minor fixes

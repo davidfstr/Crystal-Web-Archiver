@@ -169,6 +169,11 @@ def _main(args: List[str]) -> None:
             parsed_args.stale_before = parsed_args.stale_before.replace(
                 tzinfo=get_localzone())  # reinterpret
     
+    # Profile garbage collection
+    from crystal.util.xgc import PROFILE_GC, start_profiling_gc
+    if PROFILE_GC:
+        start_profiling_gc()
+    
     # Start shell if requested
     if parsed_args.shell:
         from crystal.shell import Shell

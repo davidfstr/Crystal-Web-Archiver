@@ -17,7 +17,7 @@ import wx
 
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.
-_PROFILE_FG_TASKS = os.environ.get('CRYSTAL_NO_PROFILE', 'False') != 'True'
+_PROFILE_FG_TASKS = os.environ.get('CRYSTAL_NO_PROFILE_FG_TASKS', 'False') != 'True'
 
 # Maximum reasonable time that foreground tasks should take to complete.
 # If profiling is enabled, warnings will be printed for tasks whose runtime

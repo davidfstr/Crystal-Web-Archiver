@@ -569,8 +569,10 @@ def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
             **os.environ,
             **{
                 'CRYSTAL_FAULTHANDLER': 'True',
+                
                 # Prevent profiling warnings from being mixed into output
-                'CRYSTAL_NO_PROFILE': 'True',
+                'CRYSTAL_NO_PROFILE_FG_TASKS': 'True',
+                'CRYSTAL_NO_PROFILE_GC': 'True',
             }
         })
     try:
