@@ -471,17 +471,21 @@ class DownloadResourceBodyTask(Task):
             links = body_revision.links()
             urls = [urljoin(r.url, link.relative_url) for link in links]
             
-            self.subtitle = 'Recording links...'
-            def fg_task_2() -> None:
-                # TODO: Optimize. This is taking 1-2 sec to execute on THEM's Review List page.
-                #       Need to look at optimizing this to avoid blocking the UI.
-                for url in urls:
-                    # TODO: Optimize EntityTree.resource_did_instantiate() in
-                    #       the way that its contained TODO comment describes.
-                    #       That function is currently indirectly called by
-                    #       Resource.__new__() here.
-                    Resource(r.project, url)
-            fg_call_and_wait(fg_task_2)
+            if len(urls) != 0:
+                self.subtitle = 'Recording links...'
+                def fg_task_2() -> None:
+                    # NOTE: Perform many database INSERTs related to new
+                    #       Resource objects inside the same transaction
+                    #       to optimize performance. For more information:
+                    #       https://stackoverflow.com/questions/1711631/improve-insert-per-second-performance-of-sqlite
+                    c = r.project._db.cursor()
+                    c.execute('begin transaction')
+                    for url in urls:
+                        assert r.project._db.in_transaction
+                        Resource(r.project, url, _commit=False)
+                    r.project._db.commit()  # end transaction
+                    assert not r.project._db.in_transaction
+                fg_call_and_wait(fg_task_2)
             
             return body_revision
         finally:

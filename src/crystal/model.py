@@ -675,7 +675,7 @@ class Resource:
     _already_downloaded_this_session: bool
     _id: int  # or None if deleted
     
-    def __new__(cls, project: Project, url: str, _id: Optional[int]=None) -> Resource:
+    def __new__(cls, project: Project, url: str, _id: Optional[int]=None, _commit: bool=True) -> Resource:
         """
         Looks up an existing resource with the specified URL or creates a new
         one if no preexisting resource matches.
@@ -717,7 +717,8 @@ class Resource:
                 raise ProjectReadOnlyError()
             c = project._db.cursor()
             c.execute('insert into resource (url) values (?)', (normalized_url,))
-            project._db.commit()
+            if _commit:
+                project._db.commit()
             assert c.lastrowid is not None
             self._id = c.lastrowid
         
