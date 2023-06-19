@@ -3,6 +3,7 @@ from __future__ import annotations
 from crystal.util.caffeination import Caffeination
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
+from crystal.util.xgc import gc_disabled
 from crystal.util.xthreading import (
     bg_call_later, fg_call_and_wait, fg_call_later, NoForegroundThreadError
 )
@@ -888,12 +889,13 @@ class DownloadResourceGroupMembersTask(Task):
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         
-        member_download_tasks = [
-            member.create_download_task(needs_result=False)
-            for member in group.members
-        ]
-        for t in member_download_tasks:
-            self.append_child(t, already_complete_ok=True)
+        with gc_disabled():  # don't garbage collect while allocating many objects
+            member_download_tasks = [
+                member.create_download_task(needs_result=False)
+                for member in group.members
+            ]
+            for t in member_download_tasks:
+                self.append_child(t, already_complete_ok=True)
         
         self._pbc = ProgressBarCalculator(
             initial=0,

@@ -27,6 +27,7 @@ from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
+from crystal.util.xgc import gc_disabled
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait
 import cgi
 import datetime
@@ -155,13 +156,14 @@ class Project:
                 next_index_to_report = 0
                 resource_count = 0
                 resources = []
-                for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
-                    if index == next_index_to_report:
-                        progress_listener.loading_resource(index)
-                        next_index_to_report += batch_size
-                    # Create Resource
-                    resources.append(Resource(self, url, _id=id))
-                    resource_count += 1
+                with gc_disabled():  # don't garbage collect while allocating many objects
+                    for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
+                        if index == next_index_to_report:
+                            progress_listener.loading_resource(index)
+                            next_index_to_report += batch_size
+                        # Create Resource
+                        resources.append(Resource(self, url, _id=id))
+                        resource_count += 1
                 if resource_count != 0:
                     progress_listener.loading_resource(resource_count - 1)
                 progress_listener.did_load_resources(resource_count)

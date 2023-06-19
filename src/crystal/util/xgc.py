@@ -1,6 +1,8 @@
+from contextlib import contextmanager
 import gc
 import os
 import time
+from typing import Iterator
 
 
 # If True, then the runtime of foreground tasks is tracked to ensure
@@ -32,3 +34,20 @@ def start_profiling_gc() -> None:
                 
                 last_gc_start = None
     gc.callbacks.append(on_gc)
+
+
+@contextmanager
+def gc_disabled() -> Iterator[None]:
+    """
+    Context in which garbage collection is disabled.
+    
+    Useful when allocating a very large number of long-lived objects,
+    to avoid many useless runs of the garbage collector.
+    """
+    assert gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        assert not gc.isenabled()
+        gc.enable()
