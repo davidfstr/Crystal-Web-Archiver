@@ -23,6 +23,7 @@ from crystal.util.db import (
     get_column_names_of_table,
     is_no_such_column_error_for,
 )
+from crystal.util.profile import warn_if_slow
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
@@ -713,10 +714,18 @@ class Resource:
             assert _id is not None
             self._id = _id
         else:
+            from crystal.task import PROFILE_RECORD_LINKS
+            caller_is_recording_links = not _commit
+            
             if project.readonly:
                 raise ProjectReadOnlyError()
             c = project._db.cursor()
-            c.execute('insert into resource (url) values (?)', (normalized_url,))
+            with warn_if_slow(
+                    'Inserting link',
+                    max_duration=0.1,  # seconds
+                    message=normalized_url,
+                    enabled=PROFILE_RECORD_LINKS and caller_is_recording_links):
+                c.execute('insert into resource (url) values (?)', (normalized_url,))
             if _commit:
                 project._db.commit()
             assert c.lastrowid is not None

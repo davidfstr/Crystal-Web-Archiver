@@ -348,8 +348,8 @@ Release Notes ⋮
     * Profiling warnings:
         * Several foreground tasks are optimized so that they
           no longer print slow foreground task warnings
-        * Slow garbage collection operations now print a
-          profiling warning
+        * Slow garbage collection operations now print a profiling warning
+        * Slow "Recording links" operations now print a profiling warning
     * Include [guppy] module for manual [memory leak profiling].
 
 * Minor fixes

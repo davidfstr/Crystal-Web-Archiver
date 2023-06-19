@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from crystal.util.caffeination import Caffeination
+from crystal.util.profile import warn_if_slow
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util.xthreading import (
     bg_call_later, fg_call_and_wait, fg_call_later, NoForegroundThreadError
 )
+import os
 import shutil
 import sys
 from time import sleep
@@ -411,6 +413,8 @@ def _get_abstract_resource_title(abstract_resource):
         return '%s' % (resource.url)
 
 
+PROFILE_RECORD_LINKS = os.environ.get('CRYSTAL_NO_PROFILE_RECORD_LINKS', 'False') != 'True'
+
 class DownloadResourceBodyTask(Task):
     """
     Downloads a single resource's body.
@@ -483,7 +487,12 @@ class DownloadResourceBodyTask(Task):
                     for url in urls:
                         assert r.project._db.in_transaction
                         Resource(r.project, url, _commit=False)
-                    r.project._db.commit()  # end transaction
+                    with warn_if_slow(
+                            'Committing links',
+                            max_duration=1.0,  # seconds
+                            message=lambda: f'{len(urls)} links from {r.url}',
+                            enabled=PROFILE_RECORD_LINKS):
+                        r.project._db.commit()  # end transaction
                     assert not r.project._db.in_transaction
                 fg_call_and_wait(fg_task_2)
             

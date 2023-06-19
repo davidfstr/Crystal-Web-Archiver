@@ -2,11 +2,20 @@ from contextlib import contextmanager
 import inspect
 import sys
 import time
-from typing import Iterator
+from typing import Callable, Iterator, Union
 
 
 @contextmanager
-def warn_if_slow(title: str, max_duration: float) -> Iterator[None]:
+def warn_if_slow(
+        title: str,
+        max_duration: float,
+        message: Union[Callable[[], str], str],
+        *, enabled: bool=True
+        ) -> Iterator[None]:
+    if not enabled:
+        yield
+        return
+    
     start_time = time.time()
     try:
         yield
@@ -14,9 +23,12 @@ def warn_if_slow(title: str, max_duration: float) -> Iterator[None]:
         end_time = time.time()
         delta_time = end_time - start_time
         if delta_time > max_duration:
-            print("*** %s took %.02fs to execute" % (
+            message_str = message() if callable(message) else message
+            assert isinstance(message_str, str)
+            print("*** %s took %.02fs to execute: %s" % (
                 title,
-                delta_time
+                delta_time,
+                message_str,
             ), file=sys.stderr)
 
 
