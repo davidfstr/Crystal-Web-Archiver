@@ -7,6 +7,7 @@ This thread is responsible for:
 (2) mediating access to model elements (including the underlying database).
 """
 
+from crystal.util.profile import create_profiled_callable
 import os
 import sys
 import threading
@@ -16,7 +17,7 @@ import wx
 
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.
-_PROFILE_FG_TASKS = True
+_PROFILE_FG_TASKS = os.environ.get('CRYSTAL_NO_PROFILE', 'False') != 'True'
 
 # Maximum reasonable time that foreground tasks should take to complete.
 # If profiling is enabled, warnings will be printed for tasks whose runtime
@@ -75,9 +76,12 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
     Raises:
     * NoForegroundThreadError
     """
-    if (_PROFILE_FG_TASKS and not no_profile and 
-            os.environ.get('CRYSTAL_NO_PROFILE', 'False') != 'True'):
-        callable = _create_profiled_callable(callable, *args);
+    if _PROFILE_FG_TASKS and not no_profile:
+        callable = create_profiled_callable(
+            'Slow foreground task',
+            _FG_TASK_RUNTIME_THRESHOLD,
+            callable, *args
+        )
         args=()
     
     if not has_foreground_thread():
@@ -149,40 +153,6 @@ def fg_call_and_wait(callable, no_profile: bool=False, *args):
             raise exc_info[1].with_traceback(exc_info[2])
         
         return callable_result[0]
-
-
-def _create_profiled_callable(callable, *args):
-    """
-    Decorates the specified callable such that it prints
-    a warning to the console if its runtime is long.
-    """
-    def profiled_callable():
-        import time
-        start_time = time.time()
-        try:
-            callable(*args)
-        finally:
-            end_time = time.time()
-            delta_time = end_time - start_time
-            if delta_time > _FG_TASK_RUNTIME_THRESHOLD:
-                root_callable = callable
-                while hasattr(root_callable, 'callable'):
-                    root_callable = root_callable.callable
-                
-                import inspect
-                try:
-                    file = inspect.getsourcefile(root_callable)
-                except Exception:
-                    file = '?'
-                try:
-                    start_line_number = inspect.getsourcelines(root_callable)[-1]
-                except Exception:
-                    start_line_number = '?'
-                print("*** Slow foreground task took %.02fs to execute: %s @ [%s:%s]" % (
-                    delta_time, root_callable,
-                    file,
-                    start_line_number), file=sys.stderr)
-    return profiled_callable
 
 
 class NoForegroundThreadError(ValueError):
