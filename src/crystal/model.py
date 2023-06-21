@@ -41,9 +41,10 @@ import re
 import shutil
 from sortedcontainers import SortedList
 import sqlite3
+import sys
 from typing import (
-    Any, Callable, cast, Dict, Iterable, List, Optional, Pattern, TYPE_CHECKING, Tuple,
-    TypedDict, Union
+    Any, Callable, cast, Dict, Iterable, List, Literal, Optional, Pattern,
+    TYPE_CHECKING, Tuple, TypedDict, Union
 )
 from urllib.parse import urlparse, urlunparse
 
@@ -657,6 +658,8 @@ class Resource:
     Either created manually or discovered through a link from another resource.
     Persisted and auto-saved.
     """
+    _DEFER_ID = sys.intern('__defer__')  # type: Literal['__defer__']  # type: ignore[assignment]
+    
     # Optimize per-instance memory use, since there many be very many Resource objects
     __slots__ = (
         'project',
@@ -674,9 +677,15 @@ class Resource:
     _download_task_ref: Optional[_WeakTaskRef]
     _download_task_noresult_ref: Optional[_WeakTaskRef]
     _already_downloaded_this_session: bool
-    _id: int  # or None if deleted
+    _id: int  # or None if not finished initializing or deleted
     
-    def __new__(cls, project: Project, url: str, _id: Optional[int]=None, _commit: bool=True) -> Resource:
+    # === Init (One) ===
+    
+    def __new__(cls, 
+            project: Project,
+            url: str,
+            _id: 'Union[None, int, Literal["__defer__"]]'=None,
+            ) -> Resource:
         """
         Looks up an existing resource with the specified URL or creates a new
         one if no preexisting resource matches.
@@ -686,7 +695,7 @@ class Resource:
         * url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
         """
         
-        if _id is None:
+        if _id is None or _id is Resource._DEFER_ID:
             url_alternatives = cls.resource_url_alternatives(project, url)
             
             # Find first matching existing alternative URL, to provide
@@ -710,26 +719,36 @@ class Resource:
         self._download_task_noresult_ref = None
         self._already_downloaded_this_session = False
         
-        if project._loading:
-            assert _id is not None
-            self._id = _id
-        else:
-            from crystal.task import PROFILE_RECORD_LINKS
-            caller_is_recording_links = not _commit
-            
+        if _id is None:
             if project.readonly:
                 raise ProjectReadOnlyError()
             c = project._db.cursor()
-            with warn_if_slow(
-                    'Inserting link',
-                    max_duration=0.1,  # seconds
-                    message=normalized_url,
-                    enabled=PROFILE_RECORD_LINKS and caller_is_recording_links):
-                c.execute('insert into resource (url) values (?)', (normalized_url,))
-            if _commit:
-                project._db.commit()
+            c.execute('insert into resource (url) values (?)', (normalized_url,))
+            project._db.commit()
             assert c.lastrowid is not None
-            self._id = c.lastrowid
+            _id = c.lastrowid
+        
+        if _id is Resource._DEFER_ID:
+            self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
+        else:
+            assert isinstance(_id, int)
+            self._finish_init(_id)  # sets self._id
+        
+        return self
+    
+    @property
+    def _is_finished_initializing(self) -> bool:
+        return self._id is not None
+    
+    def _finish_init(self, id: int) -> None:
+        """
+        Finishes initializing a Resource that was created with
+        Resource(..., _id=Resource._DEFER_ID).
+        """
+        self._id = id
+        
+        project = self.project  # cache
+        normalized_url = self._url  # cache
         
         # Record self in Project
         if not project._loading:
@@ -743,8 +762,72 @@ class Resource:
         # Notify listeners that self did instantiate
         if not project._loading:
             project._resource_did_instantiate(self)
+    
+    # === Init (Many) ===
+    
+    @staticmethod
+    def bulk_create(
+            project: Project,
+            urls: List[str],
+            origin_url: str,
+            ) -> List[Resource]:
+        """
+        Creates several Resources for the specified list of URLs, in bulk.
+        Returns the set of Resources created.
         
-        return self
+        Arguments:
+        * project -- associated `Project`.
+        * urls -- absolute URLs.
+        * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
+        """
+        from crystal.task import PROFILE_RECORD_LINKS
+        
+        # 1. Create Resources in memory initially, deferring any database INSERTs
+        # 2. Identify new resources that need to be inserted in the database
+        resource_for_new_url = OrderedDict()
+        for url in urls:
+            # Get/create Resource in memory and normalize its URL
+            new_r = Resource(project, url, _id=Resource._DEFER_ID)
+            if new_r._is_finished_initializing:
+                # Resource with normalized URL already existed in memory
+                pass
+            else:
+                # Resource with normalized URL needs to be created in database
+                if new_r.url in resource_for_new_url:
+                    # Resource with normalized URL is already scheduled to be created in database
+                    pass
+                else:
+                    # Schedule resource with normalized URL to be created in database
+                    resource_for_new_url[new_r.url] = new_r
+        
+        # If no resources need to be created in database, abort early
+        if len(resource_for_new_url) == 0:
+            return []
+        
+        # Create many Resource rows in database with a single bulk INSERT,
+        # to optimize performance, retrieving the IDs of the inserted rows
+        message = lambda: f'{len(resource_for_new_url)} links from {origin_url}'
+        with warn_if_slow('Inserting links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
+            c = project._db.cursor()
+            placeholders = ','.join(['(?)'] * len(resource_for_new_url))
+            ids = list(c.execute(
+                f'insert into resource (url) values {placeholders} returning id',
+                list(resource_for_new_url.keys()))
+            )  # type: List[Tuple[int]]
+        with warn_if_slow('Committing links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
+            project._db.commit()  # end transaction
+        
+        # Populate the ID of each Resource in memory with each inserted row's ID,
+        # and finish initializing each Resource (by recording it
+        # in the Project and notifying listeners of instantiation)
+        for (new_r, (id,)) in zip(resource_for_new_url.values(), ids):
+            new_r._finish_init(id)
+        
+        # Return the set of Resources that were created,
+        # which may be shorter than the list of URLs to create that were provided
+        return list(resource_for_new_url.values())
+    
+    # === Properties ===
     
     @staticmethod
     def resource_url_alternatives(project: Project, url: str) -> List[str]:
@@ -858,6 +941,8 @@ class Resource:
         _get_already_downloaded_this_session,
         _set_already_downloaded_this_session)
     
+    # === Download ===
+    
     def download_body(self) -> 'Future[ResourceRevision]':
         """
         Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
@@ -961,6 +1046,8 @@ class Resource:
         task_ref.task = task
         return task
     
+    # === Revisions ===
+    
     def has_any_revisions(self) -> bool:
         """
         Returns whether any revisions of this resource have been downloaded.
@@ -1056,6 +1143,8 @@ class Resource:
                 revision_for_etag[etag] = revision
         return revision_for_etag
     
+    # === Operations (Advanced) ===
+    
     # NOTE: Only used from a Python REPL at the moment
     def try_normalize_url(self) -> bool:
         """
@@ -1118,6 +1207,8 @@ class Resource:
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         project._resource_did_delete(self)
+    
+    # === Utility ===
     
     def __repr__(self):
         return "Resource(%s)" % (repr(self.url),)

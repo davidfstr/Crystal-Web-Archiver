@@ -478,22 +478,7 @@ class DownloadResourceBodyTask(Task):
             if len(urls) != 0:
                 self.subtitle = 'Recording links...'
                 def fg_task_2() -> None:
-                    # NOTE: Perform many database INSERTs related to new
-                    #       Resource objects inside the same transaction
-                    #       to optimize performance. For more information:
-                    #       https://stackoverflow.com/questions/1711631/improve-insert-per-second-performance-of-sqlite
-                    c = r.project._db.cursor()
-                    c.execute('begin transaction')
-                    for url in urls:
-                        assert r.project._db.in_transaction
-                        Resource(r.project, url, _commit=False)
-                    with warn_if_slow(
-                            'Committing links',
-                            max_duration=1.0,  # seconds
-                            message=lambda: f'{len(urls)} links from {r.url}',
-                            enabled=PROFILE_RECORD_LINKS):
-                        r.project._db.commit()  # end transaction
-                    assert not r.project._db.in_transaction
+                    Resource.bulk_create(r.project, urls, r.url)
                 fg_call_and_wait(fg_task_2)
             
             return body_revision
