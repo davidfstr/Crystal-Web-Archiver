@@ -580,7 +580,10 @@ def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
         assert isinstance(crystal.stdout, TextIOBase)
         os.set_blocking(crystal.stdout.fileno(), False)
         
-        (banner, _) = _read_until(crystal.stdout, '\n>>> ')
+        (banner, _) = _read_until(
+            crystal.stdout, '\n>>> ',
+            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+        )
         yield (crystal, banner)
     finally:
         crystal.kill()        
