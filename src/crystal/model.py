@@ -83,6 +83,10 @@ class Project:
         * path -- 
             path to a directory (ideally with the `FILE_EXTENSION` extension)
             from which the project is to be loaded.
+        
+        Raises:
+        * FileNotFoundError --
+            if readonly is True and no project already exists at the specified path.
         """
         if progress_listener is None:
             progress_listener = DummyOpenProjectProgressListener()
@@ -109,10 +113,13 @@ class Project:
         self._loading = True
         try:
             create = not os.path.exists(path)
+            if create and readonly:
+                # Can't create a project if cannot write to disk
+                raise FileNotFoundError(f'Cannot create new project at {path!r} when readonly=True')
             
             # Create/verify project structure
             if create:
-                # Create new project structure
+                # Create new project structure, minus database file
                 os.mkdir(path)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
             else:
@@ -122,19 +129,26 @@ class Project:
             
             # Open database
             db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
-            db = sqlite3.connect(db_filepath)
             can_write_db = (
-                True
-                if create
-                else (
-                    # Can write to *.crystalproj
-                    # (is not Locked on macOS, is not on read-only volume)
-                    os.access(path, os.W_OK) and
+                # Can write to *.crystalproj
+                # (is not Locked on macOS, is not on read-only volume)
+                os.access(path, os.W_OK) and (
+                    not os.path.exists(db_filepath) or
                     # Can write to database
                     # (is not Locked on macOS, is not Read Only on Windows, is not on read-only volume)
                     os.access(db_filepath, os.W_OK)
                 )
             )
+            db_connect_query = (
+                '?immutable=1'
+                if not can_write_db
+                else (
+                    '?mode=ro'
+                    if readonly
+                    else ''
+                )
+            )
+            db = sqlite3.connect('file:' + db_filepath + db_connect_query, uri=True)
             
             self._readonly = readonly or not can_write_db
             self._db = DatabaseConnection(db, lambda: self.readonly)
@@ -243,7 +257,7 @@ class Project:
         # Define initial configuration
         self._request_cookie = None  # type: Optional[str]
         
-        # Export reference to self
+        # Export reference to self, if running tests
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
             Project._last_opened_project = self
     

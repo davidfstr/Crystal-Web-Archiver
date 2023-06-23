@@ -527,9 +527,6 @@ def _load_project(
         ) -> Project:
     from crystal.model import Project
     
-    if not os.path.exists(project_path):
-        sys.exit('File not found: %s' % project_path)
-    
     # TODO: If errors while loading a project (ex: bad format),
     #       present them to the user nicely
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
