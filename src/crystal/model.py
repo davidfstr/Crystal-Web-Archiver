@@ -102,24 +102,31 @@ class Project:
         self._resource_groups = []              # type: List[ResourceGroup]
         self._readonly = True  # will reinitialize after database is located
         
-        def initially_readonly(can_write_db: bool) -> bool:
-            return readonly or not can_write_db
-        
         self._min_fetch_date = None  # type: Optional[datetime.datetime]
         
         progress_listener.opening_project(os.path.basename(path))
         
         self._loading = True
         try:
-            if os.path.exists(path):
-                # Load from existing project
-                
+            create = not os.path.exists(path)
+            
+            # Create/verify project structure
+            if create:
+                # Create new project structure
+                os.mkdir(path)
+                os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
+            else:
+                # Ensure existing project structure looks OK
                 if not Project.is_valid(path):
                     raise ProjectFormatError('Project format is invalid.')
-                
-                db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
-                db = sqlite3.connect(db_filepath)
-                can_write_db = (
+            
+            # Open database
+            db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
+            db = sqlite3.connect(db_filepath)
+            can_write_db = (
+                True
+                if create
+                else (
                     # Can write to *.crystalproj
                     # (is not Locked on macOS, is not on read-only volume)
                     os.access(path, os.W_OK) and
@@ -127,12 +134,29 @@ class Project:
                     # (is not Locked on macOS, is not Read Only on Windows, is not on read-only volume)
                     os.access(db_filepath, os.W_OK)
                 )
-                
-                self._readonly = initially_readonly(can_write_db)
-                self._db = DatabaseConnection(db, lambda: self.readonly)
-                
-                c = self._db.cursor()
-                
+            )
+            
+            self._readonly = readonly or not can_write_db
+            self._db = DatabaseConnection(db, lambda: self.readonly)
+            
+            c = self._db.cursor()
+            
+            # Create new project content, if missing
+            if create:
+                c.execute('create table project_property (name text unique not null, value text)')
+                progress_listener.will_load_resources(approx_resource_count=0)
+                c.execute('create table resource (id integer primary key, url text unique not null)')
+                progress_listener.did_load_resources(resource_count=0)
+                progress_listener.indexing_resources()
+                progress_listener.loading_root_resources(root_resource_count=0)
+                c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
+                progress_listener.loading_resource_groups(resource_group_count=0)
+                c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
+                c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
+                c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
+            
+            # Load from existing project
+            if True:
                 # Upgrade database schema to latest version (unless is readonly)
                 if not self.readonly:
                     self._apply_migrations(c)
@@ -205,31 +229,6 @@ class Project:
                     group._init_source(source_obj)
                 
                 # (ResourceRevisions are loaded on demand)
-            else:
-                # Create new project
-                
-                os.mkdir(path)
-                os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
-                
-                db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
-                db = sqlite3.connect(db_filepath)
-                can_write_db = True
-                
-                self._readonly = initially_readonly(can_write_db)
-                self._db = DatabaseConnection(db, lambda: self.readonly)
-                
-                c = self._db.cursor()
-                c.execute('create table project_property (name text unique not null, value text)')
-                progress_listener.will_load_resources(approx_resource_count=0)
-                c.execute('create table resource (id integer primary key, url text unique not null)')
-                progress_listener.did_load_resources(resource_count=0)
-                progress_listener.indexing_resources()
-                progress_listener.loading_root_resources(root_resource_count=0)
-                c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
-                progress_listener.loading_resource_groups(resource_group_count=0)
-                c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
-                c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
-                c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         finally:
             self._loading = False
         
