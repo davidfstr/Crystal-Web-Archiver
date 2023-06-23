@@ -1,3 +1,4 @@
+from crystal.util.xos import is_linux, is_windows
 from functools import wraps
 import platform
 from unittest import SkipTest, TestCase
@@ -13,8 +14,18 @@ def skip_on_windows(func=lambda: None):
     """Decorator for tests that should be skipped on Windows."""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if platform.system() == 'Windows':
+        if is_windows():
             skipTest('not supported on Windows')
+        func(*args, **kwargs)
+    return wrapper
+
+
+def skip_if_not_linux(func=lambda: None):
+    """Decorator for tests that should be skipped on Windows."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not is_linux():
+            skipTest('only supported on Linux')
         func(*args, **kwargs)
     return wrapper
 

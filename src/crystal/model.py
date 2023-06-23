@@ -171,6 +171,12 @@ class Project:
             
             # Load from existing project
             if True:
+                # Prefer Write Ahead Log (WAL) mode for higher performance
+                if not self.readonly:
+                    [(new_journal_mode,)] = c.execute('pragma journal_mode = wal')
+                    if new_journal_mode != 'wal':
+                        print('*** Unable to open database in WAL mode. Downloads may be slower.')
+                
                 # Upgrade database schema to latest version (unless is readonly)
                 if not self.readonly:
                     self._apply_migrations(c)
@@ -610,6 +616,21 @@ class Project:
             self._server = None
         
         self.root_task.close()
+        
+        # Disable Write Ahead Log (WAL) mode when closing database
+        # in case the user decides to burn the project to read-only media,
+        # as recommended by: https://www.sqlite.org/wal.html#readonly
+        if not self.readonly:
+            try:
+                c = self._db.cursor()
+                [(old_journal_mode,)] = c.execute('pragma journal_mode')
+                if old_journal_mode == 'wal':
+                    [(new_journal_mode,)] = c.execute('pragma journal_mode = delete')
+                    if new_journal_mode != 'delete':
+                        print('*** Unable to close database with WAL mode turned off. Project may be slower to read if burned to read-only media.')
+            except sqlite3.Error:
+                # Ignore errors while closing database
+                pass
         
         self._db.close()
     
