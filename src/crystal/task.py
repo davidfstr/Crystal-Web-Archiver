@@ -83,7 +83,7 @@ class Task:
     Tasks are not allowed to be complete immediately after initialization
     unless explicitly documented in the Task class's docstring.
     """
-    # Optimize per-instance memory use, since there many be very many Task objects
+    # Optimize per-instance memory use, since there may be very many Task objects
     __slots__ = (
         '_icon_name',
         '_title',
@@ -536,7 +536,7 @@ class DownloadResourceTask(Task):
     
     This task may be complete immediately after initialization.
     """
-    # Optimize per-instance memory use, since there many be very many
+    # Optimize per-instance memory use, since there may be very many
     # DownloadResourceTask objects
     __slots__ = (
         '_abstract_resource',

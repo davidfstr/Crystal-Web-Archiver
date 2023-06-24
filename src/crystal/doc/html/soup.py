@@ -12,14 +12,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 
-_ANY_RE = re.compile(r'.*')
-
-_IMG_RE = re.compile(r'(?i)img')
-_INPUT_RE = re.compile(r'(?i)input')
-_BUTTON_RE = re.compile(r'(?i)button')
 _ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z]*\.(?:href|location)) *= *(['"])([^'"]*)['"] *;?$''')
-_BODY_RE = re.compile(r'(?i)body')
-_SCRIPT_RE = re.compile(r'(?i)script')
 _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
 _QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")((?:https?:)?\\?/\\?/[^/][^"]+)"|(')((?:https?:)?\\?/\\?/[^/][^']+)')''')
 ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
@@ -44,14 +37,14 @@ def parse_html_and_links(
     links = []
     
     # <* background=*>
-    for tag in html.findAll(_ANY_RE, background=_ANY_RE):
+    for tag in html.find_all(background=True):
         embedded = True
         title = None
         type_title = 'Background Image'
         links.append(HtmlLink.create_from_tag(tag, 'background', type_title, title, embedded))
     
     # <* src=*>
-    for tag in html.findAll(_ANY_RE, src=_ANY_RE):
+    for tag in html.find_all(src=True):
         embedded = True
         if tag.name == 'img':
             title = _get_image_tag_title(tag)
@@ -68,11 +61,11 @@ def parse_html_and_links(
         links.append(HtmlLink.create_from_tag(tag, 'src', type_title, title, embedded))
     
     # <img srcset=*>
-    for tag in html.findAll(_IMG_RE, srcset=_ANY_RE):
+    for tag in html.find_all('img', srcset=True):
         links.extend(_process_srcset_attr(tag))
     
     # <* href=*>
-    for tag in html.findAll(_ANY_RE, href=_ANY_RE):
+    for tag in html.find_all(href=True):
         relative_url = tag['href']
         relative_url_path = urlparse(relative_url).path
         embedded = False
@@ -104,7 +97,7 @@ def parse_html_and_links(
     
     # <input type='button' onclick='*.location = "*";'>
     # This type of link is used on: fanfiction.net
-    for tag in html.findAll(_INPUT_RE, type=_BUTTON_RE, onclick=_ON_CLICK_RE):
+    for tag in html.find_all('input', type='button', onclick=_ON_CLICK_RE):
         matcher = _ON_CLICK_RE.search(tag['onclick'])
         def process_match(matcher) -> None:
             def replace_url_in_old_attr_value(url: str, old_attr_value: str) -> str:
@@ -124,7 +117,7 @@ def parse_html_and_links(
     #   - This type of link is used on: http://*.daportfolio.com/
     # 2. <script [type="text/javascript"]>..."//**"...</script>
     #   - This type of link is used on: https://blog.calm.com/take-a-deep-breath
-    for tag in html.findAll(_SCRIPT_RE, string=_QUOTED_HTTP_LINK_RE):
+    for tag in html.find_all('script', string=_QUOTED_HTTP_LINK_RE):
         if 'type' in tag.attrs and not _TEXT_JAVASCRIPT_RE.fullmatch(tag.attrs['type']):
             continue
         
@@ -159,10 +152,13 @@ def parse_html_and_links(
     # <* *="http(s)://**">
     # This type of link is used on: https://blog.calm.com/take-a-deep-breath
     # where the attribute name is "data-url".
-    seen_tags_and_attr_names = set([(link.tag, link.attr_name) for link in links])  # capture
-    for tag in html.findAll():
+    seen_tags_and_attr_names = set([
+        (_IdentityKey(link.tag), link.attr_name) for link in links
+    ])  # capture
+    for tag in html.find_all():
+        tag_ident = _IdentityKey(tag)  # cache
         for (attr_name, attr_value) in tag.attrs.items():
-            if (tag, attr_name) in seen_tags_and_attr_names:
+            if (tag_ident, attr_name) in seen_tags_and_attr_names:
                 continue
             if not isinstance(attr_value, str):
                 # HACK: BeautifulSoup has been observed to provide a 
@@ -363,3 +359,24 @@ class HtmlLink(Link):
     def __repr__(self):
         # TODO: Update repr to include new constructor parameters
         return 'HtmlLink(%s,%s,%s,%s)' % (repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))
+
+
+class _IdentityKey:
+    """
+    Wraps an object, so that equality comparisons and hash operations
+    look at the object's identity only.
+    """
+    # Optimize per-instance memory use, since there may be many _IdentityKey objects
+    __slots__ = ('_obj',)
+    
+    def __init__(self, obj: object) -> None:
+        self._obj = obj
+    
+    def __hash__(self) -> int:
+        return id(self._obj)
+    
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, _IdentityKey) and
+            self._obj is other._obj
+        )

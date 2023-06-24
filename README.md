@@ -346,6 +346,7 @@ Release Notes ⋮
       (or other embedded resources).
 
 * Parsing improvements
+    * Links are parsed in about 36% as much time as before.
     * Can identify URL references inside `<img srcset="...">`.
 
 * Serving improvements

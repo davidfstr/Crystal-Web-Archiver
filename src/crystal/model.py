@@ -663,7 +663,7 @@ class _WeakTaskRef:
     """
     Holds a reference to a Task until that task completes.
     """
-    # Optimize per-instance memory use, since there many be very many
+    # Optimize per-instance memory use, since there may be very many
     # _WeakTaskRef objects, because there may be very many Resource objects
     # which each contain _WeakTaskRef instances
     __slots__ = ('_task',)
@@ -694,7 +694,7 @@ class Resource:
     """
     _DEFER_ID = sys.intern('__defer__')  # type: Literal['__defer__']  # type: ignore[assignment]
     
-    # Optimize per-instance memory use, since there many be very many Resource objects
+    # Optimize per-instance memory use, since there may be very many Resource objects
     __slots__ = (
         'project',
         '_url',
