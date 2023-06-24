@@ -1,6 +1,7 @@
 from crystal.tests import (
     test_entitytree,
     test_menus,
+    test_readonly_mode,
     test_shell,
     test_tasks,
     test_tasktree,
@@ -25,6 +26,7 @@ def _test_functions_in_module(mod) -> List[Callable]:
 _TEST_FUNCS = (
     _test_functions_in_module(test_entitytree) +
     _test_functions_in_module(test_menus) +
+    _test_functions_in_module(test_readonly_mode) +
     _test_functions_in_module(test_shell) +
     _test_functions_in_module(test_tasks) +
     _test_functions_in_module(test_tasktree) +

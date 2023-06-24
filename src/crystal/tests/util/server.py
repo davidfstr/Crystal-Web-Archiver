@@ -45,11 +45,12 @@ def served_project(
             if fn.endswith('.crystalproj')
         ]
         project_filepath = os.path.join(project_parent_dirpath, project_filename)
-        project = fg_call_and_wait(lambda: Project(project_filepath, readonly=True))
+        must_alter_fetch_date = (fetch_date_of_resources_set_to is not None)
+        project = fg_call_and_wait(lambda: Project(project_filepath, readonly=True if not must_alter_fetch_date else False))
         try:
             # Alter the fetch date of every ResourceRevision in the project
             # to match "fetch_date_of_resources_set_to", if provided
-            if fetch_date_of_resources_set_to is not None:
+            if must_alter_fetch_date:
                 def fg_task():
                     for r in project.resources:
                         for rr in list(r.revisions()):

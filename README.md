@@ -335,6 +335,10 @@ Release Notes ⋮
       downloading groups of HTML pages that link to similar URLs
     * Support immediate early completion of download tasks for URLs
       that were downloaded in the current session or a recent session
+    * Record links while downloading faster by writing all of them to the
+      project in bulk rather than one by one
+    * Speed up downloads by opening the project's underlying SQLite database
+      in [Write-Ahead Logging (WAL) mode](https://www.sqlite.org/wal.html)
 
 * Parsing improvements
     * Can identify URL references inside `<img srcset="...">`.
