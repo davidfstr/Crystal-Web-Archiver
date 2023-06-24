@@ -42,12 +42,18 @@ async def wait_for_download_to_start_and_finish(
             raise
     
     # Wait until download task is observed that says how many items are being downloaded
-    item_count: int
+    item_count: Optional[int]
     first_task_title_func = first_task_title_progression(task_tree)
     observed_titles = []  # type: List[str]
+    did_start_download = False
     while True:
         download_task_title = first_task_title_func()
         if download_task_title is None:
+            if did_start_download:
+                # Didn't observe what the item count was
+                # but we DID see evidence that a download actually started
+                item_count = None
+                break
             if immediate_finish_ok:
                 return
             raise AssertionError(
@@ -65,14 +71,22 @@ async def wait_for_download_to_start_and_finish(
                 f'Expected first task to be a download task but found task with title: '
                 f'{download_task_title}')
         if m.group(4) is not None:
+            if m.group(4) in [
+                    'Waiting for response...',
+                    'Parsing links...',
+                    'Recording links...',
+                    'Waiting before performing next request...']:
+                did_start_download = True
             pass  # keep waiting
         else:
+            did_start_download = True
             # NOTE: Currently unused. Just proving that we can calculate it.
             item_count = int(m.group(3))
             break
         
         await bg_sleep(period)
         continue
+    assert did_start_download
     
     # Wait while downloading
     await wait_while(
