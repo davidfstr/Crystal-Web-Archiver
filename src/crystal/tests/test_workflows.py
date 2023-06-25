@@ -101,6 +101,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 # Test can re-download resource (by expanding tree node)
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                # TODO: Consider replace following wait with: wait_for_download_to_start_and_finish
                 await wait_for(tree_has_no_children_condition(mw.task_tree))
                 (comic1_ti,) = [
                     child for child in home_ti.Children
@@ -311,7 +312,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 # Test can still re-download resource (by expanding tree node)
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                await wait_for(tree_has_no_children_condition(mw.task_tree))
+                await wait_for_download_to_start_and_finish(mw.task_tree)
                 (grouped_subresources_ti,) = [
                     child for child in home_ti.Children
                     if child.Text.startswith(f'{comic_pattern} - ')
@@ -662,6 +663,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                     # Ensure home page has no normal link to Sound #1
                     home_ti.Expand()
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                    # TODO: Consider replace following wait with: wait_for_download_to_start_and_finish
                     await wait_for(
                         tree_has_no_children_condition(mw.task_tree),
                         timeout=4.0)  # 2.0s is not long enough in CI
@@ -677,6 +679,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                     ]
                     embedded_cluster_ti.Expand()
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                    # TODO: Consider replace following wait with: wait_for_download_to_start_and_finish
                     await wait_for(tree_has_no_children_condition(mw.task_tree))
                     () = [
                         child for child in embedded_cluster_ti.Children
@@ -780,6 +783,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 # Ensure home page has link to Comic #1
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                # TODO: Consider replace following wait with: wait_for_download_to_start_and_finish
                 await wait_for(
                     tree_has_no_children_condition(mw.task_tree),
                     timeout=4.0)  # 2.0s is not long enough in CI
@@ -826,6 +830,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 # 2. Ensure home page has reference to Comic #1
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                # TODO: Consider replace following wait with: wait_for_download_to_start_and_finish
                 await wait_for(
                     tree_has_no_children_condition(mw.task_tree),
                     timeout=4.0)  # 2.0s is not long enough locally
