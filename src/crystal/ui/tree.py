@@ -297,8 +297,11 @@ class NodeView:
         return self.peer._tree
     
     def _attach(self, peer: NodeViewPeer) -> None:
-        if self.peer:
-            raise ValueError('Already attached to a different peer.')
+        old_peer = self.peer  # capture
+        if old_peer:
+            raise ValueError(
+                f'Already attached to a different peer: '
+                f'old_peer={old_peer!r}, new_peer={peer!r}')
         self.peer = peer
         
         # Enable navigation from peer back to this view
