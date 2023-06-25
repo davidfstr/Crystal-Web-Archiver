@@ -12,7 +12,9 @@ import os
 import shutil
 import sys
 from time import sleep
-from typing import Any, Callable, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import (
+    Any, Callable, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
+)
 
 if TYPE_CHECKING:
     from crystal.model import ResourceRevision
@@ -217,16 +219,12 @@ class Task:
         # Mark as complete immediately, because caller may check this task's complete status
         self._complete = True
         
-        # TODO: Why is this code being run on the fg thread?
-        #       Is one of the listeners depending on that behavior?
-        def fg_task():
-            self.subtitle = 'Complete'
-            
-            # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
-            for lis in list(self.listeners):
-                if hasattr(lis, 'task_did_complete'):
-                    lis.task_did_complete(self)  # type: ignore[attr-defined]
-        fg_call_later(fg_task)
+        self.subtitle = 'Complete'
+        
+        # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
+        for lis in list(self.listeners):
+            if hasattr(lis, 'task_did_complete'):
+                lis.task_did_complete(self)  # type: ignore[attr-defined]
     
     def finalize_children(self, final_children: List[Task]) -> None:
         """
@@ -388,6 +386,17 @@ from urllib.parse import urljoin
 
 DELAY_BETWEEN_DOWNLOADS = 1.0 # secs
 
+# Configures where the DELAY_BETWEEN_DOWNLOADS delay is inserted
+# into the download process. Options are:
+# * 'after_every_page' -- 
+#     A delay is inserted after downloading a page and all its embedded resources.
+#     Simulates user browsing behavior most closely.
+# * 'after_every_resource' --
+#     A delay is inserted after downloading a page and after each of its
+#     embedded resources is downloaded.
+#     Uses server-side compute & bandwidth more slowly.
+_DOWNLOAD_DELAY_STYLE = 'after_every_page'  # type: Literal['after_every_page', 'after_every_resource']
+
 # NOTE: This optimization is important for downloading large projects.
 #       Do not recommend disabling.
 ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH = True
@@ -434,6 +443,7 @@ class DownloadResourceBodyTask(Task):
             title='Downloading body: ' + _get_abstract_resource_title(abstract_resource),
             icon_name='tasktree_download_resource_body')
         self._resource = abstract_resource.resource  # type: Resource
+        self.did_download = None  # type: Optional[bool]
     
     def __call__(self) -> ResourceRevision:
         """
@@ -450,7 +460,10 @@ class DownloadResourceBodyTask(Task):
         # NOTE: Use no_profile=True because no obvious further optimizations exist
         body_revision = fg_call_and_wait(fg_task_1, no_profile=True)
         if body_revision is not None:
+            self.did_download = False
             return body_revision
+        else:
+            self.did_download = True
         
         if self._resource.project.readonly:
             raise CannotDownloadWhenProjectReadOnlyError()
@@ -469,6 +482,12 @@ class DownloadResourceBodyTask(Task):
             from crystal.download import download_resource_revision
             body_revision = download_resource_revision(self._resource, self)
             
+            # TODO: Why is link parsing and recording happening both in
+            #       DownloadResourceBodyTask.__call__()
+            #       and in ParseResourceRevisionLinks's collaboration with
+            #       DownloadResourceTask.child_task_did_complete()?
+            #       Should probably be happening in only one place, not two places.
+            
             # Automatically parse the body's links and create associated resources
             self.subtitle = 'Parsing links...'
             r = self._resource
@@ -483,8 +502,9 @@ class DownloadResourceBodyTask(Task):
             
             return body_revision
         finally:
-            self.subtitle = 'Waiting before performing next request...'
-            sleep(DELAY_BETWEEN_DOWNLOADS)
+            if _DOWNLOAD_DELAY_STYLE == 'after_every_resource':
+                self.subtitle = 'Waiting before performing next request...'
+                sleep(DELAY_BETWEEN_DOWNLOADS)
 
 
 class CannotDownloadWhenProjectReadOnlyError(Exception):
@@ -509,7 +529,10 @@ class DownloadResourceTask(Task):
     # DownloadResourceTask objects
     __slots__ = (
         '_abstract_resource',
+        # TODO: Calculate this property from self._abstract_resource rather
+        #       than storing redundantly in memory.
         '_resource',
+        '_is_embedded',
         '_pbc',
         '_download_body_task',
         '_parse_links_task',
@@ -517,7 +540,7 @@ class DownloadResourceTask(Task):
         '_download_body_with_embedded_future',
     )
     
-    def __init__(self, abstract_resource, *, needs_result: bool=True):
+    def __init__(self, abstract_resource, *, needs_result: bool=True, is_embedded: bool=False) -> None:
         """
         Arguments:
         * abstract_resource -- a Resource or a RootResource.
@@ -527,6 +550,7 @@ class DownloadResourceTask(Task):
             icon_name='tasktree_download_resource')
         self._abstract_resource = abstract_resource
         self._resource = resource = abstract_resource.resource
+        self._is_embedded = is_embedded
         self._pbc = None  # type: Optional[ProgressBarCalculator]
         
         self._download_body_task = (
@@ -620,6 +644,12 @@ class DownloadResourceTask(Task):
                 #  used for this task's own future.)
         
         elif task is self._parse_links_task:
+            # TODO: Why is link parsing and recording happening both in
+            #       DownloadResourceBodyTask.__call__()
+            #       and in ParseResourceRevisionLinks's collaboration with
+            #       DownloadResourceTask.child_task_did_complete()?
+            #       Should probably be happening in only one place, not two places.
+            
             links = self._parse_links_task.future.result()
             self._parse_links_task.dispose()
             
@@ -633,6 +663,12 @@ class DownloadResourceTask(Task):
                     else:
                         link_urls_seen.add(link_url)
                     
+                    # HACK: It is only safe to call Resource() here,
+                    #       which is probably NOT on the foreground thread,
+                    #       because DownloadResourceBodyTask.__call__() will
+                    #       have already ensured the the resource exists in
+                    #       memory and it won't be necessary to interact with
+                    #       the database
                     link_resource = Resource(self._resource.project, link_url)
                     embedded_resources.append(link_resource)
             
@@ -644,7 +680,8 @@ class DownloadResourceTask(Task):
                     # (probably incorrectly) as an embedded resource of itself,
                     # or when a chain of embedded resources links to itself
                     continue
-                new_download_tasks.append(resource.create_download_task(needs_result=False))
+                new_download_tasks.append(
+                    resource.create_download_task(needs_result=False, is_embedded=True))
             for t in new_download_tasks:
                 self.append_child(t, already_complete_ok=True)
             
@@ -713,6 +750,13 @@ class DownloadResourceTask(Task):
                 final_children.append(_DownloadResourcesPlaceholderTask(
                     num_downloaded_resources))
                 self.finalize_children(final_children)
+            
+            if (_DOWNLOAD_DELAY_STYLE == 'after_every_page' and
+                    not self._is_embedded and
+                    self._download_body_task is not None and
+                    self._download_body_task.did_download):
+                self.subtitle = 'Waiting before performing next request...'
+                sleep(DELAY_BETWEEN_DOWNLOADS)
             
             self.finish()
     
@@ -852,7 +896,7 @@ class UpdateResourceGroupMembersTask(Task):
         
         if group.source is None:
             raise ValueError('Expected group with a source')
-        download_task = group.source.create_download_task(needs_result=False)
+        download_task = group.source.create_download_task(needs_result=False)  # is_embedded=False
         self.append_child(download_task, already_complete_ok=True)
         if download_task.complete:
             self.task_did_complete(download_task)
@@ -889,7 +933,7 @@ class DownloadResourceGroupMembersTask(Task):
         
         with gc_disabled():  # don't garbage collect while allocating many objects
             member_download_tasks = [
-                member.create_download_task(needs_result=False)
+                member.create_download_task(needs_result=False, is_embedded=False)
                 for member in group.members
             ]
             for t in member_download_tasks:
@@ -907,7 +951,7 @@ class DownloadResourceGroupMembersTask(Task):
         # (NOTE: self.complete might be True now)
     
     def group_did_add_member(self, group, member):
-        download_task = member.create_download_task(needs_result=False)
+        download_task = member.create_download_task(needs_result=False, is_embedded=False)
         self.append_child(download_task, already_complete_ok=True)
         
         self._pbc.total += 1

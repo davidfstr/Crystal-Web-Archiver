@@ -1008,14 +1008,14 @@ class Resource:
         
         This task is never complete immediately after initialization.
         """
-        def task_factory():
+        def task_factory() -> 'DownloadResourceBodyTask':
             from crystal.task import DownloadResourceBodyTask
             return DownloadResourceBodyTask(self)
         if self._download_body_task_ref is None:
             self._download_body_task_ref = _WeakTaskRef()
         return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
-    def download(self, wait_for_embedded: bool=False, needs_result: bool=True) -> 'Future[ResourceRevision]':
+    def download(self, *, wait_for_embedded: bool=False, needs_result: bool=True, is_embedded: bool=False) -> 'Future[ResourceRevision]':
         """
         Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
         up-to-date version of this resource's body. If a download is performed, all
@@ -1043,11 +1043,11 @@ class Resource:
         * ProjectClosedError --
             If the project is closed.
         """
-        task = self.create_download_task(needs_result=needs_result)
+        task = self.create_download_task(needs_result=needs_result, is_embedded=is_embedded)
         self.project.add_task(task)
         return task.get_future(wait_for_embedded)
     
-    def create_download_task(self, needs_result: bool=True) -> 'DownloadResourceTask':
+    def create_download_task(self, *, needs_result: bool=True, is_embedded: bool=False) -> 'DownloadResourceTask':
         """
         Creates a Task to download this resource and all its embedded resources.
         
@@ -1056,9 +1056,9 @@ class Resource:
         
         This task may be complete immediately after initialization.
         """
-        def task_factory():
+        def task_factory() -> 'DownloadResourceTask':
             from crystal.task import DownloadResourceTask
-            return DownloadResourceTask(self, needs_result=needs_result)
+            return DownloadResourceTask(self, needs_result=needs_result, is_embedded=is_embedded)
         if needs_result:
             if self._download_task_ref is None:
                 self._download_task_ref = _WeakTaskRef()
@@ -1326,10 +1326,10 @@ class RootResource:
     
     # TODO: Create the underlying task with the full RootResource
     #       so that the correct subtitle is displayed.
-    def download(self, needs_result: bool=True) -> Future:
+    def download(self, *, needs_result: bool=True) -> Future:
         return self.resource.download(needs_result=needs_result)
     
-    def create_download_task(self, needs_result: bool=True) -> Task:
+    def create_download_task(self, *, needs_result: bool=True) -> Task:
         """
         Creates a task to download this root resource.
         
@@ -1337,7 +1337,7 @@ class RootResource:
         """
         # TODO: Create the underlying task with the full RootResource
         #       so that the correct subtitle is displayed.
-        return self.resource.create_download_task(needs_result=needs_result)
+        return self.resource.create_download_task(needs_result=needs_result, is_embedded=False)
     
     def __repr__(self):
         return "RootResource(%s,%s)" % (repr(self.name), repr(self.resource.url))
@@ -2062,7 +2062,7 @@ class ResourceGroup:
         if resource in self._members:
             self._members.remove(resource)
     
-    def download(self, needs_result: bool=False) -> None:
+    def download(self, *, needs_result: bool=False) -> None:
         """
         Downloads this group asynchronously.
         
@@ -2076,7 +2076,7 @@ class ResourceGroup:
         task = self.create_download_task(needs_result=needs_result)
         self.project.add_task(task)
     
-    def create_download_task(self, needs_result: bool=False) -> DownloadResourceGroupTask:
+    def create_download_task(self, *, needs_result: bool=False) -> DownloadResourceGroupTask:
         """
         Creates a Task to download this resource group.
         

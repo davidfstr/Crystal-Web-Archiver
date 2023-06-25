@@ -485,6 +485,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 #       to finish downloading.
                 wait_for_embedded=True,
                 needs_result=needs_result,
+                # Assume optimistically that resource is embedded so that
+                # it downloads at "interactive priority", without inserting
+                # any artificial delays
+                is_embedded=True,
             ).result()
         except Exception:
             # Don't care if there was an error downloading

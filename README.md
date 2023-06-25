@@ -339,6 +339,11 @@ Release Notes ⋮
       project in bulk rather than one by one
     * Speed up downloads by opening the project's underlying SQLite database
       in [Write-Ahead Logging (WAL) mode](https://www.sqlite.org/wal.html)
+    * Change delay between downloads to be inserted after each HTML page
+      (plus its embedded resources), rather than after every single resource.
+      This new behavior simulates user browsing more closely and results in
+      much faster downloading of HTML pages with many images
+      (or other embedded resources).
 
 * Parsing improvements
     * Can identify URL references inside `<img srcset="...">`.
