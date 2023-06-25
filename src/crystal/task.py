@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager, nullcontext
+import cProfile
 from crystal.util.caffeination import Caffeination
 from crystal.util.profile import warn_if_slow
 from crystal.util.progress import ProgressBarCalculator
@@ -18,6 +20,15 @@ from typing import (
 
 if TYPE_CHECKING:
     from crystal.model import ResourceRevision
+
+
+# Whether to collect profiling information about the scheduler thread.
+# 
+# When True, a 'scheduler.prof' file is written to the current directory
+# after all projects have been closed. Such a file can be converted
+# into a visual flamegraph using the "flameprof" PyPI module,
+# or analyzed using the built-in "pstats" module.
+_PROFILE_SCHEDULER = False
 
 
 # ------------------------------------------------------------------------------
@@ -1108,7 +1119,7 @@ def schedule_forever(task: Task) -> None:
     """
     Runs the specified task synchronously until it completes.
     
-    This function is intended for testing, until a full scheduler class is written.
+    This function is intended for testing.
     """
     while True:
         unit = task.try_get_next_task_unit()
@@ -1123,29 +1134,38 @@ def schedule_forever(task: Task) -> None:
 
 def start_schedule_forever(task: Task) -> None:
     """
-    Asynchronously runs the specified task until it completes.
-    
-    This function is intended for testing, until a full scheduler class is written.
+    Asynchronously runs the specified task until it completes,
+    or until there is no foreground thread remaining.
     """
     def bg_task() -> None:
-        while True:
-            def fg_task() -> Tuple[Callable[[], None], bool]:
-                return (task.try_get_next_task_unit(), task.complete)
-            try:
-                (unit, task_complete) = fg_call_and_wait(fg_task)
-            except NoForegroundThreadError:
-                return
-            
-            if unit is None:
-                if task_complete:
-                    break
-                else:
-                    sleep(_ROOT_TASK_POLL_INTERVAL)
-                    continue
-            try:
-                unit()  # Run unit directly on this bg thread
-            except NoForegroundThreadError:
-                return
+        if _PROFILE_SCHEDULER:
+            profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
+        else:
+            profiling_context = nullcontext(enter_result=None)
+        try:
+            with profiling_context as profiler:
+                while True:
+                    def fg_task() -> Tuple[Callable[[], None], bool]:
+                        return (task.try_get_next_task_unit(), task.complete)
+                    try:
+                        (unit, task_complete) = fg_call_and_wait(fg_task)
+                    except NoForegroundThreadError:
+                        return
+                    
+                    if unit is None:
+                        if task_complete:
+                            break
+                        else:
+                            sleep(_ROOT_TASK_POLL_INTERVAL)
+                            continue
+                    try:
+                        unit()  # Run unit directly on this bg thread
+                    except NoForegroundThreadError:
+                        return
+        finally:
+            if _PROFILE_SCHEDULER:
+                assert profiler is not None
+                profiler.dump_stats('scheduler.prof')
     bg_call_later(bg_task, daemon=True)
 
 
