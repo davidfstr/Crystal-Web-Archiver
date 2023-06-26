@@ -19,6 +19,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
+    from crystal.doc.generic import Link
     from crystal.model import ResourceRevision
 
 
@@ -466,10 +467,10 @@ class DownloadResourceBodyTask(Task):
             download more resources.
         """
         # Return the resource's fresh (already-downloaded) default revision if available
-        def fg_task_1() -> Optional[ResourceRevision]:
+        def fg_task() -> Optional[ResourceRevision]:
             return self._resource.default_revision(stale_ok=False)
         # NOTE: Use no_profile=True because no obvious further optimizations exist
-        body_revision = fg_call_and_wait(fg_task_1, no_profile=True)
+        body_revision = fg_call_and_wait(fg_task, no_profile=True)
         if body_revision is not None:
             self.did_download = False
             return body_revision
@@ -491,27 +492,7 @@ class DownloadResourceBodyTask(Task):
         #       Need to add support for this behavior to Task.
         try:
             from crystal.download import download_resource_revision
-            body_revision = download_resource_revision(self._resource, self)
-            
-            # TODO: Why is link parsing and recording happening both in
-            #       DownloadResourceBodyTask.__call__()
-            #       and in ParseResourceRevisionLinks's collaboration with
-            #       DownloadResourceTask.child_task_did_complete()?
-            #       Should probably be happening in only one place, not two places.
-            
-            # Automatically parse the body's links and create associated resources
-            self.subtitle = 'Parsing links...'
-            r = self._resource
-            links = body_revision.links()
-            urls = [urljoin(r.url, link.relative_url) for link in links]
-            
-            if len(urls) != 0:
-                self.subtitle = 'Recording links...'
-                def fg_task_2() -> None:
-                    Resource.bulk_create(r.project, urls, r.url)
-                fg_call_and_wait(fg_task_2)
-            
-            return body_revision
+            return download_resource_revision(self._resource, self)
         finally:
             if _DOWNLOAD_DELAY_STYLE == 'after_every_resource':
                 self.subtitle = 'Waiting before performing next request...'
@@ -655,34 +636,38 @@ class DownloadResourceTask(Task):
                 #  used for this task's own future.)
         
         elif task is self._parse_links_task:
-            # TODO: Why is link parsing and recording happening both in
-            #       DownloadResourceBodyTask.__call__()
-            #       and in ParseResourceRevisionLinks's collaboration with
-            #       DownloadResourceTask.child_task_did_complete()?
-            #       Should probably be happening in only one place, not two places.
-            
-            links = self._parse_links_task.future.result()
+            (links, _) = self._parse_links_task.future.result()
             self._parse_links_task.dispose()
             
-            embedded_resources = []
-            link_urls_seen = set()
-            for link in links:
-                if link.embedded:
-                    link_url = urljoin(self._resource.url, link.relative_url)
+            # Identify embedded resources
+            def fg_task() -> List[Resource]:
+                embedded_resources = []
+                link_urls_seen = set()
+                base_url = self._resource.url  # cache
+                project = self._resource.project  # cache
+                for link in links:
+                    if not link.embedded:
+                        continue
+                    
+                    link_url = urljoin(base_url, link.relative_url)
                     if link_url in link_urls_seen:
                         continue
                     else:
                         link_urls_seen.add(link_url)
                     
-                    # HACK: It is only safe to call Resource() here,
-                    #       which is probably NOT on the foreground thread,
-                    #       because DownloadResourceBodyTask.__call__() will
-                    #       have already ensured the the resource exists in
-                    #       memory and it won't be necessary to interact with
-                    #       the database
-                    link_resource = Resource(self._resource.project, link_url)
+                    # Normalize the URL and look it up in the project
+                    # 
+                    # NOTE: Normally this should not perform any database
+                    #       queries, unless one of the related Resources
+                    #       was deleted sometime between being created
+                    #       by ParseResourceRevisionLinks and being
+                    #       accessed here.
+                    link_resource = Resource(project, link_url)
                     embedded_resources.append(link_resource)
+                return embedded_resources
+            embedded_resources = fg_call_and_wait(fg_task)
             
+            # Create and append download task for each embedded resource
             new_download_tasks = []
             ancestor_downloading_resources = self._ancestor_downloading_resources()  # cache
             for resource in embedded_resources:
@@ -791,7 +776,7 @@ class ParseResourceRevisionLinks(Task):
     """
     Parses the list of linked resources from the specified ResourceRevision.
     
-    Returns a list of Resources.
+    Returns a tuple of a list of Links and a list of Resources.
     
     This task is never complete immediately after initialization.
     """
@@ -806,9 +791,21 @@ class ParseResourceRevisionLinks(Task):
             icon_name='tasktree_parse')
         self._resource_revision = resource_revision
     
-    def __call__(self):
+    def __call__(self) -> 'Tuple[List[Link], List[Resource]]':
         self.subtitle = 'Parsing links...'
-        return self._resource_revision.links()
+        links = self._resource_revision.links()
+        
+        r = self._resource_revision.resource  # cache
+        urls = [urljoin(r.url, link.relative_url) for link in links]
+        if len(urls) == 0:
+            linked_resources = []  # type: List[Resource]
+        else:
+            self.subtitle = 'Recording links...'
+            def fg_task() -> List[Resource]:
+                return Resource.bulk_create(r.project, urls, r.url)
+            linked_resources = fg_call_and_wait(fg_task)
+        
+        return (links, linked_resources)
     
     def dispose(self) -> None:
         super().dispose()

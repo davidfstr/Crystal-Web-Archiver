@@ -724,6 +724,9 @@ class Resource:
         Looks up an existing resource with the specified URL or creates a new
         one if no preexisting resource matches.
         
+        Note that returned Resource will have a *normalized* URL which may
+        differ from the exact URL specified in this constructor.
+        
         Arguments:
         * project -- associated `Project`.
         * url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
