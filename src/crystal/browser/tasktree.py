@@ -1,6 +1,6 @@
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import SCHEDULING_STYLE_SEQUENTIAL, Task
-from crystal.ui.tree2 import TreeView, NodeView
+from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
 from crystal.util.xthreading import fg_call_later
 from typing import List, Optional
 import wx
@@ -22,12 +22,24 @@ class TaskTree:
     def peer(self) -> wx.TreeCtrl:
         """The wx.TreeCtrl controlled by this class."""
         return self.tree.peer
+    
+    def dispose(self) -> None:
+        self.root.dispose()
+        self.tree.dispose()
 
 
 class TaskTreeNode:
     # The following limits are enforced for SCHEDULING_STYLE_SEQUENTIAL tasks only
     _MAX_VISIBLE_COMPLETED_CHILDREN = 5
     _MAX_VISIBLE_CHILDREN = 100
+    
+    # Optimize per-instance memory use, since there may be very many TaskTreeNode objects
+    __slots__ = (
+        'task',
+        'tree_node',
+        '_num_visible_complete_children',
+        '_num_visible_children',
+    )
     
     """
     View controller for an individual node of the task tree.
@@ -181,6 +193,11 @@ class TaskTreeNode:
                 self._num_visible_complete_children = 0
                 self._num_visible_children = len(self.tree_node.children)
         fg_call_later(fg_task)
+    
+    def dispose(self) -> None:
+        self.task.listeners.remove(self)
+        self.tree_node.dispose()
+        self.tree_node = NULL_NODE_VIEW
 
 
 class _MoreNodeView(NodeView):

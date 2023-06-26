@@ -296,6 +296,8 @@ class MainWindow:
     # === File Menu: Events ===
     
     def _on_close_project(self, event: wx.CommandEvent) -> None:
+        self.entity_tree.dispose()
+        self.task_tree.dispose()
         self.frame.Close()
     
     def _on_quit(self, event: wx.CommandEvent) -> None:

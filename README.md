@@ -318,8 +318,8 @@ Release Notes ⋮
     * Print large numbers with comma separators or whatever the appropriate
       separator is for the current locale
     * Minimize memory use when there are very many URLs in a project
-      by shrinking in-memory Resource and Task objects by defining explicit
-      `__slots__`
+      by shrinking in-memory Resource, Task, TaskTreeNode, and NodeView objects
+      by defining explicit `__slots__`
     * Minimize memory growth while downloading URLs in a project for
       multiple hours or days
     * If free disk space drops too low then refuse to download further resources

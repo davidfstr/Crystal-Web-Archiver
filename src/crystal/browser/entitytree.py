@@ -7,6 +7,7 @@ from crystal.progress import (
     OpenProjectProgressListener,
 )
 from crystal.task import CannotDownloadWhenProjectReadOnlyError
+# TODO: Expand this star import
 from crystal.ui.tree import *
 from crystal.util.wx_bind import bind
 from crystal.util.xcollections import defaultordereddict
@@ -218,6 +219,12 @@ class EntityTree:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
         node = cast(Node, node_view.delegate)
         return node.icon_tooltip
+    
+    # === Dispose ===
+    
+    def dispose(self) -> None:
+        self.view.dispose()
+        self.root.dispose()
 
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     """
@@ -327,6 +334,16 @@ class Node:
         """
         if hasattr(self, 'calculate_icon_set'):
             self.view.icon_set = self.calculate_icon_set()  # type: ignore[attr-defined]
+    
+    # === Dispose ===
+    
+    def dispose(self) -> None:
+        if hasattr(self, '_view'):
+            self._view.dispose()
+            self._view = NULL_NODE_VIEW
+        for c in self._children:
+            c.dispose()
+        self._children = []
     
     # === Utility ===
     

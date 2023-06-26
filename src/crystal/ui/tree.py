@@ -143,6 +143,10 @@ class TreeView:
             delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
             if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
                 getattr(self.delegate, delegate_callable_attr)(event, node_view)
+    
+    def dispose(self) -> None:
+        self.delegate = None
+        self.root.dispose()
 
 
 class _OrderedTreeCtrl(wx.TreeCtrl):
@@ -175,6 +179,17 @@ class NodeView:
     * The full list of supported event names is given by
       `_EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.values()`.
     """
+    # Optimize per-instance memory use, since there may be very many NodeView objects
+    __slots__ = (
+        'delegate',
+        'peer',
+        '_title',
+        '_expandable',
+        '_icon_set_func',
+        '_icon_set',
+        '_children',
+        '_order_index',
+    )
     
     def __init__(self) -> None:
         self.delegate = None  # type: object
@@ -321,6 +336,15 @@ class NodeView:
             delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
             if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
                 getattr(self.delegate, delegate_callable_attr)(event)
+    
+    def dispose(self) -> None:
+        self.delegate = None
+        self.peer = None
+        for c in self._children:
+            c.dispose()
+        self._children = []
+
+NULL_NODE_VIEW = NodeView()
 
 
 class NodeViewPeer(tuple):

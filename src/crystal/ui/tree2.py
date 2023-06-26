@@ -39,3 +39,5 @@ class NodeView(NodeView1):
         # HACK: Call property implementation directly, since calling properties
         #       on the super() object doesn't seem to work.
         super()._set_title(combined_title)
+
+NULL_NODE_VIEW = NodeView()
