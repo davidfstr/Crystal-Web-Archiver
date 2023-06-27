@@ -175,7 +175,10 @@ class Project:
                 if not self.readonly:
                     [(new_journal_mode,)] = c.execute('pragma journal_mode = wal')
                     if new_journal_mode != 'wal':
-                        print('*** Unable to open database in WAL mode. Downloads may be slower.')
+                        print(
+                            '*** Unable to open database in WAL mode. '
+                                'Downloads may be slower.',
+                            file=sys.stderr)
                 
                 # Upgrade database schema to latest version (unless is readonly)
                 if not self.readonly:
@@ -627,7 +630,10 @@ class Project:
                 if old_journal_mode == 'wal':
                     [(new_journal_mode,)] = c.execute('pragma journal_mode = delete')
                     if new_journal_mode != 'delete':
-                        print('*** Unable to close database with WAL mode turned off. Project may be slower to read if burned to read-only media.')
+                        print(
+                            '*** Unable to close database with WAL mode turned off. '
+                                'Project may be slower to read if burned to read-only media.',
+                            file=sys.stderr)
             except sqlite3.Error:
                 # Ignore errors while closing database
                 pass

@@ -1,6 +1,7 @@
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from crystal.plugins.util.params import try_get_int, try_get_str
 import json
+import sys
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 
 
@@ -16,7 +17,7 @@ def normalize_url(old_url: str, **kwargs) -> str:
                 try:
                     d_obj = json.loads(urlsafe_b64decode(d))  # type: ignore[attr-defined]
                 except ValueError:
-                    print('*** Substack: Unable to decode "d" argument: ' + d)
+                    print('*** Substack: Unable to decode "d" argument: ' + d, file=sys.stderr)
                     pass
                 else:
                     if isinstance(d_obj, dict):

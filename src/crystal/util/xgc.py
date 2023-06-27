@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 import gc
 import os
+import sys
 import time
 from typing import Iterator
 
@@ -30,7 +31,7 @@ def start_profiling_gc() -> None:
                         'Garbage collection',
                         duration,
                         info,
-                    ))
+                    ), file=sys.stderr)
                 
                 last_gc_start = None
     gc.callbacks.append(on_gc)

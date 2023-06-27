@@ -1,5 +1,6 @@
 from crystal.plugins.util.params import try_get_int, try_get_str
 import re
+import sys
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 
 
@@ -18,7 +19,7 @@ def normalize_url(old_url: str, **kwargs) -> str:
             f = try_get_int(params, 'f')
             start = try_get_int(params, 'start')
             if start is not None and start % _FORUM_PAGE_ITEM_COUNT != 0:
-                print('*** Rounding down forum page start for: ' + old_url)
+                print('*** Rounding down forum page start for: ' + old_url, file=sys.stderr)
                 start -= (start % _FORUM_PAGE_ITEM_COUNT)  # round down
             
             if f is not None:
@@ -36,7 +37,7 @@ def normalize_url(old_url: str, **kwargs) -> str:
             p = try_get_int(params, 'p')
             start = try_get_int(params, 'start')
             if start is not None and start % _TOPIC_PAGE_ITEM_COUNT != 0:
-                print('*** Rounding down topic page start for: ' + old_url)
+                print('*** Rounding down topic page start for: ' + old_url, file=sys.stderr)
                 start -= (start % _TOPIC_PAGE_ITEM_COUNT)  # round down
             
             if t is not None or p is not None:
