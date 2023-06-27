@@ -8,7 +8,8 @@ from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util.xthreading import (
-    bg_call_later, fg_call_and_wait, fg_call_later, NoForegroundThreadError
+    bg_call_later, fg_call_and_wait, fg_call_later, is_foreground_thread,
+    NoForegroundThreadError
 )
 import os
 import shutil
@@ -496,6 +497,7 @@ class DownloadResourceBodyTask(Task):
         finally:
             if _DOWNLOAD_DELAY_STYLE == 'after_every_resource':
                 self.subtitle = 'Waiting before performing next request...'
+                assert not is_foreground_thread()
                 sleep(DELAY_BETWEEN_DOWNLOADS)
 
 
@@ -752,6 +754,7 @@ class DownloadResourceTask(Task):
                     self._download_body_task is not None and
                     self._download_body_task.did_download):
                 self.subtitle = 'Waiting before performing next request...'
+                assert not is_foreground_thread()
                 sleep(DELAY_BETWEEN_DOWNLOADS)
             
             self.finish()
@@ -1112,6 +1115,9 @@ class RootTask(Task):
 _ROOT_TASK_POLL_INTERVAL = .1 # secs
 
 
+# TODO: Move production implementation of scheduling logic from
+#       start_schedule_forever() to this method and delegate from that
+#       method to this method. Such movement will reduce logic duplication.
 def schedule_forever(task: Task) -> None:
     """
     Runs the specified task synchronously until it completes.
