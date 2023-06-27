@@ -348,6 +348,7 @@ Release Notes ⋮
 * Parsing improvements
     * Links are parsed in about 18% as much time as before.
     * Can identify URL references inside `<img srcset="...">`.
+    * Skip parsing links in downloaded files known to be binary files.
 
 * Serving improvements
     * Links to anchors on the same page are no longer rewritten,
