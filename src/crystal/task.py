@@ -7,6 +7,7 @@ from crystal.util.profile import warn_if_slow
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
+from crystal.util.xsqlite3 import is_database_closed_error
 from crystal.util.xthreading import (
     bg_call_later, fg_call_and_wait, fg_call_later, is_foreground_thread,
     NoForegroundThreadError
@@ -15,6 +16,7 @@ import os
 import shutil
 import sys
 from time import sleep
+import traceback
 from typing import (
     Any, Callable, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 )
@@ -636,7 +638,16 @@ class DownloadResourceTask(Task):
             else:
                 try:
                     body_revision = self._download_body_task.future.result()
-                except Exception:
+                except Exception as e:
+                    if is_database_closed_error(e):
+                        # Probably the project was closed. Ignore error.
+                        pass
+                    else:
+                        print(
+                            f'*** Unexpected error while downloading: {self._resource.url}',
+                            file=sys.stderr)
+                        traceback.print_exc(file=sys.stderr)
+                    
                     # Behave as if there are no embedded resources
                     pass
                 else:
