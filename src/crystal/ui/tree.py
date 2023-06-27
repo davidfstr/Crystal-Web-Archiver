@@ -261,7 +261,9 @@ class NodeView:
     
     def set_children(self,
             new_children: List[NodeView],
-            progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
+            progress_listener: Optional[OpenProjectProgressListener]=None,
+            *, _initial: bool=False
+            ) -> None:
         if progress_listener is not None:
             part_count = sum([len(c.children) for c in new_children])
             progress_listener.creating_entity_tree_nodes(part_count)
@@ -270,7 +272,7 @@ class NodeView:
         self._children = new_children
         if self.peer:
             try:
-                if not self.peer.GetFirstChild()[0].IsOk():
+                if _initial or len(old_children) == 0:
                     # Add initial children
                     part_index = 0
                     for (index, child) in enumerate(new_children):
@@ -326,7 +328,7 @@ class NodeView:
         self.title = self.title
         self.expandable = self.expandable
         self.icon_set = self.icon_set
-        self.children = self.children
+        self.set_children(self.children, _initial=True)
     
     # Called when a wx.EVT_TREE_ITEM_* event occurs on this node
     def _dispatch_event(self, event):
