@@ -6,7 +6,7 @@
 *.pyo
 
 # virtualenv
-venv
+venv*
 
 # Poetry
 /dist
