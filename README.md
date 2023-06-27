@@ -363,6 +363,8 @@ Release Notes ⋮
     * Include [guppy] module for manual [memory leak profiling].
 
 * Minor fixes
+    * Clear completed root tasks in all cases, even in the rare case where
+      all tasks except the first one are complete
     * When deleting a ResourceRevision, don't delete revision body if project
       is read-only and properly related Resource as no longer being downloaded
       this session

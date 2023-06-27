@@ -286,7 +286,7 @@ class Task:
     
     # === Public Operations ===
     
-    def try_get_next_task_unit(self):
+    def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
         """
         Returns a callable ("task unit") that completes a unit of work for
         this task, or None if no more units can be provided until at least
@@ -329,12 +329,9 @@ class Task:
                 return None
             elif self.scheduling_style == SCHEDULING_STYLE_ROUND_ROBIN:
                 if self._next_child_index == 0:
-                    if hasattr(self, 'did_schedule_all_children'):
-                        self.did_schedule_all_children()
-                        # (Children count may have changed)
-                        if len(self.children) == 0:
-                            # Handle zero-children case in usual manner
-                            return self.try_get_next_task_unit()
+                    schedule_check_result = self._notify_did_schedule_all_children()
+                    if not isinstance(schedule_check_result, bool):
+                        return schedule_check_result
                 cur_child_index = self._next_child_index
                 while True:
                     unit = self.children[cur_child_index].try_get_next_task_unit()
@@ -345,8 +342,27 @@ class Task:
                     if cur_child_index == self._next_child_index:
                         # Wrapped around and back to where we started without finding anything to do
                         return None
+                    if cur_child_index == 0:
+                        schedule_check_result = self._notify_did_schedule_all_children()
+                        if not isinstance(schedule_check_result, bool):
+                            return schedule_check_result
+                        elif schedule_check_result == True:
+                            # Invalidate self._next_child_index,
+                            # because children may have changed
+                            self._next_child_index = 0
             else:
                 raise ValueError('Container task has an unknown scheduling style (%s).' % self.scheduling_style)
+    
+    def _notify_did_schedule_all_children(self) -> Union[bool, Optional[Callable[[], None]]]:
+        if hasattr(self, 'did_schedule_all_children'):
+            self.did_schedule_all_children()  # type: ignore[attr-defined]
+            # (Children may have changed)
+            if len(self.children) == 0:
+                # Handle zero-children case in usual manner
+                return self.try_get_next_task_unit()
+            return True  # children may have changed
+        else:
+            return False  # children did not change
     
     def _call_self_and_record_result(self):
         # (Ignore client requests to cancel)
@@ -1148,7 +1164,7 @@ def start_schedule_forever(task: Task) -> None:
         try:
             with profiling_context as profiler:
                 while True:
-                    def fg_task() -> Tuple[Callable[[], None], bool]:
+                    def fg_task() -> Tuple[Optional[Callable[[], None]], bool]:
                         return (task.try_get_next_task_unit(), task.complete)
                     try:
                         (unit, task_complete) = fg_call_and_wait(fg_task)
