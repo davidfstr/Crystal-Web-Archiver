@@ -16,3 +16,6 @@ venv
 
 # PyCharm
 .idea
+
+# Profiling output
+*.prof
