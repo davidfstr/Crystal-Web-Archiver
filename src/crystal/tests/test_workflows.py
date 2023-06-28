@@ -92,7 +92,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 
                 # Test can download root resource (using download button)
                 assert home_ti.id == mw.entity_tree.window.GetSelection()
-                click_button(mw.download_button)
+                await mw.click_download_button()
                 await wait_for_download_to_start_and_finish(mw.task_tree)
                 
                 # Test can view resource (that has a downloaded revision)
@@ -247,7 +247,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     assert True == (await is_url_not_in_archive(rss_feed_url))
                     
                     feed_group_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree)
                     
                     assert False == (await is_url_not_in_archive(atom_feed_url))
@@ -444,7 +444,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                     assert f'{home_url} - Home' == home_ti.Text
                     
                     home_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree)
                     
                     # Start server
@@ -650,7 +650,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                     assert f'{home_url} - Home' == home_ti.Text
                     
                     home_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree)
                 
                 # Home page has JavaScript that will load sound URLs when
@@ -777,7 +777,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                     assert f'{home_url} - Home' == home_ti.Text
                     
                     home_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree)
                 
                 # Ensure home page has link to Comic #1
@@ -916,11 +916,11 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                     await _assert_tree_item_icon_tooltip_contains(comic1_ti, 'Undownloaded')
                     
                     home_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree)
                     
                     comic1_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree)
                     
                     # Ensure resource status badge says URL is fresh
@@ -947,12 +947,14 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 # Download: Home, Comic #1
                 if True:
                     home_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button(
+                        immediate_finish_ok=True)
                     await wait_for_download_to_start_and_finish(mw.task_tree,
                         immediate_finish_ok=True)
                     
                     comic1_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button(
+                        immediate_finish_ok=True)
                     await wait_for_download_to_start_and_finish(mw.task_tree,
                         immediate_finish_ok=True)
                 
@@ -977,12 +979,12 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 # Download: Home, Comic #1
                 if True:
                     home_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree,
                         immediate_finish_ok=True)
                     
                     comic1_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree,
                         immediate_finish_ok=True)
                 

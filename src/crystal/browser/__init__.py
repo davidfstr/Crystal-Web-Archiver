@@ -13,8 +13,11 @@ from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_linux, is_mac_os, is_windows
-from crystal.util.xthreading import set_is_quitting
+from crystal.util.xthreading import (
+    bg_call_later, fg_call_later, fg_call_and_wait, set_is_quitting
+)
 import os
+import time
 from typing import ContextManager, Iterator, List
 import webbrowser
 import wx
@@ -353,7 +356,54 @@ class MainWindow:
         assert selected_entity is not None
         if self._alert_if_not_downloadable(selected_entity):
             return
-        selected_entity.download(needs_result=False)
+        
+        # Show progress dialog if it will likely take a long time to start the download
+        if (isinstance(selected_entity, ResourceGroup) and
+                len(selected_entity.members) >= 2000):  # TODO: Tune threshold
+            progress_dialog = wx.ProgressDialog(
+                title='Starting download',
+                message=f'Starting download of {len(selected_entity.members):n} members...',
+                parent=self.frame,
+                style=wx.PD_ELAPSED_TIME)
+            progress_dialog.Name = 'cr-starting-download'
+            progress_dialog.Pulse(progress_dialog.Message)  # make progress bar indeterminate
+            progress_dialog.Show()
+            
+            # Update the elapsed time every 1 second
+            # 
+            # NOTE: It would be simpler to implement this logic with wx.Timer
+            #       but wx.Timer seems to not work well if very many lambdas
+            #       are scheduled with fg_call_later at the same time.
+            def elapsed_time_updater() -> None:
+                while True:
+                    time.sleep(1.0)
+                    def fg_task() -> bool:
+                        if progress_dialog is not None:
+                            progress_dialog.Pulse(progress_dialog.Message)
+                            return True
+                        else:
+                            return False
+                    still_ticking = fg_call_and_wait(fg_task)
+                    if not still_ticking:
+                        break
+            bg_call_later(elapsed_time_updater)
+        else:
+            progress_dialog = None
+        
+        def bg_task() -> None:
+            assert selected_entity is not None
+            
+            # Start download
+            selected_entity.download(needs_result=False)
+            
+            # Close progress dialog, if applicable
+            if progress_dialog is not None:
+                def fg_task() -> None:
+                    nonlocal progress_dialog
+                    progress_dialog.Destroy()
+                    progress_dialog = None  # unexport
+                fg_call_and_wait(fg_task)
+        bg_call_later(bg_task)
     
     def _on_update_group_membership(self, event):
         selected_entity = self.entity_tree.selected_entity

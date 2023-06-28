@@ -165,6 +165,8 @@ class MainWindow:
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use MainWindow.wait_for()?'
     
+    # === Properties ===
+    
     @property
     def readonly(self) -> bool:
         label = self.read_write_icon.Label  # cache
@@ -174,6 +176,39 @@ class MainWindow:
             return False
         else:
             raise AssertionError()
+    
+    # === Operations ===
+    
+    async def click_download_button(self, *, immediate_finish_ok: bool=False) -> None:
+        """
+        Clicks the "Download" button and waits for it to finish starting
+        a download task.
+        """
+        task_root_ti = TreeItem.GetRootItem(self.task_tree)
+        assert task_root_ti is not None
+        
+        old_task_count = len(task_root_ti.Children)
+        
+        click_button(self.download_button)
+        def task_count_changed_condition() -> Optional[int]:
+            assert task_root_ti is not None
+            new_task_count = len(task_root_ti.Children)
+            if new_task_count != old_task_count:
+                return new_task_count
+            else:
+                return None
+        try:
+            await wait_for(task_count_changed_condition)
+        except WaitTimedOut:
+            if immediate_finish_ok:
+                # TOOD: We ended up waiting until the entire timeout expired.
+                #       Find a more efficient way to detect that the download
+                #       started and immediately finished.
+                return
+            else:
+                raise
+    
+    # === Close ===
     
     async def close(self, exc_info=None) -> None:
         # Try wait for any lingering tasks to complete.

@@ -1,7 +1,7 @@
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import SCHEDULING_STYLE_SEQUENTIAL, Task
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
-from crystal.util.xthreading import fg_call_later
+from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
 from typing import List, Optional
 import wx
 
@@ -57,11 +57,49 @@ class TaskTreeNode:
         self.tree_node.subtitle = self.task.subtitle
         self.tree_node.expandable = not callable(task)
         
-        # TODO: Optimize for when task starts with a large number of children
         self._num_visible_complete_children = 0
         self._num_visible_children = 0
-        for child in self.task.children:
-            self.task_did_append_child(self.task, child)
+        
+        # NOTE: Transition to foreground thread here BEFORE making very many
+        #       calls to self.task_did_append_child() so that we don't need to
+        #       make very many thread transitions in that function
+        def fg_task() -> None:
+            # Update current progress dialog, if found,
+            # in preparation for appending tasks
+            # 
+            # HACK: Reaches into a progress dialog managed elsewhere,
+            #       in MainWindow._on_download_entity()
+            progress_dialog_old_message = None  # type: Optional[str]
+            if len(self.task.children) >= 100:
+                assert is_foreground_thread()
+                progress_dialog = wx.FindWindowByName('cr-starting-download')  # type: Optional[wx.Window]
+                if progress_dialog is not None:
+                    assert isinstance(progress_dialog, wx.ProgressDialog)
+                    
+                    # Try remove elapsed time from progress dialog,
+                    # since we won't be able to keep it up to date soon
+                    # 
+                    # NOTE: This has no effect on macOS
+                    progress_dialog.WindowStyleFlag &= ~wx.PD_ELAPSED_TIME
+                    
+                    # Change progress dialog message
+                    progress_dialog_old_message = progress_dialog.Message
+                    progress_dialog.Pulse(f'Adding {len(self.task.children):n} tasks...')
+            else:
+                progress_dialog = None
+            
+            # TODO: Optimize to use a bulk version of task_did_append_child()
+            for child in self.task.children:
+                self.task_did_append_child(self.task, child)
+            
+            if progress_dialog is not None:
+                assert isinstance(progress_dialog, wx.ProgressDialog)
+                
+                # Restore old message in progress dialog
+                assert is_foreground_thread()
+                assert progress_dialog_old_message is not None
+                progress_dialog.Pulse(progress_dialog_old_message)
+        fg_call_and_wait(fg_task)
     
     def task_subtitle_did_change(self, task: Task) -> None:
         def fg_task() -> None:

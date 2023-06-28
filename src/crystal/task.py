@@ -1003,6 +1003,7 @@ class DownloadResourceGroupMembersTask(Task):
                 member.create_download_task(needs_result=False, is_embedded=False)
                 for member in group.members
             ]
+            
             for t in member_download_tasks:
                 self.append_child(t, already_complete_ok=True)
         

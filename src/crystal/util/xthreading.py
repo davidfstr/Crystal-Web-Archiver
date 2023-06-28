@@ -11,7 +11,7 @@ from crystal.util.profile import create_profiled_callable
 import os
 import sys
 import threading
-from typing import Optional
+from typing import Callable, Optional
 import wx
 
 
@@ -162,7 +162,7 @@ class NoForegroundThreadError(ValueError):
 # ------------------------------------------------------------------------------
 # Call on Background Thread
 
-def bg_call_later(callable, daemon: bool=False, *args) -> None:
+def bg_call_later(callable: Callable[..., None], daemon: bool=False, *args) -> None:
     """
     Calls the argument on a new background thread.
     

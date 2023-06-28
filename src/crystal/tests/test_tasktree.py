@@ -61,7 +61,7 @@ async def test_while_downloading_large_group_then_show_no_more_than_100_download
                     # Start downloading group
                     assert 0 == len(task_root_ti.Children)
                     comic_group_ti.SelectItem()
-                    click_button(mw.download_button)
+                    await mw.click_download_button()
                     
                     (download_rg_task_ti,) = task_root_ti.Children
                     assert download_rg_task_ti.Text.startswith(
