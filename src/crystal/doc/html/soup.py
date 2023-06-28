@@ -8,8 +8,15 @@ from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 import json
 import re
-from typing import List, Optional
+from typing import List, Literal, Optional
 from urllib.parse import urlparse
+
+
+# HTML parsing library to use. See comparison between options at: 
+# https://beautiful-soup-4.readthedocs.io/en/latest/#installing-a-parser
+# 
+# TODO: Consider migrating to 'lxml' parser for additional speed
+_PARSER_LIBRARY = 'html.parser'  # type: Literal['lxml', 'html5lib', 'html.parser']
 
 
 _ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z]*\.(?:href|location)) *= *(['"])([^'"]*)['"] *;?$''')
@@ -28,8 +35,7 @@ def parse_html_and_links(
         html = BeautifulSoup(
             html_bytes,
             from_encoding=declared_charset,
-            # TODO: Consider migrating to 'lxml' parser for additional speed
-            features='html.parser',
+            features=_PARSER_LIBRARY,
         )
     except Exception as e:
         return None
