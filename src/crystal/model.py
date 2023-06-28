@@ -201,7 +201,7 @@ class Project:
                     assert len(rows) == 0
                     approx_resource_count = 0
                 progress_listener.will_load_resources(approx_resource_count)
-                batch_size = max(1, approx_resource_count // 100)
+                batch_size = max(500, approx_resource_count // 100)
                 next_index_to_report = 0
                 resource_count = 0
                 resources = []
