@@ -42,6 +42,7 @@ import shutil
 from sortedcontainers import SortedList
 import sqlite3
 import sys
+import time
 from typing import (
     Any, Callable, cast, Dict, Iterable, List, Literal, Optional, Pattern,
     TYPE_CHECKING, Tuple, TypedDict, Union
@@ -194,28 +195,40 @@ class Project:
                 #       significantly faster than the exact query
                 #       ('select count(1) from resource') because it
                 #       does not require a full table scan.
-                rows = list(c.execute('select id from resource order by id desc limit 1'))
-                if len(rows) == 1:
-                    [(approx_resource_count,)] = rows
-                else:
-                    assert len(rows) == 0
-                    approx_resource_count = 0
-                progress_listener.will_load_resources(approx_resource_count)
-                batch_size = max(500, approx_resource_count // 100)
-                next_index_to_report = 0
-                resource_count = 0
                 resources = []
-                with gc_disabled():  # don't garbage collect while allocating many objects
-                    for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
-                        if index == next_index_to_report:
-                            progress_listener.loading_resource(index)
-                            next_index_to_report += batch_size
-                        # Create Resource
-                        resources.append(Resource(self, url, _id=id))
-                        resource_count += 1
-                if resource_count != 0:
-                    progress_listener.loading_resource(resource_count - 1)
-                progress_listener.did_load_resources(resource_count)
+                if True:
+                    rows = list(c.execute('select id from resource order by id desc limit 1'))
+                    if len(rows) == 1:
+                        [(approx_resource_count,)] = rows
+                    else:
+                        assert len(rows) == 0
+                        approx_resource_count = 0
+                    progress_listener.will_load_resources(approx_resource_count)
+                    
+                    batch_size = max(500, approx_resource_count // 100)
+                    next_index_to_report = 0
+                    time_of_last_report = time.time()
+                    TARGET_MAX_DELAY_BETWEEN_REPORTS = 1.0
+                    SPEEDUP_FACTOR_WHEN_REPORTING_TOO_SLOWLY = 0.8  # <1.0, >=0.0, smaller is faster
+                    resource_count = 0
+                    with gc_disabled():  # don't garbage collect while allocating many objects
+                        for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
+                            if index == next_index_to_report:
+                                time_of_cur_report = time.time()  # capture
+                                progress_listener.loading_resource(index)
+                                
+                                if (time_of_cur_report - time_of_last_report) > TARGET_MAX_DELAY_BETWEEN_REPORTS:
+                                    batch_size = max(int(batch_size * SPEEDUP_FACTOR_WHEN_REPORTING_TOO_SLOWLY), 1)
+                                time_of_last_report = time_of_cur_report
+                                
+                                next_index_to_report += batch_size
+                            # Create Resource
+                            resources.append(Resource(self, url, _id=id))
+                            resource_count += 1
+                    if resource_count != 0:
+                        progress_listener.loading_resource(resource_count - 1)
+                    
+                    progress_listener.did_load_resources(resource_count)
                 
                 # Index Resources (to load RootResources and ResourceGroups faster)
                 progress_listener.indexing_resources()

@@ -74,7 +74,7 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
             'Opening Project...',
             'Opening: ' + project_name,
             maximum=1,
-            style=wx.PD_AUTO_HIDE|wx.PD_APP_MODAL|wx.PD_CAN_ABORT
+            style=wx.PD_AUTO_HIDE|wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
         )
         self._dialog.Show()
     

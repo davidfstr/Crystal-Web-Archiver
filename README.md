@@ -315,6 +315,7 @@ Release Notes ⋮
           in the preview pane, where r = the number of URLs in the project.
         * Previously an O(r) search was performed in both of the above cases.
     * Show progress dialog when starting to download a large group
+    * Show elapsed time in all progress dialogs
     * Prevent system idle sleep while tasks are running (on macOS and Windows)
     * Print large numbers with comma separators or whatever the appropriate
       separator is for the current locale
