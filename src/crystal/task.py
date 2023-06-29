@@ -1219,7 +1219,14 @@ def start_schedule_forever(task: Task) -> None:
                     try:
                         unit()  # Run unit directly on this bg thread
                     except NoForegroundThreadError:
+                        # Probably the app was closed. Ignore error.
                         return
+                    except Exception as e:
+                        if is_database_closed_error(e):
+                            # Probably the project was closed. Ignore error.
+                            return
+                        else:
+                            raise
         finally:
             if _PROFILE_SCHEDULER:
                 assert profiler is not None
