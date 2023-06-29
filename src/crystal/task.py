@@ -600,7 +600,7 @@ class DownloadResourceTask(Task):
         )
         self._parse_links_task = None  # type: Optional[ParseResourceRevisionLinks]
         self._already_downloaded_task = (
-            _AlreadyDownloadedPlaceholderTask()
+            _ALREADY_DOWNLOADED_PLACEHOLDER_TASK
             if self._resource.already_downloaded_this_session
             else None
         )
@@ -904,7 +904,6 @@ class _PlaceholderTask(Task):  # abstract
 class _AlreadyDownloadedException(Exception):
     pass
 
-
 class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
     """
     Placeholder task that marks resources that have already been downloaded.
@@ -916,7 +915,9 @@ class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
             title='Already downloaded',
             exception=_AlreadyDownloadedException().with_traceback(None),
             prefinish=True,
-        )    
+        )
+
+_ALREADY_DOWNLOADED_PLACEHOLDER_TASK = _AlreadyDownloadedPlaceholderTask()
 
 
 class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
