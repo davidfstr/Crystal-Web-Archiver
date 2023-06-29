@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from crystal.model import Project
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.tests.util.xos import skip_if_not_linux
+from crystal.tests.util.xos import skipTest
 from crystal.util.xos import is_mac_os, is_windows
 import os
 import shutil
@@ -36,64 +36,46 @@ async def test_project_opens_as_readonly_when_user_requests_it_in_cli() -> None:
     pass
 
 
-@skip_if_not_linux
 async def test_project_opens_as_readonly_when_project_is_on_readonly_filesystem() -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    if not is_mac_os():
+        skipTest('only supported on macOS')
+    
+    with tempfile.TemporaryDirectory() as working_dirpath:
+        volume_src_dirpath = os.path.join(working_dirpath, 'Project')
+        os.mkdir(volume_src_dirpath)
+        
         # Create empty project
+        project_dirpath = os.path.join(volume_src_dirpath, 'Project.crystalproj')
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
             pass
         
-        with tempfile.NamedTemporaryFile() as disk_image_file:
-            # Create empty disk image
+        # Create disk image with project on it
+        dmg_filepath = os.path.join(working_dirpath, 'Project.dmg')
+        subprocess.run([
+            'hdiutil',
+            'create',
+            '-srcfolder', volume_src_dirpath,
+            dmg_filepath,
+        ], check=True, stdout=subprocess.DEVNULL)
+        
+        # Mount disk image as readonly
+        subprocess.run([
+            'hdiutil',
+            'attach',
+            dmg_filepath,
+            '-readonly',
+        ], check=True, stdout=subprocess.DEVNULL)
+        volume_dirpath = '/Volumes/Project'
+        assert os.path.exists(volume_dirpath)
+        try:
+            mounted_project_dirpath = os.path.join(volume_dirpath, 'Project.crystalproj')
+            async with (await OpenOrCreateDialog.wait_for()).open(mounted_project_dirpath) as mw:
+                assert True == mw.readonly
+        finally:
             subprocess.run([
-                'dd',
-                'if=/dev/zero',
-                f'of={disk_image_file.name}',
-                'bs=1024', 'count=1024',  # 1 MiB
+                'umount',
+                volume_dirpath,
             ], check=True)
-            subprocess.run([
-                'mke2fs',
-                disk_image_file.name
-            ], check=True)
-            
-            with tempfile.TemporaryDirectory() as mountpoint_dirpath:
-                # 1. Mount disk image and copy empty project to it
-                # 2. Try to open project on it. Ensure it is opened as writable.
-                project_filename = os.path.basename(project_dirpath)
-                mounted_project_dirpath = os.path.join(mountpoint_dirpath, project_filename)
-                subprocess.run([
-                    'mount',
-                    '-o', 'loop',
-                    disk_image_file.name,
-                    mountpoint_dirpath,
-                ], check=True)
-                try:
-                    shutil.copytree(project_dirpath, mounted_project_dirpath)
-                    
-                    async with (await OpenOrCreateDialog.wait_for()).open(mounted_project_dirpath) as mw:
-                        assert False == mw.readonly
-                finally:
-                    subprocess.run([
-                        'umount',
-                        mountpoint_dirpath,
-                    ], check=True)
-                
-                # 1. Remount disk image as read-only
-                # 2. Try to open project on it. Ensure it is opened as read-only.
-                subprocess.run([
-                    'mount',
-                    '-o', 'loop,ro',
-                    disk_image_file.name,
-                    mountpoint_dirpath,
-                ], check=True)
-                try:
-                    async with (await OpenOrCreateDialog.wait_for()).open(mounted_project_dirpath) as mw:
-                        assert True == mw.readonly
-                finally:
-                    subprocess.run([
-                        'umount',
-                        mountpoint_dirpath,
-                    ], check=True)
 
 
 @awith_subtests

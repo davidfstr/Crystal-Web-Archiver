@@ -4,7 +4,7 @@ import platform
 from unittest import SkipTest, TestCase
 
 
-skipTest = TestCase().skipTest
+skipTest = TestCase().skipTest  # export too
 
 
 # ------------------------------------------------------------------------------
@@ -16,16 +16,6 @@ def skip_on_windows(func=lambda: None):
     def wrapper(*args, **kwargs):
         if is_windows():
             skipTest('not supported on Windows')
-        func(*args, **kwargs)
-    return wrapper
-
-
-def skip_if_not_linux(func=lambda: None):
-    """Decorator for tests that should be skipped on Windows."""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if not is_linux():
-            skipTest('only supported on Linux')
         func(*args, **kwargs)
     return wrapper
 

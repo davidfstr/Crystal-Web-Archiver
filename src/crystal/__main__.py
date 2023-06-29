@@ -267,6 +267,7 @@ def _main(args: List[str]) -> None:
                     from crystal.tests.index import run_tests
                     is_ok = run_tests(parsed_args.test)
                 finally:
+                    # TODO: How should failure be reported if NoForegroundThreadError?
                     fg_call_later(lambda: sys.exit(0 if is_ok else 1))
             bg_call_later(bg_task)
         
