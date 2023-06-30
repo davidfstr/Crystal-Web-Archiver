@@ -76,7 +76,12 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
     Raises:
     * NoForegroundThreadError
     """
-    if _PROFILE_FG_TASKS and not no_profile:
+    if not has_foreground_thread():
+        raise NoForegroundThreadError()
+    
+    is_fg_thread = is_foreground_thread()  # cache
+    
+    if _PROFILE_FG_TASKS and not no_profile and not is_fg_thread:
         callable = create_profiled_callable(
             'Slow foreground task',
             _FG_TASK_RUNTIME_THRESHOLD,
@@ -84,10 +89,7 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
         )
         args=()
     
-    if not has_foreground_thread():
-        raise NoForegroundThreadError()
-    
-    if is_foreground_thread() and not force:
+    if is_fg_thread and not force:
         callable(*args)
     else:
         try:
