@@ -492,6 +492,11 @@ class DownloadResourceBodyTask(Task):
     
     This task is never complete immediately after initialization.
     """
+    # Optimize per-instance memory use, since there may be very many DownloadResourceBodyTask objects
+    __slots__ = (
+        '_resource',
+        'did_download',
+    )
     
     def __init__(self, abstract_resource: Union[Resource, RootResource]) -> None:
         """
