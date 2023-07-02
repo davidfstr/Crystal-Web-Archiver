@@ -249,42 +249,70 @@ class Task:
             raise ValueError('Some children are not complete.')
         if not all([c.complete for c in final_children]):
             raise ValueError('Some final children are not complete.')
-        self.clear_children()
+        did_clear = self.clear_children_if_all_complete()
+        assert did_clear
         
         for c in final_children:
             self.append_child(c, already_complete_ok=True)
     
-    def clear_children(self) -> None:
+    def clear_children_if_all_complete(self) -> bool:
         """
-        Clears all of this task's children.
-        Recommended only for use by RootTask.
+        Clears all of this task's children if they are all complete.
+        Returns whether the children were cleared.
         """
-        if not all(c.complete for c in self.children):
-            raise ValueError('Some children are not complete.')
-        
-        for child in self._children:
-            child._parent = None
-        self._children = []
-        
-        self._first_incomplete_child_index = 0
-        self._next_child_index = 0
-        
-        for lis in self.listeners:
-            if hasattr(lis, 'task_did_clear_children'):
-                lis.task_did_clear_children(self)  # type: ignore[attr-defined]
+        # NOTE: Use a foreground task here as a poor man's lock to
+        #       prevent self._children from being concurrently
+        #       modified by the foreground thread.
+        #       
+        #       In particular the RootTask calls this method at the
+        #       same time that other automated test code is running which
+        #       may add a new top-level task concurrently.
+        def fg_task() -> bool:
+            all_children_complete = all(c.complete for c in self.children)
+            if all_children_complete:
+                for child in self._children:
+                    child._parent = None
+                self._children = []
+                
+                self._first_incomplete_child_index = 0
+                self._next_child_index = 0
+                
+                # NOTE: Call these listeners also inside the lock
+                #       because they are likely to be updating
+                #       data structures that need to be strongly
+                #       synchronized with the modified child list.
+                for lis in self.listeners:
+                    if hasattr(lis, 'task_did_clear_children'):
+                        lis.task_did_clear_children(self)  # type: ignore[attr-defined]
+            return all_children_complete
+        did_clear = fg_call_and_wait(fg_task)
+        return did_clear
     
     def clear_completed_children(self) -> None:
         """
         Clears all of this task's children which are complete.
-        Recommended only for use by RootTask.
         """
-        child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
-        if len(child_indexes_to_remove) == 0:
-            return
-        self._children = [c for c in self.children if not c.complete]
-        for lis in self.listeners:
-            if hasattr(lis, 'task_did_clear_children'):
-                lis.task_did_clear_children(self, child_indexes_to_remove)  # type: ignore[attr-defined]
+        # NOTE: Use a foreground task here as a poor man's lock to
+        #       prevent self._children from being concurrently
+        #       modified by the foreground thread.
+        #       
+        #       In particular the RootTask calls this method at the
+        #       same time that other automated test code is running which
+        #       may add a new top-level task concurrently.
+        def fg_task() -> None:
+            child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
+            if len(child_indexes_to_remove) == 0:
+                return
+            self._children = [c for c in self.children if not c.complete]
+            
+            # NOTE: Call these listeners also inside the lock
+            #       because they are likely to be updating
+            #       data structures that need to be strongly
+            #       synchronized with the modified child list.
+            for lis in self.listeners:
+                if hasattr(lis, 'task_did_clear_children'):
+                    lis.task_did_clear_children(self, child_indexes_to_remove)  # type: ignore[attr-defined]
+        fg_call_and_wait(fg_task)
     
     # === Public Operations ===
     
@@ -1123,8 +1151,7 @@ class RootTask(Task):
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
-        if all(c.complete for c in self.children):
-            self.clear_children()
+        self.clear_children_if_all_complete()
     
     def did_schedule_all_children(self) -> None:
         # Remove completed children after each scheduling pass
