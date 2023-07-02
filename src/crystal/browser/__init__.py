@@ -32,44 +32,53 @@ class MainWindow:
     task_tree: TaskTree
     
     def __init__(self, project: Project, progress_listener: OpenProjectProgressListener) -> None:
+        """
+        Raises:
+        * CancelOpenProject
+        """
         self.project = project
         
         self._create_actions()
         
         raw_frame = wx.Frame(None, title=project.title, name='cr-main-window')
-        raw_frame.SetRepresentedFilename(project.path)
-        
-        # NOTE: Add all controls to a root wx.Panel rather than to the
-        #       raw wx.Frame directly so that tab traversal between child
-        #       components works correctly.
-        frame = wx.Panel(raw_frame)
-        frame_sizer = wx.BoxSizer(wx.VERTICAL)
-        frame.SetSizer(frame_sizer)
-        
-        splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE, name='cr-main-window-splitter')
-        splitter.SetSashGravity(1.0)
-        splitter.SetMinimumPaneSize(20)
-        
-        entity_pane = self._create_entity_pane(splitter, progress_listener)
-        task_pane = self._create_task_pane(splitter)
-        splitter.SplitHorizontally(entity_pane, task_pane, -task_pane.GetBestSize().height)
-        
-        frame_sizer.Add(splitter, proportion=1, flag=wx.EXPAND)
-        
-        frame_sizer.Add(
-            self._create_status_bar(frame),
-            proportion=0,
-            flag=wx.EXPAND)
-        
-        raw_frame.MenuBar = self._create_menu_bar(raw_frame)
-        
-        bind(raw_frame, wx.EVT_CLOSE, self._on_close_frame)
-        
-        frame.Fit()
-        raw_frame.Fit()
-        raw_frame.Show(True)
-        
-        self.frame = raw_frame
+        try:
+            raw_frame.SetRepresentedFilename(project.path)
+            
+            # NOTE: Add all controls to a root wx.Panel rather than to the
+            #       raw wx.Frame directly so that tab traversal between child
+            #       components works correctly.
+            frame = wx.Panel(raw_frame)
+            
+            frame_sizer = wx.BoxSizer(wx.VERTICAL)
+            frame.SetSizer(frame_sizer)
+            
+            splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE, name='cr-main-window-splitter')
+            splitter.SetSashGravity(1.0)
+            splitter.SetMinimumPaneSize(20)
+            
+            entity_pane = self._create_entity_pane(splitter, progress_listener)
+            task_pane = self._create_task_pane(splitter)
+            splitter.SplitHorizontally(entity_pane, task_pane, -task_pane.GetBestSize().height)
+            
+            frame_sizer.Add(splitter, proportion=1, flag=wx.EXPAND)
+            
+            frame_sizer.Add(
+                self._create_status_bar(frame),
+                proportion=0,
+                flag=wx.EXPAND)
+            
+            raw_frame.MenuBar = self._create_menu_bar(raw_frame)
+            
+            bind(raw_frame, wx.EVT_CLOSE, self._on_close_frame)
+            
+            frame.Fit()
+            raw_frame.Fit()
+            raw_frame.Show(True)
+            
+            self.frame = raw_frame
+        except:
+            raw_frame.Destroy()
+            raise
     
     @property
     def _readonly(self) -> bool:
@@ -211,6 +220,10 @@ class MainWindow:
     # === Entity Pane: Init ===
     
     def _create_entity_pane(self, parent, progress_listener: OpenProjectProgressListener):
+        """
+        Raises:
+        * CancelOpenProject
+        """
         pane = wx.Panel(parent)
         pane_sizer = wx.BoxSizer(wx.VERTICAL)
         pane.SetSizer(pane_sizer)
@@ -224,6 +237,10 @@ class MainWindow:
         return pane
     
     def _create_entity_pane_content(self, parent: wx.Window, progress_listener: OpenProjectProgressListener):
+        """
+        Raises:
+        * CancelOpenProject
+        """
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
             self._create_entity_tree(parent, progress_listener),
@@ -234,6 +251,10 @@ class MainWindow:
         return content_sizer
     
     def _create_entity_tree(self, parent: wx.Window, progress_listener: OpenProjectProgressListener):
+        """
+        Raises:
+        * CancelOpenProject
+        """
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
         bind(self.entity_tree.peer, wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
         

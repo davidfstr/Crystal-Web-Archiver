@@ -293,7 +293,9 @@ def _main(args: List[str]) -> None:
             parsed_args.filepath = None
             
             # Re-launch, reopening the initial dialog
-            last_project = _did_launch(parsed_args, shell)  # raises SystemExit if user quits
+            last_project = _did_launch(parsed_args, shell)  # can raise SystemExit
+    except SystemExit:
+        pass
     finally:
         # Stop any further events from being scheduled on the main loop
         set_foreground_thread(None)
@@ -341,33 +343,51 @@ def _did_launch(
     Raises:
     * SystemExit -- if the user quits
     """
+    from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
     
     # If project to open was passed on the command-line, use it
     if parsed_args.filepath is not None:
         filepath = parsed_args.filepath  # reinterpret
     
     # Open/create a project
-    project: Project
+    project: Optional[Project] = None
     window: MainWindow
-    from crystal.progress import OpenProjectProgressDialog
-    with OpenProjectProgressDialog() as progress_listener:
-        # Get a project
-        project_kwargs = dict(
-            readonly=parsed_args.readonly,
-        )
-        if filepath is None:
-            project = _prompt_for_project(progress_listener, **project_kwargs)
+    try:
+        with OpenProjectProgressDialog() as progress_listener:
+            # Export reference to progress_listener, if running tests
+            if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+                from crystal import progress
+                progress._active_progress_listener = progress_listener
+            
+            # Get a project
+            project_kwargs = dict(
+                readonly=parsed_args.readonly,
+            )
+            if filepath is None:
+                # NOTE: Can raise SystemExit
+                retry_on_cancel = True
+                project = _prompt_for_project(progress_listener, **project_kwargs)
+            else:
+                # NOTE: Can raise CancelOpenProject
+                retry_on_cancel = False
+                project = _load_project(filepath, progress_listener, **project_kwargs)
+            assert project is not None
+            
+            # Configure project
+            project.request_cookie = parsed_args.cookie
+            project.min_fetch_date = parsed_args.stale_before
+            
+            # Create main window
+            from crystal.browser import MainWindow
+            # NOTE: Can raise CancelOpenProject
+            window = MainWindow(project, progress_listener)
+    except CancelOpenProject:
+        if project is not None:
+            project.close()
+        if retry_on_cancel:
+            return _did_launch(parsed_args, shell, filepath)
         else:
-            project = _load_project(filepath, progress_listener, **project_kwargs)
-        assert project is not None
-        
-        # Configure project
-        project.request_cookie = parsed_args.cookie
-        project.min_fetch_date = parsed_args.stale_before
-        
-        # Create main window
-        from crystal.browser import MainWindow
-        window = MainWindow(project, progress_listener)
+            raise SystemExit()
     
     if shell is not None:
         shell.attach(project, window)
@@ -387,6 +407,7 @@ def _prompt_for_project(
     Raises:
     * SystemExit -- if the user quits rather than providing a project
     """
+    from crystal.progress import CancelOpenProject
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     import wx
     
@@ -434,15 +455,17 @@ def _prompt_for_project(
             if choice == wx.ID_YES:
                 try:
                     return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
-                except SystemExit:
+                except CancelOpenProject:
+                    progress_listener.reset()
                     continue
             elif choice == wx.ID_NO:
                 try:
                     return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
-                except SystemExit:
+                except CancelOpenProject:
+                    progress_listener.reset()
                     continue
             else:  # wx.ID_CANCEL
-                sys.exit()
+                raise SystemExit()
 
 
 def _prompt_to_create_project(
@@ -452,9 +475,10 @@ def _prompt_to_create_project(
         ) -> Project:
     """
     Raises:
-    * SystemExit -- if the user cancels the prompt early
+    * CancelOpenProject -- if the user cancels the prompt early
     """
     from crystal.model import Project
+    from crystal.progress import CancelOpenProject
     import wx
     
     dialog = wx.FileDialog(parent,
@@ -463,7 +487,7 @@ def _prompt_to_create_project(
         style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
     with dialog:
         if not dialog.ShowModal() == wx.ID_OK:
-            sys.exit()
+            raise CancelOpenProject()
         
         project_path = dialog.GetPath()
         if not project_path.endswith(Project.FILE_EXTENSION):
@@ -481,9 +505,10 @@ def _prompt_to_open_project(
         ) -> Project:
     """
     Raises:
-    * SystemExit -- if the user cancels the prompt early
+    * CancelOpenProject -- if the user cancels the prompt early
     """
     from crystal.model import Project
+    from crystal.progress import CancelOpenProject
     from crystal.util.xos import project_appears_as_package_file
     import wx
     
@@ -500,7 +525,7 @@ def _prompt_to_open_project(
             style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
     with dialog:
         if not dialog.ShowModal() == wx.ID_OK:
-            sys.exit()
+            raise CancelOpenProject()
         
         project_path = dialog.GetPath()
     
@@ -516,7 +541,7 @@ def _prompt_to_open_project(
             name='cr-invalid-project')
         with dialog:
             dialog.ShowModal()
-        sys.exit()
+        raise CancelOpenProject()
     
     return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
 
@@ -526,6 +551,10 @@ def _load_project(
         progress_listener: OpenProjectProgressListener,
         **project_kwargs: object
         ) -> Project:
+    """
+    Raises:
+    * CancelOpenProject
+    """
     from crystal.model import Project
     
     # TODO: If errors while loading a project (ex: bad format),

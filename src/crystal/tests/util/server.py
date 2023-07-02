@@ -33,18 +33,7 @@ def served_project(
         if not datetime_is_aware(fetch_date_of_resources_set_to):
             raise ValueError('Expected fetch_date_of_resources_set_to to be an aware datetime')
     
-    with tempfile.TemporaryDirectory() as project_parent_dirpath:
-        # Extract project
-        with test_data.open_binary(zipped_project_filename) as zipped_project_file:
-            with ZipFile(zipped_project_file, 'r') as project_zipfile:
-                project_zipfile.extractall(project_parent_dirpath)
-        
-        # Open project
-        (project_filename,) = [
-            fn for fn in os.listdir(project_parent_dirpath)
-            if fn.endswith('.crystalproj')
-        ]
-        project_filepath = os.path.join(project_parent_dirpath, project_filename)
+    with extracted_project(zipped_project_filename) as project_filepath:
         must_alter_fetch_date = (fetch_date_of_resources_set_to is not None)
         project = fg_call_and_wait(lambda: Project(project_filepath, readonly=True if not must_alter_fetch_date else False))
         try:
@@ -90,6 +79,25 @@ def served_project(
             )
         finally:
             fg_call_and_wait(lambda: project.close())
+
+
+@contextmanager
+def extracted_project(
+        zipped_project_filename: str
+        ) -> Iterator[str]:
+    with tempfile.TemporaryDirectory() as project_parent_dirpath:
+        # Extract project
+        with test_data.open_binary(zipped_project_filename) as zipped_project_file:
+            with ZipFile(zipped_project_file, 'r') as project_zipfile:
+                project_zipfile.extractall(project_parent_dirpath)
+        
+        # Open project
+        (project_filename,) = [
+            fn for fn in os.listdir(project_parent_dirpath)
+            if fn.endswith('.crystalproj')
+        ]
+        project_filepath = os.path.join(project_parent_dirpath, project_filename)
+        yield project_filepath
 
 
 @contextmanager

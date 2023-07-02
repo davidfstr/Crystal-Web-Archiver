@@ -11,7 +11,7 @@ from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
     tree_has_no_children_condition,
-    wait_for, WaitTimedOut, window_condition, not_condition
+    wait_for, WaitTimedOut, window_condition, not_condition, or_condition
 )
 from crystal.util.xos import is_mac_os
 import sys
@@ -111,6 +111,16 @@ class OpenOrCreateDialog:
         finally:
             if autoclose:
                 await mw.close(exc_info_while_close)
+    
+    async def start_opening(self, project_dirpath: str, *, next_window_name: str) -> None:
+        with package_dialog_returning(project_dirpath):
+            click_button(self.open_button)
+            
+            await wait_for(
+                or_condition(
+                    window_condition('cr-opening-project'),
+                    window_condition('cr-main-window'),
+                    window_condition(next_window_name)))
 
 
 class MainWindow:

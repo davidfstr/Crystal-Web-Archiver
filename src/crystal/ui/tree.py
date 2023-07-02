@@ -264,6 +264,10 @@ class NodeView:
             progress_listener: Optional[OpenProjectProgressListener]=None,
             *, _initial: bool=False
             ) -> None:
+        """
+        Raises:
+        * CancelOpenProject
+        """
         if progress_listener is not None:
             part_count = sum([len(c.children) for c in new_children])
             progress_listener.creating_entity_tree_nodes(part_count)

@@ -37,6 +37,10 @@ class EntityTree:
             parent_peer: wx.Window,
             project: Project,
             progress_listener: OpenProjectProgressListener) -> None:
+        """
+        Raises:
+        * CancelOpenProject
+        """
         self.view = TreeView(parent_peer, name='cr-entity-tree')
         self.view.delegate = self
         self.root = RootNode(project, self.view.root, progress_listener)
@@ -262,6 +266,10 @@ class Node:
     def set_children(self,
             value: List[Node],
             progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
+        """
+        Raises:
+        * CancelOpenProject
+        """
         value = _sequence_with_matching_elements_replaced(value, self._children)
         self._children = value
         self.view.set_children([child.view for child in value], progress_listener)
@@ -353,6 +361,10 @@ class Node:
 
 class RootNode(Node):
     def __init__(self, project: Project, view: NodeView, progress_listener: OpenProjectProgressListener) -> None:
+        """
+        Raises:
+        * CancelOpenProject
+        """
         super().__init__()
         
         self.view = view
@@ -367,6 +379,10 @@ class RootNode(Node):
     
     def update_children(self, 
             progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
+        """
+        Raises:
+        * CancelOpenProject
+        """
         if progress_listener is None:
             progress_listener = DummyOpenProjectProgressListener()
         

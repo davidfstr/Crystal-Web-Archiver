@@ -3,7 +3,7 @@ from __future__ import annotations
 from crystal.tests.util.runner import bg_sleep
 import datetime
 import time
-from typing import Callable, Optional, TYPE_CHECKING, TypeVar
+from typing import Callable, Optional, TYPE_CHECKING, TypeVar, Union
 import wx
 
 if TYPE_CHECKING:
@@ -11,6 +11,10 @@ if TYPE_CHECKING:
 
 
 _T = TypeVar('_T')
+
+_T1 = TypeVar('_T1')
+_T2 = TypeVar('_T2')
+_T3 = TypeVar('_T3')
 
 
 # ------------------------------------------------------------------------------
@@ -199,6 +203,25 @@ def not_condition(condition: Callable[[], Optional[_T]]) -> Callable[[], Optiona
         else:
             return True
     return not_
+
+
+def or_condition(
+        condition1: Callable[[], Optional[_T1]],
+        condition2: Callable[[], Optional[_T2]],
+        condition3: Callable[[], Optional[_T3]]
+        ) -> Callable[[], Optional[Union[_T1, _T2, _T3]]]:
+    def or_() -> Optional[Union[_T1, _T2, _T3]]:
+        result1 = condition1()
+        if result1 is not None:
+            return result1
+        result2 = condition2()
+        if result2 is not None:
+            return result2
+        result3 = condition3()
+        if result3 is not None:
+            return result3
+        return None
+    return or_
 
 
 # ------------------------------------------------------------------------------
