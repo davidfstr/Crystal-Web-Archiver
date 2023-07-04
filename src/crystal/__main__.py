@@ -200,12 +200,23 @@ def _main(args: List[str]) -> None:
             pass
         
         def OnInit(self):
+            # If running as Mac .app, LC_CTYPE may be set to the default locale
+            # instead of LANG. So copy any such locale to LANG.
+            # 
+            # Python documentation suggests that other variables may also
+            # contain locale information: https://docs.python.org/3/library/locale.html#locale.getdefaultlocale
+            if 'LANG' not in os.environ:
+                for alternate_lang_var in ['LC_ALL', 'LC_CTYPE', 'LANGUAGE']:
+                    if alternate_lang_var in os.environ:
+                        os.environ['LANG'] = os.environ[alternate_lang_var]
+                        break
+            
             if sys.platform.startswith('win') and sys.version_info >= (3, 8):
                 # Workaround wxPython >4.0.7 plus Python 3.8 breaking locale
                 # https://discuss.wxpython.org/t/wxpython4-1-1-python3-8-locale-wxassertionerror/35168
                 locale.setlocale(locale.LC_ALL, 'C')
             else:
-                # Auto-detect appropriate locale based on on.environ['LANG']
+                # Auto-detect appropriate locale based on os.environ['LANG']
                 locale.setlocale(locale.LC_ALL, '')
             
             # Activate wx keepalive until self._finish_launch() is called
