@@ -10,6 +10,12 @@ from crystal.ui.tree import TreeView
 
 
 class NodeView(NodeView1):
+    # Optimize per-instance memory use, since there may be very many NodeView objects
+    __slots__ = (
+        '__title',
+        '__subtitle',
+    )
+    
     def __init__(self) -> None:
         super().__init__()
         self.__title = ''
