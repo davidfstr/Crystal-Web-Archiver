@@ -372,6 +372,8 @@ Release Notes ⋮
       is read-only and properly related Resource as no longer being downloaded
       this session
     * When querying a ResourceRevision's size, don't crash with a traceback
+    * When running as a macOS .app, log stdout and stderr to files correctly
+      once more
 
 * Backward-incompatible API changes
     * `Resource.revisions()` now returns `Iterable[ResourceRevision]` instead
