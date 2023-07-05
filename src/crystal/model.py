@@ -21,6 +21,7 @@ from crystal.util.db import (
     DatabaseConnection,
     DatabaseCursor,
     get_column_names_of_table,
+    get_index_names,
     is_no_such_column_error_for,
 )
 from crystal.util.profile import warn_if_slow
@@ -297,6 +298,9 @@ class Project:
         # Add resource_revision.request_cookie column if missing
         if 'request_cookie' not in get_column_names_of_table(c, 'resource_revision'):
             c.execute('alter table resource_revision add column request_cookie text')
+        # Add resource_revision__error_not_null index if missing
+        if 'resource_revision__error_not_null' not in get_index_names(c):
+            c.execute('create index resource_revision__error_not_null on resource_revision (id, resource_id) where error != "null"')
     
     # === Properties ===
     

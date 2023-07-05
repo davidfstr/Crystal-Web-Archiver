@@ -72,3 +72,11 @@ def is_no_such_column_error_for(column_name: str, e: Exception) -> bool:
         isinstance(e, sqlite3.OperationalError) and
         str(e) == f'no such column: {column_name}'
     )
+
+
+def get_index_names(c: DatabaseCursor) -> list[str]:
+    return [
+        index_name
+        for (index_name,) in 
+        c.execute('SELECT name FROM sqlite_master WHERE type = "index"')
+    ]
