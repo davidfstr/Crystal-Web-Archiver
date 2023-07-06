@@ -1,9 +1,12 @@
 from contextlib import contextmanager
 import inspect
 import sys
+import threading
 import time
 from typing import Callable, Iterator, Union
 
+
+_warn_if_slow_call_stack = threading.local()
 
 @contextmanager
 def warn_if_slow(
@@ -15,14 +18,23 @@ def warn_if_slow(
     if not enabled:
         yield
         return
+    if not (max_duration > 0):
+        raise ValueError()
     
-    start_time = time.time()
+    if not hasattr(_warn_if_slow_call_stack, 'value'):
+        _warn_if_slow_call_stack.value = []
+    _warn_if_slow_call_stack.value.append(max_duration)
+    
+    start_time = time.time()  # capture
     try:
         yield
     finally:
-        end_time = time.time()
-        delta_time = end_time - start_time
-        if delta_time > max_duration:
+        end_time = time.time()  # capture
+        
+        warn_enabled = _warn_if_slow_call_stack.value.pop() > 0
+        
+        delta_time = end_time - start_time  # cache
+        if delta_time > max_duration and warn_enabled:
             message_str = message() if callable(message) else message
             assert isinstance(message_str, str)
             print("*** %s took %.02fs to execute: %s" % (
@@ -30,6 +42,10 @@ def warn_if_slow(
                 delta_time,
                 message_str,
             ), file=sys.stderr)
+            
+            # Suppress warnings on any enclosing calls of warn_if_slow()
+            for (i, _) in enumerate(_warn_if_slow_call_stack.value):
+                _warn_if_slow_call_stack.value[i] -= max_duration
 
 
 def create_profiled_callable(title: str, max_duration: float, callable: Callable, *args) -> Callable:
