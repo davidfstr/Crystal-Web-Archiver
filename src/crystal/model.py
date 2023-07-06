@@ -652,6 +652,11 @@ class Project:
                 pass
         
         self._db.close()
+        
+        # Unexport reference to self, if running tests
+        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+            if Project._last_opened_project is self:
+                Project._last_opened_project = None
     
     # === Context Manager ===
     

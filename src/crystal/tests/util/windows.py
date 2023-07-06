@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+from crystal.model import Project
 from crystal.tests.util.controls import (
     click_button, file_dialog_returning, package_dialog_returning,
     TreeItem
@@ -80,12 +81,23 @@ class OpenOrCreateDialog:
                 await mw.close(exc_info_while_close)
     
     async def create_and_leave_open(self, project_dirpath: str) -> MainWindow:
-        with file_dialog_returning(project_dirpath):
-            click_button(self.create_button)
+        old_opened_project = Project._last_opened_project  # capture
+        try:
+            with file_dialog_returning(project_dirpath):
+                click_button(self.create_button)
+                
+                with screenshot_if_raises():
+                    mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
+                    return mw
+        except:
+            # Close any project that was opened
+            new_opened_project = Project._last_opened_project  # capture
+            if new_opened_project != old_opened_project:
+                if new_opened_project is not None:
+                    new_opened_project.close()
             
-            with screenshot_if_raises():
-                mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
-        return mw
+            raise
+        
     
     @asynccontextmanager
     async def open(self, 
