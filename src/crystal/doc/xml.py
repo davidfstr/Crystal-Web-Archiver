@@ -9,7 +9,7 @@ from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
 from io import BytesIO
 import re
-from typing import Optional
+from typing import List, Optional
 
 
 _LINK_RE = re.compile(r'(?i)link')
@@ -41,5 +41,6 @@ def parse_xml_and_links(
         if 'href' in tag.attrs:  # usually also has: rel="alternate"
             links.append(HtmlLink.create_from_tag(tag, 'href', type_title, title, embedded))
     
-    return (HtmlDocument(xml), links)
+    links_ = links  # type: List[Link]  # type: ignore[assignment]  # allow List[HtmlLink] to be converted
+    return (HtmlDocument(xml), links_)
 
