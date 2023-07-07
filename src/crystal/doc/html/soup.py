@@ -9,7 +9,7 @@ from crystal.metasoup import MetaSoup, MetaSoupT, TagT
 from crystal.doc.generic import Document, Link
 import json
 import re
-from typing import Callable, List, Literal, Match, Optional, Union
+from typing import Callable, List, Literal, Match, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 
@@ -25,13 +25,13 @@ _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
 _QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")((?:https?:)?\\?/\\?/[^/][^"]+)"|(')((?:https?:)?\\?/\\?/[^/][^']+)')''')
 ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
-PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|svg|js|css)$')
+PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)$')
 
 
 def parse_html_and_links(
         html_bytes: bytes, 
         declared_charset: Optional[str]=None
-        ) -> 'Optional[tuple[Document, list[Link]]]':
+        ) -> 'Optional[Tuple[Document, List[Link]]]':
     try:
         html = MetaSoup(
             html_bytes,
@@ -56,6 +56,9 @@ def parse_html_and_links(
         if tag.name == 'img':
             title = _get_image_tag_title(tag)
             type_title = 'Image'
+        elif tag.name == 'iframe':
+            title = _assert_str(tag['name']) if 'name' in tag.attrs else None
+            type_title = 'IFrame'
         elif tag.name == 'frame':
             title = _assert_str(tag['name']) if 'name' in tag.attrs else None
             type_title = 'Frame'
