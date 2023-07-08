@@ -7,6 +7,7 @@ from __future__ import annotations
 from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
+from crystal.metasoup import BeautifulSoupFacade
 from io import BytesIO
 import re
 from typing import List, Optional
@@ -42,5 +43,5 @@ def parse_xml_and_links(
             links.append(HtmlLink.create_from_tag(tag, 'href', type_title, title, embedded))
     
     links_ = links  # type: List[Link]  # type: ignore[assignment]  # allow List[HtmlLink] to be converted
-    return (HtmlDocument(xml), links_)
+    return (HtmlDocument(BeautifulSoupFacade(xml)), links_)
 

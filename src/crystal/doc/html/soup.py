@@ -5,7 +5,7 @@ HTML parser implementation that uses BeautifulSoup.
 from __future__ import annotations
 
 import bs4
-from crystal.metasoup import MetaSoup, MetaSoupT, TagT
+from crystal.metasoup import MetaSoup, parse_html, TagT
 from crystal.doc.generic import Document, Link
 import json
 import re
@@ -33,7 +33,7 @@ def parse_html_and_links(
         declared_charset: Optional[str]=None
         ) -> 'Optional[Tuple[Document, List[Link]]]':
     try:
-        html = MetaSoup(
+        html = parse_html(
             html_bytes,
             from_encoding=declared_charset,
             features=_PARSER_LIBRARY,
@@ -133,7 +133,10 @@ def parse_html_and_links(
             if not _TEXT_JAVASCRIPT_RE.fullmatch(_assert_str(tag.attrs['type'])):
                 continue
         
-        matches = _QUOTED_HTTP_LINK_RE.findall(tag.string)
+        tag_string = tag.string
+        if tag_string is None:
+            continue
+        matches = _QUOTED_HTTP_LINK_RE.findall(tag_string)
         for match in matches:
             def process_str_match(match: str) -> None:
                 q = match[0] or match[2]
@@ -249,7 +252,7 @@ def _format_srcset_str(srcset: List[List[str]]) -> str:
 
 
 class HtmlDocument(Document):
-    def __init__(self, html: MetaSoupT) -> None:
+    def __init__(self, html: MetaSoup) -> None:
         self._html = html
     
     def try_insert_script(self, script_url: str) -> bool:
