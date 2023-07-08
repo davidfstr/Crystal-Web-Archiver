@@ -37,7 +37,20 @@ class MetaSoup:  # abstract
     
     # === Tags ===
     
-    # (TODO: ...)
+    def tag_name(self, tag: TagT) -> str:
+        raise NotImplementedError()
+    
+    def tag_attrs(self, tag: TagT) -> MutableMapping[str, Union[str, List[str]]]:
+        raise NotImplementedError()
+    
+    def tag_string(self, tag: TagT) -> Optional[str]:
+        raise NotImplementedError()
+    
+    def set_tag_string(self, tag: TagT, string: Optional[str]) -> None:
+        raise NotImplementedError()
+    
+    def tag_insert_before(self, tag: TagT, tag2: TagT) -> None:
+        raise NotImplementedError()
 
 
 class BeautifulSoupFacade(MetaSoup):
@@ -62,7 +75,26 @@ class BeautifulSoupFacade(MetaSoup):
     
     # === Tags ===
     
-    # (TODO: ...)
+    def tag_name(self, tag: TagT) -> str:
+        assert isinstance(tag, bs4.Tag)
+        return tag.name
+    
+    def tag_attrs(self, tag: TagT) -> MutableMapping[str, Union[str, List[str]]]:
+        assert isinstance(tag, bs4.Tag)
+        return tag.attrs  # type: ignore[return-value]
+    
+    def tag_string(self, tag: TagT) -> Optional[str]:
+        assert isinstance(tag, bs4.Tag)
+        return tag.string
+    
+    def set_tag_string(self, tag: TagT, string: Optional[str]) -> None:
+        assert isinstance(tag, bs4.Tag)
+        tag.string = string;
+    
+    def tag_insert_before(self, tag: TagT, tag2: TagT) -> None:
+        assert isinstance(tag, bs4.Tag)
+        assert isinstance(tag2, bs4.Tag)
+        tag.insert_before(tag2)
 
 
 class LxmlSoup(MetaSoup):
@@ -70,24 +102,4 @@ class LxmlSoup(MetaSoup):
         raise NotImplementedError()
 
 
-class LxmlTag:
-    def __init__(self) -> None:
-        self._attrs = {}  # type: Dict[str, Union[str, List[str]]]
-    
-    @property
-    def name(self) -> str:
-        raise NotImplementedError()
-    
-    @property
-    def attrs(self) -> MutableMapping[str, Union[str, List[str]]]:
-        return self._attrs
-    
-    def _get_string(self) -> Optional[str]:
-        raise NotImplementedError()
-    def _set_string(self, string: Optional[str]) -> None:
-        raise NotImplementedError()
-    string = cast(str, property(_get_string, _set_string))
-    
-    def insert_before(self, tag: TagT) -> None:
-        assert isinstance(tag, LxmlTag)
-        raise NotImplementedError()
+LxmlTag = object

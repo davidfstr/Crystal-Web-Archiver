@@ -48,49 +48,55 @@ def parse_html_and_links(
         embedded = True
         title = None
         type_title = 'Background Image'
-        links.append(HtmlLink.create_from_tag(tag, 'background', type_title, title, embedded))
+        links.append(HtmlLink.create_from_tag(tag, html, 'background', type_title, title, embedded))
     
     # <* src=*>
     for tag in html.find_all(src=True):
+        tag_name = html.tag_name(tag)  # cache
+        tag_attrs = html.tag_attrs(tag)  # cache
+        
         embedded = True
-        if tag.name == 'img':
-            title = _get_image_tag_title(tag)
+        if tag_name == 'img':
+            title = _get_image_tag_title(html, tag)
             type_title = 'Image'
-        elif tag.name == 'iframe':
-            title = _assert_str(tag.attrs['name']) if 'name' in tag.attrs else None
+        elif tag_name == 'iframe':
+            title = _assert_str(tag_attrs['name']) if 'name' in tag_attrs else None
             type_title = 'IFrame'
-        elif tag.name == 'frame':
-            title = _assert_str(tag.attrs['name']) if 'name' in tag.attrs else None
+        elif tag_name == 'frame':
+            title = _assert_str(tag_attrs['name']) if 'name' in tag_attrs else None
             type_title = 'Frame'
-        elif tag.name == 'input' and 'type' in tag.attrs and tag.attrs['type'] == 'image':
-            title = _get_image_tag_title(tag)
+        elif tag_name == 'input' and 'type' in tag_attrs and tag_attrs['type'] == 'image':
+            title = _get_image_tag_title(html, tag)
             type_title = 'Form Image'
         else:
             title = None
-            type_title = 'Unknown Embedded (%s)' % tag.name
-        links.append(HtmlLink.create_from_tag(tag, 'src', type_title, title, embedded))
+            type_title = 'Unknown Embedded (%s)' % tag_name
+        links.append(HtmlLink.create_from_tag(tag, html, 'src', type_title, title, embedded))
     
     # <img srcset=*>
     for tag in html.find_all('img', srcset=True):
-        links.extend(_process_srcset_attr(tag))
+        links.extend(_process_srcset_attr(html, tag))
     
     # <* href=*>
     for tag in html.find_all(href=True):
-        relative_url = _assert_str(tag.attrs['href'])
+        tag_name = html.tag_name(tag)  # cache
+        tag_attrs = html.tag_attrs(tag)  # cache
+        
+        relative_url = _assert_str(tag_attrs['href'])
         relative_url_path = urlparse(relative_url).path
         embedded = False
-        if tag.name == 'a':
-            title = tag.string
+        if tag_name == 'a':
+            title = html.tag_string(tag)
             type_title = 'Link'
-        elif tag.name == 'link' and (
-                ('rel' in tag.attrs and 'stylesheet' in tag.attrs['rel']) or (
-                 'type' in tag.attrs and tag.attrs['type'] == 'text/css') or (
+        elif tag_name == 'link' and (
+                ('rel' in tag_attrs and 'stylesheet' in tag_attrs['rel']) or (
+                 'type' in tag_attrs and tag_attrs['type'] == 'text/css') or (
                  relative_url_path.endswith('.css'))):
             title = None
             type_title = 'Stylesheet'
             embedded = True
-        elif tag.name == 'link' and (
-                    ('rel' in tag.attrs and any([x in tag.attrs['rel'] for x in (
+        elif tag_name == 'link' and (
+                    ('rel' in tag_attrs and any([x in tag_attrs['rel'] for x in (
                         'shortcut icon',
                         'icon',
                         'apple-touch-icon')])) or 
@@ -102,13 +108,15 @@ def parse_html_and_links(
             embedded = True
         else:
             title = None
-            type_title = 'Unknown (%s)' % tag.name
-        links.append(HtmlLink.create_from_tag(tag, 'href', type_title, title, embedded))
+            type_title = 'Unknown (%s)' % tag_name
+        links.append(HtmlLink.create_from_tag(tag, html, 'href', type_title, title, embedded))
     
     # <input type='button' onclick='*.location = "*";'>
     # This type of link is used on: fanfiction.net
     for tag in html.find_all('input', type='button', onclick=_ON_CLICK_RE):
-        matcher = _ON_CLICK_RE.search(_assert_str(tag.attrs['onclick']))
+        tag_attrs = html.tag_attrs(tag)  # cache
+        
+        matcher = _ON_CLICK_RE.search(_assert_str(tag_attrs['onclick']))
         assert matcher is not None
         def process_match(matcher: Match) -> None:
             def replace_url_in_old_attr_value(url: str, old_attr_value: str) -> str:
@@ -116,11 +124,11 @@ def parse_html_and_links(
                 return matcher.group(1) + ' = ' + q + url + q
             
             relative_url = matcher.group(3)
-            title = _assert_str(tag.attrs['value']) if 'value' in tag.attrs else None
+            title = _assert_str(tag_attrs['value']) if 'value' in tag_attrs else None
             type_title = 'Button'
             embedded = False
             links.append(HtmlLink.create_from_complex_tag(
-                tag, 'onclick', type_title, title, embedded,
+                tag, html, 'onclick', type_title, title, embedded,
                 relative_url, replace_url_in_old_attr_value))
         process_match(matcher)
     
@@ -129,11 +137,13 @@ def parse_html_and_links(
     # 2. <script [type="text/javascript"]>..."//**"...</script>
     #   - This type of link is used on: https://blog.calm.com/take-a-deep-breath
     for tag in html.find_all('script', string=_QUOTED_HTTP_LINK_RE):
-        if 'type' in tag.attrs:
-            if not _TEXT_JAVASCRIPT_RE.fullmatch(_assert_str(tag.attrs['type'])):
+        tag_attrs = html.tag_attrs(tag)  # cache
+        
+        if 'type' in tag_attrs:
+            if not _TEXT_JAVASCRIPT_RE.fullmatch(_assert_str(tag_attrs['type'])):
                 continue
         
-        tag_string = tag.string
+        tag_string = html.tag_string(tag)
         if tag_string is None:
             continue
         matches = _QUOTED_HTTP_LINK_RE.findall(tag_string)
@@ -160,7 +170,7 @@ def parse_html_and_links(
                 type_title = 'Script Reference'
                 embedded = PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
                 links.append(HtmlLink.create_from_complex_tag(
-                    tag, 'string', type_title, title, embedded,
+                    tag, html, 'string', type_title, title, embedded,
                     relative_url, replace_url_in_old_attr_value))
             process_str_match(match)
     
@@ -172,7 +182,7 @@ def parse_html_and_links(
     ])  # capture
     for tag in html.find_all():
         tag_ident = _IdentityKey(tag)  # cache
-        for (attr_name, attr_value) in tag.attrs.items():
+        for (attr_name, attr_value) in html.tag_attrs(tag).items():
             if (tag_ident, attr_name) in seen_tags_and_attr_names:
                 continue
             if not isinstance(attr_value, str):
@@ -188,23 +198,25 @@ def parse_html_and_links(
             type_title = 'Attribute Reference'
             embedded = PROBABLE_EMBEDDED_URL_RE.search(relative_url) is not None
             links.append(HtmlLink.create_from_tag(
-                tag, attr_name, type_title, title, embedded))
+                tag, html, attr_name, type_title, title, embedded))
     
     links_ = links  # type: List[Link]  # type: ignore[assignment]  # allow List[HtmlLink] to be converted
     return (HtmlDocument(html), links_)
 
 
-def _get_image_tag_title(tag: TagT) -> Optional[str]:
-    if 'alt' in tag.attrs:
-        return _assert_str(tag.attrs['alt'])
-    elif 'title' in tag.attrs:
-        return _assert_str(tag.attrs['title'])
+def _get_image_tag_title(html: MetaSoup, tag: TagT) -> Optional[str]:
+    tag_attrs = html.tag_attrs(tag)  # cache
+    
+    if 'alt' in tag_attrs:
+        return _assert_str(tag_attrs['alt'])
+    elif 'title' in tag_attrs:
+        return _assert_str(tag_attrs['title'])
     else:
         return None
 
 
-def _process_srcset_attr(img_tag: TagT) -> 'List[HtmlLink]':
-    srcset = _parse_srcset_str(_assert_str(img_tag.attrs['srcset']))
+def _process_srcset_attr(html: MetaSoup, img_tag: TagT) -> 'List[HtmlLink]':
+    srcset = _parse_srcset_str(_assert_str(html.tag_attrs(img_tag)['srcset']))
     if srcset is None:
         return []
     
@@ -220,11 +232,11 @@ def _process_srcset_attr(img_tag: TagT) -> 'List[HtmlLink]':
             return _format_srcset_str(srcset)
         
         relative_url = parts[0]
-        title = _get_image_tag_title(img_tag)
+        title = _get_image_tag_title(html, img_tag)
         type_title = 'Image'
         embedded = True
         links.append(HtmlLink.create_from_complex_tag(
-            img_tag, 'srcset', type_title, title, embedded,
+            img_tag, html, 'srcset', type_title, title, embedded,
             relative_url, replace_url_in_old_attr_value))
     
     candidates = srcset
@@ -259,13 +271,8 @@ class HtmlDocument(Document):
         first_element = self._html.find(True)
         if first_element is not None:
             script = self._html.new_tag('script')
-            script.attrs['src'] = script_url
-            
-            if isinstance(first_element, bs4.PageElement):
-                assert isinstance(script, bs4.Tag)
-                first_element.insert_before(script)
-            else:
-                first_element.insert_before(script)
+            self._html.tag_attrs(script)['src'] = script_url
+            self._html.tag_insert_before(first_element, script)
             return True
         else:
             return False
@@ -282,6 +289,7 @@ class HtmlLink(Link):
     @staticmethod
     def create_from_tag(
             tag: TagT,
+            tag_doc: MetaSoup,
             attr_name: str,
             type_title: str,
             title: Optional[str],
@@ -299,11 +307,12 @@ class HtmlLink(Link):
         if (tag is None or attr_name is None or type_title is None or
                 embedded not in (True, False)):
             raise ValueError()
-        return HtmlLink(None, tag, attr_name, type_title, title, embedded)
+        return HtmlLink(None, tag, tag_doc, attr_name, type_title, title, embedded)
     
     @staticmethod
     def create_from_complex_tag(
             tag: TagT,
+            tag_doc: MetaSoup,
             attr_name: str,
             type_title: str,
             title: Optional[str],
@@ -322,7 +331,7 @@ class HtmlLink(Link):
         if (tag is None or attr_name is None or not callable(replace_url_in_old_attr_value) or 
                 type_title is None or embedded not in (True, False)):
             raise ValueError()
-        return HtmlLink(relative_url, tag, attr_name, type_title, title, embedded, replace_url_in_old_attr_value)
+        return HtmlLink(relative_url, tag, tag_doc, attr_name, type_title, title, embedded, replace_url_in_old_attr_value)
     
     @staticmethod
     def create_external(
@@ -342,11 +351,12 @@ class HtmlLink(Link):
         """
         if relative_url is None or type_title is None or embedded not in (True, False):
             raise ValueError
-        return HtmlLink(relative_url, None, None, type_title, title, embedded)
+        return HtmlLink(relative_url, None, None, None, type_title, title, embedded)
     
     def __init__(self,
             relative_url: Optional[str],
             tag: Optional[TagT],
+            tag_doc: Optional[MetaSoup],
             attr_name: Optional[str],
             type_title: str,
             title: Optional[str],
@@ -355,6 +365,7 @@ class HtmlLink(Link):
             ) -> None:
         self._relative_url = relative_url
         self._tag = tag
+        self._tag_doc = tag_doc
         self._attr_name = attr_name
         self._replace_url_in_old_attr_value = replace_url_in_old_attr_value
         
@@ -391,19 +402,24 @@ class HtmlLink(Link):
     
     def _get_attr_value(self) -> str:
         assert self._tag is not None
+        assert self._tag_doc is not None
         assert self._attr_name is not None
         if self._attr_name == 'string':
-            assert self._tag.string is not None
-            return self._tag.string
+            tag_string = self._tag_doc.tag_string(self._tag)
+            assert tag_string is not None
+            return tag_string
         else:
-            return _assert_str(self._tag.attrs[self._attr_name])
+            tag_attrs = self._tag_doc.tag_attrs(self._tag)
+            return _assert_str(tag_attrs[self._attr_name])
     def _set_attr_value(self, attr_value: str) -> None:
         assert self._tag is not None
+        assert self._tag_doc is not None
         assert self._attr_name is not None
         if self._attr_name == 'string':
-            self._tag.string = attr_value
+            self._tag_doc.set_tag_string(self._tag, attr_value)
         else:
-            self._tag.attrs[self._attr_name] = attr_value
+            tag_attrs = self._tag_doc.tag_attrs(self._tag)
+            tag_attrs[self._attr_name] = attr_value
     _attr_value = property(_get_attr_value, _set_attr_value)
     
     def __repr__(self) -> str:

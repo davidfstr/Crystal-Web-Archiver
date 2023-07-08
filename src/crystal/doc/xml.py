@@ -13,19 +13,16 @@ import re
 from typing import List, Optional
 
 
-_LINK_RE = re.compile(r'(?i)link')
-
-
 def parse_xml_and_links(
         xml_bytes: BytesIO, 
         declared_charset: str=None
         ) -> Optional[tuple[Document, list[Link]]]:
     try:
-        xml = BeautifulSoup(
+        xml = BeautifulSoupFacade(BeautifulSoup(
             xml_bytes,
             from_encoding=declared_charset,
             features='xml',
-        )
+        ))
     except Exception as e:
         return None
     
@@ -36,12 +33,12 @@ def parse_xml_and_links(
     type_title = 'Link'
     title = None
     embedded = False
-    for tag in xml.findAll(_LINK_RE):
-        if tag.string not in [None, '']:
-            links.append(HtmlLink.create_from_tag(tag, 'string', type_title, title, embedded))
-        if 'href' in tag.attrs:  # usually also has: rel="alternate"
-            links.append(HtmlLink.create_from_tag(tag, 'href', type_title, title, embedded))
+    for tag in xml.find_all('link'):
+        if xml.tag_string(tag) not in [None, '']:
+            links.append(HtmlLink.create_from_tag(tag, xml, 'string', type_title, title, embedded))
+        if 'href' in  xml.tag_attrs(tag):  # usually also has: rel="alternate"
+            links.append(HtmlLink.create_from_tag(tag, xml, 'href', type_title, title, embedded))
     
     links_ = links  # type: List[Link]  # type: ignore[assignment]  # allow List[HtmlLink] to be converted
-    return (HtmlDocument(BeautifulSoupFacade(xml)), links_)
+    return (HtmlDocument(xml), links_)
 
