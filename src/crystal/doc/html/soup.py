@@ -57,12 +57,12 @@ def parse_html_and_links(
             title = _get_image_tag_title(tag)
             type_title = 'Image'
         elif tag.name == 'iframe':
-            title = _assert_str(tag['name']) if 'name' in tag.attrs else None
+            title = _assert_str(tag.attrs['name']) if 'name' in tag.attrs else None
             type_title = 'IFrame'
         elif tag.name == 'frame':
-            title = _assert_str(tag['name']) if 'name' in tag.attrs else None
+            title = _assert_str(tag.attrs['name']) if 'name' in tag.attrs else None
             type_title = 'Frame'
-        elif tag.name == 'input' and 'type' in tag.attrs and tag['type'] == 'image':
+        elif tag.name == 'input' and 'type' in tag.attrs and tag.attrs['type'] == 'image':
             title = _get_image_tag_title(tag)
             type_title = 'Form Image'
         else:
@@ -76,21 +76,21 @@ def parse_html_and_links(
     
     # <* href=*>
     for tag in html.find_all(href=True):
-        relative_url = _assert_str(tag['href'])
+        relative_url = _assert_str(tag.attrs['href'])
         relative_url_path = urlparse(relative_url).path
         embedded = False
         if tag.name == 'a':
             title = tag.string
             type_title = 'Link'
         elif tag.name == 'link' and (
-                ('rel' in tag.attrs and 'stylesheet' in tag['rel']) or (
-                 'type' in tag.attrs and tag['type'] == 'text/css') or (
+                ('rel' in tag.attrs and 'stylesheet' in tag.attrs['rel']) or (
+                 'type' in tag.attrs and tag.attrs['type'] == 'text/css') or (
                  relative_url_path.endswith('.css'))):
             title = None
             type_title = 'Stylesheet'
             embedded = True
         elif tag.name == 'link' and (
-                    ('rel' in tag.attrs and any([x in tag['rel'] for x in (
+                    ('rel' in tag.attrs and any([x in tag.attrs['rel'] for x in (
                         'shortcut icon',
                         'icon',
                         'apple-touch-icon')])) or 
@@ -108,7 +108,7 @@ def parse_html_and_links(
     # <input type='button' onclick='*.location = "*";'>
     # This type of link is used on: fanfiction.net
     for tag in html.find_all('input', type='button', onclick=_ON_CLICK_RE):
-        matcher = _ON_CLICK_RE.search(_assert_str(tag['onclick']))
+        matcher = _ON_CLICK_RE.search(_assert_str(tag.attrs['onclick']))
         assert matcher is not None
         def process_match(matcher: Match) -> None:
             def replace_url_in_old_attr_value(url: str, old_attr_value: str) -> str:
@@ -116,7 +116,7 @@ def parse_html_and_links(
                 return matcher.group(1) + ' = ' + q + url + q
             
             relative_url = matcher.group(3)
-            title = _assert_str(tag['value']) if 'value' in tag.attrs else None
+            title = _assert_str(tag.attrs['value']) if 'value' in tag.attrs else None
             type_title = 'Button'
             embedded = False
             links.append(HtmlLink.create_from_complex_tag(
@@ -193,15 +193,15 @@ def parse_html_and_links(
 
 def _get_image_tag_title(tag: TagT) -> Optional[str]:
     if 'alt' in tag.attrs:
-        return _assert_str(tag['alt'])
+        return _assert_str(tag.attrs['alt'])
     elif 'title' in tag.attrs:
-        return _assert_str(tag['title'])
+        return _assert_str(tag.attrs['title'])
     else:
         return None
 
 
 def _process_srcset_attr(img_tag: TagT) -> 'List[HtmlLink]':
-    srcset = _parse_srcset_str(_assert_str(img_tag['srcset']))
+    srcset = _parse_srcset_str(_assert_str(img_tag.attrs['srcset']))
     if srcset is None:
         return []
     
@@ -256,7 +256,7 @@ class HtmlDocument(Document):
         first_element = self._html.find(True)
         if first_element is not None:
             script = self._html.new_tag('script')
-            script['src'] = script_url
+            script.attrs['src'] = script_url
             
             if isinstance(first_element, bs4.PageElement):
                 assert isinstance(script, bs4.Tag)
@@ -393,14 +393,14 @@ class HtmlLink(Link):
             assert self._tag.string is not None
             return self._tag.string
         else:
-            return _assert_str(self._tag[self._attr_name])
+            return _assert_str(self._tag.attrs[self._attr_name])
     def _set_attr_value(self, attr_value: str) -> None:
         assert self._tag is not None
         assert self._attr_name is not None
         if self._attr_name == 'string':
             self._tag.string = attr_value
         else:
-            self._tag[self._attr_name] = attr_value
+            self._tag.attrs[self._attr_name] = attr_value
     _attr_value = property(_get_attr_value, _set_attr_value)
     
     def __repr__(self) -> str:

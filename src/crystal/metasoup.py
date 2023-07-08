@@ -1,6 +1,6 @@
 import bs4
 from bs4 import BeautifulSoup
-from typing import Dict, Iterable, List, Literal, Mapping, Optional, Pattern, Union
+from typing import Dict, Iterable, List, Literal, MutableMapping, Optional, Pattern, Union
 
 
 # TODO: Either:
@@ -47,23 +47,15 @@ class LxmlSoup:
 
 class LxmlTag:
     def __init__(self) -> None:
-        self._attrs = {}  # type: Dict[str, str]
+        self._attrs = {}  # type: Dict[str, Union[str, List[str]]]
     
     @property
     def name(self) -> str:
         raise NotImplementedError()
     
     @property
-    def attrs(self) -> Mapping[str, Union[str, List[str]]]:
+    def attrs(self) -> MutableMapping[str, Union[str, List[str]]]:
         return self._attrs
-    
-    # Deprecated: Use attrs directly instead
-    def __getitem__(self, attr_name: str) -> Union[str, List[str]]:
-        return self._attrs[attr_name]
-    
-    # Deprecated: Use attrs directly instead
-    def __setitem__(self, attr_name: str, attr_value: str) -> None:
-        self._attrs[attr_name] = attr_value
     
     def _get_string(self) -> str:
         raise NotImplementedError()
