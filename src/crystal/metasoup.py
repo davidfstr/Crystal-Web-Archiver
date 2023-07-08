@@ -1,5 +1,6 @@
 import bs4
 from bs4 import BeautifulSoup
+import lxml.html
 from typing import cast, Dict, Iterable, List, Literal, MutableMapping, Optional, Pattern, Union
 
 
@@ -12,7 +13,9 @@ def parse_html(
         features: Literal['lxml', 'html5lib', 'html.parser'],
         ) -> 'MetaSoup':
     if features == 'lxml':
-        return LxmlSoup(html_bytes, from_encoding)
+        parser = lxml.html.HTMLParser(encoding=from_encoding)
+        root = lxml.html.document_fromstring(html_bytes, parser=parser)
+        return LxmlSoup(root)
     elif features in ['html5lib', 'html.parser']:
         return BeautifulSoupFacade(
             BeautifulSoup(html_bytes, from_encoding=from_encoding, features=features))
@@ -98,8 +101,77 @@ class BeautifulSoupFacade(MetaSoup):
 
 
 class LxmlSoup(MetaSoup):
-    def __init__(self, html_bytes: bytes, from_encoding: Optional[str]) -> None:
-        raise NotImplementedError()
+    def __init__(self, root: lxml.html.HtmlElement) -> None:
+        self._root = root
+    
+    # === Document ===
+    
+    def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[TagT]':
+        def make_attr_pattern_part(name: str, value_pat: Union[str, Pattern, Literal[True]]) -> str:
+            if value_pat == True or isinstance(value_pat, Pattern):
+                return f'@{name}'
+            elif isinstance(value_pat, str):
+                return f'@{name}="{value_pat}"'
+            else:
+                raise ValueError()
+        
+        tag_pattern = tag_name if tag_name is not None else '*'
+        attr_pattern = ''.join([
+            f'[{make_attr_pattern_part(k, v_pat)}]'
+            for (k, v_pat) in attrs.items()
+            if k != 'string'
+        ])
+        total_pattern = f'.//{tag_pattern}{attr_pattern}'
+        
+        re_attrs = [
+            (k, v_pat)
+            for (k, v_pat) in attrs.items()
+            if isinstance(v_pat, Pattern)
+        ]
+        def matches_re_attrs(tag) -> bool:
+            for (k, v_pat) in re_attrs:
+                v = tag.text if k == 'string' else tag.attrib[k]
+                if not isinstance(v, str) or v_pat.search(v) is None:
+                    return False
+            return True
+        
+        results = self._root.findall(total_pattern)
+        if len(re_attrs) == 0:
+            return results
+        else:
+            return [r for r in results if matches_re_attrs(r)]
+    
+    def find(self, pattern: Literal[True]) -> 'Optional[TagT]':
+        return self._root.find('*')
+    
+    def new_tag(self, tag_name: str) -> 'TagT':
+        return self._root.makeelement(tag_name)
+    
+    def __str__(self) -> str:
+        return lxml.html.tostring(self._root, encoding='unicode')
+    
+    # === Tags ===
+    
+    def tag_name(self, tag: TagT) -> str:
+        assert isinstance(tag, lxml.html.HtmlElement)
+        return tag.tag
+    
+    def tag_attrs(self, tag: TagT) -> MutableMapping[str, Union[str, List[str]]]:
+        assert isinstance(tag, lxml.html.HtmlElement)
+        return tag.attrib
+    
+    def tag_string(self, tag: TagT) -> Optional[str]:
+        assert isinstance(tag, lxml.html.HtmlElement)
+        return tag.text
+    
+    def set_tag_string(self, tag: TagT, string: Optional[str]) -> None:
+        assert isinstance(tag, lxml.html.HtmlElement)
+        tag.text = string
+    
+    def tag_insert_before(self, tag: TagT, tag2: TagT) -> None:
+        assert isinstance(tag, lxml.html.HtmlElement)
+        assert isinstance(tag2, lxml.html.HtmlElement)
+        tag.addprevious(tag2)
 
 
 LxmlTag = object

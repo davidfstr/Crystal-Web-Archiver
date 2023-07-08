@@ -22,51 +22,81 @@ def test_can_parse_and_format_basic_html_document() -> HtmlDocument:
         </html>
         """
     ).lstrip('\n').encode('utf-8')
-    EXPECTED_OUTPUT_HTML_STR = dedent(
-        """
-        <!DOCTYPE html>
-        
-        <html>
-        <head>
-        <meta charset="utf-8"/>
-        <title>Home</title>
-        </head>
-        <body>
-            Hello world!
-        </body>
-        </html>
-        """
-    ).lstrip('\n')
+    EXPECTED_OUTPUT_HTML_STR_CHOICES = [
+        dedent(  # html.parser
+            """
+            <!DOCTYPE html>
+            
+            <html>
+            <head>
+            <meta charset="utf-8"/>
+            <title>Home</title>
+            </head>
+            <body>
+                Hello world!
+            </body>
+            </html>
+            """
+        ).lstrip('\n'),
+        dedent(  # lxml
+            """
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Home</title>
+            </head>
+            <body>
+                Hello world!
+            </body>
+            </html>
+            """
+        ).lstrip('\n').rstrip('\n'),
+    ]
     
     (doc, _) = parse_html_and_links(INPUT_HTML_BYTES)
-    assert EXPECTED_OUTPUT_HTML_STR == str(doc)
+    assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
     
     assert isinstance(doc, HtmlDocument)
     return doc
 
 
 def test_can_insert_script_reference_in_html_document() -> None:
-    EXPECTED_OUTPUT_HTML_STR = dedent(
-        """
-        <!DOCTYPE html>
-        
-        <script src="/script.js"></script><html>
-        <head>
-        <meta charset="utf-8"/>
-        <title>Home</title>
-        </head>
-        <body>
-            Hello world!
-        </body>
-        </html>
-        """
-    ).lstrip('\n')
+    EXPECTED_OUTPUT_HTML_STR_CHOICES = [
+        dedent(  # html.parser
+            """
+            <!DOCTYPE html>
+            
+            <script src="/script.js"></script><html>
+            <head>
+            <meta charset="utf-8"/>
+            <title>Home</title>
+            </head>
+            <body>
+                Hello world!
+            </body>
+            </html>
+            """
+        ).lstrip('\n'),
+        dedent(  # lxml
+            """
+            <html>
+            <script src="/script.js"></script><head>
+                <meta charset="utf-8">
+                <title>Home</title>
+            </head>
+            <body>
+                Hello world!
+            </body>
+            </html>
+            """
+        ).lstrip('\n').rstrip('\n'),
+    ]
     
     doc = test_can_parse_and_format_basic_html_document()
     
     success = doc.try_insert_script('/script.js')
     assert success
-    assert EXPECTED_OUTPUT_HTML_STR == str(doc)
+    assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
     
 
 
