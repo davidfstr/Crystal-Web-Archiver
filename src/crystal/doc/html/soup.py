@@ -5,7 +5,7 @@ HTML parser implementation that uses BeautifulSoup.
 from __future__ import annotations
 
 import bs4
-from crystal.metasoup import MetaSoup, parse_html, TagT
+from crystal.metasoup import MetaSoup, parse_html, Tag
 from crystal.doc.generic import Document, Link
 import json
 import re
@@ -204,7 +204,7 @@ def parse_html_and_links(
     return (HtmlDocument(html), links_)
 
 
-def _get_image_tag_title(html: MetaSoup, tag: TagT) -> Optional[str]:
+def _get_image_tag_title(html: MetaSoup, tag: Tag) -> Optional[str]:
     tag_attrs = html.tag_attrs(tag)  # cache
     
     if 'alt' in tag_attrs:
@@ -215,7 +215,7 @@ def _get_image_tag_title(html: MetaSoup, tag: TagT) -> Optional[str]:
         return None
 
 
-def _process_srcset_attr(html: MetaSoup, img_tag: TagT) -> 'List[HtmlLink]':
+def _process_srcset_attr(html: MetaSoup, img_tag: Tag) -> 'List[HtmlLink]':
     srcset = _parse_srcset_str(_assert_str(html.tag_attrs(img_tag)['srcset']))
     if srcset is None:
         return []
@@ -288,7 +288,7 @@ class HtmlLink(Link):
     """
     @staticmethod
     def create_from_tag(
-            tag: TagT,
+            tag: Tag,
             tag_doc: MetaSoup,
             attr_name: str,
             type_title: str,
@@ -311,7 +311,7 @@ class HtmlLink(Link):
     
     @staticmethod
     def create_from_complex_tag(
-            tag: TagT,
+            tag: Tag,
             tag_doc: MetaSoup,
             attr_name: str,
             type_title: str,
@@ -355,7 +355,7 @@ class HtmlLink(Link):
     
     def __init__(self,
             relative_url: Optional[str],
-            tag: Optional[TagT],
+            tag: Optional[Tag],
             tag_doc: Optional[MetaSoup],
             attr_name: Optional[str],
             type_title: str,
@@ -393,7 +393,7 @@ class HtmlLink(Link):
     relative_url = property(_get_relative_url, _set_relative_url)
     
     @property
-    def tag(self) -> Optional[TagT]:
+    def tag(self) -> Optional[Tag]:
         return self._tag
     
     @property

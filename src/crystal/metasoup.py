@@ -1,10 +1,9 @@
 import bs4
 from bs4 import BeautifulSoup
 import lxml.html
-from typing import cast, Dict, Iterable, List, Literal, MutableMapping, Optional, Pattern, Union
-
-
-TagT = Union['LxmlTag', bs4.Tag]
+from typing import (
+    cast, Dict, Iterable, List, Literal, MutableMapping, Optional, Pattern, Union
+)
 
 
 def parse_html(
@@ -26,13 +25,13 @@ def parse_html(
 class MetaSoup:  # abstract
     # === Document ===
     
-    def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[TagT]':
+    def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[Tag]':
         raise NotImplementedError()
     
-    def find(self, pattern: Literal[True]) -> 'Optional[TagT]':
+    def find(self, pattern: Literal[True]) -> 'Optional[Tag]':
         raise NotImplementedError()
     
-    def new_tag(self, tag_name: str) -> 'TagT':
+    def new_tag(self, tag_name: str) -> 'Tag':
         raise NotImplementedError()
     
     def __str__(self) -> str:
@@ -40,19 +39,19 @@ class MetaSoup:  # abstract
     
     # === Tags ===
     
-    def tag_name(self, tag: TagT) -> str:
+    def tag_name(self, tag: Tag) -> str:
         raise NotImplementedError()
     
-    def tag_attrs(self, tag: TagT) -> MutableMapping[str, Union[str, List[str]]]:
+    def tag_attrs(self, tag: Tag) -> MutableMapping[str, Union[str, List[str]]]:
         raise NotImplementedError()
     
-    def tag_string(self, tag: TagT) -> Optional[str]:
+    def tag_string(self, tag: Tag) -> Optional[str]:
         raise NotImplementedError()
     
-    def set_tag_string(self, tag: TagT, string: Optional[str]) -> None:
+    def set_tag_string(self, tag: Tag, string: Optional[str]) -> None:
         raise NotImplementedError()
     
-    def tag_insert_before(self, tag: TagT, tag2: TagT) -> None:
+    def tag_insert_before(self, tag: Tag, tag2: Tag) -> None:
         raise NotImplementedError()
 
 
@@ -62,15 +61,15 @@ class BeautifulSoupFacade(MetaSoup):
     
     # === Document ===
     
-    def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[TagT]':
+    def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[Tag]':
         return self._base.find_all(tag_name, **attrs)  # type: ignore[arg-type]
     
-    def find(self, pattern: Literal[True]) -> 'Optional[TagT]':
+    def find(self, pattern: Literal[True]) -> 'Optional[Tag]':
         result = self._base.find(pattern)  # type: ignore[arg-type]
         assert not isinstance(result, bs4.NavigableString)
         return result
     
-    def new_tag(self, tag_name: str) -> 'TagT':
+    def new_tag(self, tag_name: str) -> 'Tag':
         return self._base.new_tag(tag_name)
     
     def __str__(self) -> str:
@@ -78,23 +77,23 @@ class BeautifulSoupFacade(MetaSoup):
     
     # === Tags ===
     
-    def tag_name(self, tag: TagT) -> str:
+    def tag_name(self, tag: Tag) -> str:
         assert isinstance(tag, bs4.Tag)
         return tag.name
     
-    def tag_attrs(self, tag: TagT) -> MutableMapping[str, Union[str, List[str]]]:
+    def tag_attrs(self, tag: Tag) -> MutableMapping[str, Union[str, List[str]]]:
         assert isinstance(tag, bs4.Tag)
         return tag.attrs  # type: ignore[return-value]
     
-    def tag_string(self, tag: TagT) -> Optional[str]:
+    def tag_string(self, tag: Tag) -> Optional[str]:
         assert isinstance(tag, bs4.Tag)
         return tag.string
     
-    def set_tag_string(self, tag: TagT, string: Optional[str]) -> None:
+    def set_tag_string(self, tag: Tag, string: Optional[str]) -> None:
         assert isinstance(tag, bs4.Tag)
         tag.string = string;
     
-    def tag_insert_before(self, tag: TagT, tag2: TagT) -> None:
+    def tag_insert_before(self, tag: Tag, tag2: Tag) -> None:
         assert isinstance(tag, bs4.Tag)
         assert isinstance(tag2, bs4.Tag)
         tag.insert_before(tag2)
@@ -106,7 +105,7 @@ class LxmlSoup(MetaSoup):
     
     # === Document ===
     
-    def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[TagT]':
+    def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[Tag]':
         def make_attr_pattern_part(name: str, value_pat: Union[str, Pattern, Literal[True]]) -> str:
             if value_pat == True or isinstance(value_pat, Pattern):
                 return f'@{name}'
@@ -141,10 +140,10 @@ class LxmlSoup(MetaSoup):
         else:
             return [r for r in results if matches_re_attrs(r)]
     
-    def find(self, pattern: Literal[True]) -> 'Optional[TagT]':
+    def find(self, pattern: Literal[True]) -> 'Optional[Tag]':
         return self._root.find('*')
     
-    def new_tag(self, tag_name: str) -> 'TagT':
+    def new_tag(self, tag_name: str) -> 'Tag':
         return self._root.makeelement(tag_name)
     
     def __str__(self) -> str:
@@ -152,26 +151,26 @@ class LxmlSoup(MetaSoup):
     
     # === Tags ===
     
-    def tag_name(self, tag: TagT) -> str:
+    def tag_name(self, tag: Tag) -> str:
         assert isinstance(tag, lxml.html.HtmlElement)
         return tag.tag
     
-    def tag_attrs(self, tag: TagT) -> MutableMapping[str, Union[str, List[str]]]:
+    def tag_attrs(self, tag: Tag) -> MutableMapping[str, Union[str, List[str]]]:
         assert isinstance(tag, lxml.html.HtmlElement)
         return tag.attrib
     
-    def tag_string(self, tag: TagT) -> Optional[str]:
+    def tag_string(self, tag: Tag) -> Optional[str]:
         assert isinstance(tag, lxml.html.HtmlElement)
         return tag.text
     
-    def set_tag_string(self, tag: TagT, string: Optional[str]) -> None:
+    def set_tag_string(self, tag: Tag, string: Optional[str]) -> None:
         assert isinstance(tag, lxml.html.HtmlElement)
         tag.text = string
     
-    def tag_insert_before(self, tag: TagT, tag2: TagT) -> None:
+    def tag_insert_before(self, tag: Tag, tag2: Tag) -> None:
         assert isinstance(tag, lxml.html.HtmlElement)
         assert isinstance(tag2, lxml.html.HtmlElement)
         tag.addprevious(tag2)
 
 
-LxmlTag = object
+Tag = Union[lxml.html.HtmlElement, bs4.Tag]
