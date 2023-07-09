@@ -865,9 +865,9 @@ class ParseResourceRevisionLinks(Task):
             linked_resources = []  # type: List[Resource]
         else:
             self.subtitle = 'Recording links...'
-            def fg_task() -> List[Resource]:
+            def record_links() -> List[Resource]:
                 return Resource.bulk_create(r.project, urls, r.url)
-            linked_resources = fg_call_and_wait(fg_task)
+            linked_resources = fg_call_and_wait(record_links)
         
         return (links, linked_resources)
     
