@@ -10,7 +10,7 @@ def parse_html(
         html_bytes: bytes,
         from_encoding: Optional[str],
         features: Literal['lxml', 'html5lib', 'html.parser'],
-        ) -> 'MetaSoup':
+        ) -> 'FastSoup':
     if features == 'lxml':
         parser = lxml.html.HTMLParser(encoding=from_encoding)
         root = lxml.html.document_fromstring(html_bytes, parser=parser)
@@ -22,7 +22,10 @@ def parse_html(
         raise ValueError(f'Unrecognized value for features: {features}')
 
 
-class MetaSoup:  # abstract
+Tag = Union[lxml.html.HtmlElement, bs4.Tag]
+
+
+class FastSoup:  # abstract
     # === Document ===
     
     def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[Tag]':
@@ -55,7 +58,7 @@ class MetaSoup:  # abstract
         raise NotImplementedError()
 
 
-class BeautifulSoupFacade(MetaSoup):
+class BeautifulSoupFacade(FastSoup):
     def __init__(self, base: BeautifulSoup) -> None:
         self._base = base
     
@@ -99,7 +102,7 @@ class BeautifulSoupFacade(MetaSoup):
         tag.insert_before(tag2)
 
 
-class LxmlSoup(MetaSoup):
+class LxmlSoup(FastSoup):
     def __init__(self, root: lxml.html.HtmlElement) -> None:
         self._root = root
     
@@ -171,6 +174,3 @@ class LxmlSoup(MetaSoup):
         assert isinstance(tag, lxml.html.HtmlElement)
         assert isinstance(tag2, lxml.html.HtmlElement)
         tag.addprevious(tag2)
-
-
-Tag = Union[lxml.html.HtmlElement, bs4.Tag]

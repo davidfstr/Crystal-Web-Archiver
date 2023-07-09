@@ -2,21 +2,19 @@
 Parses XML documents.
 """
 
-from __future__ import annotations
-
 from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
-from crystal.metasoup import BeautifulSoupFacade
+from crystal.util.fastsoup import BeautifulSoupFacade
 from io import BytesIO
 import re
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 def parse_xml_and_links(
         xml_bytes: BytesIO, 
         declared_charset: str=None
-        ) -> Optional[tuple[Document, list[Link]]]:
+        ) -> Optional[Tuple[Document, List[Link]]]:
     try:
         xml = BeautifulSoupFacade(BeautifulSoup(
             xml_bytes,

@@ -2,11 +2,8 @@
 HTML parser implementation that uses BeautifulSoup.
 """
 
-from __future__ import annotations
-
-import bs4
-from crystal.metasoup import MetaSoup, parse_html, Tag
 from crystal.doc.generic import Document, Link
+from crystal.util.fastsoup import FastSoup, parse_html, Tag
 import json
 import re
 from typing import Callable, List, Literal, Match, Optional, Tuple, Union
@@ -204,7 +201,7 @@ def parse_html_and_links(
     return (HtmlDocument(html), links_)
 
 
-def _get_image_tag_title(html: MetaSoup, tag: Tag) -> Optional[str]:
+def _get_image_tag_title(html: FastSoup, tag: Tag) -> Optional[str]:
     tag_attrs = html.tag_attrs(tag)  # cache
     
     if 'alt' in tag_attrs:
@@ -215,7 +212,7 @@ def _get_image_tag_title(html: MetaSoup, tag: Tag) -> Optional[str]:
         return None
 
 
-def _process_srcset_attr(html: MetaSoup, img_tag: Tag) -> 'List[HtmlLink]':
+def _process_srcset_attr(html: FastSoup, img_tag: Tag) -> 'List[HtmlLink]':
     srcset = _parse_srcset_str(_assert_str(html.tag_attrs(img_tag)['srcset']))
     if srcset is None:
         return []
@@ -264,7 +261,7 @@ def _format_srcset_str(srcset: List[List[str]]) -> str:
 
 
 class HtmlDocument(Document):
-    def __init__(self, html: MetaSoup) -> None:
+    def __init__(self, html: FastSoup) -> None:
         self._html = html
     
     def try_insert_script(self, script_url: str) -> bool:
@@ -289,7 +286,7 @@ class HtmlLink(Link):
     @staticmethod
     def create_from_tag(
             tag: Tag,
-            tag_doc: MetaSoup,
+            tag_doc: FastSoup,
             attr_name: str,
             type_title: str,
             title: Optional[str],
@@ -312,7 +309,7 @@ class HtmlLink(Link):
     @staticmethod
     def create_from_complex_tag(
             tag: Tag,
-            tag_doc: MetaSoup,
+            tag_doc: FastSoup,
             attr_name: str,
             type_title: str,
             title: Optional[str],
@@ -356,7 +353,7 @@ class HtmlLink(Link):
     def __init__(self,
             relative_url: Optional[str],
             tag: Optional[Tag],
-            tag_doc: Optional[MetaSoup],
+            tag_doc: Optional[FastSoup],
             attr_name: Optional[str],
             type_title: str,
             title: Optional[str],
