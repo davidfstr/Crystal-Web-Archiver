@@ -5,7 +5,7 @@ Parses XML documents.
 from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
-from crystal.util.fastsoup import BeautifulSoupFacade
+from crystal.util.fastsoup import BeautifulFastSoup
 from io import BytesIO
 import re
 from typing import List, Optional, Tuple
@@ -15,8 +15,14 @@ def parse_xml_and_links(
         xml_bytes: BytesIO, 
         declared_charset: str=None
         ) -> Optional[Tuple[Document, List[Link]]]:
+    """
+    Parses an XML document, returning a FastSoup object that can be
+    examined through a BeautifulSoup-compatible API.
+    
+    Returns None if there was a parsing error.
+    """
     try:
-        xml = BeautifulSoupFacade(BeautifulSoup(
+        xml = BeautifulFastSoup(BeautifulSoup(
             xml_bytes,
             from_encoding=declared_charset,
             features='xml',

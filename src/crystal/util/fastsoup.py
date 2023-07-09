@@ -11,13 +11,24 @@ def parse_html(
         from_encoding: Optional[str],
         features: Literal['lxml', 'html5lib', 'html.parser'],
         ) -> 'FastSoup':
+    """
+    Parses an HTML document, returning a FastSoup object that can be
+    examined through a BeautifulSoup-compatible API.
+    
+    Returns None if there was a parsing error.
+    """
     if features == 'lxml':
         parser = lxml.html.HTMLParser(encoding=from_encoding)
         root = lxml.html.document_fromstring(html_bytes, parser=parser)
-        return LxmlSoup(root)
+        return LxmlFastSoup(root)
     elif features in ['html5lib', 'html.parser']:
-        return BeautifulSoupFacade(
-            BeautifulSoup(html_bytes, from_encoding=from_encoding, features=features))
+        # TODO: Consider supporting 'html.parser' without using the
+        #       real BeautifulSoup API to wrap it, which would probably
+        #       be faster to parse.
+        #       (No current version of Crystal uses 'html5lib', so there's
+        #       no drive to optimize that particular parser at this time.)
+        return BeautifulFastSoup(BeautifulSoup(
+            html_bytes, from_encoding=from_encoding, features=features))
     else:
         raise ValueError(f'Unrecognized value for features: {features}')
 
@@ -26,6 +37,8 @@ Tag = Union[lxml.html.HtmlElement, bs4.Tag]
 
 
 class FastSoup:  # abstract
+    """A parsed HTML or XML document, navigable with a BeautifulSoup-compatible API."""
+    
     # === Document ===
     
     def find_all(self, tag_name: Optional[str]=None, **attrs: Union[str, Pattern, Literal[True]]) -> 'Iterable[Tag]':
@@ -58,7 +71,7 @@ class FastSoup:  # abstract
         raise NotImplementedError()
 
 
-class BeautifulSoupFacade(FastSoup):
+class BeautifulFastSoup(FastSoup):
     def __init__(self, base: BeautifulSoup) -> None:
         self._base = base
     
@@ -102,7 +115,7 @@ class BeautifulSoupFacade(FastSoup):
         tag.insert_before(tag2)
 
 
-class LxmlSoup(FastSoup):
+class LxmlFastSoup(FastSoup):
     def __init__(self, root: lxml.html.HtmlElement) -> None:
         self._root = root
     
