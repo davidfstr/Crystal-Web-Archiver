@@ -2,29 +2,31 @@
 Parses XML documents.
 """
 
-from __future__ import annotations
-
 from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
+from crystal.util.fastsoup import BeautifulFastSoup
 from io import BytesIO
 import re
-from typing import Optional
-
-
-_LINK_RE = re.compile(r'(?i)link')
+from typing import List, Optional, Tuple
 
 
 def parse_xml_and_links(
         xml_bytes: BytesIO, 
         declared_charset: str=None
-        ) -> Optional[tuple[Document, list[Link]]]:
+        ) -> Optional[Tuple[Document, List[Link]]]:
+    """
+    Parses an XML document, returning a FastSoup object that can be
+    examined through a BeautifulSoup-compatible API.
+    
+    Returns None if there was a parsing error.
+    """
     try:
-        xml = BeautifulSoup(
+        xml = BeautifulFastSoup(BeautifulSoup(
             xml_bytes,
             from_encoding=declared_charset,
             features='xml',
-        )
+        ))
     except Exception as e:
         return None
     
@@ -35,11 +37,12 @@ def parse_xml_and_links(
     type_title = 'Link'
     title = None
     embedded = False
-    for tag in xml.findAll(_LINK_RE):
-        if tag.string not in [None, '']:
-            links.append(HtmlLink.create_from_tag(tag, 'string', type_title, title, embedded))
-        if 'href' in tag.attrs:  # usually also has: rel="alternate"
-            links.append(HtmlLink.create_from_tag(tag, 'href', type_title, title, embedded))
+    for tag in xml.find_all('link'):
+        if xml.tag_string(tag) not in [None, '']:
+            links.append(HtmlLink.create_from_tag(tag, xml, 'string', type_title, title, embedded))
+        if 'href' in  xml.tag_attrs(tag):  # usually also has: rel="alternate"
+            links.append(HtmlLink.create_from_tag(tag, xml, 'href', type_title, title, embedded))
     
-    return (HtmlDocument(xml), links)
+    links_ = links  # type: List[Link]  # type: ignore[assignment]  # allow List[HtmlLink] to be converted
+    return (HtmlDocument(xml), links_)
 
