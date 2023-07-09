@@ -860,7 +860,8 @@ class ParseResourceRevisionLinks(Task):
         links = self._resource_revision.links()
         
         r = self._resource_revision.resource  # cache
-        urls = [urljoin(r.url, link.relative_url) for link in links]
+        r_url = r.url  # cache
+        urls = [urljoin(r_url, link.relative_url) for link in links]
         if len(urls) == 0:
             linked_resources = []  # type: List[Resource]
         else:
