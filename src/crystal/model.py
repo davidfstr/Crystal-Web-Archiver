@@ -746,6 +746,7 @@ class Resource:
         '_download_task_ref',
         '_download_task_noresult_ref',
         '_already_downloaded_this_session',
+        '_definitely_has_no_revisions',
         '_id',
     )
     
@@ -755,6 +756,7 @@ class Resource:
     _download_task_ref: Optional[_WeakTaskRef]
     _download_task_noresult_ref: Optional[_WeakTaskRef]
     _already_downloaded_this_session: bool
+    _definitely_has_no_revisions: bool
     _id: int  # or None if not finished initializing or deleted
     
     # === Init (One) ===
@@ -799,6 +801,7 @@ class Resource:
         self._download_task_ref = None
         self._download_task_noresult_ref = None
         self._already_downloaded_this_session = False
+        self._definitely_has_no_revisions = False
         
         if _id is None:
             if project.readonly:
@@ -808,6 +811,9 @@ class Resource:
             project._db.commit()
             assert c.lastrowid is not None
             _id = c.lastrowid
+            
+            # Can't have revisions because it was just created this session
+            self._definitely_has_no_revisions = True
         
         if _id is Resource._DEFER_ID:
             self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
@@ -1022,6 +1028,21 @@ class Resource:
         _get_already_downloaded_this_session,
         _set_already_downloaded_this_session)
     
+    @property
+    def definitely_has_no_revisions(self) -> bool:
+        """
+        Returns whether this Resource is known to have no ResourceRevisions.
+        Even if this property is False it is still possible that this
+        Resource has no ResourceRevisions.
+        
+        This property can be accessed from any thread (and not just the 
+        foreground thread).
+        
+        Callers can use this property to avoid making unnecessary database
+        queries for ResourceRevisions that definitely don't exist.
+        """
+        return self._definitely_has_no_revisions
+    
     # === Download ===
     
     def download_body(self) -> 'Future[ResourceRevision]':
@@ -1133,6 +1154,9 @@ class Resource:
         """
         Returns whether any revisions of this resource have been downloaded.
         """
+        if self._definitely_has_no_revisions:
+            return False
+        
         c = self.project._db.cursor()
         c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
         return c.fetchone() is not None
@@ -1147,6 +1171,9 @@ class Resource:
         If stale_ok=False and the most up-to-date revision of this resource is
         still stale, return None rather than returning a stale revision.
         """
+        if self._definitely_has_no_revisions:
+            return None
+        
         project = self.project  # cache
         
         reversed_revisions = self.revisions(
@@ -1181,6 +1208,9 @@ class Resource:
         Revisions will be returned in the order they were downloaded,
         from least-recent to most-recent.
         """
+        if self._definitely_has_no_revisions:
+            return []
+        
         RR = ResourceRevision
         
         ordering = 'asc' if not reversed else 'desc'
@@ -1203,18 +1233,26 @@ class Resource:
                 rows = ((None, c0, c1, c2) for (c0, c1, c2) in old_rows)
             else:
                 raise
+        any_rows = False
         for (request_cookie, error, metadata, id) in rows:
+            any_rows = True
             yield ResourceRevision.load(
                 resource=self,
                 request_cookie=request_cookie,
                 error=RR._decode_error(error),
                 metadata=RR._decode_metadata(metadata),
                 id=id)
+        
+        if not any_rows:
+            self._definitely_has_no_revisions = True
     
     def revision_for_etag(self) -> Dict[str, ResourceRevision]:
         """
         Returns a map of each known ETag to a matching ResourceRevision that is NOT an HTTP 304.
         """
+        if self._definitely_has_no_revisions:
+            return {}
+        
         revision_for_etag = {}
         for revision in list(self.revisions()):
             if revision.is_http_304:
@@ -1488,6 +1526,15 @@ class ResourceRevision:
         self.has_body = body_stream is not None
         
         project = self.project
+        
+        # Associated Resource will have at least one ResourceRevision
+        # 
+        # NOTE: Set this bit BEFORE finishing the download.
+        #       If we were to set the bit AFTER finishing the download
+        #       then there would be a period of time between when the download
+        #       finished and the bit was set where the value of the
+        #       bit would be wrong. Avoid that scenario.
+        resource._definitely_has_no_revisions = False
         
         condition = threading.Condition()
         callable_done = False

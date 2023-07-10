@@ -377,9 +377,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     self.send_resource_not_in_archive(archive_url)
                     return
             
-            revision = fg_call_and_wait(lambda: resource.default_revision(
-                stale_ok=True if self.project.readonly else False
-            ))  # type: Optional[ResourceRevision]
+            if resource.definitely_has_no_revisions:
+                revision = None  # type: Optional[ResourceRevision]
+            else:
+                revision = fg_call_and_wait(lambda: resource.default_revision(
+                    stale_ok=True if self.project.readonly else False
+                ))
             if revision is None:
                 if not readonly and dynamic_ok:
                     # If the existing resource is also a root resource,

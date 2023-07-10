@@ -11,7 +11,7 @@ from http.client import HTTPConnection, HTTPSConnection
 import io
 import platform
 import ssl
-from typing import cast, Dict, Iterable, Optional, Tuple
+from typing import cast, Dict, Iterable, Optional, Set, Tuple, Union
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -56,7 +56,10 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
     else:
         request_cookie = None
     
-    known_etags = fg_call_and_wait(lambda: resource.revision_for_etag().keys())
+    if resource.definitely_has_no_revisions:
+        known_etags = ()  # type: Union[Set[str], Tuple[str, ...]]
+    else:
+        known_etags = fg_call_and_wait(lambda: resource.revision_for_etag().keys())
     
     try:
         progress_listener.subtitle = 'Waiting for response...'

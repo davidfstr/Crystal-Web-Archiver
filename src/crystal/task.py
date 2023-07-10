@@ -519,10 +519,13 @@ class DownloadResourceBodyTask(Task):
             download more resources.
         """
         # Return the resource's fresh (already-downloaded) default revision if available
-        def fg_task() -> Optional[ResourceRevision]:
-            return self._resource.default_revision(stale_ok=False)
-        # NOTE: Use no_profile=True because no obvious further optimizations exist
-        body_revision = fg_call_and_wait(fg_task, no_profile=True)
+        if self._resource.definitely_has_no_revisions:
+            body_revision = None
+        else:
+            def fg_task() -> Optional[ResourceRevision]:
+                return self._resource.default_revision(stale_ok=False)
+            # NOTE: Use no_profile=True because no obvious further optimizations exist
+            body_revision = fg_call_and_wait(fg_task, no_profile=True)
         if body_revision is not None:
             self.did_download = False
             return body_revision
