@@ -1,4 +1,5 @@
 from crystal.tests import (
+    test_download_body,
     test_entitytree,
     test_menus,
     test_open_project,
@@ -25,6 +26,7 @@ def _test_functions_in_module(mod) -> List[Callable]:
 
 # TODO: Avoid the need to manually enumerate all test modules individually
 _TEST_FUNCS = (
+    _test_functions_in_module(test_download_body) +
     _test_functions_in_module(test_entitytree) +
     _test_functions_in_module(test_menus) +
     _test_functions_in_module(test_open_project) +
