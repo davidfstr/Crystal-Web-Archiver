@@ -172,8 +172,27 @@ def fg_interact(banner=None, local=None, exitmsg=None):
 class _FgInteractiveConsole(code.InteractiveConsole):
     """
     Similar to code.InteractiveConsole, but evaluates code on the foreground thread.
+    
+    Will also execute a startup file specified in $PYTHONSTARTUP if defined.
     """
-    def runcode(self, code) -> None:
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._first_input = True
+    
+    def raw_input(self, *args, **kwargs) -> str:  # override
+        if self._first_input:
+            # Try to execute startup file specified in $PYTHONSTARTUP
+            startup_filepath = os.environ.get('PYTHONSTARTUP')
+            if startup_filepath is not None and os.path.isfile(startup_filepath):
+                with open(startup_filepath, 'rb') as file:
+                    code_bytes = file.read()
+                code = compile(code_bytes, startup_filepath, 'exec')
+                self.runcode(code)
+            
+            self._first_input = False
+        return super().raw_input(*args, **kwargs)
+    
+    def runcode(self, code) -> None:  # override
         def fg_runcode():
             super(_FgInteractiveConsole, self).runcode(code)
         

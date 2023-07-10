@@ -383,6 +383,8 @@ Release Notes ⋮
         * Slow garbage collection operations now print a profiling warning
         * Slow "Recording links" operations now print a profiling warning
     * Include [guppy] module for manual [memory leak profiling].
+    * A `$PYTHONSTARTUP` file can be defined that is run automatically
+      at the beginning of a shell session.
 
 * Testing improvements
     * An entire test module can now be run with `--test`, in addition to

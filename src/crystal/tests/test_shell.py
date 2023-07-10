@@ -113,6 +113,24 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
             assertIn('Help on MainWindow in module crystal.browser object:', _py_eval(crystal, 'help(window)'))
 
 
+@skip_on_windows
+def test_can_use_pythonstartup_file() -> None:
+    with tempfile.NamedTemporaryFile(suffix='.py') as startup_file:
+        startup_file.write(textwrap.dedent('''\
+            EXCLUDED_URLS = ['a', 'b', 'c']
+            '''
+        ).encode('utf-8'))
+        startup_file.flush()
+        
+        with crystal_shell(env_extra={'PYTHONSTARTUP': startup_file.name}) as (crystal, _):
+            assertEqual(
+                ['a', 'b', 'c'],
+                literal_eval(_py_eval(crystal, 'EXCLUDED_URLS')),
+                'Expected variables written at top-level by '
+                    '$PYTHONSTARTUP file to be accessible from shell'
+            )
+
+
 # NOTE: This test code was split out of the test_can_launch_with_shell() test above
 #       because it is particularly easy to break and having a separate test function
 #       makes the break type quicker to identify.
@@ -550,7 +568,7 @@ def _delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[No
 # Utility: Shell
 
 @contextmanager
-def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
+def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
     """
     Context which starts "crystal --shell" upon enter
     and cleans up the associated process upon exit.
@@ -576,7 +594,8 @@ def crystal_shell() -> Iterator[Tuple[subprocess.Popen, str]]:
                 'CRYSTAL_NO_PROFILE_FG_TASKS': 'True',
                 'CRYSTAL_NO_PROFILE_GC': 'True',
                 'CRYSTAL_NO_PROFILE_RECORD_LINKS': 'True',
-            }
+            },
+            **env_extra
         })
     try:
         assert isinstance(crystal.stdout, TextIOBase)
