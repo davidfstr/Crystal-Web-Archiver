@@ -97,7 +97,6 @@ def test_can_insert_script_reference_in_html_document() -> None:
     success = doc.try_insert_script('/script.js')
     assert success
     assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
-    
 
 
 def test_recognizes_body_background_link() -> None:
@@ -248,7 +247,9 @@ def test_recognizes_href_attribute() -> None:
     assert 'Unknown (div)' == link.type_title
     assert None == link.title
     assert False == link.embedded
-    
+
+
+def test_recognizes_input_button_onclick() -> None:
     # <input type='button' onclick='*.location = "*";'>
     (_, (link,)) = parse_html_and_links(
         """<input type='button' onclick='window.location = "http://example.com/";' value='Example'>""".encode('utf-8'))
@@ -256,7 +257,9 @@ def test_recognizes_href_attribute() -> None:
     assert 'Button' == link.type_title
     assert 'Example' == link.title
     assert False == link.embedded
-    
+
+
+def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
     # <script [type="text/javascript"]>..."http(s)://**"...</script>
     if True:
         (_, (link,)) = parse_html_and_links(
@@ -294,7 +297,9 @@ def test_recognizes_href_attribute() -> None:
         
         (_, ()) = parse_html_and_links(
             """<script type="x-json">["//home.html"]</script>""".encode('utf-8'))
-    
+
+
+def test_recognizes_unknown_attribute_with_absolute_url() -> None:
     # <* *="http(s)://**">
     if True:
         (_, (link,)) = parse_html_and_links(
