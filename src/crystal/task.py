@@ -468,6 +468,8 @@ _SMALL_DISK_MIN_PROJECT_FREE_FRACTION = 0.05
 # the minimum free disk space required to download any more resources
 _LARGE_DISK_MIN_PROJECT_FREE_BYTES = 1024 * 1024 * 1024 * 4  # 4 GiB
 
+_MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH = 3
+
 
 def _get_abstract_resource_title(abstract_resource):
     """
@@ -736,14 +738,21 @@ class DownloadResourceTask(Task):
             # Create and append download task for each embedded resource
             new_download_tasks = []
             ancestor_downloading_resources = self._ancestor_downloading_resources()  # cache
-            for resource in embedded_resources:
-                if resource in ancestor_downloading_resources:
-                    # Avoid infinite recursion when resource identifies itself
-                    # (probably incorrectly) as an embedded resource of itself,
-                    # or when a chain of embedded resources links to itself
-                    continue
-                new_download_tasks.append(
-                    resource.create_download_task(needs_result=False, is_embedded=True))
+            if len(ancestor_downloading_resources) > _MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH:
+                # Avoid infinite recursion when resource identifies an alias
+                # of itself (probably incorrectly) as an embedded resource of 
+                # itself, or when a chain of embedded resources links to 
+                # an alias of itself
+                pass
+            else:
+                for resource in embedded_resources:
+                    if resource in ancestor_downloading_resources:
+                        # Avoid infinite recursion when resource identifies itself
+                        # (probably incorrectly) as an embedded resource of itself,
+                        # or when a chain of embedded resources links to itself
+                        continue
+                    new_download_tasks.append(
+                        resource.create_download_task(needs_result=False, is_embedded=True))
             for t in new_download_tasks:
                 self.append_child(t, already_complete_ok=True)
             

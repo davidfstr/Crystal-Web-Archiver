@@ -50,7 +50,7 @@ class ProjectServer:
         self._server = _HttpServer(address, _RequestHandler)
         self._server.project = project
         self._server.verbosity = verbosity
-        def bg_task():
+        def bg_task() -> None:
             try:
                 if verbosity == 'normal':
                     print_success('Server started on port %s.' % port)

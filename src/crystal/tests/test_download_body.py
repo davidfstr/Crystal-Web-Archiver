@@ -1,3 +1,5 @@
+"""Tests for DownloadResourceBodyTask"""
+
 from contextlib import asynccontextmanager
 from crystal.model import Project, Resource, ResourceRevision
 from crystal.tests.util.runner import bg_sleep

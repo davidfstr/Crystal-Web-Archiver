@@ -330,6 +330,10 @@ Release Notes ⋮
     * Linux: Fix dialog that appears on app launch to be sized correctly.
     * Linux: Fix View button to open browser even if Crystal run from read-only volume.
 
+* Crawling improvements
+    * Don't recurse infinitely if resource identifies alias of itself as an
+      embedded resource.
+
 * Downloading improvements
     * Show estimated time remaining and speed when downloading groups and URLs
     * Download faster
