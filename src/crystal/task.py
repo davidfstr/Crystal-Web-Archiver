@@ -784,7 +784,7 @@ class DownloadResourceTask(Task):
         else:
             (remaining_str, time_per_item_str) = \
                 self._pbc.remaining_str_and_time_per_item_str()
-            subtitle_suffix = f' -- {remaining_str} remaining ({time_per_item_str}/item)'
+            subtitle_suffix = f' -- {remaining_str} remaining ({time_per_item_str})'
         
         self.subtitle = (
             f'{self.num_children_complete:n} of '
@@ -1069,7 +1069,7 @@ class DownloadResourceGroupMembersTask(Task):
         self.subtitle = (
             f'{self.num_children_complete:n} {of_phrase} '
             f'{len(self.children):n} item(s) -- '
-            f'{remaining_str} remaining ({time_per_item_str}/item)'
+            f'{remaining_str} remaining ({time_per_item_str})'
         )
     
     def _update_completed_status(self):
