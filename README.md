@@ -332,20 +332,28 @@ Release Notes ⋮
 
 * Downloading improvements
     * Show estimated time remaining and speed when downloading groups and URLs
-    * Reinstate the ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH
-      optimization that was disabled in v1.4.0b, which significantly speeds up
-      downloading groups of HTML pages that link to similar URLs
-    * Support immediate early completion of download tasks for URLs
-      that were downloaded in the current session or a recent session
-    * Record links while downloading faster by writing all of them to the
-      project in bulk rather than one by one
-    * Speed up downloads by opening the project's underlying SQLite database
-      in [Write-Ahead Logging (WAL) mode](https://www.sqlite.org/wal.html)
-    * Change delay between downloads to be inserted after each HTML page
-      (plus its embedded resources), rather than after every single resource.
-      This new behavior simulates user browsing more closely and results in
-      much faster downloading of HTML pages with many images
-      (or other embedded resources).
+    * Download faster
+        * Reinstate the ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH
+          optimization that was disabled in v1.4.0b, which significantly speeds up
+          downloading groups of HTML pages that link to similar URLs
+        * Support immediate early completion of download tasks for URLs
+          that were downloaded in the current session or a recent session
+        * Record links while downloading faster by writing all of them to the
+          project in bulk rather than one by one
+        * Open the project's underlying SQLite database
+          in [Write-Ahead Logging (WAL) mode](https://www.sqlite.org/wal.html)
+          which is faster than the default mode
+        * Change delay between downloads to be inserted after each HTML page downloads
+          (with its embedded resources), rather than after each single resource downloads.
+          This new behavior simulates user browsing more closely and results in
+          much faster downloading of HTML pages with many images
+          (or other embedded resources).
+        * Parallelize download of URLs from origin server with writes to local
+          database where possible.
+        * Avoid querying the database for revisions of an URL if it is already
+          known that there are no revisions because of other information
+          cached in memory
+        * Precompile node selectors used to parse links from HTML 
 
 * Parsing improvements
     * Links are parsed in about 18% as much time as before.

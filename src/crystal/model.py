@@ -30,7 +30,7 @@ from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
-from crystal.util.xthreading import bg_call_later, fg_call_and_wait
+from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 import cgi
 import datetime
 import io
@@ -43,6 +43,8 @@ import shutil
 from sortedcontainers import SortedList
 import sqlite3
 import sys
+from tempfile import NamedTemporaryFile
+import threading
 import time
 from typing import (
     Any, Callable, cast, Dict, Iterable, List, Literal, Optional, Pattern,
@@ -70,6 +72,7 @@ class Project:
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
     _RESOURCE_REVISION_DIRNAME = 'revisions'
+    _TEMPORARY_DIRNAME = 'tmp'
     
     # NOTE: Only tracked when tests are running
     _last_opened_project: Optional[Project]=None  # static
@@ -125,6 +128,7 @@ class Project:
                 # Create new project structure, minus database file
                 os.mkdir(path)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
+                os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
             else:
                 # Ensure existing project structure looks OK
                 if not Project.is_valid(path):
@@ -180,7 +184,18 @@ class Project:
                 
                 # Upgrade database schema to latest version (unless is readonly)
                 if not self.readonly:
+                    # TODO: Notify progress listener that migrations are being
+                    #       applied, since this can take a long time for large projects
                     self._apply_migrations(c)
+                
+                # Cleanup any temporary files from last session (unless is readonly)
+                if not self.readonly:
+                    tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
+                    assert os.path.exists(tmp_dirpath)
+                    for tmp_filename in os.listdir(tmp_dirpath):
+                        tmp_filepath = os.path.join(tmp_dirpath, tmp_filename)
+                        if os.path.isfile(tmp_filepath):
+                            os.remove(tmp_filepath)
                 
                 # Load project properties
                 for (name, value) in c.execute('select name, value from project_property'):
@@ -287,8 +302,7 @@ class Project:
             os.path.exists(os.path.join(path, Project._DB_FILENAME)) and
             os.path.exists(os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)))
     
-    @classmethod
-    def _apply_migrations(cls, c: DatabaseCursor) -> None:
+    def _apply_migrations(self, c: DatabaseCursor) -> None:
         """
         Upgrades this project's database schema to the latest version.
         
@@ -298,9 +312,15 @@ class Project:
         # Add resource_revision.request_cookie column if missing
         if 'request_cookie' not in get_column_names_of_table(c, 'resource_revision'):
             c.execute('alter table resource_revision add column request_cookie text')
+        
         # Add resource_revision__error_not_null index if missing
         if 'resource_revision__error_not_null' not in get_index_names(c):
             c.execute('create index resource_revision__error_not_null on resource_revision (id, resource_id) where error != "null"')
+        
+        # Add temporary directory if missing
+        tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
+        if not os.path.exists(tmp_dirpath):
+            os.mkdir(tmp_dirpath)
     
     # === Properties ===
     
@@ -726,6 +746,7 @@ class Resource:
         '_download_task_ref',
         '_download_task_noresult_ref',
         '_already_downloaded_this_session',
+        '_definitely_has_no_revisions',
         '_id',
     )
     
@@ -735,6 +756,7 @@ class Resource:
     _download_task_ref: Optional[_WeakTaskRef]
     _download_task_noresult_ref: Optional[_WeakTaskRef]
     _already_downloaded_this_session: bool
+    _definitely_has_no_revisions: bool
     _id: int  # or None if not finished initializing or deleted
     
     # === Init (One) ===
@@ -779,6 +801,7 @@ class Resource:
         self._download_task_ref = None
         self._download_task_noresult_ref = None
         self._already_downloaded_this_session = False
+        self._definitely_has_no_revisions = False
         
         if _id is None:
             if project.readonly:
@@ -788,6 +811,9 @@ class Resource:
             project._db.commit()
             assert c.lastrowid is not None
             _id = c.lastrowid
+            
+            # Can't have revisions because it was just created this session
+            self._definitely_has_no_revisions = True
         
         if _id is Resource._DEFER_ID:
             self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
@@ -1002,6 +1028,21 @@ class Resource:
         _get_already_downloaded_this_session,
         _set_already_downloaded_this_session)
     
+    @property
+    def definitely_has_no_revisions(self) -> bool:
+        """
+        Returns whether this Resource is known to have no ResourceRevisions.
+        Even if this property is False it is still possible that this
+        Resource has no ResourceRevisions.
+        
+        This property can be accessed from any thread (and not just the 
+        foreground thread).
+        
+        Callers can use this property to avoid making unnecessary database
+        queries for ResourceRevisions that definitely don't exist.
+        """
+        return self._definitely_has_no_revisions
+    
     # === Download ===
     
     def download_body(self) -> 'Future[ResourceRevision]':
@@ -1113,6 +1154,9 @@ class Resource:
         """
         Returns whether any revisions of this resource have been downloaded.
         """
+        if self._definitely_has_no_revisions:
+            return False
+        
         c = self.project._db.cursor()
         c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
         return c.fetchone() is not None
@@ -1127,6 +1171,9 @@ class Resource:
         If stale_ok=False and the most up-to-date revision of this resource is
         still stale, return None rather than returning a stale revision.
         """
+        if self._definitely_has_no_revisions:
+            return None
+        
         project = self.project  # cache
         
         reversed_revisions = self.revisions(
@@ -1161,6 +1208,9 @@ class Resource:
         Revisions will be returned in the order they were downloaded,
         from least-recent to most-recent.
         """
+        if self._definitely_has_no_revisions:
+            return []
+        
         RR = ResourceRevision
         
         ordering = 'asc' if not reversed else 'desc'
@@ -1183,18 +1233,26 @@ class Resource:
                 rows = ((None, c0, c1, c2) for (c0, c1, c2) in old_rows)
             else:
                 raise
+        any_rows = False
         for (request_cookie, error, metadata, id) in rows:
+            any_rows = True
             yield ResourceRevision.load(
                 resource=self,
                 request_cookie=request_cookie,
                 error=RR._decode_error(error),
                 metadata=RR._decode_metadata(metadata),
                 id=id)
+        
+        if not any_rows:
+            self._definitely_has_no_revisions = True
     
     def revision_for_etag(self) -> Dict[str, ResourceRevision]:
         """
         Returns a map of each known ETag to a matching ResourceRevision that is NOT an HTTP 304.
         """
+        if self._definitely_has_no_revisions:
+            return {}
+        
         revision_for_etag = {}
         for revision in list(self.revisions()):
             if revision.is_http_304:
@@ -1464,42 +1522,98 @@ class ResourceRevision:
         self.request_cookie = request_cookie
         self.error = error
         self.metadata = metadata
-        # (self._id computed below)
+        self._id = None  # type: ignore[assignment]  # not yet created
         self.has_body = body_stream is not None
         
         project = self.project
         
-        # Need to do this first to get the database ID
-        def fg_task():
-            RR = ResourceRevision
-            
-            if project.readonly:
-                raise ProjectReadOnlyError()
-            c = project._db.cursor()
-            c.execute(
-                'insert into resource_revision '
-                    '(resource_id, request_cookie, error, metadata) values (?, ?, ?, ?)', 
-                (resource._id, request_cookie, RR._encode_error(error), RR._encode_metadata(metadata)))
-            project._db.commit()
-            self._id = c.lastrowid
-        # NOTE: Use no_profile=True because no obvious further optimizations exist
-        fg_call_and_wait(fg_task, no_profile=True)
+        # Associated Resource will have at least one ResourceRevision
+        # 
+        # NOTE: Set this bit BEFORE finishing the download.
+        #       If we were to set the bit AFTER finishing the download
+        #       then there would be a period of time between when the download
+        #       finished and the bit was set where the value of the
+        #       bit would be wrong. Avoid that scenario.
+        resource._definitely_has_no_revisions = False
         
-        if body_stream:
+        condition = threading.Condition()
+        callable_done = False
+        callable_exc_info = None
+        
+        # Asynchronously:
+        # 1. Create the ResourceRevision row in the database
+        # 2. Get the database ID
+        def fg_task() -> None:
+            nonlocal callable_done, callable_exc_info
             try:
-                body_filepath = os.path.join(project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id))
-                with open(body_filepath, 'wb') as body_file:
+                RR = ResourceRevision
+                
+                if project.readonly:
+                    raise ProjectReadOnlyError()
+                c = project._db.cursor()
+                c.execute(
+                    'insert into resource_revision '
+                        '(resource_id, request_cookie, error, metadata) values (?, ?, ?, ?)', 
+                    (resource._id, request_cookie, RR._encode_error(error), RR._encode_metadata(metadata)))
+                project._db.commit()
+                self._id = c.lastrowid
+            except BaseException as e:
+                callable_exc_info = sys.exc_info()
+            finally:
+                with condition:
+                    callable_done = True
+                    condition.notify()
+        # NOTE: Use no_profile=True because no obvious further optimizations exist
+        fg_call_later(fg_task, no_profile=True)
+        
+        body_file_downloaded_ok = False
+        try:
+            # Download the resource's body, if available
+            if body_stream:
+                with NamedTemporaryFile(
+                        suffix='.body',
+                        dir=os.path.join(project.path, Project._TEMPORARY_DIRNAME),
+                        delete=False) as body_file:
                     shutil.copyfileobj(body_stream, body_file)
-            except Exception:
-                # Rollback database commit
-                def fg_task():
-                    if project.readonly:
-                        raise ProjectReadOnlyError()
-                    c = project._db.cursor()
-                    c.execute('delete from resource_revision where id=?', (self._id,))
-                    project._db.commit()
-                fg_call_and_wait(fg_task)
-                raise
+                body_file_downloaded_ok = True
+            else:
+                body_file = None
+        finally:
+            # Wait for ResourceRevision row to be created in database
+            with condition:
+                while not callable_done:
+                    condition.wait()
+            row_created_ok = self._id is not None
+            
+            if body_file is not None:
+                try:
+                    if body_file_downloaded_ok and row_created_ok:
+                        # Move body file to its final filename
+                        os.rename(
+                            body_file.name,
+                            os.path.join(project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id)))
+                    else:
+                        # Remove body file
+                        os.remove(body_file.name)
+                except:
+                    body_file_downloaded_ok = False
+                finally:
+                    if not body_file_downloaded_ok and row_created_ok:
+                        # Rollback database commit
+                        def fg_task() -> None:
+                            if project.readonly:
+                                raise ProjectReadOnlyError()
+                            c = project._db.cursor()
+                            c.execute('delete from resource_revision where id=?', (self._id,))
+                            project._db.commit()
+                        # NOTE: Use no_profile=True because no obvious further optimizations exist
+                        fg_call_and_wait(fg_task, no_profile=True)
+            
+            # Reraise callable's exception, if applicable
+            if callable_exc_info is not None:
+                exc_info = callable_exc_info
+                assert exc_info[1] is not None
+                raise exc_info[1].with_traceback(exc_info[2])
         
         if not project._loading:
             project._resource_revision_did_instantiate(self)

@@ -126,35 +126,38 @@ def fg_call_and_wait(callable, no_profile: bool=False, *args):
         return callable(*args)
     else:
         condition = threading.Condition()
-        callable_done = [False]
-        callable_result = [None]
-        callable_exc_info = [None]
+        callable_done = False
+        callable_result = None
+        callable_exc_info = None
         
-        def fg_task():
+        def fg_task() -> None:
+            nonlocal callable_done, callable_result, callable_exc_info
+            
             # Run task
             try:
-                callable_result[0] = callable(*args)
+                callable_result = callable(*args)
             except BaseException as e:
-                callable_exc_info[0] = sys.exc_info()
+                callable_exc_info = sys.exc_info()
             
             # Send signal
             with condition:
-                callable_done[0] = True
+                callable_done = True
                 condition.notify()
         fg_task.callable = callable  # type: ignore[attr-defined]
         fg_call_later(fg_task, no_profile=no_profile)
         
         # Wait for signal
         with condition:
-            while not callable_done[0]:
+            while not callable_done:
                 condition.wait()
         
         # Reraise callable's exception, if applicable
-        if callable_exc_info[0] is not None:
-            exc_info = callable_exc_info[0]
+        if callable_exc_info is not None:
+            exc_info = callable_exc_info
+            assert exc_info[1] is not None
             raise exc_info[1].with_traceback(exc_info[2])
         
-        return callable_result[0]
+        return callable_result
 
 
 class NoForegroundThreadError(ValueError):

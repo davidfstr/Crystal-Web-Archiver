@@ -3,10 +3,14 @@ HTML parser implementation that uses BeautifulSoup.
 """
 
 from crystal.doc.generic import Document, Link
-from crystal.util.fastsoup import FastSoup, parse_html, Tag
+from crystal.util.fastsoup import (
+    BeautifulFastSoup, FastSoup, LxmlFastSoup, parse_html, Tag
+)
 import json
 import re
-from typing import Callable, List, Literal, Match, Optional, Tuple, Union
+from typing import (
+    Callable, List, Literal, Match, Optional, Tuple, Type, Union
+)
 from urllib.parse import urlparse
 
 
@@ -15,6 +19,11 @@ from urllib.parse import urlparse
 # 
 # TODO: Consider migrating to 'lxml' parser for additional speed
 _PARSER_LIBRARY = 'html.parser'  # type: Literal['lxml', 'html5lib', 'html.parser']
+_PARSER_LIBRARY_T = (
+    LxmlFastSoup
+    if _PARSER_LIBRARY == 'lxml'
+    else BeautifulFastSoup
+)  # type: Type[FastSoup]
 
 
 _ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z]*\.(?:href|location)) *= *(['"])([^'"]*)['"] *;?$''')
@@ -23,6 +32,21 @@ _QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")((?:https?:)?\\?/\\?/[^/][^"]+)"
 ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
 PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)$')
+
+
+_BACKGROUND_EQ_STAR_XP = _PARSER_LIBRARY_T.find_all_compile(
+    background=True)
+_SRC_EQ_STAR_XP = _PARSER_LIBRARY_T.find_all_compile(
+    src=True)
+_IMG_SRCSET_EQ_STAR_XP = _PARSER_LIBRARY_T.find_all_compile(
+    'img', srcset=True)
+_HREF_EQ_STAR_XP = _PARSER_LIBRARY_T.find_all_compile(
+    href=True)
+_INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP = _PARSER_LIBRARY_T.find_all_compile(
+    'input', type='button', onclick=_ON_CLICK_RE)
+_SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP = _PARSER_LIBRARY_T.find_all_compile(
+    'script', string=_QUOTED_HTTP_LINK_RE)
+_STAR_XP = _PARSER_LIBRARY_T.find_all_compile()
 
 
 def parse_html_and_links(
@@ -41,14 +65,14 @@ def parse_html_and_links(
     links = []
     
     # <* background=*>
-    for tag in html.find_all(background=True):
+    for tag in _BACKGROUND_EQ_STAR_XP(html):
         embedded = True
         title = None
         type_title = 'Background Image'
         links.append(HtmlLink.create_from_tag(tag, html, 'background', type_title, title, embedded))
     
     # <* src=*>
-    for tag in html.find_all(src=True):
+    for tag in _SRC_EQ_STAR_XP(html):
         tag_name = html.tag_name(tag)  # cache
         tag_attrs = html.tag_attrs(tag)  # cache
         
@@ -71,11 +95,11 @@ def parse_html_and_links(
         links.append(HtmlLink.create_from_tag(tag, html, 'src', type_title, title, embedded))
     
     # <img srcset=*>
-    for tag in html.find_all('img', srcset=True):
+    for tag in _IMG_SRCSET_EQ_STAR_XP(html):
         links.extend(_process_srcset_attr(html, tag))
     
     # <* href=*>
-    for tag in html.find_all(href=True):
+    for tag in _HREF_EQ_STAR_XP(html):
         tag_name = html.tag_name(tag)  # cache
         tag_attrs = html.tag_attrs(tag)  # cache
         
@@ -110,7 +134,7 @@ def parse_html_and_links(
     
     # <input type='button' onclick='*.location = "*";'>
     # This type of link is used on: fanfiction.net
-    for tag in html.find_all('input', type='button', onclick=_ON_CLICK_RE):
+    for tag in _INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP(html):
         tag_attrs = html.tag_attrs(tag)  # cache
         
         matcher = _ON_CLICK_RE.search(_assert_str(tag_attrs['onclick']))
@@ -133,7 +157,7 @@ def parse_html_and_links(
     #   - This type of link is used on: http://*.daportfolio.com/
     # 2. <script [type="text/javascript"]>..."//**"...</script>
     #   - This type of link is used on: https://blog.calm.com/take-a-deep-breath
-    for tag in html.find_all('script', string=_QUOTED_HTTP_LINK_RE):
+    for tag in _SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP(html):
         tag_attrs = html.tag_attrs(tag)  # cache
         
         if 'type' in tag_attrs:
@@ -177,7 +201,7 @@ def parse_html_and_links(
     seen_tags_and_attr_names = set([
         (_IdentityKey(link.tag), link.attr_name) for link in links
     ])  # capture
-    for tag in html.find_all():
+    for tag in _STAR_XP(html):
         tag_ident = _IdentityKey(tag)  # cache
         for (attr_name, attr_value) in html.tag_attrs(tag).items():
             if (tag_ident, attr_name) in seen_tags_and_attr_names:
