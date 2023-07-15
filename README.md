@@ -325,6 +325,7 @@ Release Notes ⋮
     * Minimize memory growth while downloading URLs in a project for
       multiple hours or days
     * If free disk space drops too low then refuse to download further resources
+    * Quit immediately even when a project with many resources was open recently
 
 * Critical fixes
     * Linux: Fix dialog that appears on app launch to be sized correctly.

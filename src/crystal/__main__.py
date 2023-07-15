@@ -12,6 +12,7 @@ from __future__ import annotations
 #       
 #       Therefore many imports in this file should occur directly within functions.
 import argparse
+import atexit
 import datetime
 import locale
 import os
@@ -183,6 +184,12 @@ def _main(args: List[str]) -> None:
     
     # Start GUI subsystem
     import wx
+    
+    @atexit.register
+    def on_atexit() -> None:
+        # Exit process immediately, without bothering to run garbage collection
+        # or other cleanup processes that can take a long time
+        os._exit(getattr(os, 'EX_OK', 0))
     
     last_project = None  # type: Optional[Project]
     did_quit_during_first_launch = False
