@@ -373,6 +373,10 @@ Release Notes ⋮
         * Slow "Recording links" operations now print a profiling warning
     * Include [guppy] module for manual [memory leak profiling].
 
+* Testing improvements
+    * An entire test module can now be run with `--test`, in addition to
+      individual test functions.
+
 * Minor fixes
     * Clear completed root tasks in all cases, even in the rare case where
       all tasks except the first one are complete

@@ -55,6 +55,8 @@ def run_tests(test_names: List[str]) -> bool:
         return _run_tests(test_names)
 
 
+# TODO: Rename "test_names" to something more appropriate,
+#       now that items can also refer to test modules (and not just test functions)
 def _run_tests(test_names: List[str]) -> bool:
     os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
     
@@ -69,7 +71,7 @@ def _run_tests(test_names: List[str]) -> bool:
         
         # Only run test if it was requested (or if all tests are to be run)
         if len(test_names) > 0:
-            if test_name not in test_names:
+            if test_name not in test_names and test_func.__module__ not in test_names:
                 continue
         run_count += 1
         
