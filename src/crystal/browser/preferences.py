@@ -1,6 +1,6 @@
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
-from crystal.util.xos import is_mac_os
+from crystal.util.xos import is_linux, is_mac_os, is_windows
 import datetime
 import wx
 from typing import Optional, TYPE_CHECKING
@@ -47,14 +47,15 @@ class PreferencesDialog:
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         
         fields_sizer.Add(
-            self._smaller_text(wx.StaticText(parent, label='For redownloading URLs:')),
-            flag=wx.EXPAND, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2))
+            wx.StaticText(parent, label='For redownloading URLs:'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
+            border=5 if is_windows() else 0)
         fields_sizer.Add(
             self._create_stale_before_field(parent),
             flag=wx.EXPAND, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2))
         
         fields_sizer.Add(
-            self._smaller_text(wx.StaticText(parent, label='For sites requiring login:')),
+            wx.StaticText(parent, label='For sites requiring login:'),
             flag=wx.EXPAND, pos=wx.GBPosition(2, 0), span=wx.GBSpan(1, 2))
         fields_sizer.Add(
             wx.StaticText(parent, label='Cookie:'),
@@ -69,7 +70,14 @@ class PreferencesDialog:
             self.cookie_field,
             flag=wx.EXPAND, pos=wx.GBPosition(3, 1))
         
-        return fields_sizer
+        if is_linux():
+            # Add padding around contents of wx.StaticBoxSizer because
+            # wxGTK does not do this automatically, unlike macOS and Windows
+            container_sizer = wx.BoxSizer(wx.VERTICAL)
+            container_sizer.Add(fields_sizer, flag=wx.ALL, border=8)
+            return container_sizer
+        else:
+            return fields_sizer
     
     def _create_stale_before_field(self, parent: wx.Window) -> wx.Sizer:
         import wx.adv  # import late because does print spurious messages on macOS
@@ -133,12 +141,3 @@ class PreferencesDialog:
     
     def _on_cancel(self, event: wx.Event) -> None:
         self.dialog.Destroy()
-    
-    # === Utility ===
-    
-    @staticmethod
-    def _smaller_text(label: wx.StaticText) -> wx.StaticText:
-        new_font = wx.Font(label.Font)
-        new_font.SetPointSize(12)
-        label.Font = new_font
-        return label
