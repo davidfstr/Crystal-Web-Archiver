@@ -39,8 +39,8 @@ class PreferencesDialog:
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
         
-        dialog.Fit()
         dialog.Show(True)
+        dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
     
     def _create_session_fields(self, parent: wx.Window) -> wx.Sizer:
         fields_sizer = wx.GridBagSizer(

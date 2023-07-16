@@ -34,8 +34,8 @@ class AddRootUrlDialog:
         
         self.name_field.SetFocus()
         
-        dialog.Fit()
         dialog.Show(True)
+        dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
     
     def _create_fields(self, parent, initial_url):
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,

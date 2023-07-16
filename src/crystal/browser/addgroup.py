@@ -66,8 +66,10 @@ class AddGroupDialog:
         self.name_field.SetFocus()
         self._update_preview_urls()
         
-        dialog.Fit()
         dialog.Show(True)
+        # TODO: Fit fitting on wxGTK. Moving this Fit() either before or after Show()
+        #       doesn't fix it consistently.
+        dialog.Fit()
     
     def _create_fields(self, parent, initial_url, initial_source):
         fields_sizer = wx.FlexGridSizer(cols=2,

@@ -72,7 +72,7 @@ class MainWindow:
             bind(raw_frame, wx.EVT_CLOSE, self._on_close_frame)
             
             frame.Fit()
-            raw_frame.Fit()
+            raw_frame.Fit()  # NOTE: Must Fit() before Show() here so that wxGTK actually fits correctly
             raw_frame.Show(True)
             
             self.frame = raw_frame
