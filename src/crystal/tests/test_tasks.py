@@ -18,7 +18,7 @@ import tempfile
 from tqdm import tqdm
 from typing import NamedTuple
 from unittest import skip
-from unittest.mock import patch, PropertyMock
+from unittest.mock import patch, Mock, PropertyMock
 
 
 # ------------------------------------------------------------------------------
@@ -114,11 +114,18 @@ async def test_when_download_resource_then_displays_estimated_time_remaining() -
 
 def test_format_of_estimated_time_remaining() -> None:
     def format_remaining_str(second_count: int) -> str:
-        with patch.object(tqdm, 'format_dict', new_callable=PropertyMock) as format_dict:
-            format_dict.return_value = dict(n=0, total=second_count, elapsed=1, rate=1)
-            
-            pbc = ProgressBarCalculator(initial=0, total=second_count)
-            (remaining_str, time_per_item_str) = pbc.remaining_str_and_time_per_item_str()
+        class MockProgressBarCalculator(ProgressBarCalculator):
+            pass
+        
+        pbc = MockProgressBarCalculator(initial=0, total=second_count)
+        type(pbc).n = PropertyMock(return_value=0)  # type: ignore[assignment]
+        type(pbc).total = PropertyMock(return_value=second_count)
+        pbc._rc_n = Mock()
+        type(pbc._rc_n).rate = PropertyMock(return_value=1)
+        pbc._rc_total = Mock()
+        type(pbc._rc_total).rate = PropertyMock(return_value=None)
+        
+        (remaining_str, time_per_item_str) = pbc.remaining_str_and_time_per_item_str()
         return remaining_str
     
     assert '00:01' == format_remaining_str(1)  # 1 second
