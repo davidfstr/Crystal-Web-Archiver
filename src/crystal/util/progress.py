@@ -12,6 +12,8 @@ class ProgressBarCalculator:
     
     _MINIMUM_RATE_TO_REPORT = 0.15
     
+    _MAXIMUM_DELAY_BETWEEN_GROWTH_UPDATES = 10.0  # seconds
+    
     def __init__(self, initial: int, total: int) -> None:
         self._rc_n = RateCalculator(initial, total)
         self._rc_total = RateCalculator(total)
@@ -93,6 +95,12 @@ class ProgressBarCalculator:
         if not (delta_n >= 0):
             raise ValueError()
         self._rc_n._tqdm.update(delta_n)
+        
+        time_since_last_growth_update = (
+            self._rc_n.last_print_t - self._rc_total.last_print_t
+        )
+        if time_since_last_growth_update > self._MAXIMUM_DELAY_BETWEEN_GROWTH_UPDATES:
+            self._rc_total.update(0)
     
     def close(self) -> None:
         self._rc_n.close()
@@ -129,7 +137,7 @@ class RateCalculator:
             
             # Recompute remaining time after each update() call unless many
             # calls made in a short time interval (<= `mininterval`).
-            miniters=1,
+            miniters=0,
             mininterval=0.1,  # tqdm's default value
         )
         
@@ -163,12 +171,25 @@ class RateCalculator:
         rate = dn / dt if dt else None
         return rate
     
+    @property
+    def last_print_t(self) -> float:
+        return self._tqdm.last_print_t
+    
     # === Operations ===
     
     def update(self, delta_n: int) -> None:
         if not (delta_n >= 0):
             raise ValueError()
-        self._tqdm.update(delta_n)
+        if delta_n == 0:
+            # Force the effect of: self._tqdm.update(0)
+            cur_t = self._tqdm._time()
+            dt = cur_t - self._tqdm.last_print_t
+            dn = 0
+            self._tqdm._ema_dn(dn)
+            self._tqdm._ema_dt(dt)
+            self._tqdm.last_print_t = cur_t
+        else:
+            self._tqdm.update(delta_n)
     
     def close(self) -> None:
         self._tqdm.close()
