@@ -1,6 +1,7 @@
 from ast import literal_eval
 from contextlib import contextmanager
 from crystal import __version__ as crystal_version
+from crystal.tests.util.asserts import *
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, WaitTimedOut
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
@@ -60,19 +61,6 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
     'project',
     'task_tree'
 ]
-
-# ------------------------------------------------------------------------------
-# Utility: Assertions
-
-class _DummyTestCase(TestCase):
-    maxDiff = None
-
-# All of these assert methods provide a better error message upon failure
-# than a bare assert statement
-assertEqual = _DummyTestCase().assertEqual
-assertIn = _DummyTestCase().assertIn
-assertNotIn = _DummyTestCase().assertNotIn
-
 
 # ------------------------------------------------------------------------------
 # Tests

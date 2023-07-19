@@ -2,6 +2,7 @@ from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
     ProjectFreeSpaceTooLowError
 )
+from crystal.tests.util.asserts import *
 from crystal.tests.util.data import (
     MAX_TIME_TO_DOWNLOAD_404_URL,
     MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
@@ -128,11 +129,11 @@ def test_format_of_estimated_time_remaining() -> None:
         (remaining_str, time_per_item_str) = pbc.remaining_str_and_time_per_item_str()
         return remaining_str
     
-    assert '00:01' == format_remaining_str(1)  # 1 second
-    assert '01:00' == format_remaining_str(60)  # 1 minute
-    assert '1:00:00' == format_remaining_str(60*60)  # 1 hr
-    assert '1d + 0:00:00' == format_remaining_str(24*60*60)  # 1 day
-    assert '1d + 1:01:01' == format_remaining_str(24*60*60 + 60*60 + 60 + 1)
+    assertEqual('00:01', format_remaining_str(1))  # 1 second
+    assertEqual('01:00', format_remaining_str(60))  # 1 minute
+    assertEqual('1:00:00', format_remaining_str(60*60))  # 1 hr
+    assertEqual('1d + 0:00:00', format_remaining_str(24*60*60))  # 1 day
+    assertEqual('1d + 1:01:01', format_remaining_str(24*60*60 + 60*60 + 60 + 1))
 
 
 # TODO: Extend test to check how user-facing UI responds to ProjectFreeSpaceTooLowError
