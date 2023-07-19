@@ -10,6 +10,7 @@ from crystal.tests.util.data import (
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.server import served_project
+from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
@@ -114,6 +115,10 @@ async def test_when_download_resource_then_displays_estimated_time_remaining() -
 
 
 def test_format_of_estimated_time_remaining() -> None:
+    if ProgressBarCalculator._VERBOSE:
+        skipTest('cannot check format when verbose format is being used')
+        return
+    
     def format_remaining_str(second_count: int) -> str:
         class MockProgressBarCalculator(ProgressBarCalculator):
             pass

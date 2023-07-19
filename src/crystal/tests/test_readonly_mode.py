@@ -1,8 +1,8 @@
 from contextlib import contextmanager
 from crystal.model import Project
+from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.tests.util.xos import skipTest
 from crystal.util.xos import is_mac_os, is_windows
 import os
 import shutil

@@ -1,10 +1,8 @@
+from crystal.tests.util.skip import skipTest
 from crystal.util.xos import is_linux, is_windows
 from functools import wraps
 import platform
-from unittest import SkipTest, TestCase
-
-
-skipTest = TestCase().skipTest  # export too
+from unittest import TestCase
 
 
 # ------------------------------------------------------------------------------
