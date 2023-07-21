@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util.caffeination import Caffeination
@@ -483,6 +484,15 @@ def _get_abstract_resource_title(abstract_resource):
         return '%s' % (resource.url)
 
 
+# Whether to collect profiling information about Resource.default_revision()
+# as used by DownloadResourceBodyTask.
+# 
+# When True, a 'default_revision.prof' file is written to the current directory
+# after all projects have been closed. Such a file can be converted
+# into a visual flamegraph using the "flameprof" PyPI module,
+# or analyzed using the built-in "pstats" module.
+_PROFILE_READ_REVISION = False
+
 PROFILE_RECORD_LINKS = os.environ.get('CRYSTAL_NO_PROFILE_RECORD_LINKS', 'False') != 'True'
 
 class DownloadResourceBodyTask(Task):
@@ -494,6 +504,8 @@ class DownloadResourceBodyTask(Task):
     
     This task is never complete immediately after initialization.
     """
+    _dr_profiling_context = None  # type: AbstractContextManager[Optional[cProfile.Profile]]
+    
     # Optimize per-instance memory use, since there may be very many DownloadResourceBodyTask objects
     __slots__ = (
         '_resource',
@@ -525,7 +537,13 @@ class DownloadResourceBodyTask(Task):
             body_revision = None
         else:
             def fg_task() -> Optional[ResourceRevision]:
-                return self._resource.default_revision(stale_ok=False)
+                DRBT = DownloadResourceBodyTask
+                if DRBT._dr_profiling_context is None:
+                    DRBT._dr_profiling_context = _create_profiling_context(
+                        _PROFILE_READ_REVISION,
+                        'default_revision.prof')
+                with DRBT._dr_profiling_context:
+                    return self._resource.default_revision(stale_ok=False)
             # NOTE: Use no_profile=True because no obvious further optimizations exist
             body_revision = fg_call_and_wait(fg_task, no_profile=True)
         if body_revision is not None:
@@ -555,6 +573,18 @@ class DownloadResourceBodyTask(Task):
                 self.subtitle = 'Waiting before performing next request...'
                 assert not is_foreground_thread()
                 sleep(DELAY_BETWEEN_DOWNLOADS)
+
+def _create_profiling_context(enabled: bool, stats_filepath: str) -> AbstractContextManager[Optional[cProfile.Profile]]:
+    if enabled:
+        profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
+        @atexit.register
+        def dump_stats() -> None:  # type: ignore[misc]
+            profiler = profiling_context
+            assert isinstance(profiler, cProfile.Profile)
+            profiler.dump_stats(stats_filepath)
+    else:
+        profiling_context = nullcontext(enter_result=None)
+    return profiling_context
 
 
 class CannotDownloadWhenProjectReadOnlyError(Exception):
