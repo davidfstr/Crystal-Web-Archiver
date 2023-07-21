@@ -11,6 +11,9 @@ class OpenProjectProgressListener:
     def opening_project(self, project_name: str) -> None:
         pass
     
+    def upgrading_project(self, message: str) -> None:
+        pass
+    
     def will_load_resources(self, approx_resource_count: int) -> None:
         pass
     
@@ -76,14 +79,29 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
     
     @overrides
     def opening_project(self, project_name: str) -> None:
-        self._dialog = wx.ProgressDialog(
-            'Opening Project...',
-            'Opening: ' + project_name,
-            maximum=1,
-            style=wx.PD_AUTO_HIDE|wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
-        )
-        self._dialog.Name = 'cr-opening-project'
-        self._dialog.Show()
+        pass
+    
+    @overrides
+    def upgrading_project(self, message: str) -> None:
+        # HACK: wxGTK does not reliably update wx.ProgressDialog's message
+        #       immediately after it is shown. So be sure to initialize
+        #       the wx.ProgressDialog's message immediately to what it will
+        #       be updated to soon.
+        initial_message = f'Upgrading project: {message}'
+        
+        if self._dialog is None:
+            self._dialog = wx.ProgressDialog(
+                'Opening Project...',
+                # NOTE: Message must be non-empty to size dialog correctly on Windows
+                initial_message,
+                maximum=1,
+                # NOTE: Intentionally lacks: wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
+                style=wx.PD_AUTO_HIDE|wx.PD_APP_MODAL
+            )
+            self._dialog.Name = 'cr-opening-project-1'
+            self._dialog.Show()
+        
+        self._pulse(initial_message)
     
     @overrides
     def will_load_resources(self, approx_resource_count: int) -> None:
@@ -91,11 +109,31 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         Raises:
         * CancelOpenProject
         """
+        if self._dialog is not None:
+            self._dialog.Destroy()
+            self._dialog = None  # very important; avoids segfaults
+        
+        # HACK: wxGTK does not reliably update wx.ProgressDialog's message
+        #       immediately after it is shown. So be sure to initialize
+        #       the wx.ProgressDialog's message immediately to what it will
+        #       be updated to soon.
+        initial_message = f'Loading about {approx_resource_count:n} resource(s)...'
+        
+        self._dialog = wx.ProgressDialog(
+            'Opening Project...',
+            # NOTE: Message must be non-empty to size dialog correctly on Windows
+            initial_message,
+            maximum=1,
+            style=wx.PD_AUTO_HIDE|wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
+        )
+        self._dialog.Name = 'cr-opening-project-2'
+        self._dialog.Show()
+        
         assert self._dialog is not None
         self._dialog.SetRange(max(approx_resource_count * 2, 1))
         self._update(
             0,
-            f'Loading about {approx_resource_count:n} resource(s)...')
+            initial_message)
     
     @overrides
     def loading_resource(self, index: int) -> None:
@@ -217,7 +255,7 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
     def reset(self) -> None:
         if self._dialog is not None:
             self._dialog.Destroy()
-        self._dialog = None
+            self._dialog = None  # very important; avoids segfaults
     
     # === Utility ===
     
@@ -228,6 +266,16 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         """
         assert self._dialog is not None
         (ok, _) = self._dialog.Update(new_value, new_message)
+        if not ok:
+            raise CancelOpenProject()
+    
+    def _pulse(self, new_message: str='') -> None:
+        """
+        Raises:
+        * CancelOpenProject
+        """
+        assert self._dialog is not None
+        (ok, _) = self._dialog.Pulse(new_message)
         if not ok:
             raise CancelOpenProject()
 

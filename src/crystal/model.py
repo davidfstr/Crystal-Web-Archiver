@@ -188,9 +188,7 @@ class Project:
                 
                 # Upgrade database schema to latest version (unless is readonly)
                 if not self.readonly:
-                    # TODO: Notify progress listener that migrations are being
-                    #       applied, since this can take a long time for large projects
-                    self._apply_migrations(c)
+                    self._apply_migrations(c, progress_listener)
                 
                 # Cleanup any temporary files from last session (unless is readonly)
                 if not self.readonly:
@@ -306,20 +304,31 @@ class Project:
             os.path.exists(os.path.join(path, Project._DB_FILENAME)) and
             os.path.exists(os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)))
     
-    def _apply_migrations(self, c: DatabaseCursor) -> None:
+    def _apply_migrations(self,
+            c: DatabaseCursor,
+            progress_listener: OpenProjectProgressListener) -> None:
         """
         Upgrades this project's database schema to the latest version.
         
         Raises:
         * ProjectReadOnlyError
         """
+        index_names = get_index_names(c)  # cache
+        
         # Add resource_revision.request_cookie column if missing
         if 'request_cookie' not in get_column_names_of_table(c, 'resource_revision'):
+            progress_listener.upgrading_project('Adding cookies to revisions...')
             c.execute('alter table resource_revision add column request_cookie text')
         
         # Add resource_revision__error_not_null index if missing
-        if 'resource_revision__error_not_null' not in get_index_names(c):
+        if 'resource_revision__error_not_null' not in index_names:
+            progress_listener.upgrading_project('Indexing revisions with errors...')
             c.execute('create index resource_revision__error_not_null on resource_revision (id, resource_id) where error != "null"')
+        
+        # Add resource_revision__request_cookie_not_null index if missing
+        if 'resource_revision__request_cookie_not_null' not in index_names:
+            progress_listener.upgrading_project('Indexing revisions with cookies...')
+            c.execute('create index resource_revision__request_cookie_not_null on resource_revision (id, request_cookie) where request_cookie is not null')
         
         # Add temporary directory if missing
         tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)

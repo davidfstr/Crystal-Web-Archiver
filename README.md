@@ -314,6 +314,7 @@ Release Notes ⋮
           wildcard has been typed, perform an O(log(r)) search for matching URLs
           in the preview pane, where r = the number of URLs in the project.
         * Previously an O(r) search was performed in both of the above cases.
+    * Show progress while upgrading project with many URLs
     * Show progress dialog when starting to download a large group
     * Show elapsed time in all progress dialogs
     * Prevent system idle sleep while tasks are running (on macOS and Windows)
@@ -326,6 +327,7 @@ Release Notes ⋮
       multiple hours or days
     * If free disk space drops too low then refuse to download further resources
     * Quit immediately even when a project with many resources was open recently
+    * Open preferences dialog significantly faster for projects containing many URLs
 
 * Critical fixes
     * Linux: Fix dialog that appears on app launch to be sized correctly.
@@ -391,8 +393,8 @@ Release Notes ⋮
     * Clear completed root tasks in all cases, even in the rare case where
       all tasks except the first one are complete
     * When deleting a ResourceRevision, don't delete revision body if project
-      is read-only and properly related Resource as no longer being downloaded
-      this session
+      is read-only and properly mark related Resource as no longer being 
+      downloaded this session
     * When querying a ResourceRevision's size, don't crash with a traceback
     * When running as a macOS .app, log stdout and stderr to files correctly
       once more

@@ -130,7 +130,8 @@ class OpenOrCreateDialog:
             
             await wait_for(
                 or_condition(
-                    window_condition('cr-opening-project'),
+                    window_condition('cr-opening-project-1'),
+                    window_condition('cr-opening-project-2'),
                     window_condition('cr-main-window'),
                     window_condition(next_window_name)))
 

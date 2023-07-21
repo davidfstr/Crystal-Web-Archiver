@@ -206,20 +206,13 @@ def not_condition(condition: Callable[[], Optional[_T]]) -> Callable[[], Optiona
 
 
 def or_condition(
-        condition1: Callable[[], Optional[_T1]],
-        condition2: Callable[[], Optional[_T2]],
-        condition3: Callable[[], Optional[_T3]]
-        ) -> Callable[[], Optional[Union[_T1, _T2, _T3]]]:
-    def or_() -> Optional[Union[_T1, _T2, _T3]]:
-        result1 = condition1()
-        if result1 is not None:
-            return result1
-        result2 = condition2()
-        if result2 is not None:
-            return result2
-        result3 = condition3()
-        if result3 is not None:
-            return result3
+        *conditions: Callable[[], Optional[_T]]
+        ) -> Callable[[], Optional[_T]]:
+    def or_() -> Optional[_T]:
+        for condition in conditions:
+            result = condition()
+            if result is not None:
+                return result
         return None
     return or_
 
