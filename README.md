@@ -372,6 +372,8 @@ Release Notes ⋮
     * Links to anchors on the same page are no longer rewritten,
       for better compatibility with JavaScript libraries that
       treat such links specially.
+    * Archived pages are read from disk about 45% faster by avoiding an
+      unnecessary `os.stat` call.
 
 * CLI improvements
     * Profiling warnings:

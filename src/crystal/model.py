@@ -1656,7 +1656,7 @@ class ResourceRevision:
         self.error = revision.error
         self.metadata = metadata
         self._id = revision._id
-        self.has_body = revision.has_body
+        self.has_body = (self.error is None)
         return self
     
     @staticmethod
@@ -1672,7 +1672,7 @@ class ResourceRevision:
         self.error = error
         self.metadata = metadata
         self._id = id
-        self.has_body = os.path.exists(self._body_filepath)
+        self.has_body = (self.error is None)
         return self
     
     @classmethod
