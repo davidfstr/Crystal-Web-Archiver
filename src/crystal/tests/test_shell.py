@@ -57,7 +57,6 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
 _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
     'close',
     'entity_tree',
-    'frame',  # TODO: Recommend remove from API. Too low level.
     'project',
     'task_tree'
 ]

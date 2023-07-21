@@ -83,7 +83,7 @@ class MainWindow:
             raw_frame.Fit()  # NOTE: Must Fit() before Show() here so that wxGTK actually fits correctly
             raw_frame.Show(True)
             
-            self.frame = raw_frame
+            self._frame = raw_frame
         except:
             raw_frame.Destroy()
             raise
@@ -347,12 +347,12 @@ class MainWindow:
     def _on_close_project(self, event: wx.CommandEvent) -> None:
         self.entity_tree.dispose()
         self.task_tree.dispose()
-        self.frame.Close()
+        self._frame.Close()
     
     def _on_quit(self, event: wx.CommandEvent) -> None:
         if event.Id == wx.ID_EXIT:
             set_is_quitting()
-            self.frame.Close()
+            self._frame.Close()
         else:
             event.Skip()
     
@@ -368,7 +368,7 @@ class MainWindow:
     
     def _on_add_url(self, event: wx.CommandEvent) -> None:
         AddRootUrlDialog(
-            self.frame, self._on_add_url_dialog_ok,
+            self._frame, self._on_add_url_dialog_ok,
             initial_url=self._selection_initial_url)
     
     def _on_add_url_dialog_ok(self, name, url):
@@ -379,7 +379,7 @@ class MainWindow:
     
     def _on_add_group(self, event):
         AddGroupDialog(
-            self.frame, self._on_add_group_dialog_ok,
+            self._frame, self._on_add_group_dialog_ok,
             self.project,
             initial_url=self._selection_initial_url,
             initial_source=self._selection_initial_source)
@@ -409,7 +409,7 @@ class MainWindow:
             progress_dialog = wx.ProgressDialog(
                 title='Starting download',
                 message=f'Starting download of {len(selected_entity.members):n} members...',
-                parent=self.frame,
+                parent=self._frame,
                 style=wx.PD_ELAPSED_TIME)
             progress_dialog.Name = 'cr-starting-download'
             progress_dialog.Pulse(progress_dialog.Message)  # make progress bar indeterminate
@@ -466,7 +466,7 @@ class MainWindow:
             # TODO: Would be great if we automatically gave the user the option
             #       to select a source for the group. Perhaps by automatically
             #       forwarding the user to the edit dialog for the group.
-            dialog = BetterMessageDialog(self.frame,
+            dialog = BetterMessageDialog(self._frame,
                 message=('The group "%s" does not have a source defined, which ' +
                     'prevents it from being downloaded.') % entity.name,
                 title='No Source Defined',
@@ -595,6 +595,6 @@ class MainWindow:
     
     def _on_preferences(self, event: wx.CommandEvent) -> None:
         if event.Id == wx.ID_PREFERENCES or isinstance(event.EventObject, wx.Button):
-            PreferencesDialog(self.frame, self.project)
+            PreferencesDialog(self._frame, self.project)
         else:
             event.Skip()

@@ -400,6 +400,7 @@ Release Notes ⋮
       of `List[ResourceRevision]` to support streaming results.
         * If the old behavior is desired, wrap calls to `Resource.revisions()`
           inside of a `list(...)` expression.
+    * `MainWindow.frame` is no longer public.
 
 [guppy]: https://pypi.org/project/guppy3/
 [memory leak profiling]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Testing-for-Memory-Leaks
