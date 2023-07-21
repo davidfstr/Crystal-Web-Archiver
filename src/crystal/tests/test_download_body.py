@@ -47,7 +47,7 @@ async def test_when_no_errors_then_database_row_and_body_file_is_created() -> No
                     project.path, Project._TEMPORARY_DIRNAME))
 
 
-async def test_when_io_error_then_tries_to_delete_partial_body_file_and_delete_database_row() -> None:
+async def test_when_io_error_then_tries_to_delete_partial_body_file_and_but_leave_database_row() -> None:
     async with _downloads_mocked_to_raise_io_error() as is_connection_reset:
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
             home_url = sp.get_request_url('https://xkcd.com/')
@@ -77,7 +77,7 @@ async def test_when_io_error_then_tries_to_delete_partial_body_file_and_delete_d
                         project.path, Project._TEMPORARY_DIRNAME))
 
 
-async def test_when_database_error_then_tries_to_delete_body_file() -> None:
+async def test_when_database_error_then_tries_to_delete_partial_body_file() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
@@ -110,7 +110,7 @@ async def test_when_database_error_then_tries_to_delete_body_file() -> None:
                         project.path, Project._TEMPORARY_DIRNAME))
 
 
-async def test_when_io_error_and_database_error_then_tries_to_delete_body_file() -> None:
+async def test_when_io_error_and_database_error_then_tries_to_delete_partial_body_file() -> None:
     async with _downloads_mocked_to_raise_io_error() as is_connection_reset:
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
             home_url = sp.get_request_url('https://xkcd.com/')
