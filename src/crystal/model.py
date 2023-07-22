@@ -1445,7 +1445,7 @@ class RootResource:
     
     # TODO: Create the underlying task with the full RootResource
     #       so that the correct subtitle is displayed.
-    def download(self, *, needs_result: bool=True) -> Future:
+    def download(self, *, needs_result: bool=True) -> Future[ResourceRevision]:
         return self.resource.download(needs_result=needs_result)
     
     def create_download_task(self, *, needs_result: bool=True) -> Task:
@@ -2288,7 +2288,7 @@ class ResourceGroup:
         if resource in self._members:
             self._members.remove(resource)
     
-    def download(self, *, needs_result: bool=False) -> None:
+    def download(self, *, needs_result: bool=False) -> DownloadResourceGroupTask:
         """
         Downloads this group asynchronously.
         
@@ -2301,6 +2301,7 @@ class ResourceGroup:
             raise ValueError('Download task for a group never has a result')
         task = self.create_download_task(needs_result=needs_result)
         self.project.add_task(task)
+        return task
     
     def create_download_task(self, *, needs_result: bool=False) -> DownloadResourceGroupTask:
         """
