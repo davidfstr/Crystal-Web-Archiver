@@ -75,9 +75,7 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     ]
                     
                     comic_g = ResourceGroup(project, 'Comic', comic_pattern)
-                    # TODO: Support downloading a group lacking a source,
-                    #       so that this missing_r source isn't necessary
-                    comic_g.source = RootResource(project, 'Missing', missing_r)
+                    assert None == comic_g.source
                     
                     COMIC_G_FINAL_MEMBER_COUNT = 10
                     

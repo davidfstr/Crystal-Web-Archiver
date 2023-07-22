@@ -2314,8 +2314,6 @@ class ResourceGroup:
         """
         if needs_result:
             raise ValueError('Download task for a group never has a result')
-        if self.source is None:
-            raise ValueError('Cannot download a group that lacks a source.')
         
         from crystal.task import DownloadResourceGroupTask
         return DownloadResourceGroupTask(self)
@@ -2329,9 +2327,6 @@ class ResourceGroup:
         Raises:
         * ProjectClosedError -- If the project is closed.
         """
-        if self.source is None:
-            raise ValueError('Cannot update members of a group that lacks a source.')
-        
         from crystal.task import UpdateResourceGroupMembersTask
         task = UpdateResourceGroupMembersTask(self)
         self.project.add_task(task)

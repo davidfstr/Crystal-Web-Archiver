@@ -282,6 +282,7 @@ Release Notes ⋮
           to the project in the Finder.
         * Add app name to version label in lower-left corner of project window.
     * Add keyboard shortcuts everywhere
+    * Groups without a source can now be downloaded, as one would expect.
     * Task Tree: Remove top-level tasks that complete as they complete,
       rather than waiting for all other outstanding tasks to complete first
 

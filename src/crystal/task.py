@@ -1011,11 +1011,12 @@ class UpdateResourceGroupMembersTask(Task):
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         
         if group.source is None:
-            raise ValueError('Expected group with a source')
-        download_task = group.source.create_download_task(needs_result=False)  # is_embedded=False
-        self.append_child(download_task, already_complete_ok=True)
-        if download_task.complete:
-            self.task_did_complete(download_task)
+            self.finish()
+        else:
+            download_task = group.source.create_download_task(needs_result=False)  # is_embedded=False
+            self.append_child(download_task, already_complete_ok=True)
+            if download_task.complete:
+                self.task_did_complete(download_task)
         # (NOTE: self.complete might be True now)
     
     def child_task_subtitle_did_change(self, task: Task) -> None:

@@ -1,4 +1,4 @@
-"""Tests for DownloadResourceTask"""
+"""Tests for DownloadResourceTask and DownloadResourceGroupTask"""
 
 from crystal.model import Project, Resource
 import crystal.task
@@ -14,7 +14,7 @@ from unittest import skip
 
 
 # ------------------------------------------------------------------------------
-# Tests
+# DownloadResourceTask Tests
 
 async def test_downloads_embedded_resources() -> None:
     server = MockHttpServer({
@@ -186,6 +186,27 @@ async def test_does_not_download_forever_when_embedded_resources_nest_infinitely
                     '/assets/assets/image.png',  # 2
                     '/assets/assets/assets/image.png'  # 3
                 ] == server.requested_paths
+
+
+# ------------------------------------------------------------------------------
+# DownloadResourceGroupTask Tests
+
+@skip('covered by: test_some_tasks_may_complete_immediately')
+async def test_can_download_group_with_nothing_as_source() -> None:
+    # See subtest: task_type='DownloadResourceGroupTask'
+    pass
+
+
+@skip('covered by: test_can_download_and_serve_a_static_site')
+async def test_can_download_group_with_root_resource_as_source() -> None:
+    # See section: "Test can download resource group, when root resource is source"
+    pass
+
+
+@skip('covered by: test_can_download_and_serve_a_static_site')
+async def test_can_download_group_with_group_as_source() -> None:
+    # See section: "Test can update membership of resource group, when other resource group is source"
+    pass
 
 
 # ------------------------------------------------------------------------------
