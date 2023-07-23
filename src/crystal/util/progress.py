@@ -1,3 +1,4 @@
+from crystal.util.xos import is_windows
 from tqdm import tqdm
 from tqdm.std import EMA
 from typing import Optional, Tuple
@@ -13,6 +14,11 @@ class ProgressBarCalculator:
     _MINIMUM_RATE_TO_REPORT = 0.15
     
     _MAXIMUM_DELAY_BETWEEN_GROWTH_UPDATES = 10.0  # seconds
+    
+    # HACK: Avoid printing characters outside the Windows-1252 encoding (cp1252)
+    #       when running on Windows because Windows seems to generally expect
+    #       stdout/stderr on Windows to be decodable using that encoding.
+    _DELTA = 'Δ' if not is_windows() else 'd'
     
     def __init__(self, initial: int, total: int) -> None:
         self._rc_n = RateCalculator(initial, total)
@@ -68,10 +74,10 @@ class ProgressBarCalculator:
             )
             remaining_str += (
                 f' (rate={format_floatlike(rate)}, '
-                f'n.ema_dn={format_floatlike(self._rc_n._tqdm._ema_dn())}, '
-                f'n.ema_dt={format_floatlike(self._rc_n._tqdm._ema_dt())}, '
-                f't.ema_dn={format_floatlike(self._rc_total._tqdm._ema_dn())}, '
-                f't.ema_dt={format_floatlike(self._rc_total._tqdm._ema_dt())})'
+                f'{self._DELTA}n={format_floatlike(self._rc_n._tqdm._ema_dn())}/'
+                f'{format_floatlike(self._rc_n._tqdm._ema_dt())}, '
+                f'{self._DELTA}total={format_floatlike(self._rc_total._tqdm._ema_dn())}/'
+                f'{format_floatlike(self._rc_total._tqdm._ema_dt())})'
             )
         
         time_per_item_done = 1 / growth_rate_of_n if growth_rate_of_n else None
