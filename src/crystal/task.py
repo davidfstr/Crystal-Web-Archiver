@@ -19,8 +19,10 @@ import sys
 from time import sleep
 import traceback
 from typing import (
-    Any, Callable, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
+    Any, Callable, cast, List, Literal, Iterator, Optional, Tuple,
+    TYPE_CHECKING, Union
 )
+from weakref import WeakSet
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Link
@@ -88,6 +90,12 @@ class Task:
     Tasks are not allowed to be complete immediately after initialization
     unless explicitly documented in the Task class's docstring.
     """
+    _USE_EXTRA_LISTENER_ASSERTIONS = (
+        os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
+    )
+    
+    _REPORTED_TASKS_WITH_MANY_LISTENERS = WeakSet()  # type: WeakSet[Task]
+    
     # Optimize per-instance memory use, since there may be very many Task objects
     __slots__ = (
         '_icon_name',
@@ -103,6 +111,10 @@ class Task:
         '_future',
         '_first_incomplete_child_index',
         '_next_child_index',
+        
+        # Necessary to support weak references to task objects,
+        # such as by Task._REPORTED_TASKS_WITH_MANY_LISTENERS
+        '__weakrefoffset__',
     )
     
     def __init__(self, title: str, icon_name: Optional[str]) -> None:
@@ -152,8 +164,15 @@ class Task:
                 lis.task_subtitle_did_change(self)  # type: ignore[attr-defined]
     subtitle = property(_get_subtitle, _set_subtitle)
     
+    # TODO: Alter parent tracking to support multiple parents,
+    #       since in truth a Task can already have multiple parents,
+    #       but we currently only remember one parent at a time.
     @property
     def parent(self) -> Optional[Task]:
+        """
+        The most-recently set parent of this task or None if no such parent
+        exists or this task type doesn't permit parent tracking.
+        """
         return self._parent
     
     @property
@@ -218,9 +237,18 @@ class Task:
                 f'and already_completed_ok is False. '
                 f'self={self}, child={child}')
         
+        # NOTE: child._parent may already be set to a different parent
         child._parent = self
         self._children.append(child)
         
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+            assert self not in child.listeners
+        if len(child.listeners) >= 50:
+            if child not in Task._REPORTED_TASKS_WITH_MANY_LISTENERS:
+                Task._REPORTED_TASKS_WITH_MANY_LISTENERS.add(child)
+                print(f'*** Task has many listeners and may be leaking them: {child}')
+                for lis in child.listeners:
+                    print(f'    - {lis}')
         child.listeners.append(self)
         
         for lis in self.listeners:
@@ -273,6 +301,8 @@ class Task:
             if all_children_complete:
                 for child in self._children:
                     child._parent = None
+                    if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+                        assert self not in child.listeners
                 self._children = []
                 
                 self._first_incomplete_child_index = 0
@@ -419,13 +449,15 @@ class Task:
     def task_did_complete(self, task):
         self._num_children_complete += 1
         
+        task.listeners.remove(self)
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+            assert self not in task.listeners
+        
         if hasattr(self, 'child_task_did_complete'):
             self.child_task_did_complete(task)
         for lis in self.listeners:
             if hasattr(lis, 'task_child_did_complete'):
                 lis.task_child_did_complete(self, task)  # type: ignore[attr-defined]
-            
-        task.listeners.remove(self)
 
 
 class TaskDisposedException(Exception):
@@ -575,6 +607,9 @@ class DownloadResourceBodyTask(Task):
                 self.subtitle = 'Waiting before performing next request...'
                 assert not is_foreground_thread()
                 sleep(DELAY_BETWEEN_DOWNLOADS)
+    
+    def __repr__(self) -> str:
+        return f'<DownloadResourceBodyTask for {self._resource.url!r}>'
 
 def _create_profiling_context(enabled: bool, stats_filepath: str) -> AbstractContextManager[Optional[cProfile.Profile]]:
     if enabled:
@@ -878,6 +913,9 @@ class DownloadResourceTask(Task):
             self._pbc.close()
             self._pbc = None  # garbage collect
         super().finish()
+    
+    def __repr__(self) -> str:
+        return f'<DownloadResourceTask for {self._resource.url!r}>'
 
 
 class ParseResourceRevisionLinks(Task):
@@ -919,6 +957,9 @@ class ParseResourceRevisionLinks(Task):
     def dispose(self) -> None:
         super().dispose()
         self._resource_revision = None
+    
+    def __repr__(self) -> str:
+        return f'<ParseResourceRevisionLinks for RR {self._resource_revision._id}>'
 
 
 _NO_VALUE = object()
@@ -966,6 +1007,16 @@ class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
             exception=_AlreadyDownloadedException().with_traceback(None),
             prefinish=True,
         )
+    
+    # Don't allow parent to be set on a flyweight task
+    def _get_parent(self) -> Optional[Task]:
+        return None
+    def _set_parent(self, parent: Optional[Task]) -> None:
+        pass
+    parent = cast(Optional[Task], property(_get_parent, _set_parent))
+    
+    def __repr__(self) -> str:
+        return f'_ALREADY_DOWNLOADED_PLACEHOLDER_TASK'
 
 _ALREADY_DOWNLOADED_PLACEHOLDER_TASK = _AlreadyDownloadedPlaceholderTask()
 
@@ -985,6 +1036,9 @@ class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
             ),
             prefinish=True,
         )
+    
+    def __repr__(self) -> str:
+        return f'<_DownloadResourcesPlaceholderTask {self.title!r}>'
 
 
 # ------------------------------------------------------------------------------
@@ -1030,6 +1084,11 @@ class UpdateResourceGroupMembersTask(Task):
         
         if self.num_children_complete == len(self.children):
             self.finish()
+    
+    def __repr__(self) -> str:
+        # TODO: Consider including just the group pattern,
+        #       and surrounding the result with <>.
+        return f'UpdateResourceGroupMembersTask({self.group!r})'
 
 
 class DownloadResourceGroupMembersTask(Task):
@@ -1045,7 +1104,11 @@ class DownloadResourceGroupMembersTask(Task):
             title='Downloading members of group: %s' % group.name,
             icon_name='tasktree_download_group_members')
         self.group = group
+        
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+            assert self not in self.group.listeners
         self.group.listeners.append(self)
+        
         self._done_updating_group = False
         
         self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
@@ -1110,10 +1173,20 @@ class DownloadResourceGroupMembersTask(Task):
             self.finish()
     
     def finish(self) -> None:
+        self.group.listeners.remove(self)
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+            assert self not in self.group.listeners
+        
         if self._pbc is not None:
             self._pbc.close()
             self._pbc = None  # garbage collect
+        
         super().finish()
+    
+    def __repr__(self) -> str:
+        # TODO: Consider including just the group pattern,
+        #       and surrounding the result with <>.
+        return f'DownloadResourceGroupMembersTask({self.group!r})'
 
 
 class DownloadResourceGroupTask(Task):
@@ -1123,7 +1196,7 @@ class DownloadResourceGroupTask(Task):
     
     This task may be complete immediately after initialization.
     """
-    def __init__(self, group):
+    def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
             title='Downloading group: %s' % group.name,
             icon_name='tasktree_download_group')
@@ -1142,6 +1215,10 @@ class DownloadResourceGroupTask(Task):
         
         # Prevent system idle sleep while downloading a potentially large group
         Caffeination.add_caffeine()
+    
+    @property
+    def group(self) -> ResourceGroup:
+        return self._update_members_task.group
     
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task == self._update_members_task and not self._started_downloading_members:
@@ -1163,6 +1240,11 @@ class DownloadResourceGroupTask(Task):
         Caffeination.remove_caffeine()
         
         super().finish()
+    
+    def __repr__(self) -> str:
+        # TODO: Consider including just the group pattern,
+        #       and surrounding the result with <>.
+        return f'DownloadResourceGroupTask({self.group!r})'
 
 
 # ------------------------------------------------------------------------------
@@ -1213,6 +1295,9 @@ class RootTask(Task):
     def close(self) -> None:
         """Stop all descendent tasks, asynchronously."""
         self.finish()
+    
+    def __repr__(self) -> str:
+        return f'<RootTask at 0x{id(self):x}>'
 
 
 # ------------------------------------------------------------------------------

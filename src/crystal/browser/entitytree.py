@@ -227,8 +227,9 @@ class EntityTree:
     # === Dispose ===
     
     def dispose(self) -> None:
-        self.view.dispose()
+        self._project.listeners.remove(self)
         self.root.dispose()
+        self.view.dispose()
 
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     """

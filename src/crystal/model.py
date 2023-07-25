@@ -738,6 +738,9 @@ class _WeakTaskRef:
     
     def task_did_complete(self, task: Task) -> None:
         self.task = None
+    
+    def __repr__(self) -> str:
+        return f'_WeakTaskRef({self._task!r})'
 
 
 class Resource:

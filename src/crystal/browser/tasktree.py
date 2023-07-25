@@ -46,7 +46,11 @@ class TaskTreeNode:
     """
     def __init__(self, task: Task) -> None:
         self.task = task
-        self.task.listeners.append(self)
+        
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+            assert self not in self.task.listeners
+        if not task.complete:
+            self.task.listeners.append(self)
         
         self.tree_node = NodeView()
         if self.task.icon_name is not None:
@@ -236,6 +240,9 @@ class TaskTreeNode:
         self.task.listeners.remove(self)
         self.tree_node.dispose()
         self.tree_node = NULL_NODE_VIEW
+    
+    def __repr__(self) -> str:
+        return f'TaskTreeNode({self.task!r})'
 
 
 class _MoreNodeView(NodeView):
