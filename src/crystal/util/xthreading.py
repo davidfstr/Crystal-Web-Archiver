@@ -11,7 +11,7 @@ from crystal.util.profile import create_profiled_callable
 import os
 import sys
 import threading
-from typing import Callable, Optional
+from typing import Callable, cast, Optional, TypeVar
 import wx
 
 
@@ -108,7 +108,9 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
                 raise
 
 
-def fg_call_and_wait(callable, no_profile: bool=False, *args):
+_R = TypeVar('_R')
+
+def fg_call_and_wait(callable: Callable[..., _R], no_profile: bool=False, *args) -> _R:
     """
     Calls the argument on the foreground thread and waits for it to complete.
     This should be called by background threads that need to access the UI or model.
@@ -157,7 +159,7 @@ def fg_call_and_wait(callable, no_profile: bool=False, *args):
             assert exc_info[1] is not None
             raise exc_info[1].with_traceback(exc_info[2])
         
-        return callable_result
+        return cast(_R, callable_result)
 
 
 class NoForegroundThreadError(ValueError):

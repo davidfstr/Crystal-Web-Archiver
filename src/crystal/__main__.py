@@ -184,6 +184,8 @@ def _main(args: List[str]) -> None:
     
     # Start GUI subsystem
     import wx
+    import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
+    import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
     
     @atexit.register
     def on_atexit() -> None:
@@ -412,7 +414,7 @@ def _did_launch(
     
     # Start serving immediately if requested
     if parsed_args.serve:
-        project.start_server()
+        window.start_server()
     
     return project
 

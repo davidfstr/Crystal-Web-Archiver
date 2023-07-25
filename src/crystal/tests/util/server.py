@@ -35,6 +35,7 @@ def served_project(
     
     with extracted_project(zipped_project_filename) as project_filepath:
         must_alter_fetch_date = (fetch_date_of_resources_set_to is not None)
+        project_server = None  # type: Optional[ProjectServer]
         project = fg_call_and_wait(lambda: Project(project_filepath, readonly=True if not must_alter_fetch_date else False))
         try:
             # Alter the fetch date of every ResourceRevision in the project
@@ -73,12 +74,17 @@ def served_project(
                 fg_call_and_wait(fg_task)
             
             # Start server
-            yield project.start_server(
+            project_server = ProjectServer(project,
                 port=2798,  # CRYT on telephone keypad
                 verbosity='indent',
             )
+            yield project_server
         finally:
-            fg_call_and_wait(lambda: project.close())
+            def close_project() -> None:
+                if project_server is not None:
+                    project_server.close()
+                project.close()
+            fg_call_and_wait(close_project)
 
 
 @contextmanager

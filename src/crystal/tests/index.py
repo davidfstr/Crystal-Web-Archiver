@@ -2,6 +2,7 @@ from crystal.tests import (
     test_download,
     test_download_body,
     test_entitytree,
+    test_log_drawer,
     test_menus,
     test_open_project,
     test_parse_html,
@@ -31,6 +32,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_download) +
     _test_functions_in_module(test_download_body) +
     _test_functions_in_module(test_entitytree) +
+    _test_functions_in_module(test_log_drawer) +
     _test_functions_in_module(test_menus) +
     _test_functions_in_module(test_open_project) +
     _test_functions_in_module(test_parse_html) +

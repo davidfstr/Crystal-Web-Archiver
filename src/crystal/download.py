@@ -3,6 +3,7 @@ Provides services for downloading a ResourceRevision.
 """
 
 from collections import defaultdict
+from collections.abc import Collection
 from crystal import __version__
 from crystal.model import Resource, ResourceRevision, ResourceRevisionMetadata
 from crystal.util.xos import is_windows
@@ -57,7 +58,7 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
         request_cookie = None
     
     if resource.definitely_has_no_revisions:
-        known_etags = ()  # type: Union[Set[str], Tuple[str, ...]]
+        known_etags = ()  # type: Collection[str]
     else:
         known_etags = fg_call_and_wait(lambda: resource.revision_for_etag().keys())
     

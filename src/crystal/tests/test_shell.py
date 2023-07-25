@@ -48,8 +48,6 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'resources_matching_pattern',
     'root_resources',
     'root_task',
-    'server_running',
-    'start_server',
     'title',
     'urls_matching_pattern',
 ]
@@ -58,6 +56,7 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
     'close',
     'entity_tree',
     'project',
+    'start_server',
     'task_tree'
 ]
 
@@ -117,10 +116,10 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
             # Ensure public members match expected set
             assertEqual(_EXPECTED_PROJECT_PUBLIC_MEMBERS,
                 literal_eval(_py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]")),
-                'Project public API changed')
+                'Public API of Project class has changed')
             assertEqual(_EXPECTED_WINDOW_PUBLIC_MEMBERS,
                 literal_eval(_py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]")),
-                'MainWindow public API changed')
+                'Public API of MainWindow class has changed')
 
 
 @skip_on_windows

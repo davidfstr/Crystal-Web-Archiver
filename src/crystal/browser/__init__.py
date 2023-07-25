@@ -9,10 +9,11 @@ from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.progress import (
     DummyOpenProjectProgressListener, OpenProjectProgressListener,
 )
-import crystal.server
+from crystal.server import ProjectServer
 from crystal.task import RootTask
 from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
+from crystal.ui.log_drawer import LogDrawer
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xthreading import (
@@ -20,7 +21,7 @@ from crystal.util.xthreading import (
 )
 import os
 import time
-from typing import ContextManager, Iterator, List, Optional
+from typing import ContextManager, Iterator, Optional
 import webbrowser
 import wx
 
@@ -45,16 +46,22 @@ class MainWindow:
             progress_listener = DummyOpenProjectProgressListener()
         
         self.project = project
+        self._log_drawer = None  # type: Optional[LogDrawer]
+        self._project_server = None  # type: Optional[ProjectServer]
         
         self._create_actions()
         
+        # TODO: Rename: raw_frame -> frame,
+        #               frame -> frame_content
         raw_frame = wx.Frame(None, title=project.title, name='cr-main-window')
         try:
             raw_frame.SetRepresentedFilename(project.path)
             
-            # NOTE: Add all controls to a root wx.Panel rather than to the
-            #       raw wx.Frame directly so that tab traversal between child
-            #       components works correctly.
+            # 1. Define *single* child with full content of the wx.Frame,
+            #    so that LogDrawer can be created for this window later
+            # 2. Add all controls to a root wx.Panel rather than to the
+            #    raw wx.Frame directly so that tab traversal between child
+            #    components works correctly.
             frame = wx.Panel(raw_frame)
             
             frame_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -362,6 +369,11 @@ class MainWindow:
         for a in self._actions:
             a.dispose()
         
+        if self._log_drawer is not None:
+            self._log_drawer.close()
+        if self._project_server is not None:
+            self._project_server.close()
+        
         event.Skip()  # continue dispose of frame
     
     # === Entity Pane: Events ===
@@ -456,24 +468,35 @@ class MainWindow:
     def _on_view_entity(self, event) -> None:
         # TODO: If the server couldn't be started (ex: due to the default port being in
         #       use), report an appropriate error.
-        project_server = self.project.start_server()
+        project_server = self.start_server()
         
         selected_entity = self.entity_tree.selected_entity
         assert isinstance(selected_entity, (Resource, RootResource))
         archive_url = selected_entity.resource.url
         request_url = project_server.get_request_url(archive_url)
         
-        if is_linux():
-            # HACK: Firefox on Linux starts with an error if
-            #       the current working directory is not writable,
-            #       so make sure the current working directory is
-            #       writable before potentially starting Firefox
-            open_browser_context = self._cwd_set_to_writable_dir()  # type: ContextManager
+        def open_browser_to_url() -> None:
+            if is_linux():
+                # HACK: Firefox on Linux starts with an error if
+                #       the current working directory is not writable,
+                #       so make sure the current working directory is
+                #       writable before potentially starting Firefox
+                open_browser_context = self._cwd_set_to_writable_dir()  # type: ContextManager
+            else:
+                open_browser_context = nullcontext()
+            with open_browser_context:
+                # NOTE: Can block for as long as 3 seconds on Linux
+                webbrowser.open(request_url)
+        
+        # HACK: If LogDrawer is using _WindowPairingStrategy.FLOAT_AND_RAISE_ON_ACTIVATE,
+        #       make sure the log drawer is done bringing itself and MainWindow to front
+        #       before bringing a browser to the front on top of them
+        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'False':
+            wx.CallLater(10, open_browser_to_url)
         else:
-            open_browser_context = nullcontext()
-        with open_browser_context:
-            # NOTE: Can block for as long as 3 seconds on Linux
-            webbrowser.open(request_url)
+            # NOTE: During tests it's easier to spy on this call if it's NOT
+            #       deferred inside wx.CallLater
+            open_browser_to_url()
     
     @contextmanager
     def _cwd_set_to_writable_dir(self) -> Iterator[None]:
@@ -485,6 +508,21 @@ class MainWindow:
             yield
         finally:
             os.chdir(old_cwd)
+    
+    def start_server(self) -> 'ProjectServer':
+        """
+        Starts an HTTP server that serves pages from this project.
+        
+        If an HTTP server is already running, does nothing.
+        """
+        if self._project_server is None:
+            self._log_drawer = LogDrawer(parent=self._frame)
+            
+            # TODO: If the server couldn't be started (ex: due to the default port being in
+            #       use), report an appropriate error.
+            self._project_server = ProjectServer(self.project, stdout=self._log_drawer.writer)
+        
+        return self._project_server
     
     def _on_selected_entity_changed(self, event):
         selected_entity = self.entity_tree.selected_entity  # cache

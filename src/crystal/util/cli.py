@@ -1,3 +1,7 @@
+from io import TextIOBase
+from typing import Optional
+
+
 # ------------------------------------------------------------------------------
 # Terminal Colors
 
@@ -18,23 +22,23 @@ _TERM_FG_BOLD_YELLOW =   '\033[1;33m'
 _TERM_RESET =            '\033[0m'
 
 
-def print_success(message: str) -> None:
-    print(_colorize(_TERM_FG_GREEN, message))
+def print_success(message: str, file: Optional[TextIOBase]=None) -> None:
+    print(_colorize(_TERM_FG_GREEN, message), file=file)
 
 
-def print_error(message: str) -> None:
-    print(_colorize(_TERM_FG_RED, message))
+def print_error(message: str, file: Optional[TextIOBase]=None) -> None:
+    print(_colorize(_TERM_FG_RED, message), file=file)
 
 
-def print_warning(message: str) -> None:
-    print(_colorize(_TERM_FG_YELLOW, message))
+def print_warning(message: str, file: Optional[TextIOBase]=None) -> None:
+    print(_colorize(_TERM_FG_YELLOW, message), file=file)
 
 
-def print_info(message: str) -> None:
-    print(_colorize(_TERM_FG_CYAN, message))
+def print_info(message: str, file: Optional[TextIOBase]=None) -> None:
+    print(_colorize(_TERM_FG_CYAN, message), file=file)
 
 
-def _colorize(color_code, str_value):
+def _colorize(color_code: str, str_value: str) -> str:
     return (color_code + str_value + _TERM_RESET) if _USE_COLORS else str_value
 
 

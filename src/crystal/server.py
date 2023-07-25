@@ -19,7 +19,7 @@ import datetime
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from io import StringIO
+from io import StringIO, TextIOBase
 import os
 import re
 import shutil
@@ -38,22 +38,29 @@ class ProjectServer:
     """
     Runs the archive server on a daemon thread.
     """
-    def __init__(self, project: Project, port: Optional[int]=None, verbosity: Verbosity='normal') -> None:
+    def __init__(self,
+            project: Project,
+            port: Optional[int]=None,
+            *, verbosity: Verbosity='normal',
+            stdout: Optional[TextIOBase]=None,
+            ) -> None:
         if port is None:
             port = _DEFAULT_SERVER_PORT
         
         self._project = project
         self._port = port
         self._verbosity = verbosity
+        self._stdout = stdout
         
         address = ('', port)
         self._server = _HttpServer(address, _RequestHandler)
         self._server.project = project
         self._server.verbosity = verbosity
+        self._server.stdout = stdout
         def bg_task() -> None:
             try:
                 if verbosity == 'normal':
-                    print_success('Server started on port %s.' % port)
+                    print_success('Server started on port %s.' % port, file=self._stdout)
                 self._server.serve_forever()
             finally:
                 self._server.server_close()
@@ -241,6 +248,7 @@ _ENABLE_PIN_DATE_MITIGATION = True
 class _HttpServer(HTTPServer):
     project: Project
     verbosity: Verbosity
+    stdout: Optional[TextIOBase]
 
 
 class _RequestHandler(BaseHTTPRequestHandler):
@@ -370,7 +378,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     ))
                     
                     # Try download resource immediately
-                    resource = fg_call_and_wait(lambda: Resource(self.project, archive_url))
+                    def download_resource() -> Resource:
+                        assert archive_url is not None
+                        return Resource(self.project, archive_url)
+                    resource = fg_call_and_wait(download_resource)
                     self._try_download_revision_dynamically(resource, needs_result=False)
                     # (continue to serve downloaded resource revision)
                 else:
@@ -380,9 +391,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
             if resource.definitely_has_no_revisions:
                 revision = None  # type: Optional[ResourceRevision]
             else:
-                revision = fg_call_and_wait(lambda: resource.default_revision(
-                    stale_ok=True if self.project.readonly else False
-                ))
+                def get_default_revision() -> Optional[ResourceRevision]:
+                    assert resource is not None
+                    return resource.default_revision(
+                        stale_ok=True if self.project.readonly else False
+                    )
+                revision = fg_call_and_wait(get_default_revision)
             if revision is None:
                 if not readonly and dynamic_ok:
                     # If the existing resource is also a root resource,
@@ -838,21 +852,25 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def _print_info(self, message: str) -> None:
         if self._verbosity == 'indent':
             message = '    ' + message  # reinterpret
-        print_info(message)
+        print_info(message, file=self._stdout)
     
     def _print_warning(self, message: str) -> None:
         if self._verbosity == 'indent':
             message = '    ' + message  # reinterpret
-        print_warning(message)
+        print_warning(message, file=self._stdout)
     
     def _print_error(self, message: str) -> None:
         if self._verbosity == 'indent':
             message = '    ' + message  # reinterpret
-        print_error(message)
+        print_error(message, file=self._stdout)
     
     @property
     def _verbosity(self) -> Verbosity:
         return self.server.verbosity
+    
+    @property
+    def _stdout(self) -> Optional[TextIOBase]:
+        return self.server.stdout
 
 
 _PIN_DATE_JS_TEMPLATE = dedent(

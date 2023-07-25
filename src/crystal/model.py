@@ -287,9 +287,6 @@ class Project:
         self.root_task = crystal.task.RootTask()
         crystal.task.start_schedule_forever(self.root_task)
         
-        # Hold on to the server connection
-        self._server = None  # type: Optional[ProjectServer]
-        
         # Define initial configuration
         self._request_cookie = None  # type: Optional[str]
         
@@ -661,30 +658,9 @@ class Project:
             if hasattr(lis, 'resource_group_did_instantiate'):
                 lis.resource_group_did_instantiate(group)  # type: ignore[attr-defined]
     
-    # === Server ===
-    
-    def start_server(self, **server_kwargs) -> 'ProjectServer':
-        """
-        Starts an HTTP server that serves pages from this project.
-        
-        If an HTTP server is already running, does nothing.
-        """
-        if self._server is None:
-            import crystal.server
-            self._server = crystal.server.ProjectServer(self, **server_kwargs)
-        return self._server
-    
-    @property
-    def server_running(self) -> bool:
-        return self._server is not None
-    
     # === Close ===
     
     def close(self) -> None:
-        if self._server is not None:
-            self._server.close()
-            self._server = None
-        
         self.root_task.close()
         
         # Disable Write Ahead Log (WAL) mode when closing database

@@ -44,8 +44,8 @@ Tutorial ⭐
 
 ### To download a static website (ex: [xkcd]):
 
-* Download the binary for your operating system. See the Download section above.
-* Open the program and create a new project, call it "xkcd".
+* Download Crystal for your operating system. See the Download section above.
+* Open Crystal and create a new project, call it "xkcd".
 * Click the "+ URL" button to add the "https://xkcd.com/1/" URL, named "First Comic".
 * Expand the new "First Comic" node to download the page and display its links.
 * Click the "+ Group" button to add a new group called "Comics" with the pattern
@@ -63,17 +63,13 @@ Tutorial ⭐
 
 ### To download a dynamic website (ex: [The Pragmatic Engineer]):
 
-* Start Crystal from the [command-line], so that we will have access to the
-  server log in the Terminal (macOS) or the Command Prompt (Windows) in later steps.
-    * In a future version of Crystal it will be possible to 
-      [access the server log from the regular UI], 
-      without needing to run Crystal from the command-line.
+* Open Crystal and create a new project.
 * Press the "+ URL" button and add: `https://newsletter.pragmaticengineer.com/` -- Home
 * Select the added "Home" and press the "Download" button. Wait for it to finish downloading.
 * With "Home" still selected, press the "View" button.
   A web browser should open and display the downloaded home page.
 * While browsing a downloaded site from a web browser,
-  Crystal's server will log information to the terminal about requests it 
+  Crystal's server will log information about requests it
   receives from the web browser. For example:
     * `"GET /_/https/newsletter.pragmaticengineer.com/ HTTP/1.1" 200 -`
         * This line says the web browser did try to fetch the
@@ -373,6 +369,7 @@ Release Notes ⋮
     * Skip parsing links in downloaded files known to be binary files.
 
 * Serving improvements
+    * Server logs are now displayed in a UI drawer.
     * Links to anchors on the same page are no longer rewritten,
       for better compatibility with JavaScript libraries that
       treat such links specially.
