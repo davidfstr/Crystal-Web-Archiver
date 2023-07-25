@@ -60,25 +60,6 @@ class ProgressBarCalculator:
             if rate > self._MINIMUM_RATE_TO_REPORT
             else '?'
         )
-        if self._VERBOSE:
-            def format_floatlike(value: object) -> str:
-                return (
-                    f'{value:.2f}'
-                    if isinstance(value, (float, int))
-                    else f'{value}'
-                )
-            rate_str = (
-                f'{rate:.2f}'
-                if isinstance(rate, (float, int))
-                else f'{rate}'
-            )
-            remaining_str += (
-                f' (rate={format_floatlike(rate)}, '
-                f'{self._DELTA}n={format_floatlike(self._rc_n._tqdm._ema_dn())}/'
-                f'{format_floatlike(self._rc_n._tqdm._ema_dt())}, '
-                f'{self._DELTA}total={format_floatlike(self._rc_total._tqdm._ema_dn())}/'
-                f'{format_floatlike(self._rc_total._tqdm._ema_dt())})'
-            )
         
         time_per_item_done = 1 / growth_rate_of_n if growth_rate_of_n else None
         time_per_item_add = 1 / growth_rate_of_total if growth_rate_of_total else None
@@ -92,6 +73,26 @@ class ProgressBarCalculator:
             time_per_item_str += ', ' + (
                 f'{time_per_item_add:.2f}s'
             ) + '/growth'
+        
+        if self._VERBOSE:
+            def format_floatlike(value: object) -> str:
+                return (
+                    f'{value:.2f}'
+                    if isinstance(value, (float, int))
+                    else f'{value}'
+                )
+            rate_str = (
+                f'{rate:.2f}'
+                if isinstance(rate, (float, int))
+                else f'{rate}'
+            )
+            time_per_item_str += (
+                f', rate={format_floatlike(rate)}, '
+                f'{self._DELTA}n={format_floatlike(self._rc_n._tqdm._ema_dn())}/'
+                f'{format_floatlike(self._rc_n._tqdm._ema_dt())}, '
+                f'{self._DELTA}total={format_floatlike(self._rc_total._tqdm._ema_dn())}/'
+                f'{format_floatlike(self._rc_total._tqdm._ema_dt())}'
+            )
         
         return (remaining_str, time_per_item_str)
     
