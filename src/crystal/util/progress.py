@@ -11,7 +11,10 @@ class ProgressBarCalculator:
     """
     _VERBOSE = False
     
-    _MINIMUM_RATE_TO_REPORT = 0.15
+    # Calibration notes:
+    # - 0.10 seems too low
+    # - 0.15 seems too high
+    _MINIMUM_RATE_TO_REPORT = 0.13
     
     _MAXIMUM_DELAY_BETWEEN_GROWTH_UPDATES = 10.0  # seconds
     
