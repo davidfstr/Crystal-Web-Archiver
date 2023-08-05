@@ -87,6 +87,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: poetry
+      
+      - name: Update APT packages
+        run: sudo apt-get update
 
       # HACK: Suppress warning "Error retrieving accessibility bus
       #       address: org.freedesktop.DBus.Error.ServiceUnknown:
