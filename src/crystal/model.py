@@ -320,12 +320,26 @@ class Project:
         # Add resource_revision__error_not_null index if missing
         if 'resource_revision__error_not_null' not in index_names:
             progress_listener.upgrading_project('Indexing revisions with errors...')
-            c.execute('create index resource_revision__error_not_null on resource_revision (id, resource_id) where error != "null"')
+            c.execute(
+                'create index resource_revision__error_not_null on resource_revision '
+                '(id, resource_id) '
+                'where error != "null"')
         
         # Add resource_revision__request_cookie_not_null index if missing
         if 'resource_revision__request_cookie_not_null' not in index_names:
             progress_listener.upgrading_project('Indexing revisions with cookies...')
-            c.execute('create index resource_revision__request_cookie_not_null on resource_revision (id, request_cookie) where request_cookie is not null')
+            c.execute(
+                'create index resource_revision__request_cookie_not_null on resource_revision '
+                '(id, request_cookie) '
+                'where request_cookie is not null')
+        
+        # Add resource_revision__status_code index if missing
+        if 'resource_revision__status_code' not in index_names:
+            progress_listener.upgrading_project('Indexing revisions by status code...')
+            c.execute(
+                'create index resource_revision__status_code on resource_revision '
+                '(json_extract(metadata, "$.status_code"), resource_id) '
+                'where json_extract(metadata, "$.status_code") != 200')
         
         # Add temporary directory if missing
         tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
