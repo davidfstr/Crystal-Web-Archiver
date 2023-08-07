@@ -60,6 +60,8 @@ def has_foreground_thread() -> bool:
 # Call on Foreground Thread
 
 
+# TODO: Alter signature to pass `args` as a direct kwarg,
+#       since it is difficult to use as a splat when there are other positional args
 # TODO: Consider renaming this to 'fg_call_soon' and have the
 #       (force == True) variant still be called 'fg_call_later'.
 #       This new naming stresses that the "soon" variant could
@@ -110,6 +112,8 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
 
 _R = TypeVar('_R')
 
+# TODO: Alter signature to pass `args` as a direct kwarg,
+#       since it is difficult to use as a splat when there are other positional args
 def fg_call_and_wait(callable: Callable[..., _R], no_profile: bool=False, *args) -> _R:
     """
     Calls the argument on the foreground thread and waits for it to complete.
@@ -169,6 +173,8 @@ class NoForegroundThreadError(ValueError):
 # ------------------------------------------------------------------------------
 # Call on Background Thread
 
+# TODO: Alter signature to pass `args` as a direct kwarg,
+#       since it is difficult to use as a splat when there are other positional args
 def bg_call_later(callable: Callable[..., None], daemon: bool=False, *args) -> None:
     """
     Calls the argument on a new background thread.
