@@ -1246,7 +1246,7 @@ class Resource:
         any_rows = False
         for (request_cookie, error, metadata, id) in rows:
             any_rows = True
-            yield ResourceRevision.load(
+            yield ResourceRevision._load_from_data(
                 resource=self,
                 request_cookie=request_cookie,
                 error=RR._decode_error(error),
@@ -1466,9 +1466,7 @@ class ResourceRevision:
             request_cookie: Optional[str]=None
             ) -> ResourceRevision:
         """
-        Creates a revision that encapsulates the error encountered when fetching the revision.
-        
-        Threadsafe.
+        Creates a new revision that encapsulates the error encountered when fetching the revision.
         """
         return ResourceRevision._create_from_stream(
             resource,
@@ -1483,9 +1481,9 @@ class ResourceRevision:
             request_cookie: Optional[str]=None
             ) -> ResourceRevision:
         """
-        Creates a revision with the specified metadata and body.
+        Creates a new revision with the specified metadata and body.
         
-        Threadsafe. The passed body stream will be read synchronously until EOF,
+        The passed body stream will be read synchronously until EOF,
         so it is recommended that this method be invoked on a background thread.
         
         Arguments:
@@ -1527,6 +1525,13 @@ class ResourceRevision:
             metadata: Optional[ResourceRevisionMetadata]=None,
             body_stream: Optional[io.BytesIO]=None
             ) -> ResourceRevision:
+        """
+        Creates a new revision.
+        
+        See also:
+        * ResourceRevision.create_from_error()
+        * ResourceRevision.create_from_response()
+        """
         self = ResourceRevision()
         self.resource = resource
         self.request_cookie = request_cookie
@@ -1635,6 +1640,10 @@ class ResourceRevision:
             revision: ResourceRevision,
             metadata: ResourceRevisionMetadata
             ) -> ResourceRevision:
+        """
+        Creates an unsaved modified version of an existing revision
+        with the specified new metadata.
+        """
         self = ResourceRevision()
         self.resource = revision.resource
         self.request_cookie = revision.request_cookie
@@ -1645,12 +1654,16 @@ class ResourceRevision:
         return self
     
     @staticmethod
-    def load(
+    def _load_from_data(
             resource: Resource,
             request_cookie: Optional[str],
             error: Optional[Exception],
             metadata: Optional[ResourceRevisionMetadata],
             id: int) -> ResourceRevision:
+        """
+        Loads an existing revision with data that has already been fetched
+        from the project database.
+        """
         self = ResourceRevision()
         self.resource = resource
         self.request_cookie = request_cookie
@@ -1659,6 +1672,40 @@ class ResourceRevision:
         self._id = id
         self.has_body = (self.error is None)
         return self
+    
+    # TODO: Optimize implementation to avoid unnecessarily loading all
+    #       sibling revisions of the requested revision.
+    @staticmethod
+    def load(project: Project, id: int) -> Optional[ResourceRevision]:
+        """
+        Loads the existing revision with the specified ID,
+        or returns None if no such revision exists.
+        """
+        # Fetch the revision's resource URL
+        c = project._db.cursor()
+        rows = list(c.execute(
+            f'select '
+                f'resource_id, resource.url as resource_url from resource_revision '
+                f'left join resource on resource_revision.resource_id = resource.id '
+                f'where resource_revision.id=?',
+            (id,)
+        ))
+        if len(rows) == 0:
+            return None
+        [(resource_id, resource_url)] = rows
+        
+        # Get the resource by URL from memory
+        r = project.get_resource(resource_url)
+        assert r is not None
+        
+        # Load all of the resource's revisions
+        rrs = r.revisions()
+        
+        # Find the specific revision that was requested
+        for rr in rrs:
+            if rr._id == id:
+                return rr
+        raise AssertionError()
     
     @classmethod
     def _encode_error(cls, error):
@@ -2067,8 +2114,11 @@ class ResourceRevision:
             raise ProjectReadOnlyError()
         
         body_filepath = self._body_filepath  # cache
-        if os.path.exists(body_filepath):
+        try:
             os.remove(body_filepath)
+        except FileNotFoundError:
+            # OK. The revision may have already been partially deleted outside of Crystal.
+            pass
         
         c = project._db.cursor()
         c.execute('delete from resource_revision where id=?', (self._id,))

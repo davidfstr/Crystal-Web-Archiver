@@ -404,6 +404,10 @@ Release Notes ⋮
         * If the old behavior is desired, wrap calls to `Resource.revisions()`
           inside of a `list(...)` expression.
     * `MainWindow.frame` is no longer public.
+    * `ResourceRevision.load()` has been renamed to 
+      `ResourceRevision._load_from_data()` and privatized.
+        * A replacement `ResourceRevision.load()` method now exists that loads
+          an existing revision given an ID.
 
 [guppy]: https://pypi.org/project/guppy3/
 [memory leak profiling]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Testing-for-Memory-Leaks
