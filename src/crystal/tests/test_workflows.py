@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-from crystal.model import Project
+from crystal.model import Project, Resource
 from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
 from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
     click_button, set_checkbox_value, TreeItem
 )
-from crystal.tests.util.runner import bg_fetch_url
+from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url,
     is_url_not_in_archive, served_project,
 )
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
+    DEFAULT_WAIT_PERIOD,
     DEFAULT_WAIT_TIMEOUT,
     first_child_of_tree_item_is_not_loading_condition,
     tree_has_no_children_condition,
@@ -870,6 +871,9 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
     
     with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
             # Start xkcd v1
             with served_project('testdata_xkcd.crystalproj.zip') as sp1:
                 # Define URLs
@@ -929,17 +933,21 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 
                 # Download: Home, Comic #1
                 if True:
-                    home_ti.SelectItem()
-                    await mw.click_download_button(
-                        immediate_finish_ok=True)
-                    await wait_for_download_to_start_and_finish(mw.task_tree,
-                        immediate_finish_ok=True)
+                    # NOTE: Use direct download rather than
+                    #       click_download_button(..., immediate_finish_ok=True)
+                    #       because the latter takes multiple seconds to run
+                    revision_future = Resource(project, home_url).download(
+                        wait_for_embedded=True, needs_result=False)
+                    while not revision_future.done():
+                        await bg_sleep(DEFAULT_WAIT_PERIOD)
                     
-                    comic1_ti.SelectItem()
-                    await mw.click_download_button(
-                        immediate_finish_ok=True)
-                    await wait_for_download_to_start_and_finish(mw.task_tree,
-                        immediate_finish_ok=True)
+                    # NOTE: Use direct download rather than
+                    #       click_download_button(..., immediate_finish_ok=True)
+                    #       because the latter takes multiple seconds to run
+                    revision_future = Resource(project, comic1_url).download(
+                        wait_for_embedded=True, needs_result=False)
+                    while not revision_future.done():
+                        await bg_sleep(DEFAULT_WAIT_PERIOD)
                 
                 # Verify etag is still v1 for both
                 assert home_v1_etag == (await fetch_archive_url(home_url)).etag
