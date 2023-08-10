@@ -4,7 +4,7 @@ import atexit
 from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util.caffeination import Caffeination
-from crystal.util.profile import warn_if_slow
+from crystal.util.profile import ignore_runtime_from_enclosing_warn_if_slow, warn_if_slow
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
@@ -381,7 +381,9 @@ class Task:
                 return None
             elif self.scheduling_style == SCHEDULING_STYLE_ROUND_ROBIN:
                 if self._next_child_index == 0:
-                    schedule_check_result = self._notify_did_schedule_all_children()
+                    # NOTE: Ignore known-slow operation that has no further obvious optimizations
+                    with ignore_runtime_from_enclosing_warn_if_slow():
+                        schedule_check_result = self._notify_did_schedule_all_children()
                     if not isinstance(schedule_check_result, bool):
                         return schedule_check_result
                 cur_child_index = self._next_child_index
@@ -395,7 +397,9 @@ class Task:
                         # Wrapped around and back to where we started without finding anything to do
                         return None
                     if cur_child_index == 0:
-                        schedule_check_result = self._notify_did_schedule_all_children()
+                        # NOTE: Ignore known-slow operation that has no further obvious optimizations
+                        with ignore_runtime_from_enclosing_warn_if_slow():
+                            schedule_check_result = self._notify_did_schedule_all_children()
                         if not isinstance(schedule_check_result, bool):
                             return schedule_check_result
                         elif schedule_check_result == True:

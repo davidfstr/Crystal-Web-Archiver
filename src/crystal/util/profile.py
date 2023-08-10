@@ -3,10 +3,10 @@ import inspect
 import sys
 import threading
 import time
-from typing import Callable, Iterator, Union
+from typing import Callable, Iterator, Optional, Union
 
 
-_warn_if_slow_call_stack = threading.local()
+_excluded_delta_time_stack = threading.local()
 
 @contextmanager
 def warn_if_slow(
@@ -21,9 +21,9 @@ def warn_if_slow(
     if not (max_duration > 0):
         raise ValueError()
     
-    if not hasattr(_warn_if_slow_call_stack, 'value'):
-        _warn_if_slow_call_stack.value = []
-    _warn_if_slow_call_stack.value.append(max_duration)
+    if not hasattr(_excluded_delta_time_stack, 'value'):
+        _excluded_delta_time_stack.value = []
+    _excluded_delta_time_stack.value.append(0)
     
     start_time = time.time()  # capture
     try:
@@ -31,21 +31,48 @@ def warn_if_slow(
     finally:
         end_time = time.time()  # capture
         
-        warn_enabled = _warn_if_slow_call_stack.value.pop() > 0
+        excluded_delta_time = _excluded_delta_time_stack.value.pop()
         
         delta_time = end_time - start_time  # cache
-        if delta_time > max_duration and warn_enabled:
+        if (delta_time - excluded_delta_time) > max_duration:
             message_str = message() if callable(message) else message
             assert isinstance(message_str, str)
-            print("*** %s took %.02fs to execute: %s" % (
+            excluded_part = (
+                ' (%.02fs excluded)' % (excluded_delta_time,)
+                if excluded_delta_time > 0
+                else ''
+            )
+            print("*** %s took %.02fs%s to execute: %s" % (
                 title,
                 delta_time,
+                excluded_part,
                 message_str,
             ), file=sys.stderr)
             
-            # Suppress warnings on any enclosing calls of warn_if_slow()
-            for (i, _) in enumerate(_warn_if_slow_call_stack.value):
-                _warn_if_slow_call_stack.value[i] -= max_duration
+            # Exclude delta_time from any enclosing calls of warn_if_slow()
+            for (i, _) in enumerate(_excluded_delta_time_stack.value):
+                _excluded_delta_time_stack.value[i] += delta_time
+
+
+@contextmanager
+def ignore_runtime_from_enclosing_warn_if_slow() -> Iterator[None]:
+    """
+    Context that excluded its runtime from that of any enclosing
+    warn_if_slow() context.
+    """
+    if not hasattr(_excluded_delta_time_stack, 'value'):
+        _excluded_delta_time_stack.value = []
+    
+    start_time = time.time()  # capture
+    try:
+        yield
+    finally:
+        end_time = time.time()  # capture
+        delta_time = end_time - start_time  # cache
+        
+        # Exclude delta_time from any enclosing calls of warn_if_slow()
+        for (i, _) in enumerate(_excluded_delta_time_stack.value):
+            _excluded_delta_time_stack.value[i] += delta_time
 
 
 def create_profiled_callable(title: str, max_duration: float, callable: Callable, *args) -> Callable:
