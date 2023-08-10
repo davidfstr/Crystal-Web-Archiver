@@ -14,6 +14,7 @@ from crystal.util.xthreading import (
     NoForegroundThreadError
 )
 import os
+from overrides import overrides
 import shutil
 import sys
 from time import sleep
@@ -289,35 +290,25 @@ class Task:
         Clears all of this task's children if they are all complete.
         Returns whether the children were cleared.
         """
-        # NOTE: Use a foreground task here as a poor man's lock to
-        #       prevent self._children from being concurrently
-        #       modified by the foreground thread.
-        #       
-        #       In particular the RootTask calls this method at the
-        #       same time that other automated test code is running which
-        #       may add a new top-level task concurrently.
-        def fg_task() -> bool:
-            all_children_complete = all(c.complete for c in self.children)
-            if all_children_complete:
-                for child in self._children:
-                    child._parent = None
-                    if Task._USE_EXTRA_LISTENER_ASSERTIONS:
-                        assert self not in child.listeners
-                self._children = []
-                
-                self._first_incomplete_child_index = 0
-                self._next_child_index = 0
-                
-                # NOTE: Call these listeners also inside the lock
-                #       because they are likely to be updating
-                #       data structures that need to be strongly
-                #       synchronized with the modified child list.
-                for lis in self.listeners:
-                    if hasattr(lis, 'task_did_clear_children'):
-                        lis.task_did_clear_children(self)  # type: ignore[attr-defined]
-            return all_children_complete
-        did_clear = fg_call_and_wait(fg_task)
-        return did_clear
+        all_children_complete = all(c.complete for c in self.children)
+        if all_children_complete:
+            for child in self._children:
+                child._parent = None
+                if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+                    assert self not in child.listeners
+            self._children = []
+            
+            self._first_incomplete_child_index = 0
+            self._next_child_index = 0
+            
+            # NOTE: Call these listeners also inside the lock
+            #       because they are likely to be updating
+            #       data structures that need to be strongly
+            #       synchronized with the modified child list.
+            for lis in self.listeners:
+                if hasattr(lis, 'task_did_clear_children'):
+                    lis.task_did_clear_children(self)  # type: ignore[attr-defined]
+        return all_children_complete
     
     def clear_completed_children(self) -> None:
         """
@@ -1285,12 +1276,18 @@ class RootTask(Task):
     
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
-        
-        self.clear_children_if_all_complete()
     
     def did_schedule_all_children(self) -> None:
         # Remove completed children after each scheduling pass
         self.clear_completed_children()
+    
+    @overrides
+    def clear_children_if_all_complete(self) -> bool:
+        raise NotImplementedError(
+            'RootTask does not support clear_children_if_all_complete '
+            'because the current implementation of that method in Task '
+            'is not prepared to deal with concurrent modification of '
+            'RootTask.children.')
     
     def close(self) -> None:
         """Stop all descendent tasks, asynchronously."""
