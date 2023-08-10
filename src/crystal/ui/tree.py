@@ -309,7 +309,14 @@ class NodeView:
                 pass
     
     def append_child(self, child: NodeView) -> None:
-        self.children = self.children + [child]
+        # NOTE: The following is equivalent to:
+        #           self.children = self.children + [child]
+        self._children.append(child)
+        if self.peer:
+            try:
+                child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
+            except WindowDeletedError:
+                pass
     
     @property
     def _tree(self) -> TreeView:

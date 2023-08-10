@@ -325,6 +325,8 @@ Release Notes ⋮
     * If free disk space drops too low then refuse to download further resources
     * Quit immediately even when a project with many resources was open recently
     * Open preferences dialog significantly faster for projects containing many URLs
+    * Significantly speedup creation of tasks that have many children,
+      such as tasks that download groups with very many members
 
 * Critical fixes
     * Linux: Fix dialog that appears on app launch to be sized correctly.
