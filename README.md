@@ -282,7 +282,7 @@ Release Notes ⋮
     * Task Tree: Remove top-level tasks that complete as they complete,
       rather than waiting for all other outstanding tasks to complete first
 
-* Large project improvements (with 3,000,000+ URLs)
+* Large project improvements (with 3,000,000 - 11,000,000 URLs)
     * Open projects containing many URLs in about 50% as much time as before:
         * Approximate the URL count when loading a project in O(1) time
           rather than getting an exact URL count in O(r) time,
