@@ -377,6 +377,8 @@ Release Notes ⋮
       treat such links specially.
     * Archived pages are read from disk about 45% faster by avoiding an
       unnecessary `os.stat` call.
+    * Archived pages are served faster and more efficiently by using
+      the [os.sendfile] primitive when supported by the operating system.
 
 * CLI improvements
     * Profiling warnings:
@@ -415,6 +417,7 @@ Release Notes ⋮
 
 [guppy]: https://pypi.org/project/guppy3/
 [memory leak profiling]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Testing-for-Memory-Leaks
+[os.sendfile]: https://docs.python.org/3/library/os.html#os.sendfile
 
 ### v1.5.0b (April 2, 2023)
 

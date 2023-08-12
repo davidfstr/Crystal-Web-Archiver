@@ -737,8 +737,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         if doc is None:
             # Not a document. Cannot rewrite content.
             with revision.open() as body:
+                sock = self.connection
                 try:
-                    shutil.copyfileobj(body, self.wfile)
+                    # NOTE: It would be more straightforward to use
+                    #           shutil.copyfileobj(body, self.wfile)
+                    #       but copyfileobj() does not use os.sendfile()
+                    #       internally (which is the fastest file copy primitive):
+                    #           https://github.com/python/cpython/issues/69249
+                    sock.sendfile(body)
                 except BrokenPipeError:
                     # Browser did disconnect early
                     return
