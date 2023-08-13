@@ -195,19 +195,28 @@ class HttpResourceRequest(ResourceRequest):
             'reason_phrase': response.reason,
             'headers': response.getheaders()
         })
-        # TODO: Defining a class inline like this is probably expensive,
-        #       especially in memory usage. Please define class externally
-        #       and just instantiate here.
-        class HttpResourceBodyStream:
-            close = conn.close
-            read = response.read
-            readinto = response.readinto
-            fileno = response.fileno
-            mode = 'rb'
-        return (metadata, cast(io.BytesIO, HttpResourceBodyStream()))
+        body_stream = _HttpResourceBodyStream(
+            close=conn.close,
+            read=response.read,
+            readinto=response.readinto,
+            fileno=response.fileno,
+            mode='rb')
+        return (metadata, cast(io.BytesIO, body_stream))
     
     def __repr__(self):
         return 'HttpResourceRequest(%s)' % repr(self.url)
+
+
+class _HttpResourceBodyStream:
+    """
+    File-like object for reading from an HTTP resource.
+    """
+    def __init__(self, close, read, readinto, fileno, mode) -> None:
+        self.close = close
+        self.read = read
+        self.readinto = readinto
+        self.fileno = fileno
+        self.mode = mode
 
 
 class UrlResourceRequest(ResourceRequest):
