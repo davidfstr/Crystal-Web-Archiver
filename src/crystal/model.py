@@ -1604,6 +1604,7 @@ class ResourceRevision:
             # Download the resource's body, if available
             if body_stream:
                 with NamedTemporaryFile(
+                        mode='wb',
                         suffix='.body',
                         dir=os.path.join(project.path, Project._TEMPORARY_DIRNAME),
                         delete=False) as body_file:
