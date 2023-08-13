@@ -178,8 +178,11 @@ async def _downloads_mocked_to_raise_io_error() -> AsyncIterator:
             str(e) == 'Connection reset'
         )
     
-    def mock_read_results() -> Iterable[bytes]:
-        yield b'<html>'
+    def mock_read() -> Iterable[bytes]:
+         yield b'<html>'
+         raise_connection_reset()
+    def mock_readinto() -> Iterable[int]:
+        yield len(b'<html>')
         raise_connection_reset()
     
     mock_response = Mock(spec=HTTPResponse)
@@ -189,7 +192,8 @@ async def _downloads_mocked_to_raise_io_error() -> AsyncIterator:
     mock_response.getheaders = Mock(return_value=[
         ('Content-Type', 'text/html; charset=utf-8')
     ])
-    mock_response.read = Mock(side_effect=mock_read_results())
+    mock_response.read = Mock(side_effect=mock_read())
+    mock_response.readinto = Mock(side_effect=mock_readinto())
     mock_response.fileno = Mock(side_effect=OSError)  # no file descriptor
     
     mock_connection = Mock(spec_set=HTTPConnection)

@@ -30,6 +30,7 @@ from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
+from crystal.util import xshutil
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 import cgi
 import datetime
@@ -1606,7 +1607,7 @@ class ResourceRevision:
                         suffix='.body',
                         dir=os.path.join(project.path, Project._TEMPORARY_DIRNAME),
                         delete=False) as body_file:
-                    shutil.copyfileobj(body_stream, body_file)
+                    xshutil.copyfileobj_readinto(body_stream, body_file)
                 body_file_downloaded_ok = True
             else:
                 body_file = None

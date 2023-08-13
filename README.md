@@ -363,6 +363,8 @@ Release Notes ⋮
           known that there are no revisions because of other information
           cached in memory
         * Precompile node selectors used to parse links from HTML
+        * Use an optimized version of [shutil.copyfileobj] that avoids
+          repeatedly allocating intermediate buffers
         * Maximum download speed increased from 1 item/sec to 2 items/sec
 
 * Parsing improvements
@@ -418,6 +420,7 @@ Release Notes ⋮
 [guppy]: https://pypi.org/project/guppy3/
 [memory leak profiling]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Testing-for-Memory-Leaks
 [os.sendfile]: https://docs.python.org/3/library/os.html#os.sendfile
+[shutil.copyfileobj]: https://docs.python.org/3/library/shutil.html#shutil.copyfileobj
 
 ### v1.5.0b (April 2, 2023)
 

@@ -201,6 +201,7 @@ class HttpResourceRequest(ResourceRequest):
         class HttpResourceBodyStream:
             close = conn.close
             read = response.read
+            readinto = response.readinto
             fileno = response.fileno
             mode = 'rb'
         return (metadata, cast(io.BytesIO, HttpResourceBodyStream()))
