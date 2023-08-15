@@ -15,6 +15,18 @@ def warn_if_slow(
         message: Union[Callable[[], str], str],
         *, enabled: bool=True
         ) -> Iterator[None]:
+    """
+    Context that profiles the runtime of its enclosed code and
+    upon exit prints a warning if the runtime exceeds the specified `max_duration`.
+    
+    If a warn_if_slow() context is nested within another warn_if_slow() context,
+    the runtime of the inner context will be excluded from the runtime of the
+    outer context.
+    
+    If a ignore_runtime_from_enclosing_warn_if_slow() context is nested within
+    a warn_if_slow() context, the runtime of the inner context will be excluded
+    from the runtime of the outer context.
+    """
     if not enabled:
         yield
         return
