@@ -111,12 +111,24 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
         with subtests.test(msg='and {project, window} can be used with help()'):
             assertIn('Help on Project in module crystal.model object:', _py_eval(crystal, 'help(project)'))
             assertIn('Help on MainWindow in module crystal.browser object:', _py_eval(crystal, 'help(window)'))
-            
-        with subtests.test(msg='and {project, window} have expected public API'):
-            # Ensure public members match expected set
+
+
+# NOTE: This test code was split out of the test_can_launch_with_shell() test above
+#       because it is particularly easy to break and having a separate test function
+#       makes the break type quicker to identify.
+@skip_on_windows
+@with_subtests
+def test_builtin_globals_have_stable_public_api(subtests: SubtestsContext) -> None:
+    with crystal_shell() as (crystal, banner):
+        # Open MainWindow by creating new empty project
+        _create_new_empty_project(crystal)
+        
+        with subtests.test(global_name='project'):
             assertEqual(_EXPECTED_PROJECT_PUBLIC_MEMBERS,
                 literal_eval(_py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]")),
                 'Public API of Project class has changed')
+        
+        with subtests.test(global_name='window'):
             assertEqual(_EXPECTED_WINDOW_PUBLIC_MEMBERS,
                 literal_eval(_py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]")),
                 'Public API of MainWindow class has changed')
