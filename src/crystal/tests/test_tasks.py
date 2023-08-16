@@ -23,9 +23,11 @@ from unittest import skip
 from unittest.mock import patch, Mock, PropertyMock
 
 
+# ==============================================================================
+# Test: Tasks
+
 # ------------------------------------------------------------------------------
 # Test: Task
-
 
 @awith_subtests
 async def test_some_tasks_may_complete_immediately(subtests) -> None:
@@ -231,4 +233,17 @@ async def test_when_download_resource_group_members_then_displays_estimated_time
 # (TODO: Add basic tests)
 
 
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Test: Scheduler
+
+@skip('not yet automated')
+async def test_when_get_task_unit_raises_unexpected_exception_then_scheduler_restarts():
+    pass
+
+
+@skip('not yet automated')
+async def test_when_run_task_unit_raises_unexpected_exception_then_scheduler_restarts():
+    pass
+
+
+# ==============================================================================

@@ -247,7 +247,7 @@ class Task:
         if len(child.listeners) >= 50:
             if child not in Task._REPORTED_TASKS_WITH_MANY_LISTENERS:
                 Task._REPORTED_TASKS_WITH_MANY_LISTENERS.add(child)
-                print(f'*** Task has many listeners and may be leaking them: {child}')
+                print(f'*** Task has many listeners and may be leaking them: {child}', file=sys.stderr)
                 for lis in child.listeners:
                     print(f'    - {lis}')
         child.listeners.append(self)
@@ -1340,32 +1340,46 @@ def start_schedule_forever(task: Task) -> None:
         else:
             profiling_context = nullcontext(enter_result=None)
         try:
-            with profiling_context as profiler:
-                while True:
-                    def fg_task() -> Tuple[Optional[Callable[[], None]], bool]:
-                        return (task.try_get_next_task_unit(), task.complete)
-                    try:
-                        (unit, task_complete) = fg_call_and_wait(fg_task)
-                    except NoForegroundThreadError:
-                        return
+            while True:
+                try:
+                    with profiling_context as profiler:
+                        while True:
+                            def fg_task() -> Tuple[Optional[Callable[[], None]], bool]:
+                                return (task.try_get_next_task_unit(), task.complete)
+                            try:
+                                (unit, task_complete) = fg_call_and_wait(fg_task)
+                            except NoForegroundThreadError:
+                                return
+                            
+                            if unit is None:
+                                if task_complete:
+                                    return
+                                else:
+                                    sleep(_ROOT_TASK_POLL_INTERVAL)
+                                    continue
+                            try:
+                                unit()  # Run unit directly on this bg thread
+                            except NoForegroundThreadError:
+                                # Probably the app was closed. Ignore error.
+                                return
+                            except Exception as e:
+                                if is_database_closed_error(e):
+                                    # Probably the project was closed. Ignore error.
+                                    return
+                                else:
+                                    raise
+                except Exception:
+                    print(f'*** Scheduler thread crashed. Will try to restart.', file=sys.stderr)
+                    traceback.print_exc(file=sys.stderr)
                     
-                    if unit is None:
-                        if task_complete:
-                            break
-                        else:
-                            sleep(_ROOT_TASK_POLL_INTERVAL)
-                            continue
-                    try:
-                        unit()  # Run unit directly on this bg thread
-                    except NoForegroundThreadError:
-                        # Probably the app was closed. Ignore error.
-                        return
-                    except Exception as e:
-                        if is_database_closed_error(e):
-                            # Probably the project was closed. Ignore error.
-                            return
-                        else:
-                            raise
+                    # Delay so that if we get into a retry loop,
+                    # we don't completely hog the CPU
+                    sleep(1.0)
+                    
+                    # Rewind to first top-level task and restart
+                    if task.scheduling_style == SCHEDULING_STYLE_ROUND_ROBIN:
+                        task._next_child_index = 0
+                    continue
         finally:
             if _PROFILE_SCHEDULER:
                 assert profiler is not None
