@@ -83,7 +83,7 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
                 response_etag = response_etags[0] if len(response_etags) > 0 else None
                 if response_etag is None and len(known_etags) == 1:
                     (known_etag,) = known_etags
-                    metadata['headers'].append(('ETag', known_etag))
+                    metadata['headers'].append(['ETag', known_etag])
             
             # TODO: Provide incremental feedback such as '7 KB of 15 KB'
             progress_listener.subtitle = 'Receiving response...'
@@ -193,7 +193,7 @@ class HttpResourceRequest(ResourceRequest):
             'http_version': response.version,
             'status_code': response.status,
             'reason_phrase': response.reason,
-            'headers': response.getheaders()
+            'headers': [[k, v] for (k, v) in response.getheaders()]
         })
         body_stream = _HttpResourceBodyStream(
             close=conn.close,

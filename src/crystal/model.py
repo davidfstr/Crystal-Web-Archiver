@@ -1510,30 +1510,29 @@ class ResourceRevision:
         * body_stream -- file-like object containing the revision body.
         """
         try:
-            self = ResourceRevision._create_from_stream(
+            # If no HTTP Date header was returned by the origin server,
+            # auto-populate it with the current datetime, as per RFC 7231 §7.1.1.2:
+            # 
+            # > A recipient with a clock that receives a response message without a
+            # > Date header field MUST record the time it was received and append a
+            # > corresponding Date header field to the message's header section if it
+            # > is cached or forwarded downstream.
+            if metadata is not None:
+                date_str = ResourceRevision._get_first_value_of_http_header_in_metadata(
+                    'date', metadata)
+                if date_str is None:
+                    metadata['headers'].append([
+                        'Date',
+                        http_date.format(datetime.datetime.now(datetime.timezone.utc))
+                    ])
+            
+            return ResourceRevision._create_from_stream(
                 resource,
                 request_cookie=request_cookie,
                 metadata=metadata,
                 body_stream=body_stream)
         except Exception as e:
             return ResourceRevision.create_from_error(resource, e, request_cookie)
-        else:
-            # TODO: I don't think the following code actually works,
-            #       because the Date header it's trying to add won't actually
-            #       be saved to the database...
-            # 
-            # If no HTTP Date header was returned by the origin server,
-            # auto-populate it with the current datetime, as per RFC 7231
-            date_str = self._get_first_value_of_http_header('date')
-            if date_str is None:
-                if self.metadata is not None:
-                    self.metadata['headers'].append((
-                        'Date',
-                        http_date.format(datetime.datetime.now(datetime.timezone.utc))
-                    ))
-                    assert self.date is not None
-            
-            return self
     
     @staticmethod
     def _create_from_stream(
@@ -1805,10 +1804,17 @@ class ResourceRevision:
         return self.is_http and (self.metadata['status_code'] // 100) == 3
     
     def _get_first_value_of_http_header(self, name: str) -> Optional[str]:
+        return self._get_first_value_of_http_header_in_metadata(name, self.metadata)
+    
+    @staticmethod
+    def _get_first_value_of_http_header_in_metadata(
+            name: str,
+            metadata: Optional[ResourceRevisionMetadata],
+            ) -> Optional[str]:
         name = name.lower()  # reinterpret
-        if self.metadata is None:
+        if metadata is None:
             return None
-        for (cur_name, cur_value) in self.metadata['headers']:
+        for (cur_name, cur_value) in metadata['headers']:
             if name == cur_name.lower():
                 return cur_value
         return None
@@ -2119,10 +2125,10 @@ class ResourceRevision:
                 # Set header_name = header_value in new_metadata, replacing any older value
                 header_name_lower = header_name.lower()  # cache
                 new_metadata['headers'] = [
-                    (k, v)
+                    [k, v]
                     for (k, v) in new_metadata['headers']
                     if k.lower() != header_name_lower
-                ] + [(header_name, header_value)]
+                ] + [[header_name, header_value]]
         
         return ResourceRevision._create_from_revision_and_new_metadata(target_revision, new_metadata)
     
@@ -2154,7 +2160,8 @@ class ResourceRevisionMetadata(TypedDict):
     http_version: int  # 10 for HTTP/1.0, 11 for HTTP/1.1
     status_code: int
     reason_phrase: str
-    headers: list[tuple[str, str]]  # email.message.EmailMessage
+    # NOTE: Each element of headers is a 2-item (key, value) list
+    headers: list[list[str]]  # email.message.EmailMessage
 
 
 class _PersistedError(Exception):

@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from crystal.model import Project
 from crystal.server import get_request_url, ProjectServer
-import crystal.tests.test_data as test_data
+from crystal.tests import test_data
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 from crystal.util import http_date

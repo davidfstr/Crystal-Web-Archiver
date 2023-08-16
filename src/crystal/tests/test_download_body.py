@@ -1,23 +1,141 @@
 """Tests for DownloadResourceBodyTask"""
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from crystal.model import Project, Resource, ResourceRevision
+from crystal.tests import test_data
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import OpenOrCreateDialog
 from http.client import HTTPConnection, HTTPResponse
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 import sqlite3
 import tempfile
+import threading
 import time
-from typing import AsyncIterator, Iterable, NoReturn
+from typing import AsyncIterator, Iterable, Iterator, List, NoReturn
 from unittest import skip
-from unittest.mock import Mock, patch, PropertyMock
+from unittest.mock import ANY, Mock, patch, PropertyMock
 
 
 # ------------------------------------------------------------------------------
-# Tests
+# Tests: Success Cases
+
+async def test_download_does_save_resource_metadata_and_content_accurately() -> None:
+    HEADERS = [
+        ['Content-Type', 'application/zip'],
+        ['Server', 'TestServer/1.0'],
+        ['Date', 'Wed, 16 Aug 2023 00:00:00 GMT'],  # arbitrary
+    ]
+    
+    with test_data.open_binary('testdata_xkcd.crystalproj.zip') as content_file:
+        content_bytes = content_file.read()
+    assert len(content_bytes) > 1000  # ensure is a reasonably sized file
+    
+    with _file_served(HEADERS, content_bytes) as server_port:
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                r = Resource(project, f'http://localhost:{server_port}/')
+                revision_future = r.download_body()
+                while not revision_future.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                
+                downloaded_revision = revision_future.result()  # type: ResourceRevision
+                loaded_revision = r.default_revision()
+                assert loaded_revision is not None
+                
+                for revision in [downloaded_revision, loaded_revision]:
+                    # Ensure no error is reported
+                    assert None == revision.error
+                    
+                    # Ensure metadata is correct
+                    EXPECTED_METADATA = {
+                        'http_version': 10,  # HTTP/1.0
+                        'status_code': 200,
+                        'reason_phrase': 'OK',
+                        'headers': HEADERS,
+                    }
+                    assert EXPECTED_METADATA == revision.metadata
+                    
+                    # Ensure content is correct
+                    with revision.open() as saved_content:
+                        saved_content_bytes = saved_content.read()
+                    assert content_bytes == saved_content_bytes
+
+
+async def test_download_does_autopopulate_date_header_if_not_received_from_origin() -> None:
+    HEADERS = [
+        ['Content-Type', 'application/zip'],
+        ['Server', 'TestServer/1.0'],
+        # (No 'Date' header)
+    ]
+    EXPECTED_HEADERS_SAVED = [
+        ['Content-Type', 'application/zip'],
+        ['Server', 'TestServer/1.0'],
+        ['Date', ANY],
+    ]
+    
+    with test_data.open_binary('testdata_xkcd.crystalproj.zip') as content_file:
+        content_bytes = content_file.read()
+    
+    with _file_served(HEADERS, content_bytes) as server_port:
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                r = Resource(project, f'http://localhost:{server_port}/')
+                revision_future = r.download_body()
+                while not revision_future.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                
+                downloaded_revision = revision_future.result()  # type: ResourceRevision
+                loaded_revision = r.default_revision()
+                assert loaded_revision is not None
+                
+                for revision in [downloaded_revision, loaded_revision]:
+                    EXPECTED_METADATA = {
+                        'http_version': 10,  # HTTP/1.0
+                        'status_code': 200,
+                        'reason_phrase': 'OK',
+                        'headers': EXPECTED_HEADERS_SAVED,
+                    }
+                    assert EXPECTED_METADATA == revision.metadata
+                    
+                    assert None != revision.date, \
+                        'Date header has invalid value'
+
+
+@contextmanager
+def _file_served(headers: List[List[str]], content_bytes: bytes) -> Iterator[int]:
+    class RequestHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # override
+            self.send_response_only(200)
+            for (k, v) in headers:
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(content_bytes)
+    
+    # Start an HTTP server that serves a test file for any GET request
+    with HTTPServer(('', 0), RequestHandler) as server:
+        (_, server_port) = server.server_address
+        
+        server_thread = threading.Thread(
+            target=lambda: server.serve_forever(),
+            daemon=True)
+        server_thread.start()
+        try:
+            yield server_port
+        finally:
+            server.server_close()
+
+
+# ------------------------------------------------------------------------------
+# Tests: Error Cases
 
 async def test_when_no_errors_then_database_row_and_body_file_is_created() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:

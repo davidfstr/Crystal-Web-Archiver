@@ -366,6 +366,8 @@ Release Notes ⋮
         * Use an optimized version of [shutil.copyfileobj] that avoids
           repeatedly allocating intermediate buffers
         * Maximum download speed increased from 1 item/sec to 2 items/sec
+    * Autopopulate an HTTP Date header when downloading if none provided
+      by origin server, as per RFC 7231 §7.1.1.2.
 
 * Parsing improvements
     * Links are parsed in about 18% as much time as before.
