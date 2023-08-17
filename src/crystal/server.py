@@ -233,6 +233,8 @@ _HEADER_DENYLIST = set([
     'x-ecn-p',
     'vtag',
 ])
+# Whether to suppress warnings related to unknown X- HTTP headers
+_IGNORE_UNKNOWN_X_HEADERS = True
 
 # When True, attempt to override JavaScript's Date class in HTML documents to
 # return a consistent datetime for "now" matching the Date header that the
@@ -693,16 +695,19 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         # Send headers
         for (name, value) in headers:
-            if name.lower() == 'location':
+            name_lower = name.lower()  # cache
+            
+            if name_lower == 'location':
                 self.send_header(name, self.get_request_url(value))
                 continue
                 
-            if name.lower() in _HEADER_ALLOWLIST:
+            if name_lower in _HEADER_ALLOWLIST:
                 self.send_header(name, value)
             else:
-                if name.lower() not in _HEADER_DENYLIST:
-                    self._print_warning(
-                        '*** Ignoring unknown header in archive: %s: %s' % (name, value))
+                if name_lower not in _HEADER_DENYLIST:
+                    if not (_IGNORE_UNKNOWN_X_HEADERS and name_lower.startswith('x-')):
+                        self._print_warning(
+                            '*** Ignoring unknown header in archive: %s: %s' % (name, value))
                 continue
         self.end_headers()
         

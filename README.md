@@ -383,6 +383,7 @@ Release Notes ⋮
       unnecessary `os.stat` call.
     * Archived pages are served faster and more efficiently by using
       the [os.sendfile] primitive when supported by the operating system.
+    * Don't warn about unknown X- HTTP headers.
 
 * CLI improvements
     * Profiling warnings:
