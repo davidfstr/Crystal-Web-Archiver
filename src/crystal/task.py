@@ -115,7 +115,7 @@ class Task:
         
         # Necessary to support weak references to task objects,
         # such as by Task._REPORTED_TASKS_WITH_MANY_LISTENERS
-        '__weakrefoffset__',
+        '__weakref__',
     )
     
     def __init__(self, title: str, icon_name: Optional[str]) -> None:
