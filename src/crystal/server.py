@@ -127,6 +127,8 @@ _HEADER_ALLOWLIST = set([
     'x-xss-protection',
     'x-content-type-options',
     'x-frame-options',
+    'x-download-options',
+    'x-permitted-cross-domain-policies',
     
     # CORS
     'access-control-allow-origin',
