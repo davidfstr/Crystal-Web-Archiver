@@ -2088,6 +2088,27 @@ class ResourceRevision:
     
     # === Operations ===
     
+    # NOTE: For testing purposes only.
+    #       
+    #       This is NOT part of the public API because ResourceRevisions are
+    #       generally immutable after creation.
+    def _alter_metadata(self,
+            new_metadata: ResourceRevisionMetadata,
+            *, ignore_readonly: bool=False
+            ) -> None:
+        project = self.project
+        
+        # Alter ResourceRevision's metadata in memory
+        self.metadata = new_metadata
+        
+        # Alter ResourceRevision's metadata in database
+        c = project._db.cursor()
+        c.execute(
+            'update resource_revision set metadata = ? where id = ?',
+            (json.dumps(new_metadata), self._id),  # type: ignore[attr-defined]
+            ignore_readonly=ignore_readonly)
+        project._db.commit()
+    
     @property
     def is_http_304(self) -> bool:
         metadata = self.metadata  # cache

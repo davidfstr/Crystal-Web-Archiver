@@ -41,7 +41,7 @@ def served_project(
             # Alter the fetch date of every ResourceRevision in the project
             # to match "fetch_date_of_resources_set_to", if provided
             if must_alter_fetch_date:
-                def fg_task():
+                def fg_task() -> None:
                     for r in project.resources:
                         for rr in list(r.revisions()):
                             if rr.metadata is None:
@@ -50,27 +50,19 @@ def served_project(
                                     f'resource revision lacking HTTP headers: {rr}')
                                 continue
                             
+                            assert fetch_date_of_resources_set_to is not None
                             rr_new_date = http_date.format(fetch_date_of_resources_set_to)
                             
                             # New Metadata = Old Metadata with Date and Age headers replaced
                             rr_new_metadata = deepcopy(rr.metadata)
                             rr_new_metadata['headers'] = [
-                                (cur_name, cur_value)
+                                [cur_name, cur_value]
                                 for (cur_name, cur_value) in
                                 rr_new_metadata['headers']
                                 if cur_name.lower() not in ['date', 'age']
-                            ] + [('Date', rr_new_date)]
+                            ] + [['Date', rr_new_date]]
                             
-                            # Alter ResourceRevision's metadata in memory
-                            rr.metadata = rr_new_metadata
-                            
-                            # Alter ResourceRevision's metadata in database
-                            c = project._db.cursor()
-                            c.execute(
-                                'update resource_revision set metadata = ? where id = ?',
-                                (json.dumps(rr_new_metadata), rr._id),  # type: ignore[attr-defined]
-                                ignore_readonly=True)
-                            project._db.commit()
+                            rr._alter_metadata(rr_new_metadata, ignore_readonly=True)
                 fg_call_and_wait(fg_task)
             
             # Start server
@@ -137,6 +129,8 @@ class WebPage:
         self._content_bytes = content_bytes
         self._content = None  # type: Optional[str]
     
+    # === High-Level Attributes ===
+    
     @property
     def is_not_in_archive(self) -> bool:
         return (
@@ -156,6 +150,12 @@ class WebPage:
             return None
         else:
             return m.group(1).strip()
+    
+    # === Low-Level Attributes ===
+    
+    @property
+    def headers(self) -> EmailMessage:
+        return self._headers
     
     @property
     def content(self) -> str:  # lazy

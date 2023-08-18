@@ -75,10 +75,10 @@ def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
 
 @coroutine
 def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
-    url: str,
-    *, headers: Optional[Dict[str, str]]=None,
-    timeout: float,
-    ) -> Awaitable[WebPage]:  # or Generator[Command, object, WebPage]
+        url: str,
+        *, headers: Optional[Dict[str, str]]=None,
+        timeout: float,
+        ) -> Awaitable[WebPage]:  # or Generator[Command, object, WebPage]
     """
     Switch to a background thread, fetch the specified URL, and
     then resume this foreground thread.

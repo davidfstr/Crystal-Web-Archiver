@@ -8,6 +8,7 @@ from crystal.tests import (
     test_parse_html,
     test_profile,
     test_readonly_mode,
+    test_server,
     test_shell,
     test_tasks,
     test_tasktree,
@@ -39,6 +40,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_parse_html) +
     _test_functions_in_module(test_profile) +
     _test_functions_in_module(test_readonly_mode) +
+    _test_functions_in_module(test_server) +
     _test_functions_in_module(test_shell) +
     _test_functions_in_module(test_tasks) +
     _test_functions_in_module(test_tasktree) +
