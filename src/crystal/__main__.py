@@ -314,8 +314,13 @@ def _main(args: List[str]) -> None:
             
             # Re-launch, reopening the initial dialog
             last_project = _did_launch(parsed_args, shell)  # can raise SystemExit
-    except SystemExit:
-        pass
+    except SystemExit as e:
+        if e.code not in [None, 0]:
+            # Exit with error
+            raise
+        else:
+            # Exit normally
+            pass
     finally:
         # Stop any further events from being scheduled on the main loop
         set_foreground_thread(None)
