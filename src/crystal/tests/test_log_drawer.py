@@ -49,18 +49,21 @@ def test_always_displays_vertical_scrollbar_and_never_displays_horizontal_scroll
 
 # === Activate Self or Parent ===
 
+@skip('not yet automated')
 def test_given_drawer_out_of_parent_when_activate_drawer_then_both_drawer_and_parent_raise_above_all_other_windows() -> None:
     # Case 1: _WindowPairingStrategy.FLOAT_ON_PARENT is being used
     # Case 2: _WindowPairingStrategy.FLOAT_AND_RAISE_ON_ACTIVATE is being used
     pass
 
 
+@skip('not yet automated')
 def test_given_drawer_out_of_parent_when_activate_parent_of_drawer_then_both_parent_and_drawer_raise_above_all_other_windows() -> None:
     # Case 1: _WindowPairingStrategy.FLOAT_ON_PARENT is being used
     # Case 2: _WindowPairingStrategy.FLOAT_AND_RAISE_ON_ACTIVATE is being used
     pass
 
 
+@skip('not yet automated')
 def test_given_drawer_out_of_parent_when_activate_window_from_other_app_then_window_raises_above_both_drawer_and_parent() -> None:
     # Case A1: Drawer was directly below parent (in Z-order)
     # Case A2: Drawer was directly above parent (in Z-order)
