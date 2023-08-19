@@ -29,6 +29,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: poetry
 
+      - name: Display SQLite version and JSON support
+        run: |
+          python3 -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
+          poetry run python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
+
       - name: Install dependencies with Poetry
         # If build takes a very long time, then it's likely that the version
         # of wxPython installed does not offer a precompiled wheel for this
@@ -87,7 +92,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: poetry
-      
+
+      - name: Display SQLite version and JSON support
+        run: |
+          python3 -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
+          poetry run python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
+
       - name: Update APT packages
         run: sudo apt-get update
 
@@ -167,6 +177,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: poetry
+
+      - name: Display SQLite version and JSON support
+        run: |
+          python3 -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
+          poetry run python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
 
       - name: Install dependencies with Poetry
         # If build takes a very long time, then it's likely that the version
