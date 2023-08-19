@@ -50,9 +50,7 @@ python = ">=3.8,<3.12"
 #       a very long time to complete. If wheels are missing (which is common
 #       for Linux) you'll need to precompile a .wgn yourself for the platform.
 #       See instructions in: doc/how_to_make_wxpython_wagon.md
-# NOTE: wxPython 4.2.0 does not install successfully in Python 3.10 because of
-#       https://github.com/wxWidgets/Phoenix/issues/2225
-wxPython = "==4.1.1"
+wxPython = "==4.2.1"
 beautifulsoup4 = "^4.9.3"
 py2app = { version = "^0.23", markers = "sys_platform == 'darwin'" }
 # NOTE: py2exe 0.13.0.0 is the earliest version that supports Python 3.11

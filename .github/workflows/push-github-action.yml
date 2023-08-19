@@ -109,14 +109,14 @@ jobs:
         if: ${{ matrix.python-version == 3.8 }}
         run: |
           poetry run pip3 install wagon
-          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.1.1-py38-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.1.1-py38-none-linux_x86_64.wgn
+          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py38-none-linux_x86_64.wgn
+          poetry run wagon install wxPython-4.2.1-py38-none-linux_x86_64.wgn
       - name: Install dependency wxPython from wagon (Python 3.9)
         if: ${{ matrix.python-version == 3.9 }}
         run: |
           poetry run pip3 install wagon
-          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.1.1-py39-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.1.1-py39-none-linux_x86_64.wgn
+          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py39-none-linux_x86_64.wgn
+          poetry run wagon install wxPython-4.2.1-py39-none-linux_x86_64.wgn
 
       - name: Install remaining dependencies with Poetry
         # If build takes a very long time, the precompiled .wgn in the 

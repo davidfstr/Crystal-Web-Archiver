@@ -20,8 +20,10 @@ apt-get install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss
 curl -O https://www.python.org/ftp/python/3.8.2/Python-3.8.2.tar.xz
 tar -xf Python-3.8.2.tar.xz
 cd Python-3.8.2
-./configure
-make -j
+time ./configure
+    # real  0m29.421s
+time make -j4
+    # real  1m16.073s
 make install
 python3.8 --version
 ```
@@ -35,8 +37,10 @@ apt-get install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss
 curl -O https://www.python.org/ftp/python/3.9.16/Python-3.9.16.tar.xz
 tar -xf Python-3.9.16.tar.xz
 cd Python-3.9.16
-./configure
-make  # NOTE: -j seems to crash Docker
+time ./configure
+    # real  0m28.451s
+time make -j4  # NOTE: -j seems to crash Docker
+    # real  1m11.544s
 make install
 python3.9 --version
 ```
@@ -59,7 +63,10 @@ python3.11 get-pip.py
 
 ```bash
 # Install wxPython dependencies
-apt-get install -y libgtk-3-dev
+time apt-get install -y libgtk-3-dev
+
+# Upgrade pip
+python3 -m pip install --upgrade pip
 
 # Install wagon
 pip3 install wagon[dist]  # or: python3.x -m pip install wagon[dist]
@@ -70,7 +77,8 @@ pip3 install wagon[dist]  # or: python3.x -m pip install wagon[dist]
 ```bash
 # Compile wagon
 cd /usr/src  # shared folder with Docker host
-wagon create wxPython==4.1.1  # use version from pyproject.toml
+time wagon create wxPython==4.2.1  # use version from pyproject.toml
+    # real  34m52.754s
 ```
 
 * Upload the .wgn file as a release artifact to a release tag on GitHub,
