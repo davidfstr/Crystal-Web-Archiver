@@ -87,6 +87,7 @@ class LogDrawer(wx.Frame):
         self._parent_maximized_size = None
         self._parent_content_container = None  # non-None iff self maximized
         self._was_scrolled_to_bottom = True
+        self._is_unmaximizing = False
         
         # Create splitter container that will show a visible sash at the bottom
         # of the drawer, to hint to the user that the drawer is designed
@@ -155,7 +156,7 @@ class LogDrawer(wx.Frame):
         bind(self._splitter, wx.EVT_SPLITTER_DCLICK, self._on_splitter_double_click)
         bind(self.Parent, wx.EVT_ICONIZE, self._on_parent_minimized_or_unminimized)
         bind(self.Parent, wx.EVT_MAXIMIZE, self._on_parent_will_maximize)
-        if hasattr(wx, 'EVT_FULLSCREEN'):
+        if hasattr(wx, 'EVT_FULLSCREEN'):  # wxPython >=4.2.1
             bind(self.Parent, wx.EVT_FULLSCREEN, self._on_parent_will_fullscreen_or_unfullscreen)
         bind(self._textarea, wx.EVT_SCROLLWIN, self._on_scroll)
         
@@ -349,6 +350,8 @@ class LogDrawer(wx.Frame):
         
         was_closed = not self.is_open  # capture
         
+        self._is_unmaximizing = True
+        
         # Move log from parent to drawer
         if True:
             log_drawer_content = self._parent_content_container.Window2
@@ -373,6 +376,9 @@ class LogDrawer(wx.Frame):
                 height=self.Size.Height + delta_height,
                 sizeFlags=wx.SIZE_USE_EXISTING)
             
+            # NOTE: During a "will unfullscreen" event on macOS,
+            #       this Show() may trigger _on_resize() immediately
+            #       during the show.
             self.Show()
         
         # Uninstall wx.SplitterWindow from parent
@@ -387,6 +393,8 @@ class LogDrawer(wx.Frame):
             self._toggle_open()
             assert not self.is_open
             self._height_before_closed = old_height_before_closed  # restore
+        
+        self._is_unmaximizing = False
     
     @property
     def _is_maximized(self) -> bool:
@@ -447,6 +455,9 @@ class LogDrawer(wx.Frame):
     # Called continuously while the user drags the
     # corner/edge of this drawer to resize it.
     def _on_resize(self, event: wx.SizeEvent) -> None:
+        if self._is_unmaximizing:
+            return
+        
         # Track height of drawer before it was closed
         if True:
             mouse_state = wx.GetMouseState()
@@ -619,6 +630,7 @@ class LogDrawer(wx.Frame):
     
     def _on_parent_will_fullscreen_or_unfullscreen(self, event) -> None:
         if event.IsFullScreen():  # fullscreen
+            self._parent_will_be_maximized_after_next_resize = True
             self._on_parent_did_maximize()
         else:  # un-fullscreen
             self._on_parent_unmaximized()
