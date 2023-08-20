@@ -124,9 +124,17 @@ def _file_served(headers: List[List[str]], content_bytes: bytes) -> Iterator[int
     with HTTPServer(('', 0), RequestHandler) as server:
         (_, server_port) = server.server_address
         
-        server_thread = threading.Thread(
-            target=lambda: server.serve_forever(),
-            daemon=True)
+        def do_serve_forever() -> None:
+            try:
+                server.serve_forever()
+            except OSError as e:
+                # [WinError 10038] An operation was attempted on something that is not a socket
+                if getattr(e, 'winerror', None) == 10038:
+                    # Already called server_close(). Ignore error.
+                    pass
+                else:
+                    raise
+        server_thread = threading.Thread(target=do_serve_forever, daemon=True)
         server_thread.start()
         try:
             yield server_port
