@@ -31,6 +31,7 @@ from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util import xshutil
+from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 import cgi
 import datetime
@@ -335,7 +336,7 @@ class Project:
                 'where request_cookie is not null')
         
         # Add resource_revision__status_code index if missing
-        if 'resource_revision__status_code' not in index_names:
+        if 'resource_revision__status_code' not in index_names and sqlite_has_json_support():
             progress_listener.upgrading_project('Indexing revisions by status code...')
             c.execute(
                 'create index resource_revision__status_code on resource_revision '
