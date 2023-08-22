@@ -149,18 +149,11 @@ class RateCalculator:
             # calls made in a short time interval (<= `mininterval`).
             miniters=0,
             mininterval=0.1,  # tqdm's default value
+            
+            # Calibrate EMA (exponential moving average) smoothing factors for speed estimates.
+            # Ranges from 0.0 (average speed) to 1.0 (current/instantaneous speed).
+            smoothing=0.1,  # NOTE: default is 0.3
         )
-        
-        # Calibrate EMA (exponential moving average) smoothing factors for speed estimates.
-        # Ranges from 0.0 (average speed) to 1.0 (current/instantaneous speed).
-        assert isinstance(getattr(self._tqdm, '_ema_dn', None), EMA)
-        assert isinstance(getattr(self._tqdm, '_ema_dt', None), EMA)
-        # Bias toward current speed (usually 1.0 items/call) when estimating
-        # how many items completed per update() call (so long as calls are
-        # at least `mininterval` apart)
-        self._tqdm._ema_dn = EMA(0.7)
-        # Bias toward average speed when estimating time between each update() call
-        self._tqdm._ema_dt = EMA(0.3)  # tqdm's default value
     
     # === Properties ===
     
