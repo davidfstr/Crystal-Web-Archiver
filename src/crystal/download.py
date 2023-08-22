@@ -9,10 +9,9 @@ from crystal.model import Resource, ResourceRevision, ResourceRevisionMetadata
 from crystal.util.xos import is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
-import io
 import platform
 import ssl
-from typing import cast, Dict, Iterable, Optional, Set, Tuple, Union
+from typing import BinaryIO, cast, Dict, Iterable, Optional, Set, Tuple, Union
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -126,7 +125,7 @@ class ResourceRequest:
         else:
             raise urllib.error.URLError('URL scheme "%s" is not supported.' % url_parts.scheme)
     
-    def __call__(self) -> Tuple[Optional[ResourceRevisionMetadata], io.BytesIO]:
+    def __call__(self) -> Tuple[Optional[ResourceRevisionMetadata], BinaryIO]:
         """
         Returns a (metadata, body_stream) tuple, where
             `metadata` is a JSON-serializable dictionary or None and
@@ -149,7 +148,7 @@ class HttpResourceRequest(ResourceRequest):
         self._request_cookie = request_cookie
         self._known_etags = known_etags
     
-    def __call__(self) -> Tuple[ResourceRevisionMetadata, io.BytesIO]:
+    def __call__(self) -> Tuple[ResourceRevisionMetadata, BinaryIO]:
         url_parts = urlparse(self.url)
         scheme = url_parts.scheme
         host_and_port = url_parts.netloc
@@ -201,7 +200,7 @@ class HttpResourceRequest(ResourceRequest):
             readinto=response.readinto,
             fileno=response.fileno,
             mode='rb')
-        return (metadata, cast(io.BytesIO, body_stream))
+        return (metadata, cast(BinaryIO, body_stream))
     
     def __repr__(self):
         return 'HttpResourceRequest(%s)' % repr(self.url)

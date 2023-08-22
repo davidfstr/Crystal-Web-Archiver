@@ -669,7 +669,7 @@ class DownloadResourceTask(Task):
             None
             if self._resource.already_downloaded_this_session and not needs_result
             else resource.create_download_body_task()
-        )
+        )  # type: Optional[DownloadResourceBodyTask]
         self._parse_links_task = None  # type: Optional[ParseResourceRevisionLinks]
         self._already_downloaded_task = (
             _ALREADY_DOWNLOADED_PLACEHOLDER_TASK
@@ -731,6 +731,8 @@ class DownloadResourceTask(Task):
                 self.subtitle = task.subtitle
     
     def child_task_did_complete(self, task: Task) -> None:
+        from crystal.model import RevisionBodyMissingError
+        
         if task is self._download_body_task:
             if self._already_downloaded_task is not None:
                 # Don't reparse links or attempt to redownload embedded resources
@@ -766,67 +768,87 @@ class DownloadResourceTask(Task):
                 #  used for this task's own future.)
         
         elif task is self._parse_links_task:
-            (links, _) = self._parse_links_task.future.result()
-            self._parse_links_task.dispose()
-            
-            # Identify embedded resources
-            def fg_task() -> List[Resource]:
-                embedded_resources = []
-                link_urls_seen = set()
-                base_url = self._resource.url  # cache
-                project = self._resource.project  # cache
-                for link in links:
-                    if not link.embedded:
-                        continue
-                    
-                    link_url = urljoin(base_url, link.relative_url)
-                    if link_url in link_urls_seen:
-                        continue
-                    else:
-                        link_urls_seen.add(link_url)
-                    
-                    # Normalize the URL and look it up in the project
-                    # 
-                    # NOTE: Normally this should not perform any database
-                    #       queries, unless one of the related Resources
-                    #       was deleted sometime between being created
-                    #       by ParseResourceRevisionLinks and being
-                    #       accessed here.
-                    link_resource = Resource(project, link_url)
-                    embedded_resources.append(link_resource)
-                return embedded_resources
-            embedded_resources = fg_call_and_wait(fg_task)
-            
-            # Create and append download task for each embedded resource
-            new_download_tasks = []
-            ancestor_downloading_resources = self._ancestor_downloading_resources()  # cache
-            if len(ancestor_downloading_resources) > _MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH:
-                # Avoid infinite recursion when resource identifies an alias
-                # of itself (probably incorrectly) as an embedded resource of 
-                # itself, or when a chain of embedded resources links to 
-                # an alias of itself
-                pass
+            try:
+                try:
+                    (links, _) = self._parse_links_task.future.result()
+                finally:
+                    self._parse_links_task.dispose()
+            except RevisionBodyMissingError:
+                assert self._download_body_task is not None
+                body_revision = self._download_body_task.future.result()
+                
+                print(
+                    f'*** {body_revision!s} is missing its body on disk. Redownloading it.',
+                    file=sys.stderr)
+                
+                # Delete the malformed revision
+                fg_call_and_wait(lambda: body_revision.delete())
+                
+                # Retry download of the revision
+                redownload_body_task = self._resource.create_download_body_task()
+                self.append_child(redownload_body_task)
+                
+                self._download_body_task = redownload_body_task  # reinterpret
+                self._parse_links_task = None  # reinterpret
             else:
-                for resource in embedded_resources:
-                    if resource in ancestor_downloading_resources:
-                        # Avoid infinite recursion when resource identifies itself
-                        # (probably incorrectly) as an embedded resource of itself,
-                        # or when a chain of embedded resources links to itself
-                        continue
-                    new_download_tasks.append(
-                        resource.create_download_task(needs_result=False, is_embedded=True))
-            for t in new_download_tasks:
-                self.append_child(t, already_complete_ok=True)
-            
-            # Start computing estimated time remaining
-            self._pbc = ProgressBarCalculator(
-                initial=self.num_children_complete,
-                total=len(self.children),
-            )
-            
-            for t in [t for t in new_download_tasks if t.complete]:
-                self.task_did_complete(t)
-            # (NOTE: self.complete might be True now)
+                # Identify embedded resources
+                def fg_task() -> List[Resource]:
+                    embedded_resources = []
+                    link_urls_seen = set()
+                    base_url = self._resource.url  # cache
+                    project = self._resource.project  # cache
+                    for link in links:
+                        if not link.embedded:
+                            continue
+                        
+                        link_url = urljoin(base_url, link.relative_url)
+                        if link_url in link_urls_seen:
+                            continue
+                        else:
+                            link_urls_seen.add(link_url)
+                        
+                        # Normalize the URL and look it up in the project
+                        # 
+                        # NOTE: Normally this should not perform any database
+                        #       queries, unless one of the related Resources
+                        #       was deleted sometime between being created
+                        #       by ParseResourceRevisionLinks and being
+                        #       accessed here.
+                        link_resource = Resource(project, link_url)
+                        embedded_resources.append(link_resource)
+                    return embedded_resources
+                embedded_resources = fg_call_and_wait(fg_task)
+                
+                # Create and append download task for each embedded resource
+                new_download_tasks = []
+                ancestor_downloading_resources = self._ancestor_downloading_resources()  # cache
+                if len(ancestor_downloading_resources) > _MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH:
+                    # Avoid infinite recursion when resource identifies an alias
+                    # of itself (probably incorrectly) as an embedded resource of 
+                    # itself, or when a chain of embedded resources links to 
+                    # an alias of itself
+                    pass
+                else:
+                    for resource in embedded_resources:
+                        if resource in ancestor_downloading_resources:
+                            # Avoid infinite recursion when resource identifies itself
+                            # (probably incorrectly) as an embedded resource of itself,
+                            # or when a chain of embedded resources links to itself
+                            continue
+                        new_download_tasks.append(
+                            resource.create_download_task(needs_result=False, is_embedded=True))
+                for t in new_download_tasks:
+                    self.append_child(t, already_complete_ok=True)
+                
+                # Start computing estimated time remaining
+                self._pbc = ProgressBarCalculator(
+                    initial=self.num_children_complete,
+                    total=len(self.children),
+                )
+                
+                for t in [t for t in new_download_tasks if t.complete]:
+                    self.task_did_complete(t)
+                # (NOTE: self.complete might be True now)
         
         else:
             assert isinstance(task, (
@@ -933,8 +955,12 @@ class ParseResourceRevisionLinks(Task):
         self._resource_revision = resource_revision
     
     def __call__(self) -> 'Tuple[List[Link], List[Resource]]':
+        """
+        Raises:
+        * RevisionBodyMissingError
+        """
         self.subtitle = 'Parsing links...'
-        links = self._resource_revision.links()
+        links = self._resource_revision.links()  # raises RevisionBodyMissingError
         
         r = self._resource_revision.resource  # cache
         r_url = r.url  # cache

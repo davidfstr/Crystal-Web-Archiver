@@ -395,6 +395,10 @@ Release Notes ⋮
     * A `$PYTHONSTARTUP` file can be defined that is run automatically
       at the beginning of a shell session.
 
+* Error handling improvements
+    * When attempting to download a previously-downloaded revision that is
+      missing a body file on disk, delete & redownload the old revision.
+
 * Testing improvements
     * An entire test module can now be run with `--test`, in addition to
       individual test functions.

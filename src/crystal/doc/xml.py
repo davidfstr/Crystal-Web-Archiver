@@ -6,13 +6,12 @@ from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
 from crystal.util.fastsoup import BeautifulFastSoup
-from io import BytesIO
 import re
-from typing import List, Optional, Tuple
+from typing import BinaryIO, List, Optional, Tuple
 
 
 def parse_xml_and_links(
-        xml_bytes: BytesIO, 
+        xml_bytes: BinaryIO,
         declared_charset: str=None
         ) -> Optional[Tuple[Document, List[Link]]]:
     """

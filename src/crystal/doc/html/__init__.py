@@ -5,8 +5,7 @@ Parses HTML documents.
 from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
-from io import BytesIO
-from typing import Literal, Optional, Tuple, Union
+from typing import BinaryIO, Literal, Optional, Tuple, Union
 
 
 # HTML parsing library to use. See comparison between options at: 
@@ -19,7 +18,7 @@ HTML_PARSER_TYPE_CHOICES = (
 
 
 def parse_html_and_links(
-        html_bytes: Union[bytes, BytesIO], 
+        html_bytes: Union[bytes, BinaryIO],
         declared_charset: Optional[str],
         parser_type: HtmlParserType,
         ) -> Optional[tuple[Document, list[Link]]]:

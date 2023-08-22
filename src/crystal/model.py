@@ -35,7 +35,6 @@ from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 import cgi
 import datetime
-import io
 import json
 import math
 import mimetypes
@@ -49,7 +48,7 @@ from tempfile import NamedTemporaryFile
 import threading
 import time
 from typing import (
-    Any, Callable, cast, Dict, Iterable, List, Literal, Optional, Pattern,
+    Any, BinaryIO, Callable, cast, Dict, Iterable, List, Literal, Optional, Pattern,
     TYPE_CHECKING, Tuple, TypedDict, Union
 )
 from urllib.parse import urlparse, urlunparse
@@ -134,8 +133,7 @@ class Project:
                 os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
             else:
                 # Ensure existing project structure looks OK
-                if not Project.is_valid(path):
-                    raise ProjectFormatError('Project format is invalid.')
+                Project._ensure_valid(path)
             
             # Open database
             db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
@@ -297,11 +295,30 @@ class Project:
             Project._last_opened_project = self
     
     @staticmethod
-    def is_valid(path):
-        return (
-            os.path.exists(path) and 
-            os.path.exists(os.path.join(path, Project._DB_FILENAME)) and
-            os.path.exists(os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)))
+    def is_valid(path: str) -> bool:
+        try:
+            Project._ensure_valid(path)
+        except ProjectFormatError:
+            return False
+        else:
+            return True
+    
+    @staticmethod
+    def _ensure_valid(path: str) -> None:
+        """
+        Raises:
+        * ProjectFormatError -- if the project at the specified path is invalid
+        """
+        if not os.path.isdir(path):
+            raise ProjectFormatError(f'Project is missing outermost directory: {path}')
+        
+        db_filepath = os.path.join(path, Project._DB_FILENAME)
+        if not os.path.isfile(db_filepath):
+            raise ProjectFormatError(f'Project is missing database: {db_filepath}')
+        
+        revision_dirpath = os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)
+        if not os.path.isdir(revision_dirpath):
+            raise ProjectFormatError(f'Project is missing revisions directory: {revision_dirpath}')
     
     def _apply_migrations(self,
             c: DatabaseCursor,
@@ -718,6 +735,7 @@ class CrossProjectReferenceError(Exception):
 
 
 class ProjectFormatError(Exception):
+    """The on-disk format of a Project is corrupted in some way."""
     pass
 
 
@@ -1496,7 +1514,7 @@ class ResourceRevision:
     def create_from_response(
             resource: Resource,
             metadata: Optional[ResourceRevisionMetadata],
-            body_stream: io.BytesIO,
+            body_stream: BinaryIO,
             request_cookie: Optional[str]=None
             ) -> ResourceRevision:
         """
@@ -1541,7 +1559,7 @@ class ResourceRevision:
             *, request_cookie: Optional[str]=None,
             error: Optional[Exception]=None,
             metadata: Optional[ResourceRevisionMetadata]=None,
-            body_stream: Optional[io.BytesIO]=None
+            body_stream: Optional[BinaryIO]=None
             ) -> ResourceRevision:
         """
         Creates a new revision.
@@ -1777,8 +1795,12 @@ class ResourceRevision:
         return self._encode_error_dict(self.error)
     
     def _ensure_has_body(self):
+        """
+        Raises:
+        * NoRevisionBodyError
+        """
         if not self.has_body:
-            raise ValueError('Resource "%s" has no body.' % self._url)
+            raise NoRevisionBodyError(self)
     
     @property
     def _body_filepath(self):
@@ -2011,22 +2033,40 @@ class ResourceRevision:
     def size(self) -> int:
         """
         Returns the size of this resource's body.
+        
+        Raises:
+        * NoRevisionBodyError
+        * RevisionBodyMissingError
         """
         self._ensure_has_body()
-        return os.path.getsize(self._body_filepath)
+        try:
+            return os.path.getsize(self._body_filepath)
+        except FileNotFoundError:
+            raise RevisionBodyMissingError(self)
     
-    def open(self):
+    def open(self) -> BinaryIO:
         """
         Opens the body of this resource for reading, returning a file-like object.
+        
+        Raises:
+        * NoRevisionBodyError
+        * RevisionBodyMissingError
         """
         self._ensure_has_body()
-        return open(self._body_filepath, 'rb')
+        try:
+            return open(self._body_filepath, 'rb')
+        except FileNotFoundError:
+            raise RevisionBodyMissingError(self)
     
     def links(self) -> list[Link]:
         """
         Returns list of Links found in this resource.
         
         This method blocks while parsing the links.
+        
+        Raises:
+        * NoRevisionBodyError
+        * RevisionBodyMissingError
         """
         return self.document_and_links()[1]
     
@@ -2040,6 +2080,10 @@ class ResourceRevision:
         The HTML document can be reoutput by getting its str() representation.
         
         This method blocks while parsing the links.
+        
+        Raises:
+        * NoRevisionBodyError
+        * RevisionBodyMissingError
         """
         from crystal.doc.css import parse_css_and_links
         from crystal.doc.generic import create_external_link
@@ -2174,8 +2218,27 @@ class ResourceRevision:
         
         self.resource.already_downloaded_this_session = False
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
+    
+    def __str__(self) -> str:
+        return f'Revision {self._id} for URL {self.resource.url}'
+
+
+class NoRevisionBodyError(ValueError):
+    """
+    An operation was attempted on a ResourceRevision that only makes sense
+    for revisions that have a body, and the targeted revision has no body.
+    """
+    def __init__(self, revision: ResourceRevision) -> None:
+        super().__init__(f'{revision!s} has no body')
+
+
+class RevisionBodyMissingError(ProjectFormatError):
+    def __init__(self, revision: ResourceRevision) -> None:
+        super().__init__(
+            f'{revision!s} is missing its body on disk. '
+            f'Recommend delete and redownload it.')
 
 
 class ResourceRevisionMetadata(TypedDict):

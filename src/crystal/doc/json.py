@@ -7,13 +7,12 @@ from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import ABSOLUTE_HTTP_LINK_RE, PROBABLE_EMBEDDED_URL_RE
-from io import BytesIO
 import json
-from typing import Optional
+from typing import BinaryIO, Optional
 
 
 def parse_json_and_links(
-        body_bytes: BytesIO, 
+        body_bytes: BinaryIO,
         declared_charset: str=None
         ) -> Optional[tuple[Document, list[Link]]]:
     try:
