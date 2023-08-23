@@ -57,8 +57,8 @@ class _InvalidURL(ValueError):
     """The URL provided was somehow invalid."""
 
 
-def is_unrewritable_url(url: str) -> bool:
+def is_unrewritable_url(relative_url: str) -> bool:
     for prefix in ('mailto:', 'javascript:', 'data:'):
-        if url.startswith(prefix):
+        if relative_url.startswith(prefix):
             return True
     return False
