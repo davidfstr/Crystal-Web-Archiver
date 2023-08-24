@@ -20,7 +20,7 @@ import sys
 from time import sleep
 import traceback
 from typing import (
-    Any, Callable, cast, List, Literal, Iterator, Optional, Tuple,
+    Any, Callable, cast, final, List, Literal, Iterator, Optional, Tuple,
     TYPE_CHECKING, Union
 )
 from weakref import WeakSet
@@ -66,8 +66,8 @@ class Task:
         - May add additional children tasks over time to perform additional work.
             - Generally this is done upon the completion of a child task.
         - Automatically listen to child tasks. A container task may override:
-            o child_task_subtitle_did_change
-            o child_task_did_complete
+            o child_task_subtitle_did_change -- Notified when a child of this task changed its subtitle
+            o child_task_did_complete -- Notified when a child of this task completed
     
     Tasks must generally be manipulated on the foreground thread unless
     documented otherwise.
@@ -159,6 +159,9 @@ class Task:
         """
         return self._subtitle
     def _set_subtitle(self, value: str) -> None:
+        if self._subtitle == 'Complete':
+            assert value == 'Complete', \
+                f'Cannot change subtitle of completed task {self!r} to {value!r}'
         self._subtitle = value
         for lis in self.listeners:
             if hasattr(lis, 'task_subtitle_did_change'):
@@ -284,6 +287,7 @@ class Task:
         
         for c in final_children:
             self.append_child(c, already_complete_ok=True)
+        self._num_children_complete = len(final_children)
     
     def clear_children_if_all_complete(self) -> bool:
         """
@@ -297,6 +301,7 @@ class Task:
                 if Task._USE_EXTRA_LISTENER_ASSERTIONS:
                     assert self not in child.listeners
             self._children = []
+            self._num_children_complete = 0
             
             self._first_incomplete_child_index = 0
             self._next_child_index = 0
@@ -326,6 +331,7 @@ class Task:
             if len(child_indexes_to_remove) == 0:
                 return
             self._children = [c for c in self.children if not c.complete]
+            self._num_children_complete -= len(child_indexes_to_remove)
             
             # NOTE: Call these listeners also inside the lock
             #       because they are likely to be updating
@@ -437,11 +443,19 @@ class Task:
     
     # === Internal Events ===
     
+    @final
     def task_subtitle_did_change(self, task):
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+            assert task in self.children
+        
         if hasattr(self, 'child_task_subtitle_did_change'):
             self.child_task_subtitle_did_change(task)
     
+    @final
     def task_did_complete(self, task):
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+            assert task in self.children
+        
         self._num_children_complete += 1
         
         task.listeners.remove(self)
@@ -863,19 +877,27 @@ class DownloadResourceTask(Task):
                 assert self._pbc is not None
                 self._pbc.update(1)
         
+        # NOTE: The `self.complete` check is necessary to avoid double-completing
+        #       this task in the scenario where a self._parse_links_task child task
+        #       finds that ALL discovered links have already been downloaded, 
+        #       which implies that the download task related to the last link
+        #       will have already completed this task.
+        if self.complete:
+            return
+        
+        assert 0 <= self.num_children_complete <= len(self.children)
         if self._pbc is None:
             subtitle_suffix = ''
         else:
             (remaining_str, time_per_item_str) = \
                 self._pbc.remaining_str_and_time_per_item_str()
             subtitle_suffix = f' -- {remaining_str} remaining ({time_per_item_str})'
-        
         self.subtitle = (
             f'{self.num_children_complete:n} of '
             f'{len(self.children):n} item(s){subtitle_suffix}'
         )
         
-        if self.num_children_complete == len(self.children) and not self.complete:
+        if self.num_children_complete == len(self.children):
             # Complete self._download_body_with_embedded_future,
             # with value of self._download_body_task.future
             if self._download_body_task is not None:
@@ -980,7 +1002,11 @@ class ParseResourceRevisionLinks(Task):
         self._resource_revision = None
     
     def __repr__(self) -> str:
-        return f'<ParseResourceRevisionLinks for RR {self._resource_revision._id}>'
+        return (
+            f'<ParseResourceRevisionLinks for RR {self._resource_revision._id}>'
+            if self._resource_revision is not None
+            else f'<ParseResourceRevisionLinks for RR ?>'
+        )
 
 
 _NO_VALUE = object()

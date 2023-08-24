@@ -106,8 +106,9 @@ class TaskTreeNode:
         fg_call_and_wait(fg_task)
     
     def task_subtitle_did_change(self, task: Task) -> None:
+        new_subtitle = self.task.subtitle  # capture
         def fg_task() -> None:
-            self.tree_node.subtitle = self.task.subtitle
+            self.tree_node.subtitle = new_subtitle
         # NOTE: Use no_profile=True because no obvious further optimizations exist
         fg_call_later(fg_task, no_profile=True)
     
