@@ -44,8 +44,11 @@ _PROFILE_SCHEDULER = False
 
 # TODO: Move these constants inside Task
 SCHEDULING_STYLE_NONE = 0
+"""Scheduling style for leaf tasks, that have no children."""
 SCHEDULING_STYLE_SEQUENTIAL = 1
+"""Each child will be fully executed before moving on to the next child."""
 SCHEDULING_STYLE_ROUND_ROBIN = 2
+"""One task unit will be executed from each child during a scheduler pass."""
 
 
 class Task:
@@ -61,7 +64,7 @@ class Task:
               which must be implemented by leaf task subclasses.
     (2) Container tasks
         - Uses child tasks to perform all its work.
-            - Should set the 'scheduling_style' property in its constructor.
+            - Should define the 'scheduling_style' property in its class definition.
             - Should add the initial set of children in its constructor.
         - May add additional children tasks over time to perform additional work.
             - Generally this is done upon the completion of a child task.
@@ -95,14 +98,18 @@ class Task:
         os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
     )
     
+    # Abstract fields for subclasses to override
+    icon_name = None  # type: Optional[str]  # abstract
+    """The name of the icon resource used for this task, or None to use the default icon."""
+    scheduling_style = SCHEDULING_STYLE_NONE  # abstract for container task types
+    """For a container task, defines the order that task units from children will be executed in."""
+    
     _REPORTED_TASKS_WITH_MANY_LISTENERS = WeakSet()  # type: WeakSet[Task]
     
     # Optimize per-instance memory use, since there may be very many Task objects
     __slots__ = (
-        '_icon_name',
         '_title',
         '_subtitle',
-        'scheduling_style',
         '_parent',
         '_children',
         '_num_children_complete',
@@ -110,7 +117,7 @@ class Task:
         'listeners',
         '_did_yield_self',
         '_future',
-        '_first_incomplete_child_index',
+        # NOTE: Used differently by SCHEDULING_STYLE_SEQUENTIAL and SCHEDULING_STYLE_ROUND_ROBIN
         '_next_child_index',
         
         # Necessary to support weak references to task objects,
@@ -118,11 +125,9 @@ class Task:
         '__weakref__',
     )
     
-    def __init__(self, title: str, icon_name: Optional[str]) -> None:
-        self._icon_name = icon_name
+    def __init__(self, title: str) -> None:
         self._title = title
         self._subtitle = 'Queued'
-        self.scheduling_style = SCHEDULING_STYLE_NONE
         self._parent = None  # type: Optional[Task]
         self._children = []  # type: List[Task]
         self._num_children_complete = 0
@@ -131,19 +136,9 @@ class Task:
         
         self._did_yield_self = False            # used by leaf tasks
         self._future = None  # type: Optional[Future]  # used by leaf tasks
-        # TODO: Consider merging the following two fields
-        self._first_incomplete_child_index = 0  # used by SCHEDULING_STYLE_SEQUENTIAL
-        self._next_child_index = 0              # used by SCHEDULING_STYLE_ROUND_ROBIN
+        self._next_child_index = 0
     
     # === Properties ===
-    
-    @property
-    def icon_name(self) -> Optional[str]:
-        """
-        The name of the icon resource used for this task,
-        or None to use the default icon.
-        """
-        return self._icon_name
     
     @property
     def title(self) -> str:
@@ -155,7 +150,6 @@ class Task:
     def _get_subtitle(self) -> str:
         """
         The subtitle for this task.
-        The setter (but not the getter) is threadsafe.
         """
         return self._subtitle
     def _set_subtitle(self, value: str) -> None:
@@ -303,7 +297,6 @@ class Task:
             self._children = []
             self._num_children_complete = 0
             
-            self._first_incomplete_child_index = 0
             self._next_child_index = 0
             
             # NOTE: Call these listeners also inside the lock
@@ -373,11 +366,11 @@ class Task:
             if self.scheduling_style == SCHEDULING_STYLE_NONE:
                 raise ValueError('Container task has not specified a scheduling style.')
             elif self.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
-                while self._first_incomplete_child_index < len(self.children):
-                    if self.children[self._first_incomplete_child_index].complete:
-                        self._first_incomplete_child_index += 1
+                while self._next_child_index < len(self.children):
+                    if self.children[self._next_child_index].complete:
+                        self._next_child_index += 1
                     else:
-                        cur_child_index = self._first_incomplete_child_index
+                        cur_child_index = self._next_child_index
                         while cur_child_index < len(self.children):
                             unit = self.children[cur_child_index].try_get_next_task_unit()
                             if unit is not None:
@@ -547,6 +540,8 @@ class DownloadResourceBodyTask(Task):
     
     This task is never complete immediately after initialization.
     """
+    icon_name = 'tasktree_download_resource_body'
+    
     _dr_profiling_context = None  # type: AbstractContextManager[Optional[cProfile.Profile]]
     
     # Optimize per-instance memory use, since there may be very many DownloadResourceBodyTask objects
@@ -561,8 +556,7 @@ class DownloadResourceBodyTask(Task):
         * abstract_resource -- a Resource or a RootResource.
         """
         super().__init__(
-            title='Downloading body: ' + _get_abstract_resource_title(abstract_resource),
-            icon_name='tasktree_download_resource_body')
+            title='Downloading body: ' + _get_abstract_resource_title(abstract_resource))
         self._resource = abstract_resource.resource  # type: Resource
         self.did_download = None  # type: Optional[bool]
     
@@ -651,6 +645,9 @@ class DownloadResourceTask(Task):
     
     This task may be complete immediately after initialization.
     """
+    icon_name = 'tasktree_download_resource'
+    scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
+    
     # Optimize per-instance memory use, since there may be very many
     # DownloadResourceTask objects
     __slots__ = (
@@ -672,8 +669,7 @@ class DownloadResourceTask(Task):
         * abstract_resource -- a Resource or a RootResource.
         """
         super().__init__(
-            title='Downloading: ' + _get_abstract_resource_title(abstract_resource),
-            icon_name='tasktree_download_resource')
+            title='Downloading: ' + _get_abstract_resource_title(abstract_resource))
         self._abstract_resource = abstract_resource
         self._resource = resource = abstract_resource.resource
         self._is_embedded = is_embedded
@@ -691,7 +687,6 @@ class DownloadResourceTask(Task):
             else None
         )
         
-        self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         if self._download_body_task is not None:
             self.append_child(self._download_body_task)
         if self._already_downloaded_task is not None:
@@ -965,6 +960,8 @@ class ParseResourceRevisionLinks(Task):
     
     This task is never complete immediately after initialization.
     """
+    icon_name = 'tasktree_parse'
+    
     def __init__(self, abstract_resource, resource_revision):
         """
         Arguments:
@@ -972,8 +969,7 @@ class ParseResourceRevisionLinks(Task):
         * resource_revision -- a ResourceRevision.
         """
         super().__init__(
-            title='Finding links in: ' + _get_abstract_resource_title(abstract_resource),
-            icon_name='tasktree_parse')
+            title='Finding links in: ' + _get_abstract_resource_title(abstract_resource))
         self._resource_revision = resource_revision
     
     def __call__(self) -> 'Tuple[List[Link], List[Resource]]':
@@ -1017,12 +1013,14 @@ class _PlaceholderTask(Task):  # abstract
     
     This task will be complete immediately after initialization iff prefinish=True.
     """
+    icon_name = 'tasktree_done'
+    
     def __init__(self,
             title: str,
             value: object=_NO_VALUE,
             exception: Optional[Exception]=None,
             prefinish: bool=False) -> None:
-        super().__init__(title=title, icon_name='tasktree_done')
+        super().__init__(title=title)
         self._value = value
         self._exception = exception
         
@@ -1105,13 +1103,13 @@ class UpdateResourceGroupMembersTask(Task):
     
     This task may be complete immediately after initialization.
     """
+    icon_name = 'tasktree_update_group'
+    scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
+    
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
-            title='Finding members of group: %s' % group.name,
-            icon_name='tasktree_update_group')
+            title='Finding members of group: %s' % group.name)
         self.group = group
-        
-        self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         
         if group.source is None:
             self.finish()
@@ -1146,10 +1144,12 @@ class DownloadResourceGroupMembersTask(Task):
     
     This task may be complete immediately after initialization.
     """
+    icon_name = 'tasktree_download_group_members'
+    scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
+    
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
-            title='Downloading members of group: %s' % group.name,
-            icon_name='tasktree_download_group_members')
+            title='Downloading members of group: %s' % group.name)
         self.group = group
         
         if Task._USE_EXTRA_LISTENER_ASSERTIONS:
@@ -1157,8 +1157,6 @@ class DownloadResourceGroupMembersTask(Task):
         self.group.listeners.append(self)
         
         self._done_updating_group = False
-        
-        self.scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
         
         with gc_disabled():  # don't garbage collect while allocating many objects
             member_download_tasks = [
@@ -1243,15 +1241,16 @@ class DownloadResourceGroupTask(Task):
     
     This task may be complete immediately after initialization.
     """
+    icon_name = 'tasktree_download_group'
+    scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
+    
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
-            title='Downloading group: %s' % group.name,
-            icon_name='tasktree_download_group')
+            title='Downloading group: %s' % group.name)
         self._update_members_task = UpdateResourceGroupMembersTask(group)
         self._download_members_task = DownloadResourceGroupMembersTask(group)
         self._started_downloading_members = False
         
-        self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
         self.append_child(self._update_members_task, already_complete_ok=True)
         self.append_child(self._download_members_task, already_complete_ok=True)
         
@@ -1304,11 +1303,12 @@ class RootTask(Task):
     
     This task never completes.
     """
+    icon_name = None
+    scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
+    
     def __init__(self):
-        super().__init__(title='ROOT', icon_name=None)
+        super().__init__(title='ROOT')
         self.subtitle = 'Running'
-        
-        self.scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
         
     def append_child(self, *args, **kwargs) -> None:
         """
