@@ -264,23 +264,10 @@ Release Notes ⋮
 
 ### main
 
-* First-time-run experience improvements
-    * Improve defaults
-        * New/Open Project Dialog: Default to creating a new project rather 
-          than opening an existing one.
-        * New Group Dialog: Expand "Preview Members" by default.
-    * Polish user interface
-        * Use consistent words to refer to common concepts
-            * {Create, Add} -> New
-            * {URL, Root URL} -> Root URL
-        * Add menus
-        * macOS: Add proxy icon to the project window, making it easier to navigate
-          to the project in the Finder.
-        * Add app name to version label in lower-left corner of project window.
-    * Add keyboard shortcuts everywhere
-    * Groups without a source can now be downloaded, as one would expect.
-    * Task Tree: Remove top-level tasks that complete as they complete,
-      rather than waiting for all other outstanding tasks to complete first
+This release features significant improvements to downloading large websites
+that have about 10 million URLs. Projects open and close faster. The UI is faster.
+Downloads are faster. Progress bars are shown for all slow operations.
+Estimated time remaining is shown when downloading groups.
 
 * Large project improvements (with 3,000,000 - 11,000,000 URLs)
     * Open projects containing many URLs in about 50% as much time as before:
@@ -328,6 +315,24 @@ Release Notes ⋮
     * Significantly speedup creation of tasks that have many children,
       such as tasks that download groups with very many members
 
+* First-time-run experience improvements
+    * Improve defaults
+        * New/Open Project Dialog: Default to creating a new project rather
+          than opening an existing one.
+        * New Group Dialog: Expand "Preview Members" by default.
+    * Polish user interface
+        * Use consistent words to refer to common concepts
+            * {Create, Add} -> New
+            * {URL, Root URL} -> Root URL
+        * Add menus
+        * macOS: Add proxy icon to the project window, making it easier to navigate
+          to the project in the Finder.
+        * Add app name to version label in lower-left corner of project window.
+    * Add keyboard shortcuts everywhere
+    * Groups without a source can now be downloaded, as one would expect.
+    * Task Tree: Remove top-level tasks that complete periodically,
+      rather than waiting for all of them to complete first
+
 * Critical fixes
     * Linux: Fix dialog that appears on app launch to be sized correctly.
     * Linux: Fix View button to open browser even if Crystal run from read-only volume.
@@ -362,7 +367,7 @@ Release Notes ⋮
         * Avoid querying the database for revisions of an URL if it is already
           known that there are no revisions because of other information
           cached in memory
-        * Precompile node selectors used to parse links from HTML
+        * Precompile XPath selectors used to parse links from HTML
         * Use an optimized version of [shutil.copyfileobj] that avoids
           repeatedly allocating intermediate buffers
         * Maximum download speed increased from 1 item/sec to 2 items/sec
@@ -407,7 +412,7 @@ Release Notes ⋮
     * Clear completed root tasks in all cases, even in the rare case where
       all tasks except the first one are complete
     * When deleting a ResourceRevision, don't delete revision body if project
-      is read-only and properly mark related Resource as no longer being 
+      is read-only and also properly mark related Resource as no longer being
       downloaded this session
     * When querying a ResourceRevision's size, don't crash with a traceback
     * When running as a macOS .app, log stdout and stderr to files correctly
