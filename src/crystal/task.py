@@ -1254,13 +1254,13 @@ class DownloadResourceGroupTask(Task):
         self.append_child(self._update_members_task, already_complete_ok=True)
         self.append_child(self._download_members_task, already_complete_ok=True)
         
+        # Prevent system idle sleep while downloading a potentially large group
+        Caffeination.add_caffeine()
+        
         # Apply deferred child-complete actions
         for t in [t for t in [self._update_members_task, self._download_members_task] if t.complete]:
             self.task_did_complete(t)
         # (NOTE: self.complete might be True now)
-        
-        # Prevent system idle sleep while downloading a potentially large group
-        Caffeination.add_caffeine()
     
     @property
     def group(self) -> ResourceGroup:

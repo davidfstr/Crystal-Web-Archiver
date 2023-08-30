@@ -1111,7 +1111,8 @@ class Resource:
             If the project is closed.
         """
         task = self.create_download_body_task()
-        self.project.add_task(task)
+        if not task.complete:
+            self.project.add_task(task)
         return task.future
     
     def create_download_body_task(self) -> 'DownloadResourceBodyTask':
@@ -1159,7 +1160,8 @@ class Resource:
             If the project is closed.
         """
         task = self.create_download_task(needs_result=needs_result, is_embedded=is_embedded)
-        self.project.add_task(task)
+        if not task.complete:
+            self.project.add_task(task)
         return task.get_future(wait_for_embedded)
     
     def create_download_task(self, *, needs_result: bool=True, is_embedded: bool=False) -> 'DownloadResourceTask':
@@ -2437,7 +2439,8 @@ class ResourceGroup:
         if needs_result:
             raise ValueError('Download task for a group never has a result')
         task = self.create_download_task(needs_result=needs_result)
-        self.project.add_task(task)
+        if not task.complete:
+            self.project.add_task(task)
         return task
     
     def create_download_task(self, *, needs_result: bool=False) -> DownloadResourceGroupTask:
