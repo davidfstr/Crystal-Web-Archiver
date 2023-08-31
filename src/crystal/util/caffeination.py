@@ -34,6 +34,7 @@ class Caffeination:
     def remove_caffeine(cls) -> None:
         with cls._lock:
             cls._caffeine_count -= 1
+            assert cls._caffeine_count >= 0
             new_caffeine_count = cls._caffeine_count  # capture
             if new_caffeine_count == 0:
                 cls._set_caffeinated(False)
