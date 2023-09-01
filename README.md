@@ -339,6 +339,8 @@ Estimated time remaining is shown when downloading groups.
     * Linux: Fix most other dialogs to be sized correctly.
         * However there's still a problem where the "New Group" dialog sometimes
           reserves extra space at the bottom of the dialog when previewing members.
+    * macOS: Fix issue where dialogs could appear at unusual locations,
+      including offscreen.
 
 * Crawling improvements
     * Don't recurse infinitely if resource identifies alias of itself as an

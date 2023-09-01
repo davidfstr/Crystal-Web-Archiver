@@ -1,5 +1,6 @@
 from crystal.model import ResourceGroup
 from crystal.util.wx_bind import bind
+from crystal.util.wx_dialog import position_dialog_initially
 import sys
 import wx
 
@@ -66,6 +67,7 @@ class AddGroupDialog:
         self.name_field.SetFocus()
         self._update_preview_urls()
         
+        position_dialog_initially(dialog)
         dialog.Show(True)
         # TODO: Fit fitting on wxGTK. Moving this Fit() either before or after Show()
         #       doesn't fix it consistently.

@@ -1,5 +1,6 @@
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
+from crystal.util.wx_dialog import position_dialog_initially
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import datetime
 import wx
@@ -58,6 +59,7 @@ class PreferencesDialog:
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
         
+        position_dialog_initially(dialog)
         dialog.Show(True)
         dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
     

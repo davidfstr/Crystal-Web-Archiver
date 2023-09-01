@@ -21,3 +21,26 @@ def ShowModal(dialog: wx.Dialog) -> int:
         return dialog.GetReturnCode()
     else:
         return dialog.ShowModal()
+
+
+def position_dialog_initially(dialog: wx.Dialog) -> None:
+    """
+    Reposition the specified dialog by a default offset relative to
+    its parent window.
+    
+    Different operating systems open dialogs at various positions
+    relative to their parent window. This function standardizes
+    the behavior across different operating systems. Native behavior:
+    - macOS 10.14: (0, 0) offset
+    - Windows 7: (200, 200) offset
+    - Windows 10: (150, 200) offset
+    - Ubuntu 22: (100, 100) offset
+    """
+    if dialog.Parent is None:
+        return
+    new_position = dialog.Parent.Position
+    new_position.x += (150 // 2)
+    new_position.y += (200 // 2)
+    # NOTE: Linux sometimes ignores repositioning requests,
+    #       especially if Wayland is being used rather than X11
+    dialog.Position = new_position

@@ -1,4 +1,5 @@
 from crystal.util.wx_bind import bind
+from crystal.util.wx_dialog import position_dialog_initially
 import wx
 
 
@@ -34,6 +35,7 @@ class AddRootUrlDialog:
         
         self.name_field.SetFocus()
         
+        position_dialog_initially(dialog)
         dialog.Show(True)
         dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
     
