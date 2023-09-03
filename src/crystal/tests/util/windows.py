@@ -320,7 +320,7 @@ class AddGroupDialog:
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
     source_field: wx.Choice
-    preview_members_pane: wx.CollapsiblePane
+    preview_members_pane: Optional[wx.CollapsiblePane]
     preview_members_list: wx.ListBox
     ok_button: wx.Button
     
@@ -335,7 +335,10 @@ class AddGroupDialog:
         self.source_field = add_group_dialog.FindWindowByName('cr-add-group-dialog__source-field')
         assert isinstance(self.source_field, wx.Choice)
         self.preview_members_pane = add_group_dialog.FindWindowByName('cr-add-group-dialog__preview-members')
-        assert isinstance(self.preview_members_pane, wx.CollapsiblePane)
+        assert (
+            self.preview_members_pane is None or
+            isinstance(self.preview_members_pane, wx.CollapsiblePane)
+        )
         self.preview_members_list = add_group_dialog.FindWindowByName('cr-add-group-dialog__preview-members__list')
         assert isinstance(self.preview_members_list, wx.ListBox)
         self.ok_button = add_group_dialog.FindWindowById(wx.ID_OK)

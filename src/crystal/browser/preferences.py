@@ -1,6 +1,7 @@
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
 from crystal.util.wx_dialog import position_dialog_initially
+from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import datetime
 import wx
@@ -89,7 +90,7 @@ class PreferencesDialog:
             self.html_parser_field,
             flag=wx.EXPAND, pos=wx.GBPosition(1, 1))
         
-        return _wrap_static_box_sizer_child(fields_sizer)
+        return wrap_static_box_sizer_child(fields_sizer)
     
     def _create_session_fields(self, parent: wx.Window) -> wx.Sizer:
         fields_sizer = wx.GridBagSizer(
@@ -124,7 +125,7 @@ class PreferencesDialog:
             self.cookie_field,
             flag=wx.EXPAND, pos=wx.GBPosition(4, 1))
         
-        return _wrap_static_box_sizer_child(fields_sizer)
+        return wrap_static_box_sizer_child(fields_sizer)
     
     def _create_stale_before_field(self, parent: wx.Window) -> wx.Sizer:
         import wx.adv  # import late because does print spurious messages on macOS
@@ -196,14 +197,3 @@ class PreferencesDialog:
     
     def _on_cancel(self, event: wx.Event) -> None:
         self.dialog.Destroy()
-
-
-def _wrap_static_box_sizer_child(child: wx.Sizer) -> wx.Sizer:
-    if is_linux():
-        # Add padding around contents of wx.StaticBoxSizer because
-        # wxGTK does not do this automatically, unlike macOS and Windows
-        container = wx.BoxSizer(wx.VERTICAL)
-        container.Add(child, flag=wx.ALL, border=8)
-        return container
-    else:
-        return child

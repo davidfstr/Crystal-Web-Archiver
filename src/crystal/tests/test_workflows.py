@@ -136,7 +136,10 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     
                     agd.name_field.Value = 'Comic'
                     
-                    assert agd.preview_members_pane.IsExpanded()  # expanded by default
+                    assert (
+                        agd.preview_members_pane is None or  # always expanded
+                        agd.preview_members_pane.IsExpanded()  # expanded by default
+                    )
                     member_urls = [
                         agd.preview_members_list.GetString(i)
                         for i in range(agd.preview_members_list.GetCount())

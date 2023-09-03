@@ -1,8 +1,10 @@
 from crystal.model import ResourceGroup
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import position_dialog_initially
+from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux
 import sys
+from typing import Union
 import wx
 
 
@@ -38,27 +40,42 @@ class AddGroupDialog:
         bind(dialog, wx.EVT_BUTTON, self._on_button)
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         
-        preview_box = wx.CollapsiblePane(
-            dialog, label='Preview Members',
-            name='cr-add-group-dialog__preview-members')
-        preview_box.Expand()
-        preview_box_root = preview_box.GetPane()
-        preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
-        preview_box_root.SetSizer(preview_box_root_sizer)
-        preview_box_root_sizer.SetSizeHints(preview_box_root)
+        # NOTE: Don't use wx.CollapsiblePane on wxGTK/Linux because
+        #       it doesn't resize its parent window properly on
+        #       expand and unexpand events
+        preview_box_collapsible = not is_linux()
+        preview_box: Union[wx.Window, wx.Sizer]
+        preview_box_root: wx.Window
+        preview_box_root_sizer: wx.BoxSizer
+        preview_box_flags: int
+        preview_box_border: int
+        if preview_box_collapsible:
+            preview_box = wx.CollapsiblePane(
+                dialog, label='Preview Members',
+                name='cr-add-group-dialog__preview-members')
+            preview_box.Expand()
+            preview_box_root = preview_box.GetPane()
+            preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
+            preview_box_root.SetSizer(preview_box_root_sizer)
+            preview_box_flags = 0
+            preview_box_border = 0
+        else:
+            preview_box_root_sizer = wx.StaticBoxSizer(
+                wx.VERTICAL, dialog, label='Preview Members')
+            preview_box = preview_box_root_sizer
+            preview_box_root = preview_box_root_sizer.GetStaticBox()
+            preview_box_flags = wx.TOP
+            preview_box_border = 10
         
-        self.url_list = wx.ListBox(
-            preview_box_root, style=wx.LB_ALWAYS_SB, size=(-1,150),
-            name='cr-add-group-dialog__preview-members__list')
-        
-        preview_box_root_sizer.Add(wx.StaticText(preview_box_root, label='Known matching URLs:'), flag=wx.EXPAND)
-        preview_box_root_sizer.Add(self.url_list, flag=wx.EXPAND)
+        preview_box_root_sizer.Add(
+            wrap_static_box_sizer_child(self._create_preview_box_content(preview_box_root)),
+            flag=wx.EXPAND)
         
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
             self._create_fields(dialog, initial_url, initial_source),
             flag=wx.EXPAND)
-        content_sizer.Add(preview_box, 0, flag=wx.EXPAND)
+        content_sizer.Add(preview_box, proportion=0, flag=wx.EXPAND|preview_box_flags, border=preview_box_border)
         
         dialog_sizer.Add(content_sizer, flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
@@ -70,15 +87,9 @@ class AddGroupDialog:
         
         position_dialog_initially(dialog)
         dialog.Show(True)
-        if is_linux():
-            # Fit manually because wxGTK behaves weirdly when there is a
-            # wx.CollapsiblePane inside a dialog
-            dialog.Sizer.Fit(dialog)
-            dialog.Size = dialog.Sizer.Size
-        else:
-            dialog.Fit()
+        dialog.Fit()
     
-    def _create_fields(self, parent, initial_url, initial_source):
+    def _create_fields(self, parent: wx.Window, initial_url: str, initial_source) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         fields_sizer.AddGrowableCol(1)
@@ -121,6 +132,18 @@ class AddGroupDialog:
         fields_sizer.Add(self.source_choice_box, flag=wx.EXPAND)
         
         return fields_sizer
+    
+    def _create_preview_box_content(self, parent: wx.Window) -> wx.Sizer:
+        content_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        self.url_list = wx.ListBox(
+            parent, style=wx.LB_ALWAYS_SB, size=(-1,150),
+            name='cr-add-group-dialog__preview-members__list')
+        
+        content_sizer.Add(wx.StaticText(parent, label='Known matching URLs:'), flag=wx.EXPAND)
+        content_sizer.Add(self.url_list, flag=wx.EXPAND)
+        
+        return content_sizer
     
     # === Operations ===
     

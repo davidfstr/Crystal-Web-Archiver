@@ -337,8 +337,6 @@ Estimated time remaining is shown when downloading groups.
     * Linux: Fix dialog that appears on app launch to be sized correctly.
     * Linux: Fix View button to open browser even if Crystal run from read-only volume.
     * Linux: Fix most other dialogs to be sized correctly.
-        * However there's still a problem where the "New Group" dialog sometimes
-          reserves extra space at the bottom of the dialog when previewing members.
     * macOS: Fix issue where dialogs could appear at unusual locations,
       including offscreen.
 
