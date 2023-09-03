@@ -1,6 +1,7 @@
 from crystal.model import ResourceGroup
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import position_dialog_initially
+from crystal.util.xos import is_linux
 import sys
 import wx
 
@@ -57,7 +58,7 @@ class AddGroupDialog:
         content_sizer.Add(
             self._create_fields(dialog, initial_url, initial_source),
             flag=wx.EXPAND)
-        content_sizer.Add(preview_box, flag=wx.EXPAND)
+        content_sizer.Add(preview_box, 0, flag=wx.EXPAND)
         
         dialog_sizer.Add(content_sizer, flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
@@ -69,9 +70,13 @@ class AddGroupDialog:
         
         position_dialog_initially(dialog)
         dialog.Show(True)
-        # TODO: Fit fitting on wxGTK. Moving this Fit() either before or after Show()
-        #       doesn't fix it consistently.
-        dialog.Fit()
+        if is_linux():
+            # Fit manually because wxGTK behaves weirdly when there is a
+            # wx.CollapsiblePane inside a dialog
+            dialog.Sizer.Fit(dialog)
+            dialog.Size = dialog.Sizer.Size
+        else:
+            dialog.Fit()
     
     def _create_fields(self, parent, initial_url, initial_source):
         fields_sizer = wx.FlexGridSizer(cols=2,
