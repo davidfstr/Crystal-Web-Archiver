@@ -6,9 +6,10 @@ from collections import defaultdict
 from collections.abc import Collection
 from crystal import __version__
 from crystal.model import Resource, ResourceRevision, ResourceRevisionMetadata
-from crystal.util.xos import is_windows
+from crystal.util.xos import is_mac_os, is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
+import os
 import platform
 import ssl
 from typing import BinaryIO, cast, Dict, Iterable, Optional, Set, Tuple, Union
@@ -233,15 +234,30 @@ class UrlResourceRequest(ResourceRequest):
 
 _SSL_CONTEXT = None
 
-def get_ssl_context():
+def get_ssl_context() -> ssl.SSLContext:
+    """
+    Creates the SSLContext used to make HTTPS connections.
+    
+    In particular, loads any CA certificates needed to authenticate those connections.
+    """
     global _SSL_CONTEXT
     if _SSL_CONTEXT is None:
-        if is_windows():
-            # Use Windows default CA certificates
-            cafile = None
-        else:
-            # Use bundled certifi CA certificates
-            import certifi
-            cafile = certifi.where()
-        _SSL_CONTEXT = ssl.create_default_context(cafile=cafile)
+        # Load system CA certificates
+        ctx = ssl.create_default_context(
+            # Optimize options to connect from client to server
+            # (rather than optimizing for a server receiving a client connection)
+            purpose=ssl.Purpose.SERVER_AUTH)
+        
+        # Load bundled certifi CA certificates
+        import certifi  # slow!
+        cafile1 = certifi.where()
+        ctx.load_verify_locations(cafile=cafile1)
+        
+        # Load certificates from $SSL_CERT_FILE, if specified,
+        # just like OpenSSL library does
+        cafile2 = os.environ.get('SSL_CERT_FILE')
+        if cafile2 is not None:
+            ctx.load_verify_locations(cafile=cafile2)
+        
+        _SSL_CONTEXT = ctx  # export
     return _SSL_CONTEXT

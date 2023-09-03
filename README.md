@@ -375,6 +375,9 @@ Estimated time remaining is shown when downloading groups.
         * Maximum download speed increased from 1 item/sec to 2 items/sec
     * Autopopulate an HTTP Date header when downloading if none provided
       by origin server, as per RFC 7231 §7.1.1.2.
+    * Load HTTPS CA certificates from certifi on Windows,
+      in addition to from the system CA store.
+    * Load HTTPS CA certificates from `$SSL_CERT_FILE` if specified.
 
 * Parsing improvements
     * Links are parsed in about 18% as much time as before.
