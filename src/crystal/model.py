@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from collections import OrderedDict
 import copy
+from crystal.doc.css import parse_css_and_links
+from crystal.doc.generic import create_external_link
+from crystal.doc.html import parse_html_and_links
+from crystal.doc.json import parse_json_and_links
+from crystal.doc.xml import parse_xml_and_links
 from crystal.plugins import (
     phpbb as plugins_phpbb,
     substack as plugins_substack,
@@ -2087,11 +2092,6 @@ class ResourceRevision:
         * NoRevisionBodyError
         * RevisionBodyMissingError
         """
-        from crystal.doc.css import parse_css_and_links
-        from crystal.doc.generic import create_external_link
-        from crystal.doc.html import parse_html_and_links
-        from crystal.doc.json import parse_json_and_links
-        from crystal.doc.xml import parse_xml_and_links
         
         # Extract links from HTML, if applicable
         (doc, links) = (None, [])  # type: tuple[Optional[Document], list[Link]]
