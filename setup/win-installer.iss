@@ -1,13 +1,13 @@
 [Setup]
 AppName=Crystal Web Archiver
-AppVersion=1.5.0b
+AppVersion=1.6.0b
 AppCopyright=Copyright (C) 2011-2023 David Foster. All Rights Reserved
 DefaultDirName={pf}\Crystal Web Archiver
 DefaultGroupName=Crystal Web Archiver
 UninstallDisplayIcon={app}\Crystal Web Archiver.exe
 Compression=lzma2
 SolidCompression=yes
-OutputBaseFilename=crystal-win-1.5.0b
+OutputBaseFilename=crystal-win-1.6.0b
 OutputDir=dist-win
 DisableProgramGroupPage=yes
 
@@ -40,6 +40,8 @@ Source: "dist\_tkinter.pyd"; DestDir: "{app}"
 Source: "dist\backports.zoneinfo._czoneinfo.pyd"; DestDir: "{app}"
 Source: "dist\cacert.pem"; DestDir: "{app}"
 Source: "dist\concrt140.dll"; DestDir: "{app}"
+Source: "dist\guppy.heapy.heapyc.pyd"; DestDir: "{app}"
+Source: "dist\guppy.sets.setsc.pyd"; DestDir: "{app}"
 Source: "dist\libcrypto-1_1.dll"; DestDir: "{app}"
 Source: "dist\libffi-7.dll"; DestDir: "{app}"
 Source: "dist\libopenblas_v0.3.21-gcc_8_3_0.dll"; DestDir: "{app}"
@@ -84,11 +86,15 @@ Source: "dist\wx._adv.pyd"; DestDir: "{app}"
 Source: "dist\wx._core.pyd"; DestDir: "{app}"
 Source: "dist\wx._html.pyd"; DestDir: "{app}"
 Source: "dist\wx._msw.pyd"; DestDir: "{app}"
+Source: "dist\wx._richtext.pyd"; DestDir: "{app}"
+Source: "dist\wx._xml.pyd"; DestDir: "{app}"
 Source: "dist\wx.siplib.pyd"; DestDir: "{app}"
-Source: "dist\wxbase315u_net_vc140.dll"; DestDir: "{app}"
-Source: "dist\wxbase315u_vc140.dll"; DestDir: "{app}"
-Source: "dist\wxmsw315u_core_vc140.dll"; DestDir: "{app}"
-Source: "dist\wxmsw315u_html_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxbase32u_net_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxbase32u_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxbase32u_xml_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxmsw32u_core_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxmsw32u_html_vc140.dll"; DestDir: "{app}"
+Source: "dist\wxmsw32u_richtext_vc140.dll"; DestDir: "{app}"
 Source: "dist\lib\crystal\tests\test_data\__init__.py"; DestDir: "{app}\lib\crystal\tests\test_data"
 Source: "dist\lib\crystal\tests\test_data\badge_new.png"; DestDir: "{app}\lib\crystal\tests\test_data"
 Source: "dist\lib\crystal\tests\test_data\badge_stale.png"; DestDir: "{app}\lib\crystal\tests\test_data"
@@ -102,6 +108,8 @@ Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_cluster_offsit
 Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_cluster_offsite@16x.png"; DestDir: "{app}\lib\crystal\tests\test_data"
 Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_loading.png"; DestDir: "{app}\lib\crystal\tests\test_data"
 Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_loading@16x.png"; DestDir: "{app}\lib\crystal\tests\test_data"
+Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_more.png"; DestDir: "{app}\lib\crystal\tests\test_data"
+Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_more@16x.png"; DestDir: "{app}\lib\crystal\tests\test_data"
 Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_resource.png"; DestDir: "{app}\lib\crystal\tests\test_data"
 Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_resource@16x.png"; DestDir: "{app}\lib\crystal\tests\test_data"
 Source: "dist\lib\crystal\tests\test_data\treenodeicon_entitytree_root_resource.png"; DestDir: "{app}\lib\crystal\tests\test_data"
