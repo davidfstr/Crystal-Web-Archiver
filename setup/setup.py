@@ -64,6 +64,9 @@ if sys.platform == 'darwin':
             'argv_emulation': False,
             'iconfile': 'media/AppIconMac.icns',
             'plist': PLIST,
+            'excludes': [
+                'numpy',
+            ]
         }},
     )
 elif sys.platform == 'win32':
