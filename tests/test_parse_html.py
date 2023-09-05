@@ -8,6 +8,10 @@ from typing import List, Optional, Tuple
 
 # === Tests ===
 
+# TODO: Extend each "test_recognizes_*" to also test WRITING
+#       to the relative_url of the output link to ensure it
+#       gets saves in a reasonable way.
+
 def test_can_parse_and_format_basic_html_document() -> None:
     with SubtestsContext('test_can_parse_and_format_basic_html_document').run() as subtests:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:
