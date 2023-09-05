@@ -66,6 +66,7 @@ if sys.platform == 'darwin':
             'plist': PLIST,
             'excludes': [
                 'numpy',
+                'test',  # CPython test data
             ]
         }},
     )
