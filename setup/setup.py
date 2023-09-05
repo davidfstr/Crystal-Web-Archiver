@@ -67,6 +67,7 @@ if sys.platform == 'darwin':
             'excludes': [
                 'numpy',
                 'test',  # CPython test data
+                'PIL',
             ]
         }},
     )
