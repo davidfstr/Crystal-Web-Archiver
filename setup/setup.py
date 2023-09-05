@@ -64,6 +64,11 @@ if sys.platform == 'darwin':
             'argv_emulation': False,
             'iconfile': 'media/AppIconMac.icns',
             'plist': PLIST,
+            'excludes': [
+                'numpy',
+                'test',  # CPython test data
+                'PIL',
+            ]
         }},
     )
 elif sys.platform == 'win32':
