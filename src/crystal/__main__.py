@@ -52,7 +52,7 @@ def _main(args: List[str]) -> None:
     # If running as Mac app or as Windows executable, redirect stdout and 
     # stderr to file, since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
-    interactive = 'PS1' in os.environ
+    interactive = 'TERM' in os.environ
     log_to_file = (
         (getattr(sys, 'frozen', None) == 'macosx_app' and not interactive) or
         (getattr(sys, 'frozen', None) == 'windows_exe')
