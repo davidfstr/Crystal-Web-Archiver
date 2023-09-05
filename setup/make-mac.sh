@@ -9,5 +9,6 @@ poetry run python setup.py py2app --graph
 mkdir dist-mac
 if [ "$1" != "--app-only" ]; then
     echo 'Building disk image... (skip with --app-only option)'
-    hdiutil create -srcfolder dist -volname "Crystal Web Archiver" -format UDZO dist-mac/crystal-mac-$VERSION.dmg
+    # zlib-level=6: Increase compression level from default (1)
+    hdiutil create -srcfolder dist -volname "Crystal Web Archiver" -format UDZO -imagekey zlib-level=6 dist-mac/crystal-mac-$VERSION.dmg
 fi
