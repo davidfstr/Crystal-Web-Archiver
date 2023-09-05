@@ -5,9 +5,14 @@ VERSION=`python -c 'import sys; sys.path.append("../src"); import crystal; print
 rm -rf build dist dist-mac
 
 # Build .app
-# --graph: Generates a GraphViz .dot file in the build directory that shows
-#          the calculated module dependency graph
-poetry run python setup.py py2app --graph
+if [ "$1" != "--app-only" ]; then
+    GRAPH_OPT=""
+else
+    # --graph: Generates a GraphViz .dot file in the build directory that shows
+    #          the calculated module dependency graph
+    GRAPH_OPT="--graph"
+fi
+poetry run python setup.py py2app $GRAPH_OPT
 
 # Slim .app
 zip "dist/Crystal Web Archiver.app/Contents/Resources/lib/python39.zip" \
