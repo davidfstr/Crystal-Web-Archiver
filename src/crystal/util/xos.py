@@ -1,6 +1,6 @@
 import math
 import platform
-from typing import Optional
+from typing import List, Optional
 
 
 # === Feature Detection ===
@@ -82,3 +82,10 @@ def windows_major_version() -> Optional[int]:
         return None
     else:
         return math.floor(release_number)
+
+
+def mac_version() -> Optional[List[int]]:
+    if not is_mac_os():
+        return None
+    
+    return [int(x) for x in platform.mac_ver()[0].split('.')]

@@ -15,7 +15,7 @@ from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
 from crystal.util.wx_bind import bind
-from crystal.util.xos import is_linux, is_mac_os, is_windows
+from crystal.util.xos import is_linux, is_mac_os, is_windows, mac_version
 from crystal.util.xthreading import (
     bg_call_later, fg_call_later, fg_call_and_wait, set_is_quitting
 )
@@ -139,9 +139,17 @@ class MainWindow:
             enabled=True)
         
         # Edit
+        if is_mac_os():
+            mv = mac_version()
+            if mv is not None and mv >= [13]:
+                preferences_label = 'Settings...'
+            else:
+                preferences_label = 'Preferences...'
+        else:
+            preferences_label = ''  # OS default
         self._preferences_action = Action(
             wx.ID_PREFERENCES,
-            '',
+            preferences_label,
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord(',')),
             # NOTE: Action is bound to self._on_preferences later manually
             action_func=None,
