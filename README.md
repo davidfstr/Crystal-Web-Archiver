@@ -228,13 +228,13 @@ please see the [maintainer workflow].
 
 To **run the code locally**,
 run `poetry install` once in Terminal (Mac) or in Command Prompt (Windows), and
-`poetry run python src/main.py` thereafter.
+`poetry run python -m crystal` thereafter.
 
 To **build new binaries** for Mac or Windows, follow the instructions at [COMPILING.txt].
 
 To **run non-UI tests**, run `poetry run pytest` in Terminal (Mac) or in Command Prompt (Windows).
 
-To **run UI tests**, run `poetry run python src/main.py --test` in Terminal (Mac) or in Command Prompt (Windows).
+To **run UI tests**, run `poetry run python -m crystal --test` in Terminal (Mac) or in Command Prompt (Windows).
 
 To **typecheck**, run `poetry run mypy` in Terminal (Mac) or in Command Prompt (Windows).
 

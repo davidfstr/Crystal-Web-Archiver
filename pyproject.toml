@@ -27,8 +27,6 @@ classifiers = [
 ]
 packages = [
     { include = "crystal", from = "src" },
-    # Included for backward compatibility
-    { include = "main.py", from = "src" },
 ]
 include = [
     "README/logo.png",
