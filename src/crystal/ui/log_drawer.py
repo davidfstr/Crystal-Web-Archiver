@@ -5,10 +5,11 @@ from crystal.util.xos import (
     is_linux, is_mac_os, is_windows, windows_major_version,
     wx_resize_border_is_invisible
 )
-from crystal.util.xthreading import fg_call_and_wait
+from crystal.util.xthreading import fg_call_later
 from enum import Enum
 from functools import cached_property
-from io import TextIOBase
+from io import StringIO, TextIOBase
+from threading import Lock
 from typing import Dict, List, Optional, Tuple, Union
 import wx
 from wx.richtext import RichTextCtrl
@@ -663,61 +664,72 @@ class LogDrawer(wx.Frame):
 class _LogDrawerWriter(TextIOBase):
     def __init__(self, drawer: LogDrawer) -> None:
         self._drawer = drawer
+        self._print_buffer_lock = Lock()
+        self._print_buffer = []  # type: List[str]
     
     def write(self, text: str) -> int:
         # Send text to sys.stdout
         print(text, end='')
         
-        # Send text to drawer
+        # Queue text to be printed to drawer
+        with self._print_buffer_lock:
+            self._print_buffer.append(text)
+        
+        # Start printing queued texts to drawer, but don't wait until finished
         def fg_task():
+            with self._print_buffer_lock:
+                last_print_buffer = self._print_buffer
+                if len(last_print_buffer) == 0:
+                    return
+                self._print_buffer = []
+            
             textarea = self._drawer._textarea  # cache
             textarea_was_scrolled_to_bottom = (
                 self._drawer._was_scrolled_to_bottom
             )  # capture
             
-            # Append text to text area
-            if True:
-                # Try parse coloring codes around text
-                color: Optional[wx.Colour] = None  # default
-                plain_text: str = text  # default
-                if _CODE_PREFIX in text:
-                    if text.endswith(_RESET_CODE):
-                        for (code, color) in _COLOR_CODES.items():
-                            if text.startswith(code):
-                                break
-                        else:
-                            # Failed to parse codes
-                            color = None
-                        if color is not None:
-                            plain_text = text[len(code):-len(_RESET_CODE)]
+            for text in last_print_buffer:
+                # Append text to text area
+                if True:
+                    # Try parse coloring codes around text
+                    color: Optional[wx.Colour] = None  # default
+                    plain_text: str = text  # default
+                    if _CODE_PREFIX in text:
+                        if text.endswith(_RESET_CODE):
+                            for (code, color) in _COLOR_CODES.items():
+                                if text.startswith(code):
+                                    break
+                            else:
+                                # Failed to parse codes
+                                color = None
+                            if color is not None:
+                                plain_text = text[len(code):-len(_RESET_CODE)]
+                            else:
+                                # Failed to parse codes
+                                pass
                         else:
                             # Failed to parse codes
                             pass
                     else:
-                        # Failed to parse codes
+                        # Text contains no codes
                         pass
-                else:
-                    # Text contains no codes
-                    pass
-                
-                # Append colored text
-                textarea.SetInsertionPointEnd()
-                if color is not None:
-                    textarea.BeginTextColour(color)
-                textarea.WriteText(plain_text)
-                if color is not None:
-                    textarea.EndTextColour()
-                    # HACK: EndTextColour doesn't seem to actually work
-                    #       unless I immediately write some text afterward.
-                    # TODO: Eliminate these inserted '\u200b' values
-                    #       from any text copied (or cut) from the text area.
-                    textarea.WriteText('\u200b')  # zero-width space
+                    
+                    # Append colored text
+                    textarea.SetInsertionPointEnd()
+                    if color is not None:
+                        textarea.BeginTextColour(color)
+                    textarea.WriteText(plain_text)
+                    if color is not None:
+                        textarea.EndTextColour()
+                        # HACK: EndTextColour doesn't seem to actually work
+                        #       unless I immediately write some text afterward.
+                        # TODO: Eliminate these inserted '\u200b' values
+                        #       from any text copied (or cut) from the text area.
+                        textarea.WriteText('\u200b')  # zero-width space
             
             if textarea_was_scrolled_to_bottom:
                 self._drawer._scroll_to_bottom()
-        # TODO: Consider batching many prints that happen near same time
-        # TODO: Consider using fg_call_later
-        fg_call_and_wait(fg_task)
+        fg_call_later(fg_task)
         
         # Report successful print
         return len(text)
