@@ -513,7 +513,7 @@ class _ResourceNode(Node):
         elif status_badge_name == 'stale':
             return 'Stale'
         elif status_badge_name == 'warning':
-            return 'Error'
+            return 'Error downloading'
         else:
             raise AssertionError('Unknown resource status badge: ' + status_badge_name)
     
