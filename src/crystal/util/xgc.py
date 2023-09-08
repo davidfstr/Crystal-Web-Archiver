@@ -45,10 +45,12 @@ def gc_disabled() -> Iterator[None]:
     Useful when allocating a very large number of long-lived objects,
     to avoid many useless runs of the garbage collector.
     """
-    assert gc.isenabled()
-    gc.disable()
+    was_enabled = gc.isenabled()
+    if was_enabled:
+        gc.disable()
     try:
         yield
     finally:
         assert not gc.isenabled()
-        gc.enable()
+        if was_enabled:
+            gc.enable()
