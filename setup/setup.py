@@ -37,6 +37,9 @@ if sys.platform == 'darwin':
             'Download it from http://undefined.org/python/py2app.html')
     
     PLIST = {
+        # 1. Define app name used by the application menu
+        # 2. Define file name of the created .app
+        'CFBundleName': APP_NAME,
         'CFBundleDocumentTypes': [
             # Associate application with .crystalproj files
             {
@@ -49,7 +52,7 @@ if sys.platform == 'darwin':
         ],
         'CFBundleIdentifier': 'net.dafoster.crystal',
         'CFBundleShortVersionString': VERSION_STRING,
-        'CFBundleSignature': 'CrWA',
+        'CFBundleSignature': 'CrWA',  # Crystal Web Archiver
         'CFBundleVersion': VERSION_STRING,
         'NSHumanReadableCopyright': COPYRIGHT_STRING,
     }
