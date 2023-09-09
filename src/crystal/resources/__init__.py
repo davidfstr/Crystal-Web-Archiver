@@ -1,5 +1,5 @@
 import codecs
-import crystal.tests.test_data as test_data
+import crystal.resources as resources
 from crystal.util.xos import is_windows
 import importlib.resources
 import os
@@ -19,17 +19,17 @@ def open_binary(filename: str) -> BinaryIO:
             filepath_components = (
                 [os.path.dirname(sys.executable)] +
                 ['lib'] + 
-                test_data.__name__.split('.') + 
+                resources.__name__.split('.') + 
                 [filename]
             )
         else:
             filepath_components = (
-                [os.path.dirname(test_data.__file__)] +
+                [os.path.dirname(resources.__file__)] +
                 [filename]
             )
         return open(os.path.join(*filepath_components), 'rb')
     else:
-        return importlib.resources.open_binary(test_data, filename)
+        return importlib.resources.open_binary(resources, filename)
 
 
 def open_text(filename: str, *, encoding: str='utf-8', errors='strict') -> TextIO:

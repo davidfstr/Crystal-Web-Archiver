@@ -3,8 +3,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from copy import deepcopy
 from crystal.model import Project
+from crystal import resources
 from crystal.server import get_request_url, ProjectServer
-from crystal.tests import test_data
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 from crystal.util import http_date
@@ -85,7 +85,7 @@ def extracted_project(
         ) -> Iterator[str]:
     with tempfile.TemporaryDirectory() as project_parent_dirpath:
         # Extract project
-        with test_data.open_binary(zipped_project_filename) as zipped_project_file:
+        with resources.open_binary(zipped_project_filename) as zipped_project_file:
             with ZipFile(zipped_project_file, 'r') as project_zipfile:
                 project_zipfile.extractall(project_parent_dirpath)
         

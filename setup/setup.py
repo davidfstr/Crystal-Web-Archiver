@@ -101,10 +101,10 @@ elif sys.platform == 'win32':
             'dest_base': APP_NAME,
         }],
         data_files=[
-            # crystal.tests.test_data
-            (r'lib\crystal\tests\test_data', [
-                r'..\src\crystal\tests\test_data' + '\\' + filename
-                for filename in os.listdir(r'..\src\crystal\tests\test_data')
+            # crystal.resources
+            (r'lib\crystal\resources', [
+                r'..\src\crystal\resources' + '\\' + filename
+                for filename in os.listdir(r'..\src\crystal\resources')
                 if filename not in ['__pycache__'] and not filename.startswith('.')
             ]),
         ],

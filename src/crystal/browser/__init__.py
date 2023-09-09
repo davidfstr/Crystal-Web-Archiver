@@ -65,7 +65,7 @@ class MainWindow:
         raw_frame = wx.Frame(None, title=frame_title, name='cr-main-window')
         try:
             # TODO: Move general resource management out of crystal.tests package
-            from crystal.tests.test_data import open_binary
+            from crystal.resources import open_binary
             
             # macOS: Define proxy icon beside the filename in the titlebar
             raw_frame.SetRepresentedFilename(project.path)

@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager, contextmanager
 from crystal.model import Project, Resource, ResourceRevision
-from crystal.tests import test_data
+from crystal import resources
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
@@ -29,7 +29,7 @@ async def test_download_does_save_resource_metadata_and_content_accurately() -> 
         ['Date', 'Wed, 16 Aug 2023 00:00:00 GMT'],  # arbitrary
     ]
     
-    with test_data.open_binary('testdata_xkcd.crystalproj.zip') as content_file:
+    with resources.open_binary('testdata_xkcd.crystalproj.zip') as content_file:
         content_bytes = content_file.read()
     assert len(content_bytes) > 1000  # ensure is a reasonably sized file
     
@@ -79,7 +79,7 @@ async def test_download_does_autopopulate_date_header_if_not_received_from_origi
         ['Date', ANY],
     ]
     
-    with test_data.open_binary('testdata_xkcd.crystalproj.zip') as content_file:
+    with resources.open_binary('testdata_xkcd.crystalproj.zip') as content_file:
         content_bytes = content_file.read()
     
     with _file_served(HEADERS, content_bytes) as server_port:

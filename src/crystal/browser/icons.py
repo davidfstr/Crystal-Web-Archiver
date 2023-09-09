@@ -47,7 +47,7 @@ def BADGES() -> Dict[str, wx.Bitmap]:
 
 def _load_png_resource(resource_name: str) -> wx.Bitmap:
     # TODO: Move general resource management out of crystal.tests package
-    from crystal.tests.test_data import open_binary
+    from crystal.resources import open_binary
     
     with open_binary(resource_name) as f:
         bitmap = wx.Bitmap.FromPNGData(f.read())
