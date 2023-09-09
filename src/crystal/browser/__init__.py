@@ -70,7 +70,8 @@ class MainWindow:
             # macOS: Define proxy icon beside the filename in the titlebar
             raw_frame.SetRepresentedFilename(project.path)
             # Windows: Define app icon in the top-left corner
-            raw_frame.SetIcons(wx.IconBundle(open_binary('appicon.ico')))
+            if is_windows():
+                raw_frame.SetIcons(wx.IconBundle(open_binary('appicon.ico')))
             
             # 1. Define *single* child with full content of the wx.Frame,
             #    so that LogDrawer can be created for this window later
