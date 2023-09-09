@@ -264,7 +264,14 @@ Release Notes ⋮
 
 ### main
 
-* Windows: Add app icon and Windows-friendly title to main window
+* First-time-run experience improvements
+    * App name, logo, and icon fixes
+        * macOS: Fix application menu title and title of its menuitems
+        * Windows: Add app icon and Windows-friendly title to main window
+
+* Backward-incompatible API changes
+    * `Project.title` has been removed. Calculate a reasonable title from
+      `Project.path` instead.
 
 ### v1.6.0b (September 4, 2023)
 
