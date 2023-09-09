@@ -48,7 +48,6 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'resources_matching_pattern',
     'root_resources',
     'root_task',
-    'title',
     'urls_matching_pattern',
 ]
 

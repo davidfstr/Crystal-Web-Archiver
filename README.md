@@ -262,6 +262,10 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Windows: Add app icon and Windows-friendly title to main window
+
 ### v1.6.0b (September 4, 2023)
 
 This release features significant improvements to downloading large websites

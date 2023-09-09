@@ -1,4 +1,5 @@
 from contextlib import contextmanager, nullcontext
+from crystal import APP_NAME
 from crystal import __version__ as crystal_version
 from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
@@ -51,11 +52,25 @@ class MainWindow:
         
         self._create_actions()
         
+        frame_title: str
+        filename_with_ext = os.path.basename(project.path)
+        if is_windows():
+            (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
+            frame_title = f'{filename_without_ext} - {APP_NAME}'
+        else:  # is_mac_os(); other
+            frame_title = filename_with_ext
+        
         # TODO: Rename: raw_frame -> frame,
         #               frame -> frame_content
-        raw_frame = wx.Frame(None, title=project.title, name='cr-main-window')
+        raw_frame = wx.Frame(None, title=frame_title, name='cr-main-window')
         try:
+            # TODO: Move general resource management out of crystal.tests package
+            from crystal.tests.test_data import open_binary
+            
+            # macOS: Define proxy icon beside the filename in the titlebar
             raw_frame.SetRepresentedFilename(project.path)
+            # Windows: Define app icon in the top-left corner
+            raw_frame.SetIcons(wx.IconBundle(open_binary('appicon.ico')))
             
             # 1. Define *single* child with full content of the wx.Frame,
             #    so that LogDrawer can be created for this window later

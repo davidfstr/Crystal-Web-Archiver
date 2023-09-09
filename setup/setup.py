@@ -95,7 +95,7 @@ elif sys.platform == 'win32':
     extra_setup_options = dict(
         setup_requires=['py2exe'],
         windows=[{
-            'script': r'..\crystal\__main__.py',
+            'script': r'..\src\crystal\__main__.py',
             'icon_resources': [(0, r'media\AppIconWin.ico')],
             # Executable name
             'dest_base': APP_NAME,

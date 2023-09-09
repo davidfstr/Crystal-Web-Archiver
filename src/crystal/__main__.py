@@ -13,6 +13,7 @@ from __future__ import annotations
 #       Therefore many imports in this file should occur directly within functions.
 import argparse
 import atexit
+from crystal import APP_AUTHOR, APP_NAME
 import datetime
 import locale
 import os
@@ -35,10 +36,6 @@ if TYPE_CHECKING:
     import wx
 
 
-_APP_NAME = 'Crystal Web Archiver'
-_APP_AUTHOR = 'DaFoster'
-
-
 def main() -> None:
     """
     Main function. Starts the program.
@@ -59,7 +56,7 @@ def _main(args: List[str]) -> None:
     )
     if log_to_file:
         from appdirs import user_log_dir
-        log_dirpath = user_log_dir(_APP_NAME, _APP_AUTHOR)
+        log_dirpath = user_log_dir(APP_NAME, APP_AUTHOR)
         os.makedirs(log_dirpath, exist_ok=True)
         
         sys.stdout = open(
@@ -205,7 +202,7 @@ def _main(args: List[str]) -> None:
             super().__init__(*args, **kwargs)
             
             # Define app name used by the "Quit X" and "Hide X" menuitems
-            self.SetAppDisplayName(_APP_NAME)
+            self.SetAppDisplayName(APP_NAME)
         
         def OnPreInit(self):
             # (May insert debugging code here in the future)

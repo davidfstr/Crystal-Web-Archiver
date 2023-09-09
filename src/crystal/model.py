@@ -373,10 +373,6 @@ class Project:
     # === Properties ===
     
     @property
-    def title(self) -> str:
-        return os.path.basename(self.path)
-    
-    @property
     def readonly(self) -> bool:
         """
         Whether this project has been opened as read-only during the current session.
