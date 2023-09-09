@@ -4,11 +4,6 @@ import pytest
 import re
 
 
-def test_version_is_expected_value() -> None:
-    assert __version__ == '1.6.0b', \
-        'Version in crystal/__init__.py is not the expected value'
-
-
 def test_version_in_pyproject_toml_is_consistent_with_package_version() -> None:
     pyproject_toml_filepath = os.path.join(
         os.path.dirname(__file__), '..', 'pyproject.toml')
