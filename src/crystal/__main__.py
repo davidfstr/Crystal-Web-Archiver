@@ -201,7 +201,7 @@ def _main(args: List[str]) -> None:
             self._did_finish_launch = False
             super().__init__(*args, **kwargs)
             
-            # Define app name used by the "Quit X" and "Hide X" menuitems
+            # macOS: Define app name used by the "Quit X" and "Hide X" menuitems
             self.SetAppDisplayName(APP_NAME)
         
         def OnPreInit(self):
