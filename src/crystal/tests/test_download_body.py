@@ -305,8 +305,8 @@ async def _downloads_mocked_to_raise_io_error() -> AsyncIterator:
         )
     
     def mock_read() -> Iterable[bytes]:
-         yield b'<html>'
-         raise_connection_reset()
+        yield b'<html>'
+        raise_connection_reset()
     def mock_readinto() -> Iterable[int]:
         yield len(b'<html>')
         raise_connection_reset()
