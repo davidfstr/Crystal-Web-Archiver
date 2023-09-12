@@ -16,6 +16,7 @@ Release Notes ⋮
     * App name, logo, and icon fixes
         * macOS: Fix application menu title and title of its menuitems
         * Windows: Add app icon and Windows-friendly title to main window
+        * Linux: Fix app title and icon in dock to be correct
 
 * Backward-incompatible API changes
     * `Project.title` has been removed. Calculate a reasonable title from

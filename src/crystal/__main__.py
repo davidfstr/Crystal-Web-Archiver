@@ -6,19 +6,21 @@ Home of the main function, which starts the program.
 from __future__ import annotations
 
 # NOTE: Avoid importing anything outside the Python standard library
-#       at the top-level of this module, in case the import itself fails.
+#       at the top-level of this module, including from the "crystal" package,
+#       in case the import itself fails.
+#       
 #       Import failure is more common in py2app and py2exe contexts and
 #       is easier to debug when it does NOT happen at the top-level.
 #       
 #       Therefore many imports in this file should occur directly within functions.
 import argparse
 import atexit
-from crystal import APP_AUTHOR, APP_NAME
 import datetime
 import locale
 import os
 import os.path
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -56,6 +58,8 @@ def _main(args: List[str]) -> None:
     )
     if log_to_file:
         from appdirs import user_log_dir
+        from crystal import APP_AUTHOR, APP_NAME
+        
         log_dirpath = user_log_dir(APP_NAME, APP_AUTHOR)
         os.makedirs(log_dirpath, exist_ok=True)
         
@@ -108,6 +112,8 @@ def _main(args: List[str]) -> None:
     # binary downloaded from the internet.
     args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
     
+    from crystal.util.xos import is_linux
+    
     # Parse CLI arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -150,6 +156,12 @@ def _main(args: List[str]) -> None:
         action='store',
         nargs='*',
     )
+    if is_linux():
+        parser.add_argument(
+            '--install-to-desktop',
+            help='Install this app to the desktop.',
+            action='store_true',
+        )
     parser.add_argument(
         'filepath',
         help='Optional. Path to a *.crystalproj to open.',
@@ -171,6 +183,11 @@ def _main(args: List[str]) -> None:
     from crystal.util.xgc import PROFILE_GC, start_profiling_gc
     if PROFILE_GC:
         start_profiling_gc()
+    
+    # --install-to-desktop, if requested
+    if is_linux() and parsed_args.install_to_desktop:
+        _install_to_desktop()
+        sys.exit()
     
     # Start shell if requested
     if parsed_args.shell:
@@ -197,6 +214,8 @@ def _main(args: List[str]) -> None:
     # 2. Initialize the foreground thread
     class MyApp(wx.App):
         def __init__(self, *args, **kwargs):
+            from crystal import APP_NAME
+            
             self._keepalive_frame = None
             self._did_finish_launch = False
             super().__init__(*args, **kwargs)
@@ -357,6 +376,54 @@ def _running_as_bundle():
     such as py2exe or py2app.
     """
     return hasattr(sys, 'frozen')
+
+
+def _install_to_desktop():
+    """Install the Crystal application to the desktop. (Linux only)"""
+    from crystal import resources
+    from crystal.util.xos import is_linux
+    
+    if not is_linux():
+        raise ValueError()
+    
+    # Format .desktop file in memory
+    with resources.open_text('crystal.desktop', encoding='utf-8') as f:
+        desktop_file_content = f.read()
+    desktop_file_content = desktop_file_content.replace(
+        '__CRYSTAL_PATH__', sys.executable)
+    desktop_file_content = desktop_file_content.replace(
+        '__APPICON_PATH__', resources.get_filepath('appicon.png'))
+    
+    # Install .desktop file to ~/.local/share/applications
+    # 
+    # NOTE: Only .desktop files opened from this directory will show their
+    #       icon in the dock correctly.
+    apps_dirpath = os.path.expanduser('~/.local/share/applications')
+    os.makedirs(apps_dirpath, exist_ok=True)
+    with open(f'{apps_dirpath}/crystal.desktop', 'w') as f:
+        f.write(desktop_file_content)
+    
+    # Install symlink to .desktop file on ~/Desktop, if possible
+    desktop_dirpath = os.path.expanduser('~/Desktop')
+    if os.path.isdir(desktop_dirpath) and not os.path.exists(f'{desktop_dirpath}/crystal.desktop'):
+        subprocess.run([
+            'ln', '-s',
+            f'{apps_dirpath}/crystal.desktop',
+            f'{desktop_dirpath}/crystal.desktop',
+        ], check=True)
+        
+        # Mark .desktop symlink on desktop as "Allow Launching"
+        # https://askubuntu.com/questions/1218954/desktop-files-allow-launching-set-this-via-cli
+        if True:
+            subprocess.run([
+                'gio', 'set',
+                f'{desktop_dirpath}/crystal.desktop',
+                'metadata::trusted', 'true'
+            ], check=True)
+            subprocess.run([
+                'chmod', 'a+x',
+                f'{desktop_dirpath}/crystal.desktop',
+            ], check=True)
 
 
 def _did_launch(
