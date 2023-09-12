@@ -1,0 +1,33 @@
+[Desktop Entry]
+Encoding=UTF-8
+Version=1.0
+Type=Application
+# Whether to open a terminal to run this app
+Terminal=false
+# Command line to run this app
+# See: "The Exec key" in https://specifications.freedesktop.org/desktop-entry-spec/latest/
+# 
+# TODO: Support opening multiple projects at once, in general and from CLI.
+#       Then replace %f with %F to signal that multi-file support exists.
+Exec=__CRYSTAL_PATH__ %f
+# Title used for app in dock
+Name=Crystal
+# TODO: What does this key actually affect
+GenericName=Website Downloader
+# TODO: What does this key actually affect
+Comment=Download Websites
+# Icon used for app in dock
+Icon=__APPICON_PATH__
+# MIME Types that this app knows how to open
+MimeType=application/vnd.crystal.project;
+# TODO: What does this key actually affect
+Categories=Utility;Archiving;GTK;
+# TODO: What does this key actually affect
+Keywords=WWW;Web;Archiving;
+# TODO: Add support for the Startup Notification Protocol so that
+#       app can let the desktop environment know when the app has started
+#       to launch (like the bouncing dock icon on macOS) and when
+#       it has finished launching. See:
+#       https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/
+StartupNotify=false
+#StartupWMClass=cr-open-or-create-project
