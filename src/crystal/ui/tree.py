@@ -17,7 +17,7 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_ignored,
     wrapped_object_deleted_error_raising
 )
-from crystal.util.xthreading import is_foreground_thread
+from crystal.util.xthreading import fg_affinity
 from typing import Callable, Dict, List, NewType, NoReturn, Optional, Tuple, Union
 import wx
 
@@ -400,29 +400,29 @@ class NodeViewPeer(tuple):
     def node_id(self) -> wx.TreeItemId:
         return self[1]
     
+    @fg_affinity
     def SetItemData(self, obj: NodeView) -> None:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemData(node_id, obj)
     
+    @fg_affinity
     def SetItemText(self, text: str) -> None:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemText(node_id, text)
     
+    @fg_affinity
     def SetItemHasChildren(self, has: bool) -> None:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemHasChildren(node_id, has)
     
+    @fg_affinity
     def GetFirstChild(self) -> Tuple[wx.TreeItemId, object]:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_raising(self._raise_no_longer_exists):
@@ -430,8 +430,8 @@ class NodeViewPeer(tuple):
         else:
             self._raise_no_longer_exists()
     
+    @fg_affinity
     def AppendItem(self, text: str, *args) -> wx.TreeItemId:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_raising(self._raise_no_longer_exists):
@@ -439,36 +439,36 @@ class NodeViewPeer(tuple):
         else:
             self._raise_no_longer_exists()
     
+    @fg_affinity
     def SetItemImage(self, image: ImageIndex, which: wx.TreeItemIcon) -> None:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemImage(node_id, image, which)
     
+    @fg_affinity
     def Delete(self) -> None:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.Delete(node_id)
     
+    @fg_affinity
     def SortChildren(self) -> None:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SortChildren(node_id)
     
+    @fg_affinity
     def SelectItem(self, select: bool=True) -> None:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SelectItem(node_id, select)
     
+    @fg_affinity
     def IsSelected(self) -> bool:
-        assert is_foreground_thread()
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():

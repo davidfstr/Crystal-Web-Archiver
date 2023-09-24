@@ -6,7 +6,7 @@ from crystal.browser import MainWindow
 from crystal.model import Project
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
-    fg_call_and_wait, has_foreground_thread, is_foreground_thread,
+    bg_affinity, fg_call_and_wait, has_foreground_thread,
     NoForegroundThreadError,
 )
 import os
@@ -155,8 +155,6 @@ def fg_interact(banner=None, local=None, exitmsg=None):
     """
     Similar to code.interact(), but evaluates code on the foreground thread.
     """
-    assert not is_foreground_thread()
-    
     console = _FgInteractiveConsole(local)
     try:
         import readline
@@ -179,6 +177,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         super().__init__(*args, **kwargs)
         self._first_input = True
     
+    @bg_affinity
     def raw_input(self, *args, **kwargs) -> str:  # override
         if self._first_input:
             # Try to execute startup file specified in $PYTHONSTARTUP

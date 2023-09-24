@@ -18,6 +18,7 @@ from crystal.tests import (
 )
 from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
+from crystal.util.xthreading import bg_affinity
 from functools import wraps
 import os
 import sys
@@ -55,6 +56,9 @@ _TEST_FUNCS = (
 _TestFuncId = Tuple[str, str]  # (module, func_name)
 
 
+# TODO: Rename "test_names" to something more appropriate,
+#       now that items can also refer to test modules (and not just test functions)
+@bg_affinity
 def run_tests(test_names: List[str]) -> bool:
     """
     Runs automated UI tests, printing a summary report,
@@ -67,8 +71,6 @@ def run_tests(test_names: List[str]) -> bool:
         return _run_tests(test_names)
 
 
-# TODO: Rename "test_names" to something more appropriate,
-#       now that items can also refer to test modules (and not just test functions)
 def _run_tests(test_names: List[str]) -> bool:
     os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
     

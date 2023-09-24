@@ -296,10 +296,13 @@ def _main(args: List[str]) -> None:
         app = MyApp(redirect=False)
         
         # Starts tests if requested
-        # NOTE: Must do this after initializing the foreground thread
         if parsed_args.test is not None:
-            from crystal.util.xthreading import bg_call_later, fg_call_later, is_foreground_thread
-            assert is_foreground_thread()
+            from crystal.util.xthreading import bg_call_later, fg_call_later, has_foreground_thread
+            assert has_foreground_thread(), (
+                'Expected foreground thread to be running before starting tests, '
+                'because tests expect to be able to schedule callables on '
+                'the foreground thread'
+            )
             def bg_task():
                 is_ok = False
                 try:

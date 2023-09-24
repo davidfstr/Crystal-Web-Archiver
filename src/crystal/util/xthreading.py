@@ -8,6 +8,7 @@ This thread is responsible for:
 """
 
 from crystal.util.profile import create_profiled_callable
+from functools import wraps
 import os
 import sys
 import threading
@@ -54,6 +55,53 @@ def has_foreground_thread() -> bool:
     If it doesn't exist, it may not have been created yet or it may have exited.
     """
     return _fg_thread is not None
+
+
+# ------------------------------------------------------------------------------
+# Thread Affinity
+
+def fg_affinity(func: Callable) -> Callable:
+    """
+    Marks the decorated function as needing to be called from the
+    foreground thread only.
+    
+    Calling the decorated function from an inappropriate thread will immediately
+    raise an AssertionError.
+    
+    The following kinds of manipulations need to happen on the foreground thread:
+    - wxPython calls, except for wx.CallAfter
+    - SQLite calls
+    """
+    if __debug__:  # no -O passed on command line?
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            assert is_foreground_thread()
+            return func(*args, **kwargs)
+        return wrapper
+    else:
+        return func
+
+
+def bg_affinity(func: Callable) -> Callable:
+    """
+    Marks the decorated function as needing to be called from a
+    background thread only, and in particular not from the foreground thread.
+    
+    Calling the decorated function from an inappropriate thread will immediately
+    raise an AssertionError.
+    
+    The following kinds of manipulations need to happen on background threads:
+    - Blocking I/O (except for database I/O)
+    - Long-running tasks that would block the UI if run on the foreground thread
+    """
+    if __debug__:  # no -O passed on command line?
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            assert not is_foreground_thread()
+            return func(*args, **kwargs)
+        return wrapper
+    else:
+        return func
 
 
 # ------------------------------------------------------------------------------

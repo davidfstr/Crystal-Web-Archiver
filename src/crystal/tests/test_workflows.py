@@ -23,7 +23,6 @@ from crystal.tests.util.windows import (
     AddGroupDialog, AddUrlDialog, EntityTree,
     MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
-from crystal.util.xthreading import is_foreground_thread
 import datetime
 import re
 import tempfile
@@ -40,8 +39,6 @@ async def test_can_download_and_serve_a_static_site() -> None:
     
     Example site: https://xkcd.com/
     """
-    assert is_foreground_thread()
-    
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         if True:
