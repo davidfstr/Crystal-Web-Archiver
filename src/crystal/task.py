@@ -4,6 +4,7 @@ import atexit
 from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util.caffeination import Caffeination
+from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import ignore_runtime_from_enclosing_warn_if_slow, warn_if_slow
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
@@ -51,7 +52,7 @@ SCHEDULING_STYLE_ROUND_ROBIN = 2
 """One task unit will be executed from each child during a scheduler pass."""
 
 
-class Task:
+class Task(ListenableMixin):
     """
     Encapsulates a long-running process that reports its status occasionally.
     A task may depend on the results of a child task during its execution.
@@ -114,7 +115,6 @@ class Task:
         '_children',
         '_num_children_complete',
         '_complete',
-        'listeners',
         '_did_yield_self',
         '_future',
         # NOTE: Used differently by SCHEDULING_STYLE_SEQUENTIAL and SCHEDULING_STYLE_ROUND_ROBIN
@@ -126,13 +126,14 @@ class Task:
     )
     
     def __init__(self, title: str) -> None:
+        super().__init__()
+        
         self._title = title
         self._subtitle = 'Queued'
         self._parent = None  # type: Optional[Task]
         self._children = []  # type: List[Task]
         self._num_children_complete = 0
         self._complete = False
-        self.listeners = []  # type: List[object]
         
         self._did_yield_self = False            # used by leaf tasks
         self._future = None  # type: Optional[Future]  # used by leaf tasks

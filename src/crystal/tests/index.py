@@ -20,6 +20,7 @@ from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from crystal.util.xthreading import bg_affinity
 from functools import wraps
+import gc
 import os
 import sys
 import time
@@ -115,6 +116,10 @@ def _run_tests(test_names: List[str]) -> bool:
             
             print('OK')
         print()
+        
+        # Garbage collect, running any finalizers in __del__() early,
+        # such as the warnings printed by ListenableMixin
+        gc.collect()
     end_time = time.time()  # capture
     delta_time = end_time - start_time
     

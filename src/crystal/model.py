@@ -29,6 +29,7 @@ from crystal.util.db import (
     get_index_names,
     is_no_such_column_error_for,
 )
+from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import warn_if_slow
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.xbisect import bisect_key_right
@@ -68,7 +69,7 @@ if TYPE_CHECKING:
     )
 
 
-class Project:
+class Project(ListenableMixin):
     """
     Groups together a set of resources that are downloaded and any associated settings.
     Persisted and auto-saved.
@@ -101,6 +102,8 @@ class Project:
             if readonly is True and no project already exists at the specified path.
         * CancelOpenProject
         """
+        super().__init__()
+        
         if progress_listener is None:
             progress_listener = DummyOpenProjectProgressListener()
         
@@ -110,7 +113,6 @@ class Project:
             path = head  # reinterpret
         
         self.path = path
-        self.listeners = []  # type: List[object]
         
         self._properties = dict()               # type: Dict[str, str]
         self._resources = OrderedDict()         # type: Dict[str, Resource]
@@ -2261,7 +2263,7 @@ class _PersistedError(Exception):
 ResourceGroupSource = Union['RootResource', 'ResourceGroup', None]
 
 
-class ResourceGroup:
+class ResourceGroup(ListenableMixin):
     """
     Groups resource whose url matches a particular pattern.
     Persisted and auto-saved.
@@ -2278,12 +2280,13 @@ class ResourceGroup:
         * name -- name of this group.
         * url_pattern -- url pattern matched by this group.
         """
+        super().__init__()
+        
         self.project = project
         self.name = name
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         self._source = None  # type: ResourceGroupSource
-        self.listeners = []  # type: List[object]
         
         self._members = project.resources_matching_pattern(
             url_pattern_re=self._url_pattern_re,
