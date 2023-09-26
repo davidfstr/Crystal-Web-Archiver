@@ -11,8 +11,8 @@ from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util.xsqlite3 import is_database_closed_error
 from crystal.util.xthreading import (
-    bg_call_later, fg_call_and_wait, fg_call_later, is_foreground_thread,
-    NoForegroundThreadError
+    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, 
+    is_foreground_thread, NoForegroundThreadError
 )
 import os
 from overrides import overrides
@@ -338,6 +338,7 @@ class Task(ListenableMixin):
     
     # === Public Operations ===
     
+    @fg_affinity
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
         """
         Returns a callable ("task unit") that completes a unit of work for
@@ -420,6 +421,7 @@ class Task(ListenableMixin):
         else:
             return False  # children did not change
     
+    @bg_affinity
     def _call_self_and_record_result(self):
         # (Ignore client requests to cancel)
         if self._future is None:
@@ -561,6 +563,7 @@ class DownloadResourceBodyTask(Task):
         self._resource = abstract_resource.resource  # type: Resource
         self.did_download = None  # type: Optional[bool]
     
+    @bg_affinity
     def __call__(self) -> ResourceRevision:
         """
         Raises:
@@ -973,6 +976,7 @@ class ParseResourceRevisionLinks(Task):
             title='Finding links in: ' + _get_abstract_resource_title(abstract_resource))
         self._resource_revision = resource_revision
     
+    @bg_affinity
     def __call__(self) -> 'Tuple[List[Link], List[Resource]]':
         """
         Raises:
@@ -1029,6 +1033,7 @@ class _PlaceholderTask(Task):  # abstract
             self._complete = True  # HACK: pre-finish this part
             self.finish()
     
+    @bg_affinity
     def __call__(self):
         if self._value is not _NO_VALUE:
             return self._value
@@ -1310,7 +1315,7 @@ class RootTask(Task):
     def __init__(self):
         super().__init__(title='ROOT')
         self.subtitle = 'Running'
-        
+    
     def append_child(self, *args, **kwargs) -> None:
         """
         Raises:
@@ -1321,6 +1326,7 @@ class RootTask(Task):
             raise ProjectClosedError()
         super().append_child(*args, **kwargs)
     
+    @fg_affinity
     def try_get_next_task_unit(self):
         if self.complete:
             return None
