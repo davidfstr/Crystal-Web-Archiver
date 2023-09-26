@@ -313,28 +313,19 @@ class Task(ListenableMixin):
         """
         Clears all of this task's children which are complete.
         """
-        # NOTE: Use a foreground task here as a poor man's lock to
-        #       prevent self._children from being concurrently
-        #       modified by the foreground thread.
-        #       
-        #       In particular the RootTask calls this method at the
-        #       same time that other automated test code is running which
-        #       may add a new top-level task concurrently.
-        def fg_task() -> None:
-            child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
-            if len(child_indexes_to_remove) == 0:
-                return
-            self._children = [c for c in self.children if not c.complete]
-            self._num_children_complete -= len(child_indexes_to_remove)
-            
-            # NOTE: Call these listeners also inside the lock
-            #       because they are likely to be updating
-            #       data structures that need to be strongly
-            #       synchronized with the modified child list.
-            for lis in self.listeners:
-                if hasattr(lis, 'task_did_clear_children'):
-                    lis.task_did_clear_children(self, child_indexes_to_remove)  # type: ignore[attr-defined]
-        fg_call_and_wait(fg_task)
+        child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
+        if len(child_indexes_to_remove) == 0:
+            return
+        self._children = [c for c in self.children if not c.complete]
+        self._num_children_complete -= len(child_indexes_to_remove)
+        
+        # NOTE: Call these listeners also inside the lock
+        #       because they are likely to be updating
+        #       data structures that need to be strongly
+        #       synchronized with the modified child list.
+        for lis in self.listeners:
+            if hasattr(lis, 'task_did_clear_children'):
+                lis.task_did_clear_children(self, child_indexes_to_remove)  # type: ignore[attr-defined]
     
     # === Public Operations ===
     
@@ -1361,6 +1352,13 @@ class RootTask(Task):
             'because the current implementation of that method in Task '
             'is not prepared to deal with concurrent modification of '
             'RootTask.children.')
+    
+    @overrides
+    def clear_completed_children(self) -> None:
+        def fg_task() -> None:
+            super(RootTask, self).clear_completed_children()
+        # NOTE: Must synchronize access to RootTask.children with foreground thread
+        fg_call_and_wait(fg_task)
     
     def close(self) -> None:
         """Stop all descendent tasks, asynchronously."""
