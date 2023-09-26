@@ -628,17 +628,17 @@ class Project(ListenableMixin):
     
     def add_task(self, task: Task) -> None:
         """
-        Schedules the specified top-level task for execution, if not already done.
+        Schedules the specified top-level task for execution.
         
         The specified task is allowed to already be complete.
         
         Raises:
         * ProjectClosedError -- if this project is closed
         """
-        if task not in self.root_task.children:
-            self.root_task.append_child(task, already_complete_ok=True)
-            if task.complete:
-                self.root_task.child_task_did_complete(task)
+        task_was_complete = task.complete  # capture
+        self.root_task.append_child(task, already_complete_ok=True)
+        if task_was_complete:
+            self.root_task.child_task_did_complete(task)
     
     # === Events ===
     

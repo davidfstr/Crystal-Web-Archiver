@@ -1307,6 +1307,9 @@ class RootTask(Task):
     Task whose primary purpose is to serve as the root task.
     External code must create and add its child tasks.
     
+    Access to this task's children list must be synchronized with the
+    foreground thread.
+    
     This task never completes.
     """
     icon_name = None
@@ -1316,15 +1319,22 @@ class RootTask(Task):
         super().__init__(title='ROOT')
         self.subtitle = 'Running'
     
-    def append_child(self, *args, **kwargs) -> None:
+    @overrides
+    def append_child(self, child: Task, *args, **kwargs) -> None:
         """
         Raises:
         * ProjectClosedError -- if this project is closed
         """
-        if self.complete:
-            from crystal.model import ProjectClosedError
-            raise ProjectClosedError()
-        super().append_child(*args, **kwargs)
+        def fg_task() -> None:
+            assert child not in self.children
+            
+            if self.complete:
+                from crystal.model import ProjectClosedError
+                raise ProjectClosedError()
+            
+            super(RootTask, self).append_child(child, *args, **kwargs)
+        # NOTE: Must synchronize access to RootTask.children with foreground thread
+        fg_call_and_wait(fg_task)
     
     @fg_affinity
     def try_get_next_task_unit(self):
