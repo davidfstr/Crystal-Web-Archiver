@@ -257,7 +257,6 @@ class Task(ListenableMixin):
     def finish(self) -> None:
         """
         Marks this task as completed.
-        Threadsafe.
         """
         # Mark as complete immediately, because caller may check this task's complete status
         self._complete = True
@@ -1309,6 +1308,12 @@ class RootTask(Task):
     def __init__(self):
         super().__init__(title='ROOT')
         self.subtitle = 'Running'
+    
+    @property  # type: ignore[misc]
+    @fg_affinity  # force any access to synchronize with foreground thread
+    @overrides
+    def children(self) -> List[Task]:
+        return super().children
     
     @overrides
     def append_child(self, child: Task, *args, **kwargs) -> None:

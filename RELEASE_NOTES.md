@@ -18,6 +18,11 @@ Release Notes ⋮
         * Windows: Add app icon and Windows-friendly title to main window
         * Linux: Fix app title and icon in dock to be correct
 
+* Minor fixes
+    * Eliminated race condition where scheduler thread could try to read from
+      the root task's children list concurrently with a different thread
+      adding a new child to it.
+
 * Backward-incompatible API changes
     * `Project.title` has been removed. Calculate a reasonable title from
       `Project.path` instead.
