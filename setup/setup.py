@@ -49,6 +49,14 @@ if sys.platform == 'darwin':
                 'CFBundleTypeRole': 'Editor',
                 'LSTypeIsPackage': True,
             },
+            # Associate application with .crystalopen files
+            {
+                'CFBundleTypeExtensions': ['crystalopen'],
+                'CFBundleTypeIconFile': 'LauncherIcon.icns',
+                'CFBundleTypeName': 'Crystal Launcher',
+                'CFBundleTypeRole': 'Editor',
+                'LSTypeIsPackage': False,
+            },
         ],
         'CFBundleIdentifier': 'net.dafoster.crystal',
         'CFBundleShortVersionString': VERSION_STRING,
@@ -60,7 +68,10 @@ if sys.platform == 'darwin':
     extra_setup_options = dict(
         setup_requires=['py2app'],
         app=['../src/crystal/__main__.py'],
-        data_files=['media/DocIconMac.icns'],
+        data_files=[
+            'media/DocIconMac.icns',
+            'media/LauncherIcon.icns',
+        ],
         options={'py2app': {
             # Cannot use argv_emulation=True in latest version of py2app
             # because of: https://github.com/ronaldoussoren/py2app/issues/340
@@ -96,7 +107,10 @@ elif sys.platform == 'win32':
         setup_requires=['py2exe'],
         windows=[{
             'script': r'..\src\crystal\__main__.py',
-            'icon_resources': [(0, r'media\AppIconWin.ico')],
+            'icon_resources': [
+                (0, r'media\AppIconWin.ico'),
+                (1, r'media\LauncherIcon.ico'),
+            ],
             # Executable name
             'dest_base': APP_NAME,
         }],
