@@ -376,9 +376,16 @@ class MainWindow:
     # === File Menu: Events ===
     
     def _on_close_project(self, event: wx.CommandEvent) -> None:
+        # TODO: Move these dispose operations inside _on_close_frame().
+        #       But be careful! The last time this movement was attempted,
+        #       various shutdown-related race conditions were triggered.
+        #       
+        #       Wait to perform movement until enough time to formalize
+        #       a deterministic shutdown procedure.
         self.entity_tree.dispose()
         self.task_tree.dispose()
-        self._frame.Close()
+        
+        self._frame.Close()  # will trigger call to _on_close_frame()
     
     def _on_quit(self, event: wx.CommandEvent) -> None:
         if event.Id == wx.ID_EXIT:

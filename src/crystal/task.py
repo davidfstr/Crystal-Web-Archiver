@@ -1299,8 +1299,6 @@ class RootTask(Task):
     
     Access to this task's children list must be synchronized with the
     foreground thread.
-    
-    This task never completes.
     """
     icon_name = None
     scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
@@ -1365,8 +1363,11 @@ class RootTask(Task):
         # NOTE: Must synchronize access to RootTask.children with foreground thread
         fg_call_and_wait(fg_task)
     
-    def close(self) -> None:
-        """Stop all descendent tasks, asynchronously."""
+    def interrupt(self) -> None:
+        """
+        Stop all descendent tasks, asynchronously,
+        by interrupting the scheduler thread.
+        """
         self.finish()
     
     def __repr__(self) -> str:

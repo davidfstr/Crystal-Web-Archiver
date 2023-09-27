@@ -232,9 +232,7 @@ def bg_call_later(callable: Callable[..., None], daemon: bool=False, *args) -> N
         if True, forces the background thread to be a daemon,
         and not prevent program termination while it is running.
     """
-    thread = threading.Thread(target=callable, args=args)
-    if daemon:
-        thread.daemon = True
+    thread = threading.Thread(target=callable, args=args, daemon=daemon)
     thread.start()
 
 

@@ -697,7 +697,11 @@ class Project(ListenableMixin):
     # === Close ===
     
     def close(self) -> None:
-        self.root_task.close()
+        # Stop scheduler thread soon
+        self.root_task.interrupt()
+        # (TODO: Actually wait for the scheduler thread to exit
+        #        in a deterministic fashion, rather than relying on 
+        #        garbage collection to clean up objects.)
         
         # Disable Write Ahead Log (WAL) mode when closing database
         # in case the user decides to burn the project to read-only media,
