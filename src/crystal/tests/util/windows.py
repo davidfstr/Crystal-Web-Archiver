@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from crystal.model import Project
 from crystal.tests.util.controls import (
-    click_button, file_dialog_returning, package_dialog_returning,
+    click_button, file_dialog_returning,
     TreeItem
 )
 from crystal.tests.util.runner import bg_sleep, pump_wx_events
@@ -108,7 +108,7 @@ class OpenOrCreateDialog:
         if readonly is not None:
             self.open_as_readonly.Value = readonly
         
-        with package_dialog_returning(project_dirpath):
+        with file_dialog_returning(project_dirpath):
             click_button(self.open_button)
             
             with screenshot_if_raises():
@@ -125,7 +125,7 @@ class OpenOrCreateDialog:
                 await mw.close(exc_info_while_close)
     
     async def start_opening(self, project_dirpath: str, *, next_window_name: str) -> None:
-        with package_dialog_returning(project_dirpath):
+        with file_dialog_returning(project_dirpath):
             click_button(self.open_button)
             
             await wait_for(

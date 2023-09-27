@@ -27,6 +27,7 @@ _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
 
 _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'FILE_EXTENSION',
+    'LAUNCHER_FILE_EXTENSION',
     'add_task',
     'close',
     'default_url_prefix',

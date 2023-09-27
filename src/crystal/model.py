@@ -76,11 +76,14 @@ class Project(ListenableMixin):
     """
     
     FILE_EXTENSION = '.crystalproj'
+    LAUNCHER_FILE_EXTENSION = '.crystalopen'
     
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
     _RESOURCE_REVISION_DIRNAME = 'revisions'
     _TEMPORARY_DIRNAME = 'tmp'
+    _DEFAULT_LAUNCHER_FILENAME = 'OPEN ME' + LAUNCHER_FILE_EXTENSION
+    _DEFAULT_LAUNCHER_CONTENT = 'CrPO'  # Crystal Project Open, as a FourCC
     
     # NOTE: Only tracked when tests are running
     _last_opened_project: Optional[Project]=None  # static
@@ -90,16 +93,17 @@ class Project(ListenableMixin):
             progress_listener: Optional[OpenProjectProgressListener]=None,
             *, readonly: bool=False) -> None:
         """
-        Loads a project from the specified filepath, or creates a new one if none is found.
+        Loads a project from the specified itempath, or creates a new one if none is found.
         
         Arguments:
         * path -- 
-            path to a directory (ideally with the `FILE_EXTENSION` extension)
-            from which the project is to be loaded.
+            path to a project directory (ending with `FILE_EXTENSION`)
+            or to a project launcher (ending with `LAUNCHER_FILE_EXTENSION`).
         
         Raises:
         * FileNotFoundError --
-            if readonly is True and no project already exists at the specified path.
+            if readonly is True and no project already exists at the specified path
+        * ProjectFormatError -- if the project at the specified path is invalid
         * CancelOpenProject
         """
         super().__init__()
@@ -111,6 +115,12 @@ class Project(ListenableMixin):
         (head, tail) = os.path.split(path)
         if len(tail) == 0:
             path = head  # reinterpret
+        
+        # Normalize path
+        normalized_path = self._normalize_project_path(path)  # reinterpret
+        if normalized_path is None:
+            raise ProjectFormatError(f'Project does not end with {self.FILE_EXTENSION}')
+        path = normalized_path  # reinterpret
         
         self.path = path
         
@@ -138,6 +148,8 @@ class Project(ListenableMixin):
                 os.mkdir(path)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
                 os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
+                with open(os.path.join(path, self._DEFAULT_LAUNCHER_FILENAME), 'w') as f:
+                    f.write(self._DEFAULT_LAUNCHER_CONTENT)
             else:
                 # Ensure existing project structure looks OK
                 Project._ensure_valid(path)
@@ -301,14 +313,35 @@ class Project(ListenableMixin):
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
             Project._last_opened_project = self
     
-    @staticmethod
-    def is_valid(path: str) -> bool:
+    @classmethod
+    def is_valid(cls, path: str) -> bool:
+        normalized_path = cls._normalize_project_path(path)
+        if normalized_path is None:
+            return False
         try:
-            Project._ensure_valid(path)
+            Project._ensure_valid(normalized_path)
         except ProjectFormatError:
             return False
         else:
             return True
+    
+    @classmethod
+    def _normalize_project_path(cls, path: str) -> Optional[str]:
+        if os.path.exists(path):
+            # Try to alter existing path to point to item ending with FILE_EXTENSION
+            if path.endswith(cls.FILE_EXTENSION):
+                return path
+            elif path.endswith(cls.LAUNCHER_FILE_EXTENSION):
+                parent_itempath = os.path.dirname(path)
+                if parent_itempath.endswith(cls.FILE_EXTENSION):
+                    return parent_itempath
+        else:
+            # Ensure new path ends with FILE_EXTENSION
+            if path.endswith(cls.FILE_EXTENSION):
+                return path
+            else:
+                return path + cls.FILE_EXTENSION
+        return None  # invalid
     
     @staticmethod
     def _ensure_valid(path: str) -> None:
@@ -371,6 +404,12 @@ class Project(ListenableMixin):
         tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
         if not os.path.exists(tmp_dirpath):
             os.mkdir(tmp_dirpath)
+        
+        # Add launcher if missing
+        itemnames = os.listdir(self.path)
+        if not any([n for n in itemnames if n.endswith(self.LAUNCHER_FILE_EXTENSION)]):
+            with open(os.path.join(self.path, self._DEFAULT_LAUNCHER_FILENAME), 'w') as f:
+                f.write(self._DEFAULT_LAUNCHER_CONTENT)
     
     # === Properties ===
     

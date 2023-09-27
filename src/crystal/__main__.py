@@ -164,7 +164,8 @@ def _main(args: List[str]) -> None:
         )
     parser.add_argument(
         'filepath',
-        help='Optional. Path to a *.crystalproj to open.',
+        # NOTE: Duplicates: Project.FILE_EXTENSION, Project.LAUNCHER_FILE_EXTENSION
+        help='Optional. Path to a *.crystalproj or *.crystalopen to open.',
         type=str,
         default=None,
         nargs='?',
@@ -607,17 +608,17 @@ def _prompt_to_open_project(
     from crystal.util.xos import project_appears_as_package_file
     import wx
     
-    if project_appears_as_package_file():
-        # If projects appear as files, use a file selection dialog
-        dialog = wx.FileDialog(parent,
-            message='Choose a project',
-            wildcard='Projects (%(wc)s)|%(wc)s' % {'wc': '*' + Project.FILE_EXTENSION},
-            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
-    else:
-        # If projects appear as directories, use a directory selection dialog
-        dialog = wx.DirDialog(parent,
-            message='Choose a project',
-            style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
+    # TODO: Provide way on Windows/Linux to open an old *.crystalproj
+    #       that lacks a contained launcher
+    dialog = wx.FileDialog(parent,
+        message='Choose a project',
+        wildcard='Projects (%(wc)s;%(wc2)s)|%(wc)s;%(wc2)s' % {
+            # If projects appear as files, then can open directly
+            'wc': '*' + Project.FILE_EXTENSION,
+            # If projects appear as directories, then must open contained launcher file
+            'wc2': '*' + Project.LAUNCHER_FILE_EXTENSION,
+        },
+        style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
     with dialog:
         if not dialog.ShowModal() == wx.ID_OK:
             raise CancelOpenProject()

@@ -48,16 +48,6 @@ def click_checkbox(checkbox: wx.CheckBox) -> None:
 # Utility: Controls: wx.FileDialog, wx.DirDialog
 
 @contextmanager
-def package_dialog_returning(filepath: str) -> Iterator[None]:
-    if project_appears_as_package_file():
-        with file_dialog_returning(filepath):
-            yield
-    else:
-        with dir_dialog_returning(filepath):
-            yield
-
-
-@contextmanager
 def file_dialog_returning(filepath: str) -> Iterator[None]:
     with unittest.mock.patch('wx.FileDialog', spec=True) as MockFileDialog:
         instance = MockFileDialog.return_value
