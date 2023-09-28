@@ -51,6 +51,7 @@ from sortedcontainers import SortedList
 import sqlite3
 import sys
 from tempfile import NamedTemporaryFile
+from textwrap import dedent
 import threading
 import time
 from typing import (
@@ -82,8 +83,28 @@ class Project(ListenableMixin):
     _DB_FILENAME = 'database.sqlite'
     _RESOURCE_REVISION_DIRNAME = 'revisions'
     _TEMPORARY_DIRNAME = 'tmp'
-    _DEFAULT_LAUNCHER_FILENAME = 'OPEN ME' + LAUNCHER_FILE_EXTENSION
-    _DEFAULT_LAUNCHER_CONTENT = 'CrPO'  # Crystal Project Open, as a FourCC
+    _LAUNCHER_DEFAULT_FILENAME = 'OPEN ME' + LAUNCHER_FILE_EXTENSION
+    _LAUNCHER_DEFAULT_CONTENT = b'CrPO'  # Crystal Project Open, as a FourCC
+    _README_FILENAME = 'README.txt'
+    # Define README.txt which explains what a .crystalproj is to a user that
+    # does not have Crystal installed.
+    # 
+    # NOTE: Use Windows-style CRLF line endings, assuming that most text editors
+    #       in Linux and macOS are more tolerant of foreign newline sequences
+    #       than those in Windows.
+    _README_DEFAULT_CONTENT = dedent(
+        '''
+        This .crystalproj directory is a Crystal Project, which contains one or more
+        downloaded websites and associated web pages.
+
+        You can view the websites in this project by installing Crystal from
+        https://dafoster.net/projects/crystal-web-archiver/ and double-clicking the
+        "OPEN ME" file in this directory.
+
+        To avoid damaging the downloaded websites, please do not rename, move, or
+        delete any files in this directory.
+        '''.lstrip('\n')
+    ).replace('\n', '\r\n')
     
     # NOTE: Only tracked when tests are running
     _last_opened_project: Optional[Project]=None  # static
@@ -148,8 +169,10 @@ class Project(ListenableMixin):
                 os.mkdir(path)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
                 os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
-                with open(os.path.join(path, self._DEFAULT_LAUNCHER_FILENAME), 'w') as f:
-                    f.write(self._DEFAULT_LAUNCHER_CONTENT)
+                with open(os.path.join(path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
+                    f.write(self._LAUNCHER_DEFAULT_CONTENT)
+                with open(os.path.join(self.path, self._README_FILENAME), 'w', newline='') as f:
+                    f.write(self._README_DEFAULT_CONTENT)
             else:
                 # Ensure existing project structure looks OK
                 Project._ensure_valid(path)
@@ -405,11 +428,18 @@ class Project(ListenableMixin):
         if not os.path.exists(tmp_dirpath):
             os.mkdir(tmp_dirpath)
         
-        # Add launcher if missing
+        # Add launcher and README if missing
         itemnames = os.listdir(self.path)
         if not any([n for n in itemnames if n.endswith(self.LAUNCHER_FILE_EXTENSION)]):
-            with open(os.path.join(self.path, self._DEFAULT_LAUNCHER_FILENAME), 'w') as f:
-                f.write(self._DEFAULT_LAUNCHER_CONTENT)
+            # Add missing launcher
+            with open(os.path.join(self.path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
+                f.write(self._LAUNCHER_DEFAULT_CONTENT)
+            
+            # Add README if not already there
+            readme_filepath = os.path.join(self.path, self._README_FILENAME)
+            if not os.path.exists(readme_filepath):
+                with open(readme_filepath, 'w', newline='') as f:
+                    f.write(self._README_DEFAULT_CONTENT)
     
     # === Properties ===
     
