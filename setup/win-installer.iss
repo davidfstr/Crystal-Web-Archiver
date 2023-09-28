@@ -10,6 +10,29 @@ SolidCompression=yes
 OutputBaseFilename=crystal-win-1.6.0b
 OutputDir=dist-win
 DisableProgramGroupPage=yes
+; Tell Explorer to refresh file extension information after (un)install,
+; via SHChangeNotify(SHCNE_ASSOCCHANGED)
+ChangesAssociations=yes
+
+; Register .crystalopen file extension, its icon, and its associated .exe
+[Registry]
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen"; Flags: uninsdeletekey
+; Associate .crystalopen file with MIME type
+; https://learn.microsoft.com/en-us/windows/win32/shell/fa-file-types
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen"; ValueType: string; ValueName: "Content Type"; ValueData: "application/vnd.crystal-opener"
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen"; ValueType: string; ValueName: "PerceivedType"; ValueData: "application"
+; Assign icon to file type
+; https://learn.microsoft.com/en-us/windows/win32/shell/how-to-assign-a-custom-icon-to-a-file-type
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\DefaultIcon"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\DefaultIcon"; ValueType: expandsz; ValueName: ""; ValueData: "{app}\Crystal Web Archiver.exe,1"
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell"; Flags: uninsdeletekey
+; Tell Explorer to add "Open with Crystal" to the contextual menu for a .crystalopen file
+; https://learn.microsoft.com/en-us/windows/win32/shell/context-menu-handlers
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open"; ValueType: string; ValueName: ""; ValueData: "Open with Crystal"
+; Tell Explorer to open .crystalopen files with the Crystal app
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open\command"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Crystal Web Archiver.exe"" ""%1"""
 
 ; NOTE: To regenerate file list: poetry run python make_win_installer.py
 [Files]
@@ -97,9 +120,11 @@ Source: "dist\wxmsw32u_html_vc140.dll"; DestDir: "{app}"
 Source: "dist\wxmsw32u_richtext_vc140.dll"; DestDir: "{app}"
 Source: "dist\lib\crystal\resources\__init__.py"; DestDir: "{app}\lib\crystal\resources"
 Source: "dist\lib\crystal\resources\appicon.ico"; DestDir: "{app}\lib\crystal\resources"
+Source: "dist\lib\crystal\resources\appicon.png"; DestDir: "{app}\lib\crystal\resources"
 Source: "dist\lib\crystal\resources\badge_new.png"; DestDir: "{app}\lib\crystal\resources"
 Source: "dist\lib\crystal\resources\badge_stale.png"; DestDir: "{app}\lib\crystal\resources"
 Source: "dist\lib\crystal\resources\badge_warning.png"; DestDir: "{app}\lib\crystal\resources"
+Source: "dist\lib\crystal\resources\crystal.desktop"; DestDir: "{app}\lib\crystal\resources"
 Source: "dist\lib\crystal\resources\testdata_bongo.cat.crystalproj.zip"; DestDir: "{app}\lib\crystal\resources"
 Source: "dist\lib\crystal\resources\testdata_xkcd-v2.crystalproj.zip"; DestDir: "{app}\lib\crystal\resources"
 Source: "dist\lib\crystal\resources\testdata_xkcd.crystalproj.zip"; DestDir: "{app}\lib\crystal\resources"
