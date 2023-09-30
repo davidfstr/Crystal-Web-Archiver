@@ -468,8 +468,7 @@ class Project(ListenableMixin):
             os.mkdir(tmp_dirpath)
         
         # Add launcher and README if missing
-        itemnames = os.listdir(self.path)
-        if not any([n for n in itemnames if n.endswith(self.LAUNCHER_FILE_EXTENSION)]):
+        if not any([n for n in os.listdir(self.path) if n.endswith(self.LAUNCHER_FILE_EXTENSION)]):
             # Add missing launcher
             with open(os.path.join(self.path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
                 f.write(self._LAUNCHER_DEFAULT_CONTENT)

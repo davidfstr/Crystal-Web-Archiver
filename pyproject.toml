@@ -71,6 +71,7 @@ tqdm = "^4.65.0"
 sortedcontainers = "^2.4.0"
 # For manual memory leak profiling with "guppy" module
 guppy3 = "^3.1.3"
+xattr = { version = "^0.10.1", markers = "sys_platform == 'darwin'" }
 
 [tool.poetry.dev-dependencies]
 # NOTE: pytest ^7.0 (7.2.2) failed to install on any Windows with error:
