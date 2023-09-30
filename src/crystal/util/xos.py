@@ -1,6 +1,7 @@
 import math
 import platform
-from typing import List, Optional
+import subprocess
+from typing import List, Literal, Optional
 
 
 # === Feature Detection ===
@@ -89,3 +90,14 @@ def mac_version() -> Optional[List[int]]:
         return None
     
     return [int(x) for x in platform.mac_ver()[0].split('.')]
+
+
+# === I/O ===
+
+def set_windows_file_attrib(itempath: str, attribs: List[Literal['+h', '+s']]) -> None:
+    assert is_windows()
+    subprocess.check_call(
+        ['attrib', *attribs, itempath],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=subprocess.CREATE_NO_WINDOW)  # type: ignore[attr-defined]

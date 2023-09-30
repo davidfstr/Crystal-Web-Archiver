@@ -21,6 +21,7 @@ from crystal.plugins import (
     substack as plugins_substack,
 )   
 from crystal.progress import DummyOpenProjectProgressListener, OpenProjectProgressListener
+from crystal import resources as resources_
 from crystal.util import http_date
 from crystal.util.db import (
     DatabaseConnection,
@@ -36,6 +37,7 @@ from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
+from crystal.util.xos import is_windows, set_windows_file_attrib
 from crystal.util import xshutil
 from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
@@ -105,6 +107,29 @@ class Project(ListenableMixin):
         delete any files in this directory.
         '''.lstrip('\n')
     ).replace('\n', '\r\n')
+    _DESKTOP_INI_FILENAME = 'desktop.ini'
+    # Define desktop.ini file for Windows that:
+    # - Defines icon for the .crystalproj directory
+    # - Defines tooltip for the .crystalproj directory
+    # - Associates directory with the "crystalproj" Directory Class in registry,
+    #   which defines which .exe to open it with
+    # 
+    # References:
+    # - https://learn.microsoft.com/en-us/windows/win32/shell/how-to-customize-folders-with-desktop-ini
+    # - https://learn.microsoft.com/en-us/windows/win32/shell/how-to-implement-custom-verbs-for-folders-through-desktop-ini
+    # 
+    # NOTE: Use Windows-style CRLF line endings because this is a Windows-specific file
+    _DESKTOP_INI_CONTENT = dedent(
+        r'''
+        [.ShellClassInfo]
+        DirectoryClass=crystalproj
+        ConfirmFileOp=0
+        IconFile=icons\docicon.ico
+        IconIndex=0
+        InfoTip=Crystal Project
+        '''.lstrip('\n')
+    ).replace('\n', '\r\n')
+    _ICONS_DIRNAME = 'icons'
     
     # NOTE: Only tracked when tests are running
     _last_opened_project: Optional[Project]=None  # static
@@ -168,11 +193,20 @@ class Project(ListenableMixin):
                 # Create new project structure, minus database file
                 os.mkdir(path)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
+                
+                # TODO: Consider let _apply_migrations() define the rest of the
+                #       project structure, rather than duplicating logic here
                 os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
                 with open(os.path.join(path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
                     f.write(self._LAUNCHER_DEFAULT_CONTENT)
                 with open(os.path.join(self.path, self._README_FILENAME), 'w', newline='') as f:
                     f.write(self._README_DEFAULT_CONTENT)
+                with open(os.path.join(self.path, self._DESKTOP_INI_FILENAME), 'w', newline='') as f:
+                    f.write(self._DESKTOP_INI_CONTENT)
+                os.mkdir(os.path.join(path, self._ICONS_DIRNAME))
+                with resources_.open_binary('docicon.ico') as src_file:
+                    with open(os.path.join(path, self._ICONS_DIRNAME, 'docicon.ico'), 'wb') as dst_file:
+                        shutil.copyfileobj(src_file, dst_file)
             else:
                 # Ensure existing project structure looks OK
                 Project._ensure_valid(path)
@@ -213,6 +247,8 @@ class Project(ListenableMixin):
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
                 c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
                 c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
+                
+                # (Define indexes in _apply_migrations())
                 
                 # Default HTML parser for new projects, for Crystal >1.5.0
                 self.html_parser_type = 'lxml'
@@ -440,6 +476,29 @@ class Project(ListenableMixin):
             if not os.path.exists(readme_filepath):
                 with open(readme_filepath, 'w', newline='') as f:
                     f.write(self._README_DEFAULT_CONTENT)
+        
+        # Add Windows desktop.ini and icon if missing
+        desktop_ini_filepath = os.path.join(self.path, self._DESKTOP_INI_FILENAME)
+        if not os.path.exists(desktop_ini_filepath):
+            with open(desktop_ini_filepath, 'w', newline='') as f:
+                f.write(self._DESKTOP_INI_CONTENT)
+            
+            icons_dirpath = os.path.join(self.path, self._ICONS_DIRNAME)
+            if not os.path.exists(icons_dirpath):
+                os.mkdir(icons_dirpath)
+                
+                with resources_.open_binary('docicon.ico') as src_file:
+                    with open(os.path.join(icons_dirpath, 'docicon.ico'), 'wb') as dst_file:
+                        shutil.copyfileobj(src_file, dst_file)
+        
+        # Set Windows-specific file attributes, if not already done
+        if is_windows():
+            # Mark .crystalproj as System,
+            # so that icon defined by desktop.ini is used
+            set_windows_file_attrib(self.path, ['+s'])
+            
+            # Mark desktop.ini as Hidden & System
+            set_windows_file_attrib(desktop_ini_filepath, ['+h', '+s'])
     
     # === Properties ===
     

@@ -10,6 +10,7 @@ from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.progress import (
     DummyOpenProjectProgressListener, OpenProjectProgressListener,
 )
+from crystal import resources
 from crystal.server import ProjectServer
 from crystal.task import RootTask
 from crystal.ui.actions import Action
@@ -64,14 +65,11 @@ class MainWindow:
         #               frame -> frame_content
         raw_frame = wx.Frame(None, title=frame_title, name='cr-main-window')
         try:
-            # TODO: Move general resource management out of crystal.tests package
-            from crystal.resources import open_binary
-            
             # macOS: Define proxy icon beside the filename in the titlebar
             raw_frame.SetRepresentedFilename(project.path)
             # Windows: Define app icon in the top-left corner
             if is_windows():
-                raw_frame.SetIcons(wx.IconBundle(open_binary('appicon.ico')))
+                raw_frame.SetIcons(wx.IconBundle(resources.open_binary('appicon.ico')))
             
             # 1. Define *single* child with full content of the wx.Frame,
             #    so that LogDrawer can be created for this window later
