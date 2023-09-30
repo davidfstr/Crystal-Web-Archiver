@@ -6,7 +6,6 @@ References:
 - https://arstechnica.com/gadgets/2013/10/os-x-10-9/9/
 """
 from crystal.util.xos import is_mac_os
-import xattr
 
 
 _EMPTY = b'\x00' * 32
@@ -25,6 +24,8 @@ HIDE_FILE_EXTENSION = (
 def get(filepath: str) -> bytes:
     assert is_mac_os()
     
+    import xattr  # don't import at top-level because only available on macOS
+    
     try:
         return xattr.getxattr(filepath, xattr.XATTR_FINDERINFO_NAME)
     except OSError as e:
@@ -36,6 +37,8 @@ def get(filepath: str) -> bytes:
 
 def set(filepath: str, finderinfo: bytes) -> None:
     assert is_mac_os()
+    
+    import xattr  # don't import at top-level because only available on macOS
     
     if finderinfo == _EMPTY:
         try:
@@ -58,6 +61,11 @@ def set_hide_file_extension(itempath: str, hide: bool) -> None:
     else:
         new_fi = and_(old_fi, not_(HIDE_FILE_EXTENSION))
     set(itempath, new_fi)
+
+
+def get_hide_file_extension(itempath: str) -> bool:
+    fi = get(itempath)
+    return and_(fi, HIDE_FILE_EXTENSION) != _EMPTY
 
 
 # === Bitwise Operations ===
