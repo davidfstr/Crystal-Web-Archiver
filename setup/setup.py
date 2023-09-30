@@ -44,6 +44,7 @@ if sys.platform == 'darwin':
             # Associate application with .crystalproj files
             {
                 'CFBundleTypeExtensions': ['crystalproj'],
+                'CFBundleTypeMIMETypes': ['application/vnd.crystal-project'],
                 'CFBundleTypeIconFile': 'DocIconMac.icns',
                 'CFBundleTypeName': 'Crystal Project',
                 'CFBundleTypeRole': 'Editor',
@@ -52,10 +53,10 @@ if sys.platform == 'darwin':
             # Associate application with .crystalopen files
             {
                 'CFBundleTypeExtensions': ['crystalopen'],
+                'CFBundleTypeMIMETypes': ['application/vnd.crystal-opener'],
                 'CFBundleTypeIconFile': 'LauncherIcon.icns',
                 'CFBundleTypeName': 'Crystal Launcher',
                 'CFBundleTypeRole': 'Editor',
-                'LSTypeIsPackage': False,
             },
         ],
         'CFBundleIdentifier': 'net.dafoster.crystal',
