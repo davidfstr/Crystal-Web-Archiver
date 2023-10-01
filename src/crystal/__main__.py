@@ -391,32 +391,39 @@ def _install_to_desktop():
     if not is_linux():
         raise ValueError()
     
+    # Ensure not running as root (unless is actually the root user)
     running_as_root_user = (os.geteuid() == 0)
     is_root_user = (os.getuid() == 0)
     if running_as_root_user and not is_root_user:
         print('*** --install-to-desktop should not be run as root or with sudo')
         sys.exit(1)
     
-    # Format .desktop file in memory
-    with resources.open_text('crystal.desktop', encoding='utf-8') as f:
-        desktop_file_content = f.read()
-    if os.path.basename(sys.executable) in ['python', 'python3']:
-        crystal_executable = f'{sys.executable} -m crystal'
-    else:
-        crystal_executable = sys.executable
-    desktop_file_content = desktop_file_content.replace(
-        '__CRYSTAL_PATH__', crystal_executable)
-    desktop_file_content = desktop_file_content.replace(
-        '__APPICON_PATH__', resources.get_filepath('appicon.png'))
-    
     # Install .desktop file to ~/.local/share/applications
     # 
     # NOTE: Only .desktop files opened from this directory will show their
     #       icon in the dock correctly.
-    apps_dirpath = os.path.expanduser('~/.local/share/applications')
-    os.makedirs(apps_dirpath, exist_ok=True)
-    with open(f'{apps_dirpath}/crystal.desktop', 'w') as f:
-        f.write(desktop_file_content)
+    if True:
+        # Format .desktop file in memory
+        with resources.open_text('crystal.desktop', encoding='utf-8') as f:
+            desktop_file_content = f.read()
+        if os.path.basename(sys.executable) in ['python', 'python3']:
+            crystal_executable = f'{sys.executable} -m crystal'
+        else:
+            crystal_executable = sys.executable
+        desktop_file_content = desktop_file_content.replace(
+            '__CRYSTAL_PATH__', crystal_executable)
+        desktop_file_content = desktop_file_content.replace(
+            '__APPICON_PATH__', resources.get_filepath('appicon.png'))
+        
+        apps_dirpath = os.path.expanduser('~/.local/share/applications')
+        os.makedirs(apps_dirpath, exist_ok=True)
+        with open(f'{apps_dirpath}/crystal.desktop', 'w') as f:
+            f.write(desktop_file_content)
+        
+        subprocess.run([
+            'update-desktop-database',
+            os.path.expanduser('~/.local/share/applications')
+        ], check=True)
     
     # Install symlink to .desktop file on ~/Desktop, if possible
     desktop_dirpath = os.path.expanduser('~/Desktop')
