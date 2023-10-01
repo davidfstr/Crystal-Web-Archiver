@@ -46,8 +46,6 @@ def main() -> None:
 
 
 def _main(args: List[str]) -> None:
-    _check_environment()
-    
     # If running as Mac app or as Windows executable, redirect stdout and 
     # stderr to file, since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
@@ -359,32 +357,6 @@ def _main(args: List[str]) -> None:
             app.ProcessPendingEvents()
             if app.HasPendingEvents():
                 print('Warning: Exiting app while some pending events still exist')
-
-
-def _check_environment():
-    # Check for dependencies
-    if not _running_as_bundle():
-        try:
-            import wx
-        except ImportError:
-            sys.exit(
-                'This application requires wxPython to be installed. ' + 
-                'Download it from http://wxpython.org/')
-        
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            sys.exit(
-                'This application requires BeautifulSoup to be installed. ' +
-                'Download it from http://www.crummy.com/software/BeautifulSoup/')
-
-
-def _running_as_bundle():
-    """
-    Returns whether we are running in a bundled environment,
-    such as py2exe or py2app.
-    """
-    return hasattr(sys, 'frozen')
 
 
 def _did_launch(
