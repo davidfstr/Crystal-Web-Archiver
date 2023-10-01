@@ -26,6 +26,8 @@ if [ $? -ne 0 ]; then
         echo '*** Failed to install "pipx". Please install it manually and try again.'
         exit 1
     fi
+    # Extend PATH with likely location of pipx, which might not already be on PATH
+    export PATH="$PATH:$HOME/.local/bin"
     PIPX_PATH=$(which pipx)
     if [ $? -ne 0 ]; then
         echo '*** Could not find "pipx" in PATH'

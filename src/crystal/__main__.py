@@ -386,9 +386,16 @@ def _install_to_desktop():
     """Install the Crystal application to the desktop. (Linux only)"""
     from crystal import resources
     from crystal.util.xos import is_linux
+    import glob
     
     if not is_linux():
         raise ValueError()
+    
+    running_as_root_user = (os.geteuid() == 0)
+    is_root_user = (os.getuid() == 0)
+    if running_as_root_user and not is_root_user:
+        print('*** --install-to-desktop should not be run as root or with sudo')
+        sys.exit(1)
     
     # Format .desktop file in memory
     with resources.open_text('crystal.desktop', encoding='utf-8') as f:
@@ -428,7 +435,56 @@ def _install_to_desktop():
                 'chmod', 'a+x',
                 f'{desktop_dirpath}/crystal.desktop',
             ], check=True)
-
+    
+    # Install .crystalopen MIME type definition
+    mime_dirpath = os.path.expanduser('~/.local/share/mime')
+    os.makedirs(f'{mime_dirpath}/packages', exist_ok=True)
+    with open(f'{mime_dirpath}/packages/application-vnd.crystal-opener.xml', 'w') as dst_file:
+        with resources.open_text('application-vnd.crystal-opener.xml', encoding='utf-8') as src_file:
+            shutil.copyfileobj(src_file, dst_file)
+    subprocess.run(['update-mime-database', mime_dirpath], check=True)
+    
+    # Install .crystalopen file icon
+    if True:
+        # Locate places where MIME icons are installed, in global theme directories
+        mime_icon_dirpaths = []
+        old_cwd = os.getcwd()
+        os.chdir('/usr/share/icons')
+        try:
+            # TODO: After upgrade to Python 3.10, introduce root_dir=...
+            #       parameter to avoid need to use os.chdir()
+            for mime_icon_filepath in glob.iglob('**/text-plain.*', recursive=True):
+                mime_icon_dirpath = os.path.dirname(mime_icon_filepath)
+                if mime_icon_dirpath not in mime_icon_dirpaths:
+                    mime_icon_dirpaths.append(mime_icon_dirpath)
+        finally:
+            os.chdir(old_cwd)
+        
+        # Install new MIME icons, in local theme directories
+        if len(mime_icon_dirpaths) == 0:
+            print('*** Unable to locate places to install MIME icons')
+        else:
+            local_icons_dirpath = os.path.expanduser('~/.local/share/icons')
+            for mime_icon_dirpath in mime_icon_dirpaths:
+                mime_icon_abs_dirpath = os.path.join(local_icons_dirpath, mime_icon_dirpath)
+                os.makedirs(mime_icon_abs_dirpath, exist_ok=True)
+                
+                # Install (raster) PNG icon for MIME type
+                with open(f'{mime_icon_abs_dirpath}/application-vnd.crystal-opener.png', 'wb') as dst_file:
+                    with resources.open_binary('application-vnd.crystal-opener.png') as src_file:
+                        shutil.copyfileobj(src_file, dst_file)
+                
+                # Install raster SVG icon for MIME type,
+                # because at least KDE seems to ignore PNG icons
+                with open(f'{mime_icon_abs_dirpath}/application-vnd.crystal-opener.svg', 'wb') as dst_file:
+                    with resources.open_binary('application-vnd.crystal-opener.svg') as src_file:
+                        shutil.copyfileobj(src_file, dst_file)
+            
+            # NOTE: At least on Ubuntu 22 it seems the icon caches don't need
+            #       to be explicitly updated to pick up the new icon type
+            #       immediately, which is good because it may not be possible
+            #       to sudo.
+            #subprocess.run(['sudo', 'update-icon-caches', *glob.glob('/usr/share/icons/*')], check=True)
 
 def _did_launch(
         parsed_args,

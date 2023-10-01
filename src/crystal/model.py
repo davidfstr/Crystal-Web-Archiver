@@ -86,7 +86,7 @@ class Project(ListenableMixin):
     _RESOURCE_REVISION_DIRNAME = 'revisions'
     _TEMPORARY_DIRNAME = 'tmp'
     _LAUNCHER_DEFAULT_FILENAME = 'OPEN ME' + LAUNCHER_FILE_EXTENSION
-    _LAUNCHER_DEFAULT_CONTENT = b'CrPO'  # Crystal Project Open, as a FourCC
+    _LAUNCHER_DEFAULT_CONTENT = b'CrOp'  # Crystal Opener, as a FourCC
     _README_FILENAME = 'README.txt'
     # Define README.txt which explains what a .crystalproj is to a user that
     # does not have Crystal installed.
