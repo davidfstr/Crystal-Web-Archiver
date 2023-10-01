@@ -436,12 +436,15 @@ def _install_to_desktop():
         
         # Mark .desktop symlink on desktop as "Allow Launching"
         # https://askubuntu.com/questions/1218954/desktop-files-allow-launching-set-this-via-cli
-        if True:
+        try:
             subprocess.run([
                 'gio', 'set',
                 f'{desktop_dirpath}/crystal.desktop',
                 'metadata::trusted', 'true'
             ], check=True)
+        except FileNotFoundError:
+            pass  # 'gio' not available in this Linux distribution
+        else:
             subprocess.run([
                 'chmod', 'a+x',
                 f'{desktop_dirpath}/crystal.desktop',
