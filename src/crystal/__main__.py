@@ -400,8 +400,12 @@ def _install_to_desktop():
     # Format .desktop file in memory
     with resources.open_text('crystal.desktop', encoding='utf-8') as f:
         desktop_file_content = f.read()
+    if os.path.basename(sys.executable) in ['python', 'python3']:
+        crystal_executable = f'{sys.executable} -m crystal'
+    else:
+        crystal_executable = sys.executable
     desktop_file_content = desktop_file_content.replace(
-        '__CRYSTAL_PATH__', sys.executable)
+        '__CRYSTAL_PATH__', crystal_executable)
     desktop_file_content = desktop_file_content.replace(
         '__APPICON_PATH__', resources.get_filepath('appicon.png'))
     
@@ -485,6 +489,7 @@ def _install_to_desktop():
             #       immediately, which is good because it may not be possible
             #       to sudo.
             #subprocess.run(['sudo', 'update-icon-caches', *glob.glob('/usr/share/icons/*')], check=True)
+
 
 def _did_launch(
         parsed_args,
