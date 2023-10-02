@@ -95,6 +95,13 @@ def is_no_such_column_error_for(column_name: str, e: Exception) -> bool:
     )
 
 
+def is_no_such_table_error_for(table_name: str, e: Exception) -> bool:
+    return (
+        isinstance(e, sqlite3.OperationalError) and
+        str(e) == f'no such table: {table_name}'
+    )
+
+
 def get_index_names(c: DatabaseCursor) -> list[str]:
     return [
         index_name
