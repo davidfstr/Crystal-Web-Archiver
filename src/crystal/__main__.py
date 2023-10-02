@@ -15,6 +15,7 @@ from __future__ import annotations
 #       Therefore many imports in this file should occur directly within functions.
 import argparse
 import atexit
+from contextlib import contextmanager
 import datetime
 import locale
 import os
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
     from crystal.shell import Shell
-    from typing import List, Optional
+    from typing import Iterator, List, Optional
     import wx
 
 
@@ -382,9 +383,10 @@ def _running_as_bundle():
     return hasattr(sys, 'frozen')
 
 
-def _install_to_desktop():
+def _install_to_desktop() -> None:
     """Install the Crystal application to the desktop. (Linux only)"""
     from crystal import resources
+    from crystal.util import gio
     from crystal.util.xos import is_linux
     import glob
     
@@ -437,22 +439,12 @@ def _install_to_desktop():
         # Mark .desktop symlink on desktop as "Allow Launching" on Ubuntu 22+
         # https://askubuntu.com/questions/1218954/desktop-files-allow-launching-set-this-via-cli
         try:
-            subprocess.run([
-                'gio', 'set',
-                f'{desktop_dirpath}/crystal.desktop',
-                'metadata::trusted', 'true'
-            ], check=True, capture_output=True)
-        except FileNotFoundError:
-            # 'gio' not available in this Linux distribution
+            gio.set(f'{desktop_dirpath}/crystal.desktop', 'metadata::trusted', 'true')
+        except gio.GioNotAvailable:
             pass
-        except subprocess.CalledProcessError as e:
-            if (e.stderr.startswith(b'gio: Setting attribute ') and
-                    e.stderr.endswith(b'not supported\n')):
-                # 'metadata::trusted' is not a recognized attribute.
-                # Happens on at least Kubuntu 22.
-                pass
-            else:
-                raise
+        except gio.UnrecognizedGioAttributeError:
+            # For example Kubuntu 22 does not recognize this attribute
+            pass
         else:
             subprocess.run([
                 'chmod', 'a+x',
@@ -471,17 +463,11 @@ def _install_to_desktop():
     if True:
         # Locate places where MIME icons are installed, in global theme directories
         mime_icon_dirpaths = []
-        old_cwd = os.getcwd()
-        os.chdir('/usr/share/icons')
-        try:
-            # TODO: After upgrade to Python 3.10, introduce root_dir=...
-            #       parameter to avoid need to use os.chdir()
+        with _cwd_set_to('/usr/share/icons'):
             for mime_icon_filepath in glob.iglob('**/text-plain.*', recursive=True):
                 mime_icon_dirpath = os.path.dirname(mime_icon_filepath)
                 if mime_icon_dirpath not in mime_icon_dirpaths:
                     mime_icon_dirpaths.append(mime_icon_dirpath)
-        finally:
-            os.chdir(old_cwd)
         
         # Install new MIME icons, in local theme directories
         if len(mime_icon_dirpaths) == 0:
@@ -492,14 +478,16 @@ def _install_to_desktop():
                 mime_icon_abs_dirpath = os.path.join(local_icons_dirpath, mime_icon_dirpath)
                 os.makedirs(mime_icon_abs_dirpath, exist_ok=True)
                 
-                # Install (raster) PNG icon for MIME type
+                # Install PNG icon for MIME type
                 with open(f'{mime_icon_abs_dirpath}/application-vnd.crystal-opener.png', 'wb') as dst_file:
+                    # TODO: Read/cache source icon once, so that don't need to many times...
                     with resources.open_binary('application-vnd.crystal-opener.png') as src_file:
                         shutil.copyfileobj(src_file, dst_file)
                 
-                # Install raster SVG icon for MIME type,
-                # because at least KDE seems to ignore PNG icons
+                # Install SVG icon for MIME type,
+                # because at least KDE on Kubuntu 22 seems to ignore PNG icons
                 with open(f'{mime_icon_abs_dirpath}/application-vnd.crystal-opener.svg', 'wb') as dst_file:
+                    # TODO: Read/cache source icon once, so that don't need to many times...
                     with resources.open_binary('application-vnd.crystal-opener.svg') as src_file:
                         shutil.copyfileobj(src_file, dst_file)
             
@@ -508,6 +496,74 @@ def _install_to_desktop():
             #       immediately, which is good because it may not be possible
             #       to sudo.
             #subprocess.run(['sudo', 'update-icon-caches', *glob.glob('/usr/share/icons/*')], check=True)
+    
+    # Install .crystalproj folder icon
+    if True:
+        # Determine icon names for regular folder, which actually resolve to an icon
+        try:
+            regular_folder_dirpath = os.path.dirname(__file__)
+            p = subprocess.run(
+                ['gio', 'info', '--attributes', 'standard::icon', regular_folder_dirpath],
+                check=True,
+                capture_output=True,
+            )
+        except FileNotFoundError:
+            # GIO not available
+            pass
+        else:
+            icon_names: List[str]
+            gio_lines = p.stdout.decode('utf-8').split('\n')
+            for line in gio_lines:
+                line = line.strip()  # reinterpret
+                if line.startswith('standard::icon:'):
+                    line = line[len('standard::icon:'):]  # reinterpret
+                    icon_names = [x.strip() for x in line.strip().split(',')]
+                    break
+            else:
+                icon_names = []
+            
+            # Locate places where folder icons are installed, in global theme directories
+            folder_icon_dirpaths = []
+            if len(icon_names) != 0:
+                with _cwd_set_to('/usr/share/icons'):
+                    for (root_dirpath, dirnames, filenames) in os.walk('.'):
+                        for filename in filenames:
+                            (filename_without_ext, _) = os.path.splitext(filename)
+                            if filename_without_ext in icon_names:
+                                if root_dirpath not in folder_icon_dirpaths:
+                                    folder_icon_dirpaths.append(root_dirpath)
+            
+            # Install new folder icons, in local theme directories
+            if len(folder_icon_dirpaths) == 0:
+                print('*** Unable to locate places to install folder icons')
+            else:
+                local_icons_dirpath = os.path.expanduser('~/.local/share/icons')
+                for folder_icon_dirpath in folder_icon_dirpaths:
+                    folder_icon_abs_dirpath = os.path.join(local_icons_dirpath, folder_icon_dirpath)
+                    os.makedirs(folder_icon_abs_dirpath, exist_ok=True)
+                    
+                    # Install PNG icon for folder type
+                    with open(f'{folder_icon_abs_dirpath}/crystalproj.png', 'wb') as dst_file:
+                        # TODO: Read/cache source icon once, so that don't need to 123 times...
+                        with resources.open_binary('docicon.png') as src_file:
+                            shutil.copyfileobj(src_file, dst_file)
+                    
+                    # Install SVG icon for folder type,
+                    # because at least KDE on Kubuntu 22 seems to ignore PNG icons
+                    with open(f'{folder_icon_abs_dirpath}/crystalproj.svg', 'wb') as dst_file:
+                        # TODO: Read/cache source icon once, so that don't need to 123 times...
+                        with resources.open_binary('docicon.svg') as src_file:
+                            shutil.copyfileobj(src_file, dst_file)
+
+
+@contextmanager
+def _cwd_set_to(dirpath: str) -> 'Iterator[None]':
+    old_cwd = os.getcwd()
+    os.chdir(dirpath)
+    try:
+        yield
+    finally:
+        os.chdir(old_cwd)
 
 
 def _did_launch(

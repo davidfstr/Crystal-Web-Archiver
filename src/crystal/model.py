@@ -30,6 +30,7 @@ from crystal.util.db import (
     get_index_names,
     is_no_such_column_error_for,
 )
+from crystal.util import gio
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import warn_if_slow
 from crystal.util.urls import is_unrewritable_url, requote_uri
@@ -38,7 +39,7 @@ from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
-from crystal.util.xos import is_windows
+from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util import xshutil
 from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
@@ -48,6 +49,7 @@ import json
 import math
 import mimetypes
 import os
+import pathlib
 import re
 import shutil
 from sortedcontainers import SortedList
@@ -478,7 +480,7 @@ class Project(ListenableMixin):
                 with open(readme_filepath, 'w', newline='') as f:
                     f.write(self._README_DEFAULT_CONTENT)
         
-        # Add Windows desktop.ini and icon if missing
+        # Add Windows desktop.ini and icon for .crystalproj if missing
         desktop_ini_filepath = os.path.join(self.path, self._DESKTOP_INI_FILENAME)
         if not os.path.exists(desktop_ini_filepath):
             with open(desktop_ini_filepath, 'w', newline='') as f:
@@ -492,6 +494,52 @@ class Project(ListenableMixin):
                     with open(os.path.join(icons_dirpath, 'docicon.ico'), 'wb') as dst_file:
                         shutil.copyfileobj(src_file, dst_file)
         
+        # Add Linux icon for .crystalproj if missing
+        if True:
+            # GNOME: Define icon in GIO database
+            if is_linux():
+                did_set_gio_icon = False
+                
+                # GNOME Files (AKA Nautilus)
+                try:
+                    gio.set(self.path, 'metadata::custom-icon-name', 'crystalproj')
+                except gio.GioNotAvailable:
+                    pass
+                except gio.UnrecognizedGioAttributeError:
+                    # For example Kubuntu 22 does not recognize this attribute
+                    pass
+                else:
+                    did_set_gio_icon = True
+                
+                # GNOME Desktop Items Shell Extension
+                # 
+                # HACK: Must also set icon location as a brittle absolute path
+                #       because Desktop Items doesn't understand the
+                #       'metadata::custom-icon-name' GIO attribute.
+                crystalproj_png_icon_url = pathlib.Path(
+                    resources_.get_filepath('docicon.png')
+                ).as_uri()
+                try:
+                    gio.set(self.path, 'metadata::custom-icon', crystalproj_png_icon_url)
+                except gio.GioNotAvailable:
+                    pass
+                except gio.UnrecognizedGioAttributeError:
+                    # For example Kubuntu 22 does not recognize this attribute
+                    pass
+                else:
+                    did_set_gio_icon = True
+                
+                # Touch .crystalproj so that GNOME Files (AKA Nautilus)
+                # observes the icon change
+                if did_set_gio_icon:
+                    pathlib.Path(self.path).touch()
+            
+            # KDE: Define icon in .directory file
+            dot_directory_filepath = os.path.join(self.path, '.directory')
+            if not os.path.exists(dot_directory_filepath):
+                with open(dot_directory_filepath, 'w') as f:
+                    f.write('[Desktop Entry]\nIcon=crystalproj\n')
+        
         # Set Windows-specific file attributes, if not already done
         if is_windows():
             # Mark .crystalproj as System,
@@ -500,6 +548,9 @@ class Project(ListenableMixin):
             
             # Mark desktop.ini as Hidden & System
             set_windows_file_attrib(desktop_ini_filepath, ['+h', '+s'])
+            
+            # Mark .directory as Hidden
+            set_windows_file_attrib(dot_directory_filepath, ['+h'])
     
     # === Properties ===
     
