@@ -43,6 +43,7 @@ from crystal.util.db import (
     get_column_names_of_table,
     get_index_names,
     is_no_such_column_error_for,
+    is_no_such_table_error_for,
 )
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util import gio
@@ -60,7 +61,7 @@ from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util import xshutil
-from crystal.util.xsqlite3 import sqlite_has_json_support
+from crystal.util.xsqlite3 import is_database_closed_error, sqlite_has_json_support
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
     is_foreground_thread,
@@ -2531,7 +2532,18 @@ class ResourceRevision:
                         suffix='.body',
                         dir=os.path.join(project.path, Project._TEMPORARY_DIRNAME),
                         delete=False) as body_file:
-                    xshutil.copyfileobj_readinto(body_stream, body_file)
+                    try:
+                        xshutil.copyfileobj_readinto(body_stream, body_file)
+                    finally:
+                        try:
+                            ResourceRevision._log_bytes_downloaded(
+                                body_file.tell(),
+                                resource.project)
+                        except sqlite3.ProgrammingError as e:
+                            if is_database_closed_error(e):
+                                pass
+                            else:
+                                raise
                 body_file_downloaded_ok = True
             else:
                 body_file = None
@@ -3217,6 +3229,44 @@ class ResourceRevision:
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.resource.already_downloaded_this_session = False
+    
+    # === Logging ===
+    
+    @staticmethod
+    def _log_bytes_downloaded(num_bytes_downloaded: int, project: Project) -> None:
+        """
+        Logs that the specified number of bytes were downloaded,
+        if the following statistics table exists:
+        
+            create table statistics (date text primary key asc, num_bytes_downloaded int default 0)
+        """
+        @capture_crashes_to_stderr
+        def fg_task() -> None:
+            today_local_tz = datetime.date.today()  # capture
+            
+            try:
+                c = project._db.cursor()
+                c.execute(
+                    'insert into statistics '
+                        '(date, num_bytes_downloaded) '
+                        'values (?, ?) '
+                        'on conflict (date) do '
+                    'update '
+                        'set num_bytes_downloaded = num_bytes_downloaded + ?',
+                    (str(today_local_tz), num_bytes_downloaded, num_bytes_downloaded))
+                project._db.commit()
+            except Exception as e:
+                if is_no_such_table_error_for('statistics', e):
+                    # Fail silently if statistics table does not exist
+                    pass
+                elif is_database_closed_error(e):
+                    # Probably the project was closed. Ignore error.
+                    pass
+                else:
+                    raise
+        fg_call_later(fg_task)
+    
+    # === Utility ===
     
     def __repr__(self) -> str:
         return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
