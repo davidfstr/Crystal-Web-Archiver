@@ -434,16 +434,25 @@ def _install_to_desktop():
             f'{desktop_dirpath}/crystal.desktop',
         ], check=True)
         
-        # Mark .desktop symlink on desktop as "Allow Launching"
+        # Mark .desktop symlink on desktop as "Allow Launching" on Ubuntu 22+
         # https://askubuntu.com/questions/1218954/desktop-files-allow-launching-set-this-via-cli
         try:
             subprocess.run([
                 'gio', 'set',
                 f'{desktop_dirpath}/crystal.desktop',
                 'metadata::trusted', 'true'
-            ], check=True)
+            ], check=True, capture_output=True)
         except FileNotFoundError:
-            pass  # 'gio' not available in this Linux distribution
+            # 'gio' not available in this Linux distribution
+            pass
+        except subprocess.CalledProcessError as e:
+            if (e.stderr.startswith(b'gio: Setting attribute ') and
+                    e.stderr.endswith(b'not supported\n')):
+                # 'metadata::trusted' is not a recognized attribute.
+                # Happens on at least Kubuntu 22.
+                pass
+            else:
+                raise
         else:
             subprocess.run([
                 'chmod', 'a+x',
