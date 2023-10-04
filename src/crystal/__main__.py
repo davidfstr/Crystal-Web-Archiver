@@ -685,7 +685,6 @@ def _prompt_to_open_project(
     """
     from crystal.model import Project
     from crystal.progress import CancelOpenProject
-    from crystal.util.xos import project_appears_as_package_file
     import wx
     
     # TODO: Provide way on Windows/Linux to open an old *.crystalproj

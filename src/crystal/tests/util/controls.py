@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from crystal.util.xos import project_appears_as_package_file
 from typing import Iterator, List, Optional
 import unittest.mock
 import wx

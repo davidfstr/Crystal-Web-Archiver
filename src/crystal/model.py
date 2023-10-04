@@ -33,11 +33,12 @@ from crystal.util.db import (
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import warn_if_slow
 from crystal.util.urls import is_unrewritable_url, requote_uri
+from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
-from crystal.util.xos import is_windows, set_windows_file_attrib
+from crystal.util.xos import is_windows
 from crystal.util import xshutil
 from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
