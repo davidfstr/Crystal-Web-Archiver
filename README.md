@@ -22,11 +22,11 @@ Download ⬇︎
 * [Windows 7, 8, 10](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.6.0b/crystal-win-1.6.0b.exe)
 * Linux
     * Install Python >=3.8,<3.12 and pip from your package manager
-        * Ubuntu 22.04: `apt-get update; apt-get install -y python3 python3-pip python3-venv`
-        * Fedora 37: `yum update -y; yum install -y python3 python3-pip`
+        * Ubuntu/Kubuntu 22.04+: `apt-get update; apt-get install -y python3 python3-pip python3-venv`
+        * Fedora 37+: `yum update -y; yum install -y python3 python3-pip`
     * Install dependencies of wxPython from your package manager
-        * Ubuntu 22.04: `apt-get install -y libgtk-3-dev`
-        * Fedora 37: `yum install -y wxGTK-devel gcc gcc-c++ which python3-devel`
+        * Ubuntu/Kubuntu 22.04+: `apt-get install -y libgtk-3-dev`
+        * Fedora 37+: `yum install -y wxGTK-devel gcc gcc-c++ which python3-devel`
     * Install pipx
         * `python3 -m pip install pipx`
     * Install Crystal with pipx
@@ -34,7 +34,7 @@ Download ⬇︎
           because wxPython, a dependency of Crystal, will need to be built 
           from source, since it does not offer precompiled wheels for Linux.
         * `pipx install crystal-web`
-    * (Optional) Install Crystal icon to Gnome/KDE applications and desktop:
+    * (Optional) Install Crystal icon to GNOME/KDE applications and desktop:
         * `crystal --install-to-desktop`
     * Run Crystal:
         * `crystal`
