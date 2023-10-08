@@ -15,6 +15,7 @@ from crystal.tests.util.wait import (
     wait_for, WaitTimedOut, window_condition, not_condition, or_condition
 )
 from crystal.util.xos import is_mac_os
+import os.path
 import sys
 import tempfile
 import traceback
@@ -104,11 +105,17 @@ class OpenOrCreateDialog:
             project_dirpath: str, 
             *, readonly: Optional[bool]=None,
             autoclose: bool=True,
+            using_crystalopen: bool=False,
             ) -> AsyncIterator[MainWindow]:
         if readonly is not None:
             self.open_as_readonly.Value = readonly
         
-        with file_dialog_returning(project_dirpath):
+        if using_crystalopen:
+            itempath_to_open = os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME)
+        else:
+            itempath_to_open = project_dirpath
+        
+        with file_dialog_returning(itempath_to_open):
             click_button(self.open_button)
             
             with screenshot_if_raises():

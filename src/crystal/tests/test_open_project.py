@@ -1,10 +1,89 @@
 from crystal import progress
+from crystal.model import Project
 from crystal.progress import CancelOpenProject
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project
+from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.util.xos import is_linux, is_mac_os, is_windows
+import os.path
+from unittest import skip
 from unittest.mock import patch
+
+
+@skip('not yet automated: hard to automate')
+async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_opens_projects() -> None:
+    pass
+
+
+async def test_given_macos_when_open_crystalproj_package_in_open_dialog_then_opens_project() -> None:
+    if not is_mac_os():
+        skipTest('only supported on macOS')
+    
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        ocd = await OpenOrCreateDialog.wait_for()
+        async with ocd.open(project_dirpath, using_crystalopen=False) as mw:
+            pass
+
+
+@skip('not yet automated: hard to automate')
+async def test_given_windows_when_double_click_crystalproj_directory_in_explorer_then_opens_projects() -> None:
+    pass
+
+
+@skip('not yet automated: hard to automate')
+async def test_given_windows_when_open_crystalproj_directory_and_double_click_crystalopen_file_in_explorer_then_opens_project() -> None:
+    pass
+
+
+async def test_given_windows_when_open_crystalproj_directory_and_double_click_crystalopen_file_in_open_dialog_then_opens_project() -> None:
+    if not is_windows():
+        skipTest('only supported on Windows')
+    
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        with Project(project_dirpath):
+            pass
+        assert os.path.exists(os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME))
+        
+        ocd = await OpenOrCreateDialog.wait_for()
+        async with ocd.open(project_dirpath, using_crystalopen=True) as mw:
+            pass
+
+
+@skip('not yet automated: hard to automate')
+async def test_given_linux_when_open_crystalproj_directory_and_double_click_crystalopen_file_in_file_explorer_then_opens_project() -> None:
+    pass
+
+
+async def test_given_linux_when_open_crystalproj_directory_in_open_dialog_then_opens_project() -> None:
+    if not is_linux():
+        skipTest('only supported on Linux')
+    
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        assert not os.path.exists(os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME))
+        
+        # Simulate effect of:
+        # 1. Press "Open" button to open the "Choose a project" dialog
+        # 2. Select a .crystalproj directory. "Open Directory" button undims.
+        # 3. Press "Open Directory" button
+        ocd = await OpenOrCreateDialog.wait_for()
+        async with ocd.open(project_dirpath, using_crystalopen=False) as mw:
+            pass
+
+
+async def test_given_linux_when_open_crystalproj_directory_and_double_click_crystalopen_file_in_open_dialog_then_opens_project() -> None:
+    if not is_linux():
+        skipTest('only supported on Linux')
+    
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        with Project(project_dirpath):
+            pass
+        assert os.path.exists(os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME))
+        
+        ocd = await OpenOrCreateDialog.wait_for()
+        async with ocd.open(project_dirpath, using_crystalopen=True) as mw:
+            pass
 
 
 @awith_subtests
