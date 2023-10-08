@@ -305,6 +305,10 @@ def _main(args: List[str]) -> None:
                 'because tests expect to be able to schedule callables on '
                 'the foreground thread'
             )
+            
+            # Immediately enter testing mode
+            os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
+            
             def bg_task():
                 is_ok = False
                 try:

@@ -73,7 +73,7 @@ def run_tests(test_names: List[str]) -> bool:
 
 
 def _run_tests(test_names: List[str]) -> bool:
-    os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
+    assert os.environ.get('CRYSTAL_RUNNING_TESTS') == 'True'
     
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.time()  # capture

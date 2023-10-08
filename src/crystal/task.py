@@ -14,6 +14,7 @@ from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, 
     is_foreground_thread, NoForegroundThreadError
 )
+from functools import cached_property
 import os
 from overrides import overrides
 import shutil
@@ -95,9 +96,9 @@ class Task(ListenableMixin):
     Tasks are not allowed to be complete immediately after initialization
     unless explicitly documented in the Task class's docstring.
     """
-    _USE_EXTRA_LISTENER_ASSERTIONS = (
-        os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
-    )
+    @cached_property
+    def _USE_EXTRA_LISTENER_ASSERTIONS(self) -> bool:
+        return os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
     
     # Abstract fields for subclasses to override
     icon_name = None  # type: Optional[str]  # abstract
@@ -176,6 +177,26 @@ class Task(ListenableMixin):
     
     @property
     def children(self) -> List[Task]:
+        """
+        Children task of this task.
+        
+        Callers should use append_child() instead of modifying the returned list.
+        
+        Note that some Task subclasses - notably RootTask - require (and enforce)
+        that accesses to the children list occur on a particular thread.
+        """
+        return self._children
+    
+    @final
+    @property
+    def children_unsynchronized(self) -> List[Task]:
+        """
+        Children task of this task, possibly in an inconsistent state if
+        accesses normally need to be synchronized with a particular thread
+        and the caller is not on that thread.
+        
+        Callers should use append_child() instead of modifying the returned list.
+        """
         return self._children
     
     @property
@@ -432,7 +453,7 @@ class Task(ListenableMixin):
     @final
     def task_subtitle_did_change(self, task):
         if Task._USE_EXTRA_LISTENER_ASSERTIONS:
-            assert task in self.children
+            assert task in self.children_unsynchronized
         
         if hasattr(self, 'child_task_subtitle_did_change'):
             self.child_task_subtitle_did_change(task)
@@ -440,7 +461,7 @@ class Task(ListenableMixin):
     @final
     def task_did_complete(self, task):
         if Task._USE_EXTRA_LISTENER_ASSERTIONS:
-            assert task in self.children
+            assert task in self.children_unsynchronized
         
         self._num_children_complete += 1
         
