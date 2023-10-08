@@ -745,11 +745,44 @@ def _prompt_to_open_project(
     """
     from crystal.model import Project
     from crystal.progress import CancelOpenProject
+    from crystal.util.wx_bind import bind
+    from crystal.util.xos import is_linux, is_mac_os, is_windows
     import wx
     
-    # TODO: Provide way on Windows/Linux to open an old *.crystalproj
-    #       that lacks a contained launcher
-    dialog = wx.FileDialog(parent,
+    project_path = None  # type: Optional[str]
+    
+    class OpenAsDirectoryHook(wx.FileDialogCustomizeHook):
+        def AddCustomControls(self, customizer: wx.FileDialogCustomize):  # override
+            self.button = customizer.AddButton('Open Directory...')
+            bind(self.button, wx.EVT_BUTTON, self._on_open_directory)
+        
+        def _on_open_directory(self, event: wx.CommandEvent) -> None:
+            nonlocal project_path
+            #nonlocal file_dialog
+            
+            file_dialog_filepath = file_dialog.GetPath()
+            # NOTE: wx.FileDialog.GetPath() returns '' on Linux/wxGTK if viewing
+            #       and empty directory.
+            if file_dialog_filepath != '' and os.path.exists(file_dialog_filepath):
+                file_dialog_dirpath = os.path.dirname(file_dialog_filepath)  # type: Optional[str]
+            else:
+                file_dialog_dirpath = None
+            
+            dir_dialog = wx.DirDialog(parent,
+                message='Choose a project',
+                style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
+            if file_dialog_dirpath is not None:
+                dir_dialog.SetPath(file_dialog_dirpath)
+            with dir_dialog:
+                if not dir_dialog.ShowModal() == wx.ID_OK:
+                    return
+                project_path = dir_dialog.GetPath()  # capture
+            
+            assert not is_mac_os(), 'wx.FileDialog.EndModal() does not work on macOS'
+            file_dialog.EndModal(wx.ID_OK)
+    
+    file_dialog_customize_hook = OpenAsDirectoryHook()
+    file_dialog = wx.FileDialog(parent,
         message='Choose a project',
         wildcard='Projects (%(wc)s;%(wc2)s)|%(wc)s;%(wc2)s' % {
             # If projects appear as files, then can open directly
@@ -758,11 +791,17 @@ def _prompt_to_open_project(
             'wc2': '*' + Project.LAUNCHER_FILE_EXTENSION,
         },
         style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
-    with dialog:
-        if not dialog.ShowModal() == wx.ID_OK:
+    # Offer ability to open .crystalproj directories on Linux and Windows,
+    # where they were historically created without a .crystalopen file.
+    if is_linux() or is_windows():
+        file_dialog.SetCustomizeHook(file_dialog_customize_hook)
+    with file_dialog:
+        if not file_dialog.ShowModal() == wx.ID_OK:
             raise CancelOpenProject()
-        
-        project_path = dialog.GetPath()
+        if project_path is None:
+            project_path = file_dialog.GetPath()
+        assert project_path is not None
+    del file_dialog_customize_hook  # keep hook alive until after dialog closed
     
     if not os.path.exists(project_path):
         raise AssertionError
