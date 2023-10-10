@@ -13,6 +13,9 @@ def open_binary(filename: str) -> BinaryIO:
     
     On Windows, the data file must be explicitly listed in setup.py
     in the data_files section to be accessible by this function.
+    
+    Raises:
+    * FileNotFoundException
     """
     if is_windows():
         return open(get_filepath(filename), 'rb')
@@ -26,6 +29,9 @@ def open_text(filename: str, *, encoding: str='utf-8', errors='strict') -> TextI
     
     On Windows, the data file must be explicitly listed in setup.py
     in the data_files section to be accessible by this function.
+    
+    Raises:
+    * FileNotFoundException
     """
     # NOTE: The following implementation is based on codecs.open()
     file = open_binary(filename)

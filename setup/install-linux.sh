@@ -54,6 +54,5 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 1. Install .desktop file to ~/.local/share/applications
-# 2. Install symlink to .desktop file on ~/Desktop
+# Install Crystal to desktop environment
 $CRYSTAL_PATH --install-to-desktop

@@ -9,3 +9,9 @@ Adobe Express PNG to SVG converter:
 Also tried, but creates output SVGs with more pronounced banding effects: 
 1. Submit the original PNG to the online png.to converter tool:
    https://png.to/svg/
+
+
+How this SVG was resized
+2023-10-10
+
+$ rsvg-convert icon.svg -w 16 -h 16 -f svg -o icon_16x16.svg
