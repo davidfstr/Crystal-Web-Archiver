@@ -99,8 +99,8 @@ def install_to_linux_desktop_environment() -> None:
     # Install .crystalopen MIME type definition
     mime_dirpath = os.path.expanduser('~/.local/share/mime')
     os.makedirs(f'{mime_dirpath}/packages', exist_ok=True)
-    with open(f'{mime_dirpath}/packages/application-vnd.crystal-opener.xml', 'w') as dst_file:
-        with resources.open_text('application-vnd.crystal-opener.xml', encoding='utf-8') as src_file:
+    with open(f'{mime_dirpath}/packages/application-vnd.crystal.opener.xml', 'w') as dst_file:
+        with resources.open_text('application-vnd.crystal.opener.xml', encoding='utf-8') as src_file:
             shutil.copyfileobj(src_file, dst_file)
     subprocess.run(['update-mime-database', mime_dirpath], check=True)
     
@@ -142,13 +142,13 @@ def install_to_linux_desktop_environment() -> None:
                 os.makedirs(mime_icon_abs_dirpath, exist_ok=True)
                 
                 # Install PNG icon for MIME type
-                with open(f'{mime_icon_abs_dirpath}/application-vnd.crystal-opener.png', 'wb') as dst_file:
-                    dst_file.write(_get_or_load_best_icon('application-vnd.crystal-opener', 'png', dimension))
+                with open(f'{mime_icon_abs_dirpath}/application-vnd.crystal.opener.png', 'wb') as dst_file:
+                    dst_file.write(_get_or_load_best_icon('application-vnd.crystal.opener', 'png', dimension))
                 
                 # Install SVG icon for MIME type,
                 # because at least KDE on Kubuntu 22 seems to ignore PNG icons
-                with open(f'{mime_icon_abs_dirpath}/application-vnd.crystal-opener.svg', 'wb') as dst_file:
-                    dst_file.write(_get_or_load_best_icon('application-vnd.crystal-opener', 'svg', dimension))
+                with open(f'{mime_icon_abs_dirpath}/application-vnd.crystal.opener.svg', 'wb') as dst_file:
+                    dst_file.write(_get_or_load_best_icon('application-vnd.crystal.opener', 'svg', dimension))
             
             # NOTE: At least on Ubuntu 22 it seems the icon caches don't need
             #       to be explicitly updated to pick up the new icon type

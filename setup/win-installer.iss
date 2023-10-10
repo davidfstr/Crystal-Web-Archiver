@@ -20,7 +20,7 @@ ChangesAssociations=yes
 Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen"; Flags: uninsdeletekey
 ; Associate .crystalopen file with MIME type
 ; https://learn.microsoft.com/en-us/windows/win32/shell/fa-file-types
-Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen"; ValueType: string; ValueName: "Content Type"; ValueData: "application/vnd.crystal-opener"
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen"; ValueType: string; ValueName: "Content Type"; ValueData: "application/vnd.crystal.opener"
 Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen"; ValueType: string; ValueName: "PerceivedType"; ValueData: "application"
 ; Don't show .crystalopen file extension
 ; https://www.winhelponline.com/blog/hide-file-extension-specific-file-type/

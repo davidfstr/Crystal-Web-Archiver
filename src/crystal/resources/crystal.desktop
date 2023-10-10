@@ -19,7 +19,7 @@ Comment=Download Websites
 # Icon used for app in dock
 Icon=__APPICON_PATH__
 # MIME Types that this app knows how to open
-MimeType=application/vnd.crystal-project;application/vnd.crystal-opener;
+MimeType=application/vnd.crystal.project;application/vnd.crystal.opener;
 # TODO: What does this key actually affect?
 Categories=Utility;Archiving;GTK;
 # TODO: What does this key actually affect?
