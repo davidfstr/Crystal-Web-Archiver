@@ -17,11 +17,22 @@ Release Notes ⋮
         * macOS: Fix application menu title and title of its menuitems
         * Windows: Add app icon and Windows-friendly title to main window
         * Linux: Fix app title and icon in dock to be correct
+    * .crystalproj package changes
+        * .crystalproj packages now contain a README so that users on computers
+          without Crystal are informed about what a .crystalproj package is 
+          and how to open it
+        * Windows/Linux: .crystalproj packages now have an icon
+        * Windows: .crystalproj packages that are double-clicked open in Crystal
+        * Windows/Linux: .crystalproj packages now contain a .crystalopen file
+          so that it is easy to open a .crystalproj from a file browser
+        * macOS: Hide .crystalproj and .crystalopen file extensions
 
 * Minor fixes
     * Eliminated race condition where scheduler thread could try to read from
       the root task's children list concurrently with a different thread
       adding a new child to it.
+    * Hide .crystalproj extension in main window title if extension hidden
+      in file browser
 
 * Backward-incompatible API changes
     * `Project.title` has been removed. Calculate a reasonable title from

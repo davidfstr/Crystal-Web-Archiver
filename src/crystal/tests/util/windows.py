@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from crystal.model import Project
 from crystal.tests.util.controls import (
-    click_button, file_dialog_returning, package_dialog_returning,
+    click_button, file_dialog_returning,
     TreeItem
 )
 from crystal.tests.util.runner import bg_sleep, pump_wx_events
@@ -15,6 +15,7 @@ from crystal.tests.util.wait import (
     wait_for, WaitTimedOut, window_condition, not_condition, or_condition
 )
 from crystal.util.xos import is_mac_os
+import os.path
 import sys
 import tempfile
 import traceback
@@ -104,11 +105,17 @@ class OpenOrCreateDialog:
             project_dirpath: str, 
             *, readonly: Optional[bool]=None,
             autoclose: bool=True,
+            using_crystalopen: bool=False,
             ) -> AsyncIterator[MainWindow]:
         if readonly is not None:
             self.open_as_readonly.Value = readonly
         
-        with package_dialog_returning(project_dirpath):
+        if using_crystalopen:
+            itempath_to_open = os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME)
+        else:
+            itempath_to_open = project_dirpath
+        
+        with file_dialog_returning(itempath_to_open):
             click_button(self.open_button)
             
             with screenshot_if_raises():
@@ -125,7 +132,7 @@ class OpenOrCreateDialog:
                 await mw.close(exc_info_while_close)
     
     async def start_opening(self, project_dirpath: str, *, next_window_name: str) -> None:
-        with package_dialog_returning(project_dirpath):
+        with file_dialog_returning(project_dirpath):
             click_button(self.open_button)
             
             await wait_for(

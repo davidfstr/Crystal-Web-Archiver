@@ -21,6 +21,7 @@ from crystal.plugins import (
     substack as plugins_substack,
 )   
 from crystal.progress import DummyOpenProjectProgressListener, OpenProjectProgressListener
+from crystal import resources as resources_
 from crystal.util import http_date
 from crystal.util.db import (
     DatabaseConnection,
@@ -29,13 +30,16 @@ from crystal.util.db import (
     get_index_names,
     is_no_such_column_error_for,
 )
+from crystal.util import gio
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import warn_if_slow
 from crystal.util.urls import is_unrewritable_url, requote_uri
+from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
+from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util import xshutil
 from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
@@ -45,12 +49,14 @@ import json
 import math
 import mimetypes
 import os
+import pathlib
 import re
 import shutil
 from sortedcontainers import SortedList
 import sqlite3
 import sys
 from tempfile import NamedTemporaryFile
+from textwrap import dedent
 import threading
 import time
 from typing import (
@@ -76,11 +82,57 @@ class Project(ListenableMixin):
     """
     
     FILE_EXTENSION = '.crystalproj'
+    LAUNCHER_FILE_EXTENSION = '.crystalopen'
     
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
     _RESOURCE_REVISION_DIRNAME = 'revisions'
     _TEMPORARY_DIRNAME = 'tmp'
+    _LAUNCHER_DEFAULT_FILENAME = 'OPEN ME' + LAUNCHER_FILE_EXTENSION
+    _LAUNCHER_DEFAULT_CONTENT = b'CrOp'  # Crystal Opener, as a FourCC
+    _README_FILENAME = 'README.txt'
+    # Define README.txt which explains what a .crystalproj is to a user that
+    # does not have Crystal installed.
+    # 
+    # NOTE: Use Windows-style CRLF line endings, assuming that most text editors
+    #       in Linux and macOS are more tolerant of foreign newline sequences
+    #       than those in Windows.
+    _README_DEFAULT_CONTENT = dedent(
+        '''
+        This .crystalproj directory is a Crystal Project, which contains one or more
+        downloaded websites and associated web pages.
+
+        You can view the websites in this project by installing Crystal from
+        https://dafoster.net/projects/crystal-web-archiver/ and double-clicking the
+        "OPEN ME" file in this directory.
+
+        To avoid damaging the downloaded websites, please do not rename, move, or
+        delete any files in this directory.
+        '''.lstrip('\n')
+    ).replace('\n', '\r\n')
+    _DESKTOP_INI_FILENAME = 'desktop.ini'
+    # Define desktop.ini file for Windows that:
+    # - Defines icon for the .crystalproj directory
+    # - Defines tooltip for the .crystalproj directory
+    # - Associates directory with the "crystalproj" Directory Class in registry,
+    #   which defines which .exe to open it with
+    # 
+    # References:
+    # - https://learn.microsoft.com/en-us/windows/win32/shell/how-to-customize-folders-with-desktop-ini
+    # - https://learn.microsoft.com/en-us/windows/win32/shell/how-to-implement-custom-verbs-for-folders-through-desktop-ini
+    # 
+    # NOTE: Use Windows-style CRLF line endings because this is a Windows-specific file
+    _DESKTOP_INI_CONTENT = dedent(
+        r'''
+        [.ShellClassInfo]
+        DirectoryClass=crystalproj
+        ConfirmFileOp=0
+        IconFile=icons\docicon.ico
+        IconIndex=0
+        InfoTip=Crystal Project
+        '''.lstrip('\n')
+    ).replace('\n', '\r\n')
+    _ICONS_DIRNAME = 'icons'
     
     # NOTE: Only tracked when tests are running
     _last_opened_project: Optional[Project]=None  # static
@@ -90,16 +142,17 @@ class Project(ListenableMixin):
             progress_listener: Optional[OpenProjectProgressListener]=None,
             *, readonly: bool=False) -> None:
         """
-        Loads a project from the specified filepath, or creates a new one if none is found.
+        Loads a project from the specified itempath, or creates a new one if none is found.
         
         Arguments:
         * path -- 
-            path to a directory (ideally with the `FILE_EXTENSION` extension)
-            from which the project is to be loaded.
+            path to a project directory (ending with `FILE_EXTENSION`)
+            or to a project launcher (ending with `LAUNCHER_FILE_EXTENSION`).
         
         Raises:
         * FileNotFoundError --
-            if readonly is True and no project already exists at the specified path.
+            if readonly is True and no project already exists at the specified path
+        * ProjectFormatError -- if the project at the specified path is invalid
         * CancelOpenProject
         """
         super().__init__()
@@ -111,6 +164,12 @@ class Project(ListenableMixin):
         (head, tail) = os.path.split(path)
         if len(tail) == 0:
             path = head  # reinterpret
+        
+        # Normalize path
+        normalized_path = self._normalize_project_path(path)  # reinterpret
+        if normalized_path is None:
+            raise ProjectFormatError(f'Project does not end with {self.FILE_EXTENSION}')
+        path = normalized_path  # reinterpret
         
         self.path = path
         
@@ -137,7 +196,20 @@ class Project(ListenableMixin):
                 # Create new project structure, minus database file
                 os.mkdir(path)
                 os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
+                
+                # TODO: Consider let _apply_migrations() define the rest of the
+                #       project structure, rather than duplicating logic here
                 os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
+                with open(os.path.join(path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
+                    f.write(self._LAUNCHER_DEFAULT_CONTENT)
+                with open(os.path.join(self.path, self._README_FILENAME), 'w', newline='') as f:
+                    f.write(self._README_DEFAULT_CONTENT)
+                with open(os.path.join(self.path, self._DESKTOP_INI_FILENAME), 'w', newline='') as f:
+                    f.write(self._DESKTOP_INI_CONTENT)
+                os.mkdir(os.path.join(path, self._ICONS_DIRNAME))
+                with resources_.open_binary('docicon.ico') as src_file:
+                    with open(os.path.join(path, self._ICONS_DIRNAME, 'docicon.ico'), 'wb') as dst_file:
+                        shutil.copyfileobj(src_file, dst_file)
             else:
                 # Ensure existing project structure looks OK
                 Project._ensure_valid(path)
@@ -178,6 +250,8 @@ class Project(ListenableMixin):
                 c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
                 c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
                 c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
+                
+                # (Define indexes in _apply_migrations())
                 
                 # Default HTML parser for new projects, for Crystal >1.5.0
                 self.html_parser_type = 'lxml'
@@ -301,14 +375,35 @@ class Project(ListenableMixin):
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
             Project._last_opened_project = self
     
-    @staticmethod
-    def is_valid(path: str) -> bool:
+    @classmethod
+    def is_valid(cls, path: str) -> bool:
+        normalized_path = cls._normalize_project_path(path)
+        if normalized_path is None:
+            return False
         try:
-            Project._ensure_valid(path)
+            Project._ensure_valid(normalized_path)
         except ProjectFormatError:
             return False
         else:
             return True
+    
+    @classmethod
+    def _normalize_project_path(cls, path: str) -> Optional[str]:
+        if os.path.exists(path):
+            # Try to alter existing path to point to item ending with FILE_EXTENSION
+            if path.endswith(cls.FILE_EXTENSION):
+                return path
+            elif path.endswith(cls.LAUNCHER_FILE_EXTENSION):
+                parent_itempath = os.path.dirname(path)
+                if parent_itempath.endswith(cls.FILE_EXTENSION):
+                    return parent_itempath
+        else:
+            # Ensure new path ends with FILE_EXTENSION
+            if path.endswith(cls.FILE_EXTENSION):
+                return path
+            else:
+                return path + cls.FILE_EXTENSION
+        return None  # invalid
     
     @staticmethod
     def _ensure_valid(path: str) -> None:
@@ -371,6 +466,90 @@ class Project(ListenableMixin):
         tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
         if not os.path.exists(tmp_dirpath):
             os.mkdir(tmp_dirpath)
+        
+        # Add launcher and README if missing
+        if not any([n for n in os.listdir(self.path) if n.endswith(self.LAUNCHER_FILE_EXTENSION)]):
+            # Add missing launcher
+            with open(os.path.join(self.path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
+                f.write(self._LAUNCHER_DEFAULT_CONTENT)
+            
+            # Add README if not already there
+            readme_filepath = os.path.join(self.path, self._README_FILENAME)
+            if not os.path.exists(readme_filepath):
+                with open(readme_filepath, 'w', newline='') as f:
+                    f.write(self._README_DEFAULT_CONTENT)
+        
+        # Add Windows desktop.ini and icon for .crystalproj if missing
+        desktop_ini_filepath = os.path.join(self.path, self._DESKTOP_INI_FILENAME)
+        if not os.path.exists(desktop_ini_filepath):
+            with open(desktop_ini_filepath, 'w', newline='') as f:
+                f.write(self._DESKTOP_INI_CONTENT)
+            
+            icons_dirpath = os.path.join(self.path, self._ICONS_DIRNAME)
+            if not os.path.exists(icons_dirpath):
+                os.mkdir(icons_dirpath)
+                
+                with resources_.open_binary('docicon.ico') as src_file:
+                    with open(os.path.join(icons_dirpath, 'docicon.ico'), 'wb') as dst_file:
+                        shutil.copyfileobj(src_file, dst_file)
+        
+        # Add Linux icon for .crystalproj if missing
+        if True:
+            # GNOME: Define icon in GIO database
+            if is_linux():
+                did_set_gio_icon = False
+                
+                # GNOME Files (AKA Nautilus)
+                try:
+                    gio.set(self.path, 'metadata::custom-icon-name', 'crystalproj')
+                except gio.GioNotAvailable:
+                    pass
+                except gio.UnrecognizedGioAttributeError:
+                    # For example Kubuntu 22 does not recognize this attribute
+                    pass
+                else:
+                    did_set_gio_icon = True
+                
+                # GNOME Desktop Items Shell Extension
+                # 
+                # HACK: Must also set icon location as a brittle absolute path
+                #       because Desktop Items doesn't understand the
+                #       'metadata::custom-icon-name' GIO attribute.
+                crystalproj_png_icon_url = pathlib.Path(
+                    resources_.get_filepath('docicon.png')
+                ).as_uri()
+                try:
+                    gio.set(self.path, 'metadata::custom-icon', crystalproj_png_icon_url)
+                except gio.GioNotAvailable:
+                    pass
+                except gio.UnrecognizedGioAttributeError:
+                    # For example Kubuntu 22 does not recognize this attribute
+                    pass
+                else:
+                    did_set_gio_icon = True
+                
+                # Touch .crystalproj so that GNOME Files (AKA Nautilus)
+                # observes the icon change
+                if did_set_gio_icon:
+                    pathlib.Path(self.path).touch()
+            
+            # KDE: Define icon in .directory file
+            dot_directory_filepath = os.path.join(self.path, '.directory')
+            if not os.path.exists(dot_directory_filepath):
+                with open(dot_directory_filepath, 'w') as f:
+                    f.write('[Desktop Entry]\nIcon=crystalproj\n')
+        
+        # Set Windows-specific file attributes, if not already done
+        if is_windows():
+            # Mark .crystalproj as System,
+            # so that icon defined by desktop.ini is used
+            set_windows_file_attrib(self.path, ['+s'])
+            
+            # Mark desktop.ini as Hidden & System
+            set_windows_file_attrib(desktop_ini_filepath, ['+h', '+s'])
+            
+            # Mark .directory as Hidden
+            set_windows_file_attrib(dot_directory_filepath, ['+h'])
     
     # === Properties ===
     

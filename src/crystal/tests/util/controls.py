@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from crystal.util.xos import project_appears_as_package_file
 from typing import Iterator, List, Optional
 import unittest.mock
 import wx
@@ -45,32 +44,12 @@ def click_checkbox(checkbox: wx.CheckBox) -> None:
 
 
 # ------------------------------------------------------------------------------
-# Utility: Controls: wx.FileDialog, wx.DirDialog
-
-@contextmanager
-def package_dialog_returning(filepath: str) -> Iterator[None]:
-    if project_appears_as_package_file():
-        with file_dialog_returning(filepath):
-            yield
-    else:
-        with dir_dialog_returning(filepath):
-            yield
-
+# Utility: Controls: wx.FileDialog
 
 @contextmanager
 def file_dialog_returning(filepath: str) -> Iterator[None]:
     with unittest.mock.patch('wx.FileDialog', spec=True) as MockFileDialog:
         instance = MockFileDialog.return_value
-        instance.ShowModal.return_value = wx.ID_OK
-        instance.GetPath.return_value = filepath
-        
-        yield
-
-
-@contextmanager
-def dir_dialog_returning(filepath: str) -> Iterator[None]:
-    with unittest.mock.patch('wx.DirDialog', spec=True) as MockDirDialog:
-        instance = MockDirDialog.return_value
         instance.ShowModal.return_value = wx.ID_OK
         instance.GetPath.return_value = filepath
         

@@ -3,6 +3,7 @@
 Home of the main function, which starts the program.
 """
 
+# TODO: Eliminate use of deprecated "annotation" future
 from __future__ import annotations
 
 # NOTE: Avoid importing anything outside the Python standard library
@@ -20,7 +21,6 @@ import locale
 import os
 import os.path
 import shutil
-import subprocess
 import sys
 import threading
 import time
@@ -164,7 +164,8 @@ def _main(args: List[str]) -> None:
         )
     parser.add_argument(
         'filepath',
-        help='Optional. Path to a *.crystalproj to open.',
+        # NOTE: Duplicates: Project.FILE_EXTENSION, Project.LAUNCHER_FILE_EXTENSION
+        help='Optional. Path to a *.crystalproj or *.crystalopen to open.',
         type=str,
         default=None,
         nargs='?',
@@ -186,7 +187,8 @@ def _main(args: List[str]) -> None:
     
     # --install-to-desktop, if requested
     if is_linux() and parsed_args.install_to_desktop:
-        _install_to_desktop()
+        from crystal.install import install_to_linux_desktop_environment
+        install_to_linux_desktop_environment()
         sys.exit()
     
     # Start shell if requested
@@ -303,6 +305,10 @@ def _main(args: List[str]) -> None:
                 'because tests expect to be able to schedule callables on '
                 'the foreground thread'
             )
+            
+            # Immediately enter testing mode
+            os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
+            
             def bg_task():
                 is_ok = False
                 try:
@@ -379,54 +385,6 @@ def _running_as_bundle():
     such as py2exe or py2app.
     """
     return hasattr(sys, 'frozen')
-
-
-def _install_to_desktop():
-    """Install the Crystal application to the desktop. (Linux only)"""
-    from crystal import resources
-    from crystal.util.xos import is_linux
-    
-    if not is_linux():
-        raise ValueError()
-    
-    # Format .desktop file in memory
-    with resources.open_text('crystal.desktop', encoding='utf-8') as f:
-        desktop_file_content = f.read()
-    desktop_file_content = desktop_file_content.replace(
-        '__CRYSTAL_PATH__', sys.executable)
-    desktop_file_content = desktop_file_content.replace(
-        '__APPICON_PATH__', resources.get_filepath('appicon.png'))
-    
-    # Install .desktop file to ~/.local/share/applications
-    # 
-    # NOTE: Only .desktop files opened from this directory will show their
-    #       icon in the dock correctly.
-    apps_dirpath = os.path.expanduser('~/.local/share/applications')
-    os.makedirs(apps_dirpath, exist_ok=True)
-    with open(f'{apps_dirpath}/crystal.desktop', 'w') as f:
-        f.write(desktop_file_content)
-    
-    # Install symlink to .desktop file on ~/Desktop, if possible
-    desktop_dirpath = os.path.expanduser('~/Desktop')
-    if os.path.isdir(desktop_dirpath) and not os.path.exists(f'{desktop_dirpath}/crystal.desktop'):
-        subprocess.run([
-            'ln', '-s',
-            f'{apps_dirpath}/crystal.desktop',
-            f'{desktop_dirpath}/crystal.desktop',
-        ], check=True)
-        
-        # Mark .desktop symlink on desktop as "Allow Launching"
-        # https://askubuntu.com/questions/1218954/desktop-files-allow-launching-set-this-via-cli
-        if True:
-            subprocess.run([
-                'gio', 'set',
-                f'{desktop_dirpath}/crystal.desktop',
-                'metadata::trusted', 'true'
-            ], check=True)
-            subprocess.run([
-                'chmod', 'a+x',
-                f'{desktop_dirpath}/crystal.desktop',
-            ], check=True)
 
 
 def _did_launch(
@@ -604,25 +562,69 @@ def _prompt_to_open_project(
     """
     from crystal.model import Project
     from crystal.progress import CancelOpenProject
-    from crystal.util.xos import project_appears_as_package_file
+    from crystal.util.wx_bind import bind
+    from crystal.util.xos import is_linux, is_mac_os, is_windows
     import wx
     
-    if project_appears_as_package_file():
-        # If projects appear as files, use a file selection dialog
-        dialog = wx.FileDialog(parent,
-            message='Choose a project',
-            wildcard='Projects (%(wc)s)|%(wc)s' % {'wc': '*' + Project.FILE_EXTENSION},
-            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
-    else:
-        # If projects appear as directories, use a directory selection dialog
-        dialog = wx.DirDialog(parent,
-            message='Choose a project',
-            style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
-    with dialog:
-        if not dialog.ShowModal() == wx.ID_OK:
-            raise CancelOpenProject()
+    project_path = None  # type: Optional[str]
+    
+    class OpenAsDirectoryHook(wx.FileDialogCustomizeHook):
+        def AddCustomControls(self, customizer: wx.FileDialogCustomize):  # override
+            self.open_dir_button = customizer.AddButton('Open Directory')  # type: wx.FileDialogButton
+            self.open_dir_button.Disable()
+            bind(self.open_dir_button, wx.EVT_BUTTON, self._on_open_directory)
         
-        project_path = dialog.GetPath()
+        def UpdateCustomControls(self) -> None:  # override
+            selected_itempath = file_dialog.GetPath()
+            selected_itemname = os.path.basename(selected_itempath)
+            project_is_selected = (
+                os.path.exists(selected_itempath) and (
+                    selected_itemname.endswith(Project.FILE_EXTENSION) or
+                    selected_itemname.endswith(Project.LAUNCHER_FILE_EXTENSION)
+                )
+            )
+            if project_is_selected:
+                self.open_dir_button.Enable()
+            else:
+                self.open_dir_button.Disable()
+        
+        def _on_open_directory(self, event: wx.CommandEvent) -> None:
+            nonlocal project_path
+            #nonlocal file_dialog
+            
+            project_path = file_dialog.GetPath()
+            assert not (is_mac_os() or is_windows()), (
+                'wx.FileDialog.EndModal() does not dismiss dialog '
+                'on macOS or Windows'
+            )
+            file_dialog.EndModal(wx.ID_OK)
+    
+    file_dialog_customize_hook = OpenAsDirectoryHook()
+    file_dialog = wx.FileDialog(parent,
+        message='Choose a project',
+        wildcard='Projects (%(wc)s;%(wc2)s)|%(wc)s;%(wc2)s' % {
+            # If projects appear as files, then can open directly
+            'wc': '*' + Project.FILE_EXTENSION,
+            # If projects appear as directories, then must open contained launcher file
+            'wc2': '*' + Project.LAUNCHER_FILE_EXTENSION,
+        },
+        style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+    # Offer ability to open .crystalproj directories on Linux,
+    # where they were historically created without a .crystalopen file.
+    # 
+    # NOTE: On Windows it is possible to double-click a .crystalproj directory
+    #       to open it in Crystal even if it has no .crystalopen file.
+    #       So no special support for opening a .crystalproj directory
+    #       needs to be provided here.
+    if is_linux():
+        file_dialog.SetCustomizeHook(file_dialog_customize_hook)
+    with file_dialog:
+        if not file_dialog.ShowModal() == wx.ID_OK:
+            raise CancelOpenProject()
+        if project_path is None:
+            project_path = file_dialog.GetPath()
+        assert project_path is not None
+    del file_dialog_customize_hook  # keep hook alive until after dialog closed
     
     if not os.path.exists(project_path):
         raise AssertionError

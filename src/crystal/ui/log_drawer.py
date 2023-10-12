@@ -3,7 +3,6 @@ from crystal.util import cli
 from crystal.util.wx_bind import bind
 from crystal.util.xos import (
     is_linux, is_mac_os, is_windows, windows_major_version,
-    wx_resize_border_is_invisible
 )
 from crystal.util.xthreading import fg_call_later
 from enum import Enum
@@ -762,3 +761,31 @@ class _WindowPairingStrategy(Enum):
             return _WindowPairingStrategy.FLOAT_ON_PARENT
         else:
             return _WindowPairingStrategy.FLOAT_ON_PARENT
+
+
+def wx_resize_border_is_invisible() -> bool:
+    """
+    Returns whether the wx.RESIZE_BORDER style applied to a wx.Frame causes
+    a resizable border to appear that is visible, as opposed to one that is invisible.
+    """
+    if is_mac_os():  # macOS 10.14+
+        return True
+    elif is_windows():  # Windows *
+        major_version = windows_major_version()
+        if major_version is None:  # unknown Windows
+            pass
+        elif major_version in [7, 8]:  # Windows 7, Windows 8
+            # Windows 7 and 8 add a visible border on all edges
+            return False
+        elif major_version >= 10:  # Windows 10+
+            # Windows 10 adds a visible border on the top edge only
+            return False
+        else:  # unknown Windows
+            pass
+        # Unknown Windows
+        return False
+    elif is_linux():  # Ubuntu 22.04+
+        return True
+    
+    # Default, assuming a newer OS
+    return True

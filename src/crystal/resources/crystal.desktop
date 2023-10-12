@@ -12,17 +12,17 @@ Terminal=false
 Exec=__CRYSTAL_PATH__ %f
 # Title used for app in dock
 Name=Crystal
-# TODO: What does this key actually affect
+# TODO: What does this key actually affect?
 GenericName=Website Downloader
-# TODO: What does this key actually affect
+# TODO: What does this key actually affect?
 Comment=Download Websites
 # Icon used for app in dock
 Icon=__APPICON_PATH__
 # MIME Types that this app knows how to open
-MimeType=application/vnd.crystal.project;
-# TODO: What does this key actually affect
+MimeType=application/vnd.crystal.project;application/vnd.crystal.opener;
+# TODO: What does this key actually affect?
 Categories=Utility;Archiving;GTK;
-# TODO: What does this key actually affect
+# TODO: What does this key actually affect?
 Keywords=WWW;Web;Archiving;
 # TODO: Add support for the Startup Notification Protocol so that
 #       app can let the desktop environment know when the app has started

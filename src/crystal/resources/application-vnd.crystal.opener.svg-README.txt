@@ -1,0 +1,17 @@
+How this SVG was created
+2023-10-03
+
+Adobe Express PNG to SVG converter:
+1. Submit the original PNG to the online Adobe Express PNG to SVG converter tool:
+   https://new.express.adobe.com/tools/convert-to-svg
+2. Use Inkscale to delete the black background so that it becomes transparent.
+
+Also tried, but creates output SVGs with more pronounced banding effects: 
+1. Submit the original PNG to the online png.to converter tool:
+   https://png.to/svg/
+
+
+How this SVG was resized
+2023-10-10
+
+$ rsvg-convert icon.svg -w 16 -h 16 -f svg -o icon_16x16.svg

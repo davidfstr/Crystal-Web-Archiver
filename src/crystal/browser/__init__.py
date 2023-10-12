@@ -10,11 +10,13 @@ from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.progress import (
     DummyOpenProjectProgressListener, OpenProjectProgressListener,
 )
+from crystal import resources
 from crystal.server import ProjectServer
 from crystal.task import RootTask
 from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
+from crystal.util.finderinfo import get_hide_file_extension
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_linux, is_mac_os, is_windows, mac_version
 from crystal.util.xthreading import (
@@ -54,24 +56,28 @@ class MainWindow:
         
         frame_title: str
         filename_with_ext = os.path.basename(project.path)
+        (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
         if is_windows():
-            (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
             frame_title = f'{filename_without_ext} - {APP_NAME}'
         else:  # is_mac_os(); other
-            frame_title = filename_with_ext
+            extension_visible = (
+                not get_hide_file_extension(project.path) if is_mac_os()
+                else True
+            )
+            if extension_visible:
+                frame_title = filename_with_ext
+            else:
+                frame_title = filename_without_ext
         
         # TODO: Rename: raw_frame -> frame,
         #               frame -> frame_content
         raw_frame = wx.Frame(None, title=frame_title, name='cr-main-window')
         try:
-            # TODO: Move general resource management out of crystal.tests package
-            from crystal.resources import open_binary
-            
             # macOS: Define proxy icon beside the filename in the titlebar
             raw_frame.SetRepresentedFilename(project.path)
             # Windows: Define app icon in the top-left corner
             if is_windows():
-                raw_frame.SetIcons(wx.IconBundle(open_binary('appicon.ico')))
+                raw_frame.SetIcons(wx.IconBundle(resources.open_binary('appicon.ico')))
             
             # 1. Define *single* child with full content of the wx.Frame,
             #    so that LogDrawer can be created for this window later
