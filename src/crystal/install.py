@@ -133,7 +133,7 @@ def install_to_linux_desktop_environment() -> None:
         
         # Install new MIME icons, in local theme directories
         if len(dimension_for_mime_icon_dirpath) == 0:
-            print('*** Unable to locate places to install MIME icons')
+            print('WARNING: Unable to locate places to install MIME icons')
         else:
             local_icons_dirpath = os.path.expanduser('~/.local/share/icons')
             for (mime_icon_dirpath, dimension) in dimension_for_mime_icon_dirpath.items():
@@ -163,6 +163,7 @@ def install_to_linux_desktop_environment() -> None:
     #       because some apps (like GNOME/KDE's Open Dialog) cannot scale icons themselves.
     if True:
         # Determine icon names for regular folder, which actually resolve to an icon
+        icon_names: List[str]
         try:
             regular_folder_dirpath = os.path.dirname(__file__)
             p = subprocess.run(
@@ -172,9 +173,8 @@ def install_to_linux_desktop_environment() -> None:
             )
         except FileNotFoundError:
             # GIO not available
-            pass
+            icon_names = []
         else:
-            icon_names: List[str]
             gio_lines = p.stdout.decode('utf-8').split('\n')
             for line in gio_lines:
                 line = line.strip()  # reinterpret
@@ -185,48 +185,48 @@ def install_to_linux_desktop_environment() -> None:
             else:
                 icon_names = []
             
-            # Locate places where folder icons are installed, in global theme directories
-            dimension_for_folder_icon_dirpath = {}  # type: Dict[str, Union[Tuple[int, int], EllipsisType]]
-            if len(icon_names) != 0:
-                with _cwd_set_to('/usr/share/icons'):
-                    for (folder_icon_dirpath, dirnames, filenames) in os.walk('.'):
-                        for filename in filenames:
-                            (filename_without_ext, _) = os.path.splitext(filename)
-                            if filename_without_ext not in icon_names:
-                                continue
-                            
-                            old_dimension = dimension_for_folder_icon_dirpath.get(folder_icon_dirpath)
-                            if old_dimension is not Ellipsis:
-                                with open(os.path.join(folder_icon_dirpath, filename), 'rb') as f:
-                                    if filename.endswith('.png'):
-                                        new_dimension = get_png_dimensions(f) or Ellipsis
-                                    elif filename.endswith('.svg'):
-                                        new_dimension = get_svg_dimensions(f) or Ellipsis
-                                    else:
-                                        # Ignore futuristic image types
-                                        continue
-                                if old_dimension is not None and new_dimension != old_dimension:
-                                    new_dimension = Ellipsis  # ambiguous
-                                if new_dimension != old_dimension:
-                                    dimension_for_folder_icon_dirpath[folder_icon_dirpath] = new_dimension
-            
-            # Install new folder icons, in local theme directories
-            if len(dimension_for_folder_icon_dirpath) == 0:
-                print('*** Unable to locate places to install folder icons')
-            else:
-                local_icons_dirpath = os.path.expanduser('~/.local/share/icons')
-                for (folder_icon_dirpath, dimension) in dimension_for_folder_icon_dirpath.items():
-                    folder_icon_abs_dirpath = os.path.join(local_icons_dirpath, folder_icon_dirpath)
-                    os.makedirs(folder_icon_abs_dirpath, exist_ok=True)
-                    
-                    # Install PNG icon for folder type
-                    with open(f'{folder_icon_abs_dirpath}/crystalproj.png', 'wb') as dst_file:
-                        dst_file.write(_get_or_load_best_icon('docicon', 'png', dimension))
-                    
-                    # Install SVG icon for folder type,
-                    # because at least KDE on Kubuntu 22 seems to ignore PNG icons
-                    with open(f'{folder_icon_abs_dirpath}/crystalproj.svg', 'wb') as dst_file:
-                        dst_file.write(_get_or_load_best_icon('docicon', 'svg', dimension))
+        # Locate places where folder icons are installed, in global theme directories
+        dimension_for_folder_icon_dirpath = {}  # type: Dict[str, Union[Tuple[int, int], EllipsisType]]
+        if len(icon_names) != 0:
+            with _cwd_set_to('/usr/share/icons'):
+                for (folder_icon_dirpath, dirnames, filenames) in os.walk('.'):
+                    for filename in filenames:
+                        (filename_without_ext, _) = os.path.splitext(filename)
+                        if filename_without_ext not in icon_names:
+                            continue
+                        
+                        old_dimension = dimension_for_folder_icon_dirpath.get(folder_icon_dirpath)
+                        if old_dimension is not Ellipsis:
+                            with open(os.path.join(folder_icon_dirpath, filename), 'rb') as f:
+                                if filename.endswith('.png'):
+                                    new_dimension = get_png_dimensions(f) or Ellipsis
+                                elif filename.endswith('.svg'):
+                                    new_dimension = get_svg_dimensions(f) or Ellipsis
+                                else:
+                                    # Ignore futuristic image types
+                                    continue
+                            if old_dimension is not None and new_dimension != old_dimension:
+                                new_dimension = Ellipsis  # ambiguous
+                            if new_dimension != old_dimension:
+                                dimension_for_folder_icon_dirpath[folder_icon_dirpath] = new_dimension
+        
+        # Install new folder icons, in local theme directories
+        if len(dimension_for_folder_icon_dirpath) == 0:
+            print('WARNING: Unable to locate places to install folder icons')
+        else:
+            local_icons_dirpath = os.path.expanduser('~/.local/share/icons')
+            for (folder_icon_dirpath, dimension) in dimension_for_folder_icon_dirpath.items():
+                folder_icon_abs_dirpath = os.path.join(local_icons_dirpath, folder_icon_dirpath)
+                os.makedirs(folder_icon_abs_dirpath, exist_ok=True)
+                
+                # Install PNG icon for folder type
+                with open(f'{folder_icon_abs_dirpath}/crystalproj.png', 'wb') as dst_file:
+                    dst_file.write(_get_or_load_best_icon('docicon', 'png', dimension))
+                
+                # Install SVG icon for folder type,
+                # because at least KDE on Kubuntu 22 seems to ignore PNG icons
+                with open(f'{folder_icon_abs_dirpath}/crystalproj.svg', 'wb') as dst_file:
+                    dst_file.write(_get_or_load_best_icon('docicon', 'svg', dimension))
 
 
 @cache  # ...in memory
