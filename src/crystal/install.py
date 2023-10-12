@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from functools import cache
 import os
+import os.path
 import shutil
 import subprocess
 import sys
@@ -227,6 +228,37 @@ def install_to_linux_desktop_environment() -> None:
                 # because at least KDE on Kubuntu 22 seems to ignore PNG icons
                 with open(f'{folder_icon_abs_dirpath}/crystalproj.svg', 'wb') as dst_file:
                     dst_file.write(_get_or_load_best_icon('docicon', 'svg', dimension))
+    
+    # If KDE, restart plasmasession so that desktop detects new icons immediately
+    import psutil
+    for process in psutil.process_iter(attrs=['cmdline', 'pid', 'cwd', 'environ']):
+        process_cmdline = process.cmdline()
+        if (len(process_cmdline) >= 1 and
+                os.path.basename(process_cmdline[0]) == 'plasmashell'):
+            plasmashell = process  # type: Optional[psutil.Process]
+            break
+    else:
+        plasmashell = None
+    if plasmashell is not None:
+        plasmashell_info = dict(
+            cmdline=plasmashell.cmdline(),
+            cwd=plasmashell.cwd(),
+            environ=plasmashell.environ(),
+        )  # capture
+        subprocess.run(
+            ['kill', str(plasmashell.pid)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.Popen(
+            plasmashell_info['cmdline'],
+            cwd=plasmashell_info['cwd'],
+            env=plasmashell_info['environ'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        # (Leave new plasmashell process running)
 
 
 @cache  # ...in memory
