@@ -3,11 +3,15 @@ from crystal.tests import (
     test_download,
     test_download_body,
     test_entitytree,
+    test_file_extension_visibility,
+    test_icons,
+    test_install_to_desktop,
     test_log_drawer,
     test_menus,
     test_open_project,
     test_parse_html,
     test_profile,
+    test_project_format_upgrade,
     test_readonly_mode,
     test_server,
     test_shell,
@@ -38,11 +42,15 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_download) +
     _test_functions_in_module(test_download_body) +
     _test_functions_in_module(test_entitytree) +
+    _test_functions_in_module(test_file_extension_visibility) +
+    _test_functions_in_module(test_icons) +
+    _test_functions_in_module(test_install_to_desktop) +
     _test_functions_in_module(test_log_drawer) +
     _test_functions_in_module(test_menus) +
     _test_functions_in_module(test_open_project) +
     _test_functions_in_module(test_parse_html) +
     _test_functions_in_module(test_profile) +
+    _test_functions_in_module(test_project_format_upgrade) +
     _test_functions_in_module(test_readonly_mode) +
     _test_functions_in_module(test_server) +
     _test_functions_in_module(test_shell) +
