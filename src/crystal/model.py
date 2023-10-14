@@ -426,130 +426,135 @@ class Project(ListenableMixin):
             c: DatabaseCursor,
             progress_listener: OpenProjectProgressListener) -> None:
         """
-        Upgrades this project's database schema to the latest version.
+        Upgrades this project's directory structure and database schema
+        to the latest version.
         
         Raises:
         * ProjectReadOnlyError
         """
-        index_names = get_index_names(c)  # cache
-        
-        # Add resource_revision.request_cookie column if missing
-        if 'request_cookie' not in get_column_names_of_table(c, 'resource_revision'):
-            progress_listener.upgrading_project('Adding cookies to revisions...')
-            c.execute('alter table resource_revision add column request_cookie text')
-        
-        # Add resource_revision__error_not_null index if missing
-        if 'resource_revision__error_not_null' not in index_names:
-            progress_listener.upgrading_project('Indexing revisions with errors...')
-            c.execute(
-                'create index resource_revision__error_not_null on resource_revision '
-                '(id, resource_id) '
-                'where error != "null"')
-        
-        # Add resource_revision__request_cookie_not_null index if missing
-        if 'resource_revision__request_cookie_not_null' not in index_names:
-            progress_listener.upgrading_project('Indexing revisions with cookies...')
-            c.execute(
-                'create index resource_revision__request_cookie_not_null on resource_revision '
-                '(id, request_cookie) '
-                'where request_cookie is not null')
-        
-        # Add resource_revision__status_code index if missing
-        if 'resource_revision__status_code' not in index_names and sqlite_has_json_support():
-            progress_listener.upgrading_project('Indexing revisions by status code...')
-            c.execute(
-                'create index resource_revision__status_code on resource_revision '
-                '(json_extract(metadata, "$.status_code"), resource_id) '
-                'where json_extract(metadata, "$.status_code") != 200')
-        
-        # Add temporary directory if missing
-        tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
-        if not os.path.exists(tmp_dirpath):
-            os.mkdir(tmp_dirpath)
-        
-        # Add launcher and README if missing
-        if not any([n for n in os.listdir(self.path) if n.endswith(self.LAUNCHER_FILE_EXTENSION)]):
-            # Add missing launcher
-            with open(os.path.join(self.path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
-                f.write(self._LAUNCHER_DEFAULT_CONTENT)
-            
-            # Add README if not already there
-            readme_filepath = os.path.join(self.path, self._README_FILENAME)
-            if not os.path.exists(readme_filepath):
-                with open(readme_filepath, 'w', newline='') as f:
-                    f.write(self._README_DEFAULT_CONTENT)
-        
-        # Add Windows desktop.ini and icon for .crystalproj if missing
-        desktop_ini_filepath = os.path.join(self.path, self._DESKTOP_INI_FILENAME)
-        if not os.path.exists(desktop_ini_filepath):
-            with open(desktop_ini_filepath, 'w', newline='') as f:
-                f.write(self._DESKTOP_INI_CONTENT)
-            
-            icons_dirpath = os.path.join(self.path, self._ICONS_DIRNAME)
-            if not os.path.exists(icons_dirpath):
-                os.mkdir(icons_dirpath)
-                
-                with resources_.open_binary('docicon.ico') as src_file:
-                    with open(os.path.join(icons_dirpath, 'docicon.ico'), 'wb') as dst_file:
-                        shutil.copyfileobj(src_file, dst_file)
-        
-        # Add Linux icon for .crystalproj if missing
+        # Add missing database columns and indexes
         if True:
-            # GNOME: Define icon in GIO database
-            if is_linux():
-                did_set_gio_icon = False
-                
-                # GNOME Files (AKA Nautilus)
-                try:
-                    gio.set(self.path, 'metadata::custom-icon-name', 'crystalproj')
-                except gio.GioNotAvailable:
-                    pass
-                except gio.UnrecognizedGioAttributeError:
-                    # For example Kubuntu 22 does not recognize this attribute
-                    pass
-                else:
-                    did_set_gio_icon = True
-                
-                # GNOME Desktop Items Shell Extension
-                # 
-                # HACK: Must also set icon location as a brittle absolute path
-                #       because Desktop Items doesn't understand the
-                #       'metadata::custom-icon-name' GIO attribute.
-                crystalproj_png_icon_url = pathlib.Path(
-                    resources_.get_filepath('docicon.png')
-                ).as_uri()
-                try:
-                    gio.set(self.path, 'metadata::custom-icon', crystalproj_png_icon_url)
-                except gio.GioNotAvailable:
-                    pass
-                except gio.UnrecognizedGioAttributeError:
-                    # For example Kubuntu 22 does not recognize this attribute
-                    pass
-                else:
-                    did_set_gio_icon = True
-                
-                # Touch .crystalproj so that GNOME Files (AKA Nautilus)
-                # observes the icon change
-                if did_set_gio_icon:
-                    pathlib.Path(self.path).touch()
+            index_names = get_index_names(c)  # cache
             
-            # KDE: Define icon in .directory file
-            dot_directory_filepath = os.path.join(self.path, '.directory')
-            if not os.path.exists(dot_directory_filepath):
-                with open(dot_directory_filepath, 'w') as f:
-                    f.write('[Desktop Entry]\nIcon=crystalproj\n')
+            # Add resource_revision.request_cookie column if missing
+            if 'request_cookie' not in get_column_names_of_table(c, 'resource_revision'):
+                progress_listener.upgrading_project('Adding cookies to revisions...')
+                c.execute('alter table resource_revision add column request_cookie text')
+            
+            # Add resource_revision__error_not_null index if missing
+            if 'resource_revision__error_not_null' not in index_names:
+                progress_listener.upgrading_project('Indexing revisions with errors...')
+                c.execute(
+                    'create index resource_revision__error_not_null on resource_revision '
+                    '(id, resource_id) '
+                    'where error != "null"')
+            
+            # Add resource_revision__request_cookie_not_null index if missing
+            if 'resource_revision__request_cookie_not_null' not in index_names:
+                progress_listener.upgrading_project('Indexing revisions with cookies...')
+                c.execute(
+                    'create index resource_revision__request_cookie_not_null on resource_revision '
+                    '(id, request_cookie) '
+                    'where request_cookie is not null')
+            
+            # Add resource_revision__status_code index if missing
+            if 'resource_revision__status_code' not in index_names and sqlite_has_json_support():
+                progress_listener.upgrading_project('Indexing revisions by status code...')
+                c.execute(
+                    'create index resource_revision__status_code on resource_revision '
+                    '(json_extract(metadata, "$.status_code"), resource_id) '
+                    'where json_extract(metadata, "$.status_code") != 200')
         
-        # Set Windows-specific file attributes, if not already done
-        if is_windows():
-            # Mark .crystalproj as System,
-            # so that icon defined by desktop.ini is used
-            set_windows_file_attrib(self.path, ['+s'])
+        # Add missing directory structures
+        if True:
+            # Add temporary directory if missing
+            tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
+            if not os.path.exists(tmp_dirpath):
+                os.mkdir(tmp_dirpath)
             
-            # Mark desktop.ini as Hidden & System
-            set_windows_file_attrib(desktop_ini_filepath, ['+h', '+s'])
+            # Add launcher and README if missing
+            if not any([n for n in os.listdir(self.path) if n.endswith(self.LAUNCHER_FILE_EXTENSION)]):
+                # Add missing launcher
+                with open(os.path.join(self.path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
+                    f.write(self._LAUNCHER_DEFAULT_CONTENT)
+                
+                # Add README if not already there
+                readme_filepath = os.path.join(self.path, self._README_FILENAME)
+                if not os.path.exists(readme_filepath):
+                    with open(readme_filepath, 'w', newline='') as f:
+                        f.write(self._README_DEFAULT_CONTENT)
             
-            # Mark .directory as Hidden
-            set_windows_file_attrib(dot_directory_filepath, ['+h'])
+            # Add Windows desktop.ini and icon for .crystalproj if missing
+            desktop_ini_filepath = os.path.join(self.path, self._DESKTOP_INI_FILENAME)
+            if not os.path.exists(desktop_ini_filepath):
+                with open(desktop_ini_filepath, 'w', newline='') as f:
+                    f.write(self._DESKTOP_INI_CONTENT)
+                
+                icons_dirpath = os.path.join(self.path, self._ICONS_DIRNAME)
+                if not os.path.exists(icons_dirpath):
+                    os.mkdir(icons_dirpath)
+                    
+                    with resources_.open_binary('docicon.ico') as src_file:
+                        with open(os.path.join(icons_dirpath, 'docicon.ico'), 'wb') as dst_file:
+                            shutil.copyfileobj(src_file, dst_file)
+            
+            # Add Linux icon for .crystalproj if missing
+            if True:
+                # GNOME: Define icon in GIO database
+                if is_linux():
+                    did_set_gio_icon = False
+                    
+                    # GNOME Files (AKA Nautilus)
+                    try:
+                        gio.set(self.path, 'metadata::custom-icon-name', 'crystalproj')
+                    except gio.GioNotAvailable:
+                        pass
+                    except gio.UnrecognizedGioAttributeError:
+                        # For example Kubuntu 22 does not recognize this attribute
+                        pass
+                    else:
+                        did_set_gio_icon = True
+                    
+                    # GNOME Desktop Items Shell Extension
+                    # 
+                    # HACK: Must also set icon location as a brittle absolute path
+                    #       because Desktop Items doesn't understand the
+                    #       'metadata::custom-icon-name' GIO attribute.
+                    crystalproj_png_icon_url = pathlib.Path(
+                        resources_.get_filepath('docicon.png')
+                    ).as_uri()
+                    try:
+                        gio.set(self.path, 'metadata::custom-icon', crystalproj_png_icon_url)
+                    except gio.GioNotAvailable:
+                        pass
+                    except gio.UnrecognizedGioAttributeError:
+                        # For example Kubuntu 22 does not recognize this attribute
+                        pass
+                    else:
+                        did_set_gio_icon = True
+                    
+                    # Touch .crystalproj so that GNOME Files (AKA Nautilus)
+                    # observes the icon change
+                    if did_set_gio_icon:
+                        pathlib.Path(self.path).touch()
+                
+                # KDE: Define icon in .directory file
+                dot_directory_filepath = os.path.join(self.path, '.directory')
+                if not os.path.exists(dot_directory_filepath):
+                    with open(dot_directory_filepath, 'w') as f:
+                        f.write('[Desktop Entry]\nIcon=crystalproj\n')
+            
+            # Set Windows-specific file attributes, if not already done
+            if is_windows():
+                # Mark .crystalproj as System,
+                # so that icon defined by desktop.ini is used
+                set_windows_file_attrib(self.path, ['+s'])
+                
+                # Mark desktop.ini as Hidden & System
+                set_windows_file_attrib(desktop_ini_filepath, ['+h', '+s'])
+                
+                # Mark .directory as Hidden
+                set_windows_file_attrib(dot_directory_filepath, ['+h'])
     
     # === Properties ===
     
