@@ -5,7 +5,10 @@ from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util.caffeination import Caffeination
 from crystal.util.listenable import ListenableMixin
-from crystal.util.profile import ignore_runtime_from_enclosing_warn_if_slow, warn_if_slow
+from crystal.util.profile import (
+    create_profiling_context, ignore_runtime_from_enclosing_warn_if_slow,
+    warn_if_slow,
+)
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
@@ -591,9 +594,9 @@ class DownloadResourceBodyTask(Task):
             def fg_task() -> Optional[ResourceRevision]:
                 DRBT = DownloadResourceBodyTask
                 if DRBT._dr_profiling_context is None:
-                    DRBT._dr_profiling_context = _create_profiling_context(
-                        _PROFILE_READ_REVISION,
-                        'default_revision.prof')
+                    DRBT._dr_profiling_context = create_profiling_context(
+                        'default_revision.prof',
+                        enabled=_PROFILE_READ_REVISION)
                 with DRBT._dr_profiling_context:
                     return self._resource.default_revision(stale_ok=False)
             # NOTE: Use no_profile=True because no obvious further optimizations exist
@@ -628,18 +631,6 @@ class DownloadResourceBodyTask(Task):
     
     def __repr__(self) -> str:
         return f'<DownloadResourceBodyTask for {self._resource.url!r}>'
-
-def _create_profiling_context(enabled: bool, stats_filepath: str) -> AbstractContextManager[Optional[cProfile.Profile]]:
-    if enabled:
-        profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
-        @atexit.register
-        def dump_stats() -> None:  # type: ignore[misc]
-            profiler = profiling_context
-            assert isinstance(profiler, cProfile.Profile)
-            profiler.dump_stats(stats_filepath)
-    else:
-        profiling_context = nullcontext(enter_result=None)
-    return profiling_context
 
 
 class CannotDownloadWhenProjectReadOnlyError(Exception):
