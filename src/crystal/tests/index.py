@@ -134,15 +134,20 @@ def _run_tests(test_names: List[str]) -> bool:
     failure_count = 0
     error_count = 0
     skip_count = 0
-    for result in result_for_test_func_id.values():
+    failed_test_names = []
+    for (test_func_id, result) in result_for_test_func_id.items():
         if result is None:
             pass
-        elif isinstance(result, AssertionError):
-            failure_count += 1
         elif isinstance(result, SkipTest):
             skip_count += 1
         else:
-            error_count += 1
+            if isinstance(result, AssertionError):
+                failure_count += 1
+            else:
+                error_count += 1
+            
+            test_name = f'{test_func_id[0]}.{test_func_id[1]}'
+            failed_test_names.append(test_name)
     
     is_ok = (failure_count + error_count) == 0
     
@@ -177,6 +182,12 @@ def _run_tests(test_names: List[str]) -> bool:
     print(f'Ran {run_count} tests in {"%.3f" % delta_time}s')
     print()
     print(f'{"OK" if is_ok else "FAILURE"}{suffix}')
+    
+    if len(failed_test_names) != 0:
+        print()
+        print('Rerun failed tests with:')
+        print(f'$ crystal --test {" ".join(failed_test_names)}')
+        print()
     
     return is_ok
 
