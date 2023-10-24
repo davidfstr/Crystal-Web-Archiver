@@ -228,6 +228,17 @@ files = [
 ]
 
 [[package]]
+name = "flameprof"
+version = "0.4"
+description = "cProfile flamegraph generator"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "flameprof-0.4.tar.gz", hash = "sha256:dbc86d4190cbbba624f1e0a40f44d9db96138e27534d83c8ef42d420857875a3"},
+]
+
+[[package]]
 name = "guppy3"
 version = "3.1.3"
 description = "Guppy 3 -- Guppy-PE ported to Python 3"
@@ -1188,4 +1199,4 @@ cffi = ">=1.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.12"
-content-hash = "ae84f558979282f4f03582c815f3dd03ba2398570a234e923904fb74e3648bde"
+content-hash = "597844ed534bb0ab30781303e4597baeb2ee017a311c9a7c3d3355d433ca5f24"

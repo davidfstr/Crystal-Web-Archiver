@@ -19,6 +19,7 @@ venv*
 
 # Profiling output
 *.prof
+*.prof.svg
 
 # Local startup file
 startup.py

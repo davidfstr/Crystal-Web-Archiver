@@ -82,6 +82,7 @@ pytest = "^6.0"
 mypy = "==0.961"
 types-tzlocal = "^4.2.0"
 PyScreeze = "^0.1.28"
+flameprof = "^0.4"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
