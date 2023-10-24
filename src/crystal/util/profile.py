@@ -125,7 +125,7 @@ def create_profiled_callable(title: str, max_duration: float, callable: Callable
 def create_profiling_context(
         stats_filepath: str,
         *, enabled: bool=True,
-        ) -> AbstractContextManager[Optional[cProfile.Profile]]:
+        ) -> 'AbstractContextManager[Optional[cProfile.Profile]]':
     """
     Creates a cProfile profiling context.
     Within the context all function calls are timed.

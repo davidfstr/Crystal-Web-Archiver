@@ -675,7 +675,7 @@ class _LogDrawerWriter(TextIOBase):
             self._print_buffer.append(text)
         
         # Start printing queued texts to drawer, but don't wait until finished
-        def fg_task():
+        def fg_task() -> None:
             with self._print_buffer_lock:
                 last_print_buffer = self._print_buffer
                 if len(last_print_buffer) == 0:

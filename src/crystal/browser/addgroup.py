@@ -18,7 +18,7 @@ class AddGroupDialog:
     
     # === Init ===
     
-    def __init__(self, parent, on_finish, project, initial_url=None, initial_source=None):
+    def __init__(self, parent, on_finish, project, initial_url=None, initial_source=None) -> None:
         """
         Arguments:
         * parent -- parent wx.Window that this dialog is attached to.

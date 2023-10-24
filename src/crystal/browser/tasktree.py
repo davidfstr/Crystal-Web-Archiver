@@ -47,7 +47,7 @@ class TaskTreeNode:
     def __init__(self, task: Task) -> None:
         self.task = task
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
             assert self not in self.task.listeners
         if not task.complete:
             self.task.listeners.append(self)

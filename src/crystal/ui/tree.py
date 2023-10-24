@@ -70,7 +70,7 @@ class TreeView:
     which will not be displayed 
     """
     
-    def __init__(self, parent_peer: wx.Window, *, name: str=None) -> None:
+    def __init__(self, parent_peer: wx.Window, *, name: Optional[str]=None) -> None:
         self.delegate = None  # type: object
         self.peer = _OrderedTreeCtrl(
             parent_peer,
@@ -130,7 +130,7 @@ class TreeView:
         self.peer.Expand(node_view.peer.node_id)
     
     # Notified when any interesting event occurs on the peer
-    def _dispatch_event(self, event):
+    def _dispatch_event(self, event) -> None:
         node_id = event.GetItem()
         node_view = self.peer.GetItemData(node_id)  # type: NodeView
         
@@ -364,7 +364,7 @@ class NodeView:
         self.set_children(self.children, _initial=True)
     
     # Called when a wx.EVT_TREE_ITEM_* event occurs on this node
-    def _dispatch_event(self, event):
+    def _dispatch_event(self, event) -> None:
         # Dispatch event to my delegate
         if self.delegate:
             event_type_id = event.GetEventType()

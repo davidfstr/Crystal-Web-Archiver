@@ -263,7 +263,7 @@ class Task(ListenableMixin):
         child._parent = self
         self._children.append(child)
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
             assert self not in child.listeners
         if len(child.listeners) >= 50:
             if child not in Task._REPORTED_TASKS_WITH_MANY_LISTENERS:
@@ -315,7 +315,7 @@ class Task(ListenableMixin):
         if all_children_complete:
             for child in self._children:
                 child._parent = None
-                if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+                if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
                     assert self not in child.listeners
             self._children = []
             self._num_children_complete = 0
@@ -1160,7 +1160,7 @@ class DownloadResourceGroupMembersTask(Task):
             title='Downloading members of group: %s' % group.name)
         self.group = group
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
             assert self not in self.group.listeners
         self.group.listeners.append(self)
         
@@ -1227,7 +1227,7 @@ class DownloadResourceGroupMembersTask(Task):
     
     def finish(self) -> None:
         self.group.listeners.remove(self)
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
             assert self not in self.group.listeners
         
         if self._pbc is not None:

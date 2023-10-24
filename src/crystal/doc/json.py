@@ -13,7 +13,7 @@ from typing import BinaryIO, Optional
 
 def parse_json_and_links(
         body_bytes: BinaryIO,
-        declared_charset: str=None
+        declared_charset: Optional[str]=None
         ) -> Optional[tuple[Document, list[Link]]]:
     try:
         json_obj = json.load(body_bytes)  # type: ignore[attr-defined]

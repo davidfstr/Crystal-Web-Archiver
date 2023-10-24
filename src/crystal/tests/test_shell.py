@@ -6,6 +6,7 @@ from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, W
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.xos import skip_on_windows
+from crystal.util.xos import is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from functools import wraps
 from io import StringIO, TextIOBase
@@ -646,7 +647,8 @@ def _read_until(
     if period is None:
         period = DEFAULT_WAIT_PERIOD
     
-    if os.get_blocking(stream.fileno()) != False:
+    assert not is_windows()
+    if os.get_blocking(stream.fileno()) != False:  # type: ignore[attr-defined]  # available in non-Windows
         raise ValueError('Expected stream to be opened in non-blocking mode')
     
     stop_suffix_bytes_choices = [s.encode(stream.encoding) for s in stop_suffix]

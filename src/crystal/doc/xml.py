@@ -12,7 +12,7 @@ from typing import BinaryIO, List, Optional, Tuple
 
 def parse_xml_and_links(
         xml_bytes: BinaryIO,
-        declared_charset: str=None
+        declared_charset: Optional[str]=None
         ) -> Optional[Tuple[Document, List[Link]]]:
     """
     Parses an XML document, returning a FastSoup object that can be

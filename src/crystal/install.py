@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-from functools import cache
 import os
 import os.path
 import shutil
@@ -10,6 +9,15 @@ from typing import (
     Union,
 )
 import xml.etree.ElementTree as ET
+
+
+try:
+    # Python 3.9+
+    from functools import cache  # type: ignore[attr-defined]
+except ImportError:
+    # Python 3.8
+    from functools import lru_cache
+    cache = lru_cache(maxsize=None)
 
 
 # Define EllipsisType, the type of Ellipsis
@@ -39,8 +47,8 @@ def install_to_linux_desktop_environment() -> None:
         raise ValueError()
     
     # Ensure not running as root (unless is actually the root user)
-    running_as_root_user = (os.geteuid() == 0)
-    is_root_user = (os.getuid() == 0)
+    running_as_root_user = (os.geteuid() == 0)  # type: ignore[attr-defined]  # available in Linux
+    is_root_user = (os.getuid() == 0)  # type: ignore[attr-defined]  # available in Linux
     if running_as_root_user and not is_root_user:
         print('*** --install-to-desktop should not be run as root or with sudo')
         sys.exit(1)

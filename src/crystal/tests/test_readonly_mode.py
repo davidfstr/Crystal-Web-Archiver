@@ -122,11 +122,11 @@ def _file_set_to_readonly(filepath: str) -> Iterator[None]:
 def _set_file_readonly(filepath: str, readonly: bool) -> None:
     if is_mac_os():
         # Set the "Locked" attribute
-        flags = os.stat(filepath).st_flags
+        flags = os.stat(filepath).st_flags  # type: ignore[attr-defined]  # available on macOS
         if readonly:
-            os.chflags(filepath, flags | stat.UF_IMMUTABLE)
+            os.chflags(filepath, flags | stat.UF_IMMUTABLE)  # type: ignore[attr-defined]  # available on macOS
         else:
-            os.chflags(filepath, flags & ~stat.UF_IMMUTABLE)
+            os.chflags(filepath, flags & ~stat.UF_IMMUTABLE)  # type: ignore[attr-defined]  # available on macOS
     else:
         # Set the "Read Only" attribute on Windows,
         # or set the presence of "owner writer" permissions on Linux
