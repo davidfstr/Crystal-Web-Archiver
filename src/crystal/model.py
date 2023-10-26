@@ -268,118 +268,10 @@ class Project(ListenableMixin):
             
             # Create new project content, if missing
             if create:
-                c.execute('create table project_property (name text unique not null, value text)')
-                c.execute('create table resource (id integer primary key, url text unique not null)')
-                c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
-                c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
-                c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
-                c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
-                
-                # (Define indexes in _apply_migrations())
-                
-                # Define major version for new projects, for Crystal >1.6.0
-                self._set_major_version(2, c, db.commit)
-                
-                # Define default HTML parser for new projects, for Crystal >1.5.0
-                self.html_parser_type = 'lxml'
+                self._create(c, self._db)
             
             # Load from existing project
-            if True:
-                # Prefer Write Ahead Log (WAL) mode for higher performance
-                if not self.readonly:
-                    [(new_journal_mode,)] = c.execute('pragma journal_mode = wal')
-                    if new_journal_mode != 'wal':
-                        print(
-                            '*** Unable to open database in WAL mode. '
-                                'Downloads may be slower.',
-                            file=sys.stderr)
-                
-                # Upgrade database schema to latest version (unless is readonly)
-                if not self.readonly:
-                    self._apply_migrations(c, db.commit, progress_listener)
-                
-                # Ensure major version is recognized
-                major_version = self._get_major_version(c)
-                if major_version > self._LATEST_SUPPORTED_MAJOR_VERSION:
-                    raise ProjectTooNewError(
-                        f'Project has major version {major_version} but this '
-                        f'version of Crystal only knows how to open projects '
-                        f'with major version {self._LATEST_SUPPORTED_MAJOR_VERSION} '
-                        f'or less')
-                
-                # Cleanup any temporary files from last session (unless is readonly)
-                if not self.readonly:
-                    tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
-                    if os.path.exists(tmp_dirpath):
-                        for tmp_filename in os.listdir(tmp_dirpath):
-                            tmp_filepath = os.path.join(tmp_dirpath, tmp_filename)
-                            if os.path.isfile(tmp_filepath):
-                                os.remove(tmp_filepath)
-                            else:
-                                shutil.rmtree(tmp_filepath)
-                
-                # Load project properties
-                for (name, value) in c.execute('select name, value from project_property'):
-                    self._set_property(name, value)
-                
-                # Load Resources
-                resources = []
-                def loading_resource(index: int, resources_per_second: float) -> None:
-                    assert progress_listener is not None
-                    progress_listener.loading_resource(index)
-                def load_resource(row: Tuple) -> None:
-                    (url, id) = row
-                    resources.append(Resource(self, url, _id=id))
-                # NOTE: May raise CancelOpenProject if user cancels
-                self._process_table_rows(
-                    c,
-                    # NOTE: The following query to approximate row count is
-                    #       significantly faster than the exact query
-                    #       ('select count(1) from resource') because it
-                    #       does not require a full table scan.
-                    'select id from resource order by id desc limit 1',
-                    # TODO: Consider add 'order by id asc'
-                    'select url, id from resource',
-                    load_resource,
-                    progress_listener.will_load_resources,
-                    loading_resource,
-                    progress_listener.did_load_resources)
-                
-                # Index Resources (to load RootResources and ResourceGroups faster)
-                progress_listener.indexing_resources()
-                self._resources = {r.url: r for r in resources}
-                self._sorted_resource_urls.update(self._resources.keys())
-                resource_for_id = {r._id: r for r in resources}
-                del resources  # garbage collect early
-                
-                # Load RootResources
-                [(root_resource_count,)] = c.execute('select count(1) from root_resource')
-                progress_listener.loading_root_resources(root_resource_count)
-                for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
-                    resource = resource_for_id[resource_id]
-                    RootResource(self, name, resource, _id=id)
-                
-                # Load ResourceGroups
-                [(resource_group_count,)] = c.execute('select count(1) from resource_group')
-                progress_listener.loading_resource_groups(resource_group_count)
-                group_2_source = {}
-                for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
-                        'select name, url_pattern, source_type, source_id, id from resource_group')):
-                    progress_listener.loading_resource_group(index)
-                    group = ResourceGroup(self, name, url_pattern, _id=id)
-                    group_2_source[group] = (source_type, source_id)
-                for (group, (source_type, source_id)) in group_2_source.items():
-                    if source_type is None:
-                        source_obj = None
-                    elif source_type == 'root_resource':
-                        source_obj = self._get_root_resource_with_id(source_id)
-                    elif source_type == 'resource_group':
-                        source_obj = self._get_resource_group_with_id(source_id)
-                    else:
-                        raise ProjectFormatError('Resource group %s has invalid source type "%s".' % (group._id, source_type))
-                    group._init_source(source_obj)
-                
-                # (ResourceRevisions are loaded on demand)
+            self._load(c, self._db, progress_listener)
         finally:
             self._loading = False
         
@@ -394,6 +286,8 @@ class Project(ListenableMixin):
         # Export reference to self, if running tests
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
             Project._last_opened_project = self
+    
+    # --- Load: Validity ---
     
     @classmethod
     def is_valid(cls, path: str) -> bool:
@@ -445,6 +339,8 @@ class Project(ListenableMixin):
         revision_dirpath = os.path.join(path, Project._REVISIONS_DIRNAME)
         if not os.path.isdir(revision_dirpath):
             raise ProjectFormatError(f'Project is missing revisions directory: {revision_dirpath}')
+    
+    # --- Load: Migrations ---
     
     def _apply_migrations(self,
             c: DatabaseCursor,
@@ -741,6 +637,126 @@ class Project(ListenableMixin):
             'insert or replace into project_property (name, value) values (?, ?)',
             ('major_version', major_version))
         commit()
+    
+    # --- Load: Create & Load ---
+    
+    def _create(self, c: DatabaseCursor, db: DatabaseConnection) -> None:
+        c.execute('create table project_property (name text unique not null, value text)')
+        c.execute('create table resource (id integer primary key, url text unique not null)')
+        c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
+        c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
+        c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
+        c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
+        
+        # (Define indexes in _apply_migrations())
+        
+        # Define major version for new projects, for Crystal >1.6.0
+        self._set_major_version(2, c, db.commit)
+        
+        # Define default HTML parser for new projects, for Crystal >1.5.0
+        self.html_parser_type = 'lxml'
+    
+    def _load(self,
+            c: DatabaseCursor,
+            db: DatabaseConnection,
+            progress_listener: OpenProjectProgressListener) -> None:
+        # Prefer Write Ahead Log (WAL) mode for higher performance
+        if not self.readonly:
+            [(new_journal_mode,)] = c.execute('pragma journal_mode = wal')
+            if new_journal_mode != 'wal':
+                print(
+                    '*** Unable to open database in WAL mode. '
+                        'Downloads may be slower.',
+                    file=sys.stderr)
+        
+        # Upgrade database schema to latest version (unless is readonly)
+        if not self.readonly:
+            self._apply_migrations(c, db.commit, progress_listener)
+        
+        # Ensure major version is recognized
+        major_version = self._get_major_version(c)
+        if major_version > self._LATEST_SUPPORTED_MAJOR_VERSION:
+            raise ProjectTooNewError(
+                f'Project has major version {major_version} but this '
+                f'version of Crystal only knows how to open projects '
+                f'with major version {self._LATEST_SUPPORTED_MAJOR_VERSION} '
+                f'or less')
+        
+        # Cleanup any temporary files from last session (unless is readonly)
+        if not self.readonly:
+            tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
+            if os.path.exists(tmp_dirpath):
+                for tmp_filename in os.listdir(tmp_dirpath):
+                    tmp_filepath = os.path.join(tmp_dirpath, tmp_filename)
+                    if os.path.isfile(tmp_filepath):
+                        os.remove(tmp_filepath)
+                    else:
+                        shutil.rmtree(tmp_filepath)
+        
+        # Load project properties
+        for (name, value) in c.execute('select name, value from project_property'):
+            self._set_property(name, value)
+        
+        # Load Resources
+        resources = []
+        def loading_resource(index: int, resources_per_second: float) -> None:
+            assert progress_listener is not None
+            progress_listener.loading_resource(index)
+        def load_resource(row: Tuple) -> None:
+            (url, id) = row
+            resources.append(Resource(self, url, _id=id))
+        # NOTE: May raise CancelOpenProject if user cancels
+        self._process_table_rows(
+            c,
+            # NOTE: The following query to approximate row count is
+            #       significantly faster than the exact query
+            #       ('select count(1) from resource') because it
+            #       does not require a full table scan.
+            'select id from resource order by id desc limit 1',
+            # TODO: Consider add 'order by id asc'
+            'select url, id from resource',
+            load_resource,
+            progress_listener.will_load_resources,
+            loading_resource,
+            progress_listener.did_load_resources)
+        
+        # Index Resources (to load RootResources and ResourceGroups faster)
+        progress_listener.indexing_resources()
+        self._resources = {r.url: r for r in resources}
+        self._sorted_resource_urls.update(self._resources.keys())
+        resource_for_id = {r._id: r for r in resources}
+        del resources  # garbage collect early
+        
+        # Load RootResources
+        [(root_resource_count,)] = c.execute('select count(1) from root_resource')
+        progress_listener.loading_root_resources(root_resource_count)
+        for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
+            resource = resource_for_id[resource_id]
+            RootResource(self, name, resource, _id=id)
+        
+        # Load ResourceGroups
+        [(resource_group_count,)] = c.execute('select count(1) from resource_group')
+        progress_listener.loading_resource_groups(resource_group_count)
+        group_2_source = {}
+        for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
+                'select name, url_pattern, source_type, source_id, id from resource_group')):
+            progress_listener.loading_resource_group(index)
+            group = ResourceGroup(self, name, url_pattern, _id=id)
+            group_2_source[group] = (source_type, source_id)
+        for (group, (source_type, source_id)) in group_2_source.items():
+            if source_type is None:
+                source_obj = None
+            elif source_type == 'root_resource':
+                source_obj = self._get_root_resource_with_id(source_id)
+            elif source_type == 'resource_group':
+                source_obj = self._get_resource_group_with_id(source_id)
+            else:
+                raise ProjectFormatError('Resource group %s has invalid source type "%s".' % (group._id, source_type))
+            group._init_source(source_obj)
+        
+        # (ResourceRevisions are loaded on demand)
+    
+    # --- Load: Utility ---
     
     @staticmethod
     def _process_table_rows(
