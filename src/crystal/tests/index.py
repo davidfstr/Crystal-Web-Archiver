@@ -11,7 +11,7 @@ from crystal.tests import (
     test_open_project,
     test_parse_html,
     test_profile,
-    test_project_format_upgrade,
+    test_project_migrate,
     test_readonly_mode,
     test_server,
     test_shell,
@@ -50,7 +50,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_open_project) +
     _test_functions_in_module(test_parse_html) +
     _test_functions_in_module(test_profile) +
-    _test_functions_in_module(test_project_format_upgrade) +
+    _test_functions_in_module(test_project_migrate) +
     _test_functions_in_module(test_readonly_mode) +
     _test_functions_in_module(test_server) +
     _test_functions_in_module(test_shell) +

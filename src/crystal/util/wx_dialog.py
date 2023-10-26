@@ -4,10 +4,25 @@ import wx
 
 
 def ShowModal(dialog: wx.Dialog) -> int:
+    """
+    Replacement for wx.Dialog.ShowModel() that works properly even when
+    running automated tests.
+    """
+    is_running_tests = os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
+    
+    if is_running_tests and isinstance(dialog, wx.MessageDialog):
+        # A wx.MessageDialog opened with ShowModal cannot be interacted
+        # with via wx.FindWindowByName() and similar functions on macOS.
+        # So don't allow such a dialog to be shown while tests are running.
+        raise AssertionError(
+            f'Attempted to call ShowModal on wx.MessageDialog {dialog.Name!r} '
+            f'while running an automated test, which would hang the test. '
+            f'Please patch ShowModal to return an appropriate result.')
+    
     # HACK: ShowModal sometimes hangs on macOS while running automated tests,
     #       as admitted by the wxPython test suite in test_dialog.py.
     #       So simulate its effect in a way that does NOT hang while running tests.
-    if is_mac_os() and os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+    if is_running_tests and is_mac_os():
         dialog.SetReturnCode(0)
         dialog.Show()
         

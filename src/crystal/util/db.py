@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from typing import Callable
+from typing_extensions import Self
 
 
 class DatabaseConnection:
@@ -28,7 +29,7 @@ class DatabaseCursor:
         self._c = c
         self._readonly = readonly
     
-    def execute(self, command: str, *args, **kwargs) -> DatabaseCursor:
+    def execute(self, command: str, *args, **kwargs) -> Self:
         ignore_readonly = bool(kwargs.pop('ignore_readonly', False))
         
         # Ensure that caller does disallow commands that write to the database

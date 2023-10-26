@@ -1,4 +1,5 @@
 from crystal.util.xos import is_windows
+from overrides import overrides
 from tqdm import tqdm
 from tqdm.std import EMA
 from typing import Optional, Tuple
@@ -143,7 +144,7 @@ class RateCalculator:
         self._tqdm = _TqdmWithoutDisplay(
             initial=initial,  # self.n = initial
             total=total,
-            file=_DevNullFile(),
+            file=DevNullFile(),
             
             # Recompute remaining time after each update() call unless many
             # calls made in a short time interval (<= `mininterval`).
@@ -199,11 +200,16 @@ class RateCalculator:
 
 
 class _TqdmWithoutDisplay(tqdm):
-    def display(self, *args, **kwargs):  # override
+    @overrides
+    def refresh(self, nolock=False, lock_args=None) -> bool:
+        return super().refresh(nolock=True, lock_args=lock_args)
+    
+    @overrides
+    def display(self, *args, **kwargs) -> None:
         pass  # do nothing
 
 
-class _DevNullFile:
+class DevNullFile:
     def write(self, value: str) -> None:
         pass
     

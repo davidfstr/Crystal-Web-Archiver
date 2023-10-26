@@ -1,4 +1,6 @@
-from contextlib import contextmanager
+import atexit
+from contextlib import AbstractContextManager, contextmanager, nullcontext
+import cProfile
 import inspect
 import sys
 import threading
@@ -118,3 +120,28 @@ def create_profiled_callable(title: str, max_duration: float, callable: Callable
         with warn_if_slow(title, max_duration, message_func):
             return callable(*args)
     return profiled_callable
+
+
+def create_profiling_context(
+        stats_filepath: str,
+        *, enabled: bool=True,
+        ) -> AbstractContextManager[Optional[cProfile.Profile]]:
+    """
+    Creates a cProfile profiling context.
+    Within the context all function calls are timed.
+    The content can be entered and exited mutliple times.
+    
+    Just before the program exits, a .stats file is written to the specified
+    filepath. This file can be analyzed/visualized with the PyPI "flameprof"
+    module and the standard library "pstats" module.
+    """
+    if enabled:
+        profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
+        @atexit.register
+        def dump_stats() -> None:  # type: ignore[misc]
+            profiler = profiling_context
+            assert isinstance(profiler, cProfile.Profile)
+            profiler.dump_stats(stats_filepath)
+    else:
+        profiling_context = nullcontext(enter_result=None)
+    return profiling_context

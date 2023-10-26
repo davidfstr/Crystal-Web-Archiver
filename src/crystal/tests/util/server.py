@@ -154,6 +154,10 @@ class WebPage:
     # === Low-Level Attributes ===
     
     @property
+    def status(self) -> int:
+        return self._status
+    
+    @property
     def headers(self) -> EmailMessage:
         return self._headers
     

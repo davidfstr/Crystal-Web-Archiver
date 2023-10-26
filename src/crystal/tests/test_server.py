@@ -9,7 +9,7 @@ from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, extracted_project, fetch_archive_url, WebPage,
 )
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
-from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from io import StringIO
 import tempfile
 from typing import AsyncIterator, Callable, Optional, Tuple
@@ -124,27 +124,33 @@ async def _xkcd_home_page_served(
             revision = r.default_revision()
             assert revision is not None
             
-            # Start server
-            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            assert root_ti is not None
-            home_ti = root_ti.GetFirstChild()
-            assert home_ti is not None
-            assert f'{home_url} - Home' == home_ti.Text
-            home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url(home_url)):
-                click_button(mw.view_button)
-            
             # Alter revision before fetching it through the server, if applicable
             if alter_revision_func is not None:
                 alter_revision_func(revision)
             
-            # Fetch the revision through the server
-            with redirect_stdout(StringIO()) as captured_stdout:
-                server_page = await fetch_archive_url(home_url)
-            # HACK: Ensure following "OK" print happens at start of line
-            print()
+            (server_page, captured_stdout_str) = await serve_and_fetch_xkcd_home_page(mw)
             
-            yield (revision, server_page, captured_stdout.getvalue())
+            yield (revision, server_page, captured_stdout_str)
+
+
+async def serve_and_fetch_xkcd_home_page(mw: MainWindow) -> Tuple[WebPage, str]:
+    home_url = 'https://xkcd.com/'
+    
+    with redirect_stdout(StringIO()) as captured_stdout:
+        # Start server
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        assert root_ti is not None
+        home_ti = root_ti.GetFirstChild()
+        assert home_ti is not None
+        assert f'{home_url} - Home' == home_ti.Text
+        home_ti.SelectItem()
+        with assert_does_open_webbrowser_to(get_request_url(home_url)):
+            click_button(mw.view_button)
+        
+        # Fetch the revision through the server
+        server_page = await fetch_archive_url(home_url)
+    
+    return (server_page, captured_stdout.getvalue())
 
 
 # ------------------------------------------------------------------------------
