@@ -20,7 +20,10 @@ from crystal.plugins import (
     phpbb as plugins_phpbb,
     substack as plugins_substack,
 )   
-from crystal.progress import DummyOpenProjectProgressListener, OpenProjectProgressListener
+from crystal.progress import (
+    CancelOpenProject, DummyOpenProjectProgressListener,
+    OpenProjectProgressListener, VetoUpgradeProject,
+)
 from crystal import resources as resources_
 from crystal.util import http_date
 from crystal.util.db import (
@@ -32,7 +35,8 @@ from crystal.util.db import (
 )
 from crystal.util import gio
 from crystal.util.listenable import ListenableMixin
-from crystal.util.profile import warn_if_slow
+from crystal.util.profile import create_profiling_context, warn_if_slow
+from crystal.util.progress import DevNullFile
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
@@ -49,6 +53,7 @@ import json
 import math
 import mimetypes
 import os
+from overrides import overrides
 import pathlib
 import re
 import shutil
@@ -59,6 +64,7 @@ from tempfile import NamedTemporaryFile
 from textwrap import dedent
 import threading
 import time
+from tqdm import tqdm
 from typing import (
     Any, BinaryIO, Callable, cast, Dict, Iterable, List, Literal, Optional, Pattern,
     TYPE_CHECKING, Tuple, TypedDict, Union
@@ -75,6 +81,15 @@ if TYPE_CHECKING:
     )
 
 
+# Whether to collect profiling information about Project._apply_migrations().
+# 
+# When True, a 'migrate_revisions.prof' file is written to the current directory
+# after all projects have been closed. Such a file can be converted
+# into a visual flamegraph using the "flameprof" PyPI module,
+# or analyzed using the built-in "pstats" module.
+_PROFILE_MIGRATE_REVISIONS = False
+
+
 class Project(ListenableMixin):
     """
     Groups together a set of resources that are downloaded and any associated settings.
@@ -86,7 +101,9 @@ class Project(ListenableMixin):
     
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
-    _RESOURCE_REVISION_DIRNAME = 'revisions'
+    _LATEST_SUPPORTED_MAJOR_VERSION = 2
+    _REVISIONS_DIRNAME = 'revisions'
+    _IN_PROGRESS_REVISIONS_DIRNAME = 'revisions.inprogress'
     _TEMPORARY_DIRNAME = 'tmp'
     _LAUNCHER_DEFAULT_FILENAME = 'OPEN ME' + LAUNCHER_FILE_EXTENSION
     _LAUNCHER_DEFAULT_CONTENT = b'CrOp'  # Crystal Opener, as a FourCC
@@ -134,8 +151,13 @@ class Project(ListenableMixin):
     ).replace('\n', '\r\n')
     _ICONS_DIRNAME = 'icons'
     
-    # NOTE: Only tracked when tests are running
-    _last_opened_project: Optional[Project]=None  # static
+    _MAX_REVISION_ID = (2 ** 60) - 1  # for projects with major version >= 2
+    
+    # NOTE: Only changed when tests are running
+    _last_opened_project: Optional[Project]=None
+    _report_progress_at_maximum_resolution: bool=False
+    
+    # === Load ===
     
     def __init__(self,
             path: str,
@@ -153,6 +175,8 @@ class Project(ListenableMixin):
         * FileNotFoundError --
             if readonly is True and no project already exists at the specified path
         * ProjectFormatError -- if the project at the specified path is invalid
+        * ProjectTooNewError -- 
+            if the project is a version newer than this version of Crystal can open safely
         * CancelOpenProject
         """
         super().__init__()
@@ -195,17 +219,17 @@ class Project(ListenableMixin):
             if create:
                 # Create new project structure, minus database file
                 os.mkdir(path)
-                os.mkdir(os.path.join(path, self._RESOURCE_REVISION_DIRNAME))
+                os.mkdir(os.path.join(path, self._REVISIONS_DIRNAME))
                 
                 # TODO: Consider let _apply_migrations() define the rest of the
                 #       project structure, rather than duplicating logic here
                 os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
                 with open(os.path.join(path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
                     f.write(self._LAUNCHER_DEFAULT_CONTENT)
-                with open(os.path.join(self.path, self._README_FILENAME), 'w', newline='') as f:
-                    f.write(self._README_DEFAULT_CONTENT)
-                with open(os.path.join(self.path, self._DESKTOP_INI_FILENAME), 'w', newline='') as f:
-                    f.write(self._DESKTOP_INI_CONTENT)
+                with open(os.path.join(self.path, self._README_FILENAME), 'w', newline='') as tf:
+                    tf.write(self._README_DEFAULT_CONTENT)
+                with open(os.path.join(self.path, self._DESKTOP_INI_FILENAME), 'w', newline='') as tf:
+                    tf.write(self._DESKTOP_INI_CONTENT)
                 os.mkdir(os.path.join(path, self._ICONS_DIRNAME))
                 with resources_.open_binary('docicon.ico') as src_file:
                     with open(os.path.join(path, self._ICONS_DIRNAME, 'docicon.ico'), 'wb') as dst_file:
@@ -253,7 +277,10 @@ class Project(ListenableMixin):
                 
                 # (Define indexes in _apply_migrations())
                 
-                # Default HTML parser for new projects, for Crystal >1.5.0
+                # Define major version for new projects, for Crystal >1.6.0
+                self._set_major_version(2, c, db.commit)
+                
+                # Define default HTML parser for new projects, for Crystal >1.5.0
                 self.html_parser_type = 'lxml'
             
             # Load from existing project
@@ -269,61 +296,54 @@ class Project(ListenableMixin):
                 
                 # Upgrade database schema to latest version (unless is readonly)
                 if not self.readonly:
-                    self._apply_migrations(c, progress_listener)
+                    self._apply_migrations(c, db.commit, progress_listener)
+                
+                # Ensure major version is recognized
+                major_version = self._get_major_version(c)
+                if major_version > self._LATEST_SUPPORTED_MAJOR_VERSION:
+                    raise ProjectTooNewError(
+                        f'Project has major version {major_version} but this '
+                        f'version of Crystal only knows how to open projects '
+                        f'with major version {self._LATEST_SUPPORTED_MAJOR_VERSION} '
+                        f'or less')
                 
                 # Cleanup any temporary files from last session (unless is readonly)
                 if not self.readonly:
                     tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
-                    assert os.path.exists(tmp_dirpath)
-                    for tmp_filename in os.listdir(tmp_dirpath):
-                        tmp_filepath = os.path.join(tmp_dirpath, tmp_filename)
-                        if os.path.isfile(tmp_filepath):
-                            os.remove(tmp_filepath)
+                    if os.path.exists(tmp_dirpath):
+                        for tmp_filename in os.listdir(tmp_dirpath):
+                            tmp_filepath = os.path.join(tmp_dirpath, tmp_filename)
+                            if os.path.isfile(tmp_filepath):
+                                os.remove(tmp_filepath)
+                            else:
+                                shutil.rmtree(tmp_filepath)
                 
                 # Load project properties
                 for (name, value) in c.execute('select name, value from project_property'):
                     self._set_property(name, value)
                 
                 # Load Resources
-                # 
-                # NOTE: The following query to approximate row count is
-                #       significantly faster than the exact query
-                #       ('select count(1) from resource') because it
-                #       does not require a full table scan.
                 resources = []
-                if True:
-                    rows = list(c.execute('select id from resource order by id desc limit 1'))
-                    if len(rows) == 1:
-                        [(approx_resource_count,)] = rows
-                    else:
-                        assert len(rows) == 0
-                        approx_resource_count = 0
-                    progress_listener.will_load_resources(approx_resource_count)
-                    
-                    batch_size = max(500, approx_resource_count // 100)
-                    next_index_to_report = 0
-                    time_of_last_report = time.time()
-                    TARGET_MAX_DELAY_BETWEEN_REPORTS = 1.0
-                    SPEEDUP_FACTOR_WHEN_REPORTING_TOO_SLOWLY = 0.8  # <1.0, >=0.0, smaller is faster
-                    resource_count = 0
-                    with gc_disabled():  # don't garbage collect while allocating many objects
-                        for (index, (url, id)) in enumerate(c.execute('select url, id from resource')):
-                            if index == next_index_to_report:
-                                time_of_cur_report = time.time()  # capture
-                                progress_listener.loading_resource(index)
-                                
-                                if (time_of_cur_report - time_of_last_report) > TARGET_MAX_DELAY_BETWEEN_REPORTS:
-                                    batch_size = max(int(batch_size * SPEEDUP_FACTOR_WHEN_REPORTING_TOO_SLOWLY), 1)
-                                time_of_last_report = time_of_cur_report
-                                
-                                next_index_to_report += batch_size
-                            # Create Resource
-                            resources.append(Resource(self, url, _id=id))
-                            resource_count += 1
-                    if resource_count != 0:
-                        progress_listener.loading_resource(resource_count - 1)
-                    
-                    progress_listener.did_load_resources(resource_count)
+                def loading_resource(index: int, resources_per_second: float) -> None:
+                    assert progress_listener is not None
+                    progress_listener.loading_resource(index)
+                def load_resource(row: Tuple) -> None:
+                    (url, id) = row
+                    resources.append(Resource(self, url, _id=id))
+                # NOTE: May raise CancelOpenProject if user cancels
+                self._process_table_rows(
+                    c,
+                    # NOTE: The following query to approximate row count is
+                    #       significantly faster than the exact query
+                    #       ('select count(1) from resource') because it
+                    #       does not require a full table scan.
+                    'select id from resource order by id desc limit 1',
+                    # TODO: Consider add 'order by id asc'
+                    'select url, id from resource',
+                    load_resource,
+                    progress_listener.will_load_resources,
+                    loading_resource,
+                    progress_listener.did_load_resources)
                 
                 # Index Resources (to load RootResources and ResourceGroups faster)
                 progress_listener.indexing_resources()
@@ -377,6 +397,10 @@ class Project(ListenableMixin):
     
     @classmethod
     def is_valid(cls, path: str) -> bool:
+        """
+        Returns whether there appears to be a minimally valid project
+        at the specified path.
+        """
         normalized_path = cls._normalize_project_path(path)
         if normalized_path is None:
             return False
@@ -418,12 +442,13 @@ class Project(ListenableMixin):
         if not os.path.isfile(db_filepath):
             raise ProjectFormatError(f'Project is missing database: {db_filepath}')
         
-        revision_dirpath = os.path.join(path, Project._RESOURCE_REVISION_DIRNAME)
+        revision_dirpath = os.path.join(path, Project._REVISIONS_DIRNAME)
         if not os.path.isdir(revision_dirpath):
             raise ProjectFormatError(f'Project is missing revisions directory: {revision_dirpath}')
     
     def _apply_migrations(self,
             c: DatabaseCursor,
+            commit: Callable[[], None],
             progress_listener: OpenProjectProgressListener) -> None:
         """
         Upgrades this project's directory structure and database schema
@@ -431,6 +456,7 @@ class Project(ListenableMixin):
         
         Raises:
         * ProjectReadOnlyError
+        * CancelOpenProject
         """
         # Add missing database columns and indexes
         if True:
@@ -464,6 +490,8 @@ class Project(ListenableMixin):
                     'create index resource_revision__status_code on resource_revision '
                     '(json_extract(metadata, "$.status_code"), resource_id) '
                     'where json_extract(metadata, "$.status_code") != 200')
+            
+            commit()
         
         # Add missing directory structures
         if True:
@@ -481,14 +509,14 @@ class Project(ListenableMixin):
                 # Add README if not already there
                 readme_filepath = os.path.join(self.path, self._README_FILENAME)
                 if not os.path.exists(readme_filepath):
-                    with open(readme_filepath, 'w', newline='') as f:
-                        f.write(self._README_DEFAULT_CONTENT)
+                    with open(readme_filepath, 'w', newline='') as tf:
+                        tf.write(self._README_DEFAULT_CONTENT)
             
             # Add Windows desktop.ini and icon for .crystalproj if missing
             desktop_ini_filepath = os.path.join(self.path, self._DESKTOP_INI_FILENAME)
             if not os.path.exists(desktop_ini_filepath):
-                with open(desktop_ini_filepath, 'w', newline='') as f:
-                    f.write(self._DESKTOP_INI_CONTENT)
+                with open(desktop_ini_filepath, 'w', newline='') as tf:
+                    tf.write(self._DESKTOP_INI_CONTENT)
                 
                 icons_dirpath = os.path.join(self.path, self._ICONS_DIRNAME)
                 if not os.path.exists(icons_dirpath):
@@ -541,8 +569,8 @@ class Project(ListenableMixin):
                 # KDE: Define icon in .directory file
                 dot_directory_filepath = os.path.join(self.path, '.directory')
                 if not os.path.exists(dot_directory_filepath):
-                    with open(dot_directory_filepath, 'w') as f:
-                        f.write('[Desktop Entry]\nIcon=crystalproj\n')
+                    with open(dot_directory_filepath, 'w') as tf:
+                        tf.write('[Desktop Entry]\nIcon=crystalproj\n')
             
             # Set Windows-specific file attributes, if not already done
             if is_windows():
@@ -555,6 +583,230 @@ class Project(ListenableMixin):
                 
                 # Mark .directory as Hidden
                 set_windows_file_attrib(dot_directory_filepath, ['+h'])
+        
+        # Apply major version migrations
+        if True:
+            # Get the project's major version
+            major_version = self._get_major_version(c)
+            
+            # Upgrade major version 1 -> 2
+            if major_version == 1:
+                revisions_dirpath = os.path.join(
+                    self.path, self._REVISIONS_DIRNAME)  # cache
+                ip_revisions_dirpath = os.path.join(
+                    self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
+                tmp_revisions_dirpath = os.path.join(
+                    self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
+                
+                # Ensure old revisions directory exists
+                assert os.path.isdir(revisions_dirpath)
+                
+                # 1. Confirm want to migrate now
+                # 2. Create new revisions directory
+                def will_upgrade_revisions(approx_revision_count: int) -> None:
+                    """
+                    Raises:
+                    * VetoUpgradeProject
+                    * CancelOpenProject
+                    """
+                    migration_was_in_progress = os.path.isdir(ip_revisions_dirpath)  # capture
+                    
+                    if approx_revision_count > Project._MAX_REVISION_ID:
+                        assert not migration_was_in_progress
+                        
+                        # Veto the migration automatically because it would fail
+                        # due to inability to migrate revisions with very high IDs
+                        raise VetoUpgradeProject()
+                    
+                    try:
+                        progress_listener.will_upgrade_revisions(
+                            approx_revision_count,
+                            can_veto=not migration_was_in_progress)
+                    except VetoUpgradeProject:
+                        if migration_was_in_progress:
+                            raise AssertionError('Cannot veto migration that was in progress')
+                        raise
+                    except CancelOpenProject:
+                        raise
+                    
+                    # Create new revisions directory
+                    if not migration_was_in_progress:
+                        os.mkdir(ip_revisions_dirpath)
+                
+                # Move revisions to appropriate locations in new revisions directory
+                os_path_sep = os.path.sep  # cache
+                last_new_revision_parent_relpath = None  # type: Optional[str]
+                def migrate_revision(row: Tuple) -> None:
+                    (id,) = row
+                    old_revision_filepath = (
+                        revisions_dirpath + os_path_sep +
+                        str(id)
+                    )
+                    
+                    new_revision_filepath_parts = f'{id:015x}'
+                    if len(new_revision_filepath_parts) != 15:
+                        # NOTE: Raising an AssertionError rather than a
+                        #       ProjectHasTooManyRevisionsError because
+                        #       will_upgrade_revisions() should have detected
+                        #       this case early and not permitted the upgrade
+                        #       to continue
+                        raise AssertionError(
+                            'Revision ID {id} is too high to migrate to the '
+                            'major version 2 project format')
+                    new_revision_parent_relpath = (
+                        new_revision_filepath_parts[0:3] + os_path_sep +
+                        new_revision_filepath_parts[3:6] + os_path_sep +
+                        new_revision_filepath_parts[6:9] + os_path_sep +
+                        new_revision_filepath_parts[9:12]
+                    )
+                    new_revision_filepath = (
+                        ip_revisions_dirpath + os_path_sep + 
+                        new_revision_parent_relpath + os_path_sep +
+                        new_revision_filepath_parts[12:15]
+                    )
+                    
+                    # Create parent directory for new location if needed
+                    # 
+                    # NOTE: Avoids extra calls to os.makedirs() when easy to
+                    #       prove that there's no work to be done
+                    nonlocal last_new_revision_parent_relpath
+                    if new_revision_parent_relpath != last_new_revision_parent_relpath:
+                        new_revision_parent_dirpath = \
+                            ip_revisions_dirpath + os_path_sep + new_revision_parent_relpath
+                        os.makedirs(new_revision_parent_dirpath, exist_ok=True)
+                        last_new_revision_parent_relpath = new_revision_parent_relpath
+                    
+                    # Move revision from old location to new location
+                    try:
+                        os.rename(old_revision_filepath, new_revision_filepath)
+                    except FileNotFoundError:
+                        # Either:
+                        # 1. Revision has already been moved from old location to new location
+                        #    (if this migration is being resumed from an earlier canceled migration)
+                        # 2. Revision was missing in old location before, and will be missing in new location.
+                        pass
+                # TODO: Dump profiling context immediately upon exit of context
+                #       rather then waiting to program to exit
+                with create_profiling_context(
+                        'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
+                    try:
+                        self._process_table_rows(
+                            c,
+                            # NOTE: The following query to approximate row count is
+                            #       significantly faster than the exact query
+                            #       ('select count(1) from resource_revision') because it
+                            #       does not require a full table scan.
+                            'select id from resource_revision order by id desc limit 1',
+                            'select id from resource_revision order by id asc',
+                            migrate_revision,
+                            will_upgrade_revisions,
+                            progress_listener.upgrading_revision,
+                            progress_listener.did_upgrade_revisions)
+                    except CancelOpenProject:
+                        raise
+                    except VetoUpgradeProject:
+                        pass
+                    else:
+                        # Move aside old revisions directory and queue it for deletion
+                        os.rename(revisions_dirpath, tmp_revisions_dirpath)
+                        
+                        # Move new revisions directory to final location
+                        os.rename(ip_revisions_dirpath, revisions_dirpath)
+                        
+                        # Commit upgrade
+                        major_version = 2
+                        self._set_major_version(major_version, c, commit)
+            
+            # At latest major version 2
+            if major_version == 2:
+                # Nothing to do
+                pass
+            assert self._LATEST_SUPPORTED_MAJOR_VERSION == 2
+    
+    @staticmethod
+    def _get_major_version(c: DatabaseCursor) -> int:
+        rows = list(c.execute(
+            'select value from project_property where name = ?',
+            ('major_version',)))
+        if len(rows) == 0:
+            major_version = 1
+        else:
+            [(major_version_str,)] = rows
+            major_version = int(major_version_str)
+        return major_version
+    
+    @staticmethod
+    def _set_major_version(major_version: int, c: DatabaseCursor, commit: Callable[[], None]) -> None:
+        c.execute(
+            'insert or replace into project_property (name, value) values (?, ?)',
+            ('major_version', major_version))
+        commit()
+    
+    @staticmethod
+    def _process_table_rows(
+            c: DatabaseCursor,
+            approx_row_count_query: str,
+            rows_query: str,
+            process_row_func: Callable[[Tuple], None],
+            report_approx_row_count_func: Callable[[int], None],
+            report_processing_row_func: Callable[[int, float], None],
+            report_did_process_rows_func: Callable[[int], None],
+            ) -> None:
+        TARGET_MAX_DELAY_BETWEEN_REPORTS = 1.0  # seconds
+        
+        rows = list(c.execute(approx_row_count_query))
+        if len(rows) == 1:
+            [(approx_row_count,)] = rows
+        else:
+            assert len(rows) == 0
+            approx_row_count = 0
+        report_approx_row_count_func(approx_row_count)  # may raise
+        
+        # NOTE: Initialize before initializing ProgressBar
+        index = 0
+        
+        # Configure tqdm to efficiently report process approximately every
+        # TARGET_MAX_DELAY_BETWEEN_REPORTS seconds
+        class ProgressBar(tqdm):
+            def __init__(self, *args, **kwargs) -> None:
+                self._initializing = True
+                super().__init__(*args, **kwargs)
+                self._initializing = False
+            
+            @overrides
+            def refresh(self, nolock=False, lock_args=None) -> bool:
+                return super().refresh(nolock=True, lock_args=lock_args)
+            
+            @overrides
+            def display(self, *args, **kwargs) -> None:
+                if not self._initializing:
+                    report_processing_row_func(index, self.miniters)  # may raise
+        
+        with ProgressBar(
+            initial=0,
+            total=approx_row_count,
+            mininterval=(
+                TARGET_MAX_DELAY_BETWEEN_REPORTS
+                if not Project._report_progress_at_maximum_resolution
+                else 0
+            ),
+            miniters=(
+                None  # dynamic
+                if not Project._report_progress_at_maximum_resolution
+                else 0
+            ),
+            file=DevNullFile(),
+        ) as progress_bar:
+            row_count = 0
+            with gc_disabled():  # don't garbage collect while allocating many objects
+                for (index, row) in enumerate(c.execute(rows_query)):
+                    progress_bar.update()
+                    process_row_func(row)  # may raise
+                    row_count += 1
+            if row_count != 0:
+                report_processing_row_func(row_count - 1, progress_bar.miniters)  # may raise
+        
+        report_did_process_rows_func(row_count)  # may raise
     
     # === Properties ===
     
@@ -587,6 +839,21 @@ class Project(ListenableMixin):
             c.execute('insert or replace into project_property (name, value) values (?, ?)', (name, value))
             self._db.commit()
         self._properties[name] = value
+    
+    @property
+    def major_version(self) -> int:
+        """
+        Major version of this project.
+        
+        Crystal will refuse to open a project with a later major version than
+        it knows how to read, with a ProjectTooNewError.
+        
+        Crystal will permit opening projects with a major version that is
+        older than the latest supported major version, even without upgrading
+        the project's version, because the project may be stored on a read-only
+        volume such as a DVD, CD, or BluRay disc.
+        """
+        return int(self._get_property('major_version', '1'))
     
     def _get_default_url_prefix(self):
         """
@@ -693,6 +960,8 @@ class Project(ListenableMixin):
         This property is configured only for the current session
         and is not persisted.
         """)
+    
+    # === Children ===
     
     @property
     def resources(self) -> Iterable[Resource]:
@@ -807,6 +1076,12 @@ class Project(ListenableMixin):
         """Returns the `ResourceGroup` with the specified ID or None if no such resource exists."""
         # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
         return next((rg for rg in self._resource_groups if rg._id == resource_group_id), None)
+    
+    # NOTE: Used by tests
+    def _revision_count(self) -> int:
+        c = self._db.cursor()
+        [(revision_count,)] = c.execute('select count(1) from resource_revision')
+        return revision_count
     
     # === Tasks ===
     
@@ -927,6 +1202,14 @@ class CrossProjectReferenceError(Exception):
 
 class ProjectFormatError(Exception):
     """The on-disk format of a Project is corrupted in some way."""
+    pass
+
+
+class ProjectTooNewError(Exception):
+    """
+    The project has a greater major version than this version of Crystal
+    knows how to open safely.
+    """
     pass
 
 
@@ -1697,6 +1980,10 @@ class ResourceRevision:
             ) -> ResourceRevision:
         """
         Creates a new revision that encapsulates the error encountered when fetching the revision.
+        
+        Raises:
+        * ProjectHasTooManyRevisionsError
+        * Exception -- if could not write revision to disk
         """
         return ResourceRevision._create_from_stream(
             resource,
@@ -1720,6 +2007,10 @@ class ResourceRevision:
         * resource -- resource that this is a revision of.
         * metadata -- JSON-encodable dictionary of resource metadata.
         * body_stream -- file-like object containing the revision body.
+        
+        Raises:
+        * ProjectHasTooManyRevisionsError
+        * Exception -- if could not read revision from stream or write to disk
         """
         try:
             # If no HTTP Date header was returned by the origin server,
@@ -1743,6 +2034,8 @@ class ResourceRevision:
                 request_cookie=request_cookie,
                 metadata=metadata,
                 body_stream=body_stream)
+        except ProjectHasTooManyRevisionsError:
+            raise
         except Exception as e:
             return ResourceRevision.create_from_error(resource, e, request_cookie)
     
@@ -1760,6 +2053,10 @@ class ResourceRevision:
         See also:
         * ResourceRevision.create_from_error()
         * ResourceRevision.create_from_response()
+        
+        Raises:
+        * ProjectHasTooManyRevisionsError
+        * Exception -- if could not read revision from stream or write to disk
         """
         self = ResourceRevision()
         self.resource = resource
@@ -1834,14 +2131,19 @@ class ResourceRevision:
                 try:
                     if body_file_downloaded_ok and row_created_ok:
                         # Move body file to its final filename
-                        os.rename(
-                            body_file.name,
-                            os.path.join(project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id)))
+                        # NOTE: May raise ProjectHasTooManyRevisionsError
+                        revision_filepath = self._body_filepath
+                        try:
+                            os.rename(body_file.name, revision_filepath)
+                        except FileNotFoundError:  # probably missing parent directory
+                            os.makedirs(os.path.dirname(revision_filepath), exist_ok=True)
+                            os.rename(body_file.name, revision_filepath)
                     else:
                         # Remove body file
                         os.remove(body_file.name)
                 except:
                     body_file_downloaded_ok = False
+                    raise
                 finally:
                     if not body_file_downloaded_ok and row_created_ok:
                         # Rollback database commit
@@ -1938,11 +2240,11 @@ class ResourceRevision:
         raise AssertionError()
     
     @classmethod
-    def _encode_error(cls, error):
+    def _encode_error(cls, error: Optional[Exception]) -> str:
         return json.dumps(cls._encode_error_dict(error))
     
     @staticmethod
-    def _encode_error_dict(error):
+    def _encode_error_dict(error: Optional[Exception]) -> Optional[Dict[str, str]]:
         if error is None:
             error_dict = None
         elif isinstance(error, _PersistedError):
@@ -1958,11 +2260,11 @@ class ResourceRevision:
         return error_dict
     
     @staticmethod
-    def _encode_metadata(metadata):
+    def _encode_metadata(metadata: Optional[ResourceRevisionMetadata]) -> str:
         return json.dumps(metadata)
     
     @staticmethod
-    def _decode_error(db_error):
+    def _decode_error(db_error: str) -> Optional[Exception]:
         error_dict = json.loads(db_error)
         if error_dict is None:
             return None
@@ -1970,24 +2272,24 @@ class ResourceRevision:
             return _PersistedError(error_dict['message'], error_dict['type'])
     
     @staticmethod
-    def _decode_metadata(db_metadata):
+    def _decode_metadata(db_metadata: str) -> Optional[ResourceRevisionMetadata]:
         return json.loads(db_metadata)
     
     # === Properties ===
     
     @property
-    def project(self):
+    def project(self) -> Project:
         return self.resource.project
     
     @property
-    def _url(self):
+    def _url(self) -> str:
         return self.resource.url
     
     @property
     def error_dict(self):
         return self._encode_error_dict(self.error)
     
-    def _ensure_has_body(self):
+    def _ensure_has_body(self) -> None:
         """
         Raises:
         * NoRevisionBodyError
@@ -1996,13 +2298,42 @@ class ResourceRevision:
             raise NoRevisionBodyError(self)
     
     @property
-    def _body_filepath(self):
-        return os.path.join(self.project.path, Project._RESOURCE_REVISION_DIRNAME, str(self._id))
+    def _body_filepath(self) -> str:
+        """
+        Raises:
+        * ProjectHasTooManyRevisionsError --
+            if this revision's in-memory ID is higher than what the 
+            project format supports on disk
+        """
+        major_version = self.project.major_version
+        if major_version >= 2:
+            os_path_sep = os.path.sep  # cache
+            
+            revision_relpath_parts = f'{self._id:015x}'
+            if len(revision_relpath_parts) != 15:
+                assert self._id > Project._MAX_REVISION_ID
+                raise ProjectHasTooManyRevisionsError(
+                    f'Revision ID {id} is too high to store in the '
+                    'major version 2 project format')
+            revision_relpath = (
+                revision_relpath_parts[0:3] + os_path_sep +
+                revision_relpath_parts[3:6] + os_path_sep +
+                revision_relpath_parts[6:9] + os_path_sep +
+                revision_relpath_parts[9:12] + os_path_sep +
+                revision_relpath_parts[12:15]
+            )
+        elif major_version == 1:
+            revision_relpath = str(self._id)
+        else:
+            raise AssertionError()
+        
+        return os.path.join(
+            self.project.path, Project._REVISIONS_DIRNAME, revision_relpath)
     
     # === Metadata ===
     
     @property
-    def is_http(self):
+    def is_http(self) -> bool:
         """Returns whether this resource was fetched using HTTP."""
         # HTTP resources are presently the only ones with metadata
         return self.metadata is not None
@@ -2015,9 +2346,9 @@ class ResourceRevision:
             return self.metadata['status_code']
     
     @property
-    def is_redirect(self):
+    def is_redirect(self) -> bool:
         """Returns whether this resource is a redirect."""
-        return self.is_http and (self.metadata['status_code'] // 100) == 3
+        return self.metadata is not None and (self.metadata['status_code'] // 100) == 3
     
     def _get_first_value_of_http_header(self, name: str) -> Optional[str]:
         return self._get_first_value_of_http_header_in_metadata(name, self.metadata)
@@ -2411,6 +2742,10 @@ class ResourceRevision:
     
     def __str__(self) -> str:
         return f'Revision {self._id} for URL {self.resource.url}'
+
+
+class ProjectHasTooManyRevisionsError(Exception):
+    pass
 
 
 class NoRevisionBodyError(ValueError):

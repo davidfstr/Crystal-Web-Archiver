@@ -1,3 +1,4 @@
+from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 from overrides import overrides
 import sys
 from typing import Optional
@@ -7,11 +8,22 @@ import wx
 _active_progress_listener = None  # type: Optional[OpenProjectProgressListener]
 
 
+# NOTE: See subclass OpenProjectProgressDialog for the documentation of
+#       the various methods in this interface.
 class OpenProjectProgressListener:
     def opening_project(self, project_name: str) -> None:
         pass
     
     def upgrading_project(self, message: str) -> None:
+        pass
+    
+    def will_upgrade_revisions(self, approx_revision_count: int, can_veto: bool) -> None:
+        pass
+    
+    def upgrading_revision(self, index: int, revisions_per_second: float) -> None:
+        pass
+    
+    def did_upgrade_revisions(self, revision_count: int) -> None:
         pass
     
     def will_load_resources(self, approx_resource_count: int) -> None:
@@ -61,18 +73,26 @@ DummyOpenProjectProgressListener = OpenProjectProgressListener
 
 
 class OpenProjectProgressDialog(OpenProjectProgressListener):
+    _dialog_style: Optional[int]
     _dialog: Optional[wx.ProgressDialog]
+    _approx_revision_count: Optional[float]
     _resource_count: Optional[int]
     _root_resource_count: Optional[int]
     _resource_group_count: Optional[int]
     _entity_tree_node_count: Optional[int]
     
+    # NOTE: Only changed when tests are running
+    _always_show_upgrade_required_modal = False
+    
     def __init__(self) -> None:
+        self._dialog_style = None
         self._dialog = None
+        self._approx_revision_count = None
         self._resource_count = None
         self._root_resource_count = None
         self._resource_group_count = None
         self._entity_tree_node_count = None
+        self.reset()
     
     def __enter__(self) -> OpenProjectProgressListener:
         return self
@@ -83,61 +103,142 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
     
     @overrides
     def upgrading_project(self, message: str) -> None:
+        """
+        Called immediately before a minor upgrade of a project is about to start.
+        
+        No progress will be reported during the minor upgrade.
+        """
         # HACK: wxGTK does not reliably update wx.ProgressDialog's message
         #       immediately after it is shown. So be sure to initialize
         #       the wx.ProgressDialog's message immediately to what it will
         #       be updated to soon.
         initial_message = f'Upgrading project: {message}'
+        self._update_can_cancel(False, initial_message)
         
-        if self._dialog is None:
-            self._dialog = wx.ProgressDialog(
-                'Opening Project...',
-                # NOTE: Message must be non-empty to size dialog correctly on Windows
-                initial_message,
-                maximum=1,
-                # NOTE: Intentionally lacks: wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
-                style=wx.PD_AUTO_HIDE|wx.PD_APP_MODAL
+        # Change dialog to show an indeterminate progress bar
+        try:
+            self._pulse(initial_message)
+        except CancelOpenProject:
+            # Ignore cancel request
+            pass
+    
+    @overrides
+    def will_upgrade_revisions(self, approx_revision_count: int, can_veto: bool) -> None:
+        """
+        Called immediately before a major upgrade of project revisions is about
+        to start. If can_veto is True then the upgrade can be deferred by
+        raising VetoUpgradeProject.
+        
+        If can_veto is False then VetoUpgradeProject must not be raised.
+        
+        Raises:
+        * VetoUpgradeProject -- if user declines to upgrade the project
+        * CancelOpenProject -- if user cancels opening the project
+        """
+        HISTORICAL_MIN_MIGRATION_SPEED = 200  # revisions/sec
+        
+        self._approx_revision_count = approx_revision_count
+        
+        initial_message = f'Upgrading about {approx_revision_count:n} revision(s)...'
+        self._update_can_cancel(True, initial_message)
+        
+        assert self._dialog is not None
+        self._dialog.SetRange(max(approx_revision_count, 1))
+        self._update(0, initial_message)
+        
+        eta_total_minutes = approx_revision_count // HISTORICAL_MIN_MIGRATION_SPEED // 60
+        if eta_total_minutes <= 2 and not self._always_show_upgrade_required_modal:
+            # Automatically accept an upgrade if it looks like it will be fast
+            pass
+        else:
+            # Prompt whether to start/continue upgrade now
+            
+            # TODO: Report ETA as "X hours Y minutes" rather than as
+            #       just "Z minutes", since a several hours may be
+            #       required for large projects
+            #
+            # TODO: Consider using self._dialog as the parent of this message
+            #       dialog rather than making it its own top-level dialog
+            dialog = wx.MessageDialog(None,
+                message=(
+                    f'Your project needs to be upgraded. '
+                    f'About {eta_total_minutes:n} minutes will be required.'
+                    # (TODO: Provide a 1 sentence summary of the benefits
+                    #        of upgrading.)
+                ),
+                caption='Upgrade Required',
+                style=(
+                    wx.YES_NO|wx.CANCEL
+                    if can_veto
+                    else wx.OK|wx.CANCEL
+                ),
             )
-            self._dialog.Name = 'cr-opening-project-1'
-            self._dialog.Show()
+            dialog.Name = 'cr-upgrade-required'
+            with dialog:
+                if can_veto:
+                    dialog.SetYesNoCancelLabels('Continue', '&Later', wx.ID_CLOSE)
+                else:
+                    dialog.SetOKCancelLabels('Continue', wx.ID_CLOSE)
+                dialog.SetEscapeId(wx.ID_CANCEL)
+                dialog.SetAcceleratorTable(wx.AcceleratorTable([
+                    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('L'), wx.ID_NO),
+                    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W'), wx.ID_CANCEL),
+                ]))
+                position_dialog_initially(dialog)
+                choice = ShowModal(dialog)
+            if choice in [wx.ID_YES, wx.ID_OK]:
+                pass
+            elif choice == wx.ID_NO:
+                raise VetoUpgradeProject()
+            elif choice == wx.ID_CANCEL:
+                raise CancelOpenProject()
+            else:
+                raise AssertionError()
+    
+    @overrides
+    def upgrading_revision(self, index: int, revisions_per_second: float) -> None:
+        """
+        Called about once every second while project is being upgraded,
+        to report progress of the upgrade.
         
-        self._pulse(initial_message)
+        Raises:
+        * CancelOpenProject
+        """
+        print(f'Upgrading revisions: {index:n} / {self._approx_revision_count:n} ({int(revisions_per_second):n} rev/sec)')
+        self._update(index)
+    
+    @overrides
+    def did_upgrade_revisions(self, revision_count: int) -> None:
+        """
+        Called immediately after a major upgrade completes.
+        """
+        assert self._dialog is not None
+        self._dialog.SetRange(max(revision_count, 1))
     
     @overrides
     def will_load_resources(self, approx_resource_count: int) -> None:
         """
+        Called immediately before resources will be loaded.
+        
         Raises:
         * CancelOpenProject
         """
-        if self._dialog is not None:
-            self._dialog.Destroy()
-            self._dialog = None  # very important; avoids segfaults
-        
         # HACK: wxGTK does not reliably update wx.ProgressDialog's message
         #       immediately after it is shown. So be sure to initialize
         #       the wx.ProgressDialog's message immediately to what it will
         #       be updated to soon.
         initial_message = f'Loading about {approx_resource_count:n} resource(s)...'
-        
-        self._dialog = wx.ProgressDialog(
-            'Opening Project...',
-            # NOTE: Message must be non-empty to size dialog correctly on Windows
-            initial_message,
-            maximum=1,
-            style=wx.PD_AUTO_HIDE|wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
-        )
-        self._dialog.Name = 'cr-opening-project-2'
-        self._dialog.Show()
+        self._update_can_cancel(True, initial_message)
         
         assert self._dialog is not None
         self._dialog.SetRange(max(approx_resource_count * 2, 1))
-        self._update(
-            0,
-            initial_message)
+        self._update(0, initial_message)
     
     @overrides
     def loading_resource(self, index: int) -> None:
         """
+        Called periodically while resources are being loaded, to report progress.
+        
         Raises:
         * CancelOpenProject
         """
@@ -145,6 +246,9 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
     
     @overrides
     def did_load_resources(self, resource_count: int) -> None:
+        """
+        Called immediately after resources finished loading.
+        """
         assert self._dialog is not None
         self._resource_count = resource_count
         self._dialog.SetRange(max(resource_count * 2, 1))
@@ -253,14 +357,74 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         self.reset()
     
     def reset(self) -> None:
+        """
+        Resets this progress listener to its initial state,
+        hiding any progress dialogs.
+        
+        Afterward, the progress of opening a new project may be
+        reported through this same progress listener.
+        """
+        self._dialog_style = None
         if self._dialog is not None:
             self._dialog.Destroy()
             self._dialog = None  # very important; avoids segfaults
     
     # === Utility ===
     
+    def _update_can_cancel(self, can_cancel: bool, new_message: str) -> None:
+        """
+        Updates whether the visible progress dialog shows a cancel button or not,
+        recreating the dialog with/without the button as necessary.
+        
+        Also updates the progress dialog to display the specified message.
+        
+        Does NOT raise CancelOpenProject.
+        """
+        old_style = self._dialog_style
+        new_style = (
+            wx.PD_AUTO_HIDE|wx.PD_APP_MODAL
+            if not can_cancel
+            else wx.PD_AUTO_HIDE|wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
+        )
+        new_name = (
+            'cr-opening-project-1'
+            if not can_cancel
+            else 'cr-opening-project-2'
+        )
+        
+        if new_style != old_style:
+            if self._dialog is not None:
+                self._dialog.Destroy()
+                self._dialog = None  # very important; avoids segfaults
+            
+            self._dialog_style = new_style
+            self._dialog = wx.ProgressDialog(
+                'Opening Project...',
+                # NOTE: Message must be non-empty to size dialog correctly on Windows
+                new_message,
+                # (TODO: Shouldn't the value of the previous dialog version,
+                #        if any, be preserved here?)
+                # TODO: Shouldn't the maximum of the previous dialog version,
+                #       if any, be preserved here?
+                maximum=1,
+                style=new_style
+            )
+            self._dialog.Name = new_name
+            self._dialog.Show()
+        else:
+            assert self._dialog is not None
+            try:
+                self._update(self._dialog.Value, new_message)
+            except CancelOpenProject:
+                # Ignore cancel request
+                pass
+    
     def _update(self, new_value: int, new_message: str='') -> None:
         """
+        Updates the value of the progress bar in the visible progress dialog.
+        
+        Optionally also updates the message in the progress dialog as well.
+        
         Raises:
         * CancelOpenProject
         """
@@ -271,6 +435,9 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
     
     def _pulse(self, new_message: str='') -> None:
         """
+        Changes the progress bar in the visible progress dialog
+        to be an indeterminate progress bar.
+        
         Raises:
         * CancelOpenProject
         """
@@ -279,5 +446,10 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         if not ok:
             raise CancelOpenProject()
 
+
 class CancelOpenProject(Exception):
+    pass
+
+
+class VetoUpgradeProject(Exception):
     pass

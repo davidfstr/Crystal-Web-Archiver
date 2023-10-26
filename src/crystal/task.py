@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import atexit
 from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util.caffeination import Caffeination
@@ -586,6 +585,7 @@ class DownloadResourceBodyTask(Task):
         * ProjectFreeSpaceTooLowError --
             If the project does not have enough free disk space to safely
             download more resources.
+        * ProjectHasTooManyRevisionsError
         """
         # Return the resource's fresh (already-downloaded) default revision if available
         if self._resource.definitely_has_no_revisions:

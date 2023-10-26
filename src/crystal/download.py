@@ -5,17 +5,25 @@ Provides services for downloading a ResourceRevision.
 from collections import defaultdict
 from collections.abc import Collection
 from crystal import __version__
-from crystal.model import Resource, ResourceRevision, ResourceRevisionMetadata
+from crystal.model import (
+    ProjectHasTooManyRevisionsError,
+    Resource, ResourceRevision, ResourceRevisionMetadata,
+)
 from crystal.util.xos import is_mac_os, is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
 import os
 import platform
 import ssl
-from typing import BinaryIO, cast, Dict, Iterable, Optional, Set, Tuple, Union
+from typing import (
+    BinaryIO, cast, Dict, Iterable, Optional, Set, Tuple, TYPE_CHECKING, Union
+)
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    from crystal.task import DownloadResourceBodyTask
 
 
 _HTTP_REQUEST_TIMEOUT = 10  # seconds
@@ -42,7 +50,10 @@ _VERBOSE_HTTP_REQUESTS_AND_RESPONSES = False
 _EXTRA_HEADERS = dict()  # type: Dict[str, str]
 
 
-def download_resource_revision(resource: Resource, progress_listener) -> ResourceRevision:
+def download_resource_revision(
+        resource: Resource,
+        progress_listener: 'DownloadResourceBodyTask',
+        ) -> ResourceRevision:
     """
     Synchronously downloads a revision of the specified resource.
     For internal use by DownloadResourceBodyTask.
@@ -50,6 +61,9 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
     Arguments:
     * resource -- the resource to download.
     * progress_listener -- the DownloadResourceBodyTask that progress updates will be sent to.
+    
+    Raises:
+    * ProjectHasTooManyRevisionsError
     """
     
     if resource.project.request_cookie_applies_to(resource.url):
@@ -95,7 +109,12 @@ def download_resource_revision(resource: Resource, progress_listener) -> Resourc
             )
         finally:
             body_stream.close()
+    except ProjectHasTooManyRevisionsError:
+        raise
     except Exception as error:
+        # TODO: Handle rare case where this raises an IO error when writing
+        #       revision to the database, perhaps by creating/returning
+        #       an *unsaved* ResourceRevision in memory.
         return ResourceRevision.create_from_error(
             resource,
             error,

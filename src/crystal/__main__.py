@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
     from crystal.shell import Shell
-    from typing import List, Optional
+    from typing import Callable, List, Optional
     import wx
 
 
@@ -477,20 +477,18 @@ def _prompt_for_project(
                 **dict(readonly=dialog.IsCheckBoxChecked()),
             }  # reinterpret
             
-            if choice == wx.ID_YES:
-                try:
+            try:
+                if choice == wx.ID_YES:
                     return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
-                except CancelOpenProject:
-                    progress_listener.reset()
-                    continue
-            elif choice == wx.ID_NO:
-                try:
+                elif choice == wx.ID_NO:
                     return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
-                except CancelOpenProject:
-                    progress_listener.reset()
-                    continue
-            else:  # wx.ID_CANCEL
-                raise SystemExit()
+                elif choice == wx.ID_CANCEL:
+                    raise SystemExit()
+                else:
+                    raise AssertionError()
+            except CancelOpenProject:
+                progress_listener.reset()
+                continue
 
 
 def _prompt_to_create_project(
@@ -535,6 +533,7 @@ def _prompt_to_open_project(
     from crystal.model import Project
     from crystal.progress import CancelOpenProject
     from crystal.util.wx_bind import bind
+    from crystal.util.wx_dialog import position_dialog_initially, ShowModal
     from crystal.util.xos import is_linux, is_mac_os, is_windows
     import wx
     
@@ -599,36 +598,89 @@ def _prompt_to_open_project(
     del file_dialog_customize_hook  # keep hook alive until after dialog closed
     
     if not os.path.exists(project_path):
-        raise AssertionError
+        raise AssertionError()
     if not Project.is_valid(project_path):
-        from crystal.ui.BetterMessageDialog import BetterMessageDialog
-        
-        dialog = BetterMessageDialog(None,
-            message='The selected directory is not a valid project.',
-            title='Invalid Project',
-            style=wx.OK,
-            name='cr-invalid-project')
-        with dialog:
-            dialog.ShowModal()
+        _show_invalid_project_dialog()
         raise CancelOpenProject()
     
-    return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
+    assert '_show_modal_func' not in project_kwargs
+    return _load_project(
+        project_path,
+        progress_listener,
+        **project_kwargs)  # type: ignore[arg-type]
 
 
 def _load_project(
         project_path: str,
         progress_listener: OpenProjectProgressListener,
+        # NOTE: Used by automated tests
+        *, _show_modal_func: 'Optional[Callable[[wx.Dialog], int]]'=None,
         **project_kwargs: object
         ) -> Project:
     """
     Raises:
     * CancelOpenProject
     """
-    from crystal.model import Project
+    from crystal.model import Project, ProjectFormatError, ProjectTooNewError
+    from crystal.progress import CancelOpenProject
+    from crystal.util.wx_dialog import position_dialog_initially
+    import wx
     
-    # TODO: If errors while loading a project (ex: bad format),
-    #       present them to the user nicely
-    return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
+    if _show_modal_func is None:
+        from crystal.util.wx_dialog import ShowModal as _show_modal_func
+    assert _show_modal_func is not None  # help mypy
+    
+    try:
+        return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
+    except FileNotFoundError:
+        # TODO: Present this error to the user nicely
+        raise
+    except ProjectFormatError:
+        _show_invalid_project_dialog(
+            project_is_likely_corrupted=True,
+            _show_modal_func=_show_modal_func)
+        raise CancelOpenProject()
+    except ProjectTooNewError:
+        dialog = wx.MessageDialog(None,
+            message=(
+                'This project was created by a newer version of Crystal '
+                'and cannot be opened by this version of Crystal.'
+            ),
+            caption='Project Too New',
+            style=wx.OK,
+        )
+        dialog.Name = 'cr-project-too-new'
+        with dialog:
+            position_dialog_initially(dialog)
+            _show_modal_func(dialog)
+        raise CancelOpenProject()
+    except CancelOpenProject:
+        raise
+
+
+def _show_invalid_project_dialog(
+        project_is_likely_corrupted: bool=False,
+        # NOTE: Used by automated tests
+        *, _show_modal_func: 'Optional[Callable[[wx.Dialog], int]]'=None,
+        ) -> None:
+    from crystal.util.wx_dialog import position_dialog_initially
+    import wx
+    
+    if _show_modal_func is None:
+        from crystal.util.wx_dialog import ShowModal as _show_modal_func
+    assert _show_modal_func is not None  # help mypy
+    
+    extra = ' and may be corrupted' if project_is_likely_corrupted else ''
+    
+    dialog = wx.MessageDialog(None,
+        message=f'The selected file or directory is not a valid project{extra}.',
+        caption='Invalid Project',
+        style=wx.OK,
+    )
+    dialog.Name = 'cr-invalid-project'
+    with dialog:
+        position_dialog_initially(dialog)
+        _show_modal_func(dialog)
 
 
 # ------------------------------------------------------------------------------

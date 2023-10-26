@@ -133,7 +133,7 @@ def create_profiling_context(
     
     Just before the program exits, a .stats file is written to the specified
     filepath. This file can be analyzed/visualized with the PyPI "flameprof"
-    module and the standard library "profile" module.
+    module and the standard library "pstats" module.
     """
     if enabled:
         profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
