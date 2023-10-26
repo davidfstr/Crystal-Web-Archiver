@@ -27,6 +27,13 @@ Release Notes ⋮
           so that it is easy to open a .crystalproj from a file browser
         * macOS: Hide .crystalproj and .crystalopen file extensions
 
+* Large project improvements (with 3,000,000 - 11,000,000 URLs)
+    * .crystalproj format now stores revisions in a hierarchy of nested
+      directories rather than all of them inside a single directory.
+    * .crystalproj format now stores revisions in lexicographic order
+      in the filesystem so that when a project is copied to a new location,
+      the order of revisions on disk is preserved in the new copy.
+
 * Minor fixes
     * Eliminated race condition where scheduler thread could try to read from
       the root task's children list concurrently with a different thread
