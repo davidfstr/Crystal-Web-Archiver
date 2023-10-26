@@ -15,7 +15,7 @@ fi
 poetry run python setup.py py2app $GRAPH_OPT
 
 # Slim .app
-zip "dist/Crystal Web Archiver.app/Contents/Resources/lib/python39.zip" \
+zip dist/Crystal\ Web\ Archiver.app/Contents/Resources/lib/python3*.zip \
     -d "wx/locale/*"
 
 # Build .dmg
