@@ -308,13 +308,18 @@ def _main(args: List[str]) -> None:
             os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
             
             def bg_task():
+                from crystal.util.xthreading import NoForegroundThreadError
+                
                 is_ok = False
                 try:
                     from crystal.tests.index import run_tests
                     is_ok = run_tests(parsed_args.test)
                 finally:
-                    # TODO: How should failure be reported if NoForegroundThreadError?
-                    fg_call_later(lambda: sys.exit(0 if is_ok else 1))
+                    exit_code = 0 if is_ok else 1
+                    try:
+                        fg_call_later(lambda: sys.exit(exit_code))
+                    except NoForegroundThreadError:
+                        os._exit(exit_code)
             bg_call_later(bg_task)
         
         # Run GUI
