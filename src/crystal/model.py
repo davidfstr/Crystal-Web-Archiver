@@ -265,13 +265,16 @@ class Project(ListenableMixin):
             self._db = DatabaseConnection(db, lambda: self.readonly)
             
             c = self._db.cursor()
-            
-            # Create new project content, if missing
-            if create:
-                self._create(c, self._db)
-            
-            # Load from existing project
-            self._load(c, self._db, progress_listener)
+            try:
+                # Create new project content, if missing
+                if create:
+                    self._create(c, self._db)
+                
+                # Load from existing project
+                self._load(c, self._db, progress_listener)
+            except:
+                self.close()
+                raise
         finally:
             self._loading = False
         
@@ -1173,10 +1176,11 @@ class Project(ListenableMixin):
     
     def close(self) -> None:
         # Stop scheduler thread soon
-        self.root_task.interrupt()
-        # (TODO: Actually wait for the scheduler thread to exit
-        #        in a deterministic fashion, rather than relying on 
-        #        garbage collection to clean up objects.)
+        if hasattr(self, 'root_task'):
+            self.root_task.interrupt()
+            # (TODO: Actually wait for the scheduler thread to exit
+            #        in a deterministic fashion, rather than relying on 
+            #        garbage collection to clean up objects.)
         
         # Disable Write Ahead Log (WAL) mode when closing database
         # in case the user decides to burn the project to read-only media,
