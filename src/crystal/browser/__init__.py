@@ -10,7 +10,6 @@ from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.progress import (
     DummyOpenProjectProgressListener, OpenProjectProgressListener,
 )
-from crystal import resources
 from crystal.server import ProjectServer
 from crystal.task import RootTask
 from crystal.ui.actions import Action
@@ -18,7 +17,10 @@ from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
 from crystal.util.finderinfo import get_hide_file_extension
 from crystal.util.wx_bind import bind
-from crystal.util.xos import is_linux, is_mac_os, is_windows, mac_version
+from crystal.util.wx_dialog import set_dialog_or_frame_icon_if_appropriate
+from crystal.util.xos import (
+    is_kde_or_non_gnome, is_linux, is_mac_os, is_windows, mac_version,
+)
 from crystal.util.xthreading import (
     bg_call_later, fg_call_later, fg_call_and_wait, set_is_quitting
 )
@@ -57,7 +59,7 @@ class MainWindow:
         frame_title: str
         filename_with_ext = os.path.basename(project.path)
         (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
-        if is_windows():
+        if is_windows() or is_kde_or_non_gnome():
             frame_title = f'{filename_without_ext} - {APP_NAME}'
         else:  # is_mac_os(); other
             extension_visible = (
@@ -75,9 +77,8 @@ class MainWindow:
         try:
             # macOS: Define proxy icon beside the filename in the titlebar
             raw_frame.SetRepresentedFilename(project.path)
-            # Windows: Define app icon in the top-left corner
-            if is_windows():
-                raw_frame.SetIcons(wx.IconBundle(resources.open_binary('appicon.ico')))
+            # Define frame icon, if appropriate
+            set_dialog_or_frame_icon_if_appropriate(raw_frame)
             
             # 1. Define *single* child with full content of the wx.Frame,
             #    so that LogDrawer can be created for this window later

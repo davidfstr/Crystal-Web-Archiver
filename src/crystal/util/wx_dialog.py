@@ -1,4 +1,5 @@
-from crystal.util.xos import is_mac_os
+from crystal import resources
+from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows
 import os
 import wx
 
@@ -59,3 +60,10 @@ def position_dialog_initially(dialog: wx.Dialog) -> None:
     # NOTE: Linux sometimes ignores repositioning requests,
     #       especially if Wayland is being used rather than X11
     dialog.Position = new_position
+
+
+def set_dialog_or_frame_icon_if_appropriate(tlw: wx.TopLevelWindow) -> None:
+    # 1. Windows: Define app icon in the top-left corner
+    # 2. KDE: Define app icon in the top-left corner and in the dock
+    if is_windows() or is_kde_or_non_gnome():
+        tlw.SetIcons(wx.IconBundle(resources.open_binary('appicon.ico')))

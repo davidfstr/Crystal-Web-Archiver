@@ -652,7 +652,7 @@ def _load_project(
                 'and cannot be opened by this version of Crystal.'
             ),
             caption='Project Too New',
-            style=wx.OK,
+            style=wx.ICON_ERROR|wx.OK,
         )
         dialog.Name = 'cr-project-too-new'
         with dialog:
@@ -664,11 +664,13 @@ def _load_project(
 
 
 def _show_invalid_project_dialog(
-        project_is_likely_corrupted: bool=False,
+        *, project_is_likely_corrupted: bool=False,
         # NOTE: Used by automated tests
-        *, _show_modal_func: 'Optional[Callable[[wx.Dialog], int]]'=None,
+        _show_modal_func: 'Optional[Callable[[wx.Dialog], int]]'=None,
         ) -> None:
-    from crystal.util.wx_dialog import position_dialog_initially
+    from crystal.util.wx_dialog import (
+        position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
+    )
     import wx
     
     if _show_modal_func is None:
@@ -680,7 +682,7 @@ def _show_invalid_project_dialog(
     dialog = wx.MessageDialog(None,
         message=f'The selected file or directory is not a valid project{extra}.',
         caption='Invalid Project',
-        style=wx.OK,
+        style=wx.ICON_ERROR|wx.OK,
     )
     dialog.Name = 'cr-invalid-project'
     with dialog:

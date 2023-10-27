@@ -1,5 +1,7 @@
 from crystal.util.wx_bind import bind
-from crystal.util.wx_dialog import position_dialog_initially
+from crystal.util.wx_dialog import (
+    position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
+)
 from crystal.util.xos import is_wx_gtk
 from typing import Callable, Optional
 import wx
@@ -38,7 +40,10 @@ class BetterMessageDialog(wx.Dialog):
             super().__init__(parent, title=title)
         else:
             super().__init__(parent, title=title, name=name)
+        set_dialog_or_frame_icon_if_appropriate(self)
+        
         self_sizer = wx.BoxSizer(wx.VERTICAL); self.SetSizer(self_sizer)
+        
         bind(self, wx.EVT_BUTTON, self._on_button)
         
         message_label = wx.StaticText(self, label=message)

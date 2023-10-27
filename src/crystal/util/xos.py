@@ -1,5 +1,6 @@
 import math
 import platform
+import subprocess
 from typing import List, Optional
 
 
@@ -44,6 +45,34 @@ def mac_version() -> Optional[List[int]]:
         return None
     
     return [int(x) for x in platform.mac_ver()[0].split('.')]
+
+
+# === Linux Distro Detection ===
+
+_is_gnome = None  # type: Optional[bool]
+
+def is_gnome() -> bool:
+    global _is_gnome
+    if not is_linux():
+        return False
+    if _is_gnome is None:
+        try:
+            subprocess.run(
+                ['gnome-shell', '--version'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True)
+        except FileNotFoundError:
+            _is_gnome = False
+        else:
+            _is_gnome = True
+    return _is_gnome
+
+
+def is_kde_or_non_gnome() -> bool:
+    if not is_linux():
+        return False
+    return not is_gnome()
 
 
 # === wxPython Backend Detection ===

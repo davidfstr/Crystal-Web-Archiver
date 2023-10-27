@@ -34,6 +34,10 @@ Release Notes ⋮
       in the filesystem so that when a project is copied to a new location,
       the order of revisions on disk is preserved in the new copy.
 
+* Support improvements
+    * Add Kubuntu as a supported Linux distribution
+    * Add KDE as a supported desktop environment, in addition to GNOME
+
 * Minor fixes
     * Eliminated race condition where scheduler thread could try to read from
       the root task's children list concurrently with a different thread
