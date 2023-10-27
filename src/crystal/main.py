@@ -162,7 +162,7 @@ def _main(args: List[str]) -> None:
         )
     parser.add_argument(
         'filepath',
-        # NOTE: Duplicates: Project.FILE_EXTENSION, Project.LAUNCHER_FILE_EXTENSION
+        # NOTE: Duplicates: Project.FILE_EXTENSION, Project.OPENER_FILE_EXTENSION
         help='Optional. Path to a *.crystalproj or *.crystalopen to open.',
         type=str,
         default=None,
@@ -556,7 +556,7 @@ def _prompt_to_open_project(
             project_is_selected = (
                 os.path.exists(selected_itempath) and (
                     selected_itemname.endswith(Project.FILE_EXTENSION) or
-                    selected_itemname.endswith(Project.LAUNCHER_FILE_EXTENSION)
+                    selected_itemname.endswith(Project.OPENER_FILE_EXTENSION)
                 )
             )
             if project_is_selected:
@@ -581,8 +581,8 @@ def _prompt_to_open_project(
         wildcard='Projects (%(wc)s;%(wc2)s)|%(wc)s;%(wc2)s' % {
             # If projects appear as files, then can open directly
             'wc': '*' + Project.FILE_EXTENSION,
-            # If projects appear as directories, then must open contained launcher file
-            'wc2': '*' + Project.LAUNCHER_FILE_EXTENSION,
+            # If projects appear as directories, then must open contained opener file
+            'wc2': '*' + Project.OPENER_FILE_EXTENSION,
         },
         style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
     # Offer ability to open .crystalproj directories on Linux,

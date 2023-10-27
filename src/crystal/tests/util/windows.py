@@ -111,7 +111,7 @@ class OpenOrCreateDialog:
             self.open_as_readonly.Value = readonly
         
         if using_crystalopen:
-            itempath_to_open = os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME)
+            itempath_to_open = os.path.join(project_dirpath, Project._OPENER_DEFAULT_FILENAME)
         else:
             itempath_to_open = project_dirpath
         

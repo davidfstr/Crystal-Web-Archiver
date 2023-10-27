@@ -97,7 +97,7 @@ class Project(ListenableMixin):
     """
     
     FILE_EXTENSION = '.crystalproj'
-    LAUNCHER_FILE_EXTENSION = '.crystalopen'
+    OPENER_FILE_EXTENSION = '.crystalopen'
     
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
@@ -105,8 +105,8 @@ class Project(ListenableMixin):
     _REVISIONS_DIRNAME = 'revisions'
     _IN_PROGRESS_REVISIONS_DIRNAME = 'revisions.inprogress'
     _TEMPORARY_DIRNAME = 'tmp'
-    _LAUNCHER_DEFAULT_FILENAME = 'OPEN ME' + LAUNCHER_FILE_EXTENSION
-    _LAUNCHER_DEFAULT_CONTENT = b'CrOp'  # Crystal Opener, as a FourCC
+    _OPENER_DEFAULT_FILENAME = 'OPEN ME' + OPENER_FILE_EXTENSION
+    _OPENER_DEFAULT_CONTENT = b'CrOp'  # Crystal Opener, as a FourCC
     _README_FILENAME = 'README.txt'
     # Define README.txt which explains what a .crystalproj is to a user that
     # does not have Crystal installed.
@@ -169,7 +169,7 @@ class Project(ListenableMixin):
         Arguments:
         * path -- 
             path to a project directory (ending with `FILE_EXTENSION`)
-            or to a project launcher (ending with `LAUNCHER_FILE_EXTENSION`).
+            or to a project opener (ending with `OPENER_FILE_EXTENSION`).
         
         Raises:
         * FileNotFoundError --
@@ -224,8 +224,8 @@ class Project(ListenableMixin):
                 # TODO: Consider let _apply_migrations() define the rest of the
                 #       project structure, rather than duplicating logic here
                 os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
-                with open(os.path.join(path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
-                    f.write(self._LAUNCHER_DEFAULT_CONTENT)
+                with open(os.path.join(path, self._OPENER_DEFAULT_FILENAME), 'wb') as f:
+                    f.write(self._OPENER_DEFAULT_CONTENT)
                 with open(os.path.join(self.path, self._README_FILENAME), 'w', newline='') as tf:
                     tf.write(self._README_DEFAULT_CONTENT)
                 with open(os.path.join(self.path, self._DESKTOP_INI_FILENAME), 'w', newline='') as tf:
@@ -314,7 +314,7 @@ class Project(ListenableMixin):
             # Try to alter existing path to point to item ending with FILE_EXTENSION
             if path.endswith(cls.FILE_EXTENSION):
                 return path
-            elif path.endswith(cls.LAUNCHER_FILE_EXTENSION):
+            elif path.endswith(cls.OPENER_FILE_EXTENSION):
                 parent_itempath = os.path.dirname(path)
                 if parent_itempath.endswith(cls.FILE_EXTENSION):
                     return parent_itempath
@@ -399,11 +399,11 @@ class Project(ListenableMixin):
             if not os.path.exists(tmp_dirpath):
                 os.mkdir(tmp_dirpath)
             
-            # Add launcher and README if missing
-            if not any([n for n in os.listdir(self.path) if n.endswith(self.LAUNCHER_FILE_EXTENSION)]):
-                # Add missing launcher
-                with open(os.path.join(self.path, self._LAUNCHER_DEFAULT_FILENAME), 'wb') as f:
-                    f.write(self._LAUNCHER_DEFAULT_CONTENT)
+            # Add opener and README if missing
+            if not any([n for n in os.listdir(self.path) if n.endswith(self.OPENER_FILE_EXTENSION)]):
+                # Add missing opener
+                with open(os.path.join(self.path, self._OPENER_DEFAULT_FILENAME), 'wb') as f:
+                    f.write(self._OPENER_DEFAULT_CONTENT)
                 
                 # Add README if not already there
                 readme_filepath = os.path.join(self.path, self._README_FILENAME)

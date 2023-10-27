@@ -46,7 +46,7 @@ async def test_given_windows_when_open_crystalproj_directory_and_double_click_cr
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         with Project(project_dirpath):
             pass
-        assert os.path.exists(os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME))
+        assert os.path.exists(os.path.join(project_dirpath, Project._OPENER_DEFAULT_FILENAME))
         
         ocd = await OpenOrCreateDialog.wait_for()
         async with ocd.open(project_dirpath, using_crystalopen=True) as mw:
@@ -63,7 +63,7 @@ async def test_given_linux_when_open_crystalproj_directory_in_open_dialog_then_o
         skipTest('only supported on Linux')
     
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-        assert not os.path.exists(os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME))
+        assert not os.path.exists(os.path.join(project_dirpath, Project._OPENER_DEFAULT_FILENAME))
         
         # Simulate effect of:
         # 1. Press "Open" button to open the "Choose a project" dialog
@@ -81,7 +81,7 @@ async def test_given_linux_when_open_crystalproj_directory_and_double_click_crys
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         with Project(project_dirpath):
             pass
-        assert os.path.exists(os.path.join(project_dirpath, Project._LAUNCHER_DEFAULT_FILENAME))
+        assert os.path.exists(os.path.join(project_dirpath, Project._OPENER_DEFAULT_FILENAME))
         
         ocd = await OpenOrCreateDialog.wait_for()
         async with ocd.open(project_dirpath, using_crystalopen=True) as mw:

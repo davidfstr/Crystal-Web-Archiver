@@ -54,8 +54,8 @@ if sys.platform == 'darwin':
             {
                 'CFBundleTypeExtensions': ['crystalopen'],
                 'CFBundleTypeMIMETypes': ['application/vnd.crystal.opener'],
-                'CFBundleTypeIconFile': 'LauncherIcon.icns',
-                'CFBundleTypeName': 'Crystal Launcher',
+                'CFBundleTypeIconFile': 'OpenerIcon.icns',
+                'CFBundleTypeName': 'Crystal Opener',
                 'CFBundleTypeRole': 'Editor',
             },
         ],
@@ -71,7 +71,7 @@ if sys.platform == 'darwin':
         app=['../src/crystal/__main__.py'],
         data_files=[
             'media/DocIconMac.icns',
-            'media/LauncherIcon.icns',
+            'media/OpenerIcon.icns',
         ],
         options={'py2app': {
             # Cannot use argv_emulation=True in latest version of py2app
@@ -110,7 +110,7 @@ elif sys.platform == 'win32':
             'script': r'..\src\crystal\__main__.py',
             'icon_resources': [
                 (0, r'media\AppIconWin.ico'),
-                (1, r'media\LauncherIcon.ico'),
+                (1, r'media\OpenerIcon.ico'),
             ],
             # Executable name
             'dest_base': APP_NAME,
