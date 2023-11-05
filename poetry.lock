@@ -588,14 +588,18 @@ files = [
 
 [[package]]
 name = "overrides"
-version = "3.1.0"
+version = "4.1.2"
 description = "A decorator to automatically detect mismatch when overriding a method."
 category = "main"
 optional = false
-python-versions = "*"
+python-versions = ">=3.6"
 files = [
-    {file = "overrides-3.1.0.tar.gz", hash = "sha256:30f761124579e59884b018758c4d7794914ef02a6c038621123fec49ea7599c6"},
+    {file = "overrides-4.1.2-py3-none-any.whl", hash = "sha256:1b8a2d1bd4937c414214935fd472333eb5e1fe72bcde2309061b59d5cb920509"},
+    {file = "overrides-4.1.2.tar.gz", hash = "sha256:9c14302dd56a444b47b237ca42430d2e691a6794d49fff9c977d05af4e1fc850"},
 ]
+
+[package.dependencies]
+typing-utils = ">=0.0.3"
 
 [[package]]
 name = "packaging"
@@ -1041,6 +1045,21 @@ files = [
 ]
 
 [[package]]
+name = "typing-utils"
+version = "0.1.0"
+description = "utils to inspect Python type annotations"
+category = "main"
+optional = false
+python-versions = ">=3.6.1"
+files = [
+    {file = "typing_utils-0.1.0-py3-none-any.whl", hash = "sha256:6bd26f3d38a5dd526ca3a59f0a451ccb59bcee9dc829c872dd6c0aae4ec8bbef"},
+    {file = "typing_utils-0.1.0.tar.gz", hash = "sha256:8ff6b6705414b82575ad5ae0925ac414a9650fb8c5718289b1327dec61252f65"},
+]
+
+[package.extras]
+test = ["pytest"]
+
+[[package]]
 name = "tzdata"
 version = "2023.3"
 description = "Provider of IANA time zone data"
@@ -1203,4 +1222,4 @@ cffi = ">=1.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<3.12"
-content-hash = "572a69bc1aa4cdb525a801be5560d43d3fee4341a9e2703f00d3883682bb65c8"
+content-hash = "58127c6a1cbb0554804525775191877c411f3a06f6dd0cf67827af31749d2dac"

@@ -64,7 +64,7 @@ appdirs = "^1.4.4"
 colorama = "^0.4.4"
 # Bundle latest version of HTTPS & SSL certificates
 certifi = "*"
-overrides = "^3.1.0"
+overrides = ">=4.1.0,<5"
 tzlocal = "^4.2"
 lxml = "^4.9.2"
 tqdm = "^4.65.0"
