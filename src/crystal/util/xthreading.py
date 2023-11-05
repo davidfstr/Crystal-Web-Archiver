@@ -13,6 +13,7 @@ import os
 import sys
 import threading
 from typing import Callable, cast, Optional, TypeVar
+from typing_extensions import ParamSpec
 import wx
 
 
@@ -24,6 +25,10 @@ _PROFILE_FG_TASKS = os.environ.get('CRYSTAL_NO_PROFILE_FG_TASKS', 'False') != 'T
 # If profiling is enabled, warnings will be printed for tasks whose runtime
 # exceeds this threshold.
 _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
+
+
+_P = ParamSpec('_P')
+_R = TypeVar('_R')
 
 
 # ------------------------------------------------------------------------------
@@ -60,7 +65,7 @@ def has_foreground_thread() -> bool:
 # ------------------------------------------------------------------------------
 # Thread Affinity
 
-def fg_affinity(func: Callable) -> Callable:
+def fg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
     """
     Marks the decorated function as needing to be called from the
     foreground thread only.
@@ -158,11 +163,9 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
                 raise
 
 
-_R = TypeVar('_R')
-
 # TODO: Alter signature to pass `args` as a direct kwarg,
 #       since it is difficult to use as a splat when there are other positional args
-def fg_call_and_wait(callable: Callable[..., _R], no_profile: bool=False, *args) -> _R:
+def fg_call_and_wait(callable: Callable[_P, _R], no_profile: bool=False, *args) -> _R:
     """
     Calls the argument on the foreground thread and waits for it to complete.
     This should be called by background threads that need to access the UI or model.
