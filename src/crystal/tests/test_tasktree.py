@@ -28,15 +28,15 @@ async def test_while_downloading_large_group_then_show_no_more_than_100_download
                 assert project is not None
                 
                 assert 100 == TaskTreeNode._MAX_VISIBLE_CHILDREN
-                assert 5 == TaskTreeNode._MAX_VISIBLE_COMPLETED_CHILDREN
+                assert 5 == TaskTreeNode._MAX_LEADING_COMPLETE_CHILDREN
                 
                 # Use smaller values for children counts so that the test runs faster
                 SMALL_MAX_VISIBLE_CHILDREN = 3
-                SMALL_MAX_VISIBLE_COMPLETED_CHILDREN = 2
+                SMALL_MAX_LEADING_COMPLETE_CHILDREN = 2
                 with _attr_replaced_with(TaskTreeNode, '_MAX_VISIBLE_CHILDREN', SMALL_MAX_VISIBLE_CHILDREN), \
-                        _attr_replaced_with(TaskTreeNode, '_MAX_VISIBLE_COMPLETED_CHILDREN', SMALL_MAX_VISIBLE_COMPLETED_CHILDREN):
+                        _attr_replaced_with(TaskTreeNode, '_MAX_LEADING_COMPLETE_CHILDREN', SMALL_MAX_LEADING_COMPLETE_CHILDREN):
                     N = TaskTreeNode._MAX_VISIBLE_CHILDREN
-                    M = TaskTreeNode._MAX_VISIBLE_COMPLETED_CHILDREN
+                    M = TaskTreeNode._MAX_LEADING_COMPLETE_CHILDREN
                     
                     # Create future group members
                     for i in range(1, N + M + 1):
@@ -135,6 +135,7 @@ async def test_while_downloading_large_group_then_show_no_more_than_100_download
 @skip('not yet automated')
 async def test_when_top_level_task_finishes_then_is_removed_from_ui_soon(self) -> None:
     pass
+
 
 @contextmanager
 def _attr_replaced_with(obj: object, attr_name: str, value: object) -> Iterator[None]:

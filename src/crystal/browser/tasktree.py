@@ -30,14 +30,13 @@ class TaskTree:
 
 class TaskTreeNode:
     # The following limits are enforced for SCHEDULING_STYLE_SEQUENTIAL tasks only
-    _MAX_VISIBLE_COMPLETED_CHILDREN = 5
+    _MAX_LEADING_COMPLETE_CHILDREN = 5
     _MAX_VISIBLE_CHILDREN = 100
     
     # Optimize per-instance memory use, since there may be very many TaskTreeNode objects
     __slots__ = (
         'task',
         'tree_node',
-        '_num_visible_complete_children',
         '_num_visible_children',
     )
     
@@ -61,7 +60,6 @@ class TaskTreeNode:
         self.tree_node.subtitle = self.task.subtitle
         self.tree_node.expandable = not callable(task)
         
-        self._num_visible_complete_children = 0
         self._num_visible_children = 0
         
         # NOTE: Transition to foreground thread here BEFORE making very many
@@ -141,8 +139,7 @@ class TaskTreeNode:
     
     def task_child_did_complete(self, task: Task, child: Task) -> None:
         def fg_task() -> None:
-            if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
-                    self._num_visible_complete_children == self._MAX_VISIBLE_COMPLETED_CHILDREN):
+            if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
                 # Find first_more_node, intermediate_nodes, and last_more_node
                 intermediate_nodes = list(self.tree_node.children)
                 if isinstance(intermediate_nodes[0], _MoreNodeView):
@@ -156,27 +153,19 @@ class TaskTreeNode:
                 else:
                     last_more_node = _MoreNodeView()
                 
-                def intermediate_tasks() -> List[Task]:
-                    return self.task.children[
-                        first_more_node.more_count :
-                        (first_more_node.more_count + len(intermediate_nodes))
-                    ]
-                
-                child_found_in_leading_complete_nodes = False
-                for t in intermediate_tasks():
+                num_leading_complete_children = 0
+                intermediate_tasks = self.task.children[
+                    first_more_node.more_count :
+                    (first_more_node.more_count + len(intermediate_nodes))
+                ]
+                for t in intermediate_tasks:
                     if t.complete:
-                        if child == t:
-                            child_found_in_leading_complete_nodes = True
-                            break
+                        num_leading_complete_children += 1
                     else:
                         break
                 
-                if child_found_in_leading_complete_nodes:
-                    self._num_visible_complete_children += 1
-                    
-                    # TODO: Rename: _num_visible_complete_children -> _num_leading_complete_children
-                    # TODO: Rename: _MAX_VISIBLE_COMPLETED_CHILDREN -> _MAX_LEADING_COMPLETE_CHILDREN
-                    while self._num_visible_complete_children > self._MAX_VISIBLE_COMPLETED_CHILDREN:
+                if num_leading_complete_children > self._MAX_LEADING_COMPLETE_CHILDREN:
+                    while num_leading_complete_children > self._MAX_LEADING_COMPLETE_CHILDREN:
                         # Slide first of last_more_node up into last of intermediate_nodes
                         if last_more_node.more_count >= 1:
                             trailing_child_index = first_more_node.more_count + len(intermediate_nodes)
@@ -186,17 +175,13 @@ class TaskTreeNode:
                             
                             intermediate_nodes.append(trailing_child_node)
                             last_more_node.more_count -= 1
-                            
-                            if trailing_child_task.complete:
-                                if all((t.complete for t in intermediate_tasks())):
-                                    self._num_visible_complete_children += 1
                         
                         # Slide first of intermediate_nodes up into first_more_node
                         intermediate_nodes_0_task = task.children[first_more_node.more_count]
                         assert intermediate_nodes_0_task.complete
                         first_more_node.more_count += 1
                         del intermediate_nodes[0]
-                        self._num_visible_complete_children -= 1
+                        num_leading_complete_children -= 1
                     
                     new_children = []
                     if first_more_node.more_count != 0:
@@ -207,8 +192,6 @@ class TaskTreeNode:
                     
                     self._num_visible_children = len(intermediate_nodes)
                     self.tree_node.children = new_children
-            else:
-                self._num_visible_complete_children += 1
         fg_call_later(fg_task)
     
     def task_did_clear_children(self,
@@ -220,7 +203,6 @@ class TaskTreeNode:
         def fg_task() -> None:
             if child_indexes is None:
                 self.tree_node.children = []
-                self._num_visible_complete_children = 0
                 self._num_visible_children = 0
             else:
                 if self.task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
@@ -233,7 +215,6 @@ class TaskTreeNode:
                 # HACK: The only current caller that passes non-None
                 #       child_indexes guarantees that no complete children
                 #       will remain
-                self._num_visible_complete_children = 0
                 self._num_visible_children = len(self.tree_node.children)
         fg_call_later(fg_task)
     
