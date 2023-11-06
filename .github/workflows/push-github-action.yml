@@ -46,7 +46,9 @@ jobs:
 
       - name: Build .app and disk image
         working-directory: "./setup"
-        run: "poetry run ./make-mac.sh"
+        # --app-only: Don't build disk image because it intermittently fails
+        #             with "hdiutil create failed - Resource busy" in CI
+        run: "poetry run ./make-mac.sh --app-only"
 
       - name: Run UI tests
         run: |
@@ -60,14 +62,16 @@ jobs:
           path: screenshots
           if-no-files-found: ignore
       
-      - name: Upload distribution artifact
-        # Only export distribution artifact for earliest supported Python and OS
-        if: (matrix.python-version == '3.8') && (matrix.os == 'macos-10.14')
-        uses: actions/upload-artifact@v3
-        with:
-          name: dist-mac
-          path: setup/dist-mac/*.dmg
-          if-no-files-found: warn
+      # NOTE: Must remove the --app-only option from make-mac.sh above to
+      #       reinstate build of *.dmg disk image
+      #- name: Upload distribution artifact
+      #  # Only export distribution artifact for earliest supported Python and OS
+      #  if: (matrix.python-version == '3.8') && (matrix.os == 'macos-10.14')
+      #  uses: actions/upload-artifact@v3
+      #  with:
+      #    name: dist-mac
+      #    path: setup/dist-mac/*.dmg
+      #    if-no-files-found: warn
 
   build-linux:
     strategy:
