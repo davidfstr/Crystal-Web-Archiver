@@ -17,12 +17,12 @@ from crystal.ui.tree2 import NodeView
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 import math
 import tempfile
-from typing import AsyncIterator, cast, Iterator, List, Optional, Tuple
+from typing import AsyncIterator, Callable, cast, Iterator, List, Optional, Tuple
 from unittest import skip
 from unittest.mock import patch
 
 
-# === Test: Limit visible children of SCHEDULING_STYLE_SEQUENTIAL tasks ===
+# === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit visible children ===
 
 async def test_when_start_downloading_large_group_then_show_100_children_plus_trailing_more_node() -> None:
     N = 3
@@ -31,7 +31,7 @@ async def test_when_start_downloading_large_group_then_show_100_children_plus_tr
                 resource_count=N + M,
                 small_max_visible_children=N,
                 small_max_leading_complete_children=M,
-            ) as (mw, download_rg_ttn, download_rg_members_ttn):
+            ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
         task_root_ti = TreeItem.GetRootItem(mw.task_tree)
         assert task_root_ti is not None
         
@@ -119,7 +119,7 @@ async def test_given_downloading_large_group_and_few_uncompleted_children_remain
     pass
 
 
-# === Test: Limit leading completed children of SCHEDULING_STYLE_SEQUENTIAL tasks ===
+# === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit leading completed children ===
 
 async def test_given_showing_less_than_5_leading_completed_children_when_new_leading_child_completes_then_maintain_viewport_position_and_show_one_more_leading_completed_children() -> None:
     N = 5
@@ -129,12 +129,9 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
                 small_max_visible_children=N,
                 small_max_leading_complete_children=M,
                 scheduler_thread_enabled=False,
-            ) as (mw, download_rg_ttn, download_rg_members_ttn):
+            ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
         project = Project._last_opened_project
         assert project is not None
-        
-        task_root_ti = TreeItem.GetRootItem(mw.task_tree)
-        assert task_root_ti is not None
         
         parent_ttn = download_rg_members_ttn
         
@@ -236,14 +233,11 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
             [_is_complete(tn) for tn in children_tns[1:-1]]
         )
         
-        # Complete all children
-        for t in parent_ttn.task.children:
-            if not t.complete:
-                _mark_as_complete(t)
-        assert _is_complete(download_rg_members_ttn.tree_node)
-        assert _is_complete(download_rg_ttn.tree_node)
-        assert None == project.root_task.try_get_next_task_unit()  # clear root task
-        assert len(task_root_ti.Children) == 0
+        # Cleanup: Complete all children
+        _cleanup_download_of_resource_group(
+            download_rg_ttn,
+            download_rg_members_ttn,
+            project)
 
 
 @skip('covered by: test_given_showing_less_than_5_leading_completed_children_when_new_leading_child_completes_then_maintain_viewport_position_and_show_one_more_leading_completed_children')
@@ -266,6 +260,95 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
     pass
 
 
+# === Test: DownloadResourceGroupMembersTask: Observe when group member added ===
+
+async def test_given_downloading_group_and_many_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_shows_download_task_for_member_added() -> None:
+    N = 3
+    M = 1
+    async with _project_with_resource_group_starting_to_download(
+                resource_count=N + 2,
+                small_max_visible_children=N,
+                small_max_leading_complete_children=M,
+                scheduler_thread_enabled=False,
+            ) as (mw, download_rg_ttn, download_rg_members_ttn, create_resource):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        parent_ttn = download_rg_members_ttn
+        
+        # Ensure initially has trailing more node
+        (children_tns, children_tasks) = \
+            (parent_ttn.tree_node.children, _children_tasks_of_ttn(parent_ttn))
+        assert len(children_tns) == N + 1
+        assert all([_is_download_resource_node(tn) for tn in children_tns[:-1]])
+        assert _is_more_node(children_tns[-1])
+        assert 2 == _value_of_more_node(children_tns[-1])
+        
+        # Case: test_given_downloading_group_and_many_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_shows_download_task_for_member_added
+        create_resource()
+        (children_tns, children_tasks) = \
+            (parent_ttn.tree_node.children, _children_tasks_of_ttn(parent_ttn))
+        assert len(children_tns) == N + 1
+        assert all([_is_download_resource_node(tn) for tn in children_tns[:-1]])
+        assert _is_more_node(children_tns[-1])
+        assert 3 == _value_of_more_node(children_tns[-1])
+        
+        # Complete tasks until more node disappears,
+        # but adding a task will cause it to reappear
+        assert N >= M+2
+        for t in parent_ttn.task.children[:M+3]:
+            _mark_as_complete(t)
+        (children_tns, children_tasks) = \
+            (parent_ttn.tree_node.children, _children_tasks_of_ttn(parent_ttn))
+        assert len(children_tns) == 1 + N
+        assert _is_more_node(children_tns[0])
+        assert all([_is_download_resource_node(tn) for tn in children_tns[1:]])
+        
+        # Case: test_given_downloading_group_and_few_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_added_with_value_1
+        create_resource()
+        (children_tns, children_tasks) = \
+            (parent_ttn.tree_node.children, _children_tasks_of_ttn(parent_ttn))
+        assert len(children_tns) == 1 + N + 1
+        assert _is_more_node(children_tns[0])
+        assert all([_is_download_resource_node(tn) for tn in children_tns[1:-1]])
+        assert _is_more_node(children_tns[-1])
+        assert 1 == _value_of_more_node(children_tns[-1])
+        
+        # Complete tasks until more node disappears,
+        # but adding a task will NOT cause it to reappear
+        for t in parent_ttn.task.children[M+3:(M+3)+2]:
+            _mark_as_complete(t)
+        (children_tns, children_tasks) = \
+            (parent_ttn.tree_node.children, _children_tasks_of_ttn(parent_ttn))
+        assert len(children_tns) == 1 + (N - 1)
+        assert _is_more_node(children_tns[0])
+        assert all([_is_download_resource_node(tn) for tn in children_tns[1:]])
+        
+        # Case: test_given_downloading_group_and_few_uncompleted_children_remaining_when_group_member_added_then_download_task_for_member_added
+        create_resource()
+        (children_tns, children_tasks) = \
+            (parent_ttn.tree_node.children, _children_tasks_of_ttn(parent_ttn))
+        assert len(children_tns) == 1 + N
+        assert _is_more_node(children_tns[0])
+        assert all([_is_download_resource_node(tn) for tn in children_tns[1:]])
+        
+        # Cleanup: Complete all children
+        _cleanup_download_of_resource_group(
+            download_rg_ttn,
+            download_rg_members_ttn,
+            project)
+
+
+@skip('covered by: test_given_downloading_group_and_many_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_shows_download_task_for_member_added')
+async def test_given_downloading_group_and_few_uncompleted_children_remaining_when_group_member_added_then_download_task_for_member_added() -> None:
+    pass
+
+
+@skip('covered by: test_given_downloading_group_and_many_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_shows_download_task_for_member_added')
+async def test_given_downloading_group_and_few_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_added_with_value_1() -> None:
+    pass
+
+
 # === Test: RootTask ===
 
 @skip('not yet automated')
@@ -281,7 +364,7 @@ async def _project_with_resource_group_starting_to_download(
         small_max_visible_children: int,
         small_max_leading_complete_children: int,
         scheduler_thread_enabled: bool=True,
-        ) -> AsyncIterator[Tuple[MainWindow, TaskTreeNode, TaskTreeNode]]:
+        ) -> AsyncIterator[Tuple[MainWindow, TaskTreeNode, TaskTreeNode, Callable[[], Resource]]]:
     scheduler_patched = (
         patch('crystal.task.start_schedule_forever', lambda task: None)
         if not scheduler_thread_enabled
@@ -324,11 +407,36 @@ async def _project_with_resource_group_starting_to_download(
                     (_, download_rg_members_task) = download_rg_task.children
                     assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
                     
+                    # Define: create_resource()
+                    next_resource_ordinal = resource_count + 1
+                    def create_resource() -> Resource:
+                        nonlocal next_resource_ordinal
+                        r = Resource(project, comic_pattern.replace('#', str(next_resource_ordinal)))
+                        next_resource_ordinal += 1
+                        return r
+                    
                     yield (
                         mw,
                         _ttn_for_task(download_rg_task),
-                        _ttn_for_task(download_rg_members_task)
+                        _ttn_for_task(download_rg_members_task),
+                        create_resource,
                     )
+
+
+def _cleanup_download_of_resource_group(
+        download_rg_ttn: TaskTreeNode,
+        download_rg_members_ttn: TaskTreeNode,
+        project: Project) -> None:
+    parent_ttn = download_rg_members_ttn
+    
+    # Cleanup: Complete all children
+    for t in parent_ttn.task.children:
+        if not t.complete:
+            _mark_as_complete(t)
+    assert _is_complete(download_rg_members_ttn.tree_node)
+    assert _is_complete(download_rg_ttn.tree_node)
+    assert None == project.root_task.try_get_next_task_unit()  # clear root task
+    assert len(project.root_task.children) == 0
 
 
 def _ttn_for_task(task: Task) -> TaskTreeNode:
