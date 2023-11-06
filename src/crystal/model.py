@@ -2124,8 +2124,8 @@ class ResourceRevision:
                 with condition:
                     callable_done = True
                     condition.notify()
-        # NOTE: Use no_profile=True because no obvious further optimizations exist
-        fg_call_later(fg_task, no_profile=True)
+        # NOTE: Use profile=False because no obvious further optimizations exist
+        fg_call_later(fg_task, profile=False)
         
         body_file_downloaded_ok = False
         try:
@@ -2173,8 +2173,8 @@ class ResourceRevision:
                             c = project._db.cursor()
                             c.execute('delete from resource_revision where id=?', (self._id,))
                             project._db.commit()
-                        # NOTE: Use no_profile=True because no obvious further optimizations exist
-                        fg_call_and_wait(fg_task, no_profile=True)
+                        # NOTE: Use profile=False because no obvious further optimizations exist
+                        fg_call_and_wait(fg_task, profile=False)
             
             # Reraise callable's exception, if applicable
             if callable_exc_info is not None:

@@ -87,7 +87,7 @@ def fg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
         return func
 
 
-def bg_affinity(func: Callable) -> Callable:
+def bg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
     """
     Marks the decorated function as needing to be called from a
     background thread only, and in particular not from the foreground thread.
@@ -112,21 +112,29 @@ def bg_affinity(func: Callable) -> Callable:
 # ------------------------------------------------------------------------------
 # Call on Foreground Thread
 
-
-# TODO: Alter signature to pass `args` as a direct kwarg,
-#       since it is difficult to use as a splat when there are other positional args
-# TODO: Consider renaming this to 'fg_call_soon' and have the
-#       (force == True) variant still be called 'fg_call_later'.
-#       This new naming stresses that the "soon" variant could
-#       potentially call the argument immediately whereas the
-#       "later" variant will never do that.
-def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) -> None:
+def fg_call_later(
+        callable: Callable[_P, _R],
+        # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
+        *, args=(),
+        profile: bool=True,
+        force_later: bool=False,
+        ) -> None:
     """
-    Schedules the argument to be called on the foreground thread.
-    This should be called by background threads that need to access the UI or model.
+    Schedules the specified callable to be called on the foreground thread,
+    either immediately if the caller is already running on the foreground thread,
+    or later if the caller is running on a different thread.
     
-    If the current thread is the foreground thread, the argument is executed immediately
-    unless the 'force' parameter is True.
+    Background threads should use this method when accessing the UI or model.
+    
+    Arguments:
+    * callable -- the callable to run.
+    * args -- the arguments to provide to the callable.
+    * profile -- 
+        whether to profile the callable's runtime.
+        True by default so that warnings are printed for slow foreground tasks.
+    * force_later --
+        whether to force scheduling the callable later, even if the caller is
+        already running on the foreground thread.
     
     Raises:
     * NoForegroundThreadError
@@ -136,7 +144,7 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
     
     is_fg_thread = is_foreground_thread()  # cache
     
-    if _PROFILE_FG_TASKS and not no_profile and not is_fg_thread:
+    if _PROFILE_FG_TASKS and profile and not is_fg_thread:
         callable = create_profiled_callable(
             'Slow foreground task',
             _FG_TASK_RUNTIME_THRESHOLD,
@@ -144,7 +152,7 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
         )
         args=()
     
-    if is_fg_thread and not force:
+    if is_fg_thread and not force_later:
         callable(*args)
     else:
         try:
@@ -163,15 +171,24 @@ def fg_call_later(callable, force: bool=False, no_profile: bool=False, *args) ->
                 raise
 
 
-# TODO: Alter signature to pass `args` as a direct kwarg,
-#       since it is difficult to use as a splat when there are other positional args
-def fg_call_and_wait(callable: Callable[_P, _R], no_profile: bool=False, *args) -> _R:
+def fg_call_and_wait(
+        callable: Callable[_P, _R],
+        # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
+        *, args=(),
+        profile: bool=True
+        ) -> _R:
     """
-    Calls the argument on the foreground thread and waits for it to complete.
-    This should be called by background threads that need to access the UI or model.
+    Calls the specified callable on the foreground thread and waits for it to complete,
+    returning the result of the callable, including any raised exception.
+
+    Background threads should use this method when accessing the UI or model.
     
-    Returns the result of the callable.
-    If the callable raises an exception, it will be reraised by this method.
+    Arguments:
+    * callable -- the callable to run.
+    * args -- the arguments to provide to the callable.
+    * profile -- 
+        whether to profile the callable's runtime.
+        True by default so that warnings are printed for slow foreground tasks.
     
     Raises:
     * NoForegroundThreadError
@@ -201,7 +218,7 @@ def fg_call_and_wait(callable: Callable[_P, _R], no_profile: bool=False, *args) 
                 callable_done = True
                 condition.notify()
         fg_task.callable = callable  # type: ignore[attr-defined]
-        fg_call_later(fg_task, no_profile=no_profile)
+        fg_call_later(fg_task, profile=profile)
         
         # Wait for signal
         with condition:
@@ -224,13 +241,18 @@ class NoForegroundThreadError(ValueError):
 # ------------------------------------------------------------------------------
 # Call on Background Thread
 
-# TODO: Alter signature to pass `args` as a direct kwarg,
-#       since it is difficult to use as a splat when there are other positional args
-def bg_call_later(callable: Callable[..., None], daemon: bool=False, *args) -> None:
+def bg_call_later(
+        callable: Callable[_P, None],
+        # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
+        *, args=(),
+        daemon: bool=False,
+        ) -> None:
     """
-    Calls the argument on a new background thread.
+    Calls the specified callable on a new background thread.
     
     Arguments:
+    * callable -- the callable to run.
+    * args -- the arguments to provide to the callable.
     * daemon -- 
         if True, forces the background thread to be a daemon,
         and not prevent program termination while it is running.

@@ -46,8 +46,14 @@ Release Notes ⋮
       in file browser
 
 * Backward-incompatible API changes
-    * `Project.title` has been removed. Calculate a reasonable title from
-      `Project.path` instead.
+    * `fg_call_later`, `fg_call_and_wait`, `bg_call_later`:
+        * Keyword arguments are now required for all optional parameters.
+        * Arguments passed in the format `*_call_*(callable, ...)`,
+          must now be passed as `*_call_*(callable, args=(...))`.
+        * `no_profile=` is replaced with `profile=`.
+        * `force=` is renamed to `force_later=`.
+    * `Project.title` has been removed.
+      Calculate a reasonable title from `Project.path` instead.
 
 ### v1.6.0b (September 4, 2023)
 

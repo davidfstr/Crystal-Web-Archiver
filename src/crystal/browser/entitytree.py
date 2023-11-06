@@ -112,7 +112,7 @@ class EntityTree:
             return
         else:
             self._group_nodes_need_updating = True
-            fg_call_later(self._refresh_group_nodes_now, force=True)
+            fg_call_later(self._refresh_group_nodes_now, force_later=True)
     
     def _refresh_group_nodes_now(self) -> None:
         try:

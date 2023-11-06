@@ -593,6 +593,7 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
                 'CRYSTAL_FAULTHANDLER': 'True',
                 
                 # Prevent profiling warnings from being mixed into output
+                # TODO: Recommend renaming to avoid (double-)negatives
                 'CRYSTAL_NO_PROFILE_FG_TASKS': 'True',
                 'CRYSTAL_NO_PROFILE_GC': 'True',
                 'CRYSTAL_NO_PROFILE_RECORD_LINKS': 'True',

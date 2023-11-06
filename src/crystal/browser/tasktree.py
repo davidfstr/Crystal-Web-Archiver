@@ -107,8 +107,8 @@ class TaskTreeNode:
         new_subtitle = self.task.subtitle  # capture
         def fg_task() -> None:
             self.tree_node.subtitle = new_subtitle
-        # NOTE: Use no_profile=True because no obvious further optimizations exist
-        fg_call_later(fg_task, no_profile=True)
+        # NOTE: Use profile=False because no obvious further optimizations exist
+        fg_call_later(fg_task, profile=False)
     
     def task_did_complete(self, task: Task) -> None:
         self.task.listeners.remove(self)

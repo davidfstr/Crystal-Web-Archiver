@@ -599,8 +599,8 @@ class DownloadResourceBodyTask(Task):
                         enabled=_PROFILE_READ_REVISION)
                 with DRBT._dr_profiling_context:
                     return self._resource.default_revision(stale_ok=False)
-            # NOTE: Use no_profile=True because no obvious further optimizations exist
-            body_revision = fg_call_and_wait(fg_task, no_profile=True)
+            # NOTE: Use profile=False because no obvious further optimizations exist
+            body_revision = fg_call_and_wait(fg_task, profile=False)
         if body_revision is not None:
             self.did_download = False
             return body_revision

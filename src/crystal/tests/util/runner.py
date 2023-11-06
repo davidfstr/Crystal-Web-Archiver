@@ -37,7 +37,7 @@ def run_test(test_func: Union[Callable[[], Awaitable[_T]], Callable[[], _T]]) ->
         try:
             command = fg_call_and_wait(
                 lambda: test_co.send(last_command_result),  # type: ignore[attr-defined, union-attr]
-                no_profile=True
+                profile=False
             )
         except StopIteration as e:
             return e.value

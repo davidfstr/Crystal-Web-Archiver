@@ -203,7 +203,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
                     fg_runcode,
                     # Don't complain if fg_runcode() takes a long time to run.
                     # For example the help() command blocks for a long time.
-                    no_profile=True)
+                    profile=False)
             except NoForegroundThreadError:
                 fg_runcode()
 
