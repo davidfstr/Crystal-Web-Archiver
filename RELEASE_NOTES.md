@@ -33,6 +33,8 @@ Release Notes ⋮
     * .crystalproj format now stores revisions in lexicographic order
       in the filesystem so that when a project is copied to a new location,
       the order of revisions on disk is preserved in the new copy.
+    * Large groups now start downloading immediately because member
+      download tasks are now created on demand rather than upfront.
 
 * Support improvements
     * Add Kubuntu as a supported Linux distribution

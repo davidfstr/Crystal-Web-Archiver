@@ -1,5 +1,5 @@
 from crystal.browser.icons import TREE_NODE_ICONS
-from crystal.task import SCHEDULING_STYLE_SEQUENTIAL, Task
+from crystal.task import DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
 from typing import List, Optional
@@ -38,6 +38,7 @@ class TaskTreeNode:
         'task',
         'tree_node',
         '_num_visible_children',
+        '_suppress_complete_events_for_unappended_children',
     )
     
     """
@@ -61,6 +62,7 @@ class TaskTreeNode:
         self.tree_node.expandable = not callable(task)
         
         self._num_visible_children = 0
+        self._suppress_complete_events_for_unappended_children = False
         
         # NOTE: Transition to foreground thread here BEFORE making very many
         #       calls to self.task_did_append_child() so that we don't need to
@@ -72,7 +74,7 @@ class TaskTreeNode:
             # HACK: Reaches into a progress dialog managed elsewhere,
             #       in MainWindow._on_download_entity()
             progress_dialog_old_message = None  # type: Optional[str]
-            if len(self.task.children) >= 100:
+            if len(self.task.children) >= 100 and not DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
                 assert is_foreground_thread()
                 progress_dialog = wx.FindWindowByName('cr-starting-download')  # type: Optional[wx.Window]
                 if progress_dialog is not None:
@@ -90,9 +92,7 @@ class TaskTreeNode:
             else:
                 progress_dialog = None
             
-            # TODO: Optimize to use a bulk version of task_did_append_child()
-            for child in self.task.children:
-                self.task_did_append_child(self.task, child)
+            self.task_did_set_children(self.task, len(self.task.children))
             
             if progress_dialog is not None:
                 assert isinstance(progress_dialog, wx.ProgressDialog)
@@ -113,8 +113,38 @@ class TaskTreeNode:
     def task_did_complete(self, task: Task) -> None:
         self.task.listeners.remove(self)
     
-    def task_did_append_child(self, task: Task, child: Task) -> None:
+    def task_did_set_children(self, task: Task, child_count: int) -> None:
         def fg_task() -> None:
+            if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
+                # Create tree node for each visible task
+                visible_child_count = min(child_count, self._MAX_VISIBLE_CHILDREN)
+                # NOTE: If `task.children` is an AppendableLazySequence then accessing it can
+                #       (1) materialize a child that is already complete, and
+                #       (2) call self.task_child_did_complete() on that child
+                #           BEFORE the inside of the loop can call
+                #           self.task_did_append_child() on this child
+                #       So suppress the handling of any such
+                #       self.task_child_did_complete() events temporarily.
+                assert is_foreground_thread()  # to access _suppress_complete_events_for_unappended_children
+                self._suppress_complete_events_for_unappended_children = True
+                try:
+                    for child in task.children[:visible_child_count]:
+                        self.task_did_append_child(task, child)
+                finally:
+                    self._suppress_complete_events_for_unappended_children = False
+                
+                # Create more node as a placeholder for the remaining tasks, if needed
+                if visible_child_count < child_count:
+                    self.tree_node.append_child(_MoreNodeView(child_count - visible_child_count))
+            else:
+                # Greedily create tree node for each task
+                for child in task.children:
+                    self.task_did_append_child(task, child)
+        fg_call_later(fg_task)
+    
+    def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
+        def fg_task() -> None:
+            nonlocal child
             if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
                     self._num_visible_children == self._MAX_VISIBLE_CHILDREN):
                 # Find last_more_node, or create if missing
@@ -128,19 +158,31 @@ class TaskTreeNode:
                 # Increase more_count instead of appending new child
                 last_more_node.more_count += 1
             else:
-                # Append new child
+                # Lookup (and materialize) child if necessary
+                if child is None:
+                    child = task.children[-1]  # lookup child
+                
+                # Append tree node for new task child
                 child_ttnode = TaskTreeNode(child)
                 self.tree_node.append_child(child_ttnode.tree_node)
                 self._num_visible_children += 1
             
-            if child.complete:
+            if child is not None and child.complete:
                 self.task_child_did_complete(task, child)
         fg_call_later(fg_task)
     
     def task_child_did_complete(self, task: Task, child: Task) -> None:
         def fg_task() -> None:
+            assert is_foreground_thread()  # to access _suppress_complete_events_for_unappended_children
+            if self._suppress_complete_events_for_unappended_children:
+                return
+            
             if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
                 # Find first_more_node, intermediate_nodes, and last_more_node
+                assert len(self.tree_node.children) >= 1, (
+                    f"Expected child to be in this task's children list: "
+                    f"{child}"
+                )
                 intermediate_nodes = list(self.tree_node.children)
                 if isinstance(intermediate_nodes[0], _MoreNodeView):
                     first_more_node = intermediate_nodes[0]
