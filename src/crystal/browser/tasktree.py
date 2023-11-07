@@ -90,9 +90,7 @@ class TaskTreeNode:
             else:
                 progress_dialog = None
             
-            # TODO: Optimize to use a bulk version of task_did_append_child()
-            for child in self.task.children:
-                self.task_did_append_child(self.task, child)
+            self.task_did_set_children(self.task, len(self.task.children))
             
             if progress_dialog is not None:
                 assert isinstance(progress_dialog, wx.ProgressDialog)
@@ -113,8 +111,26 @@ class TaskTreeNode:
     def task_did_complete(self, task: Task) -> None:
         self.task.listeners.remove(self)
     
-    def task_did_append_child(self, task: Task, child: Task) -> None:
+    def task_did_set_children(self, task: Task, child_count: int) -> None:
         def fg_task() -> None:
+            if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
+                # Create tree node for each visible task
+                visible_child_count = min(child_count, self._MAX_VISIBLE_CHILDREN)
+                for child in task.children[:visible_child_count]:
+                    self.task_did_append_child(task, child)
+                
+                # Create more node as a placeholder for the remaining tasks, if needed
+                if visible_child_count < child_count:
+                    self.tree_node.append_child(_MoreNodeView(child_count - visible_child_count))
+            else:
+                # Greedily create tree node for each task
+                for child in task.children:
+                    self.task_did_append_child(task, child)
+        fg_call_later(fg_task)
+    
+    def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
+        def fg_task() -> None:
+            nonlocal child
             if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
                     self._num_visible_children == self._MAX_VISIBLE_CHILDREN):
                 # Find last_more_node, or create if missing
@@ -128,12 +144,16 @@ class TaskTreeNode:
                 # Increase more_count instead of appending new child
                 last_more_node.more_count += 1
             else:
-                # Append new child
+                # Lookup (and materialize) child if necessary
+                if child is None:
+                    child = task.children[-1]  # lookup child
+                
+                # Append tree node for new task child
                 child_ttnode = TaskTreeNode(child)
                 self.tree_node.append_child(child_ttnode.tree_node)
                 self._num_visible_children += 1
             
-            if child.complete:
+            if child is not None and child.complete:
                 self.task_child_did_complete(task, child)
         fg_call_later(fg_task)
     

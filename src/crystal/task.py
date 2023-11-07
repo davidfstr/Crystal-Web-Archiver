@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util.caffeination import Caffeination
+from crystal.util.collections import AppendableLazySequence
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import (
     create_profiling_context, ignore_runtime_from_enclosing_warn_if_slow,
@@ -24,8 +25,8 @@ import sys
 from time import sleep
 import traceback
 from typing import (
-    Any, Callable, cast, final, List, Literal, Iterator, Optional, Tuple,
-    TYPE_CHECKING, Union
+    Any, Callable, cast, final, List, Literal, Iterator, Optional,
+    Sequence, Tuple, TYPE_CHECKING, Union
 )
 from weakref import WeakSet
 
@@ -134,7 +135,7 @@ class Task(ListenableMixin):
         self._title = title
         self._subtitle = 'Queued'
         self._parent = None  # type: Optional[Task]
-        self._children = []  # type: List[Task]
+        self._children = []  # type: Sequence[Task]
         self._num_children_complete = 0
         self._complete = False
         
@@ -178,7 +179,7 @@ class Task(ListenableMixin):
         return self._parent
     
     @property
-    def children(self) -> List[Task]:
+    def children(self) -> Sequence[Task]:
         """
         Children task of this task.
         
@@ -191,7 +192,7 @@ class Task(ListenableMixin):
     
     @final
     @property
-    def children_unsynchronized(self) -> List[Task]:
+    def children_unsynchronized(self) -> Sequence[Task]:
         """
         Children task of this task, possibly in an inconsistent state if
         accesses normally need to be synchronized with a particular thread
@@ -236,7 +237,65 @@ class Task(ListenableMixin):
         """
         self._future = _FUTURE_WITH_TASK_DISPOSED_EXCEPTION  # garbage collect old value
     
-    # === Protected Operations ===
+    # === Protected Operations: Lazy Children ===
+    
+    def initialize_children(self, children: Sequence[Task]) -> None:
+        """
+        Initializes this task's children to the specified sequence.
+        
+        Tasks are pre-initialized with an initially empty list of children
+        so it is not necessary for a subclass to call this method if
+        the subclass plans to instead use append_child() to populate that
+        empty list.
+        """
+        assert len(self._children) == 0, 'Cannot replace existing children with new children'
+        self._children = children
+        
+        for lis in self.listeners:
+            if hasattr(lis, 'task_did_set_children'):
+                lis.task_did_set_children(self, len(children))  # type: ignore[attr-defined]
+    
+    def materialize_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
+        """
+        Called when the specified child of this task has been instantiated
+        and is ready to be listened to.
+        
+        Upon return the child is said to be "materialized".
+        """
+        if child.complete and not already_complete_ok:
+            raise ValueError(
+                f'Child being appended is already complete, '
+                f'and already_completed_ok is False. '
+                f'self={self}, child={child}')
+        
+        # NOTE: child._parent may already be set to a different parent
+        child._parent = self
+        
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
+            assert self not in child.listeners
+        if len(child.listeners) >= 50:
+            if child not in Task._REPORTED_TASKS_WITH_MANY_LISTENERS:
+                Task._REPORTED_TASKS_WITH_MANY_LISTENERS.add(child)
+                print(f'*** Task has many listeners and may be leaking them: {child}', file=sys.stderr)
+                for lis in child.listeners:
+                    print(f'    - {lis}')
+        child.listeners.append(self)
+    
+    def notify_did_append_child(self, child: Optional[Task]) -> None:
+        """
+        Notifies listeners that a child was appended to this task's children.
+        
+        The child might not be materialized/instantiated yet.
+        
+        Arguments:
+        * child -- the child that was appended iff it is materialized,
+            or None if the child is not materialized.
+        """
+        for lis in self.listeners:
+            if hasattr(lis, 'task_did_append_child'):
+                lis.task_did_append_child(self, child)  # type: ignore[attr-defined]
+    
+    # === Protected Operations: Greedy Children ===
     
     def append_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
@@ -253,29 +312,15 @@ class Task(ListenableMixin):
         any special behavior related to adding an already-complete task,
         such as proactively firing the "task_did_complete" event on this task.
         """
-        if child.complete and not already_complete_ok:
-            raise ValueError(
-                f'Child being appended is already complete, '
-                f'and already_completed_ok is False. '
-                f'self={self}, child={child}')
+        if not isinstance(self._children, list):
+            raise ValueError('Cannot call append_child() after calling initialize_children()')
         
-        # NOTE: child._parent may already be set to a different parent
-        child._parent = self
         self._children.append(child)
+        self.materialize_child(child, already_complete_ok=already_complete_ok)
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
-            assert self not in child.listeners
-        if len(child.listeners) >= 50:
-            if child not in Task._REPORTED_TASKS_WITH_MANY_LISTENERS:
-                Task._REPORTED_TASKS_WITH_MANY_LISTENERS.add(child)
-                print(f'*** Task has many listeners and may be leaking them: {child}', file=sys.stderr)
-                for lis in child.listeners:
-                    print(f'    - {lis}')
-        child.listeners.append(self)
-        
-        for lis in self.listeners:
-            if hasattr(lis, 'task_did_append_child'):
-                lis.task_did_append_child(self, child)  # type: ignore[attr-defined]
+        self.notify_did_append_child(child)
+    
+    # === Protected Operations: Finish & Cleanup ===
     
     def finish(self) -> None:
         """
@@ -1152,6 +1197,9 @@ class DownloadResourceGroupMembersTask(Task):
     
     This task may be complete immediately after initialization.
     """
+    # TODO: Always lazy-load children, inlining this constant
+    _LAZY_LOAD_CHILDREN = True
+    
     icon_name = 'tasktree_download_group_members'
     scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
     
@@ -1166,14 +1214,27 @@ class DownloadResourceGroupMembersTask(Task):
         
         self._done_updating_group = False
         
-        with gc_disabled():  # don't garbage collect while allocating many objects
-            member_download_tasks = [
-                member.create_download_task(needs_result=False, is_embedded=False)
-                for member in group.members
-            ]
+        if self._LAZY_LOAD_CHILDREN:
+            def createitem(i: int) -> DownloadResourceTask:
+                t = group.members[i].create_download_task(needs_result=False, is_embedded=False)
+                self.materialize_child(t, already_complete_ok=True)
+                if t.complete:
+                    self.task_did_complete(t)
+                return t
             
-            for t in member_download_tasks:
-                self.append_child(t, already_complete_ok=True)
+            self.initialize_children(AppendableLazySequence(
+                createitem_func=createitem,
+                len_func=lambda: len(group.members)
+            ))
+        else:
+            with gc_disabled():  # don't garbage collect while allocating many objects
+                member_download_tasks = [
+                    member.create_download_task(needs_result=False, is_embedded=False)
+                    for member in group.members
+                ]
+                
+                for t in member_download_tasks:
+                    self.append_child(t, already_complete_ok=True)
         
         self._pbc = ProgressBarCalculator(
             initial=0,
@@ -1181,24 +1242,32 @@ class DownloadResourceGroupMembersTask(Task):
         )  # type: Optional[ProgressBarCalculator]
         self._update_subtitle()
         
-        # Apply deferred child-complete actions
-        for t in [t for t in member_download_tasks if t.complete]:
-            self.task_did_complete(t)
-        # (NOTE: self.complete might be True now)
+        if not self._LAZY_LOAD_CHILDREN:
+            # Apply deferred child-complete actions
+            for t in [t for t in member_download_tasks if t.complete]:
+                self.task_did_complete(t)
+            # (NOTE: self.complete might be True now)
     
-    def group_did_add_member(self, group, member):
-        download_task = member.create_download_task(needs_result=False, is_embedded=False)
-        self.append_child(download_task, already_complete_ok=True)
+    def group_did_add_member(self, group: ResourceGroup, member: Resource) -> None:
+        if self._LAZY_LOAD_CHILDREN:
+            self.notify_did_append_child(None)
+        else:
+            download_task = member.create_download_task(needs_result=False, is_embedded=False)
+            self.append_child(download_task, already_complete_ok=True)
         
-        self._pbc.total += 1
-        self._update_subtitle()
+        # NOTE: Unfortunately self._pbc may be None here due to a race condition:
+        #       https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
+        if self._pbc is not None:
+            self._pbc.total += 1
+            self._update_subtitle()
         
-        # Apply deferred child-complete actions
-        if download_task.complete:
-            self.task_did_complete(download_task)
-        # (NOTE: self.complete might be True now)
+        if not self._LAZY_LOAD_CHILDREN:
+            # Apply deferred child-complete actions
+            if download_task.complete:
+                self.task_did_complete(download_task)
+            # (NOTE: self.complete might be True now)
     
-    def group_did_finish_updating(self):
+    def group_did_finish_updating(self) -> None:
         self._done_updating_group = True
         self._update_subtitle()
         self._update_completed_status()
@@ -1322,7 +1391,7 @@ class RootTask(Task):
     @property  # type: ignore[misc]
     @fg_affinity  # force any access to synchronize with foreground thread
     @overrides
-    def children(self) -> List[Task]:
+    def children(self) -> Sequence[Task]:
         return super().children
     
     @overrides
