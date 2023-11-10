@@ -11,7 +11,7 @@ from crystal.progress import (
     DummyOpenProjectProgressListener, OpenProjectProgressListener,
 )
 from crystal.server import ProjectServer
-from crystal.task import RootTask
+from crystal.task import DownloadResourceGroupMembersTask, RootTask
 from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
@@ -453,7 +453,8 @@ class MainWindow:
         
         # Show progress dialog if it will likely take a long time to start the download
         if (isinstance(selected_entity, ResourceGroup) and
-                len(selected_entity.members) >= 2000):  # TODO: Tune threshold
+                len(selected_entity.members) >= 2000 and  # TODO: Tune threshold
+                not DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN):
             progress_dialog = wx.ProgressDialog(
                 title='Starting download',
                 message=f'Starting download of {len(selected_entity.members):n} members...',

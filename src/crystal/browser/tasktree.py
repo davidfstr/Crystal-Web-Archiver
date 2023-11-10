@@ -1,5 +1,5 @@
 from crystal.browser.icons import TREE_NODE_ICONS
-from crystal.task import SCHEDULING_STYLE_SEQUENTIAL, Task
+from crystal.task import DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
 from typing import List, Optional
@@ -72,7 +72,7 @@ class TaskTreeNode:
             # HACK: Reaches into a progress dialog managed elsewhere,
             #       in MainWindow._on_download_entity()
             progress_dialog_old_message = None  # type: Optional[str]
-            if len(self.task.children) >= 100:
+            if len(self.task.children) >= 100 and not DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
                 assert is_foreground_thread()
                 progress_dialog = wx.FindWindowByName('cr-starting-download')  # type: Optional[wx.Window]
                 if progress_dialog is not None:
