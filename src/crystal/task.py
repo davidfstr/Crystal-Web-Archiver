@@ -268,6 +268,8 @@ class Task(ListenableMixin):
                 f'and already_completed_ok is False. '
                 f'self={self}, child={child}')
         
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
+            assert child in self._children
         # NOTE: child._parent may already be set to a different parent
         child._parent = self
         
@@ -1215,17 +1217,24 @@ class DownloadResourceGroupMembersTask(Task):
         self._done_updating_group = False
         
         if self._LAZY_LOAD_CHILDREN:
+            initializing = True
+            
             def createitem(i: int) -> DownloadResourceTask:
-                t = group.members[i].create_download_task(needs_result=False, is_embedded=False)
+                return group.members[i].create_download_task(needs_result=False, is_embedded=False)
+            def materializeitem(t: DownloadResourceTask) -> None:
                 self.materialize_child(t, already_complete_ok=True)
                 if t.complete:
                     self.task_did_complete(t)
-                return t
             
+            print(f'FIXME: will call initialize_children: {self=}')
             self.initialize_children(AppendableLazySequence(
                 createitem_func=createitem,
+                materializeitem_func=materializeitem,
                 len_func=lambda: len(group.members)
             ))
+            print(f'FIXME: did call initialize_children: {self=}')
+            
+            initializing = False
         else:
             with gc_disabled():  # don't garbage collect while allocating many objects
                 member_download_tasks = [
@@ -1326,6 +1335,8 @@ class DownloadResourceGroupTask(Task):
             title='Downloading group: %s' % group.name)
         self._update_members_task = UpdateResourceGroupMembersTask(group)
         self._download_members_task = DownloadResourceGroupMembersTask(group)
+        #if not self._download_members_task.complete:
+        #    import pdb; pdb.set_trace()  # FIXME
         self._started_downloading_members = False
         
         self.append_child(self._update_members_task, already_complete_ok=True)

@@ -17,12 +17,23 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     # that contain a AppendableLazySequence
     __slots__ = (
         '_createitem_func',
+        '_materializeitem_func',
         '_len_func',
         '_cached_prefix',
     )
     
-    def __init__(self, createitem_func: Callable[[int], _E], len_func: Callable[[], int]):
+    def __init__(self,
+            createitem_func: Callable[[int], _E],
+            materializeitem_func: Callable[[_E], None],
+            len_func: Callable[[], int]):
+        """
+        Arguments:
+        * createitem_func -- Creates the item at the specified index in this sequence.
+        * materializeitem_func -- Called after a newly created item is contained in this sequence.
+        * len_func -- Returns the length of this sequence, including any unmaterialized items.
+        """
         self._createitem_func = createitem_func
+        self._materializeitem_func = materializeitem_func
         self._len_func = len_func
         self._cached_prefix = []  # type: List[_E]
     
@@ -36,7 +47,7 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     @overload
     def __getitem__(self, index: slice) -> Sequence[_E]:
         ...
-    def __getitem__(self, index):
+    def __getitem__(self, index: Union[int, slice]):
         if isinstance(index, slice):
             if index.start is not None and index.start < 0:
                 raise ValueError('Negative indexes in slice not supported')
@@ -52,11 +63,17 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
             if index < 0:
                 raise IndexError()
         while index >= len(self._cached_prefix):
-            self._cached_prefix.append(self._createitem_func(len(self._cached_prefix)))
+            child = self._createitem_func(len(self._cached_prefix))
+            self._cached_prefix.append(child)
+            self._materializeitem_func(child)
         return self._cached_prefix[index]
     
     def __len__(self) -> int:
         return self._len_func()
+    
+    # FIXME: Is this safe to do? (Probably, but I'd like to think about it more)
+    def __contains__(self, item: object) -> bool:
+        return item in self._cached_prefix
 
 
 class CustomSequence(Generic[_E], Sequence[_E]):
