@@ -72,7 +72,7 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
         return self._len_func()
     
     # NOTE: Assumes that each item of this list is unique.
-    #       Therefore that a created item must be in the created prefix of
+    #       Therefore a created item must be in the created prefix of
     #       this list if it is anywhere in this list at all.
     def __contains__(self, item: object) -> bool:
         return item in self._cached_prefix
