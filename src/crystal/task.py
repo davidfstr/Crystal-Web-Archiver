@@ -1217,8 +1217,6 @@ class DownloadResourceGroupMembersTask(Task):
         self._done_updating_group = False
         
         if self._LAZY_LOAD_CHILDREN:
-            initializing = True
-            
             def createitem(i: int) -> DownloadResourceTask:
                 return group.members[i].create_download_task(needs_result=False, is_embedded=False)
             def materializeitem(t: DownloadResourceTask) -> None:
@@ -1231,8 +1229,6 @@ class DownloadResourceGroupMembersTask(Task):
                 materializeitem_func=materializeitem,
                 len_func=lambda: len(group.members)
             ))
-            
-            initializing = False
         else:
             with gc_disabled():  # don't garbage collect while allocating many objects
                 member_download_tasks = [
