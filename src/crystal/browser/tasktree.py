@@ -114,14 +114,10 @@ class TaskTreeNode:
         self.task.listeners.remove(self)
     
     def task_did_set_children(self, task: Task, child_count: int) -> None:
-        print(f'FIXME: task_did_set_children will start call fg_task: {self=}')
         def fg_task() -> None:
-            print(f'FIXME: task_did_set_children did start call fg_task: {self=}')
             if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
                 # Create tree node for each visible task
                 visible_child_count = min(child_count, self._MAX_VISIBLE_CHILDREN)
-                #if isinstance(task, DownloadResourceGroupMembersTask):
-                #    import pdb; pdb.set_trace()  # FIXME
                 # NOTE: If `task.children` is an AppendableLazySequence then accessing it can
                 #       (1) materialize a child that is already complete, and
                 #       (2) call self.task_child_did_complete() on that child

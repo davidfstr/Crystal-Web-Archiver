@@ -1226,13 +1226,11 @@ class DownloadResourceGroupMembersTask(Task):
                 if t.complete:
                     self.task_did_complete(t)
             
-            print(f'FIXME: will call initialize_children: {self=}')
             self.initialize_children(AppendableLazySequence(
                 createitem_func=createitem,
                 materializeitem_func=materializeitem,
                 len_func=lambda: len(group.members)
             ))
-            print(f'FIXME: did call initialize_children: {self=}')
             
             initializing = False
         else:
@@ -1335,8 +1333,6 @@ class DownloadResourceGroupTask(Task):
             title='Downloading group: %s' % group.name)
         self._update_members_task = UpdateResourceGroupMembersTask(group)
         self._download_members_task = DownloadResourceGroupMembersTask(group)
-        #if not self._download_members_task.complete:
-        #    import pdb; pdb.set_trace()  # FIXME
         self._started_downloading_members = False
         
         self.append_child(self._update_members_task, already_complete_ok=True)
