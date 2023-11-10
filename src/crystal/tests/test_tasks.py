@@ -99,7 +99,6 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                         assert True == r.already_downloaded_this_session
                     
                     # Download the group again, and ensure it downloads immediately
-                    #import pdb; pdb.set_trace()  # FIXME
                     drg_task = comic_g.create_download_task()
                     # NOTE: The group won't appear to be immediately downloaded yet
                     #       because no code has tried to access the lazily-loaded

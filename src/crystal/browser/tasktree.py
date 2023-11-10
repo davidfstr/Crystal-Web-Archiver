@@ -180,8 +180,8 @@ class TaskTreeNode:
             if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
                 # Find first_more_node, intermediate_nodes, and last_more_node
                 assert len(self.tree_node.children) >= 1, (
-                    f"Child that was not actually in this task's children list "
-                    f"was reported as complete: {child}"
+                    f"Expected child to be in this task's children list: "
+                    f"{child}"
                 )
                 intermediate_nodes = list(self.tree_node.children)
                 if isinstance(intermediate_nodes[0], _MoreNodeView):
