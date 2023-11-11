@@ -45,12 +45,12 @@ class OpenOrCreateDialog:
             'cr-open-or-create-project'))  # type: wx.Window
         assert isinstance(open_or_create_project_dialog, wx.Dialog)
         self.open_or_create_project_dialog = open_or_create_project_dialog
-        self.open_as_readonly = self.open_or_create_project_dialog.FindWindowByName(
+        self.open_as_readonly = self.open_or_create_project_dialog.FindWindow(name=
             'cr-open-or-create-project__checkbox')
         assert isinstance(self.open_as_readonly, wx.CheckBox)
-        self.open_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_NO)
+        self.open_button = self.open_or_create_project_dialog.FindWindow(id=wx.ID_NO)
         assert isinstance(self.open_button, wx.Button)
-        self.create_button = self.open_or_create_project_dialog.FindWindowById(wx.ID_YES)
+        self.create_button = self.open_or_create_project_dialog.FindWindow(id=wx.ID_YES)
         assert isinstance(self.create_button, wx.Button)
         return self
     
@@ -170,26 +170,26 @@ class MainWindow:
             window_condition('cr-main-window'),
             timeout=self._connect_timeout)
         assert isinstance(self.main_window, wx.Frame)
-        entity_tree_window = self.main_window.FindWindowByName('cr-entity-tree')
+        entity_tree_window = self.main_window.FindWindow(name='cr-entity-tree')
         assert isinstance(entity_tree_window, wx.TreeCtrl)
         self.entity_tree = EntityTree(entity_tree_window)
-        self.add_url_button = self.main_window.FindWindowByName('cr-add-url-button')
+        self.add_url_button = self.main_window.FindWindow(name='cr-add-url-button')
         assert isinstance(self.add_url_button, wx.Button)
-        self.add_group_button = self.main_window.FindWindowByName('cr-add-group-button')
+        self.add_group_button = self.main_window.FindWindow(name='cr-add-group-button')
         assert isinstance(self.add_group_button, wx.Button)
-        self.forget_button = self.main_window.FindWindowByName('cr-forget-button')
+        self.forget_button = self.main_window.FindWindow(name='cr-forget-button')
         assert isinstance(self.forget_button, wx.Button)
-        self.download_button = self.main_window.FindWindowByName('cr-download-button')
+        self.download_button = self.main_window.FindWindow(name='cr-download-button')
         assert isinstance(self.download_button, wx.Button)
-        self.update_membership_button = self.main_window.FindWindowByName('cr-update-membership-button')
+        self.update_membership_button = self.main_window.FindWindow(name='cr-update-membership-button')
         assert isinstance(self.update_membership_button, wx.Button)
-        self.view_button = self.main_window.FindWindowByName('cr-view-button')
+        self.view_button = self.main_window.FindWindow(name='cr-view-button')
         assert isinstance(self.view_button, wx.Button)
-        self.task_tree = self.main_window.FindWindowByName('cr-task-tree')
+        self.task_tree = self.main_window.FindWindow(name='cr-task-tree')
         assert isinstance(self.task_tree, wx.TreeCtrl)
-        self.preferences_button = self.main_window.FindWindowByName('cr-preferences-button')
+        self.preferences_button = self.main_window.FindWindow(name='cr-preferences-button')
         assert isinstance(self.preferences_button, wx.Button)
-        self.read_write_icon = self.main_window.FindWindowByName('cr-read-write-icon')
+        self.read_write_icon = self.main_window.FindWindow(name='cr-read-write-icon')
         assert isinstance(self.read_write_icon, wx.StaticText)
     
     def __init__(self, *, ready: bool=False) -> None:
@@ -307,11 +307,11 @@ class AddUrlDialog:
     async def wait_for() -> AddUrlDialog:
         self = AddUrlDialog(ready=True)
         add_url_dialog = await wait_for(window_condition('cr-add-url-dialog'))  # type: wx.Window
-        self.name_field = add_url_dialog.FindWindowByName('cr-add-url-dialog__name-field')
+        self.name_field = add_url_dialog.FindWindow(name='cr-add-url-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
-        self.url_field = add_url_dialog.FindWindowByName('cr-add-url-dialog__url-field')
+        self.url_field = add_url_dialog.FindWindow(name='cr-add-url-dialog__url-field')
         assert isinstance(self.url_field, wx.TextCtrl)
-        self.ok_button = add_url_dialog.FindWindowById(wx.ID_OK)
+        self.ok_button = add_url_dialog.FindWindow(id=wx.ID_OK)
         assert isinstance(self.ok_button, wx.Button)
         return self
     
@@ -335,20 +335,20 @@ class AddGroupDialog:
     async def wait_for() -> AddGroupDialog:
         self = AddGroupDialog(ready=True)
         add_group_dialog = await wait_for(window_condition('cr-add-group-dialog'))  # type: wx.Window
-        self.name_field = add_group_dialog.FindWindowByName('cr-add-group-dialog__name-field')
+        self.name_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
-        self.pattern_field = add_group_dialog.FindWindowByName('cr-add-group-dialog__pattern-field')
+        self.pattern_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__pattern-field')
         assert isinstance(self.pattern_field, wx.TextCtrl)
-        self.source_field = add_group_dialog.FindWindowByName('cr-add-group-dialog__source-field')
+        self.source_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__source-field')
         assert isinstance(self.source_field, wx.Choice)
-        self.preview_members_pane = add_group_dialog.FindWindowByName('cr-add-group-dialog__preview-members')
+        self.preview_members_pane = add_group_dialog.FindWindow(name='cr-add-group-dialog__preview-members')
         assert (
             self.preview_members_pane is None or
             isinstance(self.preview_members_pane, wx.CollapsiblePane)
         )
-        self.preview_members_list = add_group_dialog.FindWindowByName('cr-add-group-dialog__preview-members__list')
+        self.preview_members_list = add_group_dialog.FindWindow(name='cr-add-group-dialog__preview-members__list')
         assert isinstance(self.preview_members_list, wx.ListBox)
-        self.ok_button = add_group_dialog.FindWindowById(wx.ID_OK)
+        self.ok_button = add_group_dialog.FindWindow(id=wx.ID_OK)
         assert isinstance(self.ok_button, wx.Button)
         return self
     
@@ -383,19 +383,19 @@ class PreferencesDialog:
         
         self = PreferencesDialog(ready=True)
         preferences_dialog = await wait_for(window_condition('cr-preferences-dialog'))  # type: wx.Window
-        self.html_parser_field = preferences_dialog.FindWindowByName(
+        self.html_parser_field = preferences_dialog.FindWindow(name=
             'cr-preferences-dialog__html-parser-field')
         assert isinstance(self.html_parser_field, wx.Choice)
-        self.stale_before_checkbox = preferences_dialog.FindWindowByName(
+        self.stale_before_checkbox = preferences_dialog.FindWindow(name=
             'cr-preferences-dialog__stale-before-checkbox')
         assert isinstance(self.stale_before_checkbox, wx.CheckBox)
-        self.stale_before_date_picker = preferences_dialog.FindWindowByName(
+        self.stale_before_date_picker = preferences_dialog.FindWindow(name=
             'cr-preferences-dialog__stale-before-date-picker')
         assert isinstance(self.stale_before_date_picker, wx.adv.DatePickerCtrl)
-        self.cookie_field = preferences_dialog.FindWindowByName(
+        self.cookie_field = preferences_dialog.FindWindow(name=
             'cr-preferences-dialog__cookie-field')
         assert isinstance(self.cookie_field, wx.ComboBox)
-        self.ok_button = preferences_dialog.FindWindowById(wx.ID_OK)
+        self.ok_button = preferences_dialog.FindWindow(id=wx.ID_OK)
         assert isinstance(self.ok_button, wx.Button)
         return self
     

@@ -71,9 +71,9 @@ class BetterMessageDialog(wx.Dialog):
         
         # Customize button titles
         if yes_label is not None:
-            self.FindWindowById(wx.ID_YES).SetLabel(yes_label)
+            self.FindWindow(id=wx.ID_YES).SetLabel(yes_label)
         if no_label is not None:
-            self.FindWindowById(wx.ID_NO).SetLabel(no_label)
+            self.FindWindow(id=wx.ID_NO).SetLabel(no_label)
         
         if escape_is_cancel:
             self.SetEscapeId(wx.ID_CANCEL)

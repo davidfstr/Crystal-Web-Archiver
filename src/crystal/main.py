@@ -448,7 +448,7 @@ def _prompt_for_project(
             dialog._checkbox.Value = not dialog._checkbox.Value
         
         readonly_checkbox_checked = dialog.IsCheckBoxChecked()
-        create_button = dialog.FindWindowById(wx.ID_YES)
+        create_button = dialog.FindWindow(id=wx.ID_YES)
         create_button.Enabled = not readonly_checkbox_checked
     
     dialog = BetterMessageDialog(None,
