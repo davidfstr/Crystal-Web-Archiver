@@ -1,6 +1,7 @@
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
+from crystal.util.collections import AppendableLazySequence
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
 from typing import List, Optional
 import wx
@@ -219,11 +220,15 @@ class TaskTreeNode:
                             last_more_node.more_count -= 1
                         
                         # Slide first of intermediate_nodes up into first_more_node
-                        intermediate_nodes_0_task = task.children[first_more_node.more_count]
-                        assert intermediate_nodes_0_task.complete
-                        first_more_node.more_count += 1
-                        del intermediate_nodes[0]
-                        num_leading_complete_children -= 1
+                        if True:
+                            intermediate_nodes_0_task = task.children[first_more_node.more_count]
+                            assert intermediate_nodes_0_task.complete
+                            if isinstance(task.children, AppendableLazySequence):
+                                task.children.unmaterialize(first_more_node.more_count)
+                            
+                            first_more_node.more_count += 1
+                            del intermediate_nodes[0]
+                            num_leading_complete_children -= 1
                     
                     new_children = []
                     if first_more_node.more_count != 0:

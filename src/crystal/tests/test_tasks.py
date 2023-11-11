@@ -106,7 +106,7 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     #       know that all of those children are complete
                     assert (True, 0, False) == (
                         isinstance(drg_task._download_members_task.children, AppendableLazySequence),
-                        len(drg_task._download_members_task.children.cached_prefix)
+                        drg_task._download_members_task.children.cached_prefix_len
                             if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
                             else None,
                         drg_task.complete
@@ -122,7 +122,7 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     project.add_task(drg_task)
                     assert (True, COMIC_G_FINAL_MEMBER_COUNT, True) == (
                         isinstance(drg_task._download_members_task.children, AppendableLazySequence),
-                        len(drg_task._download_members_task.children.cached_prefix)
+                        drg_task._download_members_task.children.cached_prefix_len
                             if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
                             else None,
                         drg_task.complete

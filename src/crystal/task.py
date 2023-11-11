@@ -1223,10 +1223,13 @@ class DownloadResourceGroupMembersTask(Task):
                 self.materialize_child(t, already_complete_ok=True)
                 if t.complete:
                     self.task_did_complete(t)
+            def unmaterializeitem(t: DownloadResourceTask) -> None:
+                t.dispose()
             
             self.initialize_children(AppendableLazySequence[DownloadResourceTask](
                 createitem_func=createitem,
                 materializeitem_func=materializeitem,
+                unmaterializeitem_func=unmaterializeitem,
                 len_func=lambda: len(group.members)
             ))
         else:
