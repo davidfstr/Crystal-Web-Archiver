@@ -365,29 +365,32 @@ async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_a
 # TODO: Also report the I/O error to the UI in some fashion rather
 #       than silently dropping it.
 async def test_given_project_has_revision_with_maximum_id_when_download_revision_then_raises_error_and_error_revision_not_created() -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
-            old_revision_count = project._revision_count()  # capture
-            
-            resource = Resource(project, 'https://example.com/')
-            
-            with _database_cursor_mocked_to_create_revision_with_id(Project._MAX_REVISION_ID + 1, project):
-                download_result = resource.download_body()
-                while not download_result.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                try:
-                    download_result.result()
-                except ProjectHasTooManyRevisionsError:
-                    pass
-                else:
-                    raise AssertionError(
-                        'Expected ProjectHasTooManyRevisionsError to be raised')
-            
-            new_revision_count = project._revision_count()
-            assert old_revision_count == new_revision_count
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+    
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                old_revision_count = project._revision_count()  # capture
+                
+                resource = Resource(project, home_url)
+                
+                with _database_cursor_mocked_to_create_revision_with_id(Project._MAX_REVISION_ID + 1, project):
+                    download_result = resource.download_body()
+                    while not download_result.done():
+                        await bg_sleep(DEFAULT_WAIT_PERIOD)
+                    try:
+                        download_result.result()
+                    except ProjectHasTooManyRevisionsError:
+                        pass
+                    else:
+                        raise AssertionError(
+                            'Expected ProjectHasTooManyRevisionsError to be raised')
+                
+                new_revision_count = project._revision_count()
+                assert old_revision_count == new_revision_count
 
 
 # ------------------------------------------------------------------------------
