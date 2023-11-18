@@ -26,6 +26,7 @@ from crystal.progress import (
 )
 from crystal import resources as resources_
 from crystal.util import http_date
+from crystal.util.collections import CustomSequence
 from crystal.util.db import (
     DatabaseConnection,
     DatabaseCursor,
@@ -33,6 +34,7 @@ from crystal.util.db import (
     get_index_names,
     is_no_such_column_error_for,
 )
+from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util import gio
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import create_profiling_context, warn_if_slow
@@ -49,6 +51,7 @@ from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
 import cgi
 import datetime
+from functools import cached_property
 import json
 import math
 import mimetypes
@@ -66,9 +69,11 @@ import threading
 import time
 from tqdm import tqdm
 from typing import (
-    Any, BinaryIO, Callable, cast, Dict, Iterable, List, Literal, Optional, Pattern,
-    TYPE_CHECKING, Tuple, TypedDict, Union
+    Any, BinaryIO, Callable, cast, Dict, Iterable, Iterator,
+    List, Literal, Optional, overload, Pattern, Sequence, TYPE_CHECKING,
+    Tuple, TypedDict, Union
 )
+from typing_extensions import Self
 from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
@@ -2831,6 +2836,8 @@ class ResourceGroup(ListenableMixin):
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         self._source = None  # type: ResourceGroupSource
         
+        # TODO: Calculate members on demand in ResourceGroupMembers
+        #       rather than up front
         self._members = project.resources_matching_pattern(
             url_pattern_re=self._url_pattern_re,
             literal_prefix=ResourceGroup.literal_prefix_for_url_pattern(url_pattern))
@@ -2945,9 +2952,9 @@ class ResourceGroup(ListenableMixin):
     def contains_url(self, resource_url: str) -> bool:
         return self._url_pattern_re.match(resource_url) is not None
     
-    @property
-    def members(self) -> List[Resource]:
-        return self._members
+    @cached_property
+    def members(self) -> 'ResourceGroupMembers':
+        return ResourceGroupMembers(self)
     
     # Called when a new Resource is created after the project has loaded
     def _resource_did_instantiate(self, resource: Resource) -> None:
@@ -3015,6 +3022,134 @@ class ResourceGroup(ListenableMixin):
 
     def __repr__(self):
         return 'ResourceGroup(%s,%s)' % (repr(self.name), repr(self.url_pattern))
+
+
+# NOTE: The Collection interface is the most efficient way to access
+#       the member collection, but the Sequence interface is provided
+#       for convenience for callers that think in terms of indexes.
+class ResourceGroupMembers(Sequence[Resource]):
+    """
+    Iterable collection of ResourceGroup members.
+    
+    Members appear in the order that they were discovered,
+    with increasing Resource IDs.
+    """
+    def __init__(self, group: ResourceGroup) -> None:
+        self._group = group
+    
+    # === Operations: Collection ===
+    
+    def __contains__(self, item: object) -> bool:
+        return isinstance(item, Resource) and item in self._group
+    
+    def __iter__(self) -> ResourceGroupMemberIterator:
+        return ResourceGroupMemberIterator(self)
+    
+    def __len__(self) -> int:
+        # TODO: Lazily-fetch denormalized ResourceGroup size from database.
+        #       Then update in-memory (and in DB) as members are added/removed.
+        return len(self._group._members)
+    
+    # === Operations: Sequence ===
+    
+    @overload
+    def __getitem__(self, index: int) -> Resource:
+        ...
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[Resource]:
+        ...
+    def __getitem__(self, index: Union[int, slice]):
+        if isinstance(index, slice):
+            if index.start is not None:
+                if index.start < 0:
+                    raise ValueError('Negative indexes in slice not supported')
+                if index.start >= len(self):
+                    raise IndexError()
+            if index.stop is not None:
+                if index.stop < 0:
+                    raise ValueError('Negative indexes in slice not supported')
+                if index.stop >= len(self):
+                    raise IndexError()
+            if index.step not in [None, 1]:
+                raise ValueError('Step in slice not supported')
+            
+            # Return lazy slice: self[(index.start or 0):(index.stop or len(self))]
+            def slice_getitem(i: int) -> Resource:
+                if i < 0:
+                    raise ValueError('Negative indexes not supported')
+                if i >= slice_len():
+                    raise IndexError()
+                return self[(index.start or 0) + i]
+            def slice_len() -> int:
+                return (index.stop or len(self)) - (index.start or 0)
+            return CustomSequence(getitem_func=slice_getitem, len_func=slice_len)
+        if not isinstance(index, int):
+            raise ValueError(f'Invalid index: {index!r}')
+        if index < 0:
+            index += len(self)
+            if index < 0:
+                raise IndexError()
+        if index >= len(self):
+            raise IndexError()
+        
+        # TODO: Return member from current page of active iterator
+        return self._group._members[index]
+    
+    # Sequence operations that cannot be implemented efficiently
+    def __reversed__(self) -> Iterator[Resource]:
+        raise NotImplementedError()
+    def index(self, *args, **kwargs) -> int:
+        raise NotImplementedError()
+    def count(self, item: object) -> int:
+        raise NotImplementedError()
+
+
+class ResourceGroupMemberIterator(Iterator[Resource]):
+    """
+    Iterator over a ResourceGroup's members.
+    
+    Members added to the underlying ResourceGroup concurrently while 
+    iteration is in progress WILL be observed by the iterator.
+    
+    Note that it is possible for iteration to reach the end of the current
+    members, raising a StopIteration in __next__(), but then have members
+    added such that calling __next__() again causes those members to be
+    returned.
+    """
+    
+    def __init__(self, members: ResourceGroupMembers) -> None:
+        self._members_iter = iter(members._group._members)
+    
+    def __iter__(self) -> Self:
+        return self
+    
+    @overload
+    def __next__(self) -> Resource:
+        ...
+    @overload
+    def __next__(self, page_size: Union[int, EllipsisType]) -> List[Resource]:
+        ...
+    def __next__(self, page_size: Union[int, EllipsisType, None]=None):
+        """
+        Returns up to a single next element by default, when `page_size=None`.
+        
+        If `page_size` is an integer, returns a list of as many elements as
+        possible, up to `page_size` elements. If `page_size` is Ellipsis,
+        returns a list of elements with an efficiently-chosen page size.
+        
+        Raises:
+        * StopIteration --
+            if no elements currently remain, regardless of `page_size`.
+            If members are added to the group after __next__() raises StopIteration,
+            calling __next__() again will return those new members.
+        """
+        if page_size is not None:
+            # TODO: Fetch next page from database cursor if needed
+            raise NotImplementedError()
+        else:
+            # TODO: Fetch next page from database cursor if needed.
+            #       Return member from current page.
+            return next(self._members_iter)
 
 
 def _is_ascii(s: str) -> bool:
