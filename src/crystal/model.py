@@ -3034,16 +3034,20 @@ class ResourceGroupMembers(Sequence[Resource]):
     Members appear in the order that they were discovered,
     with increasing Resource IDs.
     """
+    _VERBOSE_REWINDS = False
+    
     def __init__(self, group: ResourceGroup) -> None:
         self._group = group
+        self._page_iter = None  # type: Optional[_ResourceGroupMemberPageIterator]
+        self._member_iter = None  # type: Optional[Iterator[Resource]]
     
     # === Operations: Collection ===
     
     def __contains__(self, item: object) -> bool:
         return isinstance(item, Resource) and item in self._group
     
-    def __iter__(self) -> ResourceGroupMemberIterator:
-        return ResourceGroupMemberIterator(self)
+    def __iter__(self) -> Iterator[Resource]:
+        return _ResourceGroupMemberPageIterator(self).iterator()
     
     def __len__(self) -> int:
         # TODO: Lazily-fetch denormalized ResourceGroup size from database.
@@ -3068,7 +3072,7 @@ class ResourceGroupMembers(Sequence[Resource]):
             if index.stop is not None:
                 if index.stop < 0:
                     raise ValueError('Negative indexes in slice not supported')
-                if index.stop >= len(self):
+                if index.stop > len(self):
                     raise IndexError()
             if index.step not in [None, 1]:
                 raise ValueError('Step in slice not supported')
@@ -3092,8 +3096,30 @@ class ResourceGroupMembers(Sequence[Resource]):
         if index >= len(self):
             raise IndexError()
         
-        # TODO: Return member from current page of active iterator
-        return self._group._members[index]
+        # Return member from page of active iterator
+        if True:
+            if self._page_iter is None or index < self._page_iter.page_offset:
+                # (Re)start iterating over pages
+                if self._VERBOSE_REWINDS:
+                    if self._page_iter is not None:
+                        assert index < self._page_iter.page_offset
+                        print(f'ResourceGroupMembers({self._group}): rewinding member list')
+                self._page_iter = _ResourceGroupMemberPageIterator(self)
+                self._member_iter = self._page_iter.iterator()
+                assert self._page_iter.page_offset == 0
+                assert not (index < self._page_iter.page_offset)
+            
+            # Keep reading pages until a page with the target index is read
+            assert self._page_iter is not None
+            assert self._member_iter is not None
+            while not (index < self._page_iter.page_offset + len(self._page_iter.page)):
+                try:
+                    next(self._member_iter)
+                except StopIteration:
+                    raise IndexError()
+            
+            # Read target index from page
+            return self._page_iter.page[index - self._page_iter.page_offset]
     
     # Sequence operations that cannot be implemented efficiently
     def __reversed__(self) -> Iterator[Resource]:
@@ -3104,52 +3130,27 @@ class ResourceGroupMembers(Sequence[Resource]):
         raise NotImplementedError()
 
 
-class ResourceGroupMemberIterator(Iterator[Resource]):
-    """
-    Iterator over a ResourceGroup's members.
-    
-    Members added to the underlying ResourceGroup concurrently while 
-    iteration is in progress WILL be observed by the iterator.
-    
-    Note that it is possible for iteration to reach the end of the current
-    members, raising a StopIteration in __next__(), but then have members
-    added such that calling __next__() again causes those members to be
-    returned.
-    """
+class _ResourceGroupMemberPageIterator:
+    # TODO: Set to higher value, like 100 or 1000, for reasonable efficiency
+    # TODO: Set to dynamically determined value, such that database access
+    #       happens within 0.2sec on average
+    _PAGE_SIZE = 3
     
     def __init__(self, members: ResourceGroupMembers) -> None:
-        self._members_iter = iter(members._group._members)
+        self._group = members._group
+        self.page_offset = 0
+        self.page = []  # type: List[Resource]
     
-    def __iter__(self) -> Self:
-        return self
-    
-    @overload
-    def __next__(self) -> Resource:
-        ...
-    @overload
-    def __next__(self, page_size: Union[int, EllipsisType]) -> List[Resource]:
-        ...
-    def __next__(self, page_size: Union[int, EllipsisType, None]=None):
-        """
-        Returns up to a single next element by default, when `page_size=None`.
-        
-        If `page_size` is an integer, returns a list of as many elements as
-        possible, up to `page_size` elements. If `page_size` is Ellipsis,
-        returns a list of elements with an efficiently-chosen page size.
-        
-        Raises:
-        * StopIteration --
-            if no elements currently remain, regardless of `page_size`.
-            If members are added to the group after __next__() raises StopIteration,
-            calling __next__() again will return those new members.
-        """
-        if page_size is not None:
-            # TODO: Fetch next page from database cursor if needed
-            raise NotImplementedError()
-        else:
-            # TODO: Fetch next page from database cursor if needed.
-            #       Return member from current page.
-            return next(self._members_iter)
+    def iterator(self) -> Iterator[Resource]:
+        self.page_offset = 0
+        while True:
+            self.page = self._group._members[
+                self.page_offset:(self.page_offset + self._PAGE_SIZE)]
+            if len(self.page) == 0:
+                return  # i.e. raise StopIteration
+            for item in self.page:
+                yield item
+            self.page_offset += len(self.page)
 
 
 def _is_ascii(s: str) -> bool:

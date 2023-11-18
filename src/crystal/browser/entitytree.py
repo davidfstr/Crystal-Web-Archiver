@@ -845,7 +845,7 @@ class ResourceGroupNode(Node):
         children_rrs = []  # type: List[Node]
         children_rs = []  # type: List[Node]
         project = self.resource_group.project  # cache
-        for r in members[:self._max_visible_children]:
+        for r in members[:min(self._max_visible_children, len(members))]:
             rr = project.get_root_resource(r)
             if rr is None:
                 children_rs.append(NormalResourceNode(r))
