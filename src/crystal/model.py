@@ -268,9 +268,12 @@ class Project(ListenableMixin):
             
             self._readonly = readonly or not can_write_db
             self._db = DatabaseConnection(db, lambda: self.readonly)
-            
-            c = self._db.cursor()
             try:
+                # Enable use of REGEXP operator and regexp() function
+                db.create_function('regexp', 2, lambda x, y: re.search(x, y) is not None)
+                
+                c = self._db.cursor()
+                
                 # Create new project content, if missing
                 if create:
                     self._create(c, self._db)
@@ -1039,32 +1042,24 @@ class Project(ListenableMixin):
         Also returns the number of matching URLs if limit is None,
         or an upper bound on the number of matching URLs if limit is not None.
         """
-        sorted_resource_urls = self._sorted_resource_urls  # cache
-        
-        # NOTE: When limit is None, the following calculation is equivalent to
-        #           members = sorted([r.url for r in self.resources if url_pattern_re.fullmatch(r.url) is not None])
-        #       but runs faster on average,
-        #       in O(log(r) + s) time rather than O(r) time, where
-        #           r = (# of Resources in Project) and
-        #           s = (# of Resources in Project matching the literal prefix).
-        member_urls = []
-        start_index = sorted_resource_urls.bisect_left(literal_prefix)
-        for cur_url in sorted_resource_urls.islice(start=start_index):
-            if not cur_url.startswith(literal_prefix):
-                break
-            if url_pattern_re.fullmatch(cur_url):
-                member_urls.append(cur_url)
-                if limit is not None and len(member_urls) == limit:
-                    break
+        if '*' in literal_prefix:
+            raise ValueError('literal_prefix may not contain an *')
+        c = self._db.cursor()
         if limit is None:
+            member_urls = [url for (url,) in c.execute(
+                'select url from resource where url glob ? and url regexp ? order by url',
+                (literal_prefix + '*', url_pattern_re.pattern)
+            )]
             return (member_urls, len(member_urls))
         else:
-            end_index = bisect_key_right(
-                sorted_resource_urls,  # type: ignore[misc]
-                literal_prefix,
-                order_preserving_key=lambda url: url[:len(literal_prefix)])  # type: ignore[index]
-            
-            approx_member_count = end_index - start_index + 1
+            member_urls = [url for (url,) in c.execute(
+                'select url from resource where url glob ? and url regexp ? order by url limit ?',
+                (literal_prefix + '*', url_pattern_re.pattern, limit)
+            )]
+            [(approx_member_count,)] = c.execute(
+                'select count(1) from resource where url glob ?',
+                (literal_prefix + '*',)
+            )
             return (member_urls, approx_member_count)
     
     @property
