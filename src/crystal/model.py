@@ -998,6 +998,11 @@ class Project(ListenableMixin):
         """Returns the `Resource` with the specified URL or None if no such resource exists."""
         return self._resource_for_url.get(url, None)
     
+    # Private to crystal.model classes
+    def _get_resource_with_id(self, id: int) -> Optional[Resource]:
+        """Returns the `Resource` with the specified ID or None if no such resource exists."""
+        return self._resource_for_id.get(id, None)
+    
     def resources_matching_pattern(self,
             url_pattern_re: re.Pattern,
             literal_prefix: str,
@@ -2235,17 +2240,16 @@ class ResourceRevision:
         c = project._db.cursor()
         rows = list(c.execute(
             f'select '
-                f'resource_id, resource.url as resource_url from resource_revision '
-                f'left join resource on resource_revision.resource_id = resource.id '
+                f'resource_id from resource_revision '
                 f'where resource_revision.id=?',
             (id,)
         ))
         if len(rows) == 0:
             return None
-        [(resource_id, resource_url)] = rows
+        [(resource_id)] = rows
         
         # Get the resource by URL from memory
-        r = project.get_resource(resource_url)
+        r = project._get_resource_with_id(resource_url)
         assert r is not None
         
         # Load all of the resource's revisions
