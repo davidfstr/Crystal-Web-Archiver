@@ -1007,9 +1007,8 @@ class Project(ListenableMixin):
         Returns all Resources in the project whose URL matches the specified
         regular expression and literal prefix, in the order they were created.
         """
-        sorted_resource_urls = self._sorted_resource_urls  # cache
-        resource_for_url = self._resources  # cache
-        
+        if '*' in literal_prefix:
+            raise ValueError('literal_prefix may not contain an *')
         # NOTE: The following calculation is equivalent to
         #           members = [r for r in self.resources if url_pattern_re.fullmatch(r.url) is not None]
         #       but runs faster on average,
@@ -1017,16 +1016,13 @@ class Project(ListenableMixin):
         #           r = (# of Resources in Project),
         #           s = (# of Resources in Project matching the literal prefix), and
         #           g = (# of Resources in the resulting group).
-        members = []
-        start_index = sorted_resource_urls.bisect_left(literal_prefix)
-        for cur_url in sorted_resource_urls.islice(start=start_index):
-            if not cur_url.startswith(literal_prefix):
-                break
-            if url_pattern_re.fullmatch(cur_url):
-                r = resource_for_url[cur_url]
-                members.append(r)
-        members.sort(key=lambda r: r._id)
-        return members
+        c = self._db.cursor()
+        member_urls = [url for (url,) in c.execute(
+            'select url from resource where url glob ? and url regexp ? order by id',
+            (literal_prefix + '*', url_pattern_re.pattern)
+        )]
+        resource_for_url = self._resources  # cache
+        return [resource_for_url[url] for url in member_urls]
     
     def urls_matching_pattern(self,
             url_pattern_re: re.Pattern,
@@ -1044,6 +1040,12 @@ class Project(ListenableMixin):
         """
         if '*' in literal_prefix:
             raise ValueError('literal_prefix may not contain an *')
+        # NOTE: When limit is None, the following calculation is equivalent to
+        #           members = sorted([r.url for r in self.resources if url_pattern_re.fullmatch(r.url) is not None])
+        #       but runs faster on average,
+        #       in O(log(r) + s) time rather than O(r) time, where
+        #           r = (# of Resources in Project) and
+        #           s = (# of Resources in Project matching the literal prefix).
         c = self._db.cursor()
         if limit is None:
             member_urls = [url for (url,) in c.execute(

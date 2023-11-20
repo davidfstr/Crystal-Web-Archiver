@@ -38,7 +38,8 @@ class DatabaseCursor:
             command_lower = command.lower()  # cache
             command_is_read = (
                 command_lower.startswith('select ') or
-                command_lower.startswith('pragma table_info(')
+                command_lower.startswith('pragma table_info(') or
+                command_lower.startswith('explain ')
             )
             command_is_write = not command_is_read  # conservative
             if command_is_write:
