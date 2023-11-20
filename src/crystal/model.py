@@ -204,7 +204,6 @@ class Project(ListenableMixin):
         
         self._properties = dict()               # type: Dict[str, str]
         self._resources = OrderedDict()         # type: Dict[str, Resource]
-        self._sorted_resource_urls = SortedList()  # type: SortedList[str]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
         self._readonly = True  # will reinitialize after database is located
@@ -734,7 +733,6 @@ class Project(ListenableMixin):
         # Index Resources (to load RootResources and ResourceGroups faster)
         progress_listener.indexing_resources()
         self._resources = {r.url: r for r in resources}
-        self._sorted_resource_urls.update(self._resources.keys())
         resource_for_id = {r._id: r for r in resources}
         del resources  # garbage collect early
         
@@ -1145,16 +1143,12 @@ class Project(ListenableMixin):
         del self._resources[old_url]
         self._resources[new_url] = resource
         
-        self._sorted_resource_urls.remove(old_url)
-        self._sorted_resource_urls.add(new_url)
-        
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
             rg._resource_did_alter_url(resource, old_url, new_url)
     
     def _resource_did_delete(self, resource: Resource) -> None:
         del self._resources[resource.url]
-        self._sorted_resource_urls.remove(resource.url)
         
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
@@ -1383,10 +1377,8 @@ class Resource:
         # Record self in Project
         if not project._loading:
             project._resources[normalized_url] = self
-            project._sorted_resource_urls.add(normalized_url)
         else:
             # (Caller is responsible for updating Project._resources)
-            # (Caller is responsible for updating Project._sorted_resource_urls)
             pass
         
         # Notify listeners that self did instantiate
