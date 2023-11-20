@@ -203,7 +203,8 @@ class Project(ListenableMixin):
         self.path = path
         
         self._properties = dict()               # type: Dict[str, str]
-        self._resources = OrderedDict()         # type: Dict[str, Resource]
+        self._resource_for_url = OrderedDict()  # type: Dict[str, Resource]
+        self._resource_for_id = OrderedDict()   # type: Dict[int, Resource]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
         self._readonly = True  # will reinitialize after database is located
@@ -732,15 +733,15 @@ class Project(ListenableMixin):
         
         # Index Resources (to load RootResources and ResourceGroups faster)
         progress_listener.indexing_resources()
-        self._resources = {r.url: r for r in resources}
-        resource_for_id = {r._id: r for r in resources}
+        self._resource_for_url = {r.url: r for r in resources}
+        self._resource_for_id = {r._id: r for r in resources}
         del resources  # garbage collect early
         
         # Load RootResources
         [(root_resource_count,)] = c.execute('select count(1) from root_resource')
         progress_listener.loading_root_resources(root_resource_count)
         for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
-            resource = resource_for_id[resource_id]
+            resource = self._resource_for_id[resource_id]
             RootResource(self, name, resource, _id=id)
         
         # Load ResourceGroups
@@ -991,11 +992,11 @@ class Project(ListenableMixin):
     @property
     def resources(self) -> Iterable[Resource]:
         """Returns all Resources in the project in the order they were created."""
-        return self._resources.values()
+        return self._resource_for_url.values()
     
     def get_resource(self, url: str) -> Optional[Resource]:
         """Returns the `Resource` with the specified URL or None if no such resource exists."""
-        return self._resources.get(url, None)
+        return self._resource_for_url.get(url, None)
     
     def resources_matching_pattern(self,
             url_pattern_re: re.Pattern,
@@ -1015,12 +1016,12 @@ class Project(ListenableMixin):
         #           s = (# of Resources in Project matching the literal prefix), and
         #           g = (# of Resources in the resulting group).
         c = self._db.cursor()
-        member_urls = [url for (url,) in c.execute(
-            'select url from resource where url glob ? and url regexp ? order by id',
+        member_ids = [id for (id,) in c.execute(
+            'select id from resource where url glob ? and url regexp ? order by id',
             (literal_prefix + '*', url_pattern_re.pattern)
         )]
-        resource_for_url = self._resources  # cache
-        return [resource_for_url[url] for url in member_urls]
+        resource_for_id = self._resource_for_id  # cache
+        return [resource_for_id[id] for id in member_ids]
     
     def urls_matching_pattern(self,
             url_pattern_re: re.Pattern,
@@ -1140,19 +1141,20 @@ class Project(ListenableMixin):
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
-        del self._resources[old_url]
-        self._resources[new_url] = resource
+        del self._resource_for_url[old_url]
+        self._resource_for_url[new_url] = resource
         
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
             rg._resource_did_alter_url(resource, old_url, new_url)
     
-    def _resource_did_delete(self, resource: Resource) -> None:
-        del self._resources[resource.url]
+    def _resource_will_delete(self, resource: Resource) -> None:
+        del self._resource_for_url[resource.url]
+        del self._resource_for_id[resource._id]
         
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
-            rg._resource_did_delete(resource)
+            rg._resource_will_delete(resource)
     
     # Called when a new RootResource is created after the project has loaded
     def _root_resource_did_instantiate(self, root_resource: RootResource) -> None:
@@ -1322,8 +1324,8 @@ class Resource:
             # backward compatibility with older projects that use less-normalized
             # forms of the original URL
             for urla in url_alternatives:
-                if urla in project._resources:
-                    return project._resources[urla]
+                if urla in project._resource_for_url:
+                    return project._resource_for_url[urla]
             
             normalized_url = url_alternatives[-1]
         else:
@@ -1376,9 +1378,11 @@ class Resource:
         
         # Record self in Project
         if not project._loading:
-            project._resources[normalized_url] = self
+            project._resource_for_url[normalized_url] = self
+            project._resource_for_id[id] = self
         else:
-            # (Caller is responsible for updating Project._resources)
+            # (Caller is responsible for updating Project._resource_for_url)
+            # (Caller is responsible for updating Project._resource_for_id)
             pass
         
         # Notify listeners that self did instantiate
@@ -1819,7 +1823,7 @@ class Resource:
         """
         project = self.project  # cache
         
-        if new_url in project._resources:
+        if new_url in project._resource_for_url:
             return False
         
         if project.readonly:
@@ -1856,13 +1860,13 @@ class Resource:
         for rev in list(self.revisions()):
             rev.delete()
         
+        project._resource_will_delete(self)
+        
         # Delete Resource itself
         c = project._db.cursor()
         c.execute('delete from resource where id=?', (self._id,))
         project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
-        
-        project._resource_did_delete(self)
     
     # === Utility ===
     
@@ -2961,7 +2965,7 @@ class ResourceGroup(ListenableMixin):
         if self.contains_url(new_url):
             self._members.append(resource)
     
-    def _resource_did_delete(self, resource: Resource) -> None:
+    def _resource_will_delete(self, resource: Resource) -> None:
         if resource in self._members:
             self._members.remove(resource)
     
