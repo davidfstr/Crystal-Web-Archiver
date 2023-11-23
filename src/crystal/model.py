@@ -48,7 +48,9 @@ from crystal.util.xgc import gc_disabled
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util import xshutil
 from crystal.util.xsqlite3 import sqlite_has_json_support
-from crystal.util.xthreading import bg_call_later, fg_call_and_wait, fg_call_later
+from crystal.util.xthreading import (
+    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
+)
 import cgi
 import datetime
 from functools import cached_property
@@ -75,6 +77,7 @@ from typing import (
 )
 from typing_extensions import Self
 from urllib.parse import urlparse, urlunparse
+from weakref import WeakValueDictionary
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
@@ -203,8 +206,8 @@ class Project(ListenableMixin):
         self.path = path
         
         self._properties = dict()               # type: Dict[str, str]
-        self._resource_for_url = OrderedDict()  # type: Dict[str, Resource]
-        self._resource_for_id = OrderedDict()   # type: Dict[int, Resource]
+        self._resource_for_url = WeakValueDictionary()  # type: WeakValueDictionary[str, Resource]
+        self._resource_for_id = WeakValueDictionary()   # type: WeakValueDictionary[int, Resource]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
         self._readonly = True  # will reinitialize after database is located
@@ -709,39 +712,19 @@ class Project(ListenableMixin):
             self._set_property(name, value)
         
         # Load Resources
-        resources = []
-        def loading_resource(index: int, resources_per_second: float) -> None:
-            assert progress_listener is not None
-            progress_listener.loading_resource(index)
-        def load_resource(row: Tuple) -> None:
-            (url, id) = row
-            resources.append(Resource(self, url, _id=id))
-        # NOTE: May raise CancelOpenProject if user cancels
-        self._process_table_rows(
-            c,
-            # NOTE: The following query to approximate row count is
-            #       significantly faster than the exact query
-            #       ('select count(1) from resource') because it
-            #       does not require a full table scan.
-            'select id from resource order by id desc limit 1',
-            # TODO: Consider add 'order by id asc'
-            'select url, id from resource',
-            load_resource,
-            progress_listener.will_load_resources,
-            loading_resource,
-            progress_listener.did_load_resources)
-        
-        # Index Resources (to load RootResources and ResourceGroups faster)
+        # TODO: Eliminate dead listeners
+        progress_listener.will_load_resources(1)
+        progress_listener.loading_resource(0)
+        progress_listener.did_load_resources(1)
         progress_listener.indexing_resources()
-        self._resource_for_url = {r.url: r for r in resources}
-        self._resource_for_id = {r._id: r for r in resources}
-        del resources  # garbage collect early
         
         # Load RootResources
         [(root_resource_count,)] = c.execute('select count(1) from root_resource')
         progress_listener.loading_root_resources(root_resource_count)
         for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
-            resource = self._resource_for_id[resource_id]
+            resource = self._get_resource_with_id(resource_id)
+            if resource is None:
+                raise ProjectFormatError(f'RootResource {id} references Resource {resource_id} which does not exist')
             RootResource(self, name, resource, _id=id)
         
         # Load ResourceGroups
@@ -971,7 +954,7 @@ class Project(ListenableMixin):
         if not self._loading:
             from crystal.task import ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH
             if ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH:
-                for r in self.resources:
+                for r in self._materialized_resources:
                     r.already_downloaded_this_session = False
             for lis in self.listeners:
                 if hasattr(lis, 'min_fetch_date_did_change'):
@@ -992,17 +975,61 @@ class Project(ListenableMixin):
     @property
     def resources(self) -> Iterable[Resource]:
         """Returns all Resources in the project in the order they were created."""
-        return self._resource_for_url.values()
+        # TODO: Alter implementation to load resources one page at a time
+        #       rather than all at once, so that this method can be used
+        #       on projects with very many resources
+        c = self._db.cursor()
+        resources_data = c.execute('select id, url from resource order by id')
+        return self._materialize_resources(resources_data)
     
+    @property
+    def _materialized_resources(self) -> Iterable[Resource]:
+        return self._resource_for_id.values()
+    
+    @fg_affinity
     def get_resource(self, url: str) -> Optional[Resource]:
         """Returns the `Resource` with the specified URL or None if no such resource exists."""
-        return self._resource_for_url.get(url, None)
+        
+        # Lookup/materialize Resource
+        resource = self._resource_for_url.get(url)
+        if resource is not None:
+            return resource
+        c = self._db.cursor()
+        rows = list(c.execute('select id from resource where url = ?', (url,)))
+        if len(rows) == 0:
+            return None
+        else:
+            [(id,)] = rows
+            
+            resource = Resource(self, url, _id=id)
+            self._resource_for_id[id] = resource
+            self._resource_for_url[url] = resource
+            
+            return resource
     
     # Private to crystal.model classes
+    @fg_affinity
     def _get_resource_with_id(self, id: int) -> Optional[Resource]:
         """Returns the `Resource` with the specified ID or None if no such resource exists."""
-        return self._resource_for_id.get(id, None)
+        
+        # Lookup/materialize Resource
+        resource = self._resource_for_id.get(id)
+        if resource is not None:
+            return resource
+        c = self._db.cursor()
+        rows = list(c.execute('select url from resource where id = ?', (id,)))
+        if len(rows) == 0:
+            return None
+        else:
+            [(url,)] = rows
+            
+            resource = Resource(self, url, _id=id)
+            self._resource_for_id[id] = resource
+            self._resource_for_url[url] = resource
+            
+            return resource
     
+    @fg_affinity
     def resources_matching_pattern(self,
             url_pattern_re: re.Pattern,
             literal_prefix: str,
@@ -1021,13 +1048,26 @@ class Project(ListenableMixin):
         #           s = (# of Resources in Project matching the literal prefix), and
         #           g = (# of Resources in the resulting group).
         c = self._db.cursor()
-        member_ids = [id for (id,) in c.execute(
-            'select id from resource where url glob ? and url regexp ? order by id',
+        member_data = c.execute(
+            'select id, url from resource where url glob ? and url regexp ? order by id',
             (literal_prefix + '*', url_pattern_re.pattern)
-        )]
-        resource_for_id = self._resource_for_id  # cache
-        return [resource_for_id[id] for id in member_ids]
+        )
+        return self._materialize_resources(member_data)
     
+    def _materialize_resources(self, resources_data: Iterator[Tuple[int, str]]) -> List[Resource]:
+        resources = []
+        resource_for_id = self._resource_for_id  # cache
+        resource_for_url = self._resource_for_url  # cache
+        for (id, url) in resources_data:
+            resource = resource_for_id.get(id)
+            if resource is None:
+                resource = Resource(self, url, _id=id)
+                resource_for_id[id] = resource
+                resource_for_url[url] = resource
+            resources.append(resource)
+        return resources
+    
+    @fg_affinity
     def urls_matching_pattern(self,
             url_pattern_re: re.Pattern,
             literal_prefix: str,
@@ -1292,6 +1332,9 @@ class Resource:
         '_already_downloaded_this_session',
         '_definitely_has_no_revisions',
         '_id',
+        
+        # Necessary to support weak references to Resource objects
+        '__weakref__',
     )
     
     project: Project
@@ -1328,9 +1371,13 @@ class Resource:
             # Find first matching existing alternative URL, to provide
             # backward compatibility with older projects that use less-normalized
             # forms of the original URL
+            # 
+            # TODO: Optimize this to use a Project.get_first_matching_resource()
+            #       method that performs at most a single bulk DB query
             for urla in url_alternatives:
-                if urla in project._resource_for_url:
-                    return project._resource_for_url[urla]
+                resource = project.get_resource(urla)
+                if resource is not None:
+                    return resource
             
             normalized_url = url_alternatives[-1]
         else:
@@ -1347,7 +1394,8 @@ class Resource:
         self._already_downloaded_this_session = False
         self._definitely_has_no_revisions = False
         
-        if _id is None:
+        creating = _id is None  # capture
+        if creating:
             if project.readonly:
                 raise ProjectReadOnlyError()
             c = project._db.cursor()
@@ -1363,7 +1411,7 @@ class Resource:
             self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         else:
             assert isinstance(_id, int)
-            self._finish_init(_id)  # sets self._id
+            self._finish_init(_id, creating)  # sets self._id
         
         return self
     
@@ -1371,28 +1419,30 @@ class Resource:
     def _is_finished_initializing(self) -> bool:
         return self._id is not None
     
-    def _finish_init(self, id: int) -> None:
+    def _finish_init(self, id: int, creating: bool) -> None:
         """
         Finishes initializing a Resource that was created with
         Resource(..., _id=Resource._DEFER_ID).
+        
+        Arguments:
+        * materializing -- whether this resource already existed in the database
         """
         self._id = id
         
-        project = self.project  # cache
-        normalized_url = self._url  # cache
-        
-        # Record self in Project
-        if not project._loading:
-            project._resource_for_url[normalized_url] = self
+        if creating:
+            project = self.project  # cache
+            
+            # Record self in Project
+            project._resource_for_url[self._url] = self
             project._resource_for_id[id] = self
+            
+            # Notify listeners that self did instantiate
+            project._resource_did_instantiate(self)
         else:
+            # Record self in Project
             # (Caller is responsible for updating Project._resource_for_url)
             # (Caller is responsible for updating Project._resource_for_id)
             pass
-        
-        # Notify listeners that self did instantiate
-        if not project._loading:
-            project._resource_did_instantiate(self)
     
     # === Init (Many) ===
     
@@ -1452,7 +1502,7 @@ class Resource:
         # and finish initializing each Resource (by recording it
         # in the Project and notifying listeners of instantiation)
         for (new_r, (id,)) in zip(resource_for_new_url.values(), ids):
-            new_r._finish_init(id)
+            new_r._finish_init(id, creating=True)
         
         # Return the set of Resources that were created,
         # which may be shorter than the list of URLs to create that were provided
@@ -1696,6 +1746,7 @@ class Resource:
     
     # === Revisions ===
     
+    @fg_affinity
     def has_any_revisions(self) -> bool:
         """
         Returns whether any revisions of this resource have been downloaded.
@@ -1707,6 +1758,7 @@ class Resource:
         c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
         return c.fetchone() is not None
     
+    @fg_affinity
     def default_revision(self, *, stale_ok: bool=True) -> Optional[ResourceRevision]:
         """
         Loads and returns the "default" revision of this resource, which is the revision
@@ -1746,6 +1798,7 @@ class Resource:
                     return revision
         return None
     
+    @fg_affinity
     def revisions(self, *, reversed: bool=False) -> Iterable[ResourceRevision]:
         """
         Loads and returns a list of `ResourceRevision`s downloaded for this resource.
@@ -1792,6 +1845,7 @@ class Resource:
         if not any_rows:
             self._definitely_has_no_revisions = True
     
+    @fg_affinity
     def revision_for_etag(self) -> Dict[str, ResourceRevision]:
         """
         Returns a map of each known ETag to a matching ResourceRevision that is NOT an HTTP 304.
@@ -1828,7 +1882,7 @@ class Resource:
         """
         project = self.project  # cache
         
-        if new_url in project._resource_for_url:
+        if project.get_resource(new_url) is not None:
             return False
         
         if project.readonly:
@@ -2249,7 +2303,7 @@ class ResourceRevision:
         [(resource_id)] = rows
         
         # Get the resource by URL from memory
-        r = project._get_resource_with_id(resource_url)
+        r = project._get_resource_with_id(resource_id)
         assert r is not None
         
         # Load all of the resource's revisions

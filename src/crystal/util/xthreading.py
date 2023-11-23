@@ -8,11 +8,12 @@ This thread is responsible for:
 """
 
 from crystal.util.profile import create_profiled_callable
+from enum import Enum
 from functools import wraps
 import os
 import sys
 import threading
-from typing import Callable, cast, Optional, TypeVar
+from typing import Callable, cast, Generator, Optional, TypeVar
 from typing_extensions import ParamSpec
 import wx
 
@@ -259,6 +260,33 @@ def bg_call_later(
     """
     thread = threading.Thread(target=callable, args=args, daemon=daemon)
     thread.start()
+
+
+# ------------------------------------------------------------------------------
+# Thread Switching Coroutines
+
+class SwitchToThread(Enum):
+    BACKGROUND = 1
+    FOREGROUND = 2
+
+
+@bg_affinity
+def run_thread_switching_coroutine(coro: Generator[SwitchToThread, None, _R]) -> _R:
+    run_next = _CALL_NOW
+    while True:
+        try:
+            command = run_next(lambda: next(coro))
+        except StopIteration as e:
+            return e.value
+        if command == SwitchToThread.BACKGROUND:
+            run_next = _CALL_NOW
+        elif command == SwitchToThread.FOREGROUND:
+            run_next = fg_call_and_wait
+        else:
+            raise AssertionError()
+
+
+_CALL_NOW = lambda f: f()
 
 
 # ------------------------------------------------------------------------------
