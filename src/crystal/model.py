@@ -50,6 +50,7 @@ from crystal.util import xshutil
 from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
+    is_foreground_thread,
 )
 import cgi
 import datetime
@@ -2887,11 +2888,8 @@ class ResourceGroup(ListenableMixin):
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         self._source = None  # type: ResourceGroupSource
         
-        # TODO: Calculate members on demand in ResourceGroupMembers
-        #       rather than up front
-        self._members = project.resources_matching_pattern(
-            url_pattern_re=self._url_pattern_re,
-            literal_prefix=ResourceGroup.literal_prefix_for_url_pattern(url_pattern))
+        # Calculate members on demand rather than up front
+        self._members = None  # type: Optional[List[Resource]]
         
         if project._loading:
             self._id = _id
@@ -3003,14 +3001,34 @@ class ResourceGroup(ListenableMixin):
     def contains_url(self, resource_url: str) -> bool:
         return self._url_pattern_re.match(resource_url) is not None
     
-    @cached_property
-    def members(self) -> 'ResourceGroupMembers':
-        return ResourceGroupMembers(self)
+    # NOTE: First access of members must be on foreground thread
+    #       but subsequent accesses can be on any thread
+    @property
+    def members(self) -> 'Sequence[Resource]':
+        """
+        Returns the members of this group, in the order they were discovered.
+        
+        The returned collection is guaranteed to support the Collection
+        interface efficiently (__iter__, __len__, __contains__).
+        
+        The returned collection currently also supports the Sequence interface
+        (__getitem__) for convenience for callers that think in terms of indexes,
+        but is only guaranteed to support the interface efficiently for callers
+        that access members in a sequential fashion.
+        """
+        if self._members is None:
+            if not is_foreground_thread():
+                raise ValueError('First access of ResourceGroup.members must be done on foreground thread')
+            self._members = self.project.resources_matching_pattern(
+                url_pattern_re=self._url_pattern_re,
+                literal_prefix=ResourceGroup.literal_prefix_for_url_pattern(self.url_pattern))
+        return self._members
     
     # Called when a new Resource is created after the project has loaded
     def _resource_did_instantiate(self, resource: Resource) -> None:
         if self.contains_url(resource.url):
-            self._members.append(resource)
+            if self._members is not None:
+                self._members.append(resource)
             
             for lis in self.listeners:
                 if hasattr(lis, 'group_did_add_member'):
@@ -3018,14 +3036,19 @@ class ResourceGroup(ListenableMixin):
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
-        if self.contains_url(old_url):
-            self._members.remove(resource)
-        if self.contains_url(new_url):
-            self._members.append(resource)
+        if self._members is not None:
+            if self.contains_url(old_url):
+                self._members.remove(resource)
+            if self.contains_url(new_url):
+                self._members.append(resource)
     
     def _resource_will_delete(self, resource: Resource) -> None:
-        if resource in self._members:
-            self._members.remove(resource)
+        if self._members is not None:
+            try:
+                # NOTE: Slow. O(n). OK for now because deleting resources is rare.
+                self._members.remove(resource)
+            except ValueError:  # not in list
+                pass
     
     def download(self, *, needs_result: bool=False) -> DownloadResourceGroupTask:
         """
@@ -3073,135 +3096,6 @@ class ResourceGroup(ListenableMixin):
 
     def __repr__(self):
         return 'ResourceGroup(%s,%s)' % (repr(self.name), repr(self.url_pattern))
-
-
-# NOTE: The Collection interface is the most efficient way to access
-#       the member collection, but the Sequence interface is provided
-#       for convenience for callers that think in terms of indexes.
-class ResourceGroupMembers(Sequence[Resource]):
-    """
-    Iterable collection of ResourceGroup members.
-    
-    Members appear in the order that they were discovered,
-    with increasing Resource IDs.
-    """
-    _VERBOSE_REWINDS = False
-    
-    def __init__(self, group: ResourceGroup) -> None:
-        self._group = group
-        self._page_iter = None  # type: Optional[_ResourceGroupMemberPageIterator]
-        self._member_iter = None  # type: Optional[Iterator[Resource]]
-    
-    # === Operations: Collection ===
-    
-    def __contains__(self, item: object) -> bool:
-        return isinstance(item, Resource) and item in self._group
-    
-    def __iter__(self) -> Iterator[Resource]:
-        return _ResourceGroupMemberPageIterator(self).iterator()
-    
-    def __len__(self) -> int:
-        # TODO: Lazily-fetch denormalized ResourceGroup size from database.
-        #       Then update in-memory (and in DB) as members are added/removed.
-        return len(self._group._members)
-    
-    # === Operations: Sequence ===
-    
-    @overload
-    def __getitem__(self, index: int) -> Resource:
-        ...
-    @overload
-    def __getitem__(self, index: slice) -> Sequence[Resource]:
-        ...
-    def __getitem__(self, index: Union[int, slice]):
-        if isinstance(index, slice):
-            if index.start is not None:
-                if index.start < 0:
-                    raise ValueError('Negative indexes in slice not supported')
-                if index.start >= len(self):
-                    raise IndexError()
-            if index.stop is not None:
-                if index.stop < 0:
-                    raise ValueError('Negative indexes in slice not supported')
-                if index.stop > len(self):
-                    raise IndexError()
-            if index.step not in [None, 1]:
-                raise ValueError('Step in slice not supported')
-            
-            # Return lazy slice: self[(index.start or 0):(index.stop or len(self))]
-            def slice_getitem(i: int) -> Resource:
-                if i < 0:
-                    raise ValueError('Negative indexes not supported')
-                if i >= slice_len():
-                    raise IndexError()
-                return self[(index.start or 0) + i]
-            def slice_len() -> int:
-                return (index.stop or len(self)) - (index.start or 0)
-            return CustomSequence(getitem_func=slice_getitem, len_func=slice_len)
-        if not isinstance(index, int):
-            raise ValueError(f'Invalid index: {index!r}')
-        if index < 0:
-            index += len(self)
-            if index < 0:
-                raise IndexError()
-        if index >= len(self):
-            raise IndexError()
-        
-        # Return member from page of active iterator
-        if True:
-            if self._page_iter is None or index < self._page_iter.page_offset:
-                # (Re)start iterating over pages
-                if self._VERBOSE_REWINDS:
-                    if self._page_iter is not None:
-                        assert index < self._page_iter.page_offset
-                        print(f'ResourceGroupMembers({self._group}): rewinding member list')
-                self._page_iter = _ResourceGroupMemberPageIterator(self)
-                self._member_iter = self._page_iter.iterator()
-                assert self._page_iter.page_offset == 0
-                assert not (index < self._page_iter.page_offset)
-            
-            # Keep reading pages until a page with the target index is read
-            assert self._page_iter is not None
-            assert self._member_iter is not None
-            while not (index < self._page_iter.page_offset + len(self._page_iter.page)):
-                try:
-                    next(self._member_iter)
-                except StopIteration:
-                    raise IndexError()
-            
-            # Read target index from page
-            return self._page_iter.page[index - self._page_iter.page_offset]
-    
-    # Sequence operations that cannot be implemented efficiently
-    def __reversed__(self) -> Iterator[Resource]:
-        raise NotImplementedError()
-    def index(self, *args, **kwargs) -> int:
-        raise NotImplementedError()
-    def count(self, item: object) -> int:
-        raise NotImplementedError()
-
-
-class _ResourceGroupMemberPageIterator:
-    # TODO: Set to higher value, like 100 or 1000, for reasonable efficiency
-    # TODO: Set to dynamically determined value, such that database access
-    #       happens within 0.2sec on average
-    _PAGE_SIZE = 3
-    
-    def __init__(self, members: ResourceGroupMembers) -> None:
-        self._group = members._group
-        self.page_offset = 0
-        self.page = []  # type: List[Resource]
-    
-    def iterator(self) -> Iterator[Resource]:
-        self.page_offset = 0
-        while True:
-            self.page = self._group._members[
-                self.page_offset:(self.page_offset + self._PAGE_SIZE)]
-            if len(self.page) == 0:
-                return  # i.e. raise StopIteration
-            for item in self.page:
-                yield item
-            self.page_offset += len(self.page)
 
 
 def _is_ascii(s: str) -> bool:

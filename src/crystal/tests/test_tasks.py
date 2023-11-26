@@ -7,6 +7,7 @@ from crystal.tests.util.data import (
     MAX_TIME_TO_DOWNLOAD_404_URL,
     MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
 )
+from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.server import served_project
@@ -99,34 +100,39 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                         assert True == r.already_downloaded_this_session
                     
                     # Download the group again, and ensure it downloads immediately
-                    drg_task = comic_g.create_download_task()
-                    # NOTE: The group won't appear to be immediately downloaded yet
-                    #       because no code has tried to access the lazily-loaded
-                    #       DownloadResourceTask children yet and thus doesn't
-                    #       know that all of those children are complete
-                    assert (True, 0, False) == (
-                        isinstance(drg_task._download_members_task.children, AppendableLazySequence),
-                        drg_task._download_members_task.children.cached_prefix_len
-                            if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
-                            else None,
-                        drg_task.complete
-                    )
-                    # NOTE: Adding the DownloadResourceGroupTask to the project's
-                    #       task tree will cause the TaskTreeNode to start accessing
-                    #       the DownloadResourceTask children because it wants to
-                    #       create a paired TaskTreeNode for each such child.
-                    #       These accesses cause the DownloadResourceTask children
-                    #       to be created and observed as being already complete.
-                    #       With all of those children complete the ancestor
-                    #       DownloadResourceGroupTask will also be completed.
-                    project.add_task(drg_task)
-                    assert (True, COMIC_G_FINAL_MEMBER_COUNT, True) == (
-                        isinstance(drg_task._download_members_task.children, AppendableLazySequence),
-                        drg_task._download_members_task.children.cached_prefix_len
-                            if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
-                            else None,
-                        drg_task.complete
-                    )
+                    if True:
+                        drg_task = comic_g.create_download_task()
+                        
+                        load_children_of_drg_task(drg_task, task_added_to_project=False)
+                        
+                        # NOTE: The group won't appear to be immediately downloaded yet
+                        #       because no code has tried to access the lazily-loaded
+                        #       DownloadResourceTask children yet and thus doesn't
+                        #       know that all of those children are complete
+                        assert (True, 0, False) == (
+                            isinstance(drg_task._download_members_task.children, AppendableLazySequence),
+                            drg_task._download_members_task.children.cached_prefix_len
+                                if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
+                                else None,
+                            drg_task.complete
+                        )
+                        
+                        # NOTE: Adding the DownloadResourceGroupTask to the project's
+                        #       task tree will cause the TaskTreeNode to start accessing
+                        #       the DownloadResourceTask children because it wants to
+                        #       create a paired TaskTreeNode for each such child.
+                        #       These accesses cause the DownloadResourceTask children
+                        #       to be created and observed as being already complete.
+                        #       With all of those children complete the ancestor
+                        #       DownloadResourceGroupTask will also be completed.
+                        project.add_task(drg_task)
+                        assert (True, COMIC_G_FINAL_MEMBER_COUNT, True) == (
+                            isinstance(drg_task._download_members_task.children, AppendableLazySequence),
+                            drg_task._download_members_task.children.cached_prefix_len
+                                if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
+                                else None,
+                            drg_task.complete
+                        )
 
 
 # ------------------------------------------------------------------------------

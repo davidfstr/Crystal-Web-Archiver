@@ -9,6 +9,7 @@ from crystal.model import Project, Resource, ResourceGroup
 import locale
 import os
 import tempfile
+from typing import Optional
 from unittest import skip
 
 
@@ -116,9 +117,9 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
                 assert '900 more' == more_ti.Text
                 
                 more_ti.Expand()
-                def more_children_visible() -> bool:
+                def more_children_visible() -> Optional[bool]:
                     assert comic_group_ti is not None
-                    return len(comic_group_ti.Children) > (100 + 1)
+                    return (len(comic_group_ti.Children) > (100 + 1)) or None
                 await wait_for(more_children_visible)
                 
                 # Ensure after expanding "# more" node that another 20 children are shown
@@ -135,9 +136,9 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
                 more_ti.SelectItem()
                 
                 more_ti.Expand()
-                def more_children_visible() -> bool:
+                def more_children_visible() -> Optional[bool]:
                     assert comic_group_ti is not None
-                    return len(comic_group_ti.Children) > (100 + 20 + 1)
+                    return (len(comic_group_ti.Children) > (100 + 20 + 1)) or None
                 await wait_for(more_children_visible)
                 
                 # Ensure after expanding a selected "# more" node that the
