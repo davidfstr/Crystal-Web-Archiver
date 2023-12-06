@@ -143,6 +143,14 @@ async def test_given_downloading_large_group_and_few_uncompleted_children_remain
     pass
 
 
+@skip('covered by: test_when_start_downloading_large_group_then_show_100_children_plus_trailing_more_node')
+async def test_while_downloading_large_group_then_keeps_no_more_than_100_member_download_tasks_in_memory() -> None:
+    # The referenced covering test ensures that:
+    #     _materialized_child_task_count(...) - _unmaterialized_child_task_count(...) <= N
+    # for any N, including 100
+    pass
+
+
 # === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit leading completed children ===
 
 async def test_given_showing_less_than_5_leading_completed_children_when_new_leading_child_completes_then_maintain_viewport_position_and_show_one_more_leading_completed_children() -> None:
