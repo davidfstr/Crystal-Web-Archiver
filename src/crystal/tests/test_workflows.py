@@ -834,7 +834,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(comic1_ti))
                 cannot_download_ti = comic1_ti.GetFirstChild()
                 assert cannot_download_ti is not None
-                assert 'Cannot download children: Project is read only' == cannot_download_ti.Text
+                assert 'Cannot download: Project is read only' == cannot_download_ti.Text
                 
                 # Ensure "Forget" and "Download" are disabled when group is selected
                 (comic_group_ti,) = [

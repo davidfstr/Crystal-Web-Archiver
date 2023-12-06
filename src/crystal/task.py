@@ -762,11 +762,7 @@ class DownloadResourceTask(Task):
     
     @property
     def future(self) -> Future:
-        if self._download_body_task is None:
-            assert self._already_downloaded_task is not None
-            return self._already_downloaded_task.future
-        else:
-            return self._download_body_task.future
+        return self.get_future(wait_for_embedded=False)
     
     def get_future(self, wait_for_embedded: bool=False) -> Future:
         if self._download_body_task is None:
@@ -793,7 +789,9 @@ class DownloadResourceTask(Task):
                 self.subtitle = task.subtitle
     
     def child_task_did_complete(self, task: Task) -> None:
-        from crystal.model import RevisionBodyMissingError
+        from crystal.model import (
+            ProjectHasTooManyRevisionsError, RevisionBodyMissingError
+        )
         
         if task is self._download_body_task:
             if self._already_downloaded_task is not None:
@@ -802,6 +800,14 @@ class DownloadResourceTask(Task):
             else:
                 try:
                     body_revision = self._download_body_task.future.result()
+                except (CannotDownloadWhenProjectReadOnlyError,
+                        ProjectFreeSpaceTooLowError,
+                        ProjectHasTooManyRevisionsError):
+                    # Ignore error
+                    pass
+                    
+                    # Behave as if there are no embedded resources
+                    pass
                 except Exception as e:
                     if is_database_closed_error(e):
                         # Probably the project was closed. Ignore error.
@@ -967,8 +973,13 @@ class DownloadResourceTask(Task):
                 final_children = []
                 num_downloaded_resources = 0
                 for c in self.children:
-                    if c is self._download_body_task or c is self._parse_links_task:
+                    if (c is self._download_body_task or 
+                            c is self._parse_links_task):
                         final_children.append(c)
+                    elif (isinstance(c, DownloadResourceBodyTask) or
+                            isinstance(c, ParseResourceRevisionLinks)):
+                        # Forget old copies of these tasks
+                        pass
                     else:
                         assert isinstance(task, DownloadResourceTask)
                         num_downloaded_resources += 1

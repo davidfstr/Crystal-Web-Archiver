@@ -42,6 +42,15 @@ Release Notes ⋮
     * Add Kubuntu as a supported Linux distribution
     * Add KDE as a supported desktop environment, in addition to GNOME
 
+* Error handling improvements
+    * When expanding an URL in the Entity Tree that downloaded with an error,
+      display an error node appropriately.
+    * When expanding an undownloaded URL in the Entity Tree that could not be
+      downloaded because the disk is full or the project has too many revisions,
+      display an error node appropriately.
+    * When expanding an URL in the Entity Tree whose revision body has been
+      deleted, try to redownload it automatically.
+
 * Minor fixes
     * Eliminated race condition where scheduler thread could try to read from
       the root task's children list concurrently with a different thread

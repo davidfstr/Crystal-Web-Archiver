@@ -1649,14 +1649,17 @@ class Resource:
         
         A top-level Task will be created internally to display the progress.
         
+        Raises:
+        * ProjectClosedError --
+            If the project is closed.
+        
         Future Raises:
         * CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
         * ProjectFreeSpaceTooLowError --
             If the project does not have enough free disk space to safely
             download more resources.
-        * ProjectClosedError --
-            If the project is closed.
+        * ProjectHasTooManyRevisionsError
         """
         task = self.create_download_body_task()
         if not task.complete:
@@ -1698,14 +1701,17 @@ class Resource:
         not need and will ignore the result of the returned future,
         which enables additional optimizations.
         
+        Raises:
+        * ProjectClosedError --
+            If the project is closed.
+        
         Future Raises:
         * CannotDownloadWhenProjectReadOnlyError --
             If resource is not already downloaded and project is read-only.
         * ProjectFreeSpaceTooLowError --
             If the project does not have enough free disk space to safely
             download more resources.
-        * ProjectClosedError --
-            If the project is closed.
+        * ProjectHasTooManyRevisionsError
         """
         task = self.create_download_task(needs_result=needs_result, is_embedded=is_embedded)
         if not task.complete:
@@ -2045,7 +2051,7 @@ class ResourceRevision:
     request_cookie: Optional[str]
     error: Optional[Exception]
     metadata: Optional[ResourceRevisionMetadata]
-    _id: int  # or None if deleted
+    _id: Optional[int]  # None if deleted
     has_body: bool
     
     # === Init ===
@@ -2141,7 +2147,7 @@ class ResourceRevision:
         self.request_cookie = request_cookie
         self.error = error
         self.metadata = metadata
-        self._id = None  # type: ignore[assignment]  # not yet created
+        self._id = None  # not yet created
         self.has_body = body_stream is not None
         
         project = self.project
@@ -2321,19 +2327,19 @@ class ResourceRevision:
         return json.dumps(cls._encode_error_dict(error))
     
     @staticmethod
-    def _encode_error_dict(error: Optional[Exception]) -> Optional[Dict[str, str]]:
+    def _encode_error_dict(error: Optional[Exception]) -> 'Optional[DownloadErrorDict]':
         if error is None:
             error_dict = None
         elif isinstance(error, _PersistedError):
-            error_dict = {
+            error_dict = DownloadErrorDict({
                 'type': error.type,
                 'message': error.message,
-            }
+            })
         else:
-            error_dict = {
+            error_dict = DownloadErrorDict({
                 'type': type(error).__name__,
                 'message': str(error),
-            }
+            })
         return error_dict
     
     @staticmethod
@@ -2363,7 +2369,7 @@ class ResourceRevision:
         return self.resource.url
     
     @property
-    def error_dict(self):
+    def error_dict(self) -> 'Optional[DownloadErrorDict]':
         return self._encode_error_dict(self.error)
     
     def _ensure_has_body(self) -> None:
@@ -2382,6 +2388,9 @@ class ResourceRevision:
             if this revision's in-memory ID is higher than what the 
             project format supports on disk
         """
+        if self._id is None:
+            raise RevisionDeletedError()
+        
         major_version = self.project.major_version
         if major_version >= 2:
             os_path_sep = os.path.sep  # cache
@@ -2665,6 +2674,8 @@ class ResourceRevision:
         
         This method blocks while parsing the links.
         
+        If this revision is an error then returns an empty list.
+        
         Raises:
         * NoRevisionBodyError
         * RevisionBodyMissingError
@@ -2674,13 +2685,16 @@ class ResourceRevision:
     def document_and_links(self) -> tuple[Optional[Document], list[Link], Optional[str]]:
         """
         Returns a 3-tuple containing:
-        (1) if the resource is a document, the document, otherwise None;
-        (2) a list of rewritable Links found in this resource.
+        (1) if this revision is a document, the document, otherwise None;
+        (2) a list of rewritable Links found in this revision.
         (3) a Content-Type value for the document, or None if unknown
         
         The HTML document can be reoutput by getting its str() representation.
         
         This method blocks while parsing the links.
+        
+        If this revision is an error then returns a None document and
+        an empty list of links.
         
         Raises:
         * NoRevisionBodyError
@@ -2819,6 +2833,15 @@ class ResourceRevision:
     
     def __str__(self) -> str:
         return f'Revision {self._id} for URL {self.resource.url}'
+
+
+class DownloadErrorDict(TypedDict):
+    type: str
+    message: str
+
+
+class RevisionDeletedError(ValueError):
+    pass
 
 
 class ProjectHasTooManyRevisionsError(Exception):

@@ -1,16 +1,24 @@
+from contextlib import contextmanager
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
     wait_for,
 )
+from crystal.tests.util.runner import bg_sleep
+from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.model import Project, Resource, ResourceGroup
+from crystal.model import (
+    DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
+)
 import locale
 import os
+import socket
 import tempfile
-from typing import Optional
+from typing import Iterator, NoReturn, Optional
 from unittest import skip
+from unittest.mock import patch
 
 
 
@@ -23,7 +31,196 @@ from unittest import skip
 # ------------------------------------------------------------------------------
 # Test: RootResourceNode
 
-# (TODO: Add basic tests)
+@skip('not yet automated')
+async def test_rrn_icon_looks_like_anchor_and_has_correct_tooltip() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_rrn_title_shows_rr_name_and_url() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_rrn_does_not_load_children_until_initially_expanded() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_undownloaded_rrn_has_undownloaded_badge() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_downloaded_fresh_rrn_has_fresh_badge() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_downloaded_stale_rrn_has_stale_badge() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_downloaded_error_rrn_has_error_badge() -> None:
+    pass
+
+
+async def test_given_rr_is_not_downloaded_and_project_is_read_only_when_expand_rrn_then_shows_error_node() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            # Create project
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                # Create RootResource but don't download it
+                r = Resource(project, home_url)
+                home_rr = RootResource(project, 'Home', r)
+            
+            # Reopen project as read-only
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                (home_ti,) = root_ti.Children
+                
+                # Expand RootResourceNode and ensure it has an _ErrorNode child
+                home_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                (error_ti,) = home_ti.Children
+                assert (
+                    'Cannot download: Project is read only' ==
+                    error_ti.Text
+                )
+
+
+@skip('not yet automated')
+async def test_given_rr_is_not_downloaded_and_disk_is_full_when_expand_rrn_then_shows_error_node() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_rr_is_not_downloaded_and_project_has_maximum_revisions_when_expand_rrn_then_shows_error_node() -> None:
+    pass
+
+
+async def test_given_rr_is_downloaded_and_is_error_when_expand_rrn_then_shows_error_node() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                # Download revision
+                with _internet_down():
+                    r = Resource(project, home_url)
+                    home_rr = RootResource(project, 'Home', r)
+                    revision_future = home_rr.download()
+                    while not revision_future.done():
+                        await bg_sleep(DEFAULT_WAIT_PERIOD)
+                    # Wait for download to complete, including the trailing wait
+                    await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
+                    
+                    rr = revision_future.result()
+                    assert DownloadErrorDict(
+                        type='gaierror',
+                        message='[Errno 8] nodename nor servname provided, or not known',
+                    ) == rr.error_dict
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                (home_ti,) = root_ti.Children
+                
+                # Expand RootResourceNode and ensure it has an _ErrorNode child
+                home_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                (error_ti,) = home_ti.Children
+                assert (
+                    'Error downloading URL: gaierror: [Errno 8] nodename nor servname provided, or not known' ==
+                    error_ti.Text
+                )
+
+
+async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_then_shows_error_node_and_redownloads_rr() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            # Download revision
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                r = Resource(project, home_url)
+                home_rr = RootResource(project, 'Home', r)
+                revision_future = home_rr.download()
+                while not revision_future.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                
+                rr = revision_future.result()
+                rr_body_filepath = rr._body_filepath  # capture
+            
+            # Simulate loss of revision body file, perhaps due to an
+            # incomplete copy of a .crystalproj from one disk to another
+            # (perhaps because of bad blocks in the revision body file)
+            os.remove(rr_body_filepath)
+            
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+                project = Project._last_opened_project
+                assert project is not None
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                (home_ti,) = root_ti.Children
+                
+                # Expand RootResourceNode and ensure it has an _ErrorNode child
+                # 
+                # TODO: In the future, block on the redownload finishing
+                #       and list the links in the redownloaded revision,
+                #       WITHOUT needing to reopen the project later
+                home_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                (error_ti,) = home_ti.Children
+                assert (
+                    'Cannot list links: URL revision body is missing. Recommend delete and redownload.' ==
+                    error_ti.Text
+                )
+                
+                # Wait for redownload to complete
+                await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
+                
+                # Reexpand RootResourceNode and ensure the children are the same
+                home_ti.Collapse()
+                home_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                (error_ti,) = home_ti.Children
+                assert (
+                    'Cannot list links: URL revision body is missing. Recommend delete and redownload.' ==
+                    error_ti.Text
+                )
+            
+            # Reopen same project
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+                project = Project._last_opened_project
+                assert project is not None
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                (home_ti,) = root_ti.Children
+                
+                # Expand RootResourceNode and ensure it now lists the links in
+                # the redownloaded revision
+                home_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                children = home_ti.Children
+                assert not (
+                    len(children) >= 1 and 
+                    'Cannot list links:' in children[0].Text
+                )
 
 
 # ------------------------------------------------------------------------------
@@ -205,6 +402,18 @@ async def test_given_more_node_with_large_item_count_then_displays_count_with_co
 # Test: MorePlaceholderNode
 
 # (TODO: Add basic tests)
+
+
+# ------------------------------------------------------------------------------
+# Utility
+
+@contextmanager
+def _internet_down() -> Iterator[None]:
+    def MockHTTPConnection(*args, **kwargs) -> NoReturn:
+        raise socket.gaierror(8, 'nodename nor servname provided, or not known')
+    
+    with patch('crystal.download.HTTPConnection', MockHTTPConnection):
+        yield
 
 
 # ------------------------------------------------------------------------------

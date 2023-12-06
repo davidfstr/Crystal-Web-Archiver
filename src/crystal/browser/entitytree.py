@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 from crystal.browser.icons import BADGED_TREE_NODE_ICON, TREE_NODE_ICONS
-from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
+from crystal.doc.generic import Link
+from crystal.model import (
+    Project, ProjectHasTooManyRevisionsError, Resource, ResourceGroup,
+    ResourceRevision, RevisionBodyMissingError, RevisionDeletedError,
+    RootResource,
+)
 from crystal.progress import (
     DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
 )
-from crystal.task import CannotDownloadWhenProjectReadOnlyError
+from crystal.task import (
+    CannotDownloadWhenProjectReadOnlyError, ProjectFreeSpaceTooLowError,
+)
 # TODO: Expand this star import
 from crystal.ui.tree import *
 from crystal.util.wx_bind import bind
 from crystal.util.xcollections import defaultordereddict
+from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import os
 import threading
@@ -419,15 +427,15 @@ class _LoadingNode(Node):
         pass
 
 
-class _ChildrenUnavailableBecauseReadOnlyNode(Node):
-    def __init__(self):
+class _ErrorNode(Node):
+    def __init__(self, title: str) -> None:
         super().__init__()
         
         self.view = NodeView()
         self.view.icon_set = (
             (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_warning']),
         )
-        self.view.title = 'Cannot download children: Project is read only'
+        self.view.title = title
     
     # === Updates ===
     
@@ -459,7 +467,7 @@ class _ResourceNode(Node):
         
         self.resource = resource
         self.download_future = None
-        self.resource_links = None
+        self.resource_links = None  # type: Optional[List[Link]]
     
     # === Properties ===
     
@@ -546,21 +554,48 @@ class _ResourceNode(Node):
         if self.download_future is None:
             self.download_future = self.resource.download()
             
-            def download_done(future):
-                # TODO: Gracefully handle ProjectFreeSpaceTooLowError here
+            def download_done(future: 'Future[ResourceRevision]') -> None:
+                def set_error_child_later(message: str) -> None:
+                    def fg_task() -> None:
+                        self.children = [_ErrorNode(message)]
+                    fg_call_later(fg_task)
+                
                 try:
                     revision = future.result()
                 except CannotDownloadWhenProjectReadOnlyError:
-                    def fg_task():
-                        self.children = [_ChildrenUnavailableBecauseReadOnlyNode()]
-                    fg_call_later(fg_task)
+                    set_error_child_later('Cannot download: Project is read only')
+                except ProjectFreeSpaceTooLowError:
+                    set_error_child_later('Cannot download: Disk is full')
+                except ProjectHasTooManyRevisionsError:
+                    set_error_child_later('Cannot download: Project has too many revisions')
+                except Exception:
+                    set_error_child_later('Cannot download: Unexpected error')
                 else:
                     revision = revision.resolve_http_304()  # reinterpret
                     
-                    def bg_task():
+                    error_dict = revision.error_dict
+                    if error_dict is not None:
+                        set_error_child_later(
+                            f'Error downloading URL: {error_dict["type"]}: {error_dict["message"]}')
+                        return
+                    
+                    def bg_task() -> None:
                         # Link parsing is I/O intensive, so do it on a background thread
-                        self.resource_links = revision.links()
-                        fg_call_later(self.update_children)
+                        try:
+                            self.resource_links = revision.links()
+                        # TODO: Instead of catching RevisionDeletedError,
+                        #       fix Resource.download() and DownloadResourceTask.future
+                        #       to never return a ResourceRevision that has been deleted,
+                        #       even when it internally deletes and redownloads a revision
+                        #       whose body is missing
+                        except (RevisionBodyMissingError, RevisionDeletedError):
+                            set_error_child_later(
+                                'Cannot list links: URL revision body is missing. Recommend delete and redownload.')
+                        except Exception:
+                            set_error_child_later(
+                                'Cannot list links: Unexpected error')
+                        else:
+                            fg_call_later(self.update_children)
                     bg_call_later(bg_task)
             self.download_future.add_done_callback(download_done)
     
