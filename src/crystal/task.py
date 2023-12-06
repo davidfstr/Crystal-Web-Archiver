@@ -1216,6 +1216,19 @@ class DownloadResourceGroupMembersTask(Task):
         
         self._done_updating_group = False
         
+        self._pbc = None  # type: Optional[ProgressBarCalculator]
+        self._children_loaded = False
+    
+    @overrides
+    def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
+        if not self._children_loaded:
+            return lambda: fg_call_and_wait(self._load_children)
+        
+        return super().try_get_next_task_unit()
+    
+    def _load_children(self) -> None:
+        group = self.group  # cache
+        
         if self._LAZY_LOAD_CHILDREN:
             def createitem(i: int) -> DownloadResourceTask:
                 return group.members[i].create_download_task(needs_result=False, is_embedded=False)
@@ -1245,7 +1258,8 @@ class DownloadResourceGroupMembersTask(Task):
         self._pbc = ProgressBarCalculator(
             initial=0,
             total=len(self.children),
-        )  # type: Optional[ProgressBarCalculator]
+        )
+        self._children_loaded = True  # after self._pbc = ...; before self._update_subtitle()
         self._update_subtitle()
         
         if not self._LAZY_LOAD_CHILDREN:
@@ -1253,6 +1267,8 @@ class DownloadResourceGroupMembersTask(Task):
             for t in [t for t in member_download_tasks if t.complete]:
                 self.task_did_complete(t)
             # (NOTE: self.complete might be True now)
+        
+        assert self._children_loaded  # because set earlier in this function
     
     def group_did_add_member(self, group: ResourceGroup, member: Resource) -> None:
         if self._LAZY_LOAD_CHILDREN:
@@ -1286,7 +1302,11 @@ class DownloadResourceGroupMembersTask(Task):
         self._update_subtitle()
         self._update_completed_status()
     
-    def _update_subtitle(self):
+    def _update_subtitle(self) -> None:
+        if not self._children_loaded:
+            return
+        assert self._pbc is not None
+        
         of_phrase = 'of at least' if not self._done_updating_group else 'of'
         (remaining_str, time_per_item_str) = \
             self._pbc.remaining_str_and_time_per_item_str()
@@ -1297,7 +1317,9 @@ class DownloadResourceGroupMembersTask(Task):
         )
     
     def _update_completed_status(self):
-        if self.num_children_complete == len(self.children) and self._done_updating_group:
+        if (self._children_loaded and
+                self.num_children_complete == len(self.children) and 
+                self._done_updating_group):
             self.finish()
     
     def finish(self) -> None:

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from crystal.util.ellipsis import Ellipsis, EllipsisType
 import os
 import os.path
 import shutil
@@ -18,20 +19,6 @@ except ImportError:
     # Python 3.8
     from functools import lru_cache
     cache = lru_cache(maxsize=None)
-
-
-# Define EllipsisType, the type of Ellipsis
-if sys.version_info >= (3, 10):
-    from types import EllipsisType
-else:
-    # https://github.com/python/typing/issues/684#issuecomment-548203158
-    if TYPE_CHECKING:
-        from enum import Enum
-        class EllipsisType(Enum):
-            Ellipsis = '...'
-        Ellipsis = EllipsisType.Ellipsis
-    else:
-        EllipsisType = type(Ellipsis)
 
 
 def install_to_linux_desktop_environment() -> None:

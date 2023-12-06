@@ -14,6 +14,7 @@ from crystal.util.xcollections import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import os
 import threading
+import time
 from typing import cast, List, Optional, Union
 from urllib.parse import urljoin, urlparse, urlunparse
 import wx
@@ -833,6 +834,7 @@ class ResourceGroupNode(Node):
             if not self._children_loaded:
                 return
         
+        # NOTE: May trigger a load of the members, which could be slow
         members = self.resource_group.members  # cache
         
         children = self.children  # cache
@@ -845,7 +847,7 @@ class ResourceGroupNode(Node):
         children_rrs = []  # type: List[Node]
         children_rs = []  # type: List[Node]
         project = self.resource_group.project  # cache
-        for r in members[:self._max_visible_children]:
+        for r in members[:min(self._max_visible_children, len(members))]:
             rr = project.get_root_resource(r)
             if rr is None:
                 children_rs.append(NormalResourceNode(r))
@@ -864,7 +866,19 @@ class ResourceGroupNode(Node):
     def on_expanded(self, event) -> None:
         # If this is the first expansion attempt, populate the children
         if not self._children_loaded:
-            self.update_children(force_populate=True)
+            def fg_task_later() -> None:
+                self.update_children(force_populate=True)
+            def bg_task():
+                # Give time for the loading node to display
+                time.sleep(.1)
+                
+                # NOTE: Use profile=False because it is known that the database
+                #       query for loading group members is known to be slow.
+                #       
+                #       In the future it would be ideal to move database operations
+                #       off of the foreground thread.
+                fg_call_later(fg_task_later, profile=False)
+            bg_call_later(bg_task)
     
     def on_more_expanded(self, more_node: MorePlaceholderNode) -> None:
         # Save selected node

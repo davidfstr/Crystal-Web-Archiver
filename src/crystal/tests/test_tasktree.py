@@ -10,6 +10,7 @@ from crystal.task import (
 )
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.data import MAX_TIME_TO_DOWNLOAD_404_URL
+from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wait_while
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
@@ -456,6 +457,7 @@ async def _project_with_resource_group_starting_to_download(
                     
                     (download_rg_task,) = project.root_task.children
                     assert isinstance(download_rg_task, DownloadResourceGroupTask)
+                    load_children_of_drg_task(download_rg_task, scheduler_thread_enabled=scheduler_thread_enabled)
                     (_, download_rg_members_task) = download_rg_task.children
                     assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
                     

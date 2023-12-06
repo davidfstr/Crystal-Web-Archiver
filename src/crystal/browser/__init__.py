@@ -452,38 +452,40 @@ class MainWindow:
         assert selected_entity is not None
         
         # Show progress dialog if it will likely take a long time to start the download
-        if (isinstance(selected_entity, ResourceGroup) and
-                len(selected_entity.members) >= 2000 and  # TODO: Tune threshold
-                not DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN):
-            progress_dialog = wx.ProgressDialog(
-                title='Starting download',
-                message=f'Starting download of {len(selected_entity.members):n} members...',
-                parent=self._frame,
-                style=wx.PD_ELAPSED_TIME)
-            progress_dialog.Name = 'cr-starting-download'
-            progress_dialog.Pulse(progress_dialog.Message)  # make progress bar indeterminate
-            progress_dialog.Show()
-            
-            # Update the elapsed time every 1 second
-            # 
-            # NOTE: It would be simpler to implement this logic with wx.Timer
-            #       but wx.Timer seems to not work well if very many lambdas
-            #       are scheduled with fg_call_later at the same time.
-            def elapsed_time_updater() -> None:
-                while True:
-                    time.sleep(1.0)
-                    def fg_task() -> bool:
-                        if progress_dialog is not None:
-                            progress_dialog.Pulse(progress_dialog.Message)
-                            return True
-                        else:
-                            return False
-                    still_ticking = fg_call_and_wait(fg_task)
-                    if not still_ticking:
-                        break
-            bg_call_later(elapsed_time_updater)
+        if DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
+            progress_dialog = None  # type: Optional[wx.ProgressDialog]
         else:
-            progress_dialog = None
+            if (isinstance(selected_entity, ResourceGroup) and
+                    len(selected_entity.members) >= 2000):  # TODO: Tune threshold
+                progress_dialog = wx.ProgressDialog(
+                    title='Starting download',
+                    message=f'Starting download of {len(selected_entity.members):n} members...',
+                    parent=self._frame,
+                    style=wx.PD_ELAPSED_TIME)
+                progress_dialog.Name = 'cr-starting-download'
+                progress_dialog.Pulse(progress_dialog.Message)  # make progress bar indeterminate
+                progress_dialog.Show()
+                
+                # Update the elapsed time every 1 second
+                # 
+                # NOTE: It would be simpler to implement this logic with wx.Timer
+                #       but wx.Timer seems to not work well if very many lambdas
+                #       are scheduled with fg_call_later at the same time.
+                def elapsed_time_updater() -> None:
+                    while True:
+                        time.sleep(1.0)
+                        def fg_task() -> bool:
+                            if progress_dialog is not None:
+                                progress_dialog.Pulse(progress_dialog.Message)
+                                return True
+                            else:
+                                return False
+                        still_ticking = fg_call_and_wait(fg_task)
+                        if not still_ticking:
+                            break
+                bg_call_later(elapsed_time_updater)
+            else:
+                progress_dialog = None
         
         def bg_task() -> None:
             assert selected_entity is not None
@@ -495,6 +497,7 @@ class MainWindow:
             if progress_dialog is not None:
                 def fg_task() -> None:
                     nonlocal progress_dialog
+                    assert progress_dialog is not None
                     progress_dialog.Destroy()
                     progress_dialog = None  # unexport
                 fg_call_and_wait(fg_task)

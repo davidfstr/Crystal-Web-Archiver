@@ -28,13 +28,15 @@ Release Notes ⋮
         * macOS: Hide .crystalproj and .crystalopen file extensions
 
 * Large project improvements (with 3,000,000 - 11,000,000 URLs)
+    * Large projects now open immediately because URLs and group members
+      are now loaded on demand rather than upfront.
+    * Large groups now start downloading immediately because member
+      download tasks are now created on demand rather than upfront.
     * .crystalproj format now stores revisions in a hierarchy of nested
       directories rather than all of them inside a single directory.
     * .crystalproj format now stores revisions in lexicographic order
       in the filesystem so that when a project is copied to a new location,
       the order of revisions on disk is preserved in the new copy.
-    * Large groups now start downloading immediately because member
-      download tasks are now created on demand rather than upfront.
 
 * Support improvements
     * Add Kubuntu as a supported Linux distribution

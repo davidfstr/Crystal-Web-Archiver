@@ -14,7 +14,10 @@ from crystal.util.cli import (
     print_success,
     print_warning,
 )
-from crystal.util.xthreading import bg_call_later, fg_call_and_wait
+from crystal.util.xthreading import (
+    bg_affinity, bg_call_later, fg_call_and_wait, 
+    run_thread_switching_coroutine, SwitchToThread,
+)
 import datetime
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
@@ -24,7 +27,7 @@ import os
 import re
 import shutil
 from textwrap import dedent
-from typing import Dict, Generator, List, Literal, Optional
+from typing import Dict, Generator, Iterator, List, Literal, Optional
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 
 
@@ -305,12 +308,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     def do_GET(self) -> None:  # override
         try:
-            self._do_GET()
+            run_thread_switching_coroutine(self._do_GET())
         except BrokenPipeError:
             # Browser did drop connection before did finish sending response
             pass
     
-    def _do_GET(self) -> None:
+    def _do_GET(self) -> Generator[SwitchToThread, None, None]:
         readonly = self.project.readonly  # cache
         dynamic_ok = (self.headers.get('X-Crystal-Dynamic', 'True') == 'True')
         
@@ -351,6 +354,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
         # Serve resource revision in archive
         archive_url = self.get_archive_url(self.path)
         if archive_url is not None:
+            yield SwitchToThread.FOREGROUND
+            
             # If URL not in archive in its original form,
             # see whether it exists in the archive in a different form,
             # or whether it should be created in a different form
@@ -358,13 +363,18 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 archive_url_alternatives = Resource.resource_url_alternatives(
                     self.project, archive_url)
                 if len(archive_url_alternatives) >= 2:
+                    assert archive_url_alternatives[0] == archive_url
+                    # TODO: Optimize to use a bulk version of Project.get_resource()
+                    #       rather than making several individual queries
                     for urla in archive_url_alternatives[1:]:
                         if self.project.get_resource(urla) is not None:
                             # Redirect to existing URL in archive
+                            yield SwitchToThread.BACKGROUND
                             self.send_redirect(self.get_request_url(urla))
                             return
                     
                     # Redirect to canonical form of URL in archive
+                    yield SwitchToThread.BACKGROUND
                     self.send_redirect(self.get_request_url(archive_url_alternatives[-1]))
                     return
             # (Either resource exists at archive_url, or archive_url is in canonical form)
@@ -386,9 +396,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
                         assert archive_url is not None
                         return Resource(self.project, archive_url)
                     resource = fg_call_and_wait(download_resource)
+                    yield SwitchToThread.BACKGROUND
                     self._try_download_revision_dynamically(resource, needs_result=False)
                     # (continue to serve downloaded resource revision)
                 else:
+                    yield SwitchToThread.BACKGROUND
                     self.send_resource_not_in_archive(archive_url)
                     return
             
@@ -401,6 +413,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
                         stale_ok=True if self.project.readonly else False
                     )
                 revision = fg_call_and_wait(get_default_revision)
+            
+            yield SwitchToThread.BACKGROUND
+            
             if revision is None:
                 if not readonly and dynamic_ok:
                     # If the existing resource is also a root resource,
@@ -517,6 +532,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # === Send Page ===
     
+    @bg_affinity
     def send_welcome_page(self, query_params: Dict[str, List[str]], *, vary_referer: bool) -> None:
         # TODO: Is this /?url=** path used anywhere anymore?
         if 'url' in query_params:
@@ -550,6 +566,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             """
         ).lstrip('\n').encode('utf-8'))
     
+    @bg_affinity
     def send_not_found_page(self, *, vary_referer: bool) -> None:
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
@@ -573,6 +590,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             """
         ).lstrip('\n').encode('utf-8'))
     
+    @bg_affinity
     def send_resource_not_in_archive(self, archive_url: str) -> None:
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
@@ -599,6 +617,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         self._print_error('*** Requested resource not in archive: ' + archive_url)
     
+    @bg_affinity
     def send_redirect(self, redirect_url: str, *, vary_referer: bool=False) -> None:
         self.send_response(307)
         self.send_header('Location', redirect_url)
@@ -608,6 +627,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # === Send Revision ===
     
+    @bg_affinity
     def send_revision(self, revision: ResourceRevision, archive_url: str) -> None:
         if revision.error is not None:
             self.send_resource_error(revision.error_dict, archive_url)
@@ -619,6 +639,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_generic_revision(revision)
     
+    @bg_affinity
     def send_resource_error(self, error_dict, archive_url) -> None:
         self.send_response(400)
         self.send_header('Content-Type', 'text/html')
@@ -658,6 +679,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         self._print_error('*** Requested resource was fetched with error: ' + archive_url)
     
+    @bg_affinity
     def send_http_revision(self, revision: ResourceRevision) -> None:
         if revision.is_http_304:
             def do_resolve_http_304():
@@ -716,6 +738,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         # Send body
         self.send_revision_body(revision, doc, links, revision_datetime)
     
+    @bg_affinity
     def send_generic_revision(self, revision: ResourceRevision) -> None:
         # Determine what Content-Type to send
         assert revision.has_body
@@ -734,6 +757,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         # Send body
         self.send_revision_body(revision, doc, links, revision_datetime=None)
     
+    @bg_affinity
     def send_revision_body(self, 
             revision: ResourceRevision, 
             doc: Optional[Document], 
