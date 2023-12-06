@@ -75,23 +75,26 @@ class TaskTreeNode:
             # HACK: Reaches into a progress dialog managed elsewhere,
             #       in MainWindow._on_download_entity()
             progress_dialog_old_message = None  # type: Optional[str]
-            if len(self.task.children) >= 100 and not DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
-                assert is_foreground_thread()
-                progress_dialog = wx.FindWindowByName('cr-starting-download')  # type: Optional[wx.Window]
-                if progress_dialog is not None:
-                    assert isinstance(progress_dialog, wx.ProgressDialog)
-                    
-                    # Try remove elapsed time from progress dialog,
-                    # since we won't be able to keep it up to date soon
-                    # 
-                    # NOTE: This has no effect on macOS
-                    progress_dialog.WindowStyleFlag &= ~wx.PD_ELAPSED_TIME
-                    
-                    # Change progress dialog message
-                    progress_dialog_old_message = progress_dialog.Message
-                    progress_dialog.Pulse(f'Adding {len(self.task.children):n} tasks...')
+            if DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
+                progress_dialog = None  # type: Optional[wx.Window]
             else:
-                progress_dialog = None
+                if len(self.task.children) >= 100:
+                    assert is_foreground_thread()
+                    progress_dialog = wx.FindWindowByName('cr-starting-download')
+                    if progress_dialog is not None:
+                        assert isinstance(progress_dialog, wx.ProgressDialog)
+                        
+                        # Try remove elapsed time from progress dialog,
+                        # since we won't be able to keep it up to date soon
+                        # 
+                        # NOTE: This has no effect on macOS
+                        progress_dialog.WindowStyleFlag &= ~wx.PD_ELAPSED_TIME
+                        
+                        # Change progress dialog message
+                        progress_dialog_old_message = progress_dialog.Message
+                        progress_dialog.Pulse(f'Adding {len(self.task.children):n} tasks...')
+                else:
+                    progress_dialog = None
             
             self.task_did_set_children(self.task, len(self.task.children))
             
