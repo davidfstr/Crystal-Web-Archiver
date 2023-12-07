@@ -5,6 +5,10 @@ from typing import Callable
 from typing_extensions import Self
 
 
+# Whether to print each database query
+VERBOSE_QUERIES = False
+
+
 class DatabaseConnection:
     """Wraps a sqlite3.dbapi2.Connection, ensuring that it is used correctly."""
     
@@ -48,6 +52,8 @@ class DatabaseCursor:
                     'Caller should have checked this case and thrown ProjectReadOnlyError.'
                 )
         
+        if VERBOSE_QUERIES:
+            print(f'QUERY: {command!r}, {args=}')
         result = self._c.execute(command, *args, **kwargs)
         assert result is self._c
         return self

@@ -359,7 +359,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
             # If URL not in archive in its original form,
             # see whether it exists in the archive in a different form,
             # or whether it should be created in a different form
-            if self.project.get_resource(archive_url) is None:
+            resource = self.project.get_resource(archive_url)
+            if resource is None:
                 archive_url_alternatives = Resource.resource_url_alternatives(
                     self.project, archive_url)
                 if len(archive_url_alternatives) >= 2:
@@ -379,7 +380,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     return
             # (Either resource exists at archive_url, or archive_url is in canonical form)
             
-            resource = self.project.get_resource(archive_url)
             if resource is None:
                 # If the previously undiscovered resource is a member of an
                 # existing resource group, presume that the user is interested 
