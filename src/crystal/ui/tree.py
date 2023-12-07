@@ -278,15 +278,11 @@ class NodeView:
             try:
                 if _initial or len(old_children) == 0:
                     # Add initial children
-                    part_index = 0
                     for (index, child) in enumerate(new_children):
                         # TODO: Consider storing _order_index in a separate
                         #       child_2_order_index dict rather than annotating
                         #       the child object directly
                         child._order_index = index  # type: ignore[attr-defined]
-                        if progress_listener is not None:
-                            progress_listener.creating_entity_tree_node(part_index)
-                            part_index += len(child.children)
                         child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
                 else:
                     # Replace existing children, preserving old ones that match new ones

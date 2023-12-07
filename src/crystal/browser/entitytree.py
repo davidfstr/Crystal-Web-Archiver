@@ -400,12 +400,10 @@ class RootNode(Node):
         
         progress_listener.loading_root_resource_views()
         for (index, rr) in enumerate(self._project.root_resources):
-            progress_listener.loading_root_resource_view(index)
             children.append(RootResourceNode(rr))
         
         progress_listener.loading_resource_group_views()
         for (index, rg) in enumerate(self._project.resource_groups):
-            progress_listener.loading_resource_group_view(index)
             children.append(ResourceGroupNode(rg))
         
         self.set_children(children, progress_listener)

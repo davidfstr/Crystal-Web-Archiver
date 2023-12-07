@@ -26,43 +26,19 @@ class OpenProjectProgressListener:
     def did_upgrade_revisions(self, revision_count: int) -> None:
         pass
     
-    def will_load_resources(self, approx_resource_count: int) -> None:
-        pass
-    
-    def loading_resource(self, index: int) -> None:
-        pass
-    
-    def did_load_resources(self, resource_count: int) -> None:
-        pass
-    
-    def indexing_resources(self) -> None:
-        pass
-    
     def loading_root_resources(self, root_resource_count: int) -> None:
         pass
     
     def loading_resource_groups(self, resource_group_count: int) -> None:
         pass
     
-    def loading_resource_group(self, index: int) -> None:
-        pass
-    
     def loading_root_resource_views(self) -> None:
-        pass
-    
-    def loading_root_resource_view(self, index: int) -> None:
         pass
     
     def loading_resource_group_views(self) -> None:
         pass
     
-    def loading_resource_group_view(self, index: int) -> None:
-        pass
-    
     def creating_entity_tree_nodes(self, entity_tree_node_count: int) -> None:
-        pass
-    
-    def creating_entity_tree_node(self, index: int) -> None:
         pass
     
     def reset(self) -> None:
@@ -215,91 +191,37 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         assert self._dialog is not None
         self._dialog.SetRange(max(revision_count, 1))
     
-    @overrides
-    def will_load_resources(self, approx_resource_count: int) -> None:
-        """
-        Called immediately before resources will be loaded.
-        
-        Raises:
-        * CancelOpenProject
-        """
-        # HACK: wxGTK does not reliably update wx.ProgressDialog's message
-        #       immediately after it is shown. So be sure to initialize
-        #       the wx.ProgressDialog's message immediately to what it will
-        #       be updated to soon.
-        initial_message = f'Loading about {approx_resource_count:n} resource(s)...'
-        self._update_can_cancel(True, initial_message)
-        
-        assert self._dialog is not None
-        self._dialog.SetRange(max(approx_resource_count * 2, 1))
-        self._update(0, initial_message)
-    
-    @overrides
-    def loading_resource(self, index: int) -> None:
-        """
-        Called periodically while resources are being loaded, to report progress.
-        
-        Raises:
-        * CancelOpenProject
-        """
-        self._update(index)
-    
-    @overrides
-    def did_load_resources(self, resource_count: int) -> None:
-        """
-        Called immediately after resources finished loading.
-        """
-        assert self._dialog is not None
-        self._resource_count = resource_count
-        self._dialog.SetRange(max(resource_count * 2, 1))
-    
-    @overrides
-    def indexing_resources(self) -> None:
-        """
-        Raises:
-        * CancelOpenProject
-        """
-        assert self._dialog is not None
-        assert self._resource_count is not None
-        self._update(
-            self._dialog.Value,
-            f'Indexing {self._resource_count:n} resources(s)...')
-    
+    # Step 1
     @overrides
     def loading_root_resources(self, root_resource_count: int) -> None:
         """
         Raises:
         * CancelOpenProject
         """
-        assert self._dialog is not None
         self._root_resource_count = root_resource_count
-        self._update(
-            self._dialog.Value,
-            f'Loading {root_resource_count:n} root resources(s)...')
+        
+        initial_message = f'Loading {root_resource_count:n} root resources(s)...'
+        self._update_can_cancel(True, initial_message)
+        
+        assert self._dialog is not None
+        self._dialog.SetRange(5)
+        self._update(0, initial_message)
     
+    # Step 2
     @overrides
     def loading_resource_groups(self, resource_group_count: int) -> None:
         """
         Raises:
         * CancelOpenProject
         """
-        assert self._dialog is not None
         self._resource_group_count = resource_group_count
+        
+        assert self._dialog is not None
         self._update(
-            self._dialog.Value,
+            1,
             f'Loading {resource_group_count:n} resource groups...')
     
-    @overrides
-    def loading_resource_group(self, index: int) -> None:
-        """
-        Raises:
-        * CancelOpenProject
-        """
-        assert self._resource_count is not None
-        assert self._resource_group_count is not None
-        self._update(
-            self._resource_count + (index * self._resource_count // self._resource_group_count))
-    
+    # Step 3
     @overrides
     def loading_root_resource_views(self) -> None:
         """
@@ -309,13 +231,10 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         assert self._dialog is not None
         assert self._root_resource_count is not None
         self._update(
-            self._dialog.Value,
+            2,
             f'Creating {self._root_resource_count:n} root resource views...')
     
-    @overrides
-    def loading_root_resource_view(self, index: int) -> None:
-        pass
-    
+    # Step 4
     @overrides
     def loading_resource_group_views(self) -> None:
         """
@@ -325,13 +244,10 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         assert self._dialog is not None
         assert self._resource_group_count is not None
         self._update(
-            self._dialog.Value,
+            3,
             f'Creating {self._resource_group_count} resource group views...')
     
-    @overrides
-    def loading_resource_group_view(self, index: int) -> None:
-        pass
-    
+    # Step 5
     @overrides
     def creating_entity_tree_nodes(self, entity_tree_node_count: int) -> None:
         """
@@ -346,12 +262,8 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         self._entity_tree_node_count = entity_tree_node_count
         
         self._update(
-            self._dialog.Value,
+            4,
             f'Creating {entity_tree_node_count} entity tree nodes...')
-    
-    @overrides
-    def creating_entity_tree_node(self, index: int) -> None:
-        pass
     
     def __exit__(self, tp, value, tb) -> None:
         self.reset()

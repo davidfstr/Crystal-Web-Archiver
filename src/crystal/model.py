@@ -712,13 +712,6 @@ class Project(ListenableMixin):
         for (name, value) in c.execute('select name, value from project_property'):
             self._set_property(name, value)
         
-        # Load Resources
-        # TODO: Eliminate dead listeners
-        progress_listener.will_load_resources(1)
-        progress_listener.loading_resource(0)
-        progress_listener.did_load_resources(1)
-        progress_listener.indexing_resources()
-        
         # Load RootResources
         [(root_resource_count,)] = c.execute('select count(1) from root_resource')
         progress_listener.loading_root_resources(root_resource_count)
@@ -734,7 +727,6 @@ class Project(ListenableMixin):
         group_2_source = {}
         for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
                 'select name, url_pattern, source_type, source_id, id from resource_group')):
-            progress_listener.loading_resource_group(index)
             group = ResourceGroup(self, name, url_pattern, _id=id)
             group_2_source[group] = (source_type, source_id)
         for (group, (source_type, source_id)) in group_2_source.items():

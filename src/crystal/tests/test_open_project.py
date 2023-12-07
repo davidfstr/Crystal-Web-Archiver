@@ -104,7 +104,7 @@ async def test_given_project_opening_when_click_cancel_then_returns_to_prompt_di
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         for method_name in [
                 # Case 1: Cancel while creating Project object
-                'loading_resource',
+                'loading_root_resources',
                 # Case 2: Cancel while creating MainWindow object
                 'creating_entity_tree_nodes',
                 ]:
