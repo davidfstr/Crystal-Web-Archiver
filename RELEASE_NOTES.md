@@ -12,6 +12,13 @@ Release Notes ⋮
 
 ### main
 
+This release features further improvements to downloading large websites
+(up to 10 million URLs). Projects open in constant time. Memory usage
+while downloading large groups remains constant.
+
+Additionally .crystalproj documents now have an appropriate icon and can be 
+easily opened by double-clicking that icon on all supported operating systems.
+
 * First-time-run experience improvements
     * App name, logo, and icon fixes
         * macOS: Fix application menu title and title of its menuitems
@@ -84,7 +91,7 @@ Release Notes ⋮
 ### v1.6.0b (September 4, 2023)
 
 This release features significant improvements to downloading large websites
-that have about 10 million URLs. Projects open and close faster. The UI is faster.
+(up to 10 million URLs). Projects open and close faster. The UI is faster.
 Downloads are faster. Progress bars are shown for all slow operations.
 Estimated time remaining is shown when downloading groups.
 
