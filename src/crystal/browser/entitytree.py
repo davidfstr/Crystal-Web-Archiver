@@ -8,6 +8,7 @@ from crystal.model import (
     RootResource,
 )
 from crystal.progress import (
+    CancelLoadUrls,
     DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
 )
@@ -896,10 +897,20 @@ class ResourceGroupNode(Node):
     
     # === Events ===
     
-    def on_expanded(self, event) -> None:
+    def on_expanded(self, event: wx.TreeEvent) -> None:
         # If this is the first expansion attempt, populate the children
         if not self._children_loaded:
             def fg_task_later() -> None:
+                # Show progress dialog in advance if will need to load all project URLs
+                try:
+                    self.resource_group.project.load_urls()
+                except CancelLoadUrls:
+                    # Collapse the tree item that was just expanded
+                    self.view.peer.Collapse()
+                    
+                    # Cancel update children
+                    return
+                
                 self.update_children(force_populate=True)
             def bg_task():
                 # Give time for the loading node to display

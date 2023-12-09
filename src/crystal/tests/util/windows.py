@@ -19,7 +19,7 @@ import os.path
 import sys
 import tempfile
 import traceback
-from typing import AsyncIterator, Optional, Tuple, TYPE_CHECKING
+from typing import AsyncIterator, Callable, Optional, Tuple, TYPE_CHECKING
 import wx
 
 if TYPE_CHECKING:
@@ -137,8 +137,7 @@ class OpenOrCreateDialog:
             
             await wait_for(
                 or_condition(
-                    window_condition('cr-opening-project-1'),
-                    window_condition('cr-opening-project-2'),
+                    window_condition('cr-opening-project'),
                     window_condition('cr-main-window'),
                     window_condition(next_window_name)))
 
@@ -329,12 +328,13 @@ class AddGroupDialog:
     source_field: wx.Choice
     preview_members_pane: Optional[wx.CollapsiblePane]
     preview_members_list: wx.ListBox
+    cancel_button: wx.Button
     ok_button: wx.Button
     
     @staticmethod
     async def wait_for() -> AddGroupDialog:
         self = AddGroupDialog(ready=True)
-        add_group_dialog = await wait_for(window_condition('cr-add-group-dialog'))  # type: wx.Window
+        add_group_dialog = await wait_for(AddGroupDialog.window_condition())  # type: wx.Window
         self.name_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
         self.pattern_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__pattern-field')
@@ -348,9 +348,15 @@ class AddGroupDialog:
         )
         self.preview_members_list = add_group_dialog.FindWindow(name='cr-add-group-dialog__preview-members__list')
         assert isinstance(self.preview_members_list, wx.ListBox)
+        self.cancel_button = add_group_dialog.FindWindow(id=wx.ID_CANCEL)
+        assert isinstance(self.cancel_button, wx.Button)
         self.ok_button = add_group_dialog.FindWindow(id=wx.ID_OK)
         assert isinstance(self.ok_button, wx.Button)
         return self
+    
+    @staticmethod
+    def window_condition() -> Callable[[], Optional[wx.Window]]:
+        return window_condition('cr-add-group-dialog')
     
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use AddGroupDialog.wait_for()?'

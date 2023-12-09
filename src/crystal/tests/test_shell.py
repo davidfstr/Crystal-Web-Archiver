@@ -39,6 +39,7 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'html_parser_type',
     'is_valid',
     'listeners',
+    'load_urls',
     'major_version',
     'min_fetch_date',
     'path',

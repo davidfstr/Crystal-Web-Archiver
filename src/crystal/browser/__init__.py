@@ -8,7 +8,9 @@ from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.progress import (
-    DummyOpenProjectProgressListener, OpenProjectProgressListener,
+    CancelLoadUrls,
+    DummyOpenProjectProgressListener,
+    OpenProjectProgressListener,
 )
 from crystal.server import ProjectServer
 from crystal.task import DownloadResourceGroupMembersTask, RootTask
@@ -421,18 +423,21 @@ class MainWindow:
             self._frame, self._on_add_url_dialog_ok,
             initial_url=self._selection_initial_url)
     
-    def _on_add_url_dialog_ok(self, name, url):
+    def _on_add_url_dialog_ok(self, name, url) -> None:
         # TODO: Validate user input:
         #       * Is name or url empty?
         #       * Is name or url already taken?
         RootResource(self.project, name, Resource(self.project, url))
     
-    def _on_add_group(self, event):
-        AddGroupDialog(
-            self._frame, self._on_add_group_dialog_ok,
-            self.project,
-            initial_url=self._selection_initial_url,
-            initial_source=self._selection_initial_source)
+    def _on_add_group(self, event: wx.CommandEvent) -> None:
+        try:
+            AddGroupDialog(
+                self._frame, self._on_add_group_dialog_ok,
+                self.project,
+                initial_url=self._selection_initial_url,
+                initial_source=self._selection_initial_source)
+        except CancelLoadUrls:
+            pass
     
     def _on_add_group_dialog_ok(self, name: str, url_pattern: str, source):
         # TODO: Validate user input:
@@ -450,6 +455,13 @@ class MainWindow:
     def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
         assert selected_entity is not None
+        
+        # Show progress dialog in advance if will need to load all project URLs
+        if isinstance(selected_entity, ResourceGroup):
+            try:
+                selected_entity.project.load_urls()
+            except CancelLoadUrls:
+                return
         
         # Show progress dialog if it will likely take a long time to start the download
         if DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:

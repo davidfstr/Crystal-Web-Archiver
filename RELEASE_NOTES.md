@@ -30,13 +30,17 @@ Release Notes ⋮
 * Large project improvements (with 3,000,000 - 11,000,000 URLs)
     * Large projects now open immediately because URLs and group members
       are now loaded on demand rather than upfront.
-    * Large groups now start downloading immediately because member
+    * Large groups now start downloading faster because member
       download tasks are now created on demand rather than upfront.
     * .crystalproj format now stores revisions in a hierarchy of nested
       directories rather than all of them inside a single directory.
     * .crystalproj format now stores revisions in lexicographic order
       in the filesystem so that when a project is copied to a new location,
       the order of revisions on disk is preserved in the new copy.
+    * Projects whose database is on a solid state drive (SSD)
+      will use less memory because such projects will now prefer to
+      load group members via a database query rather than loading
+      *all* project URLs into memory.
 
 * Support improvements
     * Add Kubuntu as a supported Linux distribution
@@ -65,6 +69,11 @@ Release Notes ⋮
           must now be passed as `*_call_*(callable, args=(...))`.
         * `no_profile=` is replaced with `profile=`.
         * `force=` is renamed to `force_later=`.
+    * The `OpenProjectProgressListener` interface has substantially changed
+      to reflect the new strategy for opening projects.
+        * Additionally, a new `LoadUrlsProgressListener` interface is
+          introduced to allow monitoring of when a project decides to
+          load its URLs. It can be provided to `Project.__init__`.
     * `Project.title` has been removed.
       Calculate a reasonable title from `Project.path` instead.
 
