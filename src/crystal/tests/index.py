@@ -15,6 +15,7 @@ from crystal.tests import (
     test_readonly_mode,
     test_server,
     test_shell,
+    test_ssd,
     test_tasks,
     test_tasktree,
     test_workflows,
@@ -54,6 +55,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_readonly_mode) +
     _test_functions_in_module(test_server) +
     _test_functions_in_module(test_shell) +
+    _test_functions_in_module(test_ssd) +
     _test_functions_in_module(test_tasks) +
     _test_functions_in_module(test_tasktree) +
     _test_functions_in_module(test_workflows) +
