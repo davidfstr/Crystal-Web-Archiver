@@ -15,8 +15,8 @@ from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wait_while
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.ui.tree2 import NodeView
-from crystal.util.collections import (
-    AppendableLazySequence, CustomSequence, _UnmaterializedItem,
+from crystal.util.xcollections.lazy import (
+    AppendableLazySequence, _UnmaterializedItem,
 )
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 import math

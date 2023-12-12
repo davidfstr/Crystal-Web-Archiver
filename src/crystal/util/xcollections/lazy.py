@@ -122,39 +122,3 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     #       this list if it is anywhere in this list at all.
     def __contains__(self, item: object) -> bool:
         return item in self._cached_prefix
-
-
-class CustomSequence(Generic[_E], Sequence[_E]):
-    """A Sequence."""
-    
-    # Optimize per-instance memory use
-    __slots__ = (
-        '_getitem_func',
-        '_len_func',
-    )
-    
-    def __init__(self, getitem_func: Callable[[int], _E], len_func: Callable[[], int]):
-        self._getitem_func = getitem_func
-        self._len_func = len_func
-    
-    @overload
-    def __getitem__(self, index: int) -> _E:
-        ...
-    @overload
-    def __getitem__(self, index: slice) -> Sequence[_E]:
-        ...
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            if index.start is not None and index.start < 0:
-                raise ValueError('Negative indexes in slice not supported')
-            if index.stop is not None and index.stop < 0:
-                raise ValueError('Negative indexes in slice not supported')
-            return [self[i] for i in range(index.start or 0, index.stop or len(self), index.step or 1)]
-        if not isinstance(index, int):
-            raise ValueError(f'Invalid index: {index!r}')
-        if index < 0:
-            raise ValueError('Negative indexes not supported')
-        return self._getitem_func(index)
-    
-    def __len__(self) -> int:
-        return self._len_func()

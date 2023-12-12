@@ -30,7 +30,6 @@ from crystal.progress import (
 )
 from crystal import resources as resources_
 from crystal.util import http_date
-from crystal.util.collections import CustomSequence
 from crystal.util.db import (
     DatabaseConnection,
     DatabaseCursor,
@@ -47,7 +46,7 @@ from crystal.util.ssd import is_ssd
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
-from crystal.util.xcollections import as_ordereddict
+from crystal.util.xcollections.ordereddict import as_ordereddict
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled

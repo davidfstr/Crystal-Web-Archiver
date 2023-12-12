@@ -16,8 +16,8 @@ from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup, RootResource
-from crystal.util.collections import AppendableLazySequence
 from crystal.util.progress import ProgressBarCalculator
+from crystal.util.xcollections.lazy import AppendableLazySequence
 import tempfile
 from tqdm import tqdm
 from typing import NamedTuple

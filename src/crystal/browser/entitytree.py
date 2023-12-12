@@ -18,7 +18,7 @@ from crystal.task import (
 # TODO: Expand this star import
 from crystal.ui.tree import *
 from crystal.util.wx_bind import bind
-from crystal.util.xcollections import defaultordereddict
+from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import os

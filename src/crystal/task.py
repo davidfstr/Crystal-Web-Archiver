@@ -3,13 +3,13 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util.caffeination import Caffeination
-from crystal.util.collections import AppendableLazySequence
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import (
     create_profiling_context, ignore_runtime_from_enclosing_warn_if_slow,
     warn_if_slow,
 )
 from crystal.util.progress import ProgressBarCalculator
+from crystal.util.xcollections.lazy import AppendableLazySequence
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util.xsqlite3 import is_database_closed_error

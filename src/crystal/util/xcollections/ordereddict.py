@@ -8,30 +8,6 @@ import sys
 from typing import cast, Dict, TypeVar
 
 
-class simpleorderedset:
-    """Ordered set that supports a limited set of operations."""
-    
-    def __init__(self):
-        self.set = set()
-        self.items = []
-        
-    def add(self, value):
-        old_size = len(self.set)
-        self.set.append(value)
-        new_size = len(self.set)
-        if new_size > old_size:
-            self.items.append(value)
-    
-    def __contains__(self, value):
-        return value in self.set
-    
-    def __len__(self):
-        return len(self.items)
-    
-    def __iter__(self):
-        return self.items.__iter__()
-
-
 class defaultordereddict(OrderedDict):
     def __init__(self, default_factory=None):
         super().__init__()

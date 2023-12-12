@@ -1,7 +1,7 @@
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
-from crystal.util.collections import AppendableLazySequence
+from crystal.util.xcollections.lazy import AppendableLazySequence
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
 from typing import List, Optional
 import wx
