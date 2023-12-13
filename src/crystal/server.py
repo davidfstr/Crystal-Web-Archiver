@@ -162,6 +162,8 @@ _HEADER_ALLOWLIST = set([
     'cf-cache-status',
     'cf-ray',
     'cf-request-id',
+    'cf-bgj',
+    'cf-polished',
     
     # Infrastructure-specific: Google Cloud
     'x-goog-generation',
