@@ -9,6 +9,7 @@ from crystal.util.profile import (
     warn_if_slow,
 )
 from crystal.util.progress import ProgressBarCalculator
+from crystal.util.xcollections.dedup import dedup_list
 from crystal.util.xcollections.lazy import AppendableLazySequence
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
@@ -17,7 +18,6 @@ from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, 
     is_foreground_thread, NoForegroundThreadError
 )
-from functools import cached_property
 import os
 from overrides import overrides
 import shutil
@@ -99,16 +99,14 @@ class Task(ListenableMixin):
     Tasks are not allowed to be complete immediately after initialization
     unless explicitly documented in the Task class's docstring.
     """
-    @cached_property
-    def _USE_EXTRA_LISTENER_ASSERTIONS(self) -> bool:
-        return os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
-    
     # Abstract fields for subclasses to override
     icon_name = None  # type: Optional[str]  # abstract
     """The name of the icon resource used for this task, or None to use the default icon."""
     scheduling_style = SCHEDULING_STYLE_NONE  # abstract for container task types
     """For a container task, defines the order that task units from children will be executed in."""
     
+    _USE_EXTRA_LISTENER_ASSERTIONS = \
+        os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
     _REPORTED_TASKS_WITH_MANY_LISTENERS = WeakSet()  # type: WeakSet[Task]
     
     # Optimize per-instance memory use, since there may be very many Task objects
@@ -268,13 +266,16 @@ class Task(ListenableMixin):
                 f'and already_completed_ok is False. '
                 f'self={self}, child={child}')
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
             assert child in self._children
         # NOTE: child._parent may already be set to a different parent
         child._parent = self
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
-            assert self not in child.listeners
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+            assert self not in child.listeners, (
+                f'Expected {self=} to not already be listening to {child=}. '
+                f'Was child added multiple times to the same parent?'
+            )
         if len(child.listeners) >= 50:
             if child not in Task._REPORTED_TASKS_WITH_MANY_LISTENERS:
                 Task._REPORTED_TASKS_WITH_MANY_LISTENERS.add(child)
@@ -362,7 +363,7 @@ class Task(ListenableMixin):
         if all_children_complete:
             for child in self._children:
                 child._parent = None
-                if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
+                if Task._USE_EXTRA_LISTENER_ASSERTIONS:
                     assert self not in child.listeners
             self._children = []
             self._num_children_complete = 0
@@ -897,7 +898,7 @@ class DownloadResourceTask(Task):
                     # an alias of itself
                     pass
                 else:
-                    for resource in embedded_resources:
+                    for resource in dedup_list(embedded_resources):
                         if resource in ancestor_downloading_resources:
                             # Avoid infinite recursion when resource identifies itself
                             # (probably incorrectly) as an embedded resource of itself,
@@ -1221,7 +1222,7 @@ class DownloadResourceGroupMembersTask(Task):
             title='Downloading members of group: %s' % group.name)
         self.group = group
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
             assert self not in self.group.listeners
         self.group.listeners.append(self)
         
@@ -1335,7 +1336,7 @@ class DownloadResourceGroupMembersTask(Task):
     
     def finish(self) -> None:
         self.group.listeners.remove(self)
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:  # type: ignore[truthy-function]  # @cached_property
+        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
             assert self not in self.group.listeners
         
         if self._pbc is not None:

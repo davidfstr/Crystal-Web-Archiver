@@ -120,6 +120,7 @@ async def test_does_not_download_embedded_resources_of_recognized_binary_resourc
                 
                 assert ['/'] == server.requested_paths
 
+
 async def test_does_not_download_forever_given_embedded_resources_form_a_cycle() -> None:
     server = MockHttpServer({
         '/': dict(
@@ -323,6 +324,39 @@ async def test_when_download_resource_given_all_embedded_resources_already_downl
                     await bg_sleep(DEFAULT_WAIT_PERIOD)
                 
                 assert ['/index.php'] == server.requested_paths
+
+
+async def test_given_same_resource_embedded_multiple_times_then_downloads_it_only_once() -> None:
+    server = MockHttpServer({
+        '/': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                """
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <img src="/assets/image.png" />
+                    <img src="/assets/image.png" />
+                    <img src="/assets/image.png#fragment-should-be-ignored" />
+                </body>
+                </html>
+                """
+            ).lstrip('\n').encode('utf-8')
+        )
+    })
+    with server:
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                r = Resource(project, server.get_url('/'))
+                revision_future = r.download(wait_for_embedded=True)
+                while not revision_future.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                
+                assert ['/', '/assets/image.png'] == server.requested_paths
 
 
 # ------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
-    ProjectFreeSpaceTooLowError
+    ProjectFreeSpaceTooLowError, Task
 )
 from crystal.tests.util.asserts import *
 from crystal.tests.util.data import (
@@ -133,6 +133,10 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                                 else None,
                             drg_task.complete
                         )
+
+
+async def test_given_running_tests_then_uses_extra_listener_assertions() -> None:
+    assert True == Task._USE_EXTRA_LISTENER_ASSERTIONS
 
 
 # ------------------------------------------------------------------------------

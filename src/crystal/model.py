@@ -59,7 +59,6 @@ from crystal.util.xthreading import (
 )
 import cgi
 import datetime
-from functools import cached_property
 import json
 import math
 import mimetypes
