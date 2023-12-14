@@ -27,7 +27,7 @@ _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
 _QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")((?:https?:)?\\?/\\?/[^/][^"]+)"|(')((?:https?:)?\\?/\\?/[^/][^']+)')''')
 ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
-PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)$')
+PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)(?:\?[^/?]*)?$')
 
 
 @dataclass

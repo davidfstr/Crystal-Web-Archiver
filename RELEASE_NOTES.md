@@ -53,6 +53,10 @@ easily opened by double-clicking that icon on all supported operating systems.
     * Add Kubuntu as a supported Linux distribution
     * Add KDE as a supported desktop environment, in addition to GNOME
 
+* Parsing improvements
+    * Can identify `<link rel="preload">` references as embedded.
+    * Can identify URLs inside `<script>` blocks with a trailing `?...` query.
+
 * Error handling improvements
     * When expanding an URL in the Entity Tree that downloaded with an error,
       display an error node appropriately.
