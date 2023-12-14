@@ -138,6 +138,11 @@ def parse_html_and_links(
             title = None
             type_title = 'Icon'
             embedded = True
+        elif tag_name == 'link' and (
+                ('rel' in tag_attrs and 'preload' in tag_attrs['rel'])):
+            title = None
+            type_title = 'Preload'
+            embedded = True
         else:
             title = None
             type_title = 'Unknown (%s)' % tag_name
