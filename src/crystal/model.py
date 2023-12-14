@@ -19,6 +19,7 @@ from crystal.doc.xml import parse_xml_and_links
 from crystal.plugins import (
     phpbb as plugins_phpbb,
     substack as plugins_substack,
+    minimalist_baker as plugins_minbaker,
 )   
 from crystal.progress import (
     CancelOpenProject,
@@ -2885,6 +2886,12 @@ class ResourceRevision:
             redirect_title = self._redirect_title
             assert redirect_title is not None
             links.append(create_external_link(redirect_url, redirect_title, 'Redirect', True))
+        
+        # Allow plugins to postprocess results
+        url = self.resource.url  # cache
+        for postprocess_document_and_links in [
+                plugins_minbaker.postprocess_document_and_links]:
+            (doc, links) = postprocess_document_and_links(url, doc, links)
         
         return (doc, links, content_type_with_options)
     

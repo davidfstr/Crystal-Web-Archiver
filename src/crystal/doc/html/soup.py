@@ -422,6 +422,7 @@ class HtmlLink(Link):
             else:
                 attr_value = url
             self._attr_value = attr_value
+            self._relative_url = url
     relative_url = property(_get_relative_url, _set_relative_url)
     
     @property
