@@ -571,9 +571,6 @@ class MainWindow:
         """
         if self._project_server is None:
             self._log_drawer = LogDrawer(parent=self._frame)
-            
-            # TODO: If the server couldn't be started (ex: due to the default port being in
-            #       use), report an appropriate error.
             self._project_server = ProjectServer(self.project, stdout=self._log_drawer.writer)
         
         return self._project_server

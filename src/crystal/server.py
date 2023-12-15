@@ -14,6 +14,7 @@ from crystal.util.cli import (
     print_success,
     print_warning,
 )
+from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_call_and_wait, 
     run_thread_switching_coroutine, SwitchToThread,
@@ -49,17 +50,43 @@ class ProjectServer:
             ) -> None:
         if port is None:
             port = _DEFAULT_SERVER_PORT
+            try_other_ports = True
+        else:
+            try_other_ports = False
         
         self._project = project
-        self._port = port
         self._verbosity = verbosity
         self._stdout = stdout
         
-        address = ('', port)
-        self._server = _HttpServer(address, _RequestHandler)
-        self._server.project = project
-        self._server.verbosity = verbosity
-        self._server.stdout = stdout
+        # Start server on port, looking for alternative open port if needed
+        while True:
+            # NOTE: Must explicitly check whether port in use because Windows
+            #       appears not to raise an exception when opening a _HttpServer
+            #       on a port that is in use, unlike macOS and Linux
+            if try_other_ports and is_port_in_use(port):
+                pass
+            else:
+                try:
+                    address = ('', port)
+                    server = _HttpServer(address, _RequestHandler)
+                except Exception as e:
+                    if try_other_ports and is_port_in_use_error(e):
+                        pass
+                    else:
+                        raise
+                else:
+                    break
+            
+            # Try another port
+            port += 1
+            continue
+        server.project = project
+        server.verbosity = verbosity
+        server.stdout = stdout
+        
+        self._server = server
+        self._port = port
+        
         def bg_task() -> None:
             try:
                 if verbosity == 'normal':

@@ -117,7 +117,7 @@ def _run_tests(test_names: List[str]) -> bool:
         except SkipTest as e:
             result_for_test_func_id[test_func_id] = e
             
-            print('SKIP')
+            print(f'SKIP ({str(e)})')
         except Exception as e:
             result_for_test_func_id[test_func_id] = e
             

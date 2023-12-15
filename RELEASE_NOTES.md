@@ -58,6 +58,9 @@ easily opened by double-clicking that icon on all supported operating systems.
     * Can identify URLs inside `<script>` blocks with a trailing `?...` query.
     * Improved reporting of unknown types of `<link rel="...">`.
 
+* Serving improvements
+    * Multiple projects can be open and serving URLs at the same time.
+
 * Error handling improvements
     * When expanding an URL in the Entity Tree that downloaded with an error,
       display an error node appropriately.

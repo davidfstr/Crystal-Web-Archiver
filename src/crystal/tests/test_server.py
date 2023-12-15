@@ -2,14 +2,18 @@ from contextlib import asynccontextmanager, redirect_stdout
 from copy import deepcopy
 from crystal.model import Project, Resource, ResourceRevision, RootResource
 from crystal import server
-from crystal.server import get_request_url
+from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import (
-    assert_does_open_webbrowser_to, extracted_project, fetch_archive_url, WebPage,
+    assert_does_open_webbrowser_to, extracted_project, fetch_archive_url,
+    served_project, WebPage,
 )
+from crystal.tests.util.skip import skipTest
+from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
-from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
+from crystal.tests.util.windows import AddUrlDialog, MainWindow, OpenOrCreateDialog
+from crystal.util.ports import is_port_in_use
 from io import StringIO
 import tempfile
 from typing import AsyncIterator, Callable, Optional, Tuple
@@ -19,6 +23,61 @@ from unittest import skip
 # TODO: Many serving behaviors are tested indirectly by larger tests
 #       in test_workflows.py. Write stubs for all such behaviors
 #       and link them to the covering test.
+
+# ------------------------------------------------------------------------------
+# Test: Start Server
+
+async def test_given_default_serving_port_in_use_when_start_serving_project_then_finds_alternate_port() -> None:
+    if is_port_in_use(_DEFAULT_SERVER_PORT):
+        skipTest('_DEFAULT_SERVER_PORT is already in use outside of tests')
+    if is_port_in_use(_DEFAULT_SERVER_PORT + 1):
+        skipTest('_DEFAULT_SERVER_PORT + 1 is already in use outside of tests')
+    
+    assert not is_port_in_use(_DEFAULT_SERVER_PORT)
+    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+        assert is_port_in_use(_DEFAULT_SERVER_PORT)
+        
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                # Create a URL
+                if True:
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                    assert root_ti is not None
+                    assert root_ti.GetFirstChild() is None  # no entities
+                    
+                    click_button(mw.add_url_button)
+                    aud = await AddUrlDialog.wait_for()
+                    
+                    aud.name_field.Value = 'Home'
+                    aud.url_field.Value = home_url
+                    await aud.ok()
+                    (home_ti,) = root_ti.Children
+                
+                # Download the URL
+                home_ti.SelectItem()
+                await mw.click_download_button()
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+                
+                # Try to start second server, also on _DEFAULT_SERVER_PORT.
+                # Expect it to actually start on (_DEFAULT_SERVER_PORT + 1).
+                expected_port = _DEFAULT_SERVER_PORT + 1
+                home_ti.SelectItem()
+                try:
+                    with assert_does_open_webbrowser_to(get_request_url(home_url, expected_port)):
+                        click_button(mw.view_button)
+                finally:
+                    assert is_port_in_use(expected_port)
+                
+                # Ensure can fetch the revision through the server
+                server_page = await fetch_archive_url(home_url, expected_port)
+                assert 200 == server_page.status
+
 
 # ------------------------------------------------------------------------------
 # Test: Header Inclusion & Exclusion

@@ -28,6 +28,7 @@ from zipfile import ZipFile
 def served_project(
         zipped_project_filename: str,
         *, fetch_date_of_resources_set_to: Optional[datetime.datetime]=None,
+        port: Optional[int]=None,
         ) -> Iterator[ProjectServer]:
     if fetch_date_of_resources_set_to is not None:
         if not datetime_is_aware(fetch_date_of_resources_set_to):
@@ -67,7 +68,7 @@ def served_project(
             
             # Start server
             project_server = ProjectServer(project,
-                port=2798,  # CRYT on telephone keypad
+                port=(port or 2798),  # CRYT on telephone keypad
                 verbosity='indent',
             )
             yield project_server
@@ -114,12 +115,13 @@ async def is_url_not_in_archive(archive_url: str) -> bool:
 
 async def fetch_archive_url(
         archive_url: str,
+        port: Optional[int]=None,
         *, headers: Optional[Dict[str, str]]=None,
         timeout: Optional[float]=None,
         ) -> WebPage:
     if timeout is None:
         timeout = DEFAULT_WAIT_TIMEOUT
-    return await bg_fetch_url(get_request_url(archive_url), headers=headers, timeout=timeout)
+    return await bg_fetch_url(get_request_url(archive_url, port), headers=headers, timeout=timeout)
 
 
 class WebPage:
