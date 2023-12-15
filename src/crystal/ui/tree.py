@@ -297,32 +297,10 @@ class NodeView:
                     for child in children_to_add:
                         child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
                     
-                    # Calculate whether needs_reorder
-                    last_order_index = -1
-                    for child in new_children:
-                        cur_order_index = getattr(child, '_order_index', None)
-                        if cur_order_index is None:
-                            if last_order_index != -1:
-                                # New child without order-index mixed with
-                                # old children with order-index
-                                needs_reorder = True
-                                break
-                            else:
-                                # New child without order-index mixed with
-                                # only other new children without order-index
-                                continue
-                        if cur_order_index < last_order_index:
-                            needs_reorder = True
-                            break
-                        last_order_index = cur_order_index
-                    else:
-                        needs_reorder = False
-                    
-                    if needs_reorder:
-                        # Reorder children
-                        for (index, child) in enumerate(new_children):
-                            child._order_index = index  # type: ignore[attr-defined]
-                        self.peer.SortChildren()
+                    # Reorder children
+                    for (index, child) in enumerate(new_children):
+                        child._order_index = index  # type: ignore[attr-defined]
+                    self.peer.SortChildren()
             except WindowDeletedError:
                 pass
     
