@@ -6,14 +6,30 @@ from typing import List, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
+
+_URL_WITH_TP_IMAGE_ID = re.compile(r'^(https?://[^?]+)\?tp_image_id=[0-9]+$')
+
+def normalize_url(old_url: str, **kwargs) -> str:
+    if not old_url.startswith('https://minimalistbaker.com/'):
+        return old_url
+    
+    m = _URL_WITH_TP_IMAGE_ID.fullmatch(old_url)
+    if m is not None:
+        # Chop off tp_image_id=... part
+        return m.group(1)
+    
+    return old_url
+    
+
+
 _FWP_JSON_RE = re.compile(r'''window\.FWP_JSON = ([^\n]+);''')
 _FACETWP_PAGE_RE = re.compile(r'''(<a class="[^"]+" data-page="([^"]+)")(>[^<]+</a>)''')
-
 
 def postprocess_document_and_links(
         url: str,
         doc: Optional[Document],
-        links: List[Link]
+        links: List[Link],
+        **kwargs,
         ) -> Tuple[Optional[Document], List[Link]]:
     if not url.startswith('https://minimalistbaker.com/'):
         return (doc, links)

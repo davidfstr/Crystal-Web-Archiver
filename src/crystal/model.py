@@ -1723,7 +1723,11 @@ class Resource:
         
         # Allow plugins to normalize URLs further
         old_url = new_url
-        for normalize_url in (plugins_phpbb.normalize_url, plugins_substack.normalize_url):
+        for normalize_url in (
+                plugins_minbaker.normalize_url,
+                plugins_phpbb.normalize_url,
+                plugins_substack.normalize_url,
+                ):
             try:
                 new_url = normalize_url(old_url)
             except Exception:  # ignore errors
@@ -2889,8 +2893,9 @@ class ResourceRevision:
         
         # Allow plugins to postprocess results
         url = self.resource.url  # cache
-        for postprocess_document_and_links in [
-                plugins_minbaker.postprocess_document_and_links]:
+        for postprocess_document_and_links in (
+                plugins_minbaker.postprocess_document_and_links,
+                ):
             (doc, links) = postprocess_document_and_links(url, doc, links)
         
         return (doc, links, content_type_with_options)
