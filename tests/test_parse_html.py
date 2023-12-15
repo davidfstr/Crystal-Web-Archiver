@@ -288,7 +288,7 @@ def test_recognizes_href_attribute() -> None:
                     """<div href="image.png"></div>""".encode('utf-8'),
                     html_parser_type=html_parser_type)
                 assert 'image.png' == link.relative_url
-                assert 'Unknown (div)' == link.type_title
+                assert 'Unknown Href (div)' == link.type_title
                 assert None == link.title
                 assert False == link.embedded
 

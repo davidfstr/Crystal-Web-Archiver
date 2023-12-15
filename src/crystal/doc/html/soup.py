@@ -143,9 +143,20 @@ def parse_html_and_links(
             title = None
             type_title = 'Preload'
             embedded = True
+        elif tag_name == 'link' and 'rel' in tag_attrs:
+            def format_rel(rel: Union[str, List[str]]) -> str:
+                if isinstance(rel, str):
+                    return rel
+                elif isinstance(rel, list):
+                    return ','.join(rel)
+                else:
+                    raise ValueError()
+            
+            title = None
+            type_title = 'Unknown Link (rel=%s)' % format_rel(tag_attrs['rel'])
         else:
             title = None
-            type_title = 'Unknown (%s)' % tag_name
+            type_title = 'Unknown Href (%s)' % tag_name
         links.append(HtmlLink.create_from_tag(tag, html, 'href', type_title, title, embedded))
     
     # <input type='button' onclick='*.location = "*";'>

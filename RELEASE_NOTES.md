@@ -56,6 +56,7 @@ easily opened by double-clicking that icon on all supported operating systems.
 * Parsing improvements
     * Can identify `<link rel="preload">` references as embedded.
     * Can identify URLs inside `<script>` blocks with a trailing `?...` query.
+    * Improved reporting of unknown types of `<link rel="...">`.
 
 * Error handling improvements
     * When expanding an URL in the Entity Tree that downloaded with an error,
