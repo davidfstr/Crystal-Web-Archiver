@@ -1148,7 +1148,7 @@ class Project(ListenableMixin):
                     if limit is not None and len(member_urls) == limit:
                         break
             
-            if limit is None:
+            if limit is None or len(member_urls) < limit:
                 return (member_urls, len(member_urls))
             else:
                 end_index = bisect_key_right(
@@ -1175,13 +1175,16 @@ class Project(ListenableMixin):
             else:
                 member_urls = [url for (url,) in c.execute(
                     'select url from resource where url glob ? and url regexp ? order by url limit ?',
-                    (literal_prefix + '*', url_pattern_re.pattern, limit)
+                    (literal_prefix + '*', url_pattern_re.pattern, limit + 1)
                 )]
-                [(approx_member_count,)] = c.execute(
-                    'select count(1) from resource where url glob ?',
-                    (literal_prefix + '*',)
-                )
-                return (member_urls, approx_member_count)
+                if len(member_urls) <= limit:
+                    return (member_urls, len(member_urls))
+                else:
+                    [(approx_member_count,)] = c.execute(
+                        'select count(1) from resource where url glob ?',
+                        (literal_prefix + '*',)
+                    )
+                    return (member_urls[:-1], approx_member_count)
     
     # === Children ===
     
