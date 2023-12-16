@@ -48,6 +48,6 @@ class defaultordereddict(OrderedDict):
 _K = TypeVar('_K')
 _V = TypeVar('_V')
 
-def as_ordereddict(d: Dict[_K, _V]) -> OrderedDict[_K, _V]:
+def as_ordereddict(d: Dict[_K, _V]) -> 'OrderedDict[_K, _V]':
     assert sys.version_info >= (3, 8)
-    return cast(OrderedDict[_K, _V], d)
+    return cast('OrderedDict[_K, _V]', d)

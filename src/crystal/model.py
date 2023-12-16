@@ -1008,12 +1008,17 @@ class Project(ListenableMixin):
         try:
             # Load Resources
             resources = []
+            old_resource_for_url = self._resource_for_url  # cache
             def loading_resource(index: int, resources_per_second: float) -> None:
                 assert progress_listener is not None
                 progress_listener.loading_resource(index)
             def load_resource(row: Tuple) -> None:
                 (url, id) = row
-                resources.append(Resource(self, url, _id=id))
+                # NOTE: Reuse existing Resource object if available
+                resource = old_resource_for_url.get(url)
+                if resource is None:
+                    resource = Resource(self, url, _id=id)
+                resources.append(resource)
             # NOTE: May raise CancelLoadUrls if user cancels
             self._process_table_rows(
                 self._db.cursor(),
