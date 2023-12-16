@@ -1404,7 +1404,7 @@ class Project(ListenableMixin):
     
     # === Context Manager ===
     
-    def __enter__(self) -> Project:
+    def __enter__(self) -> Self:
         return self
     
     def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
@@ -2211,6 +2211,31 @@ class ResourceRevision:
     
     # === Init ===
     
+    # NOTE: This method is not used by the UI at this time.
+    #       It is intended only to be used by shell programs.
+    @staticmethod
+    def create_from_revision(
+            resource: Resource,
+            revision: ResourceRevision
+            ) -> ResourceRevision:
+        """
+        Creates a new revision whose contents is copied from a different revision
+        (which is likely in a different project).
+        
+        Raises:
+        * ProjectHasTooManyRevisionsError
+        * Exception -- if could not write revision to disk
+        """
+        if revision.error is not None:
+            return ResourceRevision.create_from_error(resource, revision.error)
+        else:
+            with revision.open() as f:
+                return ResourceRevision.create_from_response(
+                    resource,
+                    revision.metadata,
+                    f,
+                    revision.request_cookie)
+    
     @staticmethod
     def create_from_error(
             resource: Resource,
@@ -2407,7 +2432,7 @@ class ResourceRevision:
         return self
     
     @staticmethod
-    def _create_from_revision_and_new_metadata(
+    def _create_unsaved_from_revision_and_new_metadata(
             revision: ResourceRevision,
             metadata: ResourceRevisionMetadata
             ) -> ResourceRevision:
@@ -2968,7 +2993,8 @@ class ResourceRevision:
                     if k.lower() != header_name_lower
                 ] + [[header_name, header_value]]
         
-        return ResourceRevision._create_from_revision_and_new_metadata(target_revision, new_metadata)
+        return ResourceRevision._create_unsaved_from_revision_and_new_metadata(
+            target_revision, new_metadata)
     
     def delete(self):
         project = self.project
