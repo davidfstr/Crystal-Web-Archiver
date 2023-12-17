@@ -307,19 +307,23 @@ def _main(args: List[str]) -> None:
             # Immediately enter testing mode
             os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
             
+            # Block until test-related modules are done loading,
+            # before starting bg_task() on background thread
+            from crystal.tests.index import run_tests
+            from crystal.util.xthreading import NoForegroundThreadError
+            
             def bg_task():
-                from crystal.util.xthreading import NoForegroundThreadError
+                # (Don't import anything here, because strange things can
+                #  happen if the foreground thread tries to import the
+                #  same new modules at the same time. Instead put
+                #  any needed imports directly before starting bg_task.)
                 
                 is_ok = False
                 try:
-                    from crystal.tests.index import run_tests
                     is_ok = run_tests(parsed_args.test)
                 finally:
                     exit_code = 0 if is_ok else 1
-                    try:
-                        fg_call_later(lambda: sys.exit(exit_code))
-                    except NoForegroundThreadError:
-                        os._exit(exit_code)
+                    os._exit(exit_code)
             bg_call_later(bg_task)
         
         # Run GUI

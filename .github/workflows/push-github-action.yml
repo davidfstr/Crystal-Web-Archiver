@@ -64,8 +64,10 @@ jobs:
         run: "poetry run ./make-mac.sh --app-only"
 
       - name: Run UI tests
+        # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
+        #       rather than sending them to log files
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
 
       - name: Upload screenshot if test failure
         if: failure()

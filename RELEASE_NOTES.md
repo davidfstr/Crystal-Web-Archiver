@@ -55,6 +55,10 @@ Release Notes ⋮
     * When expanding an URL in the Entity Tree whose revision body has been
       deleted, try to redownload it automatically.
 
+* Critical fixes
+    * Fix continuous integration to regularly run UI tests on macOS once again.
+    * Fix continuous integration to reliably fail if UI tests fail.
+
 * Minor fixes
     * Eliminated race condition where scheduler thread could try to read from
       the root task's children list concurrently with a different thread

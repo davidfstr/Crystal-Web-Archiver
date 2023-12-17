@@ -581,9 +581,19 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
         # which is needed by the current implementation
         raise AssertionError('not supported on Windows')
     
+    # Determine how to run Crystal on command line
+    crystal_command: List[str]
     python = sys.executable
+    if getattr(sys, 'frozen', None) == 'macosx_app':
+        python_neighbors = os.listdir(os.path.dirname(python))
+        (crystal_binary_name,) = [n for n in python_neighbors if 'crystal' in n.lower()]
+        crystal_binary = os.path.join(os.path.dirname(python), crystal_binary_name)
+        crystal_command = [crystal_binary]
+    else:
+        crystal_command = [python, '-m', 'crystal']
+    
     crystal = subprocess.Popen(
-        [python, '-m', 'crystal', '--shell'],
+        [*crystal_command, '--shell'],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
