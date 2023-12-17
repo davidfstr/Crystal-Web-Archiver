@@ -194,5 +194,3 @@ def _run_tests(test_names: List[str]) -> bool:
         print()
     
     return is_ok
-
-

@@ -323,10 +323,7 @@ def _main(args: List[str]) -> None:
                     is_ok = run_tests(parsed_args.test)
                 finally:
                     exit_code = 0 if is_ok else 1
-                    try:
-                        fg_call_later(lambda: sys.exit(exit_code))
-                    except NoForegroundThreadError:
-                        os._exit(exit_code)
+                    os._exit(exit_code)
             bg_call_later(bg_task)
         
         # Run GUI
