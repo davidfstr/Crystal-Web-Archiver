@@ -1,10 +1,10 @@
-from contextlib import contextmanager
 from crystal.model import Project, Resource, ResourceGroup
 from crystal.progress import CancelLoadUrls
 # TODO: Consider extracting serve_and_fetch_xkcd_home_page() to utility module
 from crystal.tests.test_server import serve_and_fetch_xkcd_home_page
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.server import extracted_project, served_project
+from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
@@ -16,13 +16,12 @@ from crystal.tests.util.windows import AddGroupDialog, OpenOrCreateDialog
 from unittest import skip
 from unittest.mock import patch
 import tempfile
-from typing import Iterator
 
 
 # === Test: Database not on SSD ===
 
 async def test_given_project_database_not_on_ssd_when_expanding_first_resource_group_node_in_entity_tree_then_loading_urls_progress_dialog_becomes_visible_and_shows_loading_node() -> None:
-    with _database_on_ssd(False):
+    with database_on_ssd(False):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
                 project = Project._last_opened_project
@@ -62,7 +61,7 @@ async def test_given_project_database_not_on_ssd_given_expanding_first_resource_
 
 
 async def test_given_project_database_not_on_ssd_given_resource_group_node_selected_when_press_download_button_then_loading_urls_progress_dialog_becomes_visible() -> None:
-    with _database_on_ssd(False):
+    with database_on_ssd(False):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
             # Define URLs
             atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
@@ -108,7 +107,7 @@ async def test_given_project_database_not_on_ssd_given_resource_group_node_selec
 
 
 async def test_given_project_database_not_on_ssd_when_press_add_group_button_then_loading_urls_progress_dialog_becomes_visible() -> None:
-    with _database_on_ssd(False):
+    with database_on_ssd(False):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
                 project = Project._last_opened_project
@@ -136,7 +135,7 @@ async def test_given_project_database_not_on_ssd_given_did_press_add_group_butto
 # === Test: Database on SSD ===
 
 async def test_given_project_database_on_ssd_when_expanding_any_resource_group_node_in_entity_tree_then_shows_loading_node() -> None:
-    with _database_on_ssd(True):
+    with database_on_ssd(True):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
                 project = Project._last_opened_project
@@ -173,7 +172,7 @@ async def test_given_project_database_on_ssd_when_expanding_any_resource_group_n
 
 
 async def test_given_project_database_on_ssd_given_resource_group_node_selected_when_press_download_button_then_download_task_has_subtitle_loading() -> None:
-    with _database_on_ssd(True):
+    with database_on_ssd(True):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
             # Define URLs
             atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
@@ -214,7 +213,7 @@ async def test_given_project_database_on_ssd_given_resource_group_node_selected_
 
 
 async def test_given_project_database_on_ssd_when_press_add_group_button_then_add_group_dialog_does_appear() -> None:
-    with _database_on_ssd(True):
+    with database_on_ssd(True):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
                 project = Project._last_opened_project
@@ -241,46 +240,32 @@ async def test_given_project_database_on_ssd_when_press_add_group_button_then_ad
 @awith_subtests
 async def test_serve_url_never_requires_loading_urls(subtests: SubtestsContext) -> None:
     for is_ssd in [False, True]:
-        with subtests.test(is_ssd=is_ssd):
-            with _database_on_ssd(is_ssd):
-                with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-                    # Define URLs
-                    home_url = 'https://xkcd.com/'
+        with subtests.test(is_ssd=is_ssd), database_on_ssd(is_ssd):
+            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+                # Define URLs
+                home_url = 'https://xkcd.com/'
+                
+                async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
+                    project = Project._last_opened_project
+                    assert project is not None
                     
-                    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
-                        project = Project._last_opened_project
-                        assert project is not None
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                    assert root_ti is not None
+                    
+                    (home_ti,) = [
+                        child for child in root_ti.Children
+                        if child.Text.endswith(f'- Home')
+                    ]
+                    
+                    # Prepare to spy on whether LoadUrlsProgressDialog appears
+                    with patch.object(
+                            project._load_urls_progress_listener,
+                            'loading_resource',
+                            wraps=project._load_urls_progress_listener.loading_resource) as progress_listener_method:
+                        # 1. Start server
+                        # 2. Fetch page
+                        (server_page, _) = await serve_and_fetch_xkcd_home_page(mw)
+                        assert 200 == server_page.status
                         
-                        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                        assert root_ti is not None
-                        
-                        (home_ti,) = [
-                            child for child in root_ti.Children
-                            if child.Text.endswith(f'- Home')
-                        ]
-                        
-                        # Prepare to spy on whether LoadUrlsProgressDialog appears
-                        with patch.object(
-                                project._load_urls_progress_listener,
-                                'loading_resource',
-                                wraps=project._load_urls_progress_listener.loading_resource) as progress_listener_method:
-                            # 1. Start server
-                            # 2. Fetch page
-                            (server_page, _) = await serve_and_fetch_xkcd_home_page(mw)
-                            assert 200 == server_page.status
-                            
-                            # Ensure did not show LoadUrlsProgressDialog
-                            assert 0 == progress_listener_method.call_count
-
-
-# === Utility ===
-
-@contextmanager
-def _database_on_ssd(is_ssd: bool) -> Iterator[None]:
-    def mock_is_ssd(itempath: str) -> bool:
-        return is_ssd
-    
-    with patch('crystal.util.ssd._is_mac_ssd', mock_is_ssd), \
-            patch('crystal.util.ssd._is_linux_ssd', mock_is_ssd), \
-            patch('crystal.util.ssd._is_windows_ssd', mock_is_ssd):
-        yield
+                        # Ensure did not show LoadUrlsProgressDialog
+                        assert 0 == progress_listener_method.call_count
