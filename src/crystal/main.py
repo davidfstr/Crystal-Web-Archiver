@@ -506,7 +506,7 @@ def _prompt_to_create_project(
     * CancelOpenProject -- if the user cancels the prompt early
     """
     from crystal.model import Project
-    from crystal.progress import CancelOpenProject
+    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog
     import wx
     
     dialog = wx.FileDialog(parent,
@@ -523,7 +523,7 @@ def _prompt_to_create_project(
     
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
-    return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
+    return Project(project_path, progress_listener, LoadUrlsProgressDialog(), **project_kwargs)  # type: ignore[arg-type]
 
 
 def _prompt_to_open_project(
@@ -627,7 +627,7 @@ def _load_project(
     * CancelOpenProject
     """
     from crystal.model import Project, ProjectFormatError, ProjectTooNewError
-    from crystal.progress import CancelOpenProject
+    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog
     from crystal.util.wx_dialog import position_dialog_initially
     import wx
     
@@ -636,7 +636,7 @@ def _load_project(
     assert _show_modal_func is not None  # help mypy
     
     try:
-        return Project(project_path, progress_listener, **project_kwargs)  # type: ignore[arg-type]
+        return Project(project_path, progress_listener, LoadUrlsProgressDialog(), **project_kwargs)  # type: ignore[arg-type]
     except FileNotFoundError:
         # TODO: Present this error to the user nicely
         raise

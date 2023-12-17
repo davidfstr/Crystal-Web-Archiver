@@ -1,17 +1,134 @@
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 from overrides import overrides
 import sys
-from typing import Optional
+from typing import Optional, Type
+from typing_extensions import Self
 import wx
 
 
+# ------------------------------------------------------------------------------
+# _AbstractProgressDialog
+
+class _AbstractProgressDialog:
+    _dialog_title: str  # abstract
+    _CancelException: Type[Exception]  # abstract
+    
+    _dialog_style: Optional[int]
+    _dialog: Optional[wx.ProgressDialog]
+    
+    def __init__(self) -> None:
+        self._dialog_style = None
+        self._dialog = None
+        self.reset()
+    
+    def reset(self) -> None:
+        """
+        Resets this progress listener to its initial state,
+        hiding any progress dialogs.
+        
+        Afterward, the progress of a new operation may be
+        reported through this same progress listener.
+        """
+        self._dialog_style = None
+        if self._dialog is not None:
+            self._dialog.Destroy()
+            self._dialog = None  # very important; avoids segfaults
+    
+    # === Utility ===
+    
+    # protected
+    def _update_can_cancel(self, can_cancel: bool, new_message: str) -> None:
+        """
+        Updates whether the visible progress dialog shows a cancel button or not,
+        recreating the dialog with/without the button as necessary.
+        
+        Also updates the progress dialog to display the specified message.
+        
+        Does NOT raise _CancelException.
+        """
+        old_style = self._dialog_style
+        new_style = (
+            wx.PD_AUTO_HIDE|wx.PD_APP_MODAL
+            if not can_cancel
+            else wx.PD_AUTO_HIDE|wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
+        )
+        new_name = 'cr-opening-project'
+        
+        if new_style != old_style:
+            if self._dialog is not None:
+                self._dialog.Destroy()
+                self._dialog = None  # very important; avoids segfaults
+            
+            self._dialog_style = new_style
+            self._dialog = wx.ProgressDialog(
+                self._dialog_title,
+                # NOTE: Message must be non-empty to size dialog correctly on Windows
+                new_message,
+                # (TODO: Shouldn't the value of the previous dialog version,
+                #        if any, be preserved here?)
+                # TODO: Shouldn't the maximum of the previous dialog version,
+                #       if any, be preserved here?
+                maximum=1,
+                style=new_style
+            )
+            self._dialog.Name = new_name
+            self._dialog.Show()
+        else:
+            assert self._dialog is not None
+            try:
+                self._update(self._dialog.Value, new_message)
+            except self._CancelException:
+                # Ignore cancel request
+                pass
+    
+    # protected
+    def _update(self, new_value: int, new_message: str='') -> None:
+        """
+        Updates the value of the progress bar in the visible progress dialog.
+        
+        Optionally also updates the message in the progress dialog as well.
+        
+        Raises:
+        * _CancelException
+        """
+        assert self._dialog is not None
+        (ok, _) = self._dialog.Update(new_value, new_message)
+        if not ok:
+            raise self._CancelException()
+    
+    # protected
+    def _pulse(self, new_message: str='') -> None:
+        """
+        Changes the progress bar in the visible progress dialog
+        to be an indeterminate progress bar.
+        
+        Raises:
+        * _CancelException
+        """
+        assert self._dialog is not None
+        (ok, _) = self._dialog.Pulse(new_message)
+        if not ok:
+            raise self._CancelException()
+
+
+# ------------------------------------------------------------------------------
+# OpenProjectProgressListener
+
 _active_progress_listener = None  # type: Optional[OpenProjectProgressListener]
+
+
+class CancelOpenProject(Exception):
+    pass
+
+
+class VetoUpgradeProject(Exception):
+    pass
 
 
 # NOTE: See subclass OpenProjectProgressDialog for the documentation of
 #       the various methods in this interface.
 class OpenProjectProgressListener:
-    def opening_project(self, project_name: str) -> None:
+    def opening_project(self) -> None:
         pass
     
     def upgrading_project(self, message: str) -> None:
@@ -48,9 +165,10 @@ class OpenProjectProgressListener:
 DummyOpenProjectProgressListener = OpenProjectProgressListener
 
 
-class OpenProjectProgressDialog(OpenProjectProgressListener):
-    _dialog_style: Optional[int]
-    _dialog: Optional[wx.ProgressDialog]
+class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressListener):
+    _dialog_title = 'Opening Project...'  # override
+    _CancelException = CancelOpenProject  # override
+    
     _approx_revision_count: Optional[float]
     _resource_count: Optional[int]
     _root_resource_count: Optional[int]
@@ -61,21 +179,23 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
     _always_show_upgrade_required_modal = False
     
     def __init__(self) -> None:
-        self._dialog_style = None
-        self._dialog = None
+        super().__init__()
         self._approx_revision_count = None
         self._resource_count = None
         self._root_resource_count = None
         self._resource_group_count = None
         self._entity_tree_node_count = None
-        self.reset()
     
-    def __enter__(self) -> OpenProjectProgressListener:
+    # === Enter ===
+    
+    def __enter__(self) -> Self:
         return self
     
     @overrides
-    def opening_project(self, project_name: str) -> None:
+    def opening_project(self) -> None:
         pass
+    
+    # === Phase 1: Upgrade Revisions ===
     
     @overrides
     def upgrading_project(self, message: str) -> None:
@@ -191,6 +311,8 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
         assert self._dialog is not None
         self._dialog.SetRange(max(revision_count, 1))
     
+    # === Phase 2: Load ===
+    
     # Step 1
     @overrides
     def loading_root_resources(self, root_resource_count: int) -> None:
@@ -265,103 +387,92 @@ class OpenProjectProgressDialog(OpenProjectProgressListener):
             4,
             f'Creating {entity_tree_node_count} entity tree nodes...')
     
+    # === Exit ===
+    
     def __exit__(self, tp, value, tb) -> None:
         self.reset()
+
+
+# ------------------------------------------------------------------------------
+# LoadUrlsProgressListener
+
+class CancelLoadUrls(Exception):
+    pass
+
+
+# NOTE: See subclass LoadUrlsProgressDialog for the documentation of
+#       the various methods in this interface.
+class LoadUrlsProgressListener:
+    def will_load_resources(self, approx_resource_count: int) -> None:
+        pass
+    
+    def loading_resource(self, index: int) -> None:
+        pass
+    
+    def did_load_resources(self, resource_count: int) -> None:
+        pass
+    
+    def indexing_resources(self) -> None:
+        pass
     
     def reset(self) -> None:
-        """
-        Resets this progress listener to its initial state,
-        hiding any progress dialogs.
-        
-        Afterward, the progress of opening a new project may be
-        reported through this same progress listener.
-        """
-        self._dialog_style = None
-        if self._dialog is not None:
-            self._dialog.Destroy()
-            self._dialog = None  # very important; avoids segfaults
+        pass
+
+
+DummyLoadUrlsProgressListener = LoadUrlsProgressListener
+
+
+class LoadUrlsProgressDialog(_AbstractProgressDialog, LoadUrlsProgressListener):
+    _dialog_title = 'Loading URLs...'  # override
+    _CancelException = CancelLoadUrls  # override
     
-    # === Utility ===
+    def __init__(self) -> None:
+        super().__init__()
     
-    def _update_can_cancel(self, can_cancel: bool, new_message: str) -> None:
+    @overrides
+    def will_load_resources(self, approx_resource_count: int) -> None:
         """
-        Updates whether the visible progress dialog shows a cancel button or not,
-        recreating the dialog with/without the button as necessary.
-        
-        Also updates the progress dialog to display the specified message.
-        
-        Does NOT raise CancelOpenProject.
-        """
-        old_style = self._dialog_style
-        new_style = (
-            wx.PD_AUTO_HIDE|wx.PD_APP_MODAL
-            if not can_cancel
-            else wx.PD_AUTO_HIDE|wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME
-        )
-        new_name = (
-            'cr-opening-project-1'
-            if not can_cancel
-            else 'cr-opening-project-2'
-        )
-        
-        if new_style != old_style:
-            if self._dialog is not None:
-                self._dialog.Destroy()
-                self._dialog = None  # very important; avoids segfaults
-            
-            self._dialog_style = new_style
-            self._dialog = wx.ProgressDialog(
-                'Opening Project...',
-                # NOTE: Message must be non-empty to size dialog correctly on Windows
-                new_message,
-                # (TODO: Shouldn't the value of the previous dialog version,
-                #        if any, be preserved here?)
-                # TODO: Shouldn't the maximum of the previous dialog version,
-                #       if any, be preserved here?
-                maximum=1,
-                style=new_style
-            )
-            self._dialog.Name = new_name
-            self._dialog.Show()
-        else:
-            assert self._dialog is not None
-            try:
-                self._update(self._dialog.Value, new_message)
-            except CancelOpenProject:
-                # Ignore cancel request
-                pass
-    
-    def _update(self, new_value: int, new_message: str='') -> None:
-        """
-        Updates the value of the progress bar in the visible progress dialog.
-        
-        Optionally also updates the message in the progress dialog as well.
+        Called immediately before resources will be loaded.
         
         Raises:
-        * CancelOpenProject
+        * CancelLoadUrls
         """
+        initial_message = f'Loading about {approx_resource_count:n} resource(s)...'
+        self._update_can_cancel(True, initial_message)
+        
         assert self._dialog is not None
-        (ok, _) = self._dialog.Update(new_value, new_message)
-        if not ok:
-            raise CancelOpenProject()
+        self._dialog.SetRange(max(approx_resource_count, 1))
+        self._update(0, initial_message)
     
-    def _pulse(self, new_message: str='') -> None:
+    @overrides
+    def loading_resource(self, index: int) -> None:
         """
-        Changes the progress bar in the visible progress dialog
-        to be an indeterminate progress bar.
+        Called periodically while resources are being loaded, to report progress.
         
         Raises:
-        * CancelOpenProject
+        * CancelLoadUrls
+        """
+        self._update(index)
+    
+    @overrides
+    def did_load_resources(self, resource_count: int) -> None:
+        """
+        Called immediately after resources finished loading.
         """
         assert self._dialog is not None
-        (ok, _) = self._dialog.Pulse(new_message)
-        if not ok:
-            raise CancelOpenProject()
+        self._resource_count = resource_count
+        self._dialog.SetRange(max(resource_count, 1))
+    
+    @overrides
+    def indexing_resources(self) -> None:
+        """
+        Raises:
+        * CancelLoadUrls
+        """
+        assert self._dialog is not None
+        assert self._resource_count is not None
+        message = f'Indexing {self._resource_count:n} resources(s)...'
+        self._update(self._dialog.GetRange(), message)
 
 
-class CancelOpenProject(Exception):
-    pass
-
-
-class VetoUpgradeProject(Exception):
-    pass
+# ------------------------------------------------------------------------------

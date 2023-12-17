@@ -1,4 +1,5 @@
 from crystal.model import ResourceGroup
+from crystal.progress import CancelLoadUrls
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import position_dialog_initially
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
@@ -26,11 +27,20 @@ class AddGroupDialog:
         * project -- the project.
         * initial_url -- overrides the initial URL displayed.
         * initial_source -- overrides the initial source displayed.
+        
+        Raises:
+        * CancelLoadUrls
         """
         self._project = project
         self._on_finish = on_finish
         if initial_url is None:
             initial_url = 'http://'
+        
+        # Show progress dialog in advance if will need to load all project URLs
+        try:
+            project.load_urls()
+        except CancelLoadUrls:
+            raise
         
         dialog = self.dialog = wx.Dialog(
             parent, title='New Group',

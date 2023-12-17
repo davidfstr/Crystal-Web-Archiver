@@ -473,5 +473,12 @@ class NodeViewPeer(tuple):
         else:
             return False
     
+    @fg_affinity
+    def Collapse(self) -> None:
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.Collapse(node_id)
+    
     def _raise_no_longer_exists(self) -> NoReturn:
         raise WindowDeletedError('Tree item no longer exists')

@@ -107,6 +107,9 @@ async def test_when_serve_page_with_unknown_x_header_then_excludes_header_silent
         )
 
 
+# ------------------------------------------------------------------------------
+# Utility
+
 @asynccontextmanager
 async def _xkcd_home_page_served(
         alter_revision_func: Optional[Callable[[ResourceRevision], None]]=None,

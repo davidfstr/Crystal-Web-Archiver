@@ -6,6 +6,7 @@ from crystal.tests import (
     test_file_extension_visibility,
     test_icons,
     test_install_to_desktop,
+    test_load_urls,
     test_log_drawer,
     test_menus,
     test_open_project,
@@ -15,6 +16,7 @@ from crystal.tests import (
     test_readonly_mode,
     test_server,
     test_shell,
+    test_ssd,
     test_tasks,
     test_tasktree,
     test_workflows,
@@ -45,6 +47,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_file_extension_visibility) +
     _test_functions_in_module(test_icons) +
     _test_functions_in_module(test_install_to_desktop) +
+    _test_functions_in_module(test_load_urls) +
     _test_functions_in_module(test_log_drawer) +
     _test_functions_in_module(test_menus) +
     _test_functions_in_module(test_open_project) +
@@ -54,6 +57,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_readonly_mode) +
     _test_functions_in_module(test_server) +
     _test_functions_in_module(test_shell) +
+    _test_functions_in_module(test_ssd) +
     _test_functions_in_module(test_tasks) +
     _test_functions_in_module(test_tasktree) +
     _test_functions_in_module(test_workflows) +

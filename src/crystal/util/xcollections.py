@@ -4,6 +4,8 @@ extended collections in the standard `collections` module.
 """
 
 from collections import OrderedDict
+import sys
+from typing import cast, Dict, TypeVar
 
 
 class simpleorderedset:
@@ -41,3 +43,11 @@ class defaultordereddict(OrderedDict):
         value = self.default_factory()
         self[key] = value
         return value
+
+
+_K = TypeVar('_K')
+_V = TypeVar('_V')
+
+def as_ordereddict(d: Dict[_K, _V]) -> 'OrderedDict[_K, _V]':
+    assert sys.version_info >= (3, 8)
+    return cast('OrderedDict[_K, _V]', d)
