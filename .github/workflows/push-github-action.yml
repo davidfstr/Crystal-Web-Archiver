@@ -27,7 +27,7 @@ jobs:
           - macos-latest
         python-version: ["3.8", "3.9"]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10  # normally takes 4 min, as of 2023-03-03
+    timeout-minutes: 12  # normally takes 9 min 50 secs, as of 2023-12-17
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -98,7 +98,7 @@ jobs:
           - ubuntu-22.04
         python-version: ["3.8", "3.9"]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10  # normally takes 2 min, as of 2023-03-03
+    timeout-minutes: 5  # normally takes 3 min 40 sec, as of 2023-12-17
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -183,7 +183,7 @@ jobs:
           - windows-latest
         python-version: ["3.8", "3.9"]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15  # normally takes 10 min, as of 2023-03-03
+    timeout-minutes: 18  # normally takes 14 min 40 secs, as of 2023-12-17
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
