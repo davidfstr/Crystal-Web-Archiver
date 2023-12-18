@@ -17,9 +17,9 @@ Additional documentation will be available once Crystal is no longer **in beta**
 Download ⬇︎
 --------
 
-* [macOS 10.14 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.6.0b/crystal-mac-1.6.0b.dmg)
+* [macOS 12 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.7.0b/crystal-mac-1.7.0b.dmg)
     * You will need to [right-click or Control-click on the application and select "Open" to open it for the first time](https://github.com/davidfstr/Crystal-Web-Archiver/issues/20).
-* [Windows 7, 8, 10](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.6.0b/crystal-win-1.6.0b.exe)
+* [Windows 7 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.7.0b/crystal-win-1.7.0b.exe)
 * Linux
     * Install Python >=3.8,<3.12 and pip from your package manager
         * Ubuntu/Kubuntu 22.04+: `apt-get update; apt-get install -y python3 python3-pip python3-venv`

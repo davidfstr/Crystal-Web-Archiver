@@ -1,13 +1,13 @@
 [Setup]
 AppName=Crystal Web Archiver
-AppVersion=1.6.0b
+AppVersion=1.7.0b
 AppCopyright=Copyright (C) 2011-2023 David Foster. All Rights Reserved
 DefaultDirName={pf}\Crystal Web Archiver
 DefaultGroupName=Crystal Web Archiver
 UninstallDisplayIcon={app}\Crystal Web Archiver.exe
 Compression=lzma2
 SolidCompression=yes
-OutputBaseFilename=crystal-win-1.6.0b
+OutputBaseFilename=crystal-win-1.7.0b
 OutputDir=dist-win
 DisableProgramGroupPage=yes
 ; Tell Explorer to refresh file extension information after (un)install,
@@ -79,6 +79,7 @@ Source: "dist\_sqlite3.pyd"; DestDir: "{app}"
 Source: "dist\_ssl.pyd"; DestDir: "{app}"
 Source: "dist\_testcapi.pyd"; DestDir: "{app}"
 Source: "dist\_tkinter.pyd"; DestDir: "{app}"
+Source: "dist\_win32sysloader.pyd"; DestDir: "{app}"
 Source: "dist\backports.zoneinfo._czoneinfo.pyd"; DestDir: "{app}"
 Source: "dist\cacert.pem"; DestDir: "{app}"
 Source: "dist\concrt140.dll"; DestDir: "{app}"
@@ -90,6 +91,7 @@ Source: "dist\libopenblas_v0.3.21-gcc_8_3_0.dll"; DestDir: "{app}"
 Source: "dist\libssl-1_1.dll"; DestDir: "{app}"
 Source: "dist\lxml._elementpath.pyd"; DestDir: "{app}"
 Source: "dist\lxml.etree.pyd"; DestDir: "{app}"
+Source: "dist\mfc140u.dll"; DestDir: "{app}"
 Source: "dist\msvcp140_1.dll"; DestDir: "{app}"
 Source: "dist\msvcp140_2.dll"; DestDir: "{app}"
 Source: "dist\msvcp140_atomic_wait.dll"; DestDir: "{app}"
@@ -115,6 +117,8 @@ Source: "dist\numpy.random.bit_generator.pyd"; DestDir: "{app}"
 Source: "dist\numpy.random.mtrand.pyd"; DestDir: "{app}"
 Source: "dist\pyexpat.pyd"; DestDir: "{app}"
 Source: "dist\python38.dll"; DestDir: "{app}"
+Source: "dist\pythoncom38.dll"; DestDir: "{app}"
+Source: "dist\pywintypes38.dll"; DestDir: "{app}"
 Source: "dist\select.pyd"; DestDir: "{app}"
 Source: "dist\sqlite3.dll"; DestDir: "{app}"
 Source: "dist\tcl86t.dll"; DestDir: "{app}"
@@ -124,6 +128,13 @@ Source: "dist\vcamp140.dll"; DestDir: "{app}"
 Source: "dist\vccorlib140.dll"; DestDir: "{app}"
 Source: "dist\vcomp140.dll"; DestDir: "{app}"
 Source: "dist\vcruntime140.dll"; DestDir: "{app}"
+Source: "dist\win32api.pyd"; DestDir: "{app}"
+Source: "dist\win32com.shell.shell.pyd"; DestDir: "{app}"
+Source: "dist\win32evtlog.pyd"; DestDir: "{app}"
+Source: "dist\win32file.pyd"; DestDir: "{app}"
+Source: "dist\win32pdh.pyd"; DestDir: "{app}"
+Source: "dist\win32ui.pyd"; DestDir: "{app}"
+Source: "dist\win32wnet.pyd"; DestDir: "{app}"
 Source: "dist\wx._adv.pyd"; DestDir: "{app}"
 Source: "dist\wx._core.pyd"; DestDir: "{app}"
 Source: "dist\wx._html.pyd"; DestDir: "{app}"

@@ -10,7 +10,7 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### v1.7.0b (December 18, 2023)
 
 This release features further improvements to downloading large websites
 (up to 10 million URLs). Projects open in constant time. Memory usage
@@ -18,6 +18,10 @@ while downloading large groups remains constant.
 
 Additionally .crystalproj documents now have an appropriate icon and can be 
 easily opened by double-clicking that icon on all supported operating systems.
+
+There has also been a major change to the .crystalproj format: Revisions are
+now stored in a hierarchy of directories rather than as a single flat directory.
+Crystal continues to be able to read and write projects of all major versions.
 
 * First-time-run experience improvements
     * App name, logo, and icon fixes
@@ -39,19 +43,25 @@ easily opened by double-clicking that icon on all supported operating systems.
       are now loaded on demand rather than upfront.
     * Large groups now start downloading faster because member
       download tasks are now created on demand rather than upfront.
-    * .crystalproj format now stores revisions in a hierarchy of nested
-      directories rather than all of them inside a single directory.
-    * .crystalproj format now stores revisions in lexicographic order
-      in the filesystem so that when a project is copied to a new location,
-      the order of revisions on disk is preserved in the new copy.
+    * The .crystalproj format has a new major change:
+        * .crystalproj format now stores revisions in a hierarchy of nested
+          directories rather than all of them inside a single directory,
+          to provide faster performance on filesystems which behave poorly
+          when a single directory has very many files.
+        * .crystalproj format now stores revisions in lexicographic order
+          in the filesystem so that when a project is copied to a new location,
+          the order of revisions on disk is preserved in the new copy.
+        * Projects using this new format have a `major_version` of `2`
+          in the `project_property` table.
     * Projects whose database is on a solid state drive (SSD)
       will use less memory because such projects will now prefer to
       load group members via a database query rather than loading
       *all* project URLs into memory.
 
-* Support improvements
+* Support changes
     * Add Kubuntu as a supported Linux distribution
     * Add KDE as a supported desktop environment, in addition to GNOME
+    * Drop support for macOS 10.14. macOS 12+ remains supported.
 
 * Parsing improvements
     * Can identify `<link rel="preload">` references as embedded.
