@@ -105,8 +105,10 @@ class Task(ListenableMixin):
     scheduling_style = SCHEDULING_STYLE_NONE  # abstract for container task types
     """For a container task, defines the order that task units from children will be executed in."""
     
-    _USE_EXTRA_LISTENER_ASSERTIONS = \
+    _USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS = (
         os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
+    )
+    _USE_EXTRA_LISTENER_ASSERTIONS_WHEN_CHILD_COUNT_BELOW = 50
     _REPORTED_TASKS_WITH_MANY_LISTENERS = WeakSet()  # type: WeakSet[Task]
     
     # Optimize per-instance memory use, since there may be very many Task objects
@@ -266,12 +268,12 @@ class Task(ListenableMixin):
                 f'and already_completed_ok is False. '
                 f'self={self}, child={child}')
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if self._use_extra_listener_assertions:
             assert child in self._children
         # NOTE: child._parent may already be set to a different parent
         child._parent = self
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if self._use_extra_listener_assertions:
             assert self not in child.listeners, (
                 f'Expected {self=} to not already be listening to {child=}. '
                 f'Was child added multiple times to the same parent?'
@@ -363,7 +365,7 @@ class Task(ListenableMixin):
         if all_children_complete:
             for child in self._children:
                 child._parent = None
-                if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+                if self._use_extra_listener_assertions:
                     assert self not in child.listeners
             self._children = []
             self._num_children_complete = 0
@@ -502,7 +504,7 @@ class Task(ListenableMixin):
     
     @final
     def task_subtitle_did_change(self, task):
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
         
         if hasattr(self, 'child_task_subtitle_did_change'):
@@ -510,13 +512,13 @@ class Task(ListenableMixin):
     
     @final
     def task_did_complete(self, task):
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
         
         self._num_children_complete += 1
         
         task.listeners.remove(self)
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if self._use_extra_listener_assertions:
             assert self not in task.listeners
         
         if hasattr(self, 'child_task_did_complete'):
@@ -524,6 +526,18 @@ class Task(ListenableMixin):
         for lis in self.listeners:
             if hasattr(lis, 'task_child_did_complete'):
                 lis.task_child_did_complete(self, task)  # type: ignore[attr-defined]
+    
+    # === Utility ===
+    
+    @property
+    def _use_extra_listener_assertions(self) -> bool:
+        return (
+            # Enable assertions if forced on
+            Task._USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS or
+            # Enable assertions if child count is low enough
+            # that assertions aren't too expensive
+            len(self._children) < Task._USE_EXTRA_LISTENER_ASSERTIONS_WHEN_CHILD_COUNT_BELOW
+        )
 
 
 class TaskDisposedException(Exception):
@@ -1222,7 +1236,7 @@ class DownloadResourceGroupMembersTask(Task):
             title='Downloading members of group: %s' % group.name)
         self.group = group
         
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if self._use_extra_listener_assertions:
             assert self not in self.group.listeners
         self.group.listeners.append(self)
         
@@ -1336,7 +1350,7 @@ class DownloadResourceGroupMembersTask(Task):
     
     def finish(self) -> None:
         self.group.listeners.remove(self)
-        if Task._USE_EXTRA_LISTENER_ASSERTIONS:
+        if self._use_extra_listener_assertions:
             assert self not in self.group.listeners
         
         if self._pbc is not None:
