@@ -65,7 +65,7 @@ class AddRootUrlDialog:
         self.name_field = wx.TextCtrl(
             parent,
             name='cr-add-url-dialog__name-field')
-        self.url_field.Hint = 'Home'
+        self.name_field.Hint = 'Home'
         self.name_field.SetSelection(-1, -1)  # select all upon focus
         fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         

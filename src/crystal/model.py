@@ -1792,7 +1792,7 @@ class Resource:
         """
         return self._definitely_has_no_revisions
     
-    # === Download ===
+    # === Operations: Download ===
     
     def download_body(self) -> 'Future[ResourceRevision]':
         """
@@ -2104,13 +2104,15 @@ class RootResource:
     resource: Resource
     _id: int  # or None if deleted
     
+    # === Init ===
+    
     def __new__(cls, project: Project, name: str, resource: Resource, _id: Optional[int]=None) -> RootResource:
         """
         Creates a new root resource.
         
         Arguments:
         * project -- associated `Project`.
-        * name -- display name.
+        * name -- name. Possibly ''.
         * resource -- `Resource`.
         
         Raises:
@@ -2148,6 +2150,8 @@ class RootResource:
             
             return self
     
+    # === Delete ===
+    
     def delete(self) -> None:
         """
         Deletes this root resource.
@@ -2166,9 +2170,18 @@ class RootResource:
         
         del self.project._root_resources[self.resource]
     
+    # === Properties ===
+    
+    @property
+    def display_name(self) -> str:
+        """Name of this root resource that is used in the UI."""
+        return self.name or self.url
+    
     @property
     def url(self) -> str:
         return self.resource.url
+    
+    # === Operations: Download ===
     
     # TODO: Create the underlying task with the full RootResource
     #       so that the correct subtitle is displayed.
@@ -2184,6 +2197,8 @@ class RootResource:
         # TODO: Create the underlying task with the full RootResource
         #       so that the correct subtitle is displayed.
         return self.resource.create_download_task(needs_result=needs_result, is_embedded=False)
+    
+    # === Utility ===
     
     def __repr__(self):
         return "RootResource(%s,%s)" % (repr(self.name), repr(self.resource.url))
@@ -3079,18 +3094,23 @@ class ResourceGroup(ListenableMixin):
     Persisted and auto-saved.
     """
     
+    # === Init ===
+    
     def __init__(self, 
             project: Project, 
-            name: str, 
+            name: str,  # possibly ''
             url_pattern: str, 
             _id: Optional[int]=None) -> None:
         """
         Arguments:
         * project -- associated `Project`.
-        * name -- name of this group.
+        * name -- name of this group. Possibly ''.
         * url_pattern -- url pattern matched by this group.
         """
         super().__init__()
+        
+        if len(url_pattern) == 0:
+            raise ValueError('Cannot create group with empty pattern')
         
         self.project = project
         self.name = name
@@ -3118,6 +3138,8 @@ class ResourceGroup(ListenableMixin):
     def _init_source(self, source: ResourceGroupSource) -> None:
         self._source = source
     
+    # === Delete ===
+    
     def delete(self) -> None:
         """
         Deletes this resource group.
@@ -3135,6 +3157,13 @@ class ResourceGroup(ListenableMixin):
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.project._resource_groups.remove(self)
+    
+    # === Properties ===
+    
+    @property
+    def display_name(self) -> str:
+        """Name of this group that is used in the UI."""
+        return self.name or self.url_pattern
     
     def _get_source(self) -> ResourceGroupSource:
         """
@@ -3234,6 +3263,8 @@ class ResourceGroup(ListenableMixin):
                 literal_prefix=ResourceGroup.literal_prefix_for_url_pattern(self.url_pattern))
         return self._members
     
+    # === Events ===
+    
     # Called when a new Resource is created after the project has loaded
     def _resource_did_instantiate(self, resource: Resource) -> None:
         if self.contains_url(resource.url):
@@ -3259,6 +3290,8 @@ class ResourceGroup(ListenableMixin):
                 self._members.remove(resource)
             except ValueError:  # not in list
                 pass
+    
+    # === Operations: Download ===
     
     def download(self, *, needs_result: bool=False) -> DownloadResourceGroupTask:
         """
@@ -3303,6 +3336,8 @@ class ResourceGroup(ListenableMixin):
         from crystal.task import UpdateResourceGroupMembersTask
         task = UpdateResourceGroupMembersTask(self)
         self.project.add_task(task)
+    
+    # === Utility ===
 
     def __repr__(self):
         return 'ResourceGroup(%s,%s)' % (repr(self.name), repr(self.url_pattern))

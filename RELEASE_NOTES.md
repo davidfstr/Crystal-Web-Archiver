@@ -10,6 +10,13 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main (v2.0.0?)
+
+* First-time-run experience improvements
+    * Add Root URL, Add Group:
+        * Make it optional to provide a name for new Root URLs and Groups.
+        * Rearrange fields to deemphasize the Name field.
+
 ### v1.7.0b (December 18, 2023)
 
 This release features further improvements to downloading large websites

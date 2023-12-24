@@ -586,14 +586,15 @@ _LARGE_DISK_MIN_PROJECT_FREE_BYTES = 1024 * 1024 * 1024 * 4  # 4 GiB
 _MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH = 3
 
 
-def _get_abstract_resource_title(abstract_resource):
+def _get_abstract_resource_title(abstract_resource: Union[Resource, RootResource]) -> str:
     """
     Arguments:
     * abstract_resource -- a Resource or a RootResource.
     """
     resource = abstract_resource.resource
-    if hasattr(abstract_resource, 'name'):
-        return '%s - %s' % (resource.url, abstract_resource.name)
+    name = getattr(abstract_resource, 'name', '') or ''
+    if name != '':
+        return '%s - %s' % (resource.url, name)
     else:
         return '%s' % (resource.url)
 
@@ -731,7 +732,11 @@ class DownloadResourceTask(Task):
         '_download_body_with_embedded_future',
     )
     
-    def __init__(self, abstract_resource, *, needs_result: bool=True, is_embedded: bool=False) -> None:
+    def __init__(self,
+            abstract_resource: Union[Resource, RootResource],
+            *, needs_result: bool=True,
+            is_embedded: bool=False,
+            ) -> None:
         """
         Arguments:
         * abstract_resource -- a Resource or a RootResource.
@@ -1189,7 +1194,7 @@ class UpdateResourceGroupMembersTask(Task):
     
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
-            title='Finding members of group: %s' % group.name)
+            title='Finding members of group: %s' % group.display_name)
         self.group = group
         
         if group.source is None:
@@ -1233,7 +1238,7 @@ class DownloadResourceGroupMembersTask(Task):
     
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
-            title='Downloading members of group: %s' % group.name)
+            title='Downloading members of group: %s' % group.display_name)
         self.group = group
         
         if self._use_extra_listener_assertions:
@@ -1377,7 +1382,7 @@ class DownloadResourceGroupTask(Task):
     
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
-            title='Downloading group: %s' % group.name)
+            title='Downloading group: %s' % group.display_name)
         self._update_members_task = UpdateResourceGroupMembersTask(group)
         self._download_members_task = DownloadResourceGroupMembersTask(group)
         self._started_downloading_members = False

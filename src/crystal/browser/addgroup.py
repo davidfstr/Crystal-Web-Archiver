@@ -136,9 +136,9 @@ class AddGroupDialog:
             name='cr-add-group-dialog__source-field')
         self.source_choice_box.Append('none', None)
         for rr in self._project.root_resources:
-            self.source_choice_box.Append(rr.name, rr)
+            self.source_choice_box.Append(rr.display_name, rr)
         for rg in self._project.resource_groups:
-            self.source_choice_box.Append(rg.name, rg)
+            self.source_choice_box.Append(rg.display_name, rg)
         self.source_choice_box.SetSelection(0)
         if initial_source is not None:
             for i in range(self.source_choice_box.GetCount()):

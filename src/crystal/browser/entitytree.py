@@ -709,9 +709,11 @@ class RootResourceNode(_ResourceNode):
     
     def calculate_title(self):
         project = self.root_resource.project
-        return '%s - %s' % (
-            project.get_display_url(self.root_resource.url),
-            self.root_resource.name)
+        display_url = project.get_display_url(self.root_resource.url)
+        if self.root_resource.name != '':
+            return '%s - %s' % (display_url, self.root_resource.name)
+        else:
+            return '%s' % (display_url,)
     
     @property
     def entity(self):
@@ -846,9 +848,11 @@ class ResourceGroupNode(Node):
     
     def calculate_title(self):
         project = self.resource_group.project
-        return '%s - %s' % (
-            project.get_display_url(self.resource_group.url_pattern),
-            self.resource_group.name)
+        display_url = project.get_display_url(self.resource_group.url_pattern)
+        if self.resource_group.name != '':
+            return '%s - %s' % (display_url, self.resource_group.name)
+        else:
+            return '%s' % (display_url,)
     
     @property
     def entity(self):
@@ -970,10 +974,17 @@ class GroupedLinkedResourcesNode(Node):
     
     def calculate_title(self):
         project = self.resource_group.project
-        return '%s - %d of %s' % (
-            project.get_display_url(self.resource_group.url_pattern),
-            len(self.children),
-            self.resource_group.name)
+        display_url_pattern = project.get_display_url(self.resource_group.url_pattern)
+        if self.resource_group.name != '':
+            return '%s - %d of %s' % (
+                display_url_pattern,
+                len(self.children),
+                self.resource_group.name)
+        else:
+            return '%s - %d link%s' % (
+                display_url_pattern,
+                len(self.children),
+                '' if len(self.children) == 1 else 's')
     
     @property
     def entity(self):

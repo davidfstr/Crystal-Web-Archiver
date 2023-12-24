@@ -1017,6 +1017,119 @@ async def test_can_download_and_serve_a_site_requiring_cookie_authentication() -
     pass
 
 
+async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() -> None:
+    """
+    Test that can successfully download a site without needing to name any
+    Root URLs or Groups, and those unnamed entities look okay everywhere
+    in the UI.
+    """
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic2_url = sp.get_request_url('https://xkcd.com/2/')
+            comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+            
+            atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+            rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+            feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
+            
+            feed_item_pattern = sp.get_request_url('https://xkcd.com/##/')
+            assert feed_item_pattern != comic_pattern
+        
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                # 1. Test can create unnamed root resource
+                # 2. Ensure unnamed root resource at root of Entity Tree has OK title
+                if True:
+                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                    assert root_ti is not None
+                    assert root_ti.GetFirstChild() is None  # no entities
+                    
+                    click_button(mw.add_url_button)
+                    aud = await AddUrlDialog.wait_for()
+                    
+                    aud.url_field.Value = home_url
+                    await aud.ok()
+                    home_ti = root_ti.GetFirstChild()
+                    assert home_ti is not None  # entity was created
+                    assert f'{home_url}' == home_ti.Text
+                
+                # Expand root resource
+                home_ti.Expand()
+                await wait_for(
+                    first_child_of_tree_item_is_not_loading_condition(home_ti),
+                    timeout=4.0  # 2.0s isn't long enough for Windows test runners on GitHub Actions
+                )
+                (comic1_ti,) = [
+                    child for child in home_ti.Children
+                    if child.Text.startswith(f'{comic1_url} - ')
+                ]  # ensure did find sub-resource for Comic #1
+                
+                # 1. Test can create unnamed resource group
+                # 2. Ensure unnamed root resource shows as source with OK title
+                if True:
+                    comic1_ti.SelectItem()
+                    
+                    click_button(mw.add_group_button)
+                    agd = await AddGroupDialog.wait_for()
+                    
+                    agd.pattern_field.Value = comic_pattern
+                    agd.source = home_url
+                    await agd.ok()
+                    
+                    # 1. Ensure the new resource group does now group sub-resources
+                    # 2. Ensure grouped sub-resources for unnamed group has OK title
+                    if True:
+                        (grouped_subresources_ti,) = [
+                            child for child in home_ti.Children
+                            if child.Text.startswith(f'{comic_pattern} - ')
+                        ]  # ensure did find grouped sub-resources
+                        assert re.fullmatch(
+                            rf'{re.escape(comic_pattern)} - \d+ links?',  # title format of grouped sub-resources
+                            grouped_subresources_ti.Text)
+                        
+                        grouped_subresources_ti.Expand()
+                        await wait_for(first_child_of_tree_item_is_not_loading_condition(grouped_subresources_ti))
+                        
+                        (comic1_ti,) = [
+                            child for child in grouped_subresources_ti.Children
+                            if child.Text.startswith(f'{comic1_url} - ')
+                        ]  # contains first comic
+                        assert len(grouped_subresources_ti.Children) >= 2  # contains last comic too
+                        
+                        grouped_subresources_ti.Collapse()
+                    
+                    home_ti.Collapse()
+                    
+                    # 1. Ensure the new resource group appears at the root of the entity tree
+                    # 2. Ensure unnamed resource group at root of Entity Tree has OK title
+                    (comic_group_ti,) = [
+                        child for child in root_ti.Children
+                        if child.Text == f'{comic_pattern}'
+                    ]  # ensure did find resource group at root of entity tree
+                    
+                    comic_group_ti.Expand()
+                    await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
+                    
+                    # Ensure the new resource group does contain the expected members
+                    (comic1_ti,) = [
+                        child for child in comic_group_ti.Children
+                        if child.Text == f'{comic1_url}'
+                    ]  # contains first comic
+                    assert len(comic_group_ti.Children) >= 2  # contains last comic too
+                    
+                    comic_group_ti.Collapse()
+                
+                # Ensure unnamed resource group shows as source with OK title
+                click_button(mw.add_group_button)
+                agd = await AddGroupDialog.wait_for()
+                agd.source = comic_pattern
+                click_button(agd.cancel_button)
+
+
 # ------------------------------------------------------------------------------
 # Utility
 

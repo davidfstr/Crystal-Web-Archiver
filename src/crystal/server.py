@@ -416,7 +416,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 matching_rg = self._find_group_matching_archive_url(archive_url)
                 if matching_rg is not None and not readonly and dynamic_ok:
                     self._print_warning('*** Dynamically downloading new resource in group %r: %s' % (
-                        matching_rg.name,
+                        matching_rg.display_name,
                         archive_url,
                     ))
                     
@@ -453,7 +453,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     matching_rr = self._find_root_resource_matching_archive_url(archive_url)
                     if matching_rr is not None:
                         self._print_warning('*** Dynamically downloading root resource %r: %s' % (
-                            matching_rr.name,
+                            matching_rr.display_name,
                             archive_url,
                         ))
                     
@@ -463,7 +463,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     matching_rg = self._find_group_matching_archive_url(archive_url)
                     if matching_rg is not None:
                         self._print_warning('*** Dynamically downloading existing resource in group %r: %s' % (
-                            matching_rg.name,
+                            matching_rg.display_name,
                             archive_url,
                         ))
                     
