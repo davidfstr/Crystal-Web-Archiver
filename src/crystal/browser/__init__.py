@@ -6,7 +6,9 @@ from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
-from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.model import (
+    Project, Resource, ResourceGroup, ResourceGroupSource, RootResource
+)
 from crystal.progress import (
     CancelLoadUrls,
     DummyOpenProjectProgressListener,
@@ -342,25 +344,25 @@ class MainWindow:
     # === Entity Pane: Properties ===
     
     @property
-    def _selection_initial_url(self):
+    def _selection_initial_url(self) -> Optional[str]:
         selected_entity = self.entity_tree.selected_entity
-        if type(selected_entity) in (Resource, RootResource):
+        if isinstance(selected_entity, (Resource, RootResource)):
             return selected_entity.resource.url
-        elif type(selected_entity) is ResourceGroup:
+        elif isinstance(selected_entity, ResourceGroup):
             return selected_entity.url_pattern
         else:
             return self.project.default_url_prefix
     
     @property
-    def _selection_initial_source(self):
+    def _selection_initial_source(self) -> Optional[ResourceGroupSource]:
         selected_entity = self.entity_tree.selected_entity
-        if type(selected_entity) in (Resource, RootResource):
+        if isinstance(selected_entity, (Resource, RootResource)):
             parent_of_selected_entity = self.entity_tree.parent_of_selected_entity
-            if type(parent_of_selected_entity) in (ResourceGroup, RootResource):
+            if isinstance(parent_of_selected_entity, (ResourceGroup, RootResource)):
                 return parent_of_selected_entity
             else:
                 return None
-        elif type(selected_entity) is ResourceGroup:
+        elif isinstance(selected_entity, ResourceGroup):
             return selected_entity.source
         else:
             return None
@@ -421,7 +423,7 @@ class MainWindow:
     def _on_add_url(self, event: wx.CommandEvent) -> None:
         AddRootUrlDialog(
             self._frame, self._on_add_url_dialog_ok,
-            initial_url=self._selection_initial_url)
+            initial_url=self._selection_initial_url or '')
     
     def _on_add_url_dialog_ok(self, name, url) -> None:
         # TODO: Validate user input:
@@ -434,7 +436,7 @@ class MainWindow:
             AddGroupDialog(
                 self._frame, self._on_add_group_dialog_ok,
                 self.project,
-                initial_url=self._selection_initial_url,
+                initial_url=self._selection_initial_url or '',
                 initial_source=self._selection_initial_source)
         except CancelLoadUrls:
             pass

@@ -1,11 +1,13 @@
-from crystal.model import ResourceGroup
+# TODO: Consider extracting functions shared between dialogs to own module
+from crystal.browser.addrooturl import AddRootUrlDialog, fields_hide_hint_when_focused
+from crystal.model import Project, ResourceGroup, ResourceGroupSource
 from crystal.progress import CancelLoadUrls
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import position_dialog_initially
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux
 import sys
-from typing import Union
+from typing import Callable, Optional, Union
 import wx
 
 
@@ -19,11 +21,17 @@ class AddGroupDialog:
     
     # === Init ===
     
-    def __init__(self, parent, on_finish, project, initial_url=None, initial_source=None) -> None:
+    def __init__(self,
+            parent: wx.Window,
+            on_finish: Callable[[str, str, ResourceGroupSource], None],
+            project: Project,
+            initial_url: str='',
+            initial_source: Optional[ResourceGroupSource]=None,
+            ) -> None:
         """
         Arguments:
         * parent -- parent wx.Window that this dialog is attached to.
-        * on_finish -- called when OK pressed on dialog. Is a callable(name, url_pattern).
+        * on_finish -- called when OK pressed on dialog. Is a callable(name, url_pattern, source).
         * project -- the project.
         * initial_url -- overrides the initial URL displayed.
         * initial_source -- overrides the initial source displayed.
@@ -33,8 +41,6 @@ class AddGroupDialog:
         """
         self._project = project
         self._on_finish = on_finish
-        if initial_url is None:
-            initial_url = 'http://'
         
         # Show progress dialog in advance if will need to load all project URLs
         try:
@@ -92,42 +98,43 @@ class AddGroupDialog:
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
         
-        self.name_field.SetFocus()
+        if not fields_hide_hint_when_focused():
+            self.pattern_field.SetFocus()  # initialize focus
         self._update_preview_urls()
         
         position_dialog_initially(dialog)
         dialog.Show(True)
         dialog.Fit()
     
-    def _create_fields(self, parent: wx.Window, initial_url: str, initial_source) -> wx.Sizer:
+    def _create_fields(self,
+            parent: wx.Window,
+            initial_url: str,
+            initial_source: Optional[ResourceGroupSource]
+            ) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         fields_sizer.AddGrowableCol(1)
-        
-        fields_sizer.Add(wx.StaticText(parent, label='Name:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
-        self.name_field = wx.TextCtrl(
-            parent,
-            name='cr-add-group-dialog__name-field')
-        self.name_field.SetSelection(-1, -1)
-        fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         
         pattern_field_sizer = wx.BoxSizer(wx.VERTICAL)
         self.pattern_field = wx.TextCtrl(
             parent, value=initial_url, size=(300,-1),  # width hint
             name='cr-add-group-dialog__pattern-field')
         bind(self.pattern_field, wx.EVT_TEXT, self._on_pattern_field_changed)
-        self.pattern_field.SetSelection(-1, -1)
+        self.pattern_field.Hint = 'https://example.com/post/*'
+        self.pattern_field.SetSelection(-1, -1)  # select all upon focus
         pattern_field_sizer.Add(self.pattern_field, flag=wx.EXPAND)
         pattern_field_sizer.Add(wx.StaticText(parent, label='# = digit, @ = alpha, * = any nonslash, ** = any'), flag=wx.EXPAND)
         
-        fields_sizer.Add(wx.StaticText(parent, label='URL Pattern:', style=wx.ALIGN_RIGHT|wx.ALIGN_TOP), flag=wx.EXPAND)
+        pattern_label = wx.StaticText(parent, label='URL Pattern:', style=wx.ALIGN_RIGHT|wx.ALIGN_TOP)
+        pattern_label.Font = pattern_label.Font.Bold()  # mark as required
+        fields_sizer.Add(pattern_label, flag=wx.EXPAND)
         fields_sizer.Add(pattern_field_sizer, flag=wx.EXPAND)
         
         fields_sizer.Add(wx.StaticText(parent, label='Source:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
         self.source_choice_box = wx.Choice(
             parent,
             name='cr-add-group-dialog__source-field')
-        self.source_choice_box.Append('None', None)
+        self.source_choice_box.Append('none', None)
         for rr in self._project.root_resources:
             self.source_choice_box.Append(rr.name, rr)
         for rg in self._project.resource_groups:
@@ -140,6 +147,14 @@ class AddGroupDialog:
                     self.source_choice_box.SetSelection(i)
                     break
         fields_sizer.Add(self.source_choice_box, flag=wx.EXPAND)
+        
+        fields_sizer.Add(wx.StaticText(parent, label='Name:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
+        self.name_field = wx.TextCtrl(
+            parent,
+            name='cr-add-group-dialog__name-field')
+        self.name_field.Hint = 'Post'
+        self.name_field.SetSelection(-1, -1)  # select all upon focus
+        fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         
         return fields_sizer
     
