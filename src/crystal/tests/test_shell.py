@@ -22,6 +22,7 @@ import traceback
 from typing import Callable, Iterator, List, Optional, Tuple, Union
 from unittest import skip, SkipTest, TestCase
 from unittest.mock import ANY
+import urllib
 
 
 _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
@@ -348,6 +349,23 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                 assertEqual(
                     r"""b'<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" type="text/css" href="/s/7d94e0.css" title="Default"/>\n<title>xkcd: Air Gap</title>\n'""" + '\n',
                     _py_eval(crystal, f'body[:137]'))
+            
+            with subtests.test(case='test can serve resource revision'):
+                # Test can import ProjectServer
+                assertEqual('', _py_eval(crystal, 'from crystal.server import ProjectServer'))
+                assertEqual('', _py_eval(crystal, 'from io import StringIO'))
+                # Test can start ProjectServer
+                assertEqual(
+                    "",
+                    _py_eval(crystal, f'server = ProjectServer(p, stdout=StringIO())'))
+                port = literal_eval(_py_eval(crystal, f'server.port'))
+                request_url = literal_eval(_py_eval(crystal, f'server.get_request_url({home_url!r})'))
+                
+                # Test ProjectServer serves resource revision
+                assertIn(str(port), request_url)
+                with urllib.request.urlopen(request_url) as response:
+                    response_bytes = response.read()
+                assertIn(b'<title>xkcd: Air Gap</title>', response_bytes)
 
 
 @skip_on_windows
@@ -361,6 +379,10 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
             comic1_url = sp.get_request_url('https://xkcd.com/1/')
             comic2_url = sp.get_request_url('https://xkcd.com/2/')
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+            
+            atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+            rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+            feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         # Create named temporary directory that won't be deleted automatically
         with tempfile.NamedTemporaryFile(suffix='.crystalproj', delete=False) as project_td:
@@ -439,6 +461,75 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 assertEqual('', _py_eval(crystal, f'r.delete()'))
                 # Ensure Resource itself is deleted
                 assertEqual('', _py_eval(crystal, f'p.get_resource(r.url)'))
+            
+            with subtests.test(case='test can download project entities', return_if_failure=True):
+                # Recreate home Resource
+                assertEqual(
+                    "Resource('http://localhost:2798/_/https/xkcd.com/')\n",
+                    _py_eval(crystal, f'r = Resource(p, {home_url!r}); r'))
+                # Recreate home RootResource
+                assertEqual(
+                    "RootResource('Home','http://localhost:2798/_/https/xkcd.com/')\n",
+                    _py_eval(crystal, f'root_r = RootResource(p, "Home", r); root_r'))
+                
+                # Test can download RootResource
+                with _delay_between_downloads_minimized(crystal):
+                    assertEqual('', _py_eval(crystal, 'rr_future = root_r.download()'))
+                    while True:
+                        is_done = (literal_eval(_py_eval(crystal, 'rr_future.done()')) == True)
+                        if is_done:
+                            break
+                        time.sleep(.2)
+                    assertIn('<ResourceRevision ', _py_eval(crystal, 'rr = rr_future.result(); rr'))
+                
+                # Create feed ResourceGroup
+                assertEqual(
+                    "ResourceGroup('Feed','http://localhost:2798/_/https/xkcd.com/*.xml')\n",
+                    _py_eval(crystal, f'rg = ResourceGroup(p, "Feed", {feed_pattern!r}); rg'))
+                assertEqual(
+                    "",
+                    _py_eval(crystal, f'rg.source = root_r'))
+                # Ensure ResourceGroup includes some members discovered by downloading resource Home
+                assertEqual(
+                    2,
+                    literal_eval(_py_eval(crystal, f'len(rg.members)')))
+                
+                # Test can download ResourceGroup
+                with _delay_between_downloads_minimized(crystal):
+                    assertEqual('', _py_eval(crystal, 'drgt = rg.download()'))
+                    while True:
+                        is_done = (literal_eval(_py_eval(crystal, 'drgt.complete')) == True)
+                        if is_done:
+                            break
+                        time.sleep(.2)
+                assertEqual(
+                    [True] * 2,
+                    literal_eval(_py_eval(crystal, '[r.has_any_revisions() for r in rg.members]')))
+
+
+@skip('covered by: test_can_write_project_with_shell')
+def test_can_open_or_create_project() -> None:
+    pass
+
+
+@skip('covered by: test_can_write_project_with_shell')
+def test_can_create_project_entities() -> None:
+    pass
+
+
+@skip('covered by: test_can_read_project_with_shell')
+def test_can_read_project_entities() -> None:
+    pass
+
+
+@skip('covered by: test_can_write_project_with_shell')
+def test_can_download_project_entities() -> None:
+    pass
+
+
+@skip('covered by: test_can_write_project_with_shell')
+def test_can_delete_project_entities() -> None:
+    pass
 
 
 @skip_on_windows

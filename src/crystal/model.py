@@ -89,7 +89,6 @@ from weakref import WeakValueDictionary
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
     from crystal.doc.html import HtmlParserType
-    from crystal.server import ProjectServer
     from crystal.task import (
         DownloadResourceTask, DownloadResourceBodyTask,
         DownloadResourceGroupTask, Task,
