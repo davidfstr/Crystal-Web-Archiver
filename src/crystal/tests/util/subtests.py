@@ -30,7 +30,7 @@ class SubtestsContext:
                 print(subtest_report, end='')
                 print('-' * 70)
                 if not raised_exc:
-                    raise Exception('Subtests did fail')
+                    raise SubtestFailed()
     
     @contextmanager
     def test(self, msg: Optional[str]=None, **kwargs: object) -> Iterator[None]:
@@ -91,6 +91,11 @@ class SubtestsContext:
 
 class _SubtestReturn(BaseException):
     pass
+
+
+class SubtestFailed(Exception):
+    def __init__(self) -> None:
+        super().__init__('Subtest failed')
 
 
 def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], None]:

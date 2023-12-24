@@ -24,6 +24,7 @@ from crystal.tests import (
 )
 from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
+from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.xthreading import bg_affinity
 from functools import wraps
 import gc
@@ -121,8 +122,9 @@ def _run_tests(test_names: List[str]) -> bool:
         except Exception as e:
             result_for_test_func_id[test_func_id] = e
             
-            traceback.print_exc(file=sys.stdout)
-            print('ERROR')
+            if not isinstance(e, SubtestFailed):
+                traceback.print_exc(file=sys.stdout)
+            print(f'ERROR ({e.__class__.__name__})')
         else:
             result_for_test_func_id[test_func_id] = None
             
