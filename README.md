@@ -17,6 +17,8 @@ Additional documentation will be available once Crystal is no longer **in beta**
 Download ⬇︎
 --------
 
+Either install a binary:
+
 * [macOS 12 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.7.0b/crystal-mac-1.7.0b.dmg)
     * You will need to [right-click or Control-click on the application and select "Open" to open it for the first time](https://github.com/davidfstr/Crystal-Web-Archiver/issues/20).
 * [Windows 7 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.7.0b/crystal-win-1.7.0b.exe)
@@ -38,6 +40,10 @@ Download ⬇︎
         * `crystal --install-to-desktop`
     * Run Crystal:
         * `crystal`
+
+Or install from source using [pipx](https://pipx.pypa.io/stable/):
+
+* `pipx install crystal-web`
 
 
 Tutorial ⭐
