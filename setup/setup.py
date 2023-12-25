@@ -65,6 +65,12 @@ if sys.platform == 'darwin':
         'CFBundleVersion': VERSION_STRING,
         'NSHumanReadableCopyright': COPYRIGHT_STRING,
     }
+    
+    # Exclude PIL unless $CRYSTAL_SUPPORT_SCREENSHOTS is True
+    extra_excludes = (
+        [] if os.environ.get('CRYSTAL_SUPPORT_SCREENSHOTS', 'False') == 'True'
+        else ['PIL']
+    )
 
     extra_setup_options = dict(
         setup_requires=['py2app'],
@@ -82,8 +88,7 @@ if sys.platform == 'darwin':
             'excludes': [
                 'numpy',
                 'test',  # CPython test data
-                'PIL',
-            ]
+            ] + extra_excludes
         }},
     )
 elif sys.platform == 'win32':

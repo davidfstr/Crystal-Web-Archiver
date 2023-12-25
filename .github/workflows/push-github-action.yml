@@ -61,7 +61,7 @@ jobs:
         working-directory: "./setup"
         # --app-only: Don't build disk image because it intermittently fails
         #             with "hdiutil create failed - Resource busy" in CI
-        run: "poetry run ./make-mac.sh --app-only"
+        run: "CRYSTAL_SUPPORT_SCREENSHOTS=True poetry run ./make-mac.sh --app-only"
 
       - name: Run UI tests
         # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
@@ -71,10 +71,10 @@ jobs:
 
       - name: Upload screenshot if test failure
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: screenshots
-          path: screenshots
+          name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
+          path: ${{ github.workspace }}/screenshots/**/*
           if-no-files-found: ignore
       
       # NOTE: Must remove the --app-only option from make-mac.sh above to
