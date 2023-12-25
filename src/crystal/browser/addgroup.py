@@ -17,6 +17,7 @@ _FORM_ROW_SPACING = 10
 
 
 class AddGroupDialog:
+    _INITIAL_URL_WIDTH = AddRootUrlDialog._INITIAL_URL_WIDTH
     _MAX_VISIBLE_PREVIEW_URLS = 100
     
     # === Init ===
@@ -50,7 +51,8 @@ class AddGroupDialog:
         
         dialog = self.dialog = wx.Dialog(
             parent, title='New Group',
-            name='cr-add-group-dialog')
+            name='cr-add-group-dialog',
+            style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
         bind(dialog, wx.EVT_BUTTON, self._on_button)
@@ -85,15 +87,16 @@ class AddGroupDialog:
         
         preview_box_root_sizer.Add(
             wrap_static_box_sizer_child(self._create_preview_box_content(preview_box_root)),
+            proportion=1,
             flag=wx.EXPAND)
         
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
             self._create_fields(dialog, initial_url, initial_source),
             flag=wx.EXPAND)
-        content_sizer.Add(preview_box, proportion=0, flag=wx.EXPAND|preview_box_flags, border=preview_box_border)
+        content_sizer.Add(preview_box, proportion=1, flag=wx.EXPAND|preview_box_flags, border=preview_box_border)
         
-        dialog_sizer.Add(content_sizer, flag=wx.EXPAND|wx.ALL,
+        dialog_sizer.Add(content_sizer, proportion=1, flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
@@ -105,6 +108,9 @@ class AddGroupDialog:
         position_dialog_initially(dialog)
         dialog.Show(True)
         dialog.Fit()
+        
+        dialog.MinSize = dialog.Size
+        dialog.MaxSize = wx.Size(wx.DefaultCoord, wx.DefaultCoord)
     
     def _create_fields(self,
             parent: wx.Window,
@@ -117,7 +123,8 @@ class AddGroupDialog:
         
         pattern_field_sizer = wx.BoxSizer(wx.VERTICAL)
         self.pattern_field = wx.TextCtrl(
-            parent, value=initial_url, size=(300,-1),  # width hint
+            parent, value=initial_url,
+            size=(self._INITIAL_URL_WIDTH, wx.DefaultCoord),
             name='cr-add-group-dialog__pattern-field')
         bind(self.pattern_field, wx.EVT_TEXT, self._on_pattern_field_changed)
         self.pattern_field.Hint = 'https://example.com/post/*'
@@ -166,7 +173,7 @@ class AddGroupDialog:
             name='cr-add-group-dialog__preview-members__list')
         
         content_sizer.Add(wx.StaticText(parent, label='Known matching URLs:'), flag=wx.EXPAND)
-        content_sizer.Add(self.url_list, flag=wx.EXPAND)
+        content_sizer.Add(self.url_list, proportion=1, flag=wx.EXPAND)
         
         return content_sizer
     
@@ -200,20 +207,20 @@ class AddGroupDialog:
     
     # === Events ===
     
-    def _on_pattern_field_changed(self, event):
+    def _on_pattern_field_changed(self, event) -> None:
         self._update_preview_urls()
     
-    def _on_button(self, event):
+    def _on_button(self, event: wx.CommandEvent) -> None:
         btn_id = event.GetEventObject().GetId()
         if btn_id == wx.ID_OK:
             self._on_ok(event)
         elif btn_id == wx.ID_CANCEL:
             self._on_cancel(event)
     
-    def _on_close(self, event):
+    def _on_close(self, event: wx.CloseEvent) -> None:
         self._on_cancel(event)
     
-    def _on_ok(self, event):
+    def _on_ok(self, event: wx.CommandEvent) -> None:
         name = self.name_field.GetValue()
         url_pattern = self.pattern_field.GetValue()
         source = self.source_choice_box.GetClientData(
@@ -221,5 +228,5 @@ class AddGroupDialog:
         self._on_finish(name, url_pattern, source)
         self.dialog.Destroy()
     
-    def _on_cancel(self, event):
+    def _on_cancel(self, event: wx.CommandEvent) -> None:
         self.dialog.Destroy()

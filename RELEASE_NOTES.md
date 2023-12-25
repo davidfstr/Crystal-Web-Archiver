@@ -13,9 +13,10 @@ Release Notes ⋮
 ### main (v2.0.0?)
 
 * First-time-run experience improvements
-    * Add Root URL, Add Group:
+    * New Root URL and New Group Dialogs:
         * Make it optional to provide a name for new Root URLs and Groups.
         * Rearrange fields to deemphasize the Name field.
+        * Fix dialogs to be resizable.
 
 ### v1.7.0b (December 18, 2023)
 

@@ -11,6 +11,8 @@ _FORM_ROW_SPACING = 10
 
 
 class AddRootUrlDialog:
+    _INITIAL_URL_WIDTH = 400  # in pixels
+    
     # === Init ===
     
     def __init__(self,
@@ -26,7 +28,9 @@ class AddRootUrlDialog:
         """
         self._on_finish = on_finish
         
-        dialog = self.dialog = wx.Dialog(parent, title='New Root URL', name='cr-add-url-dialog')
+        dialog = self.dialog = wx.Dialog(
+            parent, title='New Root URL', name='cr-add-url-dialog',
+            style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
         bind(dialog, wx.EVT_BUTTON, self._on_button)
@@ -43,6 +47,9 @@ class AddRootUrlDialog:
         position_dialog_initially(dialog)
         dialog.Show(True)
         dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
+        
+        dialog.MinSize = dialog.Size
+        dialog.MaxSize = wx.Size(wx.DefaultCoord, dialog.Size.Height)
     
     def _create_fields(self, parent: wx.Window, initial_url: str) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
@@ -54,7 +61,8 @@ class AddRootUrlDialog:
         fields_sizer.Add(url_label, flag=wx.EXPAND)
         
         self.url_field = wx.TextCtrl(
-            parent, value=initial_url, size=(300,-1), # width hint
+            parent, value=initial_url,
+            size=(self._INITIAL_URL_WIDTH, wx.DefaultCoord),
             name='cr-add-url-dialog__url-field')
         self.url_field.Hint = 'https://example.com/'
         self.url_field.SetSelection(-1, -1)  # select all upon focus
