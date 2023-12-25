@@ -117,6 +117,11 @@ class MainWindow:
             raw_frame.Fit()  # NOTE: Must Fit() before Show() here so that wxGTK actually fits correctly
             raw_frame.Show(True)
             
+            # Define minimum size for main window
+            min_width = entity_pane.GetBestSize().Width
+            min_height = task_pane.GetBestSize().Height * 2
+            raw_frame.MinSize = wx.Size(min_width, min_height)
+            
             self._frame = raw_frame
         except:
             raw_frame.Destroy()

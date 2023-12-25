@@ -17,6 +17,8 @@ Release Notes ⋮
         * Make it optional to provide a name for new Root URLs and Groups.
         * Rearrange fields to deemphasize the Name field.
         * Fix dialogs to be resizable.
+    * Main Window
+        * Prevent resizing the window to be too small
 
 ### v1.7.0b (December 18, 2023)
 
