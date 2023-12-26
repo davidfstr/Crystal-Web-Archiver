@@ -334,7 +334,10 @@ class AddGroupDialog:
     @staticmethod
     async def wait_for() -> AddGroupDialog:
         self = AddGroupDialog(ready=True)
-        add_group_dialog = await wait_for(AddGroupDialog.window_condition())  # type: wx.Window
+        add_group_dialog = await wait_for(
+            AddGroupDialog.window_condition(),
+            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+        )  # type: wx.Window
         self.name_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
         self.pattern_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__pattern-field')
