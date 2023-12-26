@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from crystal.task import DownloadResourceBodyTask
 
 
-_HTTP_REQUEST_TIMEOUT = 10  # seconds
+HTTP_REQUEST_TIMEOUT = 10  # seconds
 
 # The User-Agent string to use for downloads, or None to omit.
 _USER_AGENT_STRING = 'Crystal/%s (https://dafoster.net/projects/crystal-web-archiver/)' % __version__
@@ -180,12 +180,12 @@ class HttpResourceRequest(ResourceRequest):
         if scheme == 'http':
             conn = HTTPConnection(
                 host_and_port,
-                timeout=_HTTP_REQUEST_TIMEOUT,
+                timeout=HTTP_REQUEST_TIMEOUT,
             )
         elif scheme == 'https':
             conn = HTTPSConnection(
                 host_and_port,
-                timeout=_HTTP_REQUEST_TIMEOUT,
+                timeout=HTTP_REQUEST_TIMEOUT,
                 context=get_ssl_context(),
             )
         else:

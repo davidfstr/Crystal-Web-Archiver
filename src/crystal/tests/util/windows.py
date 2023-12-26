@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.model import Project
 from crystal.tests.util.controls import (
     click_button, file_dialog_returning,
@@ -307,27 +308,52 @@ class MainWindow:
 
 
 class AddUrlDialog:
-    name_field: wx.TextCtrl
+    _dialog: wx.Dialog
+    _controller: AddRootUrlDialog
     url_field: wx.TextCtrl
+    url_cleaner_spinner: wx.ActivityIndicator
+    name_field: wx.TextCtrl
     ok_button: wx.Button
+    cancel_button: wx.Button
     
     @staticmethod
     async def wait_for() -> AddUrlDialog:
         self = AddUrlDialog(ready=True)
-        add_url_dialog = await wait_for(window_condition('cr-add-url-dialog'))  # type: wx.Window
-        self.name_field = add_url_dialog.FindWindow(name='cr-add-url-dialog__name-field')
-        assert isinstance(self.name_field, wx.TextCtrl)
-        self.url_field = add_url_dialog.FindWindow(name='cr-add-url-dialog__url-field')
+        self._dialog = await wait_for(window_condition('cr-add-url-dialog'))
+        assert isinstance(self._dialog, wx.Dialog)
+        assert AddRootUrlDialog._last_opened is not None
+        self._controller = AddRootUrlDialog._last_opened
+        self.url_field = self._dialog.FindWindow(name='cr-add-url-dialog__url-field')
         assert isinstance(self.url_field, wx.TextCtrl)
-        self.ok_button = add_url_dialog.FindWindow(id=wx.ID_OK)
+        self.url_cleaner_spinner = self._dialog.FindWindow(name='cr-add-url-dialog__url-cleaner-spinner')
+        assert isinstance(self.url_cleaner_spinner, wx.ActivityIndicator)
+        self.name_field = self._dialog.FindWindow(name='cr-add-url-dialog__name-field')
+        assert isinstance(self.name_field, wx.TextCtrl)
+        self.ok_button = self._dialog.FindWindow(id=wx.ID_OK)
         assert isinstance(self.ok_button, wx.Button)
+        self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
+        assert isinstance(self.cancel_button, wx.Button)
         return self
     
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use AddUrlDialog.wait_for()?'
     
+    @property
+    def shown(self) -> bool:
+        if self._controller._is_destroying_or_destroyed:
+            return False
+        return self._dialog.IsShown()
+    
+    @property
+    def url_field_focused(self) -> bool:
+        return self._controller._url_field_focused
+    
     async def ok(self) -> None:
         click_button(self.ok_button)
+        await wait_for(not_condition(window_condition('cr-add-url-dialog')))
+    
+    async def cancel(self) -> None:
+        click_button(self.cancel_button)
         await wait_for(not_condition(window_condition('cr-add-url-dialog')))
 
 

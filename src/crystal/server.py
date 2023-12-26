@@ -337,7 +337,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     def do_GET(self) -> None:  # override
         try:
-            run_thread_switching_coroutine(self._do_GET())
+            run_thread_switching_coroutine(
+                SwitchToThread.BACKGROUND,
+                self._do_GET())
         except BrokenPipeError:
             # Browser did drop connection before did finish sending response
             pass
