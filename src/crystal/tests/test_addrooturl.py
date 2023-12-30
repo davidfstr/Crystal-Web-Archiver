@@ -482,7 +482,35 @@ async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_the
 
 # === Test: Disallow Create Empty Root URL ===
 
-# ...
+async def test_given_url_input_is_empty_then_ok_button_is_disabled() -> None:
+    async with _add_url_dialog_open() as aud:
+        assertEqual('', aud.url_field.Value)
+        assertEqual(False, aud.ok_button.Enabled)
+        
+        last_focused = None  # type: Optional[wx.Window]
+        
+        last_focused = SetFocus(aud.url_field, last_focused)
+        aud.url_field.Value = 'xkcd.com'
+        assertEqual(True, aud.ok_button.Enabled)
+        
+        last_focused = SetFocus(aud.name_field, last_focused)  # simulate press tab
+        assertEqual(True, aud.ok_button.Enabled)
+        
+        last_focused = SetFocus(aud.url_field, last_focused)  # simulate press shift-tab
+        assertEqual(True, aud.ok_button.Enabled)
+        
+        aud.url_field.Value = ''
+        assertEqual(False, aud.ok_button.Enabled)
+
+
+@skip('covered by: test_given_url_input_is_empty_then_ok_button_is_disabled')
+async def test_given_url_input_is_empty_when_url_input_becomes_nonempty_then_ok_button_is_enabled() -> None:
+    pass
+
+
+@skip('covered by: test_given_url_input_is_empty_then_ok_button_is_disabled')
+async def test_given_url_input_is_nonempty_when_url_input_becomes_empty_then_ok_button_is_disabled() -> None:
+    pass
 
 
 # === Test: Disallow Create Duplicate Root URL ===

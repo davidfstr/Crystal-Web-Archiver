@@ -57,6 +57,8 @@ class AddRootUrlDialog:
         self.ok_button = dialog.FindWindow(id=wx.ID_OK)
         self.cancel_button = dialog.FindWindow(id=wx.ID_CANCEL)
         
+        self._update_ok_enabled()
+        
         if not fields_hide_hint_when_focused():
             self.url_field.SetFocus()  # initialize focus
         
@@ -89,6 +91,7 @@ class AddRootUrlDialog:
                     name='cr-add-url-dialog__url-field')
                 self.url_field.Hint = 'https://example.com/'
                 self.url_field.SetSelection(-1, -1)  # select all upon focus
+                bind(self.url_field, wx.EVT_TEXT, self._update_ok_enabled)
                 bind(self.url_field, wx.EVT_SET_FOCUS, self._on_url_field_focus)
                 bind(self.url_field, wx.EVT_KILL_FOCUS, self._on_url_field_blur)
                 url_field_and_spinner.Add(self.url_field, proportion=1, flag=wx.EXPAND)
@@ -262,6 +265,11 @@ class AddRootUrlDialog:
     @fg_affinity
     def _on_destroyed(self, event) -> None:
         self._is_destroying_or_destroyed = True
+    
+    # === Updates ===
+    
+    def _update_ok_enabled(self, event=None) -> None:
+        self.ok_button.Enabled = (self.url_field.Value != '')
 
 
 def fields_hide_hint_when_focused() -> bool:
