@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager, contextmanager
-from crystal.model import Project
+from crystal.browser.addrooturl import fields_hide_hint_when_focused
+from crystal.model import Project, Resource, RootResource
 from crystal.tests.util.asserts import *
 from crystal.tests.util.controls import click_button
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
@@ -515,7 +516,84 @@ async def test_given_url_input_is_nonempty_when_url_input_becomes_empty_then_ok_
 
 # === Test: Disallow Create Duplicate Root URL ===
 
-# ...
+@awith_subtests
+async def test_given_url_input_matches_existing_root_url_when_press_ok_then_displays_error_dialog_and_enables_all_controls(subtests: SubtestsContext) -> None:
+    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
+        with subtests.test(case='given url input is focused'):
+            async with _add_url_dialog_open() as aud:
+                project = Project._last_opened_project
+                assert project is not None
+                
+                r = Resource(project, 'https://xkcd.com/')
+                RootResource(project, '', r)
+                
+                last_focused = None  # type: Optional[wx.Window]
+                
+                last_focused = SetFocus(aud.url_field, last_focused)
+                aud.url_field.Value = 'https://xkcd.com/'
+                
+                with patch('crystal.browser.addrooturl.ShowModal', return_value=wx.ID_OK) as show_modal_method:
+                    click_button(aud.ok_button)
+                    await wait_for(lambda: (1 == show_modal_method.call_count) or None)
+                    await wait_for(lambda: (True == aud.url_field.Enabled) or None)
+                assertEqual(True, aud.url_field.Enabled)
+                assertEqual(True, aud.name_field.Enabled)
+                assertEqual(True, aud.ok_button.Enabled)
+                assertEqual(True, aud.cancel_button.Enabled)
+        
+        with subtests.test(case='given url input is unfocused and spinner is visible'):
+            async with _add_url_dialog_open() as aud:
+                project = Project._last_opened_project
+                assert project is not None
+                
+                r = Resource(project, 'https://xkcd.com/')
+                RootResource(project, '', r)
+                
+                last_focused = None
+                
+                last_focused = SetFocus(aud.url_field, last_focused)
+                aud.url_field.Value = 'https://xkcd.com/'
+                
+                last_focused = SetFocus(aud.name_field, last_focused)  # simulate press tab
+                assertEqual(False, aud.url_field_focused)
+                assertEqual(True, aud.url_cleaner_spinner.IsShown())
+                
+                with patch('crystal.browser.addrooturl.ShowModal', return_value=wx.ID_OK) as show_modal_method:
+                    click_button(aud.ok_button)
+                    await wait_for(lambda: (1 == show_modal_method.call_count) or None)
+                    await wait_for(lambda: (True == aud.url_field.Enabled) or None)
+                assertEqual(True, aud.url_field.Enabled)
+                assertEqual(True, aud.name_field.Enabled)
+                assertEqual(True, aud.ok_button.Enabled)
+                assertEqual(True, aud.cancel_button.Enabled)
+        
+        with subtests.test(case='given url input is unfocused and spinner is not visible'):
+            async with _add_url_dialog_open() as aud:
+                project = Project._last_opened_project
+                assert project is not None
+                
+                r = Resource(project, 'https://xkcd.com/')
+                RootResource(project, '', r)
+                
+                last_focused = None
+                
+                last_focused = SetFocus(aud.url_field, last_focused)
+                aud.url_field.Value = 'https://xkcd.com/'
+                
+                last_focused = SetFocus(aud.name_field, last_focused)  # simulate press tab
+                assertEqual(False, aud.url_field_focused)
+                assertEqual(True, aud.url_cleaner_spinner.IsShown())
+                
+                await wait_for(lambda: (False == aud.url_cleaner_spinner.IsShown()) or None)
+                
+                with patch('crystal.browser.addrooturl.ShowModal', return_value=wx.ID_OK) as show_modal_method:
+                    click_button(aud.ok_button)
+                    await wait_for(lambda: (1 == show_modal_method.call_count) or None)
+                    await wait_for(lambda: (True == aud.url_field.Enabled) or None)
+                assertEqual(True, aud.url_field.Enabled)
+                assertEqual(True, aud.name_field.Enabled)
+                assertEqual(True, aud.ok_button.Enabled)
+                assertEqual(True, aud.cancel_button.Enabled)
 
 
 # === Utility ===

@@ -26,7 +26,7 @@ from crystal.util.xos import (
     is_kde_or_non_gnome, is_linux, is_mac_os, is_windows, mac_version,
 )
 from crystal.util.xthreading import (
-    bg_call_later, fg_call_later, fg_call_and_wait, set_is_quitting
+    bg_call_later, fg_affinity, fg_call_later, fg_call_and_wait, set_is_quitting
 )
 import os
 import time
@@ -426,15 +426,27 @@ class MainWindow:
     # === Entity Pane: Events ===
     
     def _on_add_url(self, event: wx.CommandEvent) -> None:
+        def root_url_exists(url: str) -> bool:
+            r = self.project.get_resource(url)
+            if r is None:
+                return False
+            rr = self.project.get_root_resource(r)
+            return rr is not None
+            
         AddRootUrlDialog(
             self._frame, self._on_add_url_dialog_ok,
-            initial_url=self._selection_initial_url or '')
+            url_exists_func=root_url_exists,
+            initial_url=self._selection_initial_url or '',
+        )
     
-    def _on_add_url_dialog_ok(self, name, url) -> None:
-        # TODO: Validate user input:
-        #       * Is name or url empty?
-        #       * Is name or url already taken?
-        RootResource(self.project, name, Resource(self.project, url))
+    @fg_affinity
+    def _on_add_url_dialog_ok(self, name: str, url: str) -> None:
+        if url == '':
+            raise ValueError('Invalid blank URL')
+        try:
+            RootResource(self.project, name, Resource(self.project, url))
+        except RootResource.AlreadyExists:
+            raise ValueError('Invalid duplicate URL')
     
     def _on_add_group(self, event: wx.CommandEvent) -> None:
         try:

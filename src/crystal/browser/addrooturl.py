@@ -1,6 +1,6 @@
 from crystal.url_input import UrlCleaner
 from crystal.util.wx_bind import bind
-from crystal.util.wx_dialog import position_dialog_initially
+from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 from crystal.util.xos import is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
 import os
@@ -25,6 +25,7 @@ class AddRootUrlDialog:
     def __init__(self,
             parent: wx.Window,
             on_finish: Callable[[str, str], None],
+            url_exists_func: Callable[[str], bool],
             initial_url: str='',
             ) -> None:
         """
@@ -34,6 +35,7 @@ class AddRootUrlDialog:
         * initial_url -- overrides the initial URL displayed.
         """
         self._on_finish = on_finish
+        self._url_exists_func = url_exists_func
         
         self._url_field_focused = False
         self._last_cleaned_url = None  # type: Optional[str]
@@ -244,6 +246,23 @@ class AddRootUrlDialog:
         
         name = self.name_field.Value
         url = self.url_field.Value
+        if self._url_exists_func(url):
+            dialog = wx.MessageDialog(None,
+                message='That root URL already exists in the project.',
+                caption='Root URL Exists',
+                style=wx.OK,
+            )
+            dialog.Name = 'cr-root-url-exists'
+            position_dialog_initially(dialog)
+            choice = ShowModal(dialog)
+            assert wx.ID_OK == choice
+            
+            self.url_field.Enabled = True
+            self.name_field.Enabled = True
+            self.ok_button.Enabled = True
+            assert self.cancel_button.Enabled == True
+            return
+        
         self._on_finish(name, url)
         
         self._destroy()
