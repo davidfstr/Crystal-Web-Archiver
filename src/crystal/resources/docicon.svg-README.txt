@@ -1,1 +1,1 @@
-application-vnd.crystal.opener.svg-README.txt
+See application-vnd.crystal.opener.svg-README.txt in this directory.
