@@ -39,10 +39,12 @@ class OpenOrCreateDialog:
     create_button: wx.Button
     
     @staticmethod
-    async def wait_for() -> OpenOrCreateDialog:
+    async def wait_for(timeout: Optional[float]=None) -> OpenOrCreateDialog:
         self = OpenOrCreateDialog(ready=True)
-        open_or_create_project_dialog = await wait_for(window_condition(
-            'cr-open-or-create-project'))  # type: wx.Window
+        open_or_create_project_dialog = await wait_for(
+            window_condition('cr-open-or-create-project'),
+            timeout=timeout,
+        )  # type: wx.Window
         assert isinstance(open_or_create_project_dialog, wx.Dialog)
         self.open_or_create_project_dialog = open_or_create_project_dialog
         self.open_as_readonly = self.open_or_create_project_dialog.FindWindow(name=
@@ -272,8 +274,13 @@ class MainWindow:
     async def wait_for_close(self) -> None:
         await wait_for(lambda: self.main_window.IsBeingDeleted)
         await wait_for(lambda: not self.main_window.IsShown)
-        await wait_for(not_condition(window_condition('cr-main-window')))
-        await OpenOrCreateDialog.wait_for()
+        await wait_for(
+            not_condition(window_condition('cr-main-window')),
+            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+        )
+        await OpenOrCreateDialog.wait_for(
+            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+        )
     
     @asynccontextmanager
     async def temporarily_closed(self, project_dirpath: str) -> AsyncIterator[None]:
@@ -391,7 +398,10 @@ class PreferencesDialog:
         import wx.adv
         
         self = PreferencesDialog(ready=True)
-        preferences_dialog = await wait_for(window_condition('cr-preferences-dialog'))  # type: wx.Window
+        preferences_dialog = await wait_for(
+            window_condition('cr-preferences-dialog'),
+            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+        )  # type: wx.Window
         self.html_parser_field = preferences_dialog.FindWindow(name=
             'cr-preferences-dialog__html-parser-field')
         assert isinstance(self.html_parser_field, wx.Choice)
