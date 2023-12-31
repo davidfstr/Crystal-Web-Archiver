@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import *
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, WaitTimedOut
+from crystal.tests.util.windows import MainWindow
 from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
@@ -646,7 +647,10 @@ def _close_main_window(crystal: subprocess.Popen, *, after_delay: Optional[float
 
         t = Thread(target=lambda: run_test(close_main_window))
         t.start()
-        '''), stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '')
+        '''),
+        stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '',
+        timeout=MainWindow.CLOSE_TIMEOUT,
+    )
 
 
 @contextmanager

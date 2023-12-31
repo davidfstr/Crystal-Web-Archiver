@@ -241,6 +241,8 @@ class MainWindow:
     
     # === Close ===
     
+    CLOSE_TIMEOUT = 4.0
+    
     async def close(self, exc_info=None) -> None:
         # Try wait for any lingering tasks to complete.
         # 
@@ -248,7 +250,7 @@ class MainWindow:
         try:
             await wait_for(
                 tree_has_no_children_condition(self.task_tree),
-                timeout=4.0)  # wait only briefly
+                timeout=self.CLOSE_TIMEOUT)  # wait only briefly
         except WaitTimedOut:
             first_task_title = first_task_title_progression(self.task_tree)()
             print(f'*** MainWindow: Closing while tasks are still running. May deadlock! Current task: {first_task_title}')
