@@ -485,22 +485,17 @@ class _ResourceNode(Node):
         return self._status_badge_name_value
     
     def _calculate_status_badge_name(self) -> Optional[str]:
-        resource = self.resource  # cache
-        
-        # NOTE: Inefficient. Performs 2 database queries (via 2 calls to
-        #       default_revision) when only 1 could be used
-        any_rr = resource.default_revision(stale_ok=True)
-        if any_rr is None:
+        freshest_rr = self.resource.default_revision(stale_ok=True)
+        if freshest_rr is None:
             # Not downloaded
             return 'new'
         else:
-            non_stale_rr = resource.default_revision(stale_ok=False)
-            if non_stale_rr is None:
+            if freshest_rr.is_stale:
                 # Stale
                 return 'stale'
             else:
                 # Fresh
-                if non_stale_rr.error is None:
+                if freshest_rr.error is None:
                     # OK
                     return None
                 else:

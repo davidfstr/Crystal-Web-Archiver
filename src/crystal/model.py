@@ -1942,20 +1942,7 @@ class Resource:
             if stale_ok:
                 return revision
             else:
-                revision_is_stale = False
-                if project.request_cookie_applies_to(self.url) and project.request_cookie is not None:
-                    if revision.request_cookie != project.request_cookie:
-                        revision_is_stale = True  # reinterpret
-                if project.min_fetch_date is not None:
-                    # TODO: Consider storing the fetch date explicitly
-                    #       rather than trying to derive it from the 
-                    #       Date and Age HTTP headers
-                    fetch_date = revision.date_plus_age  # cache
-                    if (fetch_date is not None and 
-                            fetch_date <= project.min_fetch_date):
-                        revision_is_stale = True  # reinterpret
-                
-                if not revision_is_stale:
+                if not revision.is_stale:
                     return revision
         return None
     
@@ -2831,6 +2818,26 @@ class ResourceRevision:
     @property
     def etag(self) -> Optional[str]:
         return self._get_first_value_of_http_header('etag')
+    
+    # === Staleness ===
+    
+    @property
+    def is_stale(self) -> bool:
+        resource = self.resource
+        project = resource.project
+        
+        if project.request_cookie_applies_to(resource.url) and project.request_cookie is not None:
+            if self.request_cookie != project.request_cookie:
+                return True
+        if project.min_fetch_date is not None:
+            # TODO: Consider storing the fetch date explicitly
+            #       rather than trying to derive it from the 
+            #       Date and Age HTTP headers
+            fetch_date = self.date_plus_age  # cache
+            if (fetch_date is not None and 
+                    fetch_date <= project.min_fetch_date):
+                return True
+        return False
     
     # === Body ===
     
