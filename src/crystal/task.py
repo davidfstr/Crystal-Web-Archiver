@@ -494,8 +494,7 @@ class Task(ListenableMixin):
         self._future.set_running_or_notify_cancel()
         try:
             self._future.set_result(self())
-        except BaseException:
-            (_, e, _) = sys.exc_info()
+        except BaseException as e:
             self._future.set_exception(e)
         finally:
             self.finish()

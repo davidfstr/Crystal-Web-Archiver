@@ -13,7 +13,7 @@ from functools import wraps
 import os
 import sys
 import threading
-from typing import Callable, cast, Generator, Optional, TypeVar
+from typing import Callable, cast, Generator, Iterator, Optional, overload, TypeVar
 from typing_extensions import ParamSpec
 import wx
 
@@ -270,20 +270,48 @@ class SwitchToThread(Enum):
     FOREGROUND = 2
 
 
+def start_thread_switching_coroutine(
+        first_command: SwitchToThread,
+        coro: Generator[SwitchToThread, None, _R],
+        /,
+        ) -> None:
+    # If is foreground thread, immediately run any prefix of the coroutine
+    # that wants to be on the foreground thread
+    if is_foreground_thread():
+        command = first_command
+        while command == SwitchToThread.FOREGROUND:
+            try:
+                command = next(coro)
+            except StopIteration as e:
+                return
+        assert command == SwitchToThread.BACKGROUND
+        
+        first_command = command  # reinterpret
+    
+    # Run remainder of coroutine on a new background thread
+    def bg_task() -> None:
+        run_thread_switching_coroutine(first_command, coro)
+    bg_call_later(bg_task)
+
+
 @bg_affinity
-def run_thread_switching_coroutine(coro: Generator[SwitchToThread, None, _R]) -> _R:
-    run_next = _CALL_NOW
+def run_thread_switching_coroutine(
+        first_command: SwitchToThread,
+        coro: Generator[SwitchToThread, None, _R],
+        /,
+        ) -> _R:
+    command = first_command
     while True:
-        try:
-            command = run_next(lambda: next(coro))
-        except StopIteration as e:
-            return e.value
         if command == SwitchToThread.BACKGROUND:
             run_next = _CALL_NOW
         elif command == SwitchToThread.FOREGROUND:
             run_next = fg_call_and_wait
         else:
             raise AssertionError()
+        try:
+            command = run_next(lambda: next(coro))
+        except StopIteration as e:
+            return e.value
 
 
 _CALL_NOW = lambda f: f()

@@ -7,5 +7,6 @@ class _DummyTestCase(TestCase):
 # All of these assert methods provide a better error message upon failure
 # than a bare assert statement
 assertEqual = _DummyTestCase().assertEqual
+assertNotEqual = _DummyTestCase().assertEqual
 assertIn = _DummyTestCase().assertIn
 assertNotIn = _DummyTestCase().assertNotIn

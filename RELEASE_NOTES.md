@@ -13,12 +13,16 @@ Release Notes ⋮
 ### main (v2.0.0?)
 
 * First-time-run experience improvements
+    * New Root URL Dialog:
+        * Accept URLs in loose format, similar to what regular web browsers accept.
+        * Better error message when try to create duplicate root URL.
+        * Disallow create of empty root URL.
     * New Root URL and New Group Dialogs:
-        * Make it optional to provide a name for new Root URLs and Groups.
-        * Rearrange fields to deemphasize the Name field.
-        * Fix dialogs to be resizable.
+        * Make it optional to provide a name.
+        * Rearrange fields to deemphasize the name field.
+        * Allow resizing.
     * Main Window
-        * Prevent resizing the window to be too small
+        * Prevent resizing the window to be too small.
 
 ### v1.7.0b (December 18, 2023)
 
