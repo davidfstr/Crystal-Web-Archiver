@@ -191,9 +191,26 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
     def __enter__(self) -> Self:
         return self
     
+    # === Phase 0 ===
+    
     @overrides
     def opening_project(self) -> None:
-        pass
+        self._show_noncancelable_indeterminate_message(
+            f'Opening project...')
+    
+    def _show_noncancelable_indeterminate_message(self, initial_message: str) -> None:
+        # HACK: wxGTK does not reliably update wx.ProgressDialog's message
+        #       immediately after it is shown. So be sure to initialize
+        #       the wx.ProgressDialog's message immediately to what it will
+        #       be updated to soon.
+        self._update_can_cancel(False, initial_message)
+        
+        # Change dialog to show an indeterminate progress bar
+        try:
+            self._pulse(initial_message)
+        except CancelOpenProject:
+            # Ignore cancel request
+            pass
     
     # === Phase 1: Upgrade Revisions ===
     
@@ -204,19 +221,8 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         
         No progress will be reported during the minor upgrade.
         """
-        # HACK: wxGTK does not reliably update wx.ProgressDialog's message
-        #       immediately after it is shown. So be sure to initialize
-        #       the wx.ProgressDialog's message immediately to what it will
-        #       be updated to soon.
-        initial_message = f'Upgrading project: {message}'
-        self._update_can_cancel(False, initial_message)
-        
-        # Change dialog to show an indeterminate progress bar
-        try:
-            self._pulse(initial_message)
-        except CancelOpenProject:
-            # Ignore cancel request
-            pass
+        self._show_noncancelable_indeterminate_message(
+            f'Upgrading project: {message}')
     
     @overrides
     def will_upgrade_revisions(self, approx_revision_count: int, can_veto: bool) -> None:
@@ -350,8 +356,10 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         Raises:
         * CancelOpenProject
         """
+        if self._root_resource_count is None:
+            return
+        
         assert self._dialog is not None
-        assert self._root_resource_count is not None
         self._update(
             2,
             f'Creating {self._root_resource_count:n} root resource views...')
@@ -363,8 +371,10 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         Raises:
         * CancelOpenProject
         """
+        if self._resource_group_count is None:
+            return
+        
         assert self._dialog is not None
-        assert self._resource_group_count is not None
         self._update(
             3,
             f'Creating {self._resource_group_count} resource group views...')
@@ -376,9 +386,10 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         Raises:
         * CancelOpenProject
         """
+        if self._root_resource_count is None or self._resource_group_count is None:
+            return
+        
         assert self._dialog is not None
-        assert self._root_resource_count is not None
-        assert self._resource_group_count is not None
         if entity_tree_node_count != (self._root_resource_count + self._resource_group_count):
             raise AssertionError('Unexpected number of initial entity tree nodes')
         self._entity_tree_node_count = entity_tree_node_count

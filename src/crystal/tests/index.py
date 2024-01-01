@@ -38,7 +38,16 @@ from unittest import SkipTest
 
 
 def _test_functions_in_module(mod) -> List[Callable]:
-    return [f for f in mod.__dict__.values() if callable(f) and getattr(f, '__name__', '').startswith('test_')]
+    return [
+        f for f in mod.__dict__.values() 
+        if (
+            callable(f) and 
+            getattr(f, '__name__', '').startswith('test_') and
+            # NOTE: Need to check stringness explicitly to exclude "call" from 
+            #       "from unittest.mock import call"
+            isinstance(getattr(f, '__name__', ''), str)
+        )
+    ]
 
 # TODO: Avoid the need to manually enumerate all test modules individually
 _TEST_FUNCS = (

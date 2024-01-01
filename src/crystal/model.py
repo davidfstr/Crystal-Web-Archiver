@@ -306,7 +306,12 @@ class Project(ListenableMixin):
                     self._create(c, self._db)
                 
                 # Load from existing project
-                self._load(c, self._db, progress_listener)
+                # NOTE: Don't provide detailed feedback when creating a project initially
+                load_progress_listener = (
+                    progress_listener if not create
+                    else DummyOpenProjectProgressListener()
+                )
+                self._load(c, self._db, load_progress_listener)
             except:
                 self.close()
                 raise
@@ -686,7 +691,7 @@ class Project(ListenableMixin):
         c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
         c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         
-        # (Define indexes in _apply_migrations())
+        # (Define indexes later in _apply_migrations())
         
         # Define major version for new projects, for Crystal >1.6.0
         self._set_major_version(2, c, db.commit)
