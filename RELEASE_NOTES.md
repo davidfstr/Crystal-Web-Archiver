@@ -24,6 +24,9 @@ Release Notes ⋮
     * Main Window
         * Prevent resizing the window to be too small.
 
+* Fixes
+    * Fix disappearance of error nodes when new root URL or group is added.
+
 ### v1.7.0b (December 18, 2023)
 
 This release features further improvements to downloading large websites

@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from crystal.tests.util.controls import TreeItem
+from crystal.tests.util.downloads import network_down
 from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
@@ -14,11 +15,9 @@ from crystal.model import (
 )
 import locale
 import os
-import socket
 import tempfile
-from typing import Iterator, NoReturn, Optional
+from typing import Iterator, Optional
 from unittest import skip
-from unittest.mock import patch
 
 
 
@@ -26,6 +25,39 @@ from unittest.mock import patch
 # Test: RootNode
 
 # (TODO: Add basic tests)
+
+
+# ------------------------------------------------------------------------------
+# Test: _ResourceNode
+
+# (TODO: Add basic tests)
+
+
+async def test_rn_with_error_child_retains_child_when_new_entity_added() -> None:
+    with network_down():
+        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                
+                RootResource(project, 'Domain 1', Resource(project, 'https://nosuchdomain1.com/'))
+                (rrn1_ti,) = root_ti.Children
+                
+                rrn1_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(rrn1_ti))
+                assert rrn1_ti.GetFirstChild() is not None
+                
+                RootResource(project, 'Domain 2', Resource(project, 'https://nosuchdomain2.com/'))
+                (rrn1_ti, rrn2_ti) = root_ti.Children
+                assert rrn1_ti.GetFirstChild() is not None  # has failed in the past
+                
+                rrn2_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(rrn2_ti))
+                assert rrn1_ti.GetFirstChild() is not None
+                assert rrn2_ti.GetFirstChild() is not None
 
 
 # ------------------------------------------------------------------------------
@@ -116,7 +148,7 @@ async def test_given_rr_is_downloaded_and_is_error_when_expand_rrn_then_shows_er
                 assert project is not None
                 
                 # Download revision
-                with _internet_down():
+                with network_down():
                     r = Resource(project, home_url)
                     home_rr = RootResource(project, 'Home', r)
                     revision_future = home_rr.download()
@@ -402,18 +434,6 @@ async def test_given_more_node_with_large_item_count_then_displays_count_with_co
 # Test: MorePlaceholderNode
 
 # (TODO: Add basic tests)
-
-
-# ------------------------------------------------------------------------------
-# Utility
-
-@contextmanager
-def _internet_down() -> Iterator[None]:
-    def MockHTTPConnection(*args, **kwargs) -> NoReturn:
-        raise socket.gaierror(8, 'nodename nor servname provided, or not known')
-    
-    with patch('crystal.download.HTTPConnection', MockHTTPConnection):
-        yield
 
 
 # ------------------------------------------------------------------------------

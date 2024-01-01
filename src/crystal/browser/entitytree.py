@@ -604,6 +604,10 @@ class _ResourceNode(Node):
             # We were never expanded, so no need to recalculate anything.
             return
         
+        if len(self.children) >= 1 and isinstance(self.children[0], _ErrorNode):
+            # Leave error state unchanged
+            return
+        
         # Partition links and create resources
         resources_2_links = defaultordereddict(list)
         if self.resource_links:

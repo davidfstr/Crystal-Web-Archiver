@@ -1,6 +1,8 @@
 from contextlib import contextmanager
 import crystal.task
-from typing import Iterator, TYPE_CHECKING
+import socket
+from typing import Iterator, NoReturn, TYPE_CHECKING
+from unittest.mock import patch
 
 if TYPE_CHECKING:
     from crystal.task import DownloadResourceGroupTask
@@ -38,3 +40,12 @@ def load_children_of_drg_task(
     
     # Postcondition
     assert drg_task._download_members_task._children_loaded
+
+
+@contextmanager
+def network_down() -> Iterator[None]:
+    def MockHTTPConnection(*args, **kwargs) -> NoReturn:
+        raise socket.gaierror(8, 'nodename nor servname provided, or not known')
+    
+    with patch('crystal.download.HTTPConnection', MockHTTPConnection):
+        yield
