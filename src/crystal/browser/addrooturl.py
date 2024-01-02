@@ -121,10 +121,10 @@ class AddRootUrlDialog:
                 self.name_field.SetSelection(-1, -1)  # select all upon focus
                 name_field_and_space.Add(self.name_field, proportion=1, flag=wx.EXPAND)
                 
-                name_field_and_space.Add(
-                    wx.Size(spinner_diameter, spinner_diameter),
-                    flag=wx.LEFT,
-                    border=self._FIELD_TO_SPINNER_MARGIN)
+                #name_field_and_space.Add(
+                #    wx.Size(spinner_diameter, spinner_diameter),
+                #    flag=wx.LEFT,
+                #    border=self._FIELD_TO_SPINNER_MARGIN)
             fields_sizer.Add(name_field_and_space, flag=wx.EXPAND)
         
         return fields_sizer
