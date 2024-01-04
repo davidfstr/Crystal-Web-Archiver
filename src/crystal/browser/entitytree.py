@@ -4,6 +4,7 @@ from crystal.browser.icons import BADGED_TREE_NODE_ICON, TREE_NODE_ICONS
 from crystal.doc.generic import Link
 from crystal.model import (
     Project, ProjectHasTooManyRevisionsError, Resource, ResourceGroup,
+    ResourceGroupSource,
     ResourceRevision, RevisionBodyMissingError, RevisionDeletedError,
     RootResource,
 )
@@ -56,7 +57,7 @@ class EntityTree:
         self.root = RootNode(project, self.view.root, progress_listener)
         self._project = project
         self._group_nodes_need_updating = False
-        self._right_clicked_node = None
+        self._right_clicked_node = None  # type: Optional[Node]
         
         project.listeners.append(self)
         
@@ -80,26 +81,43 @@ class EntityTree:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
-        selected_node = selected_node_view.delegate
-        assert isinstance(selected_node, Node)
-        
-        return selected_node.entity
+        return self._node_for_node_view(selected_node_view).entity
     
-    # HACK: Violates the Law of Demeter rather substantially.
     @property
-    def parent_of_selected_entity(self):
-        selected_wxtreeitemid = self.view.peer.GetSelection()
-        if not selected_wxtreeitemid.IsOk():
+    def source_of_selected_entity(self) -> Optional[ResourceGroupSource]:
+        selected_node_view = self.view.selected_node
+        if selected_node_view is None:
             return None
+        ancestor_node_view = self._parent_of_node_view(selected_node_view)
+        while ancestor_node_view is not None:
+            ancestor_node = self._node_for_node_view(ancestor_node_view)
+            if isinstance(ancestor_node, LinkedResourceNode):
+                return None
+            elif isinstance(ancestor_node, (RootResourceNode, ResourceGroupNode)):
+                return ancestor_node.entity
+            else:
+                # Continue
+                pass
+            
+            ancestor_node_view = self._parent_of_node_view(ancestor_node_view)
+        return None
+    
+    @staticmethod
+    def _node_for_node_view(node_view: NodeView) -> Node:
+        node = node_view.delegate
+        assert isinstance(node, Node)
+        return node
+    
+    @staticmethod
+    def _parent_of_node_view(node_view: NodeView) -> Optional[NodeView]:
+        assert node_view.peer is not None
+        tree_peer = node_view.peer.tree_peer
         
-        parent_wxtreeitemid = self.view.peer.GetItemParent(selected_wxtreeitemid)
-        if not parent_wxtreeitemid.IsOk():
+        parent_node_id = tree_peer.GetItemParent(node_view.peer.node_id)
+        if not parent_node_id.IsOk():
             return None
-        
-        parent_node_view = self.view.peer.GetItemData(parent_wxtreeitemid)
-        parent_node = parent_node_view.delegate
-        
-        return parent_node.entity
+        parent_node_view = tree_peer.GetItemData(parent_node_id)  # type: NodeView
+        return parent_node_view
     
     # === Updates ===
     
@@ -156,8 +174,8 @@ class EntityTree:
     
     # === Event: Right Click ===
     
-    def on_right_click(self, event, node_view):
-        node = node_view.delegate
+    def on_right_click(self, event, node_view: NodeView) -> None:
+        node = self._node_for_node_view(node_view)
         self._right_clicked_node = node
         
         # Create popup menu
@@ -231,7 +249,7 @@ class EntityTree:
     
     def _icon_tooltip_for_tree_item_id(self, tree_item_id) -> Optional[str]:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
-        node = cast(Node, node_view.delegate)
+        node = self._node_for_node_view(node_view)
         return node.icon_tooltip
     
     # === Dispose ===

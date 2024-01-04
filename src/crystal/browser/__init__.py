@@ -349,7 +349,7 @@ class MainWindow:
     # === Entity Pane: Properties ===
     
     @property
-    def _selection_initial_url(self) -> Optional[str]:
+    def _suggested_url_or_url_pattern_for_selection(self) -> Optional[str]:
         selected_entity = self.entity_tree.selected_entity
         if isinstance(selected_entity, (Resource, RootResource)):
             return selected_entity.resource.url
@@ -359,18 +359,8 @@ class MainWindow:
             return self.project.default_url_prefix
     
     @property
-    def _selection_initial_source(self) -> Optional[ResourceGroupSource]:
-        selected_entity = self.entity_tree.selected_entity
-        if isinstance(selected_entity, (Resource, RootResource)):
-            parent_of_selected_entity = self.entity_tree.parent_of_selected_entity
-            if isinstance(parent_of_selected_entity, (ResourceGroup, RootResource)):
-                return parent_of_selected_entity
-            else:
-                return None
-        elif isinstance(selected_entity, ResourceGroup):
-            return selected_entity.source
-        else:
-            return None
+    def _suggested_source_for_selection(self) -> Optional[ResourceGroupSource]:
+        return self.entity_tree.source_of_selected_entity
     
     # === Operations ===
     
@@ -436,7 +426,7 @@ class MainWindow:
         AddRootUrlDialog(
             self._frame, self._on_add_url_dialog_ok,
             url_exists_func=root_url_exists,
-            initial_url=self._selection_initial_url or '',
+            initial_url=self._suggested_url_or_url_pattern_for_selection or '',
         )
     
     @fg_affinity
@@ -453,8 +443,8 @@ class MainWindow:
             AddGroupDialog(
                 self._frame, self._on_add_group_dialog_ok,
                 self.project,
-                initial_url=self._selection_initial_url or '',
-                initial_source=self._selection_initial_source)
+                initial_url_pattern=self._suggested_url_or_url_pattern_for_selection or '',
+                initial_source=self._suggested_source_for_selection)
         except CancelLoadUrls:
             pass
     

@@ -17,7 +17,7 @@ _FORM_ROW_SPACING = 10
 
 
 class AddGroupDialog:
-    _INITIAL_URL_WIDTH = AddRootUrlDialog._INITIAL_URL_WIDTH
+    _INITIAL_URL_PATTERN_WIDTH = AddRootUrlDialog._INITIAL_URL_WIDTH
     _MAX_VISIBLE_PREVIEW_URLS = 100
     
     # === Init ===
@@ -26,7 +26,7 @@ class AddGroupDialog:
             parent: wx.Window,
             on_finish: Callable[[str, str, ResourceGroupSource], None],
             project: Project,
-            initial_url: str='',
+            initial_url_pattern: str='',
             initial_source: Optional[ResourceGroupSource]=None,
             ) -> None:
         """
@@ -34,7 +34,7 @@ class AddGroupDialog:
         * parent -- parent wx.Window that this dialog is attached to.
         * on_finish -- called when OK pressed on dialog. Is a callable(name, url_pattern, source).
         * project -- the project.
-        * initial_url -- overrides the initial URL displayed.
+        * initial_url_pattern -- overrides the initial URL pattern displayed.
         * initial_source -- overrides the initial source displayed.
         
         Raises:
@@ -92,7 +92,7 @@ class AddGroupDialog:
         
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
-            self._create_fields(dialog, initial_url, initial_source),
+            self._create_fields(dialog, initial_url_pattern, initial_source),
             flag=wx.EXPAND)
         content_sizer.Add(preview_box, proportion=1, flag=wx.EXPAND|preview_box_flags, border=preview_box_border)
         
@@ -114,7 +114,7 @@ class AddGroupDialog:
     
     def _create_fields(self,
             parent: wx.Window,
-            initial_url: str,
+            initial_url_pattern: str,
             initial_source: Optional[ResourceGroupSource]
             ) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(cols=2,
@@ -123,8 +123,8 @@ class AddGroupDialog:
         
         pattern_field_sizer = wx.BoxSizer(wx.VERTICAL)
         self.pattern_field = wx.TextCtrl(
-            parent, value=initial_url,
-            size=(self._INITIAL_URL_WIDTH, wx.DefaultCoord),
+            parent, value=initial_url_pattern,
+            size=(self._INITIAL_URL_PATTERN_WIDTH, wx.DefaultCoord),
             name='cr-add-group-dialog__pattern-field')
         bind(self.pattern_field, wx.EVT_TEXT, self._on_pattern_field_changed)
         self.pattern_field.Hint = 'https://example.com/post/*'
