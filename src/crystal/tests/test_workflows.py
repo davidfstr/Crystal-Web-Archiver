@@ -126,7 +126,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     click_button(mw.add_group_button)
                     agd = await AddGroupDialog.wait_for()
                     
-                    assert '' == agd.name_field.Value  # default name = (nothing)
+                    assert '|<' == agd.name_field.Value  # default name = (from first text link)
                     assert comic1_url == agd.pattern_field.Value  # default pattern = (from resource)
                     assert 'Home' == agd.source  # default source = (from resource parent)
                     assert agd.name_field.HasFocus  # default focused field
@@ -1078,6 +1078,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                     
                     agd.pattern_field.Value = comic_pattern
                     agd.source = home_url
+                    agd.name_field.Value = ''
                     await agd.ok()
                     
                     # 1. Ensure the new resource group does now group sub-resources

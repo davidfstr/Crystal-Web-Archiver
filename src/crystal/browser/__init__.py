@@ -362,6 +362,10 @@ class MainWindow:
     def _suggested_source_for_selection(self) -> Optional[ResourceGroupSource]:
         return self.entity_tree.source_of_selected_entity
     
+    @property
+    def _suggested_name_for_selection(self) -> Optional[str]:
+        return self.entity_tree.name_of_selected_entity
+    
     # === Operations ===
     
     def close(self) -> None:
@@ -427,6 +431,7 @@ class MainWindow:
             self._frame, self._on_add_url_dialog_ok,
             url_exists_func=root_url_exists,
             initial_url=self._suggested_url_or_url_pattern_for_selection or '',
+            initial_name=self._suggested_name_for_selection or '',
         )
     
     @fg_affinity
@@ -444,7 +449,8 @@ class MainWindow:
                 self._frame, self._on_add_group_dialog_ok,
                 self.project,
                 initial_url_pattern=self._suggested_url_or_url_pattern_for_selection or '',
-                initial_source=self._suggested_source_for_selection)
+                initial_source=self._suggested_source_for_selection,
+                initial_name=self._suggested_name_for_selection or '')
         except CancelLoadUrls:
             pass
     

@@ -57,6 +57,9 @@ _XPS_FOR_PARSER_LIBRARY_T = {T: _XPaths(
 ) for T in _PARSER_LIBRARY_T_CHOICES}
 
 
+TEXT_LINK_TYPE_TITLE = 'Link'
+
+
 def parse_html_and_links(
         html_bytes: bytes, 
         declared_charset: Optional[str],
@@ -119,7 +122,7 @@ def parse_html_and_links(
         embedded = False
         if tag_name == 'a':
             title = html.tag_string(tag)
-            type_title = 'Link'
+            type_title = TEXT_LINK_TYPE_TITLE  # 'Link'
         elif tag_name == 'link' and (
                 ('rel' in tag_attrs and 'stylesheet' in tag_attrs['rel']) or (
                  'type' in tag_attrs and tag_attrs['type'] == 'text/css') or (

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from crystal.browser.icons import BADGED_TREE_NODE_ICON, TREE_NODE_ICONS
 from crystal.doc.generic import Link
+from crystal.doc.html.soup import TEXT_LINK_TYPE_TITLE
 from crystal.model import (
     Project, ProjectHasTooManyRevisionsError, Resource, ResourceGroup,
     ResourceGroupSource,
@@ -101,6 +102,28 @@ class EntityTree:
             
             ancestor_node_view = self._parent_of_node_view(ancestor_node_view)
         return None
+    
+    @property
+    def name_of_selected_entity(self) -> Optional[str]:
+        entity = self.selected_entity
+        if isinstance(entity, (RootResource, ResourceGroup)):
+            return entity.name
+        elif isinstance(entity, Resource):
+            selected_node_view = self.view.selected_node
+            if selected_node_view is None:
+                return None
+            selected_node = self._node_for_node_view(selected_node_view)
+            if isinstance(selected_node, LinkedResourceNode):
+                for link in selected_node.links:
+                    if (link.type_title == TEXT_LINK_TYPE_TITLE and 
+                            link.title is not None and
+                            link.title != ''):
+                        return link.title
+                return None
+            else:
+                return None
+        else:
+            return None
     
     @staticmethod
     def _node_for_node_view(node_view: NodeView) -> Node:

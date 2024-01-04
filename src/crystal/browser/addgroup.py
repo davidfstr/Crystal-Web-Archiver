@@ -28,6 +28,7 @@ class AddGroupDialog:
             project: Project,
             initial_url_pattern: str='',
             initial_source: Optional[ResourceGroupSource]=None,
+            initial_name: str='',
             ) -> None:
         """
         Arguments:
@@ -36,6 +37,7 @@ class AddGroupDialog:
         * project -- the project.
         * initial_url_pattern -- overrides the initial URL pattern displayed.
         * initial_source -- overrides the initial source displayed.
+        * initial_name -- overrides the initial name displayed.
         
         Raises:
         * CancelLoadUrls
@@ -92,7 +94,7 @@ class AddGroupDialog:
         
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
-            self._create_fields(dialog, initial_url_pattern, initial_source),
+            self._create_fields(dialog, initial_url_pattern, initial_source, initial_name),
             flag=wx.EXPAND)
         content_sizer.Add(preview_box, proportion=1, flag=wx.EXPAND|preview_box_flags, border=preview_box_border)
         
@@ -115,7 +117,8 @@ class AddGroupDialog:
     def _create_fields(self,
             parent: wx.Window,
             initial_url_pattern: str,
-            initial_source: Optional[ResourceGroupSource]
+            initial_source: Optional[ResourceGroupSource],
+            initial_name: str,
             ) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
@@ -157,7 +160,7 @@ class AddGroupDialog:
         
         fields_sizer.Add(wx.StaticText(parent, label='Name:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
         self.name_field = wx.TextCtrl(
-            parent,
+            parent, value=initial_name,
             name='cr-add-group-dialog__name-field')
         self.name_field.Hint = 'Post'
         self.name_field.SetSelection(-1, -1)  # select all upon focus
