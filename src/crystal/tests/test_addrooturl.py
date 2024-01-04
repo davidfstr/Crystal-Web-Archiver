@@ -2,11 +2,18 @@ from contextlib import asynccontextmanager, contextmanager
 from crystal.browser.addrooturl import fields_hide_hint_when_focused
 from crystal.model import Project, Resource, RootResource
 from crystal.tests.util.asserts import *
-from crystal.tests.util.controls import click_button
+from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for
-from crystal.tests.util.windows import AddUrlDialog, OpenOrCreateDialog
+from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.wait import (
+    DEFAULT_WAIT_PERIOD,
+    first_child_of_tree_item_is_not_loading_condition,
+    wait_for,
+)
+from crystal.tests.util.windows import AddUrlDialog, EntityTree, OpenOrCreateDialog
 from crystal.util.wx_window import SetFocus
+from crystal.util.xos import is_windows
 import crystal.url_input
 from crystal.url_input import _candidate_urls_from_user_input as EXPAND
 import os
@@ -17,6 +24,188 @@ from typing_extensions import Self
 from unittest import skip
 from unittest.mock import ANY, patch
 import wx
+
+
+# === Test: Create & Delete Standalone ===
+
+async def test_can_create_root_url(*, ensure_revisions_not_deleted: bool=False) -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            # Create root URL
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                () = root_ti.Children
+                
+                assert mw.add_url_button.Enabled
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                
+                # Ensure prepopulates reasonable information
+                assert '' == aud.url_field.Value
+                assert '' == aud.name_field.Value
+                #assert None == agd.source
+                assert aud.url_field.HasFocus  # default focused field
+                
+                aud.name_field.Value = 'Home'
+                aud.url_field.Value = home_url
+                await aud.ok()
+                
+                # Ensure appearance is correct
+                (home_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{home_url} - ')
+                ]
+                assert f'{home_url} - Home' == home_ti.Text
+                await _assert_tree_item_icon_tooltip_contains(home_ti, 'root URL')
+                await _assert_tree_item_icon_tooltip_contains(home_ti, 'Undownloaded')
+                
+                # Currently, an entirely new root URL is NOT selected automatically.
+                # This behavior might be changed in the future.
+                if not is_windows():
+                    selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                    assert (selected_ti is None) or (selected_ti == root_ti)
+            
+            if ensure_revisions_not_deleted:
+                # Download a revision of the root URL
+                home_ti.SelectItem()
+                await mw.click_download_button()
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+                await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
+            
+            # Forget root URL
+            if True:
+                home_ti.SelectItem()
+                assert mw.forget_button.IsEnabled()
+                click_button(mw.forget_button)
+                
+                # Ensure cannot find root URL
+                () = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{home_url} - ')
+                ]
+                if not is_windows():
+                    selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                    assert (selected_ti is None) or (selected_ti == root_ti)
+            
+            if ensure_revisions_not_deleted:
+                # Recreate the root URL
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                aud.name_field.Value = 'Home'
+                aud.url_field.Value = home_url
+                await aud.ok()
+                
+                # 1. Ensure appearance is correct
+                # 2. Ensure previously downloaded revisions still exist
+                (home_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{home_url} - ')
+                ]
+                assert f'{home_url} - Home' == home_ti.Text
+                await _assert_tree_item_icon_tooltip_contains(home_ti, 'root URL')
+                await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
+
+
+@skip('covered by: test_can_create_root_url')
+async def test_can_forget_root_url() -> None:
+    pass
+
+
+async def test_when_forget_root_url_then_revisions_of_that_url_are_not_deleted() -> None:
+    await test_can_create_root_url(ensure_revisions_not_deleted=True)
+
+
+# === Test: Create & Delete from Links ===
+
+async def test_given_resource_node_with_links_can_create_new_root_url_to_label_link() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            # Create home URL
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                () = root_ti.Children
+                
+                assert mw.add_url_button.Enabled
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                
+                aud.name_field.Value = 'Home'
+                aud.url_field.Value = home_url
+                await aud.ok()
+                (home_ti,) = root_ti.Children
+            
+            # Expand home URL
+            home_ti.Expand()
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+            assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
+            
+            # Select the Atom Feed link from the home URL
+            (atom_feed_ti,) = [
+                child for child in home_ti.Children
+                if child.Text.startswith(f'{atom_feed_url} - ')
+            ]  # ensure did find sub-resource
+            atom_feed_ti.SelectItem()
+            
+            # Create a root resource to label the link
+            if True:
+                assert mw.add_url_button.Enabled
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                
+                # Ensure prepopulates reasonable information
+                assert atom_feed_url == aud.url_field.Value  # default pattern = (from resource)
+                assert 'Feed' == aud.name_field.Value  # default name = (from first text link)
+                #assert 'Home' == aud.source  # default source = (from resource parent)
+                assert aud.url_field.HasFocus  # default focused field
+                
+                # Input new name
+                aud.name_field.Value = 'Atom Feed'
+                
+                await aud.ok()
+            
+            # 1. Ensure the new root resource does now label the link
+            # 2. Ensure the labeled link is selected immediately after closing the add URL dialog
+            (atom_feed_ti,) = [
+                child for child in home_ti.Children
+                if child.Text.startswith(f'{atom_feed_url} - ')
+            ]  # ensure did find sub-resource
+            assert (
+                # title format of labeled sub-resource
+                f'{atom_feed_url} - Atom Feed' ==
+                atom_feed_ti.Text)
+            assert atom_feed_ti.IsSelected()
+            
+            # Forget the root resource to unlabel the link
+            if True:
+                assert atom_feed_ti.IsSelected()
+                assert mw.forget_button.IsEnabled()
+                click_button(mw.forget_button)
+                
+                # 1. Ensure can find the unlabeled link
+                # 2. Ensure that unlabeled link is selected immediately after forgetting the root resource
+                (atom_feed_ti,) = [
+                    child for child in home_ti.Children
+                    if child.Text.startswith(f'{atom_feed_url} - ')
+                ]  # ensure did find sub-resource
+                assert (
+                    # title format of unlabeled sub-resource
+                    f'{atom_feed_url} - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed' ==
+                    atom_feed_ti.Text)
+                assert atom_feed_ti.IsSelected()
+
+
+@skip('covered by: test_given_resource_node_with_links_can_create_new_root_url_to_label_link')
+async def test_given_resource_node_with_link_labeled_as_root_url_can_easily_forget_the_root_url_to_unlabel_the_link() -> None:
+    pass
 
 
 # === Test: URL Input -> Candidate URLs ===
@@ -694,3 +883,7 @@ def _assert_contains_sublist(xs: List[str], ys: List[str]) -> None:
             last_index = xs.index(y, last_index + 1)
         except IndexError:
             raise AssertionError(f'Expected list {xs} to contain sublist {ys} but it does not')
+
+
+# NOTE: Only for use with tree items in EntityTree
+_assert_tree_item_icon_tooltip_contains = EntityTree.assert_tree_item_icon_tooltip_contains

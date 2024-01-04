@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from crystal.util.xos import is_windows
 from typing import Iterator, List, Optional
 import unittest.mock
 import wx
@@ -128,8 +129,15 @@ class TreeItem:
         return get_children_of_tree_item(self.tree, self.id)
     
     def __eq__(self, other: object) -> bool:
-        # wx.TreeItemId does not support equality comparison on Windows
-        return NotImplemented
+        if is_windows():
+            # wx.TreeItemId does not support equality comparison on Windows
+            raise ValueError('Cannot compare TreeItems on Windows')
+        else:
+            return (
+                isinstance(other, TreeItem) and
+                self.tree == other.tree and
+                self.id == other.id
+            )
 
 
 # ------------------------------------------------------------------------------

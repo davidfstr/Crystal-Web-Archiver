@@ -358,6 +358,8 @@ class AddUrlDialog:
 
 
 class AddGroupDialog:
+    _NONE_SOURCE_TITLE = 'none'
+    
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
     source_field: wx.Choice
@@ -403,8 +405,13 @@ class AddGroupDialog:
         selection_ci = self.source_field.GetSelection()
         if selection_ci == wx.NOT_FOUND:
             return None
-        return self.source_field.GetString(selection_ci)
-    def _set_source(self, source_title: str) -> None:
+        source_title = self.source_field.GetString(selection_ci)
+        if source_title == self._NONE_SOURCE_TITLE:
+            return None
+        return source_title
+    def _set_source(self, source_title: Optional[str]) -> None:
+        if source_title is None:
+            source_title = self._NONE_SOURCE_TITLE
         selection_ci = self.source_field.GetStrings().index(source_title)
         self.source_field.SetSelection(selection_ci)
     source = property(_get_source, _set_source)
@@ -479,6 +486,12 @@ class EntityTree:
         else:
             raise AssertionError('GetTooltipEvent did not return tooltip')
         return event.tooltip_cell[0]
+    
+    @staticmethod
+    async def assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
+        tooltip = await (EntityTree(ti.tree).get_tree_item_icon_tooltip(ti))
+        assert tooltip is not None and value in tooltip, \
+            f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
     
     async def set_default_url_prefix_to_resource_at_tree_item(self, tree_item: TreeItem) -> None:
         # TODO: Publicize constant
