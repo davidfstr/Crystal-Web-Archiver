@@ -525,11 +525,11 @@ class _ResourceNode(Node):
         raise NotImplementedError()
     
     @property
-    def entity(self):
+    def entity(self) -> NodeEntity:
         return self.resource
     
     @property
-    def _project(self):
+    def _project(self) -> Project:
         return self.resource.project
     
     # === Comparison ===
@@ -706,7 +706,7 @@ class RootResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'root URL'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.root_resource.project
         display_url = project.get_display_url(self.root_resource.url)
         if self.root_resource.name != '':
@@ -715,7 +715,7 @@ class RootResourceNode(_ResourceNode):
             return '%s' % (display_url,)
     
     @property
-    def entity(self):
+    def entity(self) -> RootResource:
         return self.root_resource
     
     # === Comparison ===
@@ -738,12 +738,12 @@ class NormalResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'URL'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.resource.project
         return '%s' % project.get_display_url(self.resource.url)
     
     @property
-    def entity(self):
+    def entity(self) -> Resource:
         return self.resource
     
     # === Comparison ===
@@ -767,21 +767,22 @@ class LinkedResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'URL'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.resource.project
         link_titles = ', '.join([self._full_title_of_link(link) for link in self.links])
         return '%s - %s' % (
             project.get_display_url(self.resource.url),
             link_titles)
     
-    def _full_title_of_link(self, link):
+    @staticmethod
+    def _full_title_of_link(link: Link) -> str:
         if link.title:
             return '%s: %s' % (link.type_title, link.title)
         else:
             return '%s' % link.type_title
     
     @property
-    def entity(self):
+    def entity(self) -> Resource:
         return self.resource
     
     # === Comparison ===
@@ -845,7 +846,7 @@ class ResourceGroupNode(Node):
     def icon_tooltip(self) -> Optional[str]:
         return 'Group'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.resource_group.project
         display_url = project.get_display_url(self.resource_group.url_pattern)
         if self.resource_group.name != '':
@@ -854,7 +855,7 @@ class ResourceGroupNode(Node):
             return '%s' % (display_url,)
     
     @property
-    def entity(self):
+    def entity(self) -> ResourceGroup:
         return self.resource_group
     
     # === Update ===
@@ -952,7 +953,11 @@ class ResourceGroupNode(Node):
 
 
 class GroupedLinkedResourcesNode(Node):
-    def __init__(self, resource_group, root_rsrc_nodes, linked_rsrc_nodes):
+    def __init__(self,
+            resource_group: ResourceGroup,
+            root_rsrc_nodes: List[RootResourceNode],
+            linked_rsrc_nodes: List[LinkedResourceNode],
+            ) -> None:
         self.resource_group = resource_group
         super().__init__()
         
@@ -971,7 +976,7 @@ class GroupedLinkedResourcesNode(Node):
     def icon_tooltip(self) -> Optional[str]:
         return 'Grouped URLs'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.resource_group.project
         display_url_pattern = project.get_display_url(self.resource_group.url_pattern)
         if self.resource_group.name != '':

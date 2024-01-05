@@ -202,7 +202,7 @@ class MainWindow:
         self._forget_action = Action(wx.ID_ANY,
             '&Forget',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_BACK),
-            self._on_remove_entity,
+            self._on_forget_entity,
             enabled=False)
         self._download_action = Action(wx.ID_ANY,
             '&Download',
@@ -465,7 +465,7 @@ class MainWindow:
         rg = ResourceGroup(self.project, name, url_pattern)
         rg.source = source
     
-    def _on_remove_entity(self, event):
+    def _on_forget_entity(self, event):
         self.entity_tree.selected_entity.delete()
         # TODO: This update() should happen in response to a delete
         #       event fired by the entity itself.
@@ -594,20 +594,20 @@ class MainWindow:
         
         return self._project_server
     
-    def _on_selected_entity_changed(self, event):
+    def _on_selected_entity_changed(self, event: wx.TreeEvent) -> None:
         selected_entity = self.entity_tree.selected_entity  # cache
         readonly = self._readonly  # cache
         self._forget_action.enabled = (
             (not readonly) and
-            type(selected_entity) in (ResourceGroup, RootResource))
+            isinstance(selected_entity, (ResourceGroup, RootResource)))
         self._download_action.enabled = (
             (not readonly) and
             selected_entity is not None)
         self._update_membership_action.enabled = (
             (not readonly) and
-            type(selected_entity) is ResourceGroup)
+            isinstance(selected_entity, ResourceGroup))
         self._view_action.enabled = (
-            type(selected_entity) in (Resource, RootResource))
+            isinstance(selected_entity, (Resource, RootResource)))
     
     # === Task Pane: Init ===
     
