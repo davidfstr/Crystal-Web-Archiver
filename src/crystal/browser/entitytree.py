@@ -79,19 +79,27 @@ class EntityTree:
     
     @property
     def selected_entity(self) -> Optional[NodeEntity]:
+        return self.selected_entity_pair[0]
+    
+    @property
+    def selected_entity_pair(self) -> Tuple[Optional[NodeEntity], Optional[NodeEntity]]:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
-            return None
-        return self._node_for_node_view(selected_node_view).entity
+            return (None, None)
+        selected_node = Node.for_node_view(selected_node_view)
+        return (
+            selected_node.entity,
+            selected_node.related_entity,
+        )
     
     @property
     def source_of_selected_entity(self) -> Optional[ResourceGroupSource]:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
-        ancestor_node_view = self._parent_of_node_view(selected_node_view)
+        ancestor_node_view = selected_node_view.parent
         while ancestor_node_view is not None:
-            ancestor_node = self._node_for_node_view(ancestor_node_view)
+            ancestor_node = Node.for_node_view(ancestor_node_view)
             if isinstance(ancestor_node, LinkedResourceNode):
                 return None
             elif isinstance(ancestor_node, (RootResourceNode, ResourceGroupNode)):
@@ -100,7 +108,7 @@ class EntityTree:
                 # Continue
                 pass
             
-            ancestor_node_view = self._parent_of_node_view(ancestor_node_view)
+            ancestor_node_view = ancestor_node_view.parent
         return None
     
     @property
@@ -112,7 +120,7 @@ class EntityTree:
             selected_node_view = self.view.selected_node
             if selected_node_view is None:
                 return None
-            selected_node = self._node_for_node_view(selected_node_view)
+            selected_node = Node.for_node_view(selected_node_view)
             if isinstance(selected_node, LinkedResourceNode):
                 for link in selected_node.links:
                     if (link.type_title == TEXT_LINK_TYPE_TITLE and 
@@ -124,23 +132,6 @@ class EntityTree:
                 return None
         else:
             return None
-    
-    @staticmethod
-    def _node_for_node_view(node_view: NodeView) -> Node:
-        node = node_view.delegate
-        assert isinstance(node, Node)
-        return node
-    
-    @staticmethod
-    def _parent_of_node_view(node_view: NodeView) -> Optional[NodeView]:
-        assert node_view.peer is not None
-        tree_peer = node_view.peer.tree_peer
-        
-        parent_node_id = tree_peer.GetItemParent(node_view.peer.node_id)
-        if not parent_node_id.IsOk():
-            return None
-        parent_node_view = tree_peer.GetItemData(parent_node_id)  # type: NodeView
-        return parent_node_view
     
     # === Updates ===
     
@@ -198,7 +189,7 @@ class EntityTree:
     # === Event: Right Click ===
     
     def on_right_click(self, event, node_view: NodeView) -> None:
-        node = self._node_for_node_view(node_view)
+        node = Node.for_node_view(node_view)
         self._right_clicked_node = node
         
         # Create popup menu
@@ -270,9 +261,9 @@ class EntityTree:
     def _on_get_tooltip_event(self, event: wx.Event) -> None:
         event.tooltip_cell[0] = self._icon_tooltip_for_tree_item_id(event.tree_item_id)
     
-    def _icon_tooltip_for_tree_item_id(self, tree_item_id) -> Optional[str]:
+    def _icon_tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId) -> Optional[str]:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
-        node = self._node_for_node_view(node_view)
+        node = Node.for_node_view(node_view)
         return node.icon_tooltip
     
     # === Dispose ===
@@ -300,6 +291,12 @@ class Node:
     def __init__(self) -> None:
         self._children = []  # type: List[Node]
     
+    @staticmethod
+    def for_node_view(node_view: NodeView) -> Node:
+        node = node_view.delegate
+        assert isinstance(node, Node)
+        return node
+    
     # === Properties ===
     
     def _get_view(self) -> NodeView:
@@ -322,6 +319,8 @@ class Node:
         Raises:
         * CancelOpenProject
         """
+        # NOTE: Very important. Needed to reuse most nodes when changing
+        #       children list to a similar children list.
         value = _sequence_with_matching_elements_replaced(value, self._children)
         self._children = value
         self.view.set_children([child.view for child in value], progress_listener)
@@ -337,6 +336,13 @@ class Node:
     def entity(self) -> Optional[NodeEntity]:
         """
         The entity represented by this node, or None if not applicable.
+        """
+        return None
+    
+    @property
+    def related_entity(self) -> Optional[NodeEntity]:
+        """
+        The entity related to this node, or None if not applicable.
         """
         return None
     
@@ -636,7 +642,7 @@ class _ResourceNode(Node):
     
     # === Updates ===
     
-    def update_children(self):
+    def update_children(self) -> None:
         """
         Updates this node's children.
         Should be called whenever project entities change or the underlying resource's links change.
@@ -731,6 +737,44 @@ class _ResourceNode(Node):
             ), 'Embedded URLs'))
         
         self.children = children
+    
+    def on_selection_deleted(self,
+            old_selected_node_view: NodeView,
+            ) -> Optional[NodeView]:
+        old_selected_node = Node.for_node_view(old_selected_node_view)
+        if isinstance(old_selected_node, _ResourceNode):
+            # Probably this node still exists but in a different location.
+            # Try to find that location.
+            for child in self.children:
+                if old_selected_node == child:
+                    return child.view
+                for grandchild in child.children:
+                    if old_selected_node == grandchild:
+                        return grandchild.view
+            
+            # Maybe this node changed type, either:
+            #     1. {LinkedResourceNode, NormalResourceNode} -> RootResourceNode
+            #     2. RootResourceNode -> {LinkedResourceNode, NormalResourceNode}
+            # Try to find a node with the same URL even if different type.
+            for child in self.children:
+                if isinstance(child, _ResourceNode):
+                    if old_selected_node.resource == child.resource:
+                        return child.view
+                for grandchild in child.children:
+                    if isinstance(grandchild, _ResourceNode):
+                        if old_selected_node.resource == grandchild.resource:
+                            return grandchild.view
+            
+            return None
+        elif isinstance(old_selected_node, GroupedLinkedResourcesNode):
+            # Probably the first child still exists but in a different location.
+            # Try to find that location.
+            children = old_selected_node.children
+            if len(children) == 0:
+                return None
+            return self.on_selection_deleted(children[0].view)
+        else:
+            return None
 
 
 class RootResourceNode(_ResourceNode):
@@ -1031,8 +1075,17 @@ class GroupedLinkedResourcesNode(Node):
                 len(self.children),
                 '' if len(self.children) == 1 else 's')
     
+    #override
     @property
-    def entity(self):
+    def entity(self) -> Optional[NodeEntity]:
+        # This node does NOT represent a ResourceGroup despite being related to one.
+        return None
+    
+    #override
+    @property
+    def related_entity(self) -> Optional[NodeEntity]:
+        # This node groups together various _ResourceNode entities that
+        # are in the same ResourceGroup
         return self.resource_group
     
     # === Comparison ===

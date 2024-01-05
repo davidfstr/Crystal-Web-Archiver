@@ -350,11 +350,13 @@ class MainWindow:
     
     @property
     def _suggested_url_or_url_pattern_for_selection(self) -> Optional[str]:
-        selected_entity = self.entity_tree.selected_entity
-        if isinstance(selected_entity, (Resource, RootResource)):
-            return selected_entity.resource.url
-        elif isinstance(selected_entity, ResourceGroup):
-            return selected_entity.url_pattern
+        selected_entity_pair = self.entity_tree.selected_entity_pair
+        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        
+        if isinstance(selected_or_related_entity, (Resource, RootResource)):
+            return selected_or_related_entity.resource.url
+        elif isinstance(selected_or_related_entity, ResourceGroup):
+            return selected_or_related_entity.url_pattern
         else:
             return self.project.default_url_prefix
     
@@ -462,7 +464,10 @@ class MainWindow:
         rg.source = source
     
     def _on_forget_entity(self, event):
-        self.entity_tree.selected_entity.delete()
+        selected_entity_pair = self.entity_tree.selected_entity_pair
+        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        
+        selected_or_related_entity.delete()
         # TODO: This update() should happen in response to a delete
         #       event fired by the entity itself.
         self.entity_tree.update()
@@ -591,11 +596,14 @@ class MainWindow:
         return self._project_server
     
     def _on_selected_entity_changed(self, event: wx.TreeEvent) -> None:
-        selected_entity = self.entity_tree.selected_entity  # cache
+        selected_entity_pair = self.entity_tree.selected_entity_pair  # cache
+        selected_entity = selected_entity_pair[0]
+        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        
         readonly = self._readonly  # cache
         self._forget_action.enabled = (
             (not readonly) and
-            isinstance(selected_entity, (ResourceGroup, RootResource)))
+            isinstance(selected_or_related_entity, (ResourceGroup, RootResource)))
         self._download_action.enabled = (
             (not readonly) and
             selected_entity is not None)
