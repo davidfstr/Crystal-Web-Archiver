@@ -32,6 +32,12 @@ import wx
 import wx.lib.newevent
 
 
+DeferrableResourceGroupSource = Union[
+    ResourceGroupSource,
+    Callable[[], ResourceGroupSource]
+]
+
+
 _ID_SET_PREFIX = 101
 _ID_CLEAR_PREFIX = 102
 
@@ -93,26 +99,14 @@ class EntityTree:
         )
     
     @property
-    def source_of_selected_entity(self) -> Optional[ResourceGroupSource]:
+    def source_of_selection(self) -> ResourceGroupSource:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
-        ancestor_node_view = selected_node_view.parent
-        while ancestor_node_view is not None:
-            ancestor_node = Node.for_node_view(ancestor_node_view)
-            if isinstance(ancestor_node, LinkedResourceNode):
-                return None
-            elif isinstance(ancestor_node, (RootResourceNode, ResourceGroupNode)):
-                return ancestor_node.entity
-            else:
-                # Continue
-                pass
-            
-            ancestor_node_view = ancestor_node_view.parent
-        return None
+        return Node.for_node_view(selected_node_view).source
     
     @property
-    def name_of_selected_entity(self) -> Optional[str]:
+    def name_of_selection(self) -> Optional[str]:
         entity = self.selected_entity
         if isinstance(entity, (RootResource, ResourceGroup)):
             return entity.name
@@ -288,7 +282,8 @@ NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
 
 
 class Node:
-    def __init__(self) -> None:
+    def __init__(self, *, source: DeferrableResourceGroupSource) -> None:
+        self._source = source
         self._children = []  # type: List[Node]
     
     @staticmethod
@@ -345,6 +340,13 @@ class Node:
         The entity related to this node, or None if not applicable.
         """
         return None
+    
+    @property
+    def source(self) -> ResourceGroupSource:
+        if callable(self._source):
+            return self._source()
+        else:
+            return self._source
     
     # === Updates ===
     
@@ -423,7 +425,7 @@ class RootNode(Node):
         Raises:
         * CancelOpenProject
         """
-        super().__init__()
+        super().__init__(source=None)
         
         self.view = view
         self.view.title = 'ROOT'
@@ -448,7 +450,7 @@ class RootNode(Node):
         
         progress_listener.loading_root_resource_views()
         for (index, rr) in enumerate(self._project.root_resources):
-            children.append(RootResourceNode(rr))
+            children.append(RootResourceNode(rr, source=None))
         
         progress_listener.loading_resource_group_views()
         for (index, rg) in enumerate(self._project.resource_groups):
@@ -458,8 +460,8 @@ class RootNode(Node):
 
 
 class _LoadingNode(Node):
-    def __init__(self):
-        super().__init__()
+    def __init__(self) -> None:
+        super().__init__(source=None)
         
         self.view = NodeView()
         self.view.icon_set = (
@@ -475,7 +477,7 @@ class _LoadingNode(Node):
 
 class _ErrorNode(Node):
     def __init__(self, title: str) -> None:
-        super().__init__()
+        super().__init__(source=None)
         
         self.view = NodeView()
         self.view.icon_set = (
@@ -495,10 +497,14 @@ class _ResourceNode(Node):
     def __init__(self,
             title: str,
             resource: Resource,
-            tree_node_icon_name: str='entitytree_resource') -> None:
-        super().__init__()
+            tree_node_icon_name: str='entitytree_resource',
+            *, source: DeferrableResourceGroupSource,
+            source_of_links: ResourceGroupSource,
+            ) -> None:
+        super().__init__(source=source)
         
         self._tree_node_icon_name = tree_node_icon_name
+        self._source_of_links = source_of_links
         
         self._status_badge_name_calculated = False
         self._status_badge_name_value = None  # type: Optional[str]
@@ -706,35 +712,43 @@ class _ResourceNode(Node):
         children = []
         
         for (rr, links_to_r) in linked_root_resources:
-            children.append(RootResourceNode(rr))
+            children.append(RootResourceNode(rr,
+                source=self._source_of_links))
         
         for (group, (rr_2_links, r_2_links)) in group_2_root_and_normal_resources.items():
             root_rsrc_nodes = []
             for (rr, links_to_r) in rr_2_links:
-                root_rsrc_nodes.append(RootResourceNode(rr))
+                root_rsrc_nodes.append(RootResourceNode(rr,
+                    source=self._source_of_links))
             linked_rsrc_nodes = []
             for (r, links_to_r) in r_2_links:
-                linked_rsrc_nodes.append(LinkedResourceNode(r, links_to_r))
-            children.append(GroupedLinkedResourcesNode(group, root_rsrc_nodes, linked_rsrc_nodes))
+                linked_rsrc_nodes.append(LinkedResourceNode(r, links_to_r,
+                    source=self._source_of_links))
+            children.append(GroupedLinkedResourcesNode(
+                group, root_rsrc_nodes, linked_rsrc_nodes,
+                source=self._source_of_links))
         
         for (r, links_to_r) in linked_other_resources:
-            children.append(LinkedResourceNode(r, links_to_r))
+            children.append(LinkedResourceNode(r, links_to_r,
+                source=self._source_of_links))
         
         if lowpri_offsite_resources:
             subchildren = []
             for (r, links_to_r) in lowpri_offsite_resources:
-                subchildren.append(LinkedResourceNode(r, links_to_r))
+                subchildren.append(LinkedResourceNode(r, links_to_r,
+                    source=self._source_of_links))
             children.append(ClusterNode('(Low-priority: Offsite)', subchildren, (
                 (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_cluster_offsite']),
-            ), 'Offsite URLs'))
+            ), 'Offsite URLs', source=self._source_of_links))
         
         if hidden_embedded_resources:
             subchildren = []
             for (r, links_to_r) in hidden_embedded_resources:
-                subchildren.append(LinkedResourceNode(r, links_to_r))
+                subchildren.append(LinkedResourceNode(r, links_to_r,
+                    source=self._source_of_links))
             children.append(ClusterNode('(Hidden: Embedded)', subchildren, (
                 (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_cluster_embedded']),
-            ), 'Embedded URLs'))
+            ), 'Embedded URLs', source=self._source_of_links))
         
         self.children = children
     
@@ -778,12 +792,17 @@ class _ResourceNode(Node):
 
 
 class RootResourceNode(_ResourceNode):
-    def __init__(self, root_resource: RootResource) -> None:
+    def __init__(self,
+            root_resource: RootResource,
+            *, source: DeferrableResourceGroupSource,
+            ) -> None:
         self.root_resource = root_resource
         super().__init__(
             self.calculate_title(),
             root_resource.resource,
-            'entitytree_root_resource')
+            'entitytree_root_resource',
+            source=source,
+            source_of_links=root_resource)
     
     # === Properties ===
     
@@ -813,9 +832,17 @@ class RootResourceNode(_ResourceNode):
 
 
 class NormalResourceNode(_ResourceNode):
-    def __init__(self, resource):
+    def __init__(self,
+            resource: Resource,
+            *, source: DeferrableResourceGroupSource,
+            source_of_links: ResourceGroupSource,
+            ) -> None:
         self.resource = resource
-        super().__init__(self.calculate_title(), resource)
+        super().__init__(
+            self.calculate_title(),
+            resource,
+            source=source,
+            source_of_links=source_of_links)
     
     # === Properties ===
     
@@ -841,10 +868,18 @@ class NormalResourceNode(_ResourceNode):
 
 
 class LinkedResourceNode(_ResourceNode):
-    def __init__(self, resource, links):
+    def __init__(self,
+            resource: Resource,
+            links: List[Link],
+            *, source: ResourceGroupSource,
+            ) -> None:
         self.resource = resource
         self.links = tuple(links)
-        super().__init__(self.calculate_title(), resource)
+        super().__init__(
+            self.calculate_title(),
+            resource,
+            source=source,
+            source_of_links=None)
     
     # === Properties ===
     
@@ -880,8 +915,14 @@ class LinkedResourceNode(_ResourceNode):
 
 
 class ClusterNode(Node):
-    def __init__(self, title: str, children, icon_set: IconSet, icon_tooltip: str) -> None:
-        super().__init__()
+    def __init__(self,
+            title: str,
+            children,
+            icon_set: IconSet,
+            icon_tooltip: str,
+            *, source: ResourceGroupSource,
+            ) -> None:
+        super().__init__(source=source)
         
         self._icon_tooltip = icon_tooltip
         
@@ -914,7 +955,7 @@ class ResourceGroupNode(Node):
     
     def __init__(self, resource_group: ResourceGroup) -> None:
         self.resource_group = resource_group
-        super().__init__()
+        super().__init__(source=lambda: resource_group.source)
         self._max_visible_children = self._MAX_VISIBLE_CHILDREN
         
         self.view = NodeView()
@@ -973,12 +1014,16 @@ class ResourceGroupNode(Node):
         for r in members[:min(self._max_visible_children, len(members))]:
             rr = project.get_root_resource(r)
             if rr is None:
-                children_rs.append(NormalResourceNode(r))
+                children_rs.append(NormalResourceNode(r,
+                    source=lambda: self.resource_group.source,
+                    source_of_links=self.resource_group))
             else:
-                children_rrs.append(RootResourceNode(rr))
+                children_rrs.append(RootResourceNode(rr,
+                    source=lambda: self.resource_group.source))
         if len(members) > self._max_visible_children:
             children_extra = [
-                MorePlaceholderNode(len(members) - self._max_visible_children, self),
+                MorePlaceholderNode(len(members) - self._max_visible_children, self,
+                    source=lambda: self.resource_group.source),
             ]  # type: List[Node]
         else:
             children_extra = []
@@ -1042,9 +1087,10 @@ class GroupedLinkedResourcesNode(Node):
             resource_group: ResourceGroup,
             root_rsrc_nodes: List[RootResourceNode],
             linked_rsrc_nodes: List[LinkedResourceNode],
+            source: ResourceGroupSource,
             ) -> None:
         self.resource_group = resource_group
-        super().__init__()
+        super().__init__(source=source)
         
         self.view = NodeView()
         #self.view.title = ... (set below)
@@ -1098,8 +1144,12 @@ class GroupedLinkedResourcesNode(Node):
 
 
 class MorePlaceholderNode(Node):
-    def __init__(self, more_count: int, delegate: Optional[object]=None) -> None:
-        super().__init__()
+    def __init__(self,
+            more_count: int,
+            delegate: Optional[object]=None,
+            *, source: DeferrableResourceGroupSource
+            ) -> None:
+        super().__init__(source=source)
         self._more_count = -1
         self._delegate = delegate
         

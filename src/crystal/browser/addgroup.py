@@ -27,7 +27,7 @@ class AddGroupDialog:
             on_finish: Callable[[str, str, ResourceGroupSource], None],
             project: Project,
             initial_url_pattern: str='',
-            initial_source: Optional[ResourceGroupSource]=None,
+            initial_source: ResourceGroupSource=None,
             initial_name: str='',
             ) -> None:
         """
@@ -117,7 +117,7 @@ class AddGroupDialog:
     def _create_fields(self,
             parent: wx.Window,
             initial_url_pattern: str,
-            initial_source: Optional[ResourceGroupSource],
+            initial_source: ResourceGroupSource,
             initial_name: str,
             ) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(cols=2,

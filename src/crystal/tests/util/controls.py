@@ -110,12 +110,10 @@ class TreeItem:
         self.tree.ScrollTo(self.id)
     
     @staticmethod
-    def GetRootItem(tree: wx.TreeCtrl) -> Optional[TreeItem]:
+    def GetRootItem(tree: wx.TreeCtrl) -> TreeItem:
         root_tii = tree.GetRootItem()
-        if root_tii.IsOk():
-            return TreeItem(tree, root_tii)
-        else:
-            return None
+        assert root_tii.IsOk()
+        return TreeItem(tree, root_tii)
     
     def GetFirstChild(self) -> Optional[TreeItem]:
         first_child_tii = self.tree.GetFirstChild(self.id)[0]

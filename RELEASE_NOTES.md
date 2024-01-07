@@ -13,14 +13,17 @@ Release Notes ⋮
 ### main (v2.0.0?)
 
 * First-time-run experience improvements
+    * New Root URL and New Group Dialogs:
+        * Improve suggested name when creating a new root URL or group.
+        * Make it optional to provide a name.
+        * Rearrange fields to deemphasize the name field.
+        * Allow resizing.
     * New Root URL Dialog:
         * Accept URLs in loose format, similar to what regular web browsers accept.
         * Better error message when try to create duplicate root URL.
         * Disallow create of empty root URL.
-    * New Root URL and New Group Dialogs:
-        * Make it optional to provide a name.
-        * Rearrange fields to deemphasize the name field.
-        * Allow resizing.
+    * New Group Dialog:
+        * Improve suggested source when creating a new group.
     * Main Window
         * Prevent resizing the window to be too small.
 

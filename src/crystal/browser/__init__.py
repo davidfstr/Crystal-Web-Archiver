@@ -361,12 +361,12 @@ class MainWindow:
             return self.project.default_url_prefix
     
     @property
-    def _suggested_source_for_selection(self) -> Optional[ResourceGroupSource]:
-        return self.entity_tree.source_of_selected_entity
+    def _suggested_source_for_selection(self) -> ResourceGroupSource:
+        return self.entity_tree.source_of_selection
     
     @property
     def _suggested_name_for_selection(self) -> Optional[str]:
-        return self.entity_tree.name_of_selected_entity
+        return self.entity_tree.name_of_selection
     
     # === Operations ===
     
@@ -460,8 +460,7 @@ class MainWindow:
         # TODO: Validate user input:
         #       * Is name or url_pattern empty?
         #       * Is name or url_pattern already taken?
-        rg = ResourceGroup(self.project, name, url_pattern)
-        rg.source = source
+        rg = ResourceGroup(self.project, name, url_pattern, source)
     
     def _on_forget_entity(self, event):
         selected_entity_pair = self.entity_tree.selected_entity_pair
