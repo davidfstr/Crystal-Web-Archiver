@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from crystal.tests import (
     test_addgroup,
     test_addrooturl,
@@ -34,7 +35,7 @@ import os
 import sys
 import time
 import traceback
-from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
+from typing import Any, Callable, Coroutine, Dict, List, Iterator, Optional, Tuple
 from unittest import SkipTest
 import warnings
 
@@ -109,7 +110,7 @@ def _run_tests(test_names: List[str]) -> bool:
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.time()  # capture
     run_count = 0
-    with warnings.catch_warnings(record=True) as warning_list:
+    with warnings.catch_warnings(record=True) as warning_list, _warnings_sent_to_ci():
         assert warning_list is not None
         
         for test_func in _TEST_FUNCS:
@@ -231,3 +232,44 @@ def _run_tests(test_names: List[str]) -> bool:
         print()
     
     return is_ok
+
+
+@contextmanager
+def _warnings_sent_to_ci() -> Iterator[None]:
+    if not _running_in_ci():
+        yield
+        return
+    
+    super_showwarning = warnings.showwarning  # capture
+    
+    def showwarning(message, category, filename, lineno, file=None, line=None):
+        # Try to reformat `filename` to use the Linux format so that warning
+        # annotations are associated with the correct file
+        # 
+        # Depending on OS, `filename` initially looks like:
+        #     - macOS: setup/dist/Crystal Web Archiver.app/Contents/Resources/lib/python38.zip/crystal/tests/index.py
+        #     - Linux: src/crystal/tests/index.py
+        #     - Windows: crystal\tests\index.pyc
+        filename_parts = filename.split(os.path.sep)
+        if 'crystal' in filename_parts:
+            filename_parts = ['src'] + filename_parts[filename_parts.index('crystal'):]
+            if filename_parts[-1].endswith('.pyc'):
+                filename_parts[-1] = filename_parts[-1][:-1]  # convert .pyc ending to .py
+            filename = '/'.join(filename_parts)  # reinterpret
+        
+        # Create warning annotation in GitHub Action's [Summary > Annotations] section
+        # 
+        # Syntax: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#example-setting-a-warning-message
+        print(f'::warning file={filename},line={lineno}::{message}')
+        
+        return super_showwarning(message, category, filename, lineno, file, line)
+    
+    warnings.showwarning = showwarning
+    try:
+        yield
+    finally:
+        warnings.showwarning = super_showwarning
+
+
+def _running_in_ci() -> bool:
+    return os.environ.get('GITHUB_ACTIONS') == 'true'
