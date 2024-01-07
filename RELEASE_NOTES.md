@@ -17,6 +17,8 @@ Release Notes ⋮
         * Improve suggested name when creating a new root URL or group.
         * Make it optional to provide a name.
         * Rearrange fields to deemphasize the name field.
+        * Update the selected node in the Entity Tree intelligently after
+          creating or forgetting a root URL or a group.
         * Allow resizing.
     * New Root URL Dialog:
         * Accept URLs in loose format, similar to what regular web browsers accept.
