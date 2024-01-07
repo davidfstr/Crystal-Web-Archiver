@@ -401,7 +401,9 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can import Project
                 assertEqual('', _py_eval(crystal, 'from crystal.model import Project'))
                 # Test can create project
-                assertEqual('', _py_eval(crystal, f'p = Project({project_dirpath!r})'))
+                assertEqual('', _py_eval(crystal, f'p = Project({project_dirpath!r})',
+                    # 2.0s isn't long enough for macOS test runners on GitHub Actions
+                    timeout=4.0))
             
             with subtests.test(case='test can create project entities', return_if_failure=True):
                 # Test can import Resource
