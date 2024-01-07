@@ -315,10 +315,16 @@ def _format_srcset_str(srcset: List[List[str]]) -> str:
 
 
 class HtmlDocument(Document):
-    def __init__(self, html: FastSoup) -> None:
+    def __init__(self, html: FastSoup, *, is_html: bool=True) -> None:
         self._html = html
+        self._is_html = is_html
     
     def try_insert_script(self, script_url: str) -> bool:
+        if not self._is_html:
+            # Don't try to insert an HTML link into a non-HTML document,
+            # such as an XML document
+            return False
+        
         first_element = self._html.find(True)
         if first_element is not None:
             script = self._html.new_tag('script')

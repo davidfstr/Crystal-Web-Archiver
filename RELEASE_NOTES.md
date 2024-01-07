@@ -24,6 +24,10 @@ Release Notes ⋮
     * Main Window
         * Prevent resizing the window to be too small.
 
+* Serving improvements
+    * XML files like Atom feeds and RSS feeds are now served correctly,
+      without introducing an invalid `<script>` tag.
+
 * Fixes
     * Fix disappearance of error nodes when new root URL or group is added.
 
