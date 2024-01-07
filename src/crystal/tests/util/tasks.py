@@ -95,7 +95,6 @@ async def wait_for_download_to_start_and_finish(
     # Wait while downloading
     await wait_while(
         first_task_title_func,
-        total_timeout=math.inf,  # progress timeout is sufficient
         progress_timeout=max_download_duration_per_large_item,
         progress_timeout_message=lambda: (
             f'Subresource download timed out after {max_download_duration_per_large_item:.1f}s: '
