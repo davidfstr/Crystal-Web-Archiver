@@ -36,6 +36,11 @@ import time
 import traceback
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 from unittest import SkipTest
+import warnings
+
+
+# Path to parent directory of the "crystal" package
+_SOURCE_DIRPATH = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 
 def _test_functions_in_module(mod) -> List[Callable]:
@@ -104,49 +109,53 @@ def _run_tests(test_names: List[str]) -> bool:
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.time()  # capture
     run_count = 0
-    for test_func in _TEST_FUNCS:
-        if not callable(test_func):
-            raise ValueError(f'Test function is not callable: {test_func}')
-        test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
-        test_name = f'{test_func_id[0]}.{test_func_id[1]}'
+    with warnings.catch_warnings(record=True) as warning_list:
+        assert warning_list is not None
         
-        # Only run test if it was requested (or if all tests are to be run)
-        if len(test_names) > 0:
-            if test_name not in test_names and test_func.__module__ not in test_names:
-                continue
-        run_count += 1
-        
-        os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
-        
-        print('=' * 70)
-        print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]})')
-        print('-' * 70)
-        try:
-            run_test(test_func)
-        except AssertionError as e:
-            result_for_test_func_id[test_func_id] = e
+        for test_func in _TEST_FUNCS:
+            if not callable(test_func):
+                raise ValueError(f'Test function is not callable: {test_func}')
+            test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
+            test_name = f'{test_func_id[0]}.{test_func_id[1]}'
             
-            traceback.print_exc(file=sys.stdout)
-            print('FAILURE')
-        except SkipTest as e:
-            result_for_test_func_id[test_func_id] = e
+            # Only run test if it was requested (or if all tests are to be run)
+            if len(test_names) > 0:
+                if test_name not in test_names and test_func.__module__ not in test_names:
+                    continue
+            run_count += 1
             
-            print(f'SKIP ({str(e)})')
-        except Exception as e:
-            result_for_test_func_id[test_func_id] = e
+            os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
             
-            if not isinstance(e, SubtestFailed):
+            print('=' * 70)
+            print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]})')
+            print('-' * 70)
+            try:
+                run_test(test_func)
+            except AssertionError as e:
+                result_for_test_func_id[test_func_id] = e
+                
                 traceback.print_exc(file=sys.stdout)
-            print(f'ERROR ({e.__class__.__name__})')
-        else:
-            result_for_test_func_id[test_func_id] = None
+                print('FAILURE')
+            except SkipTest as e:
+                result_for_test_func_id[test_func_id] = e
+                
+                print(f'SKIP ({str(e)})')
+            except Exception as e:
+                result_for_test_func_id[test_func_id] = e
+                
+                if not isinstance(e, SubtestFailed):
+                    traceback.print_exc(file=sys.stdout)
+                print(f'ERROR ({e.__class__.__name__})')
+            else:
+                result_for_test_func_id[test_func_id] = None
+                
+                print('OK')
+            print()
             
-            print('OK')
-        print()
-        
-        # Garbage collect, running any finalizers in __del__() early,
-        # such as the warnings printed by ListenableMixin
-        gc.collect()
+            # Garbage collect, running any finalizers in __del__() early,
+            # such as the warnings printed by ListenableMixin
+            gc.collect()
+    
     end_time = time.time()  # capture
     delta_time = end_time - start_time
     
@@ -202,6 +211,19 @@ def _run_tests(test_names: List[str]) -> bool:
     print()
     print(f'{"OK" if is_ok else "FAILURE"}{suffix}')
     
+    # Print warnings, if any
+    if len(warning_list) >= 1:
+        print()
+        print('Warnings:')
+        for w in warning_list:
+            if w.filename.startswith(_SOURCE_DIRPATH):
+                short_filepath = os.path.relpath(w.filename, start=_SOURCE_DIRPATH)
+            else:
+                short_filepath = w.filename
+            w_str = warnings.formatwarning(w.message, w.category, short_filepath, w.lineno, w.line)
+            print('- ' + w_str, end='')
+    
+    # Print command to rerun failed tests
     if len(failed_test_names) != 0:
         print()
         print('Rerun failed tests with:')
