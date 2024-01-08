@@ -18,6 +18,7 @@ from io import StringIO, TextIOBase
 import os
 import platform
 import re
+from select import select
 import subprocess
 import sys
 import tempfile
@@ -717,7 +718,6 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
         })
     try:
         assert isinstance(crystal.stdout, TextIOBase)
-        os.set_blocking(crystal.stdout.fileno(), False)
         
         (banner, _) = _read_until(
             crystal.stdout, '\n>>> ',
@@ -769,42 +769,59 @@ def _read_until(
     if period is None:
         period = DEFAULT_WAIT_PERIOD
     
-    assert not is_windows()
-    if os.get_blocking(stream.fileno()) != False:  # type: ignore[attr-defined]  # available in non-Windows
-        raise ValueError('Expected stream to be opened in non-blocking mode')
-    
-    stop_suffix_bytes_choices = [s.encode(stream.encoding) for s in stop_suffix]
-    
     soft_timeout = timeout
     hard_timeout = timeout * HARD_TIMEOUT_MULTIPLIER
+    
+    stop_suffix_bytes_choices = [s.encode(stream.encoding) for s in stop_suffix]
     
     read_buffer = b''
     found_stop_suffix = None  # type: Optional[str]
     start_time = time.time()
     hard_timeout_exceeded = False
     try:
+        delta_time = 0.0
         while True:
-            last_read_bytes = stream.buffer.read()  # type: ignore[attr-defined]
-            if last_read_bytes is not None:
-                # NOTE: Quadratic performance.
+            # 1. Wait for stream to be ready to read or hit EOF
+            # 2. Read stream (if became ready)
+            # 3. Look for an acceptable `stop_suffix` at the end of everything read so far
+            remaining_time = hard_timeout - delta_time
+            assert remaining_time > 0
+            (rlist_ready, _, xlist_ready) = select(
+                [stream],
+                [],
+                [stream],
+                remaining_time)
+            did_time_out = (len(rlist_ready) + len(xlist_ready) == 0)
+            if did_time_out:
+                # Look for an acceptable "stop suffix"
+                # Special case: '' is always an acceptable `stop_suffix`
+                if '' in stop_suffix:
+                    found_stop_suffix = ''
+            else:
+                # Read stream
+                # NOTE: Append uses quadratic performance.
                 #       Not using for large amounts of text so I don't care.
-                read_buffer += last_read_bytes
-            for (i, s_bytes) in enumerate(stop_suffix_bytes_choices):
-                if read_buffer.endswith(s_bytes):
-                    found_stop_suffix = stop_suffix[i]
-                    break
+                read_buffer += stream.buffer.read1(1024)  # type: ignore[attr-defined]  # arbitrary
+                
+                # Look for an acceptable "stop suffix"
+                for (i, s_bytes) in enumerate(stop_suffix_bytes_choices):
+                    if read_buffer.endswith(s_bytes):
+                        found_stop_suffix = stop_suffix[i]
+                        break
             if found_stop_suffix is not None:
+                # Done
                 break
+            
+            # If hard timeout exceeded then raise
             delta_time = time.time() - start_time
-            if delta_time > hard_timeout:
+            if did_time_out or delta_time >= hard_timeout:
                 hard_timeout_exceeded = True
                 raise WaitTimedOut(
                     f'Timed out after {timeout:.1f}s while '
                     f'reading until {stop_suffix!r}. '
                     f'Read so far: {read_buffer.decode(stream.encoding)!r}')
-            time.sleep(period)
     finally:
-        # Warn if soft timeout exceeded
+        # If soft timeout exceeded then warn before returning
         if not hard_timeout_exceeded:
             delta_time = time.time() - start_time
             if delta_time > soft_timeout:

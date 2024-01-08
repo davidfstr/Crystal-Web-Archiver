@@ -20,6 +20,7 @@ import wx
 async def wait_for_download_to_start_and_finish(
         task_tree: wx.TreeCtrl,
         *, immediate_finish_ok: bool=False,
+        stacklevel_extra: int=0
         ) -> None:
     # TODO: Allow caller to tune "max_download_duration_per_item"
     max_download_duration_per_standard_item = (
@@ -38,7 +39,8 @@ async def wait_for_download_to_start_and_finish(
         try:
             await wait_for(
                 tree_has_children_condition(task_tree),
-                timeout=4.0)  # 2.0s isn't long enough for Windows test runners on GitHub Actions
+                timeout=4.0,  # 2.0s isn't long enough for Windows test runners on GitHub Actions
+                stacklevel_extra=(1 + stacklevel_extra))
         except WaitTimedOut:
             if immediate_finish_ok:
                 return
