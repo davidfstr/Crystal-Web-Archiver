@@ -173,6 +173,7 @@ class Project(ListenableMixin):
     
     # === Load ===
     
+    @fg_affinity
     def __init__(self,
             path: str,
             progress_listener: Optional[OpenProjectProgressListener]=None,
