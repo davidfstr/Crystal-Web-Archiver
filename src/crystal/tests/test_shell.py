@@ -351,7 +351,7 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                         'headers': ANY
                     },
                     literal_eval(_py_eval(crystal, f'rr.metadata')))
-                _py_eval(crystal, f'with rr.open() as f:\n    body = f.read()\n')
+                _py_eval(crystal, f'with rr.open() as f:\n    body = f.read()\n', stop_suffix='>>> ')
                 assertEqual(
                     r"""b'<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" type="text/css" href="/s/7d94e0.css" title="Default"/>\n<title>xkcd: Air Gap</title>\n'""" + '\n',
                     _py_eval(crystal, f'body[:137]'))
@@ -662,11 +662,9 @@ def _close_main_window(crystal: subprocess.Popen, *, after_delay: Optional[float
 @contextmanager
 def _delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[None]:
     # NOTE: Uses private API, including the entire crystal.tests package
-    _py_eval(crystal, textwrap.dedent(f'''\
-        from crystal.tests.util.downloads import delay_between_downloads_minimized as D
-        download_ctx = D()
-        download_ctx.__enter__()
-        '''))
+    _py_eval(crystal, 'from crystal.tests.util.downloads import delay_between_downloads_minimized as D')
+    _py_eval(crystal, 'download_ctx = D()')
+    _py_eval(crystal, 'download_ctx.__enter__()')
     try:
         yield
     finally:
@@ -735,6 +733,10 @@ def _py_eval(
         py_code: str,
         stop_suffix: Optional[Union[str, Tuple[str, ...]]]=None,
         *, timeout: Optional[float]=None) -> str:
+    if '\n' in py_code and stop_suffix is None:
+        raise ValueError(
+            'Unsafe to use _py_eval() on multi-line py_code '
+            'unless stop_suffix is set carefully')
     if stop_suffix is None:
         stop_suffix = '>>> '
     
