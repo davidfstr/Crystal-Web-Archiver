@@ -626,40 +626,42 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
 def _close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: Optional[float]=None) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     _py_eval(crystal, textwrap.dedent(f'''\
-        from crystal.tests.util.runner import bg_sleep, run_test
-        from crystal.tests.util.windows import OpenOrCreateDialog
-        from threading import Thread
-
-        async def close_ocd():
-            ocd = await OpenOrCreateDialog.wait_for()
-            if {after_delay} != None:
-                await bg_sleep({after_delay})
-            ocd.open_or_create_project_dialog.Close()
+        if True:
+            from crystal.tests.util.runner import bg_sleep, run_test
+            from crystal.tests.util.windows import OpenOrCreateDialog
+            from threading import Thread
             #
-            print('OK')
-
-        t = Thread(target=lambda: run_test(close_ocd))
-        t.start()
+            async def close_ocd():
+                ocd = await OpenOrCreateDialog.wait_for()
+                if {after_delay} != None:
+                    await bg_sleep({after_delay})
+                ocd.open_or_create_project_dialog.Close()
+                #
+                print('OK')
+            #
+            t = Thread(target=lambda: run_test(close_ocd))
+            t.start()
         '''), stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '')
 
 
 def _close_main_window(crystal: subprocess.Popen, *, after_delay: Optional[float]=None) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     _py_eval(crystal, textwrap.dedent(f'''\
-        from crystal.tests.util.runner import bg_sleep, run_test
-        from crystal.tests.util.windows import MainWindow
-        from threading import Thread
-
-        async def close_main_window():
-            mw = await MainWindow.wait_for()
-            if {after_delay} != None:
-                await bg_sleep({after_delay})
-            await mw.close()
+        if True:
+            from crystal.tests.util.runner import bg_sleep, run_test
+            from crystal.tests.util.windows import MainWindow
+            from threading import Thread
             #
-            print('OK')
-
-        t = Thread(target=lambda: run_test(close_main_window))
-        t.start()
+            async def close_main_window():
+                mw = await MainWindow.wait_for()
+                if {after_delay} != None:
+                    await bg_sleep({after_delay})
+                await mw.close()
+                #
+                print('OK')
+            #
+            t = Thread(target=lambda: run_test(close_main_window))
+            t.start()
         '''),
         stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '',
         timeout=MainWindow.CLOSE_TIMEOUT,
