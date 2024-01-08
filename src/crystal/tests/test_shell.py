@@ -743,7 +743,8 @@ def _py_eval(
     assert isinstance(python.stdin, TextIOBase)
     assert isinstance(python.stdout, TextIOBase)
     python.stdin.write(f'{py_code}\n'); python.stdin.flush()
-    (result, found_stop_suffix) = _read_until(python.stdout, stop_suffix, timeout=timeout)
+    (result, found_stop_suffix) = _read_until(
+        python.stdout, stop_suffix, timeout=timeout, stacklevel_extra=1)
     return result[:-len(found_stop_suffix)]
 
 
@@ -752,6 +753,7 @@ def _read_until(
         stop_suffix: Union[str, Tuple[str, ...]],
         timeout: Optional[float]=None,
         *, period: Optional[float]=None,
+        stacklevel_extra: int=0
         ) -> Tuple[str, str]:
     """
     Reads from the specified stream until the provided `stop_suffix`
@@ -813,7 +815,7 @@ def _read_until(
                         soft_timeout,
                         stop_suffix
                     ),
-                    stacklevel=2)
+                    stacklevel=(2 + stacklevel_extra))
             
     return (read_buffer.decode(stream.encoding), found_stop_suffix)
 
