@@ -1,7 +1,7 @@
 from ast import literal_eval
 from contextlib import contextmanager
 from crystal import __version__ as crystal_version
-from crystal.tests.util.asserts import *
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER,
     WaitTimedOut,
@@ -170,7 +170,10 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
         with crystal_shell() as (crystal, _):
             _close_open_or_create_dialog(crystal)
             
-            assert '4\n' == _py_eval(crystal, '2 + 2')
+            try:
+                assertEqual('4\n', _py_eval(crystal, '2 + 2'))
+            except AssertionError as e:
+                raise AssertionError(f'{e} Trailing output: {_drain(crystal)!r}')
     
     with subtests.test(case='test when main window or non-first open/create dialog is closed given shell is running then shell remains running'):
         with crystal_shell() as (crystal, _):
@@ -179,7 +182,10 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
             
             _close_open_or_create_dialog(crystal)
             
-            assert '4\n' == _py_eval(crystal, '2 + 2')
+            try:
+                assertEqual('4\n', _py_eval(crystal, '2 + 2'))
+            except AssertionError as e:
+                raise AssertionError(f'{e} Trailing output: {_drain(crystal)!r}')
     
     for exit_method in ('exit()', 'Ctrl-D'):
         with subtests.test(case=f'test when {exit_method} given first open/create dialog is already closed then exits'):
@@ -760,7 +766,7 @@ def _read_until(
     is read at the end of the stream or the timeout expires.
     
     Raises:
-    * WaitTimedOut -- if the timeout expires before `stop_suffix` is read
+    * ReadUntilTimedOut -- if the timeout expires before `stop_suffix` is read
     """
     if isinstance(stop_suffix, str):
         stop_suffix = (stop_suffix,)
@@ -816,10 +822,12 @@ def _read_until(
             delta_time = time.time() - start_time
             if did_time_out or delta_time >= hard_timeout:
                 hard_timeout_exceeded = True
-                raise WaitTimedOut(
+                read_so_far = read_buffer.decode(stream.encoding)
+                raise ReadUntilTimedOut(
                     f'Timed out after {timeout:.1f}s while '
                     f'reading until {stop_suffix!r}. '
-                    f'Read so far: {read_buffer.decode(stream.encoding)!r}')
+                    f'Read so far: {read_so_far!r}',
+                    read_so_far)
     finally:
         # If soft timeout exceeded then warn before returning
         if not hard_timeout_exceeded:
@@ -835,6 +843,38 @@ def _read_until(
                     stacklevel=(2 + stacklevel_extra))
             
     return (read_buffer.decode(stream.encoding), found_stop_suffix)
+
+
+class ReadUntilTimedOut(WaitTimedOut):
+    def __init__(self, message: str, read_so_far: str) -> None:
+        super().__init__(message)
+        self.read_so_far = read_so_far
+
+
+_DEFAULT_DRAIN_TTL = min(DEFAULT_WAIT_TIMEOUT, 2.0)
+
+def _drain(stream: Union[TextIOBase, subprocess.Popen], ttl: Optional[float]=None) -> str:
+    """
+    Reads as much as possible from the specified stream for the specified
+    TTL duration and returns it.
+    
+    Often useful for debugging _read_until() failures.
+    """
+    if ttl is None:
+        ttl = _DEFAULT_DRAIN_TTL
+    
+    if isinstance(stream, subprocess.Popen):
+        stream2 = stream.stdout
+        assert isinstance(stream2, TextIOBase)
+        stream = stream2  # reinterpret
+    
+    EOT = '\4'  # End of Transmission; an unlikely character to occur in the wild
+    try:
+        _read_until(stream, EOT, ttl)
+    except ReadUntilTimedOut as e:
+        return e.read_so_far
+    else:
+        raise ValueError('Actually encountered EOT while reading stream!')
 
 
 # ------------------------------------------------------------------------------
