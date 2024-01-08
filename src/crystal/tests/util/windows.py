@@ -358,6 +358,8 @@ class AddUrlDialog:
 
 
 class AddGroupDialog:
+    _NONE_SOURCE_TITLE = 'none'
+    
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
     source_field: wx.Choice
@@ -399,18 +401,28 @@ class AddGroupDialog:
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use AddGroupDialog.wait_for()?'
     
+    # TODO: Rename -> source_name
     def _get_source(self) -> Optional[str]:
         selection_ci = self.source_field.GetSelection()
         if selection_ci == wx.NOT_FOUND:
             return None
-        return self.source_field.GetString(selection_ci)
-    def _set_source(self, source_title: str) -> None:
-        selection_ci = self.source_field.GetStrings().index(source_title)
+        source_name = self.source_field.GetString(selection_ci)
+        if source_name == self._NONE_SOURCE_TITLE:
+            return None
+        return source_name
+    def _set_source(self, source_name: Optional[str]) -> None:
+        if source_name is None:
+            source_name = self._NONE_SOURCE_TITLE
+        selection_ci = self.source_field.GetStrings().index(source_name)
         self.source_field.SetSelection(selection_ci)
     source = property(_get_source, _set_source)
     
     async def ok(self) -> None:
         click_button(self.ok_button)
+        await wait_for(not_condition(window_condition('cr-add-group-dialog')))
+    
+    async def cancel(self) -> None:
+        click_button(self.cancel_button)
         await wait_for(not_condition(window_condition('cr-add-group-dialog')))
 
 
@@ -479,6 +491,12 @@ class EntityTree:
         else:
             raise AssertionError('GetTooltipEvent did not return tooltip')
         return event.tooltip_cell[0]
+    
+    @staticmethod
+    async def assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
+        tooltip = await (EntityTree(ti.tree).get_tree_item_icon_tooltip(ti))
+        assert tooltip is not None and value in tooltip, \
+            f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
     
     async def set_default_url_prefix_to_resource_at_tree_item(self, tree_item: TreeItem) -> None:
         # TODO: Publicize constant

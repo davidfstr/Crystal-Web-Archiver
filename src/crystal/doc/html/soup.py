@@ -57,6 +57,9 @@ _XPS_FOR_PARSER_LIBRARY_T = {T: _XPaths(
 ) for T in _PARSER_LIBRARY_T_CHOICES}
 
 
+TEXT_LINK_TYPE_TITLE = 'Link'
+
+
 def parse_html_and_links(
         html_bytes: bytes, 
         declared_charset: Optional[str],
@@ -119,7 +122,7 @@ def parse_html_and_links(
         embedded = False
         if tag_name == 'a':
             title = html.tag_string(tag)
-            type_title = 'Link'
+            type_title = TEXT_LINK_TYPE_TITLE  # 'Link'
         elif tag_name == 'link' and (
                 ('rel' in tag_attrs and 'stylesheet' in tag_attrs['rel']) or (
                  'type' in tag_attrs and tag_attrs['type'] == 'text/css') or (
@@ -312,10 +315,16 @@ def _format_srcset_str(srcset: List[List[str]]) -> str:
 
 
 class HtmlDocument(Document):
-    def __init__(self, html: FastSoup) -> None:
+    def __init__(self, html: FastSoup, *, is_html: bool=True) -> None:
         self._html = html
+        self._is_html = is_html
     
     def try_insert_script(self, script_url: str) -> bool:
+        if not self._is_html:
+            # Don't try to insert an HTML link into a non-HTML document,
+            # such as an XML document
+            return False
+        
         first_element = self._html.find(True)
         if first_element is not None:
             script = self._html.new_tag('script')

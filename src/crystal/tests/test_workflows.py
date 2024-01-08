@@ -23,6 +23,7 @@ from crystal.tests.util.windows import (
     AddGroupDialog, AddUrlDialog, EntityTree,
     MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
+from crystal.util.xos import is_windows
 import datetime
 import re
 import tempfile
@@ -89,7 +90,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 assert True == (await is_url_not_in_archive(home_url))
                 
                 # Test can download root resource (using download button)
-                assert home_ti.id == mw.entity_tree.window.GetSelection()
+                assert home_ti.IsSelected()
                 await mw.click_download_button()
                 await wait_for_download_to_start_and_finish(mw.task_tree)
                 
@@ -126,7 +127,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     click_button(mw.add_group_button)
                     agd = await AddGroupDialog.wait_for()
                     
-                    assert '' == agd.name_field.Value  # default name = (nothing)
+                    assert '|<' == agd.name_field.Value  # default name = (from first text link)
                     assert comic1_url == agd.pattern_field.Value  # default pattern = (from resource)
                     assert 'Home' == agd.source  # default source = (from resource parent)
                     assert agd.name_field.HasFocus  # default focused field
@@ -361,9 +362,9 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 
                 # 1. Test cannot add new root resource in read-only project
                 # 2. Test cannot add new resource group in read-only project
-                selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
-                # NOTE: Cannot test the selection on Windows
-                #assert (selected_ti is None) or (selected_ti == root_ti)
+                if not is_windows():
+                    selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                    assert (selected_ti is None) or (selected_ti == root_ti)
                 assert False == mw.add_url_button.IsEnabled()
                 assert False == mw.add_group_button.IsEnabled()
                 
@@ -1078,6 +1079,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                     
                     agd.pattern_field.Value = comic_pattern
                     agd.source = home_url
+                    agd.name_field.Value = ''
                     await agd.ok()
                     
                     # 1. Ensure the new resource group does now group sub-resources
@@ -1183,10 +1185,7 @@ async def _undiscover_url(
 
 
 # NOTE: Only for use with tree items in EntityTree
-async def _assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
-    tooltip = await (EntityTree(ti.tree).get_tree_item_icon_tooltip(ti))
-    assert tooltip is not None and value in tooltip, \
-        f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
+_assert_tree_item_icon_tooltip_contains = EntityTree.assert_tree_item_icon_tooltip_contains
 
 
 # ------------------------------------------------------------------------------

@@ -43,5 +43,5 @@ def parse_xml_and_links(
             links.append(HtmlLink.create_from_tag(tag, xml, 'href', type_title, title, embedded))
     
     links_ = links  # type: List[Link]  # type: ignore[assignment]  # allow List[HtmlLink] to be converted
-    return (HtmlDocument(xml), links_)
+    return (HtmlDocument(xml, is_html=False), links_)
 

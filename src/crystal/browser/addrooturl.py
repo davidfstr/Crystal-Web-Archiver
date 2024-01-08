@@ -27,6 +27,7 @@ class AddRootUrlDialog:
             on_finish: Callable[[str, str], None],
             url_exists_func: Callable[[str], bool],
             initial_url: str='',
+            initial_name: str='',
             ) -> None:
         """
         Arguments:
@@ -52,7 +53,7 @@ class AddRootUrlDialog:
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         bind(dialog, wx.EVT_WINDOW_DESTROY, self._on_destroyed)
         
-        dialog_sizer.Add(self._create_fields(dialog, initial_url), flag=wx.EXPAND|wx.ALL,
+        dialog_sizer.Add(self._create_fields(dialog, initial_url, initial_name), flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
@@ -75,7 +76,7 @@ class AddRootUrlDialog:
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
             AddRootUrlDialog._last_opened = self
     
-    def _create_fields(self, parent: wx.Window, initial_url: str) -> wx.Sizer:
+    def _create_fields(self, parent: wx.Window, initial_url: str, initial_name: str) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         fields_sizer.AddGrowableCol(1)
@@ -115,7 +116,7 @@ class AddRootUrlDialog:
             name_field_and_space = wx.BoxSizer(wx.HORIZONTAL)
             if True:
                 self.name_field = wx.TextCtrl(
-                    parent,
+                    parent, value=initial_name,
                     name='cr-add-url-dialog__name-field')
                 self.name_field.Hint = 'Home'
                 self.name_field.SetSelection(-1, -1)  # select all upon focus

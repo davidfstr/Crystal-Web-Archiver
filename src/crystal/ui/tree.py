@@ -18,7 +18,7 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_raising
 )
 from crystal.util.xthreading import fg_affinity
-from typing import Callable, Dict, List, NewType, NoReturn, Optional, Tuple, Union
+from typing import Callable, Container, Dict, List, NewType, NoReturn, Optional, Tuple, Union
 import wx
 
 
@@ -96,6 +96,8 @@ class TreeView:
         for event_type in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR:
             bind(self.peer, event_type, self._dispatch_event, self.peer)
     
+    # === Properties ===
+    
     def _get_root(self) -> NodeView:
         return self._root
     def _set_root(self, value: NodeView) -> None:
@@ -103,16 +105,24 @@ class TreeView:
         self._root._attach(self._root_peer)
     root = property(_get_root, _set_root)
     
+    # TODO: Rename: selection
     @property
     def selected_node(self) -> Optional[NodeView]:
+        return self.selected_node_in(self.peer)
+    
+    # TODO: Rename: selection_in
+    @staticmethod
+    def selected_node_in(tree_peer: wx.TreeCtrl) -> Optional[NodeView]:
         try:
-            selected_node_id = self.peer.GetSelection()
+            selected_node_id = tree_peer.GetSelection()
         except Exception as e:
             if is_wrapped_object_deleted_error(e):
                 return None
             else:
                 raise
-        return self.peer.GetItemData(selected_node_id) if selected_node_id.IsOk() else None
+        if not selected_node_id.IsOk():
+            return None
+        return tree_peer.GetItemData(selected_node_id)
     
     def get_image_id_for_bitmap(self, bitmap: wx.Bitmap) -> ImageIndex:
         """
@@ -126,11 +136,13 @@ class TreeView:
             self._bitmap_2_image_id[bitmap] = ImageIndex(image_id)
         return image_id
     
+    # === Operations ===
+    
     def expand(self, node_view):
         self.peer.Expand(node_view.peer.node_id)
     
     # Notified when any interesting event occurs on the peer
-    def _dispatch_event(self, event) -> None:
+    def _dispatch_event(self, event: wx.TreeEvent) -> None:
         node_id = event.GetItem()
         node_view = self.peer.GetItemData(node_id)  # type: NodeView
         
@@ -150,7 +162,7 @@ class TreeView:
 
 
 class _OrderedTreeCtrl(wx.TreeCtrl):
-    def OnCompareItems(self, item1, item2):
+    def OnCompareItems(self, item1: wx.TreeItemId, item2: wx.TreeItemId) -> int:
         (item1_view, item2_view) = (self.GetItemData(item1), self.GetItemData(item2))
         assert isinstance(item1_view, NodeView) and isinstance(item2_view, NodeView)
         (order_index_1, order_index_2) = (
@@ -199,6 +211,8 @@ class NodeView:
         self._icon_set_func = None  # type: Optional[Callable[[], Optional[IconSet]]]
         self._icon_set = None  # type: Optional[IconSet]
         self._children = []  # type: List[NodeView]
+    
+    # === Properties ===
     
     def _get_title(self) -> str:
         return self._title
@@ -286,13 +300,28 @@ class NodeView:
                         child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
                 else:
                     # Replace existing children, preserving old ones that match new ones
+                    
                     old_children_set = set(old_children)
                     
-                    children_to_delete = old_children_set - set(new_children)
-                    for child in children_to_delete:
-                        if child.peer is not None:
-                            child.peer.Delete()
+                    # 1. Delete some children
+                    # 2. Capture selected node if it is in the deleted region
+                    if True:
+                        children_to_delete = old_children_set - set(new_children)
+                        
+                        on_selection_deleted = getattr(
+                            self.delegate, 'on_selection_deleted', None
+                        )  # type: Optional[Callable[[NodeView], Optional[NodeView]]]
+                        old_selection_to_retarget = None  # type: Optional[NodeView]
+                        if on_selection_deleted is not None:
+                            old_selection = TreeView.selected_node_in(self.peer.tree_peer)
+                            if old_selection is not None and old_selection.is_descendent_of_any(children_to_delete):
+                                old_selection_to_retarget = old_selection  # capture
+                        
+                        for child in children_to_delete:
+                            if child.peer is not None:
+                                child.peer.Delete()
                     
+                    # Add some children
                     children_to_add = [new_child for new_child in new_children if new_child not in old_children_set]
                     for child in children_to_add:
                         child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
@@ -301,6 +330,17 @@ class NodeView:
                     for (index, child) in enumerate(new_children):
                         child._order_index = index  # type: ignore[attr-defined]
                     self.peer.SortChildren()
+                    
+                    # If old selected node was in the deleted region, try to
+                    # intelligently retarget the selection to something else
+                    if on_selection_deleted is not None and old_selection_to_retarget is not None:
+                        new_selection = on_selection_deleted(old_selection_to_retarget)
+                        if new_selection is None:
+                            self.peer.tree_peer.Unselect()
+                        else:
+                            assert new_selection.peer is not None
+                            new_selection.peer.SelectItem()
+                    
             except WindowDeletedError:
                 pass
     
@@ -315,10 +355,29 @@ class NodeView:
                 pass
     
     @property
+    def parent(self) -> Optional[NodeView]:
+        if not self.peer:
+            raise ValueError('Cannot lookup parent when not attached to a tree.')
+        parent_treeitemid = self.peer.GetItemParent()
+        if not parent_treeitemid.IsOk():
+            return None
+        return self.peer.tree_peer.GetItemData(parent_treeitemid)
+    
+    def is_descendent_of_any(self, ancestor_node_views: Container[NodeView]) -> bool:
+        cur_node_view = self  # type: Optional[NodeView]
+        while cur_node_view is not None:
+            if cur_node_view in ancestor_node_views:
+                return True
+            cur_node_view = cur_node_view.parent
+        return False
+    
+    @property
     def _tree(self) -> TreeView:
         if not self.peer:
             raise ValueError('Not attached to a tree.')
         return self.peer._tree
+    
+    # === Operations ===
     
     def _attach(self, peer: NodeViewPeer) -> None:
         old_peer = self.peer  # capture
@@ -357,6 +416,10 @@ NULL_NODE_VIEW = NodeView()
 
 
 class NodeViewPeer(tuple):
+    """
+    Thin wrapper around a wxPython tree item that makes the underlying API safer to use.
+    """
+    
     def __new__(cls, tree: TreeView, node_id: wx.TreeItemId):
         return tuple.__new__(cls, (tree, node_id))
     
@@ -395,12 +458,22 @@ class NodeViewPeer(tuple):
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemHasChildren(node_id, has)
     
+    # TODO: Delete unused method
     @fg_affinity
     def GetFirstChild(self) -> Tuple[wx.TreeItemId, object]:
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_raising(self._raise_no_longer_exists):
                 return self.tree_peer.GetFirstChild(node_id)
+        else:
+            self._raise_no_longer_exists()
+    
+    @fg_affinity
+    def GetItemParent(self) -> wx.TreeItemId:
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            with wrapped_object_deleted_error_raising(self._raise_no_longer_exists):
+                return self.tree_peer.GetItemParent(node_id)
         else:
             self._raise_no_longer_exists()
     

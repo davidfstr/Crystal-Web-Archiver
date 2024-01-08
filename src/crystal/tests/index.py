@@ -1,4 +1,5 @@
 from crystal.tests import (
+    test_addgroup,
     test_addrooturl,
     test_disk_io_errors,
     test_download,
@@ -51,6 +52,7 @@ def _test_functions_in_module(mod) -> List[Callable]:
 
 # TODO: Avoid the need to manually enumerate all test modules individually
 _TEST_FUNCS = (
+    _test_functions_in_module(test_addgroup) +
     _test_functions_in_module(test_addrooturl) +
     _test_functions_in_module(test_disk_io_errors) +
     _test_functions_in_module(test_download) +

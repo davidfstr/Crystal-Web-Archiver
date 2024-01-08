@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from crystal.browser.icons import BADGED_TREE_NODE_ICON, TREE_NODE_ICONS
 from crystal.doc.generic import Link
+from crystal.doc.html.soup import TEXT_LINK_TYPE_TITLE
 from crystal.model import (
     Project, ProjectHasTooManyRevisionsError, Resource, ResourceGroup,
+    ResourceGroupSource,
     ResourceRevision, RevisionBodyMissingError, RevisionDeletedError,
     RootResource,
 )
@@ -28,6 +30,12 @@ from typing import cast, List, Optional, Union
 from urllib.parse import urljoin, urlparse, urlunparse
 import wx
 import wx.lib.newevent
+
+
+DeferrableResourceGroupSource = Union[
+    ResourceGroupSource,
+    Callable[[], ResourceGroupSource]
+]
 
 
 _ID_SET_PREFIX = 101
@@ -56,7 +64,7 @@ class EntityTree:
         self.root = RootNode(project, self.view.root, progress_listener)
         self._project = project
         self._group_nodes_need_updating = False
-        self._right_clicked_node = None
+        self._right_clicked_node = None  # type: Optional[Node]
         
         project.listeners.append(self)
         
@@ -77,29 +85,47 @@ class EntityTree:
     
     @property
     def selected_entity(self) -> Optional[NodeEntity]:
+        return self.selected_entity_pair[0]
+    
+    @property
+    def selected_entity_pair(self) -> Tuple[Optional[NodeEntity], Optional[NodeEntity]]:
+        selected_node_view = self.view.selected_node
+        if selected_node_view is None:
+            return (None, None)
+        selected_node = Node.for_node_view(selected_node_view)
+        return (
+            selected_node.entity,
+            selected_node.related_entity,
+        )
+    
+    @property
+    def source_of_selection(self) -> ResourceGroupSource:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
-        selected_node = selected_node_view.delegate
-        assert isinstance(selected_node, Node)
-        
-        return selected_node.entity
+        return Node.for_node_view(selected_node_view).source
     
-    # HACK: Violates the Law of Demeter rather substantially.
     @property
-    def parent_of_selected_entity(self):
-        selected_wxtreeitemid = self.view.peer.GetSelection()
-        if not selected_wxtreeitemid.IsOk():
+    def name_of_selection(self) -> Optional[str]:
+        entity = self.selected_entity
+        if isinstance(entity, (RootResource, ResourceGroup)):
+            return entity.name
+        elif isinstance(entity, Resource):
+            selected_node_view = self.view.selected_node
+            if selected_node_view is None:
+                return None
+            selected_node = Node.for_node_view(selected_node_view)
+            if isinstance(selected_node, LinkedResourceNode):
+                for link in selected_node.links:
+                    if (link.type_title == TEXT_LINK_TYPE_TITLE and 
+                            link.title is not None and
+                            link.title != ''):
+                        return link.title
+                return None
+            else:
+                return None
+        else:
             return None
-        
-        parent_wxtreeitemid = self.view.peer.GetItemParent(selected_wxtreeitemid)
-        if not parent_wxtreeitemid.IsOk():
-            return None
-        
-        parent_node_view = self.view.peer.GetItemData(parent_wxtreeitemid)
-        parent_node = parent_node_view.delegate
-        
-        return parent_node.entity
     
     # === Updates ===
     
@@ -156,8 +182,8 @@ class EntityTree:
     
     # === Event: Right Click ===
     
-    def on_right_click(self, event, node_view):
-        node = node_view.delegate
+    def on_right_click(self, event, node_view: NodeView) -> None:
+        node = Node.for_node_view(node_view)
         self._right_clicked_node = node
         
         # Create popup menu
@@ -229,9 +255,9 @@ class EntityTree:
     def _on_get_tooltip_event(self, event: wx.Event) -> None:
         event.tooltip_cell[0] = self._icon_tooltip_for_tree_item_id(event.tree_item_id)
     
-    def _icon_tooltip_for_tree_item_id(self, tree_item_id) -> Optional[str]:
+    def _icon_tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId) -> Optional[str]:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
-        node = cast(Node, node_view.delegate)
+        node = Node.for_node_view(node_view)
         return node.icon_tooltip
     
     # === Dispose ===
@@ -256,8 +282,15 @@ NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
 
 
 class Node:
-    def __init__(self) -> None:
+    def __init__(self, *, source: DeferrableResourceGroupSource) -> None:
+        self._source = source
         self._children = []  # type: List[Node]
+    
+    @staticmethod
+    def for_node_view(node_view: NodeView) -> Node:
+        node = node_view.delegate
+        assert isinstance(node, Node)
+        return node
     
     # === Properties ===
     
@@ -281,6 +314,8 @@ class Node:
         Raises:
         * CancelOpenProject
         """
+        # NOTE: Very important. Needed to reuse most nodes when changing
+        #       children list to a similar children list.
         value = _sequence_with_matching_elements_replaced(value, self._children)
         self._children = value
         self.view.set_children([child.view for child in value], progress_listener)
@@ -298,6 +333,20 @@ class Node:
         The entity represented by this node, or None if not applicable.
         """
         return None
+    
+    @property
+    def related_entity(self) -> Optional[NodeEntity]:
+        """
+        The entity related to this node, or None if not applicable.
+        """
+        return None
+    
+    @property
+    def source(self) -> ResourceGroupSource:
+        if callable(self._source):
+            return self._source()
+        else:
+            return self._source
     
     # === Updates ===
     
@@ -376,7 +425,7 @@ class RootNode(Node):
         Raises:
         * CancelOpenProject
         """
-        super().__init__()
+        super().__init__(source=None)
         
         self.view = view
         self.view.title = 'ROOT'
@@ -401,7 +450,7 @@ class RootNode(Node):
         
         progress_listener.loading_root_resource_views()
         for (index, rr) in enumerate(self._project.root_resources):
-            children.append(RootResourceNode(rr))
+            children.append(RootResourceNode(rr, source=None))
         
         progress_listener.loading_resource_group_views()
         for (index, rg) in enumerate(self._project.resource_groups):
@@ -411,8 +460,8 @@ class RootNode(Node):
 
 
 class _LoadingNode(Node):
-    def __init__(self):
-        super().__init__()
+    def __init__(self) -> None:
+        super().__init__(source=None)
         
         self.view = NodeView()
         self.view.icon_set = (
@@ -428,7 +477,7 @@ class _LoadingNode(Node):
 
 class _ErrorNode(Node):
     def __init__(self, title: str) -> None:
-        super().__init__()
+        super().__init__(source=None)
         
         self.view = NodeView()
         self.view.icon_set = (
@@ -448,10 +497,14 @@ class _ResourceNode(Node):
     def __init__(self,
             title: str,
             resource: Resource,
-            tree_node_icon_name: str='entitytree_resource') -> None:
-        super().__init__()
+            tree_node_icon_name: str='entitytree_resource',
+            *, source: DeferrableResourceGroupSource,
+            source_of_links: ResourceGroupSource,
+            ) -> None:
+        super().__init__(source=source)
         
         self._tree_node_icon_name = tree_node_icon_name
+        self._source_of_links = source_of_links
         
         self._status_badge_name_calculated = False
         self._status_badge_name_value = None  # type: Optional[str]
@@ -525,11 +578,11 @@ class _ResourceNode(Node):
         raise NotImplementedError()
     
     @property
-    def entity(self):
+    def entity(self) -> NodeEntity:
         return self.resource
     
     @property
-    def _project(self):
+    def _project(self) -> Project:
         return self.resource.project
     
     # === Comparison ===
@@ -595,7 +648,7 @@ class _ResourceNode(Node):
     
     # === Updates ===
     
-    def update_children(self):
+    def update_children(self) -> None:
         """
         Updates this node's children.
         Should be called whenever project entities change or the underlying resource's links change.
@@ -659,46 +712,97 @@ class _ResourceNode(Node):
         children = []
         
         for (rr, links_to_r) in linked_root_resources:
-            children.append(RootResourceNode(rr))
+            children.append(RootResourceNode(rr,
+                source=self._source_of_links))
         
         for (group, (rr_2_links, r_2_links)) in group_2_root_and_normal_resources.items():
             root_rsrc_nodes = []
             for (rr, links_to_r) in rr_2_links:
-                root_rsrc_nodes.append(RootResourceNode(rr))
+                root_rsrc_nodes.append(RootResourceNode(rr,
+                    source=self._source_of_links))
             linked_rsrc_nodes = []
             for (r, links_to_r) in r_2_links:
-                linked_rsrc_nodes.append(LinkedResourceNode(r, links_to_r))
-            children.append(GroupedLinkedResourcesNode(group, root_rsrc_nodes, linked_rsrc_nodes))
+                linked_rsrc_nodes.append(LinkedResourceNode(r, links_to_r,
+                    source=self._source_of_links))
+            children.append(GroupedLinkedResourcesNode(
+                group, root_rsrc_nodes, linked_rsrc_nodes,
+                source=self._source_of_links))
         
         for (r, links_to_r) in linked_other_resources:
-            children.append(LinkedResourceNode(r, links_to_r))
+            children.append(LinkedResourceNode(r, links_to_r,
+                source=self._source_of_links))
         
         if lowpri_offsite_resources:
             subchildren = []
             for (r, links_to_r) in lowpri_offsite_resources:
-                subchildren.append(LinkedResourceNode(r, links_to_r))
+                subchildren.append(LinkedResourceNode(r, links_to_r,
+                    source=self._source_of_links))
             children.append(ClusterNode('(Low-priority: Offsite)', subchildren, (
                 (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_cluster_offsite']),
-            ), 'Offsite URLs'))
+            ), 'Offsite URLs', source=self._source_of_links))
         
         if hidden_embedded_resources:
             subchildren = []
             for (r, links_to_r) in hidden_embedded_resources:
-                subchildren.append(LinkedResourceNode(r, links_to_r))
+                subchildren.append(LinkedResourceNode(r, links_to_r,
+                    source=self._source_of_links))
             children.append(ClusterNode('(Hidden: Embedded)', subchildren, (
                 (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_cluster_embedded']),
-            ), 'Embedded URLs'))
+            ), 'Embedded URLs', source=self._source_of_links))
         
         self.children = children
+    
+    def on_selection_deleted(self,
+            old_selected_node_view: NodeView,
+            ) -> Optional[NodeView]:
+        old_selected_node = Node.for_node_view(old_selected_node_view)
+        if isinstance(old_selected_node, _ResourceNode):
+            # Probably this node still exists but in a different location.
+            # Try to find that location.
+            for child in self.children:
+                if old_selected_node == child:
+                    return child.view
+                for grandchild in child.children:
+                    if old_selected_node == grandchild:
+                        return grandchild.view
+            
+            # Maybe this node changed type, either:
+            #     1. {LinkedResourceNode, NormalResourceNode} -> RootResourceNode
+            #     2. RootResourceNode -> {LinkedResourceNode, NormalResourceNode}
+            # Try to find a node with the same URL even if different type.
+            for child in self.children:
+                if isinstance(child, _ResourceNode):
+                    if old_selected_node.resource == child.resource:
+                        return child.view
+                for grandchild in child.children:
+                    if isinstance(grandchild, _ResourceNode):
+                        if old_selected_node.resource == grandchild.resource:
+                            return grandchild.view
+            
+            return None
+        elif isinstance(old_selected_node, GroupedLinkedResourcesNode):
+            # Probably the first child still exists but in a different location.
+            # Try to find that location.
+            children = old_selected_node.children
+            if len(children) == 0:
+                return None
+            return self.on_selection_deleted(children[0].view)
+        else:
+            return None
 
 
 class RootResourceNode(_ResourceNode):
-    def __init__(self, root_resource: RootResource) -> None:
+    def __init__(self,
+            root_resource: RootResource,
+            *, source: DeferrableResourceGroupSource,
+            ) -> None:
         self.root_resource = root_resource
         super().__init__(
             self.calculate_title(),
             root_resource.resource,
-            'entitytree_root_resource')
+            'entitytree_root_resource',
+            source=source,
+            source_of_links=root_resource)
     
     # === Properties ===
     
@@ -706,7 +810,7 @@ class RootResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'root URL'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.root_resource.project
         display_url = project.get_display_url(self.root_resource.url)
         if self.root_resource.name != '':
@@ -715,7 +819,7 @@ class RootResourceNode(_ResourceNode):
             return '%s' % (display_url,)
     
     @property
-    def entity(self):
+    def entity(self) -> RootResource:
         return self.root_resource
     
     # === Comparison ===
@@ -728,9 +832,17 @@ class RootResourceNode(_ResourceNode):
 
 
 class NormalResourceNode(_ResourceNode):
-    def __init__(self, resource):
+    def __init__(self,
+            resource: Resource,
+            *, source: DeferrableResourceGroupSource,
+            source_of_links: ResourceGroupSource,
+            ) -> None:
         self.resource = resource
-        super().__init__(self.calculate_title(), resource)
+        super().__init__(
+            self.calculate_title(),
+            resource,
+            source=source,
+            source_of_links=source_of_links)
     
     # === Properties ===
     
@@ -738,12 +850,12 @@ class NormalResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'URL'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.resource.project
         return '%s' % project.get_display_url(self.resource.url)
     
     @property
-    def entity(self):
+    def entity(self) -> Resource:
         return self.resource
     
     # === Comparison ===
@@ -756,10 +868,18 @@ class NormalResourceNode(_ResourceNode):
 
 
 class LinkedResourceNode(_ResourceNode):
-    def __init__(self, resource, links):
+    def __init__(self,
+            resource: Resource,
+            links: List[Link],
+            *, source: ResourceGroupSource,
+            ) -> None:
         self.resource = resource
         self.links = tuple(links)
-        super().__init__(self.calculate_title(), resource)
+        super().__init__(
+            self.calculate_title(),
+            resource,
+            source=source,
+            source_of_links=None)
     
     # === Properties ===
     
@@ -767,21 +887,22 @@ class LinkedResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'URL'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.resource.project
         link_titles = ', '.join([self._full_title_of_link(link) for link in self.links])
         return '%s - %s' % (
             project.get_display_url(self.resource.url),
             link_titles)
     
-    def _full_title_of_link(self, link):
+    @staticmethod
+    def _full_title_of_link(link: Link) -> str:
         if link.title:
             return '%s: %s' % (link.type_title, link.title)
         else:
             return '%s' % link.type_title
     
     @property
-    def entity(self):
+    def entity(self) -> Resource:
         return self.resource
     
     # === Comparison ===
@@ -794,8 +915,14 @@ class LinkedResourceNode(_ResourceNode):
 
 
 class ClusterNode(Node):
-    def __init__(self, title: str, children, icon_set: IconSet, icon_tooltip: str) -> None:
-        super().__init__()
+    def __init__(self,
+            title: str,
+            children,
+            icon_set: IconSet,
+            icon_tooltip: str,
+            *, source: ResourceGroupSource,
+            ) -> None:
+        super().__init__(source=source)
         
         self._icon_tooltip = icon_tooltip
         
@@ -828,7 +955,7 @@ class ResourceGroupNode(Node):
     
     def __init__(self, resource_group: ResourceGroup) -> None:
         self.resource_group = resource_group
-        super().__init__()
+        super().__init__(source=lambda: resource_group.source)
         self._max_visible_children = self._MAX_VISIBLE_CHILDREN
         
         self.view = NodeView()
@@ -845,7 +972,7 @@ class ResourceGroupNode(Node):
     def icon_tooltip(self) -> Optional[str]:
         return 'Group'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.resource_group.project
         display_url = project.get_display_url(self.resource_group.url_pattern)
         if self.resource_group.name != '':
@@ -854,7 +981,7 @@ class ResourceGroupNode(Node):
             return '%s' % (display_url,)
     
     @property
-    def entity(self):
+    def entity(self) -> ResourceGroup:
         return self.resource_group
     
     # === Update ===
@@ -887,12 +1014,16 @@ class ResourceGroupNode(Node):
         for r in members[:min(self._max_visible_children, len(members))]:
             rr = project.get_root_resource(r)
             if rr is None:
-                children_rs.append(NormalResourceNode(r))
+                children_rs.append(NormalResourceNode(r,
+                    source=lambda: self.resource_group.source,
+                    source_of_links=self.resource_group))
             else:
-                children_rrs.append(RootResourceNode(rr))
+                children_rrs.append(RootResourceNode(rr,
+                    source=lambda: self.resource_group.source))
         if len(members) > self._max_visible_children:
             children_extra = [
-                MorePlaceholderNode(len(members) - self._max_visible_children, self),
+                MorePlaceholderNode(len(members) - self._max_visible_children, self,
+                    source=lambda: self.resource_group.source),
             ]  # type: List[Node]
         else:
             children_extra = []
@@ -952,9 +1083,14 @@ class ResourceGroupNode(Node):
 
 
 class GroupedLinkedResourcesNode(Node):
-    def __init__(self, resource_group, root_rsrc_nodes, linked_rsrc_nodes):
+    def __init__(self,
+            resource_group: ResourceGroup,
+            root_rsrc_nodes: List[RootResourceNode],
+            linked_rsrc_nodes: List[LinkedResourceNode],
+            source: ResourceGroupSource,
+            ) -> None:
         self.resource_group = resource_group
-        super().__init__()
+        super().__init__(source=source)
         
         self.view = NodeView()
         #self.view.title = ... (set below)
@@ -971,7 +1107,7 @@ class GroupedLinkedResourcesNode(Node):
     def icon_tooltip(self) -> Optional[str]:
         return 'Grouped URLs'
     
-    def calculate_title(self):
+    def calculate_title(self) -> str:
         project = self.resource_group.project
         display_url_pattern = project.get_display_url(self.resource_group.url_pattern)
         if self.resource_group.name != '':
@@ -985,8 +1121,17 @@ class GroupedLinkedResourcesNode(Node):
                 len(self.children),
                 '' if len(self.children) == 1 else 's')
     
+    #override
     @property
-    def entity(self):
+    def entity(self) -> Optional[NodeEntity]:
+        # This node does NOT represent a ResourceGroup despite being related to one.
+        return None
+    
+    #override
+    @property
+    def related_entity(self) -> Optional[NodeEntity]:
+        # This node groups together various _ResourceNode entities that
+        # are in the same ResourceGroup
         return self.resource_group
     
     # === Comparison ===
@@ -999,8 +1144,12 @@ class GroupedLinkedResourcesNode(Node):
 
 
 class MorePlaceholderNode(Node):
-    def __init__(self, more_count: int, delegate: Optional[object]=None) -> None:
-        super().__init__()
+    def __init__(self,
+            more_count: int,
+            delegate: Optional[object]=None,
+            *, source: DeferrableResourceGroupSource
+            ) -> None:
+        super().__init__(source=source)
         self._more_count = -1
         self._delegate = delegate
         

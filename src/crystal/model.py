@@ -755,7 +755,7 @@ class Project(ListenableMixin):
         group_2_source = {}
         for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
                 'select name, url_pattern, source_type, source_id, id from resource_group')):
-            group = ResourceGroup(self, name, url_pattern, _id=id)
+            group = ResourceGroup(self, name, url_pattern, source=Ellipsis, _id=id)
             group_2_source[group] = (source_type, source_id)
         for (group, (source_type, source_id)) in group_2_source.items():
             if source_type is None:
@@ -766,7 +766,7 @@ class Project(ListenableMixin):
                 source_obj = self._get_resource_group_with_id(source_id)
             else:
                 raise ProjectFormatError('Resource group %s has invalid source type "%s".' % (group._id, source_type))
-            group._init_source(source_obj)
+            group.init_source(source_obj)
         
         # (ResourceRevisions are loaded on demand)
     
@@ -3111,13 +3111,15 @@ class ResourceGroup(ListenableMixin):
     def __init__(self, 
             project: Project, 
             name: str,  # possibly ''
-            url_pattern: str, 
+            url_pattern: str,
+            source: Union[ResourceGroupSource, EllipsisType]=None,
             _id: Optional[int]=None) -> None:
         """
         Arguments:
         * project -- associated `Project`.
         * name -- name of this group. Possibly ''.
         * url_pattern -- url pattern matched by this group.
+        * source -- source of this group, or Ellipsis if init_source() will be called later.
         """
         super().__init__()
         
@@ -3128,13 +3130,15 @@ class ResourceGroup(ListenableMixin):
         self.name = name
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
-        self._source = None  # type: ResourceGroupSource
+        self._source = None  # type: Union[ResourceGroupSource, EllipsisType]
         
         # Calculate members on demand rather than up front
         self._members = None  # type: Optional[List[Resource]]
         
         if project._loading:
             self._id = _id
+            
+            self._source = source
         else:
             if project.readonly:
                 raise ProjectReadOnlyError()
@@ -3142,12 +3146,24 @@ class ResourceGroup(ListenableMixin):
             c.execute('insert into resource_group (name, url_pattern) values (?, ?)', (name, url_pattern))
             project._db.commit()
             self._id = c.lastrowid
+            
+            if source is Ellipsis:
+                raise ValueError()
+            # NOTE: Performs 1 database query to update above database row
+            self.source = source
+            assert self._source == source
         project._resource_groups.append(self)
         
         if not project._loading:
             project._resource_group_did_instantiate(self)
     
-    def _init_source(self, source: ResourceGroupSource) -> None:
+    def init_source(self, source: ResourceGroupSource) -> None:
+        """
+        Initializes the source of a group that was initially created with
+        source=Ellipsis.
+        """
+        if self._source is not Ellipsis:
+            raise ValueError('Source already initialized')
         self._source = source
     
     # === Delete ===
@@ -3185,6 +3201,8 @@ class ResourceGroup(ListenableMixin):
         the source will reveal all of the members of this group. Thus a group's source
         acts as the source of its members.
         """
+        if isinstance(self._source, EllipsisType):
+            raise ValueError('Expected ResourceGroup.init_source() to have been already called')
         return self._source
     def _set_source(self, value: ResourceGroupSource) -> None:
         if value is None:

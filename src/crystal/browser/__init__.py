@@ -202,7 +202,7 @@ class MainWindow:
         self._forget_action = Action(wx.ID_ANY,
             '&Forget',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_BACK),
-            self._on_remove_entity,
+            self._on_forget_entity,
             enabled=False)
         self._download_action = Action(wx.ID_ANY,
             '&Download',
@@ -349,28 +349,24 @@ class MainWindow:
     # === Entity Pane: Properties ===
     
     @property
-    def _selection_initial_url(self) -> Optional[str]:
-        selected_entity = self.entity_tree.selected_entity
-        if isinstance(selected_entity, (Resource, RootResource)):
-            return selected_entity.resource.url
-        elif isinstance(selected_entity, ResourceGroup):
-            return selected_entity.url_pattern
+    def _suggested_url_or_url_pattern_for_selection(self) -> Optional[str]:
+        selected_entity_pair = self.entity_tree.selected_entity_pair
+        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        
+        if isinstance(selected_or_related_entity, (Resource, RootResource)):
+            return selected_or_related_entity.resource.url
+        elif isinstance(selected_or_related_entity, ResourceGroup):
+            return selected_or_related_entity.url_pattern
         else:
             return self.project.default_url_prefix
     
     @property
-    def _selection_initial_source(self) -> Optional[ResourceGroupSource]:
-        selected_entity = self.entity_tree.selected_entity
-        if isinstance(selected_entity, (Resource, RootResource)):
-            parent_of_selected_entity = self.entity_tree.parent_of_selected_entity
-            if isinstance(parent_of_selected_entity, (ResourceGroup, RootResource)):
-                return parent_of_selected_entity
-            else:
-                return None
-        elif isinstance(selected_entity, ResourceGroup):
-            return selected_entity.source
-        else:
-            return None
+    def _suggested_source_for_selection(self) -> ResourceGroupSource:
+        return self.entity_tree.source_of_selection
+    
+    @property
+    def _suggested_name_for_selection(self) -> Optional[str]:
+        return self.entity_tree.name_of_selection
     
     # === Operations ===
     
@@ -436,7 +432,8 @@ class MainWindow:
         AddRootUrlDialog(
             self._frame, self._on_add_url_dialog_ok,
             url_exists_func=root_url_exists,
-            initial_url=self._selection_initial_url or '',
+            initial_url=self._suggested_url_or_url_pattern_for_selection or '',
+            initial_name=self._suggested_name_for_selection or '',
         )
     
     @fg_affinity
@@ -453,8 +450,9 @@ class MainWindow:
             AddGroupDialog(
                 self._frame, self._on_add_group_dialog_ok,
                 self.project,
-                initial_url=self._selection_initial_url or '',
-                initial_source=self._selection_initial_source)
+                initial_url_pattern=self._suggested_url_or_url_pattern_for_selection or '',
+                initial_source=self._suggested_source_for_selection,
+                initial_name=self._suggested_name_for_selection or '')
         except CancelLoadUrls:
             pass
     
@@ -462,11 +460,13 @@ class MainWindow:
         # TODO: Validate user input:
         #       * Is name or url_pattern empty?
         #       * Is name or url_pattern already taken?
-        rg = ResourceGroup(self.project, name, url_pattern)
-        rg.source = source
+        rg = ResourceGroup(self.project, name, url_pattern, source)
     
-    def _on_remove_entity(self, event):
-        self.entity_tree.selected_entity.delete()
+    def _on_forget_entity(self, event):
+        selected_entity_pair = self.entity_tree.selected_entity_pair
+        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        
+        selected_or_related_entity.delete()
         # TODO: This update() should happen in response to a delete
         #       event fired by the entity itself.
         self.entity_tree.update()
@@ -594,20 +594,23 @@ class MainWindow:
         
         return self._project_server
     
-    def _on_selected_entity_changed(self, event):
-        selected_entity = self.entity_tree.selected_entity  # cache
+    def _on_selected_entity_changed(self, event: wx.TreeEvent) -> None:
+        selected_entity_pair = self.entity_tree.selected_entity_pair  # cache
+        selected_entity = selected_entity_pair[0]
+        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        
         readonly = self._readonly  # cache
         self._forget_action.enabled = (
             (not readonly) and
-            type(selected_entity) in (ResourceGroup, RootResource))
+            isinstance(selected_or_related_entity, (ResourceGroup, RootResource)))
         self._download_action.enabled = (
             (not readonly) and
             selected_entity is not None)
         self._update_membership_action.enabled = (
             (not readonly) and
-            type(selected_entity) is ResourceGroup)
+            isinstance(selected_entity, ResourceGroup))
         self._view_action.enabled = (
-            type(selected_entity) in (Resource, RootResource))
+            isinstance(selected_entity, (Resource, RootResource)))
     
     # === Task Pane: Init ===
     
