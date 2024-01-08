@@ -29,6 +29,7 @@ from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.xthreading import bg_affinity
+from crystal.util.xtime import sleep_profiled
 from functools import wraps
 import gc
 import os
@@ -100,7 +101,7 @@ def run_tests(test_names: List[str]) -> bool:
     The format of the summary report is designed to be similar
     to that used by Python's unittest module.
     """
-    with delay_between_downloads_minimized():
+    with delay_between_downloads_minimized(), sleep_profiled():
         return _run_tests(test_names)
 
 
