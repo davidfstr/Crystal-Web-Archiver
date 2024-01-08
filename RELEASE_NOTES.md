@@ -33,6 +33,15 @@ Release Notes ⋮
     * XML files like Atom feeds and RSS feeds are now served correctly,
       without introducing an invalid `<script>` tag.
 
+* Testing improvements
+    * Waits now use a soft timeout in addition to a hard timeout,
+      which makes it easier to tune/bump timeout durations as needed.
+        * Triggering a soft timeout causes a warning to be logged.
+    * Warnings logged during a test run are collected and reported
+      at the end of the test run.
+    * Warnings logged during a test run are reported to GitHub Actions
+      as warning annotations.
+
 * Fixes
     * Fix disappearance of error nodes when new root URL or group is added.
 

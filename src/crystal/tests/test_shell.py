@@ -2,7 +2,10 @@ from ast import literal_eval
 from contextlib import contextmanager
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import *
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, WaitTimedOut
+from crystal.tests.util.wait import (
+    DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER,
+    WaitTimedOut,
+)
 from crystal.tests.util.windows import MainWindow
 from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.server import served_project
@@ -25,6 +28,7 @@ from typing import Callable, Iterator, List, Optional, Tuple, Union
 from unittest import skip, SkipTest, TestCase
 from unittest.mock import ANY
 import urllib
+import warnings
 
 
 _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
@@ -401,7 +405,9 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can import Project
                 assertEqual('', _py_eval(crystal, 'from crystal.model import Project'))
                 # Test can create project
-                assertEqual('', _py_eval(crystal, f'p = Project({project_dirpath!r})'))
+                assertEqual('', _py_eval(crystal, f'p = Project({project_dirpath!r})',
+                    # 2.0s isn't long enough for macOS test runners on GitHub Actions
+                    timeout=4.0))
             
             with subtests.test(case='test can create project entities', return_if_failure=True):
                 # Test can import Resource
@@ -765,28 +771,48 @@ def _read_until(
     
     stop_suffix_bytes_choices = [s.encode(stream.encoding) for s in stop_suffix]
     
+    soft_timeout = timeout
+    hard_timeout = timeout * HARD_TIMEOUT_MULTIPLIER
+    
     read_buffer = b''
     found_stop_suffix = None  # type: Optional[str]
     start_time = time.time()
-    while True:
-        last_read_bytes = stream.buffer.read()  # type: ignore[attr-defined]
-        if last_read_bytes is not None:
-            # NOTE: Quadratic performance.
-            #       Not using for large amounts of text so I don't care.
-            read_buffer += last_read_bytes
-        for (i, s_bytes) in enumerate(stop_suffix_bytes_choices):
-            if read_buffer.endswith(s_bytes):
-                found_stop_suffix = stop_suffix[i]
+    hard_timeout_exceeded = False
+    try:
+        while True:
+            last_read_bytes = stream.buffer.read()  # type: ignore[attr-defined]
+            if last_read_bytes is not None:
+                # NOTE: Quadratic performance.
+                #       Not using for large amounts of text so I don't care.
+                read_buffer += last_read_bytes
+            for (i, s_bytes) in enumerate(stop_suffix_bytes_choices):
+                if read_buffer.endswith(s_bytes):
+                    found_stop_suffix = stop_suffix[i]
+                    break
+            if found_stop_suffix is not None:
                 break
-        if found_stop_suffix is not None:
-            break
-        delta_time = time.time() - start_time
-        if delta_time > timeout:
-            raise WaitTimedOut(
-                f'Timed out after {timeout:.1f}s while '
-                f'reading until {stop_suffix!r}. '
-                f'Read so far: {read_buffer.decode(stream.encoding)!r}')
-        time.sleep(period)
+            delta_time = time.time() - start_time
+            if delta_time > hard_timeout:
+                hard_timeout_exceeded = True
+                raise WaitTimedOut(
+                    f'Timed out after {timeout:.1f}s while '
+                    f'reading until {stop_suffix!r}. '
+                    f'Read so far: {read_buffer.decode(stream.encoding)!r}')
+            time.sleep(period)
+    finally:
+        # Warn if soft timeout exceeded
+        if not hard_timeout_exceeded:
+            delta_time = time.time() - start_time
+            if delta_time > soft_timeout:
+                warnings.warn(
+                    ('Soft timeout exceeded (%.1fs > %.1fs) while '
+                    'reading until %r.') % (
+                        delta_time,
+                        soft_timeout,
+                        stop_suffix
+                    ),
+                    stacklevel=2)
+            
     return (read_buffer.decode(stream.encoding), found_stop_suffix)
 
 
