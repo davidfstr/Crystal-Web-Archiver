@@ -89,6 +89,7 @@ async def wait_for(
         timeout: Optional[float]=None,
         *, period: Optional[float]=None,
         message: Optional[Callable[[], str]]=None,
+        stacklevel_extra: int=0,
         ) -> _T:
     """
     Waits up to `timeout` seconds for the specified condition to become non-None,
@@ -150,7 +151,7 @@ async def wait_for(
                         soft_timeout,
                         message_suffix_str
                     ),
-                    stacklevel=2)
+                    stacklevel=(2 + stacklevel_extra))
 
 
 class WaitTimedOut(Exception):

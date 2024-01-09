@@ -400,8 +400,12 @@ async def _expand_node(node_ti: TreeItem, mw: Optional[MainWindow]=None, *, will
     if will_download:
         if mw is None:
             raise ValueError('Need mw parameter when will_download=True')
-        await wait_for_download_to_start_and_finish(mw.task_tree)
-    await wait_for(first_child_of_tree_item_is_not_loading_condition(node_ti))
+        await wait_for_download_to_start_and_finish(
+            mw.task_tree,
+            stacklevel_extra=1)
+    await wait_for(
+        first_child_of_tree_item_is_not_loading_condition(node_ti),
+        stacklevel_extra=1)
 
 
 async def _source_name_for_node(node_ti: TreeItem, mw: MainWindow) -> Optional[str]:
