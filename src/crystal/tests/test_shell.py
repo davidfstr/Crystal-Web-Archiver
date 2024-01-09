@@ -183,7 +183,9 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
             _close_open_or_create_dialog(crystal)
             
             try:
-                assertEqual('4\n', _py_eval(crystal, '2 + 2'))
+                assertEqual(
+                    '4\n',
+                    _py_eval(crystal, '2 + 2', timeout=5.0))  # took >4.0s in Linux CI
             except AssertionError as e:
                 raise AssertionError(f'{e} Trailing output: {_drain(crystal)!r}')
     
@@ -216,14 +218,16 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 _close_open_or_create_dialog(crystal)
                 
                 if exit_method == 'exit()':
-                    _py_eval(crystal, 'exit()', stop_suffix='')
+                    _py_eval(
+                        crystal, 'exit()', stop_suffix='',
+                        timeout=5.0)  # took 4.0s in Linux CI
                 elif exit_method == 'Ctrl-D':
                     crystal.stdin.close()  # Ctrl-D
                 else:
                     raise AssertionError()
                 
                 try:
-                    crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+                    crystal.wait(timeout=5.0)  # took >4.0s in Linux CI
                 except subprocess.TimeoutExpired:
                     raise AssertionError('Timed out waiting for Crystal to exit')
     
