@@ -405,6 +405,7 @@ async def _expand_node(node_ti: TreeItem, mw: Optional[MainWindow]=None, *, will
             stacklevel_extra=1)
     await wait_for(
         first_child_of_tree_item_is_not_loading_condition(node_ti),
+        timeout=3.0,  # took 2.2s on Windows CI
         stacklevel_extra=1)
 
 
