@@ -792,6 +792,8 @@ class _ResourceNode(Node):
 
 
 class RootResourceNode(_ResourceNode):
+    ICON = '⚓️'
+    
     def __init__(self,
             root_resource: RootResource,
             *, source: DeferrableResourceGroupSource,
@@ -811,10 +813,14 @@ class RootResourceNode(_ResourceNode):
         return 'root URL'
     
     def calculate_title(self) -> str:
-        project = self.root_resource.project
-        display_url = project.get_display_url(self.root_resource.url)
-        if self.root_resource.name != '':
-            return '%s - %s' % (display_url, self.root_resource.name)
+        return self.calculate_title_of(self.root_resource)
+    
+    @staticmethod
+    def calculate_title_of(root_resource: RootResource) -> str:
+        project = root_resource.project
+        display_url = project.get_display_url(root_resource.url)
+        if root_resource.name != '':
+            return '%s - %s' % (display_url, root_resource.name)
         else:
             return '%s' % (display_url,)
     
@@ -950,6 +956,8 @@ class ClusterNode(Node):
 
 
 class ResourceGroupNode(Node):
+    ICON = '📁'
+    
     _MAX_VISIBLE_CHILDREN = 100
     _MORE_CHILDREN_TO_SHOW = 20
     
@@ -973,10 +981,14 @@ class ResourceGroupNode(Node):
         return 'Group'
     
     def calculate_title(self) -> str:
-        project = self.resource_group.project
-        display_url = project.get_display_url(self.resource_group.url_pattern)
-        if self.resource_group.name != '':
-            return '%s - %s' % (display_url, self.resource_group.name)
+        return self.calculate_title_of(self.resource_group)
+    
+    @staticmethod
+    def calculate_title_of(resource_group: ResourceGroup) -> str:
+        project = resource_group.project
+        display_url = project.get_display_url(resource_group.url_pattern)
+        if resource_group.name != '':
+            return '%s - %s' % (display_url, resource_group.name)
         else:
             return '%s' % (display_url,)
     
