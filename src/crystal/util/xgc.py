@@ -27,7 +27,7 @@ def start_profiling_gc() -> None:
             if last_gc_start is not None:
                 duration = now - last_gc_start
                 if duration > _GC_RUNTIME_THRESHOLD:
-                    print("*** %s took %.02fs to execute: %r" % (
+                    print('*** %s took %.02fs to execute: %r' % (
                         'Garbage collection',
                         duration,
                         info,

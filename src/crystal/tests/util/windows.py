@@ -45,6 +45,7 @@ class OpenOrCreateDialog:
         open_or_create_project_dialog = await wait_for(
             window_condition('cr-open-or-create-project'),
             timeout=timeout,
+            stacklevel_extra=1,
         )  # type: wx.Window
         assert isinstance(open_or_create_project_dialog, wx.Dialog)
         self.open_or_create_project_dialog = open_or_create_project_dialog
@@ -142,7 +143,8 @@ class OpenOrCreateDialog:
                 or_condition(
                     window_condition('cr-opening-project'),
                     window_condition('cr-main-window'),
-                    window_condition(next_window_name)))
+                    window_condition(next_window_name)),
+                stacklevel_extra=1)
 
 
 class MainWindow:
@@ -170,7 +172,8 @@ class MainWindow:
     async def _connect(self) -> None:
         self.main_window = await wait_for(
             window_condition('cr-main-window'),
-            timeout=self._connect_timeout)
+            timeout=self._connect_timeout,
+            stacklevel_extra=1)
         assert isinstance(self.main_window, wx.Frame)
         entity_tree_window = self.main_window.FindWindow(name='cr-entity-tree')
         assert isinstance(entity_tree_window, wx.TreeCtrl)
@@ -230,7 +233,7 @@ class MainWindow:
             else:
                 return None
         try:
-            await wait_for(task_count_changed_condition)
+            await wait_for(task_count_changed_condition, stacklevel_extra=1)
         except WaitTimedOut:
             if immediate_finish_ok:
                 # TOOD: We ended up waiting until the entire timeout expired.
@@ -251,7 +254,8 @@ class MainWindow:
         try:
             await wait_for(
                 tree_has_no_children_condition(self.task_tree),
-                timeout=self.CLOSE_TIMEOUT)  # wait only briefly
+                timeout=self.CLOSE_TIMEOUT,  # wait only briefly
+                stacklevel_extra=1)
         except WaitTimedOut:
             first_task_title = first_task_title_progression(self.task_tree)()
             print(f'*** MainWindow: Closing while tasks are still running. May deadlock! Current task: {first_task_title}')
@@ -279,7 +283,8 @@ class MainWindow:
         await wait_for(lambda: not self.main_window.IsShown)
         await wait_for(
             not_condition(window_condition('cr-main-window')),
-            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            stacklevel_extra=1,
         )
         await OpenOrCreateDialog.wait_for(
             timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
@@ -319,7 +324,7 @@ class AddUrlDialog:
     @staticmethod
     async def wait_for() -> AddUrlDialog:
         self = AddUrlDialog(ready=True)
-        self._dialog = await wait_for(window_condition('cr-add-url-dialog'))
+        self._dialog = await wait_for(window_condition('cr-add-url-dialog'), stacklevel_extra=1)
         assert isinstance(self._dialog, wx.Dialog)
         assert AddRootUrlDialog._last_opened is not None
         self._controller = AddRootUrlDialog._last_opened
@@ -350,11 +355,11 @@ class AddUrlDialog:
     
     async def ok(self) -> None:
         click_button(self.ok_button)
-        await wait_for(not_condition(window_condition('cr-add-url-dialog')))
+        await wait_for(not_condition(window_condition('cr-add-url-dialog')), stacklevel_extra=1)
     
     async def cancel(self) -> None:
         click_button(self.cancel_button)
-        await wait_for(not_condition(window_condition('cr-add-url-dialog')))
+        await wait_for(not_condition(window_condition('cr-add-url-dialog')), stacklevel_extra=1)
 
 
 class AddGroupDialog:
@@ -373,7 +378,8 @@ class AddGroupDialog:
         self = AddGroupDialog(ready=True)
         add_group_dialog = await wait_for(
             AddGroupDialog.window_condition(),
-            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            stacklevel_extra=1,
         )  # type: wx.Window
         self.name_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
@@ -419,11 +425,11 @@ class AddGroupDialog:
     
     async def ok(self) -> None:
         click_button(self.ok_button)
-        await wait_for(not_condition(window_condition('cr-add-group-dialog')))
+        await wait_for(not_condition(window_condition('cr-add-group-dialog')), stacklevel_extra=1)
     
     async def cancel(self) -> None:
         click_button(self.cancel_button)
-        await wait_for(not_condition(window_condition('cr-add-group-dialog')))
+        await wait_for(not_condition(window_condition('cr-add-group-dialog')), stacklevel_extra=1)
 
 
 class PreferencesDialog:
@@ -440,7 +446,8 @@ class PreferencesDialog:
         self = PreferencesDialog(ready=True)
         preferences_dialog = await wait_for(
             window_condition('cr-preferences-dialog'),
-            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            stacklevel_extra=1,
         )  # type: wx.Window
         self.html_parser_field = preferences_dialog.FindWindow(name=
             'cr-preferences-dialog__html-parser-field')
@@ -463,7 +470,7 @@ class PreferencesDialog:
     
     async def ok(self) -> None:
         click_button(self.ok_button)
-        await wait_for(not_condition(window_condition('cr-preferences-dialog')))
+        await wait_for(not_condition(window_condition('cr-preferences-dialog')), stacklevel_extra=1)
 
 
 # ------------------------------------------------------------------------------

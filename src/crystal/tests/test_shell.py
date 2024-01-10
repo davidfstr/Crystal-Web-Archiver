@@ -1,7 +1,7 @@
 from ast import literal_eval
 from contextlib import contextmanager
 from crystal import __version__ as crystal_version
-from crystal.tests.util.asserts import *
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER,
     WaitTimedOut,
@@ -18,6 +18,7 @@ from io import StringIO, TextIOBase
 import os
 import platform
 import re
+from select import select
 import subprocess
 import sys
 import tempfile
@@ -169,7 +170,10 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
         with crystal_shell() as (crystal, _):
             _close_open_or_create_dialog(crystal)
             
-            assert '4\n' == _py_eval(crystal, '2 + 2')
+            try:
+                assertEqual('4\n', _py_eval(crystal, '2 + 2'))
+            except AssertionError as e:
+                raise AssertionError(f'{e} Trailing output: {_drain(crystal)!r}')
     
     with subtests.test(case='test when main window or non-first open/create dialog is closed given shell is running then shell remains running'):
         with crystal_shell() as (crystal, _):
@@ -178,7 +182,12 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
             
             _close_open_or_create_dialog(crystal)
             
-            assert '4\n' == _py_eval(crystal, '2 + 2')
+            try:
+                assertEqual(
+                    '4\n',
+                    _py_eval(crystal, '2 + 2', timeout=5.0))  # took >4.0s in Linux CI
+            except AssertionError as e:
+                raise AssertionError(f'{e} Trailing output: {_drain(crystal)!r}')
     
     for exit_method in ('exit()', 'Ctrl-D'):
         with subtests.test(case=f'test when {exit_method} given first open/create dialog is already closed then exits'):
@@ -209,14 +218,16 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 _close_open_or_create_dialog(crystal)
                 
                 if exit_method == 'exit()':
-                    _py_eval(crystal, 'exit()', stop_suffix='')
+                    _py_eval(
+                        crystal, 'exit()', stop_suffix='',
+                        timeout=5.0)  # took 4.0s in Linux CI
                 elif exit_method == 'Ctrl-D':
                     crystal.stdin.close()  # Ctrl-D
                 else:
                     raise AssertionError()
                 
                 try:
-                    crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+                    crystal.wait(timeout=5.0)  # took >4.0s in Linux CI
                 except subprocess.TimeoutExpired:
                     raise AssertionError('Timed out waiting for Crystal to exit')
     
@@ -351,7 +362,7 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                         'headers': ANY
                     },
                     literal_eval(_py_eval(crystal, f'rr.metadata')))
-                _py_eval(crystal, f'with rr.open() as f:\n    body = f.read()\n')
+                _py_eval(crystal, f'with rr.open() as f:\n    body = f.read()\n', stop_suffix='>>> ')
                 assertEqual(
                     r"""b'<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" type="text/css" href="/s/7d94e0.css" title="Default"/>\n<title>xkcd: Air Gap</title>\n'""" + '\n',
                     _py_eval(crystal, f'body[:137]'))
@@ -619,40 +630,42 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
 def _close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: Optional[float]=None) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     _py_eval(crystal, textwrap.dedent(f'''\
-        from crystal.tests.util.runner import bg_sleep, run_test
-        from crystal.tests.util.windows import OpenOrCreateDialog
-        from threading import Thread
-
-        async def close_ocd():
-            ocd = await OpenOrCreateDialog.wait_for()
-            if {after_delay} != None:
-                await bg_sleep({after_delay})
-            ocd.open_or_create_project_dialog.Close()
+        if True:
+            from crystal.tests.util.runner import bg_sleep, run_test
+            from crystal.tests.util.windows import OpenOrCreateDialog
+            from threading import Thread
             #
-            print('OK')
-
-        t = Thread(target=lambda: run_test(close_ocd))
-        t.start()
+            async def close_ocd():
+                ocd = await OpenOrCreateDialog.wait_for()
+                if {after_delay} != None:
+                    await bg_sleep({after_delay})
+                ocd.open_or_create_project_dialog.Close()
+                #
+                print('OK')
+            #
+            t = Thread(target=lambda: run_test(close_ocd))
+            t.start()
         '''), stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '')
 
 
 def _close_main_window(crystal: subprocess.Popen, *, after_delay: Optional[float]=None) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     _py_eval(crystal, textwrap.dedent(f'''\
-        from crystal.tests.util.runner import bg_sleep, run_test
-        from crystal.tests.util.windows import MainWindow
-        from threading import Thread
-
-        async def close_main_window():
-            mw = await MainWindow.wait_for()
-            if {after_delay} != None:
-                await bg_sleep({after_delay})
-            await mw.close()
+        if True:
+            from crystal.tests.util.runner import bg_sleep, run_test
+            from crystal.tests.util.windows import MainWindow
+            from threading import Thread
             #
-            print('OK')
-
-        t = Thread(target=lambda: run_test(close_main_window))
-        t.start()
+            async def close_main_window():
+                mw = await MainWindow.wait_for()
+                if {after_delay} != None:
+                    await bg_sleep({after_delay})
+                await mw.close()
+                #
+                print('OK')
+            #
+            t = Thread(target=lambda: run_test(close_main_window))
+            t.start()
         '''),
         stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '',
         timeout=MainWindow.CLOSE_TIMEOUT,
@@ -662,11 +675,9 @@ def _close_main_window(crystal: subprocess.Popen, *, after_delay: Optional[float
 @contextmanager
 def _delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[None]:
     # NOTE: Uses private API, including the entire crystal.tests package
-    _py_eval(crystal, textwrap.dedent(f'''\
-        from crystal.tests.util.downloads import delay_between_downloads_minimized as D
-        download_ctx = D()
-        download_ctx.__enter__()
-        '''))
+    _py_eval(crystal, 'from crystal.tests.util.downloads import delay_between_downloads_minimized as D')
+    _py_eval(crystal, 'download_ctx = D()')
+    _py_eval(crystal, 'download_ctx.__enter__()')
     try:
         yield
     finally:
@@ -719,7 +730,6 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
         })
     try:
         assert isinstance(crystal.stdout, TextIOBase)
-        os.set_blocking(crystal.stdout.fileno(), False)
         
         (banner, _) = _read_until(
             crystal.stdout, '\n>>> ',
@@ -735,13 +745,18 @@ def _py_eval(
         py_code: str,
         stop_suffix: Optional[Union[str, Tuple[str, ...]]]=None,
         *, timeout: Optional[float]=None) -> str:
+    if '\n' in py_code and stop_suffix is None:
+        raise ValueError(
+            'Unsafe to use _py_eval() on multi-line py_code '
+            'unless stop_suffix is set carefully')
     if stop_suffix is None:
         stop_suffix = '>>> '
     
     assert isinstance(python.stdin, TextIOBase)
     assert isinstance(python.stdout, TextIOBase)
     python.stdin.write(f'{py_code}\n'); python.stdin.flush()
-    (result, found_stop_suffix) = _read_until(python.stdout, stop_suffix, timeout=timeout)
+    (result, found_stop_suffix) = _read_until(
+        python.stdout, stop_suffix, timeout=timeout, stacklevel_extra=1)
     return result[:-len(found_stop_suffix)]
 
 
@@ -750,13 +765,14 @@ def _read_until(
         stop_suffix: Union[str, Tuple[str, ...]],
         timeout: Optional[float]=None,
         *, period: Optional[float]=None,
+        stacklevel_extra: int=0
         ) -> Tuple[str, str]:
     """
     Reads from the specified stream until the provided `stop_suffix`
     is read at the end of the stream or the timeout expires.
     
     Raises:
-    * WaitTimedOut -- if the timeout expires before `stop_suffix` is read
+    * ReadUntilTimedOut -- if the timeout expires before `stop_suffix` is read
     """
     if isinstance(stop_suffix, str):
         stop_suffix = (stop_suffix,)
@@ -765,42 +781,61 @@ def _read_until(
     if period is None:
         period = DEFAULT_WAIT_PERIOD
     
-    assert not is_windows()
-    if os.get_blocking(stream.fileno()) != False:  # type: ignore[attr-defined]  # available in non-Windows
-        raise ValueError('Expected stream to be opened in non-blocking mode')
-    
-    stop_suffix_bytes_choices = [s.encode(stream.encoding) for s in stop_suffix]
-    
     soft_timeout = timeout
     hard_timeout = timeout * HARD_TIMEOUT_MULTIPLIER
+    
+    stop_suffix_bytes_choices = [s.encode(stream.encoding) for s in stop_suffix]
     
     read_buffer = b''
     found_stop_suffix = None  # type: Optional[str]
     start_time = time.time()
     hard_timeout_exceeded = False
     try:
+        delta_time = 0.0
         while True:
-            last_read_bytes = stream.buffer.read()  # type: ignore[attr-defined]
-            if last_read_bytes is not None:
-                # NOTE: Quadratic performance.
+            # 1. Wait for stream to be ready to read or hit EOF
+            # 2. Read stream (if became ready)
+            # 3. Look for an acceptable `stop_suffix` at the end of everything read so far
+            remaining_time = hard_timeout - delta_time
+            assert remaining_time > 0
+            (rlist_ready, _, xlist_ready) = select(
+                [stream],
+                [],
+                [stream],
+                remaining_time)
+            did_time_out = (len(rlist_ready) + len(xlist_ready) == 0)
+            if did_time_out:
+                # Look for an acceptable "stop suffix"
+                # Special case: '' is always an acceptable `stop_suffix`
+                if '' in stop_suffix:
+                    found_stop_suffix = ''
+            else:
+                # Read stream
+                # NOTE: Append uses quadratic performance.
                 #       Not using for large amounts of text so I don't care.
-                read_buffer += last_read_bytes
-            for (i, s_bytes) in enumerate(stop_suffix_bytes_choices):
-                if read_buffer.endswith(s_bytes):
-                    found_stop_suffix = stop_suffix[i]
-                    break
+                read_buffer += stream.buffer.read1(1024)  # type: ignore[attr-defined]  # arbitrary
+                
+                # Look for an acceptable "stop suffix"
+                for (i, s_bytes) in enumerate(stop_suffix_bytes_choices):
+                    if read_buffer.endswith(s_bytes):
+                        found_stop_suffix = stop_suffix[i]
+                        break
             if found_stop_suffix is not None:
+                # Done
                 break
+            
+            # If hard timeout exceeded then raise
             delta_time = time.time() - start_time
-            if delta_time > hard_timeout:
+            if did_time_out or delta_time >= hard_timeout:
                 hard_timeout_exceeded = True
-                raise WaitTimedOut(
+                read_so_far = read_buffer.decode(stream.encoding)
+                raise ReadUntilTimedOut(
                     f'Timed out after {timeout:.1f}s while '
                     f'reading until {stop_suffix!r}. '
-                    f'Read so far: {read_buffer.decode(stream.encoding)!r}')
-            time.sleep(period)
+                    f'Read so far: {read_so_far!r}',
+                    read_so_far)
     finally:
-        # Warn if soft timeout exceeded
+        # If soft timeout exceeded then warn before returning
         if not hard_timeout_exceeded:
             delta_time = time.time() - start_time
             if delta_time > soft_timeout:
@@ -811,9 +846,41 @@ def _read_until(
                         soft_timeout,
                         stop_suffix
                     ),
-                    stacklevel=2)
+                    stacklevel=(2 + stacklevel_extra))
             
     return (read_buffer.decode(stream.encoding), found_stop_suffix)
+
+
+class ReadUntilTimedOut(WaitTimedOut):
+    def __init__(self, message: str, read_so_far: str) -> None:
+        super().__init__(message)
+        self.read_so_far = read_so_far
+
+
+_DEFAULT_DRAIN_TTL = min(DEFAULT_WAIT_TIMEOUT, 2.0)
+
+def _drain(stream: Union[TextIOBase, subprocess.Popen], ttl: Optional[float]=None) -> str:
+    """
+    Reads as much as possible from the specified stream for the specified
+    TTL duration and returns it.
+    
+    Often useful for debugging _read_until() failures.
+    """
+    if ttl is None:
+        ttl = _DEFAULT_DRAIN_TTL
+    
+    if isinstance(stream, subprocess.Popen):
+        stream2 = stream.stdout
+        assert isinstance(stream2, TextIOBase)
+        stream = stream2  # reinterpret
+    
+    EOT = '\4'  # End of Transmission; an unlikely character to occur in the wild
+    try:
+        _read_until(stream, EOT, ttl)
+    except ReadUntilTimedOut as e:
+        return e.read_so_far
+    else:
+        raise ValueError('Actually encountered EOT while reading stream!')
 
 
 # ------------------------------------------------------------------------------

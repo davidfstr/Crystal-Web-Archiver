@@ -189,13 +189,6 @@ def _main(args: List[str]) -> None:
         install_to_linux_desktop_environment()
         sys.exit()
     
-    # Start shell if requested
-    if parsed_args.shell:
-        from crystal.shell import Shell
-        shell = Shell()
-    else:
-        shell = None
-    
     # Start GUI subsystem
     import wx
     import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
@@ -293,7 +286,15 @@ def _main(args: List[str]) -> None:
     from crystal.util.xthreading import is_quitting, set_foreground_thread
     set_foreground_thread(threading.current_thread())
     try:
+        # (Don't insert anything between set_foreground_thread() and MyApp())
         app = MyApp(redirect=False)
+        
+        # Start shell if requested
+        if parsed_args.shell:
+            from crystal.shell import Shell
+            shell = Shell()
+        else:
+            shell = None
         
         # Starts tests if requested
         if parsed_args.test is not None:

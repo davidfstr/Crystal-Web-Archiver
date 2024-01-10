@@ -331,15 +331,19 @@ async def test_given_node_is_selected_in_entity_tree_when_press_new_group_button
                     home_rrn__feed_glrn__rss_feed_lrn, home_url, url_prefix)
                 
                 # Children of LinkedResourceNode (a kind of _ResourceNode) that is inside RootResourceNode
-                await _expand_node(home_rrn__archive_lrn, mw, will_download=True)
+                # HACK: Relies on Crystal's "Not in Archive" page to provide a
+                #       link to the original URL (which is offsite)
+                await _expand_node(home_rrn__archive_lrn, mw)  # not in archive
                 home_rrn__archive_lrn__offsite_cn = _find_child_by_title(
                     home_rrn__archive_lrn, 'Offsite')
                 
                 # Children of LinkedResourceNode (a kind of _ResourceNode) that is inside ClusterNode
-                await _expand_node(home_rrn__offsite_cn__twitter_lrn, mw, will_download=True)
+                # HACK: Relies on Crystal's "Not in Archive" page to provide a
+                #       link to the original URL (which is offsite)
+                await _expand_node(home_rrn__offsite_cn__twitter_lrn, mw)  # not in archive
                 home_rrn__offsite_cn__twitter_lrn__offsite_cn = _find_child_by_title(
                     home_rrn__offsite_cn__twitter_lrn, 'Offsite')
-                await _expand_node(home_rrn__embedded_cn__stylesheet_lrn)
+                await _expand_node(home_rrn__embedded_cn__stylesheet_lrn)  # already downloaded
                 home_rrn__embedded_cn__stylesheet_lrn__embedded_cn = _find_child_by_title(
                     home_rrn__embedded_cn__stylesheet_lrn, 'Embedded')
                 
@@ -396,8 +400,13 @@ async def _expand_node(node_ti: TreeItem, mw: Optional[MainWindow]=None, *, will
     if will_download:
         if mw is None:
             raise ValueError('Need mw parameter when will_download=True')
-        await wait_for_download_to_start_and_finish(mw.task_tree)
-    await wait_for(first_child_of_tree_item_is_not_loading_condition(node_ti))
+        await wait_for_download_to_start_and_finish(
+            mw.task_tree,
+            stacklevel_extra=1)
+    await wait_for(
+        first_child_of_tree_item_is_not_loading_condition(node_ti),
+        timeout=3.0,  # took 2.2s on Windows CI
+        stacklevel_extra=1)
 
 
 async def _source_name_for_node(node_ti: TreeItem, mw: MainWindow) -> Optional[str]:

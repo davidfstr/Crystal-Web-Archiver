@@ -17,6 +17,9 @@ from typing import Optional
 
 class Shell:
     def __init__(self) -> None:
+        if not has_foreground_thread():
+            raise ValueError('Expected there to be a foreground thread when starting a Shell')
+        
         # Setup proxy variables for shell
         _Proxy._patch_help()
         self._project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
