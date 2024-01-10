@@ -40,43 +40,42 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            # Create a URL
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                assert root_ti.GetFirstChild() is None  # no entities
                 
-                # Create a URL
-                if True:
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
-                    assert root_ti.GetFirstChild() is None  # no entities
-                    
-                    click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
-                    
-                    aud.name_field.Value = 'Home'
-                    aud.url_field.Value = home_url
-                    await aud.ok()
-                    (home_ti,) = root_ti.Children
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
                 
-                # Download the URL
-                home_ti.SelectItem()
-                await mw.click_download_button()
-                await wait_for_download_to_start_and_finish(mw.task_tree)
-                
-                # Try to start second server, also on _DEFAULT_SERVER_PORT.
-                # Expect it to actually start on (_DEFAULT_SERVER_PORT + 1).
-                expected_port = _DEFAULT_SERVER_PORT + 1
-                home_ti.SelectItem()
-                try:
-                    with assert_does_open_webbrowser_to(get_request_url(home_url, expected_port)):
-                        click_button(mw.view_button)
-                finally:
-                    assert is_port_in_use(expected_port)
-                
-                # Ensure can fetch the revision through the server
-                server_page = await fetch_archive_url(home_url, expected_port)
-                assert 200 == server_page.status
+                aud.name_field.Value = 'Home'
+                aud.url_field.Value = home_url
+                await aud.ok()
+                (home_ti,) = root_ti.Children
+            
+            # Download the URL
+            home_ti.SelectItem()
+            await mw.click_download_button()
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            # Try to start second server, also on _DEFAULT_SERVER_PORT.
+            # Expect it to actually start on (_DEFAULT_SERVER_PORT + 1).
+            expected_port = _DEFAULT_SERVER_PORT + 1
+            home_ti.SelectItem()
+            try:
+                with assert_does_open_webbrowser_to(get_request_url(home_url, expected_port)):
+                    click_button(mw.view_button)
+            finally:
+                assert is_port_in_use(expected_port)
+            
+            # Ensure can fetch the revision through the server
+            server_page = await fetch_archive_url(home_url, expected_port)
+            assert 200 == server_page.status
 
 
 # ------------------------------------------------------------------------------

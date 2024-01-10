@@ -69,7 +69,7 @@ class OpenOrCreateDialog:
         if project_dirpath is None:
             with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
                 assert project_dirpath is not None
-                async with self.create(project_dirpath) as (mw, project_dirpath):
+                async with self.create(project_dirpath, autoclose=autoclose) as (mw, project_dirpath):
                     yield (mw, project_dirpath)
             return
         

@@ -41,37 +41,36 @@ async def test_download_does_save_resource_metadata_and_content_accurately() -> 
     assert len(content_bytes) > 1000  # ensure is a reasonably sized file
     
     with _file_served(HEADERS, content_bytes) as server_port:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, f'http://localhost:{server_port}/')
+            revision_future = r.download_body()
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            downloaded_revision = revision_future.result()  # type: ResourceRevision
+            loaded_revision = r.default_revision()
+            assert loaded_revision is not None
+            
+            for revision in [downloaded_revision, loaded_revision]:
+                # Ensure no error is reported
+                assert None == revision.error
                 
-                r = Resource(project, f'http://localhost:{server_port}/')
-                revision_future = r.download_body()
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                # Ensure metadata is correct
+                EXPECTED_METADATA = {
+                    'http_version': 10,  # HTTP/1.0
+                    'status_code': 200,
+                    'reason_phrase': 'OK',
+                    'headers': HEADERS,
+                }
+                assert EXPECTED_METADATA == revision.metadata
                 
-                downloaded_revision = revision_future.result()  # type: ResourceRevision
-                loaded_revision = r.default_revision()
-                assert loaded_revision is not None
-                
-                for revision in [downloaded_revision, loaded_revision]:
-                    # Ensure no error is reported
-                    assert None == revision.error
-                    
-                    # Ensure metadata is correct
-                    EXPECTED_METADATA = {
-                        'http_version': 10,  # HTTP/1.0
-                        'status_code': 200,
-                        'reason_phrase': 'OK',
-                        'headers': HEADERS,
-                    }
-                    assert EXPECTED_METADATA == revision.metadata
-                    
-                    # Ensure content is correct
-                    with revision.open() as saved_content:
-                        saved_content_bytes = saved_content.read()
-                    assert content_bytes == saved_content_bytes
+                # Ensure content is correct
+                with revision.open() as saved_content:
+                    saved_content_bytes = saved_content.read()
+                assert content_bytes == saved_content_bytes
 
 
 async def test_download_does_autopopulate_date_header_if_not_received_from_origin() -> None:
@@ -90,31 +89,30 @@ async def test_download_does_autopopulate_date_header_if_not_received_from_origi
         content_bytes = content_file.read()
     
     with _file_served(HEADERS, content_bytes) as server_port:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, f'http://localhost:{server_port}/')
+            revision_future = r.download_body()
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            downloaded_revision = revision_future.result()  # type: ResourceRevision
+            loaded_revision = r.default_revision()
+            assert loaded_revision is not None
+            
+            for revision in [downloaded_revision, loaded_revision]:
+                EXPECTED_METADATA = {
+                    'http_version': 10,  # HTTP/1.0
+                    'status_code': 200,
+                    'reason_phrase': 'OK',
+                    'headers': EXPECTED_HEADERS_SAVED,
+                }
+                assert EXPECTED_METADATA == revision.metadata
                 
-                r = Resource(project, f'http://localhost:{server_port}/')
-                revision_future = r.download_body()
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                downloaded_revision = revision_future.result()  # type: ResourceRevision
-                loaded_revision = r.default_revision()
-                assert loaded_revision is not None
-                
-                for revision in [downloaded_revision, loaded_revision]:
-                    EXPECTED_METADATA = {
-                        'http_version': 10,  # HTTP/1.0
-                        'status_code': 200,
-                        'reason_phrase': 'OK',
-                        'headers': EXPECTED_HEADERS_SAVED,
-                    }
-                    assert EXPECTED_METADATA == revision.metadata
-                    
-                    assert None != revision.date, \
-                        'Date header has invalid value'
+                assert None != revision.date, \
+                    'Date header has invalid value'
 
 
 @contextmanager
@@ -156,118 +154,114 @@ async def test_when_no_errors_then_database_row_and_body_file_is_created_and_ret
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                r = Resource(project, home_url)
-                revision_future = r.download_body()
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                # Ensure no error is reported
-                revision = revision_future.result()  # type: ResourceRevision
-                assert None == revision.error
-                
-                # Ensure database and filesystem is in expected state
-                assert 1 == project._revision_count()
-                assert True == os.path.exists(os.path.join(
-                    project.path, Project._REVISIONS_DIRNAME,
-                    '000', '000', '000', '000', f'{revision._id:03x}'))
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._TEMPORARY_DIRNAME))
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, home_url)
+            revision_future = r.download_body()
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            # Ensure no error is reported
+            revision = revision_future.result()  # type: ResourceRevision
+            assert None == revision.error
+            
+            # Ensure database and filesystem is in expected state
+            assert 1 == project._revision_count()
+            assert True == os.path.exists(os.path.join(
+                project.path, Project._REVISIONS_DIRNAME,
+                '000', '000', '000', '000', f'{revision._id:03x}'))
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._TEMPORARY_DIRNAME))
 
 
 async def test_when_network_io_error_then_tries_to_delete_partial_body_file_but_leave_database_row_and_returns_error_revision() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                with _downloads_mocked_to_raise_network_io_error() as is_connection_reset:
-                    r = Resource(project, home_url)
-                    revision_future = r.download_body()
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                # Ensure an I/O error is reported as an error revision
-                revision = revision_future.result()  # type: ResourceRevision
-                assert None != revision.error
-                assert is_connection_reset(revision.error)
-                
-                # Ensure database and filesystem is in expected state
-                assert 1 == project._revision_count()
-                assert False == os.path.exists(revision._body_filepath)
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._TEMPORARY_DIRNAME))
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with _downloads_mocked_to_raise_network_io_error() as is_connection_reset:
+                r = Resource(project, home_url)
+                revision_future = r.download_body()
+                while not revision_future.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            # Ensure an I/O error is reported as an error revision
+            revision = revision_future.result()  # type: ResourceRevision
+            assert None != revision.error
+            assert is_connection_reset(revision.error)
+            
+            # Ensure database and filesystem is in expected state
+            assert 1 == project._revision_count()
+            assert False == os.path.exists(revision._body_filepath)
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._TEMPORARY_DIRNAME))
 
 
 async def test_when_database_error_then_tries_to_delete_partial_body_file_and_raises_database_error() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
-                    r = Resource(project, home_url)
-                    revision_future = r.download_body()
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                # Ensure a database error is reported as a raised exception
-                try:
-                    revision = revision_future.result()  # type: ResourceRevision
-                except Exception as e:
-                    assert is_database_error(e)
-                else:
-                    assert False, 'Expected database error'
-                
-                # Ensure database and filesystem is in expected state
-                assert 0 == project._revision_count()
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._REVISIONS_DIRNAME))
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._TEMPORARY_DIRNAME))
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
+                r = Resource(project, home_url)
+                revision_future = r.download_body()
+                while not revision_future.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            # Ensure a database error is reported as a raised exception
+            try:
+                revision = revision_future.result()  # type: ResourceRevision
+            except Exception as e:
+                assert is_database_error(e)
+            else:
+                assert False, 'Expected database error'
+            
+            # Ensure database and filesystem is in expected state
+            assert 0 == project._revision_count()
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._REVISIONS_DIRNAME))
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._TEMPORARY_DIRNAME))
 
 
 async def test_when_network_io_error_and_database_error_then_tries_to_delete_partial_body_file_and_raises_database_error() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with _downloads_mocked_to_raise_network_io_error() as is_connection_reset:
+                with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
+                    r = Resource(project, home_url)
+                    revision_future = r.download_body()
+                    while not revision_future.done():
+                        await bg_sleep(DEFAULT_WAIT_PERIOD)
                 
-                with _downloads_mocked_to_raise_network_io_error() as is_connection_reset:
-                    with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
-                        r = Resource(project, home_url)
-                        revision_future = r.download_body()
-                        while not revision_future.done():
-                            await bg_sleep(DEFAULT_WAIT_PERIOD)
-                    
-                # Ensure a database error is reported as a raised exception
-                # (rather than reporting the I/O error as an error revision)
-                try:
-                    revision = revision_future.result()  # type: ResourceRevision
-                except Exception as e:
-                    assert is_database_error(e)
-                else:
-                    assert False, 'Expected database error'
-                
-                # Ensure database and filesystem is in expected state
-                assert 0 == project._revision_count()
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._REVISIONS_DIRNAME))
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._TEMPORARY_DIRNAME))
+            # Ensure a database error is reported as a raised exception
+            # (rather than reporting the I/O error as an error revision)
+            try:
+                revision = revision_future.result()  # type: ResourceRevision
+            except Exception as e:
+                assert is_database_error(e)
+            else:
+                assert False, 'Expected database error'
+            
+            # Ensure database and filesystem is in expected state
+            assert 0 == project._revision_count()
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._REVISIONS_DIRNAME))
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._TEMPORARY_DIRNAME))
 
 
 async def test_when_open_project_given_partial_body_files_exist_then_deletes_all_partial_body_files() -> None:
@@ -285,7 +279,7 @@ async def test_when_open_project_given_partial_body_files_exist_then_deletes_all
             project_dirpath, Project._TEMPORARY_DIRNAME))
         
         # Reopen project
-        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
             # Ensure partial body file is deleted
             assert [] == os.listdir(os.path.join(
                 project_dirpath, Project._TEMPORARY_DIRNAME))
@@ -303,59 +297,57 @@ async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_t
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
-                    r = Resource(project, home_url)
-                    revision_future = r.download_body()
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                # Ensure an I/O error is reported as an error revision
-                revision = revision_future.result()  # type: ResourceRevision
-                assert None != revision.error
-                assert is_io_error(revision.error)
-                
-                # Ensure database and filesystem is in expected state
-                assert 1 == project._revision_count()
-                assert False == os.path.exists(revision._body_filepath)
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._TEMPORARY_DIRNAME))
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
+                r = Resource(project, home_url)
+                revision_future = r.download_body()
+                while not revision_future.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            # Ensure an I/O error is reported as an error revision
+            revision = revision_future.result()  # type: ResourceRevision
+            assert None != revision.error
+            assert is_io_error(revision.error)
+            
+            # Ensure database and filesystem is in expected state
+            assert 1 == project._revision_count()
+            assert False == os.path.exists(revision._body_filepath)
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._TEMPORARY_DIRNAME))
 
 
 async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_and_writing_to_database_raises_io_error_then_raises_database_error() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
-                    with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
-                        r = Resource(project, home_url)
-                        revision_future = r.download_body()
-                        while not revision_future.done():
-                            await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                # Ensure a database error is reported as a raised exception
-                try:
-                    revision = revision_future.result()  # type: ResourceRevision
-                except Exception as e:
-                    assert is_database_error(e)
-                else:
-                    assert False, 'Expected database error'
-                
-                # Ensure database and filesystem is in expected state
-                assert 0 == project._revision_count()
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._REVISIONS_DIRNAME))
-                assert [] == os.listdir(os.path.join(
-                    project.path, Project._TEMPORARY_DIRNAME))
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
+                with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
+                    r = Resource(project, home_url)
+                    revision_future = r.download_body()
+                    while not revision_future.done():
+                        await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            # Ensure a database error is reported as a raised exception
+            try:
+                revision = revision_future.result()  # type: ResourceRevision
+            except Exception as e:
+                assert is_database_error(e)
+            else:
+                assert False, 'Expected database error'
+            
+            # Ensure database and filesystem is in expected state
+            assert 0 == project._revision_count()
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._REVISIONS_DIRNAME))
+            assert [] == os.listdir(os.path.join(
+                project.path, Project._TEMPORARY_DIRNAME))
 
 
 # NOTE: This error scenario is expected to never happen in practice,
@@ -368,29 +360,28 @@ async def test_given_project_has_revision_with_maximum_id_when_download_revision
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
     
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                old_revision_count = project._revision_count()  # capture
-                
-                resource = Resource(project, home_url)
-                
-                with _database_cursor_mocked_to_create_revision_with_id(Project._MAX_REVISION_ID + 1, project):
-                    download_result = resource.download_body()
-                    while not download_result.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
-                    try:
-                        download_result.result()
-                    except ProjectHasTooManyRevisionsError:
-                        pass
-                    else:
-                        raise AssertionError(
-                            'Expected ProjectHasTooManyRevisionsError to be raised')
-                
-                new_revision_count = project._revision_count()
-                assert old_revision_count == new_revision_count
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            old_revision_count = project._revision_count()  # capture
+            
+            resource = Resource(project, home_url)
+            
+            with _database_cursor_mocked_to_create_revision_with_id(Project._MAX_REVISION_ID + 1, project):
+                download_result = resource.download_body()
+                while not download_result.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                try:
+                    download_result.result()
+                except ProjectHasTooManyRevisionsError:
+                    pass
+                else:
+                    raise AssertionError(
+                        'Expected ProjectHasTooManyRevisionsError to be raised')
+            
+            new_revision_count = project._revision_count()
+            assert old_revision_count == new_revision_count
 
 
 # ------------------------------------------------------------------------------

@@ -12,9 +12,8 @@ import textwrap
 
 
 async def test_can_close_project_with_menuitem() -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath, autoclose=False) as (mw, _):
-            await mw.close_with_menuitem()
+    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, _):
+        await mw.close_with_menuitem()
 
 
 async def test_can_quit_with_menuitem() -> None:
@@ -42,7 +41,6 @@ async def test_can_quit_with_menuitem() -> None:
 
 
 async def test_can_open_preferences_with_menuitem() -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-            prefs_dialog = await mw.open_preferences_with_menuitem()
-            await prefs_dialog.ok()
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        prefs_dialog = await mw.open_preferences_with_menuitem()
+        await prefs_dialog.ok()

@@ -21,42 +21,41 @@ async def test_uses_html_parser_specified_in_preferences() -> None:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                rr = RootResource(project, 'Home', Resource(project, home_url))
-                r = Resource(project, home_url)
-                
-                # Ensure default HTML parser for new project is lxml
-                click_button(mw.preferences_button)
-                pd = await PreferencesDialog.wait_for()
-                html_parser_title = pd.html_parser_field.Items[pd.html_parser_field.Selection]
-                assert 'Fastest - lxml' == html_parser_title
-                await pd.ok()
-                
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                revision = revision_future.result()
-                
-                # Ensure expected HTML parser is used
-                with _watch_html_parser_usage() as (lxml_parse_func, bs4_parse_func):
-                    (_, _, _) = revision.document_and_links()
-                assert (1, 0) == (lxml_parse_func.call_count, bs4_parse_func.call_count)
-                
-                # Switch HTML parser
-                click_button(mw.preferences_button)
-                pd = await PreferencesDialog.wait_for()
-                pd.html_parser_field.Selection = pd.html_parser_field.Items.index(
-                    'Classic - html.parser (bs4)')
-                await pd.ok()
-                
-                # Ensure new HTML parser is used
-                with _watch_html_parser_usage() as (lxml_parse_func, bs4_parse_func):
-                    (_, _, _) = revision.document_and_links()
-                assert (0, 1) == (lxml_parse_func.call_count, bs4_parse_func.call_count)
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            rr = RootResource(project, 'Home', Resource(project, home_url))
+            r = Resource(project, home_url)
+            
+            # Ensure default HTML parser for new project is lxml
+            click_button(mw.preferences_button)
+            pd = await PreferencesDialog.wait_for()
+            html_parser_title = pd.html_parser_field.Items[pd.html_parser_field.Selection]
+            assert 'Fastest - lxml' == html_parser_title
+            await pd.ok()
+            
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            revision = revision_future.result()
+            
+            # Ensure expected HTML parser is used
+            with _watch_html_parser_usage() as (lxml_parse_func, bs4_parse_func):
+                (_, _, _) = revision.document_and_links()
+            assert (1, 0) == (lxml_parse_func.call_count, bs4_parse_func.call_count)
+            
+            # Switch HTML parser
+            click_button(mw.preferences_button)
+            pd = await PreferencesDialog.wait_for()
+            pd.html_parser_field.Selection = pd.html_parser_field.Items.index(
+                'Classic - html.parser (bs4)')
+            await pd.ok()
+            
+            # Ensure new HTML parser is used
+            with _watch_html_parser_usage() as (lxml_parse_func, bs4_parse_func):
+                (_, _, _) = revision.document_and_links()
+            assert (0, 1) == (lxml_parse_func.call_count, bs4_parse_func.call_count)
 
 
 @skip('covered by: test_uses_html_parser_specified_in_preferences')

@@ -801,16 +801,15 @@ def _EXPAND_enabled() -> Iterator[None]:
 async def _add_url_dialog_open(*, autoclose: bool=True) -> AsyncIterator[AddUrlDialog]:
     # Never allow automated tests to make real internet requests
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=590, url=ANY)):
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                click_button(mw.add_url_button)
-                aud = await AddUrlDialog.wait_for()
-                
-                try:
-                    yield aud
-                finally:
-                    if autoclose and aud.shown:
-                        await aud.cancel()
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            click_button(mw.add_url_button)
+            aud = await AddUrlDialog.wait_for()
+            
+            try:
+                yield aud
+            finally:
+                if autoclose and aud.shown:
+                    await aud.cancel()
 
 
 @contextmanager

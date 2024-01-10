@@ -25,27 +25,26 @@ import wx
 # === Test: Create Project ===
 
 async def test_when_create_project_then_shows_dialog_saying_opening_project_but_no_other_messages() -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-        ocd = await OpenOrCreateDialog.wait_for()
+    ocd = await OpenOrCreateDialog.wait_for()
+    
+    progress_listener = progress._active_progress_listener
+    assert progress_listener is not None
+    
+    with patch('crystal.progress.wx.ProgressDialog', autospec=True) as MockProgressDialog:
+        pd = MockProgressDialog.return_value
+        pd.Pulse.return_value = (True, False)
+        pd.Update.return_value = (True, False)
         
-        progress_listener = progress._active_progress_listener
-        assert progress_listener is not None
+        async with ocd.create() as (mw, _):
+            pass
         
-        with patch('crystal.progress.wx.ProgressDialog', autospec=True) as MockProgressDialog:
-            pd = MockProgressDialog.return_value
-            pd.Pulse.return_value = (True, False)
-            pd.Update.return_value = (True, False)
-            
-            async with ocd.create(project_dirpath) as (mw, _):
-                pass
-            
-            assert (
-                [call('Opening project...')],
-                []
-            ) == (
-                pd.Pulse.call_args_list,
-                pd.Update.call_args_list
-            )
+        assert (
+            [call('Opening project...')],
+            []
+        ) == (
+            pd.Pulse.call_args_list,
+            pd.Update.call_args_list
+        )
 
 
 # === Test: Start Open Project ===

@@ -43,96 +43,95 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
             
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            missing_r = Resource(project, missing_url)
+            
+            with subtests.test(task_type='DownloadResourceTask'):
+                # Download the resource
+                assert False == missing_r.already_downloaded_this_session
+                missing_rr_future = missing_r.download()  # uses DownloadResourceTask
+                with screenshot_if_raises():
+                    await wait_for(
+                        lambda: missing_rr_future.done() or None,
+                        timeout=MAX_TIME_TO_DOWNLOAD_404_URL)
+                assert True == missing_r.already_downloaded_this_session
                 
-                missing_r = Resource(project, missing_url)
+                # Download the resource again, and ensure it downloads immediately
+                dr_task = missing_r.create_download_task(needs_result=False)  # a DownloadResourceTask
+                assert True == dr_task.complete
+            
+            with subtests.test(task_type='UpdateResourceGroupMembersTask'):
+                # Covered by subtest: DownloadResourceGroupTask
+                pass
+            
+            with subtests.test(task_type='DownloadResourceGroupMembersTask'):
+                # Covered by subtest: DownloadResourceGroupTask
+                pass
+            
+            with subtests.test(task_type='DownloadResourceGroupTask'):
+                comic_rs = [
+                    Resource(project, comic_pattern.replace('#', str(ordinal)))
+                    for ordinal in [1, 2]
+                ]
                 
-                with subtests.test(task_type='DownloadResourceTask'):
-                    # Download the resource
-                    assert False == missing_r.already_downloaded_this_session
-                    missing_rr_future = missing_r.download()  # uses DownloadResourceTask
-                    with screenshot_if_raises():
-                        await wait_for(
-                            lambda: missing_rr_future.done() or None,
-                            timeout=MAX_TIME_TO_DOWNLOAD_404_URL)
-                    assert True == missing_r.already_downloaded_this_session
+                comic_g = ResourceGroup(project, 'Comic', comic_pattern)
+                assert None == comic_g.source
+                
+                COMIC_G_FINAL_MEMBER_COUNT = 10
+                
+                # Download the group (and all of its currently known members)
+                for r in comic_rs:
+                    assert False == r.already_downloaded_this_session
+                drg_task = comic_g.create_download_task()  # a DownloadResourceGroupTask
+                project.add_task(drg_task)
+                with screenshot_if_raises():
+                    await wait_for(
+                        lambda: drg_task.complete or None,
+                        timeout=(
+                            MAX_TIME_TO_DOWNLOAD_404_URL +
+                            (MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY * COMIC_G_FINAL_MEMBER_COUNT)
+                        ))
+                assert COMIC_G_FINAL_MEMBER_COUNT == len(comic_g.members)
+                for r in comic_rs:
+                    assert True == r.already_downloaded_this_session
+                
+                # Download the group again, and ensure it downloads immediately
+                if True:
+                    drg_task = comic_g.create_download_task()
                     
-                    # Download the resource again, and ensure it downloads immediately
-                    dr_task = missing_r.create_download_task(needs_result=False)  # a DownloadResourceTask
-                    assert True == dr_task.complete
-                
-                with subtests.test(task_type='UpdateResourceGroupMembersTask'):
-                    # Covered by subtest: DownloadResourceGroupTask
-                    pass
-                
-                with subtests.test(task_type='DownloadResourceGroupMembersTask'):
-                    # Covered by subtest: DownloadResourceGroupTask
-                    pass
-                
-                with subtests.test(task_type='DownloadResourceGroupTask'):
-                    comic_rs = [
-                        Resource(project, comic_pattern.replace('#', str(ordinal)))
-                        for ordinal in [1, 2]
-                    ]
+                    load_children_of_drg_task(drg_task, task_added_to_project=False)
                     
-                    comic_g = ResourceGroup(project, 'Comic', comic_pattern)
-                    assert None == comic_g.source
+                    # NOTE: The group won't appear to be immediately downloaded yet
+                    #       because no code has tried to access the lazily-loaded
+                    #       DownloadResourceTask children yet and thus doesn't
+                    #       know that all of those children are complete
+                    assert (True, 0, False) == (
+                        isinstance(drg_task._download_members_task.children, AppendableLazySequence),
+                        drg_task._download_members_task.children.cached_prefix_len
+                            if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
+                            else None,
+                        drg_task.complete
+                    )
                     
-                    COMIC_G_FINAL_MEMBER_COUNT = 10
-                    
-                    # Download the group (and all of its currently known members)
-                    for r in comic_rs:
-                        assert False == r.already_downloaded_this_session
-                    drg_task = comic_g.create_download_task()  # a DownloadResourceGroupTask
+                    # NOTE: Adding the DownloadResourceGroupTask to the project's
+                    #       task tree will cause the TaskTreeNode to start accessing
+                    #       the DownloadResourceTask children because it wants to
+                    #       create a paired TaskTreeNode for each such child.
+                    #       These accesses cause the DownloadResourceTask children
+                    #       to be created and observed as being already complete.
+                    #       With all of those children complete the ancestor
+                    #       DownloadResourceGroupTask will also be completed.
                     project.add_task(drg_task)
-                    with screenshot_if_raises():
-                        await wait_for(
-                            lambda: drg_task.complete or None,
-                            timeout=(
-                                MAX_TIME_TO_DOWNLOAD_404_URL +
-                                (MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY * COMIC_G_FINAL_MEMBER_COUNT)
-                            ))
-                    assert COMIC_G_FINAL_MEMBER_COUNT == len(comic_g.members)
-                    for r in comic_rs:
-                        assert True == r.already_downloaded_this_session
-                    
-                    # Download the group again, and ensure it downloads immediately
-                    if True:
-                        drg_task = comic_g.create_download_task()
-                        
-                        load_children_of_drg_task(drg_task, task_added_to_project=False)
-                        
-                        # NOTE: The group won't appear to be immediately downloaded yet
-                        #       because no code has tried to access the lazily-loaded
-                        #       DownloadResourceTask children yet and thus doesn't
-                        #       know that all of those children are complete
-                        assert (True, 0, False) == (
-                            isinstance(drg_task._download_members_task.children, AppendableLazySequence),
-                            drg_task._download_members_task.children.cached_prefix_len
-                                if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
-                                else None,
-                            drg_task.complete
-                        )
-                        
-                        # NOTE: Adding the DownloadResourceGroupTask to the project's
-                        #       task tree will cause the TaskTreeNode to start accessing
-                        #       the DownloadResourceTask children because it wants to
-                        #       create a paired TaskTreeNode for each such child.
-                        #       These accesses cause the DownloadResourceTask children
-                        #       to be created and observed as being already complete.
-                        #       With all of those children complete the ancestor
-                        #       DownloadResourceGroupTask will also be completed.
-                        project.add_task(drg_task)
-                        assert (True, COMIC_G_FINAL_MEMBER_COUNT, True) == (
-                            isinstance(drg_task._download_members_task.children, AppendableLazySequence),
-                            drg_task._download_members_task.children.cached_prefix_len
-                                if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
-                                else None,
-                            drg_task.complete
-                        )
+                    assert (True, COMIC_G_FINAL_MEMBER_COUNT, True) == (
+                        isinstance(drg_task._download_members_task.children, AppendableLazySequence),
+                        drg_task._download_members_task.children.cached_prefix_len
+                            if isinstance(drg_task._download_members_task.children, AppendableLazySequence)
+                            else None,
+                        drg_task.complete
+                    )
 
 
 async def test_given_running_tests_then_uses_extra_listener_assertions() -> None:
@@ -213,18 +212,17 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
             if True:
                 home_url = sp.get_request_url('https://xkcd.com/')
             
-            with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-                async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                    project = Project._last_opened_project
-                    assert project is not None
-                    
-                    await try_download_with_disk_usage(
-                        _DiskUsage(total=100*1024*1024, used=(100-6)*1024*1024, free=6*1024*1024),
-                        expect_failure=False)
-                    
-                    await try_download_with_disk_usage(
-                        _DiskUsage(total=100*1024*1024, used=(100-4)*1024*1024, free=4*1024*1024),
-                        expect_failure=True)
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                await try_download_with_disk_usage(
+                    _DiskUsage(total=100*1024*1024, used=(100-6)*1024*1024, free=6*1024*1024),
+                    expect_failure=False)
+                
+                await try_download_with_disk_usage(
+                    _DiskUsage(total=100*1024*1024, used=(100-4)*1024*1024, free=4*1024*1024),
+                    expect_failure=True)
     
     with subtests.test('given project on large disk and less than 4 gib of disk free'):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -232,18 +230,17 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
             if True:
                 home_url = sp.get_request_url('https://xkcd.com/')
             
-            with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-                async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                    project = Project._last_opened_project
-                    assert project is not None
-                    
-                    await try_download_with_disk_usage(
-                        _DiskUsage(total=1000*1024*1024*1024, used=(1000-6)*1024*1024*1024, free=6*1024*1024*1024),
-                        expect_failure=False)
-                    
-                    await try_download_with_disk_usage(
-                        _DiskUsage(total=1000*1024*1024*1024, used=(1000-3)*1024*1024*1024, free=3*1024*1024*1024),
-                        expect_failure=True)
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                await try_download_with_disk_usage(
+                    _DiskUsage(total=1000*1024*1024*1024, used=(1000-6)*1024*1024*1024, free=6*1024*1024*1024),
+                    expect_failure=False)
+                
+                await try_download_with_disk_usage(
+                    _DiskUsage(total=1000*1024*1024*1024, used=(1000-3)*1024*1024*1024, free=3*1024*1024*1024),
+                    expect_failure=True)
 
 
 class _DiskUsage(NamedTuple):

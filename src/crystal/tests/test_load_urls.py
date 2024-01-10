@@ -68,37 +68,36 @@ async def test_given_project_database_not_on_ssd_given_resource_group_node_selec
             rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
             feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
             
-            with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-                async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                    project = Project._last_opened_project
-                    assert project is not None
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                # Create small resource group (with only 2 members)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
+                feed_group = ResourceGroup(project, 'Feed', feed_pattern)
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                
+                (feed_group_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.endswith(f'- {feed_group.name}')
+                ]
+                
+                # Prepare to press Cancel when LoadUrlsProgressDialog appears
+                with patch.object(
+                        project._load_urls_progress_listener,
+                        'loading_resource',
+                        side_effect=CancelLoadUrls) as progress_listener_method:
+                    feed_group_ti.SelectItem()
+                    click_button(mw.download_button)
                     
-                    # Create small resource group (with only 2 members)
-                    Resource(project, atom_feed_url)
-                    Resource(project, rss_feed_url)
-                    feed_group = ResourceGroup(project, 'Feed', feed_pattern)
+                    # Wait for progress dialog to show and for cancel to be pressed
+                    await wait_for(lambda: (progress_listener_method.call_count >= 1) or None)
                     
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
-                    
-                    (feed_group_ti,) = [
-                        child for child in root_ti.Children
-                        if child.Text.endswith(f'- {feed_group.name}')
-                    ]
-                    
-                    # Prepare to press Cancel when LoadUrlsProgressDialog appears
-                    with patch.object(
-                            project._load_urls_progress_listener,
-                            'loading_resource',
-                            side_effect=CancelLoadUrls) as progress_listener_method:
-                        feed_group_ti.SelectItem()
-                        click_button(mw.download_button)
-                        
-                        # Wait for progress dialog to show and for cancel to be pressed
-                        await wait_for(lambda: (progress_listener_method.call_count >= 1) or None)
-                        
-                        # Ensure did not create a download task
-                        assert tree_has_no_children_condition(mw.task_tree)() is not None
+                    # Ensure did not create a download task
+                    assert tree_has_no_children_condition(mw.task_tree)() is not None
 
 
 @skip('covered by: test_given_project_database_not_on_ssd_given_resource_group_node_selected_when_press_download_button_then_loading_urls_progress_dialog_becomes_visible')
@@ -179,37 +178,36 @@ async def test_given_project_database_on_ssd_given_resource_group_node_selected_
             rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
             feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
             
-            with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-                async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                    project = Project._last_opened_project
-                    assert project is not None
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                # Create small resource group (with only 2 members)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
+                feed_group = ResourceGroup(project, 'Feed', feed_pattern)
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                
+                (feed_group_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.endswith(f'- {feed_group.name}')
+                ]
+                
+                # Prepare to spy on whether LoadUrlsProgressDialog appears
+                with patch.object(
+                        project._load_urls_progress_listener,
+                        'loading_resource',
+                        wraps=project._load_urls_progress_listener.loading_resource) as progress_listener_method:
+                    feed_group_ti.SelectItem()
                     
-                    # Create small resource group (with only 2 members)
-                    Resource(project, atom_feed_url)
-                    Resource(project, rss_feed_url)
-                    feed_group = ResourceGroup(project, 'Feed', feed_pattern)
+                    # Wait for download to start and complete
+                    await mw.click_download_button()
+                    await wait_for_download_to_start_and_finish(mw.task_tree)
                     
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
-                    
-                    (feed_group_ti,) = [
-                        child for child in root_ti.Children
-                        if child.Text.endswith(f'- {feed_group.name}')
-                    ]
-                    
-                    # Prepare to spy on whether LoadUrlsProgressDialog appears
-                    with patch.object(
-                            project._load_urls_progress_listener,
-                            'loading_resource',
-                            wraps=project._load_urls_progress_listener.loading_resource) as progress_listener_method:
-                        feed_group_ti.SelectItem()
-                        
-                        # Wait for download to start and complete
-                        await mw.click_download_button()
-                        await wait_for_download_to_start_and_finish(mw.task_tree)
-                        
-                        # Ensure did not show LoadUrlsProgressDialog
-                        assert 0 == progress_listener_method.call_count
+                    # Ensure did not show LoadUrlsProgressDialog
+                    assert 0 == progress_listener_method.call_count
 
 
 async def test_given_project_database_on_ssd_when_press_add_group_button_then_add_group_dialog_does_appear() -> None:

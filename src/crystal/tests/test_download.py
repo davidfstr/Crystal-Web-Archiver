@@ -37,17 +37,16 @@ async def test_downloads_embedded_resources() -> None:
         )
     })
     with server:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                r = Resource(project, server.get_url('/'))
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                assert ['/', '/assets/image.png'] == server.requested_paths
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, server.get_url('/'))
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            assert ['/', '/assets/image.png'] == server.requested_paths
 
 
 async def test_does_not_download_embedded_resources_of_http_4xx_and_5xx_pages() -> None:
@@ -82,17 +81,16 @@ async def test_does_not_download_embedded_resources_of_http_4xx_and_5xx_pages() 
         )
     })
     with server:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                r = Resource(project, server.get_url('/'))
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                assert ['/'] == server.requested_paths
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, server.get_url('/'))
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            assert ['/'] == server.requested_paths
 
 
 async def test_does_not_download_embedded_resources_of_recognized_binary_resource() -> None:
@@ -108,17 +106,16 @@ async def test_does_not_download_embedded_resources_of_recognized_binary_resourc
         )
     })
     with server:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                r = Resource(project, server.get_url('/'))
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                assert ['/'] == server.requested_paths
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, server.get_url('/'))
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            assert ['/'] == server.requested_paths
 
 
 async def test_does_not_download_forever_given_embedded_resources_form_a_cycle() -> None:
@@ -153,17 +150,16 @@ async def test_does_not_download_forever_given_embedded_resources_form_a_cycle()
         )
     })
     with server:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                r = Resource(project, server.get_url('/'))
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                assert ['/', '/assets/image.png'] == server.requested_paths
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, server.get_url('/'))
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            assert ['/', '/assets/image.png'] == server.requested_paths
 
 
 async def test_does_not_download_forever_given_embedded_resources_nest_infinitely() -> None:
@@ -198,23 +194,22 @@ async def test_does_not_download_forever_given_embedded_resources_nest_infinitel
         )
     })
     with server:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                r = Resource(project, server.get_url('/'))
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                assert 3 == crystal.task._MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH
-                assert [
-                    '/',
-                    '/assets/image.png',  # 1
-                    '/assets/assets/image.png',  # 2
-                    '/assets/assets/assets/image.png'  # 3
-                ] == server.requested_paths
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, server.get_url('/'))
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            assert 3 == crystal.task._MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH
+            assert [
+                '/',
+                '/assets/image.png',  # 1
+                '/assets/assets/image.png',  # 2
+                '/assets/assets/assets/image.png'  # 3
+            ] == server.requested_paths
 
 
 async def test_when_download_resource_given_revision_body_missing_then_redownloads_revision_body() -> None:
@@ -305,25 +300,24 @@ async def test_when_download_resource_given_all_embedded_resources_already_downl
         )
     })
     with server:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                r = Resource(project, server.get_url('/'))
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                assert ['/', '/assets/image.png'] == server.requested_paths
-                server.requested_paths.clear()
-                
-                r = Resource(project, server.get_url('/index.php'))
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                assert ['/index.php'] == server.requested_paths
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, server.get_url('/'))
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            assert ['/', '/assets/image.png'] == server.requested_paths
+            server.requested_paths.clear()
+            
+            r = Resource(project, server.get_url('/index.php'))
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            assert ['/index.php'] == server.requested_paths
 
 
 async def test_given_same_resource_embedded_multiple_times_then_downloads_it_only_once() -> None:
@@ -346,17 +340,16 @@ async def test_given_same_resource_embedded_multiple_times_then_downloads_it_onl
         )
     })
     with server:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                r = Resource(project, server.get_url('/'))
-                revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                assert ['/', '/assets/image.png'] == server.requested_paths
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, server.get_url('/'))
+            revision_future = r.download(wait_for_embedded=True)
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            assert ['/', '/assets/image.png'] == server.requested_paths
 
 
 # ------------------------------------------------------------------------------

@@ -35,29 +35,28 @@ from unittest import skip
 
 async def test_rn_with_error_child_retains_child_when_new_entity_added() -> None:
     with network_down():
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
-                
-                RootResource(project, 'Domain 1', Resource(project, 'https://nosuchdomain1.com/'))
-                (rrn1_ti,) = root_ti.Children
-                
-                rrn1_ti.Expand()
-                await wait_for(first_child_of_tree_item_is_not_loading_condition(rrn1_ti))
-                assert rrn1_ti.GetFirstChild() is not None
-                
-                RootResource(project, 'Domain 2', Resource(project, 'https://nosuchdomain2.com/'))
-                (rrn1_ti, rrn2_ti) = root_ti.Children
-                assert rrn1_ti.GetFirstChild() is not None  # has failed in the past
-                
-                rrn2_ti.Expand()
-                await wait_for(first_child_of_tree_item_is_not_loading_condition(rrn2_ti))
-                assert rrn1_ti.GetFirstChild() is not None
-                assert rrn2_ti.GetFirstChild() is not None
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            assert root_ti is not None
+            
+            RootResource(project, 'Domain 1', Resource(project, 'https://nosuchdomain1.com/'))
+            (rrn1_ti,) = root_ti.Children
+            
+            rrn1_ti.Expand()
+            await wait_for(first_child_of_tree_item_is_not_loading_condition(rrn1_ti))
+            assert rrn1_ti.GetFirstChild() is not None
+            
+            RootResource(project, 'Domain 2', Resource(project, 'https://nosuchdomain2.com/'))
+            (rrn1_ti, rrn2_ti) = root_ti.Children
+            assert rrn1_ti.GetFirstChild() is not None  # has failed in the past
+            
+            rrn2_ti.Expand()
+            await wait_for(first_child_of_tree_item_is_not_loading_condition(rrn2_ti))
+            assert rrn1_ti.GetFirstChild() is not None
+            assert rrn2_ti.GetFirstChild() is not None
 
 
 # ------------------------------------------------------------------------------
@@ -142,39 +141,38 @@ async def test_given_rr_is_downloaded_and_is_error_when_expand_rrn_then_shows_er
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            # Download revision
+            with network_down():
+                r = Resource(project, home_url)
+                home_rr = RootResource(project, 'Home', r)
+                revision_future = home_rr.download()
+                while not revision_future.done():
+                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                # Wait for download to complete, including the trailing wait
+                await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
                 
-                # Download revision
-                with network_down():
-                    r = Resource(project, home_url)
-                    home_rr = RootResource(project, 'Home', r)
-                    revision_future = home_rr.download()
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
-                    # Wait for download to complete, including the trailing wait
-                    await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
-                    
-                    rr = revision_future.result()
-                    assert DownloadErrorDict(
-                        type='gaierror',
-                        message='[Errno 8] nodename nor servname provided, or not known',
-                    ) == rr.error_dict
-                
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
-                (home_ti,) = root_ti.Children
-                
-                # Expand RootResourceNode and ensure it has an _ErrorNode child
-                home_ti.Expand()
-                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                (error_ti,) = home_ti.Children
-                assert (
-                    'Error downloading URL: gaierror: [Errno 8] nodename nor servname provided, or not known' ==
-                    error_ti.Text
-                )
+                rr = revision_future.result()
+                assert DownloadErrorDict(
+                    type='gaierror',
+                    message='[Errno 8] nodename nor servname provided, or not known',
+                ) == rr.error_dict
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            assert root_ti is not None
+            (home_ti,) = root_ti.Children
+            
+            # Expand RootResourceNode and ensure it has an _ErrorNode child
+            home_ti.Expand()
+            await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+            (error_ti,) = home_ti.Children
+            assert (
+                'Error downloading URL: gaierror: [Errno 8] nodename nor servname provided, or not known' ==
+                error_ti.Text
+            )
 
 
 async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_then_shows_error_node_and_redownloads_rr() -> None:
@@ -307,75 +305,74 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
         if True:
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                # Create future group members
-                for i in range(1, 1000+1):
-                    Resource(project, comic_pattern.replace('#', str(i)))
-                
-                # Create group
-                ResourceGroup(project, 'Comic', comic_pattern)
-                
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
-                
-                comic_group_ti = root_ti.GetFirstChild()
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            # Create future group members
+            for i in range(1, 1000+1):
+                Resource(project, comic_pattern.replace('#', str(i)))
+            
+            # Create group
+            ResourceGroup(project, 'Comic', comic_pattern)
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            assert root_ti is not None
+            
+            comic_group_ti = root_ti.GetFirstChild()
+            assert comic_group_ti is not None
+            assert f'{comic_pattern} - Comic' == comic_group_ti.Text
+            
+            # Ensure first child of group (not displayed) is "Loading..."
+            cg_child_ti = comic_group_ti.GetFirstChild()
+            assert cg_child_ti is not None
+            assert 'Loading...' == cg_child_ti.Text
+            
+            comic_group_ti.Expand()
+            await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
+            
+            # Ensure after expanding that first 100 children are shown initially,
+            # followed by a "# more" node
+            cg_children_tis = comic_group_ti.Children
+            assert len(cg_children_tis) == 100 + 1
+            for i in range(0, 100):
+                expected_comic_url = comic_pattern.replace('#', str(i + 1))
+                assert expected_comic_url == cg_children_tis[i].Text
+            more_ti = cg_children_tis[-1]
+            more_ti.ScrollTo()
+            assert '900 more' == more_ti.Text
+            
+            more_ti.Expand()
+            def more_children_visible() -> Optional[bool]:
                 assert comic_group_ti is not None
-                assert f'{comic_pattern} - Comic' == comic_group_ti.Text
-                
-                # Ensure first child of group (not displayed) is "Loading..."
-                cg_child_ti = comic_group_ti.GetFirstChild()
-                assert cg_child_ti is not None
-                assert 'Loading...' == cg_child_ti.Text
-                
-                comic_group_ti.Expand()
-                await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
-                
-                # Ensure after expanding that first 100 children are shown initially,
-                # followed by a "# more" node
-                cg_children_tis = comic_group_ti.Children
-                assert len(cg_children_tis) == 100 + 1
-                for i in range(0, 100):
-                    expected_comic_url = comic_pattern.replace('#', str(i + 1))
-                    assert expected_comic_url == cg_children_tis[i].Text
-                more_ti = cg_children_tis[-1]
-                more_ti.ScrollTo()
-                assert '900 more' == more_ti.Text
-                
-                more_ti.Expand()
-                def more_children_visible() -> Optional[bool]:
-                    assert comic_group_ti is not None
-                    return (len(comic_group_ti.Children) > (100 + 1)) or None
-                await wait_for(more_children_visible)
-                
-                # Ensure after expanding "# more" node that another 20 children are shown
-                cg_children_tis = comic_group_ti.Children
-                assert len(cg_children_tis) == 100 + 20 + 1
-                for i in range(0, 100 + 20):
-                    expected_comic_url = comic_pattern.replace('#', str(i + 1))
-                    assert expected_comic_url == cg_children_tis[i].Text
-                more_ti = cg_children_tis[-1]
-                more_ti.ScrollTo()
-                assert '880 more' == more_ti.Text
-                assert False == more_ti.IsExpanded()
-                
-                more_ti.SelectItem()
-                
-                more_ti.Expand()
-                def more_children_visible() -> Optional[bool]:
-                    assert comic_group_ti is not None
-                    return (len(comic_group_ti.Children) > (100 + 20 + 1)) or None
-                await wait_for(more_children_visible)
-                
-                # Ensure after expanding a selected "# more" node that the
-                # first newly visible child inherits the selection
-                cg_children_tis = comic_group_ti.Children
-                assert len(cg_children_tis) == 100 + 20 + 20 + 1
-                node_in_position_of_old_more_node = cg_children_tis[100 + 20]
-                assert True == node_in_position_of_old_more_node.IsSelected()
+                return (len(comic_group_ti.Children) > (100 + 1)) or None
+            await wait_for(more_children_visible)
+            
+            # Ensure after expanding "# more" node that another 20 children are shown
+            cg_children_tis = comic_group_ti.Children
+            assert len(cg_children_tis) == 100 + 20 + 1
+            for i in range(0, 100 + 20):
+                expected_comic_url = comic_pattern.replace('#', str(i + 1))
+                assert expected_comic_url == cg_children_tis[i].Text
+            more_ti = cg_children_tis[-1]
+            more_ti.ScrollTo()
+            assert '880 more' == more_ti.Text
+            assert False == more_ti.IsExpanded()
+            
+            more_ti.SelectItem()
+            
+            more_ti.Expand()
+            def more_children_visible() -> Optional[bool]:
+                assert comic_group_ti is not None
+                return (len(comic_group_ti.Children) > (100 + 20 + 1)) or None
+            await wait_for(more_children_visible)
+            
+            # Ensure after expanding a selected "# more" node that the
+            # first newly visible child inherits the selection
+            cg_children_tis = comic_group_ti.Children
+            assert len(cg_children_tis) == 100 + 20 + 20 + 1
+            node_in_position_of_old_more_node = cg_children_tis[100 + 20]
+            assert True == node_in_position_of_old_more_node.IsSelected()
 
 
 async def test_given_more_node_with_large_item_count_then_displays_count_with_commas() -> None:
@@ -390,32 +387,31 @@ async def test_given_more_node_with_large_item_count_then_displays_count_with_co
             if True:
                 comic_pattern = sp.get_request_url('https://xkcd.com/#/')
             
-            with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-                async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                    project = Project._last_opened_project
-                    assert project is not None
-                    
-                    # Create future group members
-                    for i in range(1, 1200+1):
-                        Resource(project, comic_pattern.replace('#', str(i)))
-                    
-                    # Create group
-                    ResourceGroup(project, 'Comic', comic_pattern)
-                    
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
-                    
-                    comic_group_ti = root_ti.GetFirstChild()
-                    assert comic_group_ti is not None
-                    assert f'{comic_pattern} - Comic' == comic_group_ti.Text
-                    
-                    comic_group_ti.Expand()
-                    await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
-                    
-                    cg_children_tis = comic_group_ti.Children
-                    more_ti = cg_children_tis[-1]
-                    more_ti.ScrollTo()
-                    assert '1,100 more' == more_ti.Text
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                # Create future group members
+                for i in range(1, 1200+1):
+                    Resource(project, comic_pattern.replace('#', str(i)))
+                
+                # Create group
+                ResourceGroup(project, 'Comic', comic_pattern)
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                
+                comic_group_ti = root_ti.GetFirstChild()
+                assert comic_group_ti is not None
+                assert f'{comic_pattern} - Comic' == comic_group_ti.Text
+                
+                comic_group_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
+                
+                cg_children_tis = comic_group_ti.Children
+                more_ti = cg_children_tis[-1]
+                more_ti.ScrollTo()
+                assert '1,100 more' == more_ti.Text
     finally:
         if old_lang is None:
             del os.environ['LANG']

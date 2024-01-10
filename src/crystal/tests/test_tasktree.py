@@ -447,42 +447,41 @@ async def _project_with_resource_group_starting_to_download(
         with patch.object(TaskTreeNode, '_MAX_VISIBLE_CHILDREN', small_max_visible_children), \
                 patch.object(TaskTreeNode, '_MAX_LEADING_COMPLETE_CHILDREN', small_max_leading_complete_children):
             
-            with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-                async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                    project = Project._last_opened_project
-                    assert project is not None
-                    
-                    # Create group
-                    g = ResourceGroup(project, 'Comic', comic_pattern)
-                    
-                    # Create group members
-                    for i in range(1, resource_count + 1):
-                        Resource(project, comic_pattern.replace('#', str(i)))
-                    
-                    # Start downloading group
-                    assert 0 == len(project.root_task.children)
-                    g.download()
-                    
-                    (download_rg_task,) = project.root_task.children
-                    assert isinstance(download_rg_task, DownloadResourceGroupTask)
-                    load_children_of_drg_task(download_rg_task, scheduler_thread_enabled=scheduler_thread_enabled)
-                    (_, download_rg_members_task) = download_rg_task.children
-                    assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
-                    
-                    # Define: create_resource()
-                    next_resource_ordinal = resource_count + 1
-                    def create_resource() -> Resource:
-                        nonlocal next_resource_ordinal
-                        r = Resource(project, comic_pattern.replace('#', str(next_resource_ordinal)))
-                        next_resource_ordinal += 1
-                        return r
-                    
-                    yield (
-                        mw,
-                        _ttn_for_task(download_rg_task),
-                        _ttn_for_task(download_rg_members_task),
-                        create_resource,
-                    )
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+                project = Project._last_opened_project
+                assert project is not None
+                
+                # Create group
+                g = ResourceGroup(project, 'Comic', comic_pattern)
+                
+                # Create group members
+                for i in range(1, resource_count + 1):
+                    Resource(project, comic_pattern.replace('#', str(i)))
+                
+                # Start downloading group
+                assert 0 == len(project.root_task.children)
+                g.download()
+                
+                (download_rg_task,) = project.root_task.children
+                assert isinstance(download_rg_task, DownloadResourceGroupTask)
+                load_children_of_drg_task(download_rg_task, scheduler_thread_enabled=scheduler_thread_enabled)
+                (_, download_rg_members_task) = download_rg_task.children
+                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+                
+                # Define: create_resource()
+                next_resource_ordinal = resource_count + 1
+                def create_resource() -> Resource:
+                    nonlocal next_resource_ordinal
+                    r = Resource(project, comic_pattern.replace('#', str(next_resource_ordinal)))
+                    next_resource_ordinal += 1
+                    return r
+                
+                yield (
+                    mw,
+                    _ttn_for_task(download_rg_task),
+                    _ttn_for_task(download_rg_members_task),
+                    create_resource,
+                )
 
 
 def _cleanup_download_of_resource_group(

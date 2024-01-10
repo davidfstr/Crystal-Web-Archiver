@@ -26,31 +26,30 @@ async def test_given_default_revision_with_missing_body_when_download_related_re
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
-                # Download revision
-                r = Resource(project, home_url)
-                revision_future = r.download_body()
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            # Download revision
+            r = Resource(project, home_url)
+            revision_future = r.download_body()
+            while not revision_future.done():
+                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            
+            # Simulate loss of revision body file
+            revision = revision_future.result()
+            os.remove(revision._body_filepath)
+            
+            # Download related resource
+            with redirect_stderr(io.StringIO()) as captured_stderr:
+                revision_future = r.download(wait_for_embedded=True, needs_result=True)
                 while not revision_future.done():
                     await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                # Simulate loss of revision body file
-                revision = revision_future.result()
-                os.remove(revision._body_filepath)
-                
-                # Download related resource
-                with redirect_stderr(io.StringIO()) as captured_stderr:
-                    revision_future = r.download(wait_for_embedded=True, needs_result=True)
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
-                assert 'is missing its body on disk. Redownloading it.' in captured_stderr.getvalue()
-                revision = revision_future.result()
-                assert revision.has_body
-                with revision.open():  # ensure no error
-                    pass
+            assert 'is missing its body on disk. Redownloading it.' in captured_stderr.getvalue()
+            revision = revision_future.result()
+            assert revision.has_body
+            with revision.open():  # ensure no error
+                pass
 
 
 @skip('fails: not implemented')

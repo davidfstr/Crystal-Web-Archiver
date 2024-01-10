@@ -425,59 +425,93 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
             
             target_root_resource_name = 'Target'
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            assert root_ti is not None
+            assert root_ti.GetFirstChild() is None  # no entities
+            
+            # Download home page
+            if True:
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                aud.name_field.Value = 'Home'
+                aud.url_field.Value = home_url
+                await aud.ok()
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None  # entity was created
+                assert f'{home_url} - Home' == home_ti.Text
+                
+                home_ti.SelectItem()
+                await mw.click_download_button()
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+                
+                # Start server
+                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                    click_button(mw.view_button)
+                
+                assert False == (await is_url_not_in_archive(home_url))
+                
+                # Ensure home page ONLY has <script> reference to target
+                if True:
+                    # Ensure home page has <script> reference to target
+                    home_page = await fetch_archive_url(home_url)
+                    assert target_reference in home_page.content
+                    
+                    # Ensure target was not discovered as embedded resource of home page
+                    assert False == (await is_url_not_in_archive(home_url))
+                    assert True == (await is_url_not_in_archive(target_url))
+            
+            def start_server_again():
+                nonlocal root_ti
+                nonlocal home_ti
+                
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti is not None
-                assert root_ti.GetFirstChild() is None  # no entities
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None
+                home_ti.SelectItem()
+                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                    click_button(mw.view_button)
+            
+            # View the home page.
+            # Ensure console does reveal that target was not downloaded successfully.
+            if True:
+                # Simulate opening home page in browser,
+                # which should evaluate the <script>-only reference,
+                # and try to fetch the target automatically
+                with console_output_copied() as console_output:
+                    home_page = await fetch_archive_url(home_url)
+                    # TODO: Use a *dynamic* timeout that looks for progress in
+                    #       download tasks in the UI, similar to
+                    #       wait_for_download_to_start_and_finish
+                    target_page = await fetch_archive_url(target_url, timeout=10)
                 
-                # Download home page
+                # Ensure console does log that target in not in the archive
+                # so that user knows they must take special action to download it
+                assert (
+                    f'*** Requested resource not in archive: '
+                    f'{target_url}'
+                ) in console_output.getvalue()
+            
+            # Test will dynamically download a new resource group member upon request
+            if True:
+                assert True == (await is_url_not_in_archive(target_url))
+                
+                # Undiscover the target
+                await _undiscover_url(target_url, mw, project_dirpath)
+                start_server_again()
+                
+                # Add resource group matching target
+                click_button(mw.add_group_button)
+                agd = await AddGroupDialog.wait_for()
+                agd.name_field.Value = target_group_name
+                agd.pattern_field.Value = target_group_pattern
+                await agd.ok()
+                
+                # Refresh the home page.
+                # Ensure console does log that target is being dynamically fetched.
                 if True:
-                    click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
-                    aud.name_field.Value = 'Home'
-                    aud.url_field.Value = home_url
-                    await aud.ok()
-                    home_ti = root_ti.GetFirstChild()
-                    assert home_ti is not None  # entity was created
-                    assert f'{home_url} - Home' == home_ti.Text
-                    
-                    home_ti.SelectItem()
-                    await mw.click_download_button()
-                    await wait_for_download_to_start_and_finish(mw.task_tree)
-                    
-                    # Start server
-                    with assert_does_open_webbrowser_to(get_request_url(home_url)):
-                        click_button(mw.view_button)
-                    
-                    assert False == (await is_url_not_in_archive(home_url))
-                    
-                    # Ensure home page ONLY has <script> reference to target
-                    if True:
-                        # Ensure home page has <script> reference to target
-                        home_page = await fetch_archive_url(home_url)
-                        assert target_reference in home_page.content
-                        
-                        # Ensure target was not discovered as embedded resource of home page
-                        assert False == (await is_url_not_in_archive(home_url))
-                        assert True == (await is_url_not_in_archive(target_url))
-                
-                def start_server_again():
-                    nonlocal root_ti
-                    nonlocal home_ti
-                    
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
-                    home_ti = root_ti.GetFirstChild()
-                    assert home_ti is not None
-                    home_ti.SelectItem()
-                    with assert_does_open_webbrowser_to(get_request_url(home_url)):
-                        click_button(mw.view_button)
-                
-                # View the home page.
-                # Ensure console does reveal that target was not downloaded successfully.
-                if True:
-                    # Simulate opening home page in browser,
+                    # Simulate refreshing home page in browser,
                     # which should evaluate the <script>-only reference,
                     # and try to fetch the target automatically
                     with console_output_copied() as console_output:
@@ -487,133 +521,98 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                         #       wait_for_download_to_start_and_finish
                         target_page = await fetch_archive_url(target_url, timeout=10)
                     
-                    # Ensure console does log that target in not in the archive
-                    # so that user knows they must take special action to download it
+                    # Ensure console does log that target is being dynamically fetched,
+                    # so that user knows they were successful in creating a matching group
                     assert (
-                        f'*** Requested resource not in archive: '
-                        f'{target_url}'
+                        f'*** Dynamically downloading new resource in group '
+                        f'{target_group_name!r}: {target_url}'
+                    ) in console_output.getvalue()
+                    
+                assert False == (await is_url_not_in_archive(target_url))
+                
+                # Undownload target
+                await _undownload_url(target_url, mw, project_dirpath)
+                start_server_again()
+            
+            # Test will dynamically download an existing resource group member upon request
+            if True:
+                # Refresh the home page.
+                # Ensure console does log that target is being dynamically fetched.
+                if True:
+                    # Simulate refreshing home page in browser,
+                    # which should evaluate the <script>-only reference,
+                    # and try to fetch the target automatically
+                    with console_output_copied() as console_output:
+                        home_page = await fetch_archive_url(home_url)
+                        # TODO: Use a *dynamic* timeout that looks for progress in
+                        #       download tasks in the UI, similar to
+                        #       wait_for_download_to_start_and_finish
+                        target_page = await fetch_archive_url(target_url, timeout=10)
+                    
+                    # Ensure console does log that target is being dynamically fetched,
+                    # so that user knows they were successful in creating a matching group
+                    assert (
+                        f'*** Dynamically downloading existing resource in group '
+                        f'{target_group_name!r}: {target_url}'
                     ) in console_output.getvalue()
                 
-                # Test will dynamically download a new resource group member upon request
-                if True:
-                    assert True == (await is_url_not_in_archive(target_url))
-                    
-                    # Undiscover the target
-                    await _undiscover_url(target_url, mw, project_dirpath)
-                    start_server_again()
-                    
-                    # Add resource group matching target
-                    click_button(mw.add_group_button)
-                    agd = await AddGroupDialog.wait_for()
-                    agd.name_field.Value = target_group_name
-                    agd.pattern_field.Value = target_group_pattern
-                    await agd.ok()
-                    
-                    # Refresh the home page.
-                    # Ensure console does log that target is being dynamically fetched.
-                    if True:
-                        # Simulate refreshing home page in browser,
-                        # which should evaluate the <script>-only reference,
-                        # and try to fetch the target automatically
-                        with console_output_copied() as console_output:
-                            home_page = await fetch_archive_url(home_url)
-                            # TODO: Use a *dynamic* timeout that looks for progress in
-                            #       download tasks in the UI, similar to
-                            #       wait_for_download_to_start_and_finish
-                            target_page = await fetch_archive_url(target_url, timeout=10)
-                        
-                        # Ensure console does log that target is being dynamically fetched,
-                        # so that user knows they were successful in creating a matching group
-                        assert (
-                            f'*** Dynamically downloading new resource in group '
-                            f'{target_group_name!r}: {target_url}'
-                        ) in console_output.getvalue()
-                        
-                    assert False == (await is_url_not_in_archive(target_url))
-                    
-                    # Undownload target
-                    await _undownload_url(target_url, mw, project_dirpath)
-                    start_server_again()
+                assert False == (await is_url_not_in_archive(target_url))
                 
-                # Test will dynamically download an existing resource group member upon request
-                if True:
-                    # Refresh the home page.
-                    # Ensure console does log that target is being dynamically fetched.
-                    if True:
-                        # Simulate refreshing home page in browser,
-                        # which should evaluate the <script>-only reference,
-                        # and try to fetch the target automatically
-                        with console_output_copied() as console_output:
-                            home_page = await fetch_archive_url(home_url)
-                            # TODO: Use a *dynamic* timeout that looks for progress in
-                            #       download tasks in the UI, similar to
-                            #       wait_for_download_to_start_and_finish
-                            target_page = await fetch_archive_url(target_url, timeout=10)
-                        
-                        # Ensure console does log that target is being dynamically fetched,
-                        # so that user knows they were successful in creating a matching group
-                        assert (
-                            f'*** Dynamically downloading existing resource in group '
-                            f'{target_group_name!r}: {target_url}'
-                        ) in console_output.getvalue()
-                    
-                    assert False == (await is_url_not_in_archive(target_url))
-                    
-                    # Forget resource group matching target
-                    (target_group_ti,) = [
-                        child for child in root_ti.Children
-                        if child.Text.startswith(f'{target_group_pattern} - ')
-                    ]
-                    target_group_ti.SelectItem()
-                    click_button(mw.forget_button)
-                    
-                    # Undownload target
-                    await _undownload_url(target_url, mw, project_dirpath)
-                    start_server_again()
+                # Forget resource group matching target
+                (target_group_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{target_group_pattern} - ')
+                ]
+                target_group_ti.SelectItem()
+                click_button(mw.forget_button)
                 
-                # Test will dynamically download a root resource upon request
+                # Undownload target
+                await _undownload_url(target_url, mw, project_dirpath)
+                start_server_again()
+            
+            # Test will dynamically download a root resource upon request
+            if True:
+                assert True == (await is_url_not_in_archive(target_url))
+                
+                # Add root resource: https://c.xkcd.com/xkcd/news
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                aud.name_field.Value = target_root_resource_name
+                aud.url_field.Value = target_url
+                await aud.ok()
+                
+                # Refresh the home page.
+                # Ensure console does log that target is being dynamically fetched.
                 if True:
-                    assert True == (await is_url_not_in_archive(target_url))
+                    # Simulate refreshing home page in browser,
+                    # which should evaluate the <script>-only reference,
+                    # and try to fetch the target automatically
+                    with console_output_copied() as console_output:
+                        home_page = await fetch_archive_url(home_url)
+                        # TODO: Use a *dynamic* timeout that looks for progress in
+                        #       download tasks in the UI, similar to
+                        #       wait_for_download_to_start_and_finish
+                        target_page = await fetch_archive_url(target_url, timeout=10)
                     
-                    # Add root resource: https://c.xkcd.com/xkcd/news
-                    click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
-                    aud.name_field.Value = target_root_resource_name
-                    aud.url_field.Value = target_url
-                    await aud.ok()
-                    
-                    # Refresh the home page.
-                    # Ensure console does log that target is being dynamically fetched.
-                    if True:
-                        # Simulate refreshing home page in browser,
-                        # which should evaluate the <script>-only reference,
-                        # and try to fetch the target automatically
-                        with console_output_copied() as console_output:
-                            home_page = await fetch_archive_url(home_url)
-                            # TODO: Use a *dynamic* timeout that looks for progress in
-                            #       download tasks in the UI, similar to
-                            #       wait_for_download_to_start_and_finish
-                            target_page = await fetch_archive_url(target_url, timeout=10)
-                        
-                        # Ensure console does log that target is being dynamically fetched,
-                        # so that user knows they were successful in creating a matching root resource
-                        assert (
-                            f'*** Dynamically downloading root resource '
-                            f'{target_root_resource_name!r}: {target_url}'
-                        ) in console_output.getvalue()
-                    
-                    assert False == (await is_url_not_in_archive(target_url))
-                    
-                    # Forget root resource matching target
-                    (target_rr_ti,) = [
-                        child for child in root_ti.Children
-                        if child.Text.startswith(f'{target_url} - ')
-                    ]
-                    target_rr_ti.SelectItem()
-                    click_button(mw.forget_button)
-                    
-                    # Undownload target
-                    await _undownload_url(target_url, mw, project_dirpath)
+                    # Ensure console does log that target is being dynamically fetched,
+                    # so that user knows they were successful in creating a matching root resource
+                    assert (
+                        f'*** Dynamically downloading root resource '
+                        f'{target_root_resource_name!r}: {target_url}'
+                    ) in console_output.getvalue()
+                
+                assert False == (await is_url_not_in_archive(target_url))
+                
+                # Forget root resource matching target
+                (target_rr_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text.startswith(f'{target_url} - ')
+                ]
+                target_rr_ti.SelectItem()
+                click_button(mw.forget_button)
+                
+                # Undownload target
+                await _undownload_url(target_url, mw, project_dirpath)
 
 
 async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() -> None:
@@ -631,109 +630,108 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
             sound_group_name = 'Sound'
             sound_pattern = sp.get_request_url('https://bongo.cat/sounds/*')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
-                assert root_ti.GetFirstChild() is None  # no entities
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            assert root_ti is not None
+            assert root_ti.GetFirstChild() is None  # no entities
+            
+            # Download home page
+            if True:
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
+                aud.name_field.Value = 'Home'
+                aud.url_field.Value = home_url
+                await aud.ok()
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None  # entity was created
+                assert f'{home_url} - Home' == home_ti.Text
                 
-                # Download home page
-                if True:
-                    click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
-                    aud.name_field.Value = 'Home'
-                    aud.url_field.Value = home_url
-                    await aud.ok()
-                    home_ti = root_ti.GetFirstChild()
-                    assert home_ti is not None  # entity was created
-                    assert f'{home_url} - Home' == home_ti.Text
-                    
-                    home_ti.SelectItem()
-                    await mw.click_download_button()
-                    await wait_for_download_to_start_and_finish(mw.task_tree)
-                
-                # Home page has JavaScript that will load sound URLs when
-                # executed, but Crystal isn't smart enough to find those
-                # sound URLs in advance
-                
-                # Ensure sound file not detected as embedded resource
-                # and not downloaded
-                if True:
-                    # Ensure home page has no normal link to Sound #1
-                    home_ti.Expand()
-                    await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                    () = [
-                        child for child in home_ti.Children
-                        if child.Text.startswith(f'{sound1_url} - ')
-                    ]
-                    
-                    # Ensure home page has no embedded link to Sound #1
-                    (embedded_cluster_ti,) = [
-                        child for child in home_ti.Children
-                        if child.Text == '(Hidden: Embedded)'
-                    ]
-                    embedded_cluster_ti.Expand()
-                    await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                    () = [
-                        child for child in embedded_cluster_ti.Children
-                        if child.Text.startswith(f'{sound1_url} - ')
-                    ]
-                    
-                    home_ti.Collapse()
-                
-                # Create group Sound,
-                # so that dynamic requests to sound resources within the group
-                # by JavaScript will be downloaded automatically
-                if True:
-                    click_button(mw.add_group_button)
-                    agd = await AddGroupDialog.wait_for()
-                    
-                    agd.name_field.Value = sound_group_name
-                    agd.pattern_field.Value = sound_pattern
-                    await agd.ok()
-                
-                # Set home page as default URL prefix,
-                # so that dynamic requests to *site-relative* sound URLs by JavaScript
-                # can be dynamically rewritten to use the correct domain
                 home_ti.SelectItem()
-                await mw.entity_tree.set_default_url_prefix_to_resource_at_tree_item(home_ti)
-                new_default_url_prefix = home_url[:-1]  # without trailing /
+                await mw.click_download_button()
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            # Home page has JavaScript that will load sound URLs when
+            # executed, but Crystal isn't smart enough to find those
+            # sound URLs in advance
+            
+            # Ensure sound file not detected as embedded resource
+            # and not downloaded
+            if True:
+                # Ensure home page has no normal link to Sound #1
+                home_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                () = [
+                    child for child in home_ti.Children
+                    if child.Text.startswith(f'{sound1_url} - ')
+                ]
                 
-                # Start server
-                home_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(
-                        home_url,
-                        project_default_url_prefix=new_default_url_prefix)):
-                    click_button(mw.view_button)
+                # Ensure home page has no embedded link to Sound #1
+                (embedded_cluster_ti,) = [
+                    child for child in home_ti.Children
+                    if child.Text == '(Hidden: Embedded)'
+                ]
+                embedded_cluster_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                () = [
+                    child for child in embedded_cluster_ti.Children
+                    if child.Text.startswith(f'{sound1_url} - ')
+                ]
                 
-                # View the home page.
-                # Ensure console does reveal that link to sound was dynamically rewritten.
-                if True:
-                    # Simulate opening home page in browser,
-                    # which should evaluate the <script>-only reference,
-                    # and try to fetch the sound automatically
-                    with console_output_copied() as console_output:
-                        home_page = await fetch_archive_url(home_url)
-                        
-                        request_scheme = 'http'
-                        request_host = 'localhost:%s' % sp.port
-                        request_path = sound1_href
-                        sound1_request_url = f'{request_scheme}://{request_host}{request_path}'
-                        sound1_data = await bg_fetch_url(
-                            sound1_request_url,
-                            headers={
-                                'Referer': home_url
-                            },
-                            timeout=DEFAULT_WAIT_TIMEOUT)
+                home_ti.Collapse()
+            
+            # Create group Sound,
+            # so that dynamic requests to sound resources within the group
+            # by JavaScript will be downloaded automatically
+            if True:
+                click_button(mw.add_group_button)
+                agd = await AddGroupDialog.wait_for()
+                
+                agd.name_field.Value = sound_group_name
+                agd.pattern_field.Value = sound_pattern
+                await agd.ok()
+            
+            # Set home page as default URL prefix,
+            # so that dynamic requests to *site-relative* sound URLs by JavaScript
+            # can be dynamically rewritten to use the correct domain
+            home_ti.SelectItem()
+            await mw.entity_tree.set_default_url_prefix_to_resource_at_tree_item(home_ti)
+            new_default_url_prefix = home_url[:-1]  # without trailing /
+            
+            # Start server
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(get_request_url(
+                    home_url,
+                    project_default_url_prefix=new_default_url_prefix)):
+                click_button(mw.view_button)
+            
+            # View the home page.
+            # Ensure console does reveal that link to sound was dynamically rewritten.
+            if True:
+                # Simulate opening home page in browser,
+                # which should evaluate the <script>-only reference,
+                # and try to fetch the sound automatically
+                with console_output_copied() as console_output:
+                    home_page = await fetch_archive_url(home_url)
                     
-                    # Ensure console does log that link to sound is being dynamically rewriten
-                    assert (
-                        f'*** Dynamically rewriting link from {home_original_url}: '
-                        f'{sound1_original_url}'
-                    ) in console_output.getvalue()
-                    
-                    # Ensure sound did actually download
-                    assert len(sound1_data.content_bytes) == 10258  # magic
+                    request_scheme = 'http'
+                    request_host = 'localhost:%s' % sp.port
+                    request_path = sound1_href
+                    sound1_request_url = f'{request_scheme}://{request_host}{request_path}'
+                    sound1_data = await bg_fetch_url(
+                        sound1_request_url,
+                        headers={
+                            'Referer': home_url
+                        },
+                        timeout=DEFAULT_WAIT_TIMEOUT)
+                
+                # Ensure console does log that link to sound is being dynamically rewriten
+                assert (
+                    f'*** Dynamically rewriting link from {home_original_url}: '
+                    f'{sound1_original_url}'
+                ) in console_output.getvalue()
+                
+                # Ensure sound did actually download
+                assert len(sound1_data.content_bytes) == 10258  # magic
 
 
 async def test_cannot_download_anything_given_project_is_opened_as_readonly() -> None:
@@ -1040,96 +1038,95 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
             feed_item_pattern = sp.get_request_url('https://xkcd.com/##/')
             assert feed_item_pattern != comic_pattern
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                # 1. Test can create unnamed root resource
-                # 2. Ensure unnamed root resource at root of Entity Tree has OK title
-                if True:
-                    root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
-                    assert root_ti.GetFirstChild() is None  # no entities
-                    
-                    click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
-                    
-                    aud.url_field.Value = home_url
-                    await aud.ok()
-                    home_ti = root_ti.GetFirstChild()
-                    assert home_ti is not None  # entity was created
-                    assert f'{home_url}' == home_ti.Text
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            # 1. Test can create unnamed root resource
+            # 2. Ensure unnamed root resource at root of Entity Tree has OK title
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti is not None
+                assert root_ti.GetFirstChild() is None  # no entities
                 
-                # Expand root resource
-                home_ti.Expand()
-                await wait_for(
-                    first_child_of_tree_item_is_not_loading_condition(home_ti),
-                    timeout=4.0  # 2.0s isn't long enough for Windows test runners on GitHub Actions
-                )
-                (comic1_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic1_url} - ')
-                ]  # ensure did find sub-resource for Comic #1
+                click_button(mw.add_url_button)
+                aud = await AddUrlDialog.wait_for()
                 
-                # 1. Test can create unnamed resource group
-                # 2. Ensure unnamed root resource shows as source with OK title
-                if True:
-                    comic1_ti.SelectItem()
-                    
-                    click_button(mw.add_group_button)
-                    agd = await AddGroupDialog.wait_for()
-                    
-                    agd.pattern_field.Value = comic_pattern
-                    agd.source = home_url
-                    agd.name_field.Value = ''
-                    await agd.ok()
-                    
-                    # 1. Ensure the new resource group does now group sub-resources
-                    # 2. Ensure grouped sub-resources for unnamed group has OK title
-                    if True:
-                        (grouped_subresources_ti,) = [
-                            child for child in home_ti.Children
-                            if child.Text.startswith(f'{comic_pattern} - ')
-                        ]  # ensure did find grouped sub-resources
-                        assert re.fullmatch(
-                            rf'{re.escape(comic_pattern)} - \d+ links?',  # title format of grouped sub-resources
-                            grouped_subresources_ti.Text)
-                        
-                        grouped_subresources_ti.Expand()
-                        await wait_for(first_child_of_tree_item_is_not_loading_condition(grouped_subresources_ti))
-                        
-                        (comic1_ti,) = [
-                            child for child in grouped_subresources_ti.Children
-                            if child.Text.startswith(f'{comic1_url} - ')
-                        ]  # contains first comic
-                        assert len(grouped_subresources_ti.Children) >= 2  # contains last comic too
-                        
-                        grouped_subresources_ti.Collapse()
-                    
-                    home_ti.Collapse()
-                    
-                    # 1. Ensure the new resource group appears at the root of the entity tree
-                    # 2. Ensure unnamed resource group at root of Entity Tree has OK title
-                    (comic_group_ti,) = [
-                        child for child in root_ti.Children
-                        if child.Text == f'{comic_pattern}'
-                    ]  # ensure did find resource group at root of entity tree
-                    
-                    comic_group_ti.Expand()
-                    await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
-                    
-                    # Ensure the new resource group does contain the expected members
-                    (comic1_ti,) = [
-                        child for child in comic_group_ti.Children
-                        if child.Text == f'{comic1_url}'
-                    ]  # contains first comic
-                    assert len(comic_group_ti.Children) >= 2  # contains last comic too
-                    
-                    comic_group_ti.Collapse()
+                aud.url_field.Value = home_url
+                await aud.ok()
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None  # entity was created
+                assert f'{home_url}' == home_ti.Text
+            
+            # Expand root resource
+            home_ti.Expand()
+            await wait_for(
+                first_child_of_tree_item_is_not_loading_condition(home_ti),
+                timeout=4.0  # 2.0s isn't long enough for Windows test runners on GitHub Actions
+            )
+            (comic1_ti,) = [
+                child for child in home_ti.Children
+                if child.Text.startswith(f'{comic1_url} - ')
+            ]  # ensure did find sub-resource for Comic #1
+            
+            # 1. Test can create unnamed resource group
+            # 2. Ensure unnamed root resource shows as source with OK title
+            if True:
+                comic1_ti.SelectItem()
                 
-                # Ensure unnamed resource group shows as source with OK title
                 click_button(mw.add_group_button)
                 agd = await AddGroupDialog.wait_for()
-                agd.source = comic_pattern
-                click_button(agd.cancel_button)
+                
+                agd.pattern_field.Value = comic_pattern
+                agd.source = home_url
+                agd.name_field.Value = ''
+                await agd.ok()
+                
+                # 1. Ensure the new resource group does now group sub-resources
+                # 2. Ensure grouped sub-resources for unnamed group has OK title
+                if True:
+                    (grouped_subresources_ti,) = [
+                        child for child in home_ti.Children
+                        if child.Text.startswith(f'{comic_pattern} - ')
+                    ]  # ensure did find grouped sub-resources
+                    assert re.fullmatch(
+                        rf'{re.escape(comic_pattern)} - \d+ links?',  # title format of grouped sub-resources
+                        grouped_subresources_ti.Text)
+                    
+                    grouped_subresources_ti.Expand()
+                    await wait_for(first_child_of_tree_item_is_not_loading_condition(grouped_subresources_ti))
+                    
+                    (comic1_ti,) = [
+                        child for child in grouped_subresources_ti.Children
+                        if child.Text.startswith(f'{comic1_url} - ')
+                    ]  # contains first comic
+                    assert len(grouped_subresources_ti.Children) >= 2  # contains last comic too
+                    
+                    grouped_subresources_ti.Collapse()
+                
+                home_ti.Collapse()
+                
+                # 1. Ensure the new resource group appears at the root of the entity tree
+                # 2. Ensure unnamed resource group at root of Entity Tree has OK title
+                (comic_group_ti,) = [
+                    child for child in root_ti.Children
+                    if child.Text == f'{comic_pattern}'
+                ]  # ensure did find resource group at root of entity tree
+                
+                comic_group_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
+                
+                # Ensure the new resource group does contain the expected members
+                (comic1_ti,) = [
+                    child for child in comic_group_ti.Children
+                    if child.Text == f'{comic1_url}'
+                ]  # contains first comic
+                assert len(comic_group_ti.Children) >= 2  # contains last comic too
+                
+                comic_group_ti.Collapse()
+            
+            # Ensure unnamed resource group shows as source with OK title
+            click_button(mw.add_group_button)
+            agd = await AddGroupDialog.wait_for()
+            agd.source = comic_pattern
+            click_button(agd.cancel_button)
 
 
 # ------------------------------------------------------------------------------
