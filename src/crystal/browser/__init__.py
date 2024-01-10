@@ -3,7 +3,7 @@ from crystal import APP_NAME
 from crystal import __version__ as crystal_version
 from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
-from crystal.browser.entitytree import EntityTree
+from crystal.browser.entitytree import EntityTree, ResourceGroupNode, RootResourceNode
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import (
@@ -186,39 +186,45 @@ class MainWindow:
             # NOTE: Action is bound to self._on_preferences later manually
             action_func=None,
             enabled=True,
-            button_label='&Preferences...')
+            button_label='⚙️ &Preferences...')
         
         # Entity
         self._new_root_url_action = Action(wx.ID_ANY,
             'New &Root URL...',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('R')),
             self._on_add_url,
-            enabled=(not self._readonly))
+            enabled=(not self._readonly),
+            button_label=f'{RootResourceNode.ICON} New &Root URL...')
         self._new_group_action = Action(wx.ID_ANY,
             'New &Group...',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('G')),
             self._on_add_group,
-            enabled=(not self._readonly))
+            enabled=(not self._readonly),
+            button_label=f'{ResourceGroupNode.ICON} New &Group...')
         self._forget_action = Action(wx.ID_ANY,
             '&Forget',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_BACK),
             self._on_forget_entity,
-            enabled=False)
+            enabled=False,
+            button_label=f'✖️ &Forget')
         self._download_action = Action(wx.ID_ANY,
             '&Download',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_RETURN),
             self._on_download_entity,
-            enabled=False)
+            enabled=False,
+            button_label=f'⬇ &Download')
         self._update_membership_action = Action(wx.ID_ANY,
             'Update &Membership',
             accel=None,
             action_func=self._on_update_group_membership,
-            enabled=False)
+            enabled=False,
+            button_label=f'🔎 Update &Membership')
         self._view_action = Action(wx.ID_ANY,
             '&View',
             wx.AcceleratorEntry(wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('O')),
             self._on_view_entity,
-            enabled=False)
+            enabled=False,
+            button_label=f'👁 &View')
         
         # HACK: Gather all actions indirectly by inspecting fields
         self._actions = [a for a in self.__dict__.values() if isinstance(a, Action)]
