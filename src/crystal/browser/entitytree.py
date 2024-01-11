@@ -793,6 +793,7 @@ class _ResourceNode(Node):
 
 class RootResourceNode(_ResourceNode):
     ICON = '⚓️'
+    ICON_TRUNCATION_FIX = ''
     
     def __init__(self,
             root_resource: RootResource,
@@ -957,6 +958,7 @@ class ClusterNode(Node):
 
 class ResourceGroupNode(Node):
     ICON = '📁'
+    ICON_TRUNCATION_FIX = ' '
     
     _MAX_VISIBLE_CHILDREN = 100
     _MORE_CHILDREN_TO_SHOW = 20

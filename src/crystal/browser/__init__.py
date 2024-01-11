@@ -20,6 +20,7 @@ from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
 from crystal.util.finderinfo import get_hide_file_extension
+from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import set_dialog_or_frame_icon_if_appropriate
 from crystal.util.xos import (
@@ -186,7 +187,7 @@ class MainWindow:
             # NOTE: Action is bound to self._on_preferences later manually
             action_func=None,
             enabled=True,
-            button_label='⚙️ &Preferences...')
+            button_label=decorate_label('⚙️', '&Preferences...', ''))
         
         # Entity
         self._new_root_url_action = Action(wx.ID_ANY,
@@ -194,37 +195,43 @@ class MainWindow:
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('R')),
             self._on_add_url,
             enabled=(not self._readonly),
-            button_label=f'{RootResourceNode.ICON} New &Root URL...')
+            button_label=decorate_label(
+                RootResourceNode.ICON,
+                'New &Root URL...',
+                RootResourceNode.ICON_TRUNCATION_FIX))
         self._new_group_action = Action(wx.ID_ANY,
             'New &Group...',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('G')),
             self._on_add_group,
             enabled=(not self._readonly),
-            button_label=f'{ResourceGroupNode.ICON} New &Group...')
+            button_label=decorate_label(
+                ResourceGroupNode.ICON,
+                'New &Group...',
+                ResourceGroupNode.ICON_TRUNCATION_FIX))
         self._forget_action = Action(wx.ID_ANY,
             '&Forget',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_BACK),
             self._on_forget_entity,
             enabled=False,
-            button_label=f'✖️ &Forget')
+            button_label=decorate_label('✖️', '&Forget', ''))
         self._download_action = Action(wx.ID_ANY,
             '&Download',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_RETURN),
             self._on_download_entity,
             enabled=False,
-            button_label=f'⬇ &Download')
+            button_label=decorate_label('⬇', '&Download', ''))
         self._update_membership_action = Action(wx.ID_ANY,
             'Update &Membership',
             accel=None,
             action_func=self._on_update_group_membership,
             enabled=False,
-            button_label=f'🔎 Update &Membership')
+            button_label=decorate_label('🔎', 'Update &Membership', ' '))
         self._view_action = Action(wx.ID_ANY,
             '&View',
             wx.AcceleratorEntry(wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('O')),
             self._on_view_entity,
             enabled=False,
-            button_label=f'👁 &View')
+            button_label=decorate_label('👀', '&View', ' '))
         
         # HACK: Gather all actions indirectly by inspecting fields
         self._actions = [a for a in self.__dict__.values() if isinstance(a, Action)]

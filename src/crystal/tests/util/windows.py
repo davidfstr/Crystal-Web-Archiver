@@ -365,7 +365,7 @@ class AddUrlDialog:
 
 class AddGroupDialog:
     _NONE_SOURCE_TITLE = 'none'
-    _SOURCE_TITLE_RE = re.compile(r'^[^ ]+ (.*?)(?: - (.*))?$')
+    _SOURCE_TITLE_RE = re.compile(r'^(?:[^a-zA-Z0-9]+ )?(.*?)(?: - (.*?))? *$')
     
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
