@@ -28,7 +28,7 @@ ImageIndex = NewType('ImageIndex', int)
 _DEFAULT_TREE_ICON_SIZE = (16,16)
 
 _DEFAULT_FOLDER_ICON_SET_CACHED = None
-def _DEFAULT_FOLDER_ICON_SET() -> IconSet:
+def DEFAULT_FOLDER_ICON_SET() -> IconSet:
     global _DEFAULT_FOLDER_ICON_SET_CACHED  # necessary to write to a module global
     if not _DEFAULT_FOLDER_ICON_SET_CACHED:
         _DEFAULT_FOLDER_ICON_SET_CACHED = (
@@ -258,7 +258,7 @@ class NodeView:
             effective_value = (
                 value
                 if value is not None else (
-                    _DEFAULT_FOLDER_ICON_SET()
+                    DEFAULT_FOLDER_ICON_SET()
                     if self.expandable 
                     else _DEFAULT_FILE_ICON_SET()
                 )

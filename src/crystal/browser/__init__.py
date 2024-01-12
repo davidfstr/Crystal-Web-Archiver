@@ -4,6 +4,7 @@ from crystal import __version__ as crystal_version
 from crystal.browser.addgroup import AddGroupDialog
 from crystal.browser.addrooturl import AddRootUrlDialog
 from crystal.browser.entitytree import EntityTree, ResourceGroupNode, RootResourceNode
+from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import (
@@ -19,6 +20,7 @@ from crystal.task import DownloadResourceGroupMembersTask, RootTask
 from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
+from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
 from crystal.util.finderinfo import get_hide_file_extension
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
@@ -195,19 +197,15 @@ class MainWindow:
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('R')),
             self._on_add_url,
             enabled=(not self._readonly),
-            button_label=decorate_label(
-                RootResourceNode.ICON,
-                'New &Root URL...',
-                RootResourceNode.ICON_TRUNCATION_FIX))
+            button_bitmap=TREE_NODE_ICONS()['entitytree_root_resource'],
+            button_label='New &Root URL...')
         self._new_group_action = Action(wx.ID_ANY,
             'New &Group...',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('G')),
             self._on_add_group,
             enabled=(not self._readonly),
-            button_label=decorate_label(
-                ResourceGroupNode.ICON,
-                'New &Group...',
-                ResourceGroupNode.ICON_TRUNCATION_FIX))
+            button_bitmap=dict(DEFAULT_FOLDER_ICON_SET())[wx.TreeItemIcon_Normal],
+            button_label='New &Group...')
         self._forget_action = Action(wx.ID_ANY,
             '&Forget',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_BACK),

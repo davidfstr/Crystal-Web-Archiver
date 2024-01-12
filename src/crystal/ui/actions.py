@@ -1,5 +1,6 @@
+from crystal.browser.icons import add_transparent_left_border
 from crystal.util.wx_bind import bind
-from crystal.util.xos import is_mac_os
+from crystal.util.xos import is_mac_os, is_windows
 from typing import Callable, List, Optional
 import wx
 
@@ -21,12 +22,14 @@ class Action:
             accel: Optional[wx.AcceleratorEntry]=None,
             action_func: Optional[Callable[[wx.CommandEvent], None]]=None,
             enabled: bool=True,
+            button_bitmap: Optional[wx.Bitmap]=None,
             button_label: str=''):
         self._menuitem_id = menuitem_id
         self._label = label
         self._accel = accel
         self._action_func = action_func
         self._enabled = enabled
+        self._button_bitmap = button_bitmap
         self._button_label = button_label
         
         self._menuitems = []  # type: List[wx.MenuItem]
@@ -78,6 +81,16 @@ class Action:
             button_label = wx.Control.RemoveMnemonics(button_label)  # reinterpret
         
         button = wx.Button(*args, label=button_label, **kwargs)
+        if self._button_bitmap is not None:
+            button.SetBitmap(add_transparent_left_border(
+                self._button_bitmap,
+                # Alter left margin for bitmap to be reasonable on Windows.
+                # Initially it is 0.
+                8+6 if is_windows() else 0
+            ))
+            if is_windows():
+                # Decrease bitmap-to-text spacing on Windows to be reasonable
+                button.SetBitmapMargins((-6, 0))
         # (NOTE: Do NOT set accelerator for the button because it does not
         #        work on consistently on macOS. Any action added as a button
         #        should also be added as a menuitem too, and we CAN set an
