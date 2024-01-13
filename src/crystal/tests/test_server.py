@@ -12,7 +12,7 @@ from crystal.tests.util.server import (
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
-from crystal.tests.util.windows import AddUrlDialog, MainWindow, OpenOrCreateDialog
+from crystal.tests.util.windows import NewRootUrlDialog, MainWindow, OpenOrCreateDialog
 from crystal.util.ports import is_port_in_use
 from io import StringIO
 import tempfile
@@ -51,11 +51,11 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
                 assert root_ti.GetFirstChild() is None  # no entities
                 
                 click_button(mw.add_url_button)
-                aud = await AddUrlDialog.wait_for()
+                nud = await NewRootUrlDialog.wait_for()
                 
-                aud.name_field.Value = 'Home'
-                aud.url_field.Value = home_url
-                await aud.ok()
+                nud.name_field.Value = 'Home'
+                nud.url_field.Value = home_url
+                await nud.ok()
                 (home_ti,) = root_ti.Children
             
             # Download the URL

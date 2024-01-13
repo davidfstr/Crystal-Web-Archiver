@@ -8,7 +8,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import (
-    AddGroupDialog, AddUrlDialog, EntityTree, MainWindow, OpenOrCreateDialog,
+    AddGroupDialog, NewRootUrlDialog, EntityTree, MainWindow, OpenOrCreateDialog,
 )
 from crystal.util.xos import is_windows
 import re
@@ -34,11 +34,11 @@ async def test_can_create_group_with_source(*, with_source: bool=True) -> None:
             if with_source:
                 assert mw.add_url_button.Enabled
                 click_button(mw.add_url_button)
-                aud = await AddUrlDialog.wait_for()
+                nud = await NewRootUrlDialog.wait_for()
                 
-                aud.name_field.Value = 'Home'
-                aud.url_field.Value = home_url
-                await aud.ok()
+                nud.name_field.Value = 'Home'
+                nud.url_field.Value = home_url
+                await nud.ok()
             
             # Create a group
             if True:
@@ -144,11 +144,11 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 
                 assert mw.add_url_button.Enabled
                 click_button(mw.add_url_button)
-                aud = await AddUrlDialog.wait_for()
+                nud = await NewRootUrlDialog.wait_for()
                 
-                aud.name_field.Value = 'Home'
-                aud.url_field.Value = home_url
-                await aud.ok()
+                nud.name_field.Value = 'Home'
+                nud.url_field.Value = home_url
+                await nud.ok()
                 (home_ti,) = root_ti.Children
             
             # Expand home URL

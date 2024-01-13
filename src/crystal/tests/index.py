@@ -1,7 +1,6 @@
 from contextlib import contextmanager
 from crystal.tests import (
     test_addgroup,
-    test_addrooturl,
     test_disk_io_errors,
     test_download,
     test_download_body,
@@ -12,6 +11,7 @@ from crystal.tests import (
     test_load_urls,
     test_log_drawer,
     test_menus,
+    test_new_root_url,
     test_open_project,
     test_parse_html,
     test_profile,
@@ -60,7 +60,7 @@ def _test_functions_in_module(mod) -> List[Callable]:
 # TODO: Avoid the need to manually enumerate all test modules individually
 _TEST_FUNCS = (
     _test_functions_in_module(test_addgroup) +
-    _test_functions_in_module(test_addrooturl) +
+    _test_functions_in_module(test_new_root_url) +
     _test_functions_in_module(test_disk_io_errors) +
     _test_functions_in_module(test_download) +
     _test_functions_in_module(test_download_body) +

@@ -1,5 +1,5 @@
 # TODO: Consider extracting functions shared between dialogs to own module
-from crystal.browser.addrooturl import AddRootUrlDialog, fields_hide_hint_when_focused
+from crystal.browser.new_root_url import NewRootUrlDialog, fields_hide_hint_when_focused
 from crystal.browser.entitytree import ResourceGroupNode, RootResourceNode
 from crystal.model import Project, ResourceGroup, ResourceGroupSource
 from crystal.progress import CancelLoadUrls
@@ -19,7 +19,7 @@ _FORM_ROW_SPACING = 10
 
 
 class AddGroupDialog:
-    _INITIAL_URL_PATTERN_WIDTH = AddRootUrlDialog._INITIAL_URL_WIDTH
+    _INITIAL_URL_PATTERN_WIDTH = NewRootUrlDialog._INITIAL_URL_WIDTH
     _MAX_VISIBLE_PREVIEW_URLS = 100
     
     # === Init ===

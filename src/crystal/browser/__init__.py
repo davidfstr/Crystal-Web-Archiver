@@ -2,7 +2,7 @@ from contextlib import contextmanager, nullcontext
 from crystal import APP_NAME
 from crystal import __version__ as crystal_version
 from crystal.browser.addgroup import AddGroupDialog
-from crystal.browser.addrooturl import AddRootUrlDialog
+from crystal.browser.new_root_url import NewRootUrlDialog
 from crystal.browser.entitytree import EntityTree, ResourceGroupNode, RootResourceNode
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.browser.preferences import PreferencesDialog
@@ -440,7 +440,7 @@ class MainWindow:
             rr = self.project.get_root_resource(r)
             return rr is not None
             
-        AddRootUrlDialog(
+        NewRootUrlDialog(
             self._frame, self._on_add_url_dialog_ok,
             url_exists_func=root_url_exists,
             initial_url=self._suggested_url_or_url_pattern_for_selection or '',

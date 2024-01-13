@@ -20,7 +20,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import (
-    AddGroupDialog, AddUrlDialog, EntityTree,
+    AddGroupDialog, NewRootUrlDialog, EntityTree,
     MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
 from crystal.util.xos import is_windows
@@ -69,11 +69,11 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     assert root_ti.GetFirstChild() is None  # no entities
                     
                     click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
+                    nud = await NewRootUrlDialog.wait_for()
                     
-                    aud.name_field.Value = 'Home'
-                    aud.url_field.Value = home_url
-                    await aud.ok()
+                    nud.name_field.Value = 'Home'
+                    nud.url_field.Value = home_url
+                    await nud.ok()
                     home_ti = root_ti.GetFirstChild()
                     assert home_ti is not None  # entity was created
                     assert f'{home_url} - Home' == home_ti.Text
@@ -433,10 +433,10 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
             # Download home page
             if True:
                 click_button(mw.add_url_button)
-                aud = await AddUrlDialog.wait_for()
-                aud.name_field.Value = 'Home'
-                aud.url_field.Value = home_url
-                await aud.ok()
+                nud = await NewRootUrlDialog.wait_for()
+                nud.name_field.Value = 'Home'
+                nud.url_field.Value = home_url
+                await nud.ok()
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None  # entity was created
                 assert f'{home_url} - Home' == home_ti.Text
@@ -576,10 +576,10 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 
                 # Add root resource: https://c.xkcd.com/xkcd/news
                 click_button(mw.add_url_button)
-                aud = await AddUrlDialog.wait_for()
-                aud.name_field.Value = target_root_resource_name
-                aud.url_field.Value = target_url
-                await aud.ok()
+                nud = await NewRootUrlDialog.wait_for()
+                nud.name_field.Value = target_root_resource_name
+                nud.url_field.Value = target_url
+                await nud.ok()
                 
                 # Refresh the home page.
                 # Ensure console does log that target is being dynamically fetched.
@@ -638,10 +638,10 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
             # Download home page
             if True:
                 click_button(mw.add_url_button)
-                aud = await AddUrlDialog.wait_for()
-                aud.name_field.Value = 'Home'
-                aud.url_field.Value = home_url
-                await aud.ok()
+                nud = await NewRootUrlDialog.wait_for()
+                nud.name_field.Value = 'Home'
+                nud.url_field.Value = home_url
+                await nud.ok()
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None  # entity was created
                 assert f'{home_url} - Home' == home_ti.Text
@@ -759,10 +759,10 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 # Download home page
                 if True:
                     click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
-                    aud.name_field.Value = 'Home'
-                    aud.url_field.Value = home_url
-                    await aud.ok()
+                    nud = await NewRootUrlDialog.wait_for()
+                    nud.name_field.Value = 'Home'
+                    nud.url_field.Value = home_url
+                    await nud.ok()
                     home_ti = root_ti.GetFirstChild()
                     assert home_ti is not None  # entity was created
                     assert f'{home_url} - Home' == home_ti.Text
@@ -882,16 +882,16 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 # Download: Home, Comic #1
                 if True:
                     click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
-                    aud.name_field.Value = 'Home'
-                    aud.url_field.Value = home_url
-                    await aud.ok()
+                    nud = await NewRootUrlDialog.wait_for()
+                    nud.name_field.Value = 'Home'
+                    nud.url_field.Value = home_url
+                    await nud.ok()
                     
                     click_button(mw.add_url_button)
-                    aud = await AddUrlDialog.wait_for()
-                    aud.name_field.Value = 'Comic #1'
-                    aud.url_field.Value = comic1_url
-                    await aud.ok()
+                    nud = await NewRootUrlDialog.wait_for()
+                    nud.name_field.Value = 'Comic #1'
+                    nud.url_field.Value = comic1_url
+                    await nud.ok()
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     assert root_ti is not None
@@ -1047,10 +1047,10 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 assert root_ti.GetFirstChild() is None  # no entities
                 
                 click_button(mw.add_url_button)
-                aud = await AddUrlDialog.wait_for()
+                nud = await NewRootUrlDialog.wait_for()
                 
-                aud.url_field.Value = home_url
-                await aud.ok()
+                nud.url_field.Value = home_url
+                await nud.ok()
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None  # entity was created
                 assert f'{home_url}' == home_ti.Text

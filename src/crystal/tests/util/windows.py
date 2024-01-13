@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from crystal.browser.addrooturl import AddRootUrlDialog
+from crystal.browser.new_root_url import NewRootUrlDialog as RealNewRootUrlDialog
 from crystal.model import Project
 from crystal.tests.util.controls import (
     click_button, file_dialog_returning,
@@ -313,9 +313,9 @@ class MainWindow:
         await self.wait_for_close()
 
 
-class AddUrlDialog:
+class NewRootUrlDialog:
     _dialog: wx.Dialog
-    _controller: AddRootUrlDialog
+    _controller: RealNewRootUrlDialog
     url_field: wx.TextCtrl
     url_cleaner_spinner: wx.ActivityIndicator
     name_field: wx.TextCtrl
@@ -323,17 +323,17 @@ class AddUrlDialog:
     cancel_button: wx.Button
     
     @staticmethod
-    async def wait_for() -> AddUrlDialog:
-        self = AddUrlDialog(ready=True)
-        self._dialog = await wait_for(window_condition('cr-add-url-dialog'), stacklevel_extra=1)
+    async def wait_for() -> NewRootUrlDialog:
+        self = NewRootUrlDialog(ready=True)
+        self._dialog = await wait_for(window_condition('cr-new-root-url-dialog'), stacklevel_extra=1)
         assert isinstance(self._dialog, wx.Dialog)
-        assert AddRootUrlDialog._last_opened is not None
-        self._controller = AddRootUrlDialog._last_opened
-        self.url_field = self._dialog.FindWindow(name='cr-add-url-dialog__url-field')
+        assert RealNewRootUrlDialog._last_opened is not None
+        self._controller = RealNewRootUrlDialog._last_opened
+        self.url_field = self._dialog.FindWindow(name='cr-new-root-url-dialog__url-field')
         assert isinstance(self.url_field, wx.TextCtrl)
-        self.url_cleaner_spinner = self._dialog.FindWindow(name='cr-add-url-dialog__url-cleaner-spinner')
+        self.url_cleaner_spinner = self._dialog.FindWindow(name='cr-new-root-url-dialog__url-cleaner-spinner')
         assert isinstance(self.url_cleaner_spinner, wx.ActivityIndicator)
-        self.name_field = self._dialog.FindWindow(name='cr-add-url-dialog__name-field')
+        self.name_field = self._dialog.FindWindow(name='cr-new-root-url-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
         self.ok_button = self._dialog.FindWindow(id=wx.ID_OK)
         assert isinstance(self.ok_button, wx.Button)
@@ -342,7 +342,7 @@ class AddUrlDialog:
         return self
     
     def __init__(self, *, ready: bool=False) -> None:
-        assert ready, 'Did you mean to use AddUrlDialog.wait_for()?'
+        assert ready, 'Did you mean to use NewRootUrlDialog.wait_for()?'
     
     @property
     def shown(self) -> bool:
@@ -356,11 +356,11 @@ class AddUrlDialog:
     
     async def ok(self) -> None:
         click_button(self.ok_button)
-        await wait_for(not_condition(window_condition('cr-add-url-dialog')), stacklevel_extra=1)
+        await wait_for(not_condition(window_condition('cr-new-root-url-dialog')), stacklevel_extra=1)
     
     async def cancel(self) -> None:
         click_button(self.cancel_button)
-        await wait_for(not_condition(window_condition('cr-add-url-dialog')), stacklevel_extra=1)
+        await wait_for(not_condition(window_condition('cr-new-root-url-dialog')), stacklevel_extra=1)
 
 
 class AddGroupDialog:

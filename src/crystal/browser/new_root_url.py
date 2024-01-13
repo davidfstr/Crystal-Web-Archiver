@@ -13,12 +13,12 @@ _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
 
 
-class AddRootUrlDialog:
+class NewRootUrlDialog:
     _INITIAL_URL_WIDTH = 400  # in pixels
     _FIELD_TO_SPINNER_MARGIN = 5
     
     # NOTE: Only changed when tests are running
-    _last_opened: 'Optional[AddRootUrlDialog]'=None
+    _last_opened: 'Optional[NewRootUrlDialog]'=None
     
     # === Init ===
     
@@ -45,7 +45,7 @@ class AddRootUrlDialog:
         self._is_destroying_or_destroyed = False
         
         dialog = self.dialog = wx.Dialog(
-            parent, title='New Root URL', name='cr-add-url-dialog',
+            parent, title='New Root URL', name='cr-new-root-url-dialog',
             style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
@@ -74,7 +74,7 @@ class AddRootUrlDialog:
         
         # Export reference to self, if running tests
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
-            AddRootUrlDialog._last_opened = self
+            NewRootUrlDialog._last_opened = self
     
     def _create_fields(self, parent: wx.Window, initial_url: str, initial_name: str) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
@@ -91,7 +91,7 @@ class AddRootUrlDialog:
                 self.url_field = wx.TextCtrl(
                     parent, value=initial_url,
                     size=(self._INITIAL_URL_WIDTH, wx.DefaultCoord),
-                    name='cr-add-url-dialog__url-field')
+                    name='cr-new-root-url-dialog__url-field')
                 self.url_field.Hint = 'https://example.com/'
                 self.url_field.SetSelection(-1, -1)  # select all upon focus
                 bind(self.url_field, wx.EVT_TEXT, self._update_ok_enabled)
@@ -103,7 +103,7 @@ class AddRootUrlDialog:
                 self.url_cleaner_spinner = wx.ActivityIndicator(
                     parent,
                     size=wx.Size(spinner_diameter, spinner_diameter),
-                    name='cr-add-url-dialog__url-cleaner-spinner')
+                    name='cr-new-root-url-dialog__url-cleaner-spinner')
                 self.url_cleaner_spinner.Hide()
                 url_field_and_spinner.Add(
                     self.url_cleaner_spinner,
@@ -117,7 +117,7 @@ class AddRootUrlDialog:
             if True:
                 self.name_field = wx.TextCtrl(
                     parent, value=initial_name,
-                    name='cr-add-url-dialog__name-field')
+                    name='cr-new-root-url-dialog__name-field')
                 self.name_field.Hint = 'Home'
                 self.name_field.SetSelection(-1, -1)  # select all upon focus
                 name_field_and_space.Add(self.name_field, proportion=1, flag=wx.EXPAND)
