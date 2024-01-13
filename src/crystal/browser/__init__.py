@@ -218,12 +218,12 @@ class MainWindow:
             self._on_download_entity,
             enabled=False,
             button_label=decorate_label('⬇', '&Download', ''))
-        self._update_membership_action = Action(wx.ID_ANY,
-            'Update &Membership',
+        self._update_members_action = Action(wx.ID_ANY,
+            'Update &Members',
             accel=None,
             action_func=self._on_update_group_membership,
             enabled=False,
-            button_label=decorate_label('🔎', 'Update &Membership', ' '))
+            button_label=decorate_label('🔎', 'Update &Members', ' '))
         self._view_action = Action(wx.ID_ANY,
             '&View',
             wx.AcceleratorEntry(wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('O')),
@@ -274,7 +274,7 @@ class MainWindow:
         self._forget_action.append_menuitem_to(entity_menu)
         entity_menu.AppendSeparator()
         self._download_action.append_menuitem_to(entity_menu)
-        self._update_membership_action.append_menuitem_to(entity_menu)
+        self._update_members_action.append_menuitem_to(entity_menu)
         self._view_action.append_menuitem_to(entity_menu)
         
         menubar = wx.MenuBar()
@@ -337,8 +337,8 @@ class MainWindow:
         
         download_button = self._download_action.create_button(parent, name='cr-download-button')
         
-        update_membership_button = self._update_membership_action.create_button(
-            parent, name='cr-update-membership-button')
+        update_members_button = self._update_members_action.create_button(
+            parent, name='cr-update-members-button')
         
         view_button = self._view_action.create_button(parent, name='cr-view-button')
         
@@ -352,7 +352,7 @@ class MainWindow:
         content_sizer.AddStretchSpacer()
         content_sizer.Add(download_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(update_membership_button)
+        content_sizer.Add(update_members_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
         content_sizer.Add(view_button)
         return content_sizer
@@ -547,7 +547,7 @@ class MainWindow:
     
     def _on_update_group_membership(self, event):
         selected_entity = self.entity_tree.selected_entity
-        selected_entity.update_membership()
+        selected_entity.update_members()
     
     def _on_view_entity(self, event) -> None:
         # TODO: If the server couldn't be started (ex: due to the default port being in
@@ -617,7 +617,7 @@ class MainWindow:
         self._download_action.enabled = (
             (not readonly) and
             selected_entity is not None)
-        self._update_membership_action.enabled = (
+        self._update_members_action.enabled = (
             (not readonly) and
             isinstance(selected_entity, ResourceGroup))
         self._view_action.enabled = (

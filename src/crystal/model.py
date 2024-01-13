@@ -3364,7 +3364,7 @@ class ResourceGroup(ListenableMixin):
         from crystal.task import DownloadResourceGroupTask
         return DownloadResourceGroupTask(self)
     
-    def update_membership(self) -> None:
+    def update_members(self) -> None:
         """
         Updates the membership of this group asynchronously.
         

@@ -154,7 +154,7 @@ class MainWindow:
     add_group_button: wx.Button
     forget_button: wx.Button
     download_button: wx.Button
-    update_membership_button: wx.Button
+    update_members_button: wx.Button
     view_button: wx.Button
     task_tree: wx.TreeCtrl
     preferences_button: wx.Button
@@ -184,8 +184,8 @@ class MainWindow:
         assert isinstance(self.forget_button, wx.Button)
         self.download_button = self.main_window.FindWindow(name='cr-download-button')
         assert isinstance(self.download_button, wx.Button)
-        self.update_membership_button = self.main_window.FindWindow(name='cr-update-membership-button')
-        assert isinstance(self.update_membership_button, wx.Button)
+        self.update_members_button = self.main_window.FindWindow(name='cr-update-members-button')
+        assert isinstance(self.update_members_button, wx.Button)
         self.view_button = self.main_window.FindWindow(name='cr-view-button')
         assert isinstance(self.view_button, wx.Button)
         self.task_tree = self.main_window.FindWindow(name='cr-task-tree')
