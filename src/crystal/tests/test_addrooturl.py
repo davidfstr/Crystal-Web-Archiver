@@ -216,7 +216,7 @@ def test_given_empty_string_then_returns_empty_string() -> None:
 
 
 @with_subtests
-def test_given_any_valid_url_then_returns_that_url_as_first_candidate(subtests: SubtestsContext) -> None:
+def test_given_any_valid_url_then_returns_that_url_as_only_candidate(subtests: SubtestsContext) -> None:
     VALID_URLS = [
         'https://xkcd.com/',
         'https://xkcd.com/1/',
@@ -230,11 +230,11 @@ def test_given_any_valid_url_then_returns_that_url_as_first_candidate(subtests: 
     with _EXPAND_enabled():
         for url in VALID_URLS:
             with subtests.test(url=url):
-                assertEqual(url, EXPAND(url)[0])
+                assertEqual([url], EXPAND(url))
 
 
 @with_subtests
-def test_given_a_url_that_would_be_valid_with_appended_slash_then_returns_that_modified_url_as_first_candidate(subtests: SubtestsContext) -> None:
+def test_given_a_url_that_would_be_valid_with_appended_slash_then_returns_that_modified_url_as_only_candidate(subtests: SubtestsContext) -> None:
     VALID_WITH_SLASH_URLS = [
         'https://xkcd.com',
         'https://www.apple.com',
@@ -243,14 +243,14 @@ def test_given_a_url_that_would_be_valid_with_appended_slash_then_returns_that_m
     with _EXPAND_enabled():
         for url in VALID_WITH_SLASH_URLS:
             with subtests.test(url=url):
-                assertEqual(url + '/', EXPAND(url)[0])
+                assertEqual([url + '/'], EXPAND(url))
 
 
 @with_subtests
-def test_given_url_without_www_prefix_then_returns_that_url_plus_that_url_with_www_as_candidates(subtests: SubtestsContext) -> None:
+def test_given_schemaless_url_without_www_prefix_then_returns_that_url_plus_that_url_with_www_as_candidates(subtests: SubtestsContext) -> None:
     CASES = [
-        ('https://xkcd.com/', ['https://xkcd.com/', 'https://www.xkcd.com/']),
-        ('https://apple.com/', ['https://apple.com/', 'https://www.apple.com/']),
+        ('xkcd.com/', ['https://xkcd.com/', 'https://www.xkcd.com/']),
+        ('apple.com/', ['https://apple.com/', 'https://www.apple.com/']),
     ]
     with _EXPAND_enabled():
         for (input, output) in CASES:
@@ -259,10 +259,10 @@ def test_given_url_without_www_prefix_then_returns_that_url_plus_that_url_with_w
 
 
 @with_subtests
-def test_given_url_with_www_prefix_then_returns_that_url_plus_that_url_without_www_as_candidates(subtests: SubtestsContext) -> None:
+def test_given_schemaless_url_with_www_prefix_then_returns_that_url_plus_that_url_without_www_as_candidates(subtests: SubtestsContext) -> None:
     CASES = [
-        ('https://www.xkcd.com/', ['https://www.xkcd.com/', 'https://xkcd.com/']),
-        ('https://www.apple.com/', ['https://www.apple.com/', 'https://apple.com/']),
+        ('www.xkcd.com/', ['https://www.xkcd.com/', 'https://xkcd.com/']),
+        ('www.apple.com/', ['https://www.apple.com/', 'https://apple.com/']),
     ]
     with _EXPAND_enabled():
         for (input, output) in CASES:
@@ -320,10 +320,8 @@ async def test_given_url_input_is_empty_and_focused_when_tab_pressed_then_url_in
 @awith_subtests
 async def test_given_url_input_is_nonempty_and_focused_when_tab_pressed_then_url_input_unfocused_and_spinner_appears(subtests: SubtestsContext) -> None:
     URLS = [
-        'https://xkcd.com/',
-        'https://www.apple.com/',
-        'http://xkcd.com/',
-        'http://www.apple.com/',
+        'xkcd.com',
+        'www.apple.com',
     ]
     async with _add_url_dialog_open() as aud:
         with _urlopen_responding_with(_UrlOpenHttpResponse(code=404, url=ANY)):
@@ -346,15 +344,13 @@ async def test_given_url_input_is_nonempty_and_focused_when_tab_pressed_then_url
 
 @awith_subtests
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_200_then_spinner_disappears(subtests: SubtestsContext) -> None:
-    URLS = [
-        'https://xkcd.com/',
-        'https://www.apple.com/',
-        'http://xkcd.com/',
-        'http://www.apple.com/',
+    CASES = [
+        ('xkcd.com', 'https://xkcd.com/'),
+        ('www.apple.com', 'https://www.apple.com/'),
     ]
     async with _add_url_dialog_open() as aud:
         last_focused = None  # type: Optional[wx.Window]
-        for url in URLS:
+        for (url, normalized_url) in CASES:
             with subtests.test(url=url):
                 # NOTE: Fail if requests any URL beyond the original one
                 with _urlopen_responding_with({url: _UrlOpenHttpResponse(code=200, url=url)}):
@@ -365,13 +361,12 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
                     assertEqual(False, aud.url_field_focused)
                     assertEqual(True, aud.url_cleaner_spinner.IsShown())
                     await wait_for(lambda: (False == aud.url_cleaner_spinner.IsShown()) or None)
-                    assertEqual(url, aud.url_field.Value)
+                    assertEqual(normalized_url, aud.url_field.Value)
 
 
 @awith_subtests
 async def test_given_url_input_is_nonempty_without_www_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_3xx_to_url_with_www_and_url_with_www_url_responds_with_http_200_then_url_input_replaced_with_url_with_www_and_spinner_disappears(subtests: SubtestsContext) -> None:
     CASES = [
-        ('https://apple.com/', 'https://apple.com/', 'https://www.apple.com/'),
         ('apple.com/mac/', 'https://apple.com/mac/', 'https://www.apple.com/mac/'),
         ('apple.com/', 'https://apple.com/', 'https://www.apple.com/'),
         ('apple.com', 'https://apple.com/', 'https://www.apple.com/'),
@@ -395,7 +390,6 @@ async def test_given_url_input_is_nonempty_without_www_and_did_press_tab_and_spi
 @awith_subtests
 async def test_given_url_input_is_nonempty_with_www_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_3xx_to_url_without_www_and_url_without_www_responds_with_http_200_then_url_input_replaced_with_url_without_www_and_spinner_disappears(subtests: SubtestsContext) -> None:
     CASES = [
-        ('https://www.xkcd.com/', 'https://www.xkcd.com/', 'https://xkcd.com/'),
         ('www.xkcd.com/1/', 'https://www.xkcd.com/1/', 'https://xkcd.com/1/'),
         ('www.xkcd.com/', 'https://www.xkcd.com/', 'https://xkcd.com/'),
         ('www.xkcd.com', 'https://www.xkcd.com/', 'https://xkcd.com/'),
@@ -417,57 +411,13 @@ async def test_given_url_input_is_nonempty_with_www_and_did_press_tab_and_spinne
 
 
 @awith_subtests
-async def test_given_url_input_is_nonempty_with_http_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_200_then_spinner_disappears(subtests: SubtestsContext) -> None:
-    URLS = [
-        'http://captive.apple.com/',
-        'http://http.badssl.com/',
-    ]
-    async with _add_url_dialog_open() as aud:
-        last_focused = None  # type: Optional[wx.Window]
-        for url in URLS:
-            with subtests.test(url=url):
-                # NOTE: Fail if requests any URL beyond the original one
-                with _urlopen_responding_with({url: _UrlOpenHttpResponse(code=200, url=url)}):
-                    last_focused = SetFocus(aud.url_field, last_focused)
-                    aud.url_field.Value = url
-                    
-                    last_focused = SetFocus(aud.name_field, last_focused)  # simulate press tab
-                    assertEqual(False, aud.url_field_focused)
-                    assertEqual(True, aud.url_cleaner_spinner.IsShown())
-                    await wait_for(lambda: (False == aud.url_cleaner_spinner.IsShown()) or None)
-                    assertEqual(url, aud.url_field.Value)
-
-
-@awith_subtests
-async def test_given_url_input_is_nonempty_with_http_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_3xx_to_https_url_then_url_input_replaced_with_https_url_and_spinner_disappears(subtests: SubtestsContext) -> None:
-    CASES = [
-        ('http://www.themanime.org/', 'https://www.themanime.org/'),
-    ]
-    async with _add_url_dialog_open() as aud:
-        last_focused = None  # type: Optional[wx.Window]
-        for (http_url, https_url) in CASES:
-            with subtests.test(url_input=http_url):
-                with _urlopen_responding_with({
-                        http_url: _UrlOpenHttpResponse(code=200, url=https_url)}):
-                    last_focused = SetFocus(aud.url_field, last_focused)
-                    aud.url_field.Value = http_url
-                    
-                    last_focused = SetFocus(aud.name_field, last_focused)  # simulate press tab
-                    assertEqual(False, aud.url_field_focused)
-                    assertEqual(True, aud.url_cleaner_spinner.IsShown())
-                    await wait_for(lambda: (False == aud.url_cleaner_spinner.IsShown()) or None)
-                    assertEqual(https_url, aud.url_field.Value)
-
-
-@awith_subtests
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_3xx_to_unrelated_url_then_spinner_disappears(subtests: SubtestsContext) -> None:
     CASES = [
-        ('http://contoso.com/', 'https://www.microsoft.com/'),
-        ('https://contoso.com/', 'https://www.microsoft.com/'),
+        ('contoso.com/', 'https://contoso.com/', 'https://www.microsoft.com/'),
     ]
     async with _add_url_dialog_open() as aud:
         last_focused = None  # type: Optional[wx.Window]
-        for (start_url, target_url) in CASES:
+        for (start_url, normalized_start_url, target_url) in CASES:
             with subtests.test(url_input=start_url):
                 with _urlopen_responding_with({
                         start_url: _UrlOpenHttpResponse(code=200, url=target_url)}):
@@ -478,7 +428,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
                     assertEqual(False, aud.url_field_focused)
                     assertEqual(True, aud.url_cleaner_spinner.IsShown())
                     await wait_for(lambda: (False == aud.url_cleaner_spinner.IsShown()) or None)
-                    assertEqual(start_url, aud.url_field.Value)
+                    assertEqual(normalized_start_url, aud.url_field.Value)
 
 
 # === Test: Concurrent Actions While Resolving URL & Allow Create Root URL ===
@@ -719,7 +669,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 last_focused = None  # type: Optional[wx.Window]
                 
                 last_focused = SetFocus(aud.url_field, last_focused)
-                aud.url_field.Value = 'https://xkcd.com/'
+                aud.url_field.Value = 'xkcd.com/'
                 
                 with patch('crystal.browser.addrooturl.ShowModal', return_value=wx.ID_OK) as show_modal_method:
                     click_button(aud.ok_button)
@@ -741,7 +691,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 last_focused = None
                 
                 last_focused = SetFocus(aud.url_field, last_focused)
-                aud.url_field.Value = 'https://xkcd.com/'
+                aud.url_field.Value = 'xkcd.com/'
                 
                 last_focused = SetFocus(aud.name_field, last_focused)  # simulate press tab
                 assertEqual(False, aud.url_field_focused)
@@ -767,7 +717,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 last_focused = None
                 
                 last_focused = SetFocus(aud.url_field, last_focused)
-                aud.url_field.Value = 'https://xkcd.com/'
+                aud.url_field.Value = 'xkcd.com/'
                 
                 last_focused = SetFocus(aud.name_field, last_focused)  # simulate press tab
                 assertEqual(False, aud.url_field_focused)
