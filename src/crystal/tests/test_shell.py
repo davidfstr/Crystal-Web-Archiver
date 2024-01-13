@@ -592,39 +592,41 @@ _OK_THREAD_STOP_SUFFIX = (
 def _create_new_empty_project(crystal: subprocess.Popen) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     _py_eval(crystal, textwrap.dedent('''\
-        from crystal.tests.util.runner import run_test
-        from crystal.tests.util.windows import OpenOrCreateDialog
-        import os
-        import tempfile
-        from threading import Thread
-
-        async def create_new_project():
-            # Create named temporary directory that won't be deleted automatically
-            with tempfile.NamedTemporaryFile(suffix='.crystalproj', delete=False) as project_td:
-                pass
-            os.remove(project_td.name)
-            os.mkdir(project_td.name)
-            project_dirpath = project_td.name
+        if True:
+            from crystal.tests.util.runner import run_test
+            from crystal.tests.util.windows import OpenOrCreateDialog
+            import os
+            import tempfile
+            from threading import Thread
             #
-            ocd = await OpenOrCreateDialog.wait_for()
-            mw = await ocd.create_and_leave_open(project_dirpath)
+            async def create_new_project():
+                # Create named temporary directory that won't be deleted automatically
+                with tempfile.NamedTemporaryFile(suffix='.crystalproj', delete=False) as project_td:
+                    pass
+                os.remove(project_td.name)
+                os.mkdir(project_td.name)
+                project_dirpath = project_td.name
+                #
+                ocd = await OpenOrCreateDialog.wait_for()
+                mw = await ocd.create_and_leave_open(project_dirpath)
+                #
+                print('OK')
+                return mw
             #
-            print('OK')
-            return mw
-
-        result_cell = [Ellipsis]
-        def get_result(result_cell):
-            result_cell[0] = run_test(lambda: create_new_project())
-
-        t = Thread(target=lambda: get_result(result_cell))
-        t.start()
+            result_cell = [Ellipsis]
+            def get_result(result_cell):
+                result_cell[0] = run_test(lambda: create_new_project())
+            #
+            t = Thread(target=lambda: get_result(result_cell))
+            t.start()
         '''),
         stop_suffix=_OK_THREAD_STOP_SUFFIX,
         # NOTE: 6.0 was observed to sometimes not be long enough on macOS
         timeout=8.0
     )
-    assert "<class 'crystal.tests.util.windows.MainWindow'>\n" == \
-        _py_eval(crystal, 'type(result_cell[0])')
+    assertEqual(
+        "<class 'crystal.tests.util.windows.MainWindow'>\n",
+        _py_eval(crystal, 'type(result_cell[0])'))
 
 
 def _close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: Optional[float]=None) -> None:
