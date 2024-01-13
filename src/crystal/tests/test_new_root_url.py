@@ -47,7 +47,7 @@ async def test_can_create_root_url(*, ensure_revisions_not_deleted: bool=False) 
                 # Ensure prepopulates reasonable information
                 assert '' == nud.url_field.Value
                 assert '' == nud.name_field.Value
-                #assert None == agd.source
+                #assert None == ngd.source
                 assert nud.url_field.HasFocus  # default focused field
                 
                 nud.name_field.Value = 'Home'

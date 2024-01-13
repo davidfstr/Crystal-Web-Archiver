@@ -20,7 +20,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import (
-    AddGroupDialog, NewRootUrlDialog, EntityTree,
+    NewGroupDialog, NewRootUrlDialog, EntityTree,
     MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
 from crystal.util.xos import is_windows
@@ -125,35 +125,35 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     comic1_ti.SelectItem()
                     
                     click_button(mw.add_group_button)
-                    agd = await AddGroupDialog.wait_for()
+                    ngd = await NewGroupDialog.wait_for()
                     
-                    assert '|<' == agd.name_field.Value  # default name = (from first text link)
-                    assert comic1_url == agd.pattern_field.Value  # default pattern = (from resource)
-                    assert 'Home' == agd.source  # default source = (from resource parent)
-                    assert agd.name_field.HasFocus  # default focused field
+                    assert '|<' == ngd.name_field.Value  # default name = (from first text link)
+                    assert comic1_url == ngd.pattern_field.Value  # default pattern = (from resource)
+                    assert 'Home' == ngd.source  # default source = (from resource parent)
+                    assert ngd.name_field.HasFocus  # default focused field
                     
-                    agd.name_field.Value = 'Comic'
+                    ngd.name_field.Value = 'Comic'
                     
                     assert (
-                        agd.preview_members_pane is None or  # always expanded
-                        agd.preview_members_pane.IsExpanded()  # expanded by default
+                        ngd.preview_members_pane is None or  # always expanded
+                        ngd.preview_members_pane.IsExpanded()  # expanded by default
                     )
                     member_urls = [
-                        agd.preview_members_list.GetString(i)
-                        for i in range(agd.preview_members_list.GetCount())
+                        ngd.preview_members_list.GetString(i)
+                        for i in range(ngd.preview_members_list.GetCount())
                     ]
                     assert [comic1_url] == member_urls  # contains exact match of pattern
                     
-                    agd.pattern_field.Value = comic_pattern
+                    ngd.pattern_field.Value = comic_pattern
                     
                     member_urls = [
-                        agd.preview_members_list.GetString(i)
-                        for i in range(agd.preview_members_list.GetCount())
+                        ngd.preview_members_list.GetString(i)
+                        for i in range(ngd.preview_members_list.GetCount())
                     ]
                     assert comic1_url in member_urls  # contains first comic
                     assert len(member_urls) >= 2  # contains last comic too
                     
-                    await agd.ok()
+                    await ngd.ok()
                     
                     # Ensure the new resource group does now group sub-resources
                     if True:
@@ -216,11 +216,11 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         atom_feed_ti.SelectItem()
                         
                         click_button(mw.add_group_button)
-                        agd = await AddGroupDialog.wait_for()
+                        ngd = await NewGroupDialog.wait_for()
                         
-                        agd.name_field.Value = 'Feed'
-                        agd.pattern_field.Value = feed_pattern
-                        await agd.ok()
+                        ngd.name_field.Value = 'Feed'
+                        ngd.pattern_field.Value = feed_pattern
+                        await ngd.ok()
                         
                         home_ti.Collapse()
                         
@@ -264,12 +264,12 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     # Create feed item group, with feed group as source
                     if True:
                         click_button(mw.add_group_button)
-                        agd = await AddGroupDialog.wait_for()
+                        ngd = await NewGroupDialog.wait_for()
                         
-                        agd.name_field.Value = 'Feed Item'
-                        agd.pattern_field.Value = feed_item_pattern
-                        agd.source = 'Feed'
-                        await agd.ok()
+                        ngd.name_field.Value = 'Feed Item'
+                        ngd.pattern_field.Value = feed_item_pattern
+                        ngd.source = 'Feed'
+                        await ngd.ok()
                         
                         (feed_item_group_ti,) = [
                             child for child in root_ti.Children
@@ -503,10 +503,10 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 
                 # Add resource group matching target
                 click_button(mw.add_group_button)
-                agd = await AddGroupDialog.wait_for()
-                agd.name_field.Value = target_group_name
-                agd.pattern_field.Value = target_group_pattern
-                await agd.ok()
+                ngd = await NewGroupDialog.wait_for()
+                ngd.name_field.Value = target_group_name
+                ngd.pattern_field.Value = target_group_pattern
+                await ngd.ok()
                 
                 # Refresh the home page.
                 # Ensure console does log that target is being dynamically fetched.
@@ -684,11 +684,11 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
             # by JavaScript will be downloaded automatically
             if True:
                 click_button(mw.add_group_button)
-                agd = await AddGroupDialog.wait_for()
+                ngd = await NewGroupDialog.wait_for()
                 
-                agd.name_field.Value = sound_group_name
-                agd.pattern_field.Value = sound_pattern
-                await agd.ok()
+                ngd.name_field.Value = sound_group_name
+                ngd.pattern_field.Value = sound_pattern
+                await ngd.ok()
             
             # Set home page as default URL prefix,
             # so that dynamic requests to *site-relative* sound URLs by JavaScript
@@ -782,11 +782,11 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 # Create group Comic
                 if True:
                     click_button(mw.add_group_button)
-                    agd = await AddGroupDialog.wait_for()
+                    ngd = await NewGroupDialog.wait_for()
                     
-                    agd.name_field.Value = 'Comic'
-                    agd.pattern_field.Value = comic_pattern
-                    await agd.ok()
+                    ngd.name_field.Value = 'Comic'
+                    ngd.pattern_field.Value = comic_pattern
+                    await ngd.ok()
             
             # Ensure "Create" is disabled when preparing to open/create in read-only mode
             ocd = await OpenOrCreateDialog.wait_for()
@@ -1072,12 +1072,12 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 comic1_ti.SelectItem()
                 
                 click_button(mw.add_group_button)
-                agd = await AddGroupDialog.wait_for()
+                ngd = await NewGroupDialog.wait_for()
                 
-                agd.pattern_field.Value = comic_pattern
-                agd.source = home_url
-                agd.name_field.Value = ''
-                await agd.ok()
+                ngd.pattern_field.Value = comic_pattern
+                ngd.source = home_url
+                ngd.name_field.Value = ''
+                await ngd.ok()
                 
                 # 1. Ensure the new resource group does now group sub-resources
                 # 2. Ensure grouped sub-resources for unnamed group has OK title
@@ -1124,9 +1124,9 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
             
             # Ensure unnamed resource group shows as source with OK title
             click_button(mw.add_group_button)
-            agd = await AddGroupDialog.wait_for()
-            agd.source = comic_pattern
-            click_button(agd.cancel_button)
+            ngd = await NewGroupDialog.wait_for()
+            ngd.source = comic_pattern
+            click_button(ngd.cancel_button)
 
 
 # ------------------------------------------------------------------------------

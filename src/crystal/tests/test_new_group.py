@@ -8,7 +8,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import (
-    AddGroupDialog, NewRootUrlDialog, EntityTree, MainWindow, OpenOrCreateDialog,
+    NewGroupDialog, NewRootUrlDialog, EntityTree, MainWindow, OpenOrCreateDialog,
 )
 from crystal.util.xos import is_windows
 import re
@@ -49,35 +49,35 @@ async def test_can_create_group_with_source(*, with_source: bool=True) -> None:
                 
                 assert mw.add_group_button.Enabled
                 click_button(mw.add_group_button)
-                agd = await AddGroupDialog.wait_for()
+                ngd = await NewGroupDialog.wait_for()
                 
                 # Ensure prepopulates reasonable information
                 if not is_windows():
-                    assert '' == agd.pattern_field.Value
-                    assert '' == agd.name_field.Value
-                    assert None == agd.source
+                    assert '' == ngd.pattern_field.Value
+                    assert '' == ngd.name_field.Value
+                    assert None == ngd.source
                 else:
                     # Windows appears to have some kind of race condition that
                     # sometimes causes the Home tree item to be selected initially
-                    assert agd.pattern_field.Value in ['', home_url]
-                    assert agd.name_field.Value in ['', 'Home']
-                    assert None == agd.source
-                assert agd.pattern_field.HasFocus  # default focused field
+                    assert ngd.pattern_field.Value in ['', home_url]
+                    assert ngd.name_field.Value in ['', 'Home']
+                    assert None == ngd.source
+                assert ngd.pattern_field.HasFocus  # default focused field
                 
                 # Input new URL pattern with wildcard, to match comics
-                agd.pattern_field.Value = comic_pattern
+                ngd.pattern_field.Value = comic_pattern
                 
                 # Ensure preview members show the new matching URLs (i.e. none)
                 member_urls = [
-                    agd.preview_members_list.GetString(i)
-                    for i in range(agd.preview_members_list.GetCount())
+                    ngd.preview_members_list.GetString(i)
+                    for i in range(ngd.preview_members_list.GetCount())
                 ]
                 assert [] == member_urls  # no comics discovered yet
                 
                 if with_source:
-                    agd.source = 'Home'
-                agd.name_field.Value = 'Comic'
-                await agd.ok()
+                    ngd.source = 'Home'
+                ngd.name_field.Value = 'Comic'
+                await ngd.ok()
                 
                 # Ensure appearance is correct
                 (comic_ti,) = [
@@ -168,40 +168,40 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             if True:
                 assert mw.add_group_button.Enabled
                 click_button(mw.add_group_button)
-                agd = await AddGroupDialog.wait_for()
+                ngd = await NewGroupDialog.wait_for()
                 
                 # Ensure prepopulates reasonable information
-                assert comic1_url == agd.pattern_field.Value  # default pattern = (from resource)
-                assert '|<' == agd.name_field.Value  # default name = (from first text link)
-                assert 'Home' == agd.source  # default source = (from resource parent)
-                assert agd.pattern_field.HasFocus  # default focused field
+                assert comic1_url == ngd.pattern_field.Value  # default pattern = (from resource)
+                assert '|<' == ngd.name_field.Value  # default name = (from first text link)
+                assert 'Home' == ngd.source  # default source = (from resource parent)
+                assert ngd.pattern_field.HasFocus  # default focused field
                 
                 # Ensure preview members show the 1 URL
                 assert (
-                    agd.preview_members_pane is None or  # always expanded
-                    agd.preview_members_pane.IsExpanded()  # expanded by default
+                    ngd.preview_members_pane is None or  # always expanded
+                    ngd.preview_members_pane.IsExpanded()  # expanded by default
                 )
                 member_urls = [
-                    agd.preview_members_list.GetString(i)
-                    for i in range(agd.preview_members_list.GetCount())
+                    ngd.preview_members_list.GetString(i)
+                    for i in range(ngd.preview_members_list.GetCount())
                 ]
                 assert [comic1_url] == member_urls  # contains exact match of pattern
                 
                 # Input new URL pattern with wildcard, to match other comics
-                agd.pattern_field.Value = comic_pattern
+                ngd.pattern_field.Value = comic_pattern
                 
                 # Ensure preview members show the new matching URLs
                 member_urls = [
-                    agd.preview_members_list.GetString(i)
-                    for i in range(agd.preview_members_list.GetCount())
+                    ngd.preview_members_list.GetString(i)
+                    for i in range(ngd.preview_members_list.GetCount())
                 ]
                 assert comic1_url in member_urls  # contains first comic
                 assert len(member_urls) >= 2  # contains last comic too
                 
                 # Input new name
-                agd.name_field.Value = 'Comic'
+                ngd.name_field.Value = 'Comic'
                 
-                await agd.ok()
+                await ngd.ok()
             
             # 1. Ensure the new resource group does now bundle the comic links together
             # 2. Ensure the bundled link is selected immediately after closing the add group dialog
@@ -413,9 +413,9 @@ async def _source_name_for_node(node_ti: TreeItem, mw: MainWindow) -> Optional[s
     node_ti.SelectItem()
     
     click_button(mw.add_group_button)
-    agd = await AddGroupDialog.wait_for()
-    source_name = agd.source  # capture
-    await agd.cancel()
+    ngd = await NewGroupDialog.wait_for()
+    source_name = ngd.source  # capture
+    await ngd.cancel()
     return source_name
 
 

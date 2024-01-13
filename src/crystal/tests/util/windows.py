@@ -363,7 +363,7 @@ class NewRootUrlDialog:
         await wait_for(not_condition(window_condition('cr-new-root-url-dialog')), stacklevel_extra=1)
 
 
-class AddGroupDialog:
+class NewGroupDialog:
     _NONE_SOURCE_TITLE = 'none'
     _SOURCE_TITLE_RE = re.compile(r'^(?:[^a-zA-Z0-9]+ )?(.*?)(?: - (.*?))? *$')
     
@@ -376,25 +376,25 @@ class AddGroupDialog:
     ok_button: wx.Button
     
     @staticmethod
-    async def wait_for() -> AddGroupDialog:
-        self = AddGroupDialog(ready=True)
+    async def wait_for() -> NewGroupDialog:
+        self = NewGroupDialog(ready=True)
         add_group_dialog = await wait_for(
-            AddGroupDialog.window_condition(),
+            NewGroupDialog.window_condition(),
             timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
             stacklevel_extra=1,
         )  # type: wx.Window
-        self.name_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__name-field')
+        self.name_field = add_group_dialog.FindWindow(name='cr-new-group-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
-        self.pattern_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__pattern-field')
+        self.pattern_field = add_group_dialog.FindWindow(name='cr-new-group-dialog__pattern-field')
         assert isinstance(self.pattern_field, wx.TextCtrl)
-        self.source_field = add_group_dialog.FindWindow(name='cr-add-group-dialog__source-field')
+        self.source_field = add_group_dialog.FindWindow(name='cr-new-group-dialog__source-field')
         assert isinstance(self.source_field, wx.Choice)
-        self.preview_members_pane = add_group_dialog.FindWindow(name='cr-add-group-dialog__preview-members')
+        self.preview_members_pane = add_group_dialog.FindWindow(name='cr-new-group-dialog__preview-members')
         assert (
             self.preview_members_pane is None or
             isinstance(self.preview_members_pane, wx.CollapsiblePane)
         )
-        self.preview_members_list = add_group_dialog.FindWindow(name='cr-add-group-dialog__preview-members__list')
+        self.preview_members_list = add_group_dialog.FindWindow(name='cr-new-group-dialog__preview-members__list')
         assert isinstance(self.preview_members_list, wx.ListBox)
         self.cancel_button = add_group_dialog.FindWindow(id=wx.ID_CANCEL)
         assert isinstance(self.cancel_button, wx.Button)
@@ -404,10 +404,10 @@ class AddGroupDialog:
     
     @staticmethod
     def window_condition() -> Callable[[], Optional[wx.Window]]:
-        return window_condition('cr-add-group-dialog')
+        return window_condition('cr-new-group-dialog')
     
     def __init__(self, *, ready: bool=False) -> None:
-        assert ready, 'Did you mean to use AddGroupDialog.wait_for()?'
+        assert ready, 'Did you mean to use NewGroupDialog.wait_for()?'
     
     # TODO: Rename -> source_name
     def _get_source(self) -> Optional[str]:
@@ -454,11 +454,11 @@ class AddGroupDialog:
     
     async def ok(self) -> None:
         click_button(self.ok_button)
-        await wait_for(not_condition(window_condition('cr-add-group-dialog')), stacklevel_extra=1)
+        await wait_for(not_condition(window_condition('cr-new-group-dialog')), stacklevel_extra=1)
     
     async def cancel(self) -> None:
         click_button(self.cancel_button)
-        await wait_for(not_condition(window_condition('cr-add-group-dialog')), stacklevel_extra=1)
+        await wait_for(not_condition(window_condition('cr-new-group-dialog')), stacklevel_extra=1)
 
 
 class PreferencesDialog:

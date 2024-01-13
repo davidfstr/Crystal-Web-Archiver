@@ -1,7 +1,7 @@
 from contextlib import contextmanager, nullcontext
 from crystal import APP_NAME
 from crystal import __version__ as crystal_version
-from crystal.browser.addgroup import AddGroupDialog
+from crystal.browser.new_group import NewGroupDialog
 from crystal.browser.new_root_url import NewRootUrlDialog
 from crystal.browser.entitytree import EntityTree, ResourceGroupNode, RootResourceNode
 from crystal.browser.icons import TREE_NODE_ICONS
@@ -458,7 +458,7 @@ class MainWindow:
     
     def _on_add_group(self, event: wx.CommandEvent) -> None:
         try:
-            AddGroupDialog(
+            NewGroupDialog(
                 self._frame, self._on_add_group_dialog_ok,
                 self.project,
                 initial_url_pattern=self._suggested_url_or_url_pattern_for_selection or '',

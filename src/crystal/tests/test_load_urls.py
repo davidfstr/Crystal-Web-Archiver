@@ -12,7 +12,7 @@ from crystal.tests.util.wait import (
     tree_has_no_children_condition,
     wait_for,
 )
-from crystal.tests.util.windows import AddGroupDialog, OpenOrCreateDialog
+from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
 from unittest import skip
 from unittest.mock import patch
 import tempfile
@@ -122,8 +122,8 @@ async def test_given_project_database_not_on_ssd_when_press_add_group_button_the
                     # Wait for progress dialog to show and for cancel to be pressed
                     await wait_for(lambda: (progress_listener_method.call_count >= 1) or None)
                     
-                    # Ensure did not show AddGroupDialog
-                    assert AddGroupDialog.window_condition()() is None
+                    # Ensure did not show NewGroupDialog
+                    assert NewGroupDialog.window_condition()() is None
 
 
 @skip('covered by: test_given_project_database_not_on_ssd_when_press_add_group_button_then_loading_urls_progress_dialog_becomes_visible')
@@ -224,13 +224,13 @@ async def test_given_project_database_on_ssd_when_press_add_group_button_then_ad
                         wraps=project._load_urls_progress_listener.loading_resource) as progress_listener_method:
                     click_button(mw.add_group_button)
                     
-                    # Wait for AddGroupDialog to appear
-                    agd = await AddGroupDialog.wait_for()
+                    # Wait for NewGroupDialog to appear
+                    ngd = await NewGroupDialog.wait_for()
                     
                     # Ensure did not show LoadUrlsProgressDialog
                     assert 0 == progress_listener_method.call_count
                     
-                    click_button(agd.cancel_button)
+                    click_button(ngd.cancel_button)
 
 
 # === Test: No Load Required ===

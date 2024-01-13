@@ -18,7 +18,7 @@ _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
 
 
-class AddGroupDialog:
+class NewGroupDialog:
     _INITIAL_URL_PATTERN_WIDTH = NewRootUrlDialog._INITIAL_URL_WIDTH
     _MAX_VISIBLE_PREVIEW_URLS = 100
     
@@ -55,7 +55,7 @@ class AddGroupDialog:
         
         dialog = self.dialog = wx.Dialog(
             parent, title='New Group',
-            name='cr-add-group-dialog',
+            name='cr-new-group-dialog',
             style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
@@ -74,7 +74,7 @@ class AddGroupDialog:
         if preview_box_collapsible:
             preview_box = wx.CollapsiblePane(
                 dialog, label='Preview Members',
-                name='cr-add-group-dialog__preview-members')
+                name='cr-new-group-dialog__preview-members')
             preview_box.Expand()
             preview_box_root = preview_box.GetPane()
             preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -130,7 +130,7 @@ class AddGroupDialog:
         self.pattern_field = wx.TextCtrl(
             parent, value=initial_url_pattern,
             size=(self._INITIAL_URL_PATTERN_WIDTH, wx.DefaultCoord),
-            name='cr-add-group-dialog__pattern-field')
+            name='cr-new-group-dialog__pattern-field')
         bind(self.pattern_field, wx.EVT_TEXT, self._on_pattern_field_changed)
         self.pattern_field.Hint = 'https://example.com/post/*'
         self.pattern_field.SetSelection(-1, -1)  # select all upon focus
@@ -145,7 +145,7 @@ class AddGroupDialog:
         fields_sizer.Add(wx.StaticText(parent, label='Source:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
         self.source_choice_box = wx.Choice(
             parent,
-            name='cr-add-group-dialog__source-field')
+            name='cr-new-group-dialog__source-field')
         self.source_choice_box.Append('none', None)
         for rr in self._project.root_resources:
             self.source_choice_box.Append(
@@ -173,7 +173,7 @@ class AddGroupDialog:
         fields_sizer.Add(wx.StaticText(parent, label='Name:', style=wx.ALIGN_RIGHT), flag=wx.EXPAND)
         self.name_field = wx.TextCtrl(
             parent, value=initial_name,
-            name='cr-add-group-dialog__name-field')
+            name='cr-new-group-dialog__name-field')
         self.name_field.Hint = 'Post'
         self.name_field.SetSelection(-1, -1)  # select all upon focus
         fields_sizer.Add(self.name_field, flag=wx.EXPAND)
@@ -185,7 +185,7 @@ class AddGroupDialog:
         
         self.url_list = wx.ListBox(
             parent, style=wx.LB_ALWAYS_SB, size=(-1,150),
-            name='cr-add-group-dialog__preview-members__list')
+            name='cr-new-group-dialog__preview-members__list')
         
         content_sizer.Add(wx.StaticText(parent, label='Known matching URLs:'), flag=wx.EXPAND)
         content_sizer.Add(self.url_list, proportion=1, flag=wx.EXPAND)
