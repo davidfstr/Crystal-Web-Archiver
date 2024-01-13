@@ -67,3 +67,24 @@ def set_dialog_or_frame_icon_if_appropriate(tlw: wx.TopLevelWindow) -> None:
     # 2. KDE: Define app icon in the top-left corner and in the dock
     if is_windows() or is_kde_or_non_gnome():
         tlw.SetIcons(wx.IconBundle(resources.open_binary('appicon.ico')))
+
+
+def CreateButtonSizer(
+        parent: wx.Dialog,
+        affirmative_id,
+        cancel_id=wx.ID_CANCEL,
+        ) -> wx.Sizer:
+    """
+    Has a similar effect as wx.Dialog.CreateButtonSizer() but supports any
+    value for the `affirmative_id`.
+    """
+    sizer = wx.StdDialogButtonSizer()
+    
+    affirmative_button = wx.Button(parent, affirmative_id)
+    affirmative_button.SetDefault()
+    sizer.SetAffirmativeButton(affirmative_button)
+    
+    sizer.SetCancelButton(wx.Button(parent, cancel_id))
+    
+    sizer.Realize()
+    return sizer

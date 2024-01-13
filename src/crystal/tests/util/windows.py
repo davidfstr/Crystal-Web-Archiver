@@ -152,6 +152,7 @@ class MainWindow:
     entity_tree: 'EntityTree'
     add_url_button: wx.Button
     add_group_button: wx.Button
+    edit_button: wx.Button
     forget_button: wx.Button
     download_button: wx.Button
     update_members_button: wx.Button
@@ -180,6 +181,8 @@ class MainWindow:
         assert isinstance(self.add_url_button, wx.Button)
         self.add_group_button = self.main_window.FindWindow(name='cr-add-group-button')
         assert isinstance(self.add_group_button, wx.Button)
+        self.edit_button = self.main_window.FindWindow(name='cr-edit-button')
+        assert isinstance(self.edit_button, wx.Button)
         self.forget_button = self.main_window.FindWindow(name='cr-forget-button')
         assert isinstance(self.forget_button, wx.Button)
         self.download_button = self.main_window.FindWindow(name='cr-download-button')
@@ -332,7 +335,9 @@ class NewRootUrlDialog:
         assert isinstance(self.url_cleaner_spinner, wx.ActivityIndicator)
         self.name_field = self._dialog.FindWindow(name='cr-new-root-url-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
-        self.ok_button = self._dialog.FindWindow(id=wx.ID_OK)
+        self.ok_button = self._dialog.FindWindow(id=wx.ID_NEW)
+        if self.ok_button is None:
+            self.ok_button = self._dialog.FindWindow(id=wx.ID_SAVE)
         assert isinstance(self.ok_button, wx.Button)
         self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
         assert isinstance(self.cancel_button, wx.Button)
@@ -395,7 +400,9 @@ class NewGroupDialog:
         assert isinstance(self.preview_members_list, wx.ListBox)
         self.cancel_button = add_group_dialog.FindWindow(id=wx.ID_CANCEL)
         assert isinstance(self.cancel_button, wx.Button)
-        self.ok_button = add_group_dialog.FindWindow(id=wx.ID_OK)
+        self.ok_button = add_group_dialog.FindWindow(id=wx.ID_NEW)
+        if self.ok_button is None:
+            self.ok_button = add_group_dialog.FindWindow(id=wx.ID_SAVE)
         assert isinstance(self.ok_button, wx.Button)
         return self
     

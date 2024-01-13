@@ -1,6 +1,8 @@
 from crystal.url_input import UrlCleaner
 from crystal.util.wx_bind import bind
-from crystal.util.wx_dialog import position_dialog_initially, ShowModal
+from crystal.util.wx_dialog import (
+    CreateButtonSizer, position_dialog_initially, ShowModal,
+)
 from crystal.util.xos import is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
 import os
@@ -20,6 +22,9 @@ class NewRootUrlDialog:
     # NOTE: Only changed when tests are running
     _last_opened: 'Optional[NewRootUrlDialog]'=None
     
+    url_field: wx.TextCtrl
+    name_field: wx.TextCtrl
+    
     # === Init ===
     
     def __init__(self,
@@ -28,6 +33,7 @@ class NewRootUrlDialog:
             url_exists_func: Callable[[str], bool],
             initial_url: str='',
             initial_name: str='',
+            is_edit: bool=False,
             ) -> None:
         """
         Arguments:
@@ -37,6 +43,7 @@ class NewRootUrlDialog:
         """
         self._on_finish = on_finish
         self._url_exists_func = url_exists_func
+        self._is_edit = is_edit
         
         self._url_field_focused = False
         self._last_cleaned_url = None  # type: Optional[str]
@@ -45,7 +52,9 @@ class NewRootUrlDialog:
         self._is_destroying_or_destroyed = False
         
         dialog = self.dialog = wx.Dialog(
-            parent, title='New Root URL', name='cr-new-root-url-dialog',
+            parent,
+            title=('New Root URL' if not is_edit else 'Edit Root URL'),
+            name='cr-new-root-url-dialog',
             style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
@@ -53,17 +62,22 @@ class NewRootUrlDialog:
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         bind(dialog, wx.EVT_WINDOW_DESTROY, self._on_destroyed)
         
-        dialog_sizer.Add(self._create_fields(dialog, initial_url, initial_name), flag=wx.EXPAND|wx.ALL,
+        ok_button_id = (wx.ID_NEW if not is_edit else wx.ID_SAVE)
+        dialog_sizer.Add(self._create_fields(dialog, initial_url, initial_name, is_edit), flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
-        dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
+        dialog_sizer.Add(CreateButtonSizer(dialog, ok_button_id, wx.ID_CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
-        self.ok_button = dialog.FindWindow(id=wx.ID_OK)
+        self.ok_button = dialog.FindWindow(id=ok_button_id)
         self.cancel_button = dialog.FindWindow(id=wx.ID_CANCEL)
         
         self._update_ok_enabled()
         
         if not fields_hide_hint_when_focused():
-            self.url_field.SetFocus()  # initialize focus
+            # Initialize focus
+            if not is_edit:
+                self.url_field.SetFocus()
+            else:
+                self.name_field.SetFocus()
         
         position_dialog_initially(dialog)
         dialog.Show(True)
@@ -76,7 +90,7 @@ class NewRootUrlDialog:
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
             NewRootUrlDialog._last_opened = self
     
-    def _create_fields(self, parent: wx.Window, initial_url: str, initial_name: str) -> wx.Sizer:
+    def _create_fields(self, parent: wx.Window, initial_url: str, initial_name: str, is_edit: bool) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
         fields_sizer.AddGrowableCol(1)
@@ -94,6 +108,7 @@ class NewRootUrlDialog:
                     name='cr-new-root-url-dialog__url-field')
                 self.url_field.Hint = 'https://example.com/'
                 self.url_field.SetSelection(-1, -1)  # select all upon focus
+                self.url_field.Enabled = not is_edit
                 bind(self.url_field, wx.EVT_TEXT, self._update_ok_enabled)
                 bind(self.url_field, wx.EVT_SET_FOCUS, self._on_url_field_focus)
                 bind(self.url_field, wx.EVT_KILL_FOCUS, self._on_url_field_blur)
@@ -222,7 +237,7 @@ class NewRootUrlDialog:
     
     def _on_button(self, event: wx.CommandEvent) -> None:
         btn_id = event.GetEventObject().GetId()
-        if btn_id == wx.ID_OK:
+        if btn_id in (wx.ID_NEW, wx.ID_SAVE):
             self._on_ok(event)
         elif btn_id == wx.ID_CANCEL:
             self._on_cancel(event)
@@ -247,8 +262,9 @@ class NewRootUrlDialog:
         
         name = self.name_field.Value
         url = self.url_field.Value
-        if self._url_exists_func(url):
-            dialog = wx.MessageDialog(None,
+        if not self._is_edit and self._url_exists_func(url):
+            dialog = wx.MessageDialog(
+                self.dialog,
                 message='That root URL already exists in the project.',
                 caption='Root URL Exists',
                 style=wx.OK,
@@ -263,7 +279,6 @@ class NewRootUrlDialog:
             self.ok_button.Enabled = True
             assert self.cancel_button.Enabled == True
             return
-        
         self._on_finish(name, url)
         
         self._destroy()

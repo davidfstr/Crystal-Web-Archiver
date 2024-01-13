@@ -5,7 +5,9 @@ from crystal.model import Project, ResourceGroup, ResourceGroupSource
 from crystal.progress import CancelLoadUrls
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
-from crystal.util.wx_dialog import position_dialog_initially
+from crystal.util.wx_dialog import (
+    CreateButtonSizer, position_dialog_initially, ShowModal,
+)
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux
 import sys
@@ -28,9 +30,11 @@ class NewGroupDialog:
             parent: wx.Window,
             on_finish: Callable[[str, str, ResourceGroupSource], None],
             project: Project,
+            saving_source_would_create_cycle_func: Callable[[ResourceGroupSource], bool],
             initial_url_pattern: str='',
             initial_source: ResourceGroupSource=None,
             initial_name: str='',
+            is_edit: bool=False,
             ) -> None:
         """
         Arguments:
@@ -46,6 +50,7 @@ class NewGroupDialog:
         """
         self._project = project
         self._on_finish = on_finish
+        self._saving_source_would_create_cycle_func = saving_source_would_create_cycle_func
         
         # Show progress dialog in advance if will need to load all project URLs
         try:
@@ -54,7 +59,8 @@ class NewGroupDialog:
             raise
         
         dialog = self.dialog = wx.Dialog(
-            parent, title='New Group',
+            parent,
+            title=('New Group' if not is_edit else 'Edit Group'),
             name='cr-new-group-dialog',
             style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -96,17 +102,22 @@ class NewGroupDialog:
         
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
-            self._create_fields(dialog, initial_url_pattern, initial_source, initial_name),
+            self._create_fields(dialog, initial_url_pattern, initial_source, initial_name, is_edit),
             flag=wx.EXPAND)
         content_sizer.Add(preview_box, proportion=1, flag=wx.EXPAND|preview_box_flags, border=preview_box_border)
         
+        ok_button_id = (wx.ID_NEW if not is_edit else wx.ID_SAVE)
         dialog_sizer.Add(content_sizer, proportion=1, flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
-        dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
+        dialog_sizer.Add(CreateButtonSizer(dialog, ok_button_id, wx.ID_CANCEL), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
         
         if not fields_hide_hint_when_focused():
-            self.pattern_field.SetFocus()  # initialize focus
+            # Initialize focus
+            if not is_edit:
+                self.pattern_field.SetFocus()
+            else:
+                self.name_field.SetFocus()
         self._update_preview_urls()
         
         position_dialog_initially(dialog)
@@ -121,6 +132,7 @@ class NewGroupDialog:
             initial_url_pattern: str,
             initial_source: ResourceGroupSource,
             initial_name: str,
+            is_edit: bool,
             ) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(cols=2,
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
@@ -134,6 +146,7 @@ class NewGroupDialog:
         bind(self.pattern_field, wx.EVT_TEXT, self._on_pattern_field_changed)
         self.pattern_field.Hint = 'https://example.com/post/*'
         self.pattern_field.SetSelection(-1, -1)  # select all upon focus
+        self.pattern_field.Enabled = not is_edit
         pattern_field_sizer.Add(self.pattern_field, flag=wx.EXPAND)
         pattern_field_sizer.Add(wx.StaticText(parent, label='# = digit, @ = alpha, * = any nonslash, ** = any'), flag=wx.EXPAND)
         
@@ -227,7 +240,7 @@ class NewGroupDialog:
     
     def _on_button(self, event: wx.CommandEvent) -> None:
         btn_id = event.GetEventObject().GetId()
-        if btn_id == wx.ID_OK:
+        if btn_id in (wx.ID_NEW, wx.ID_SAVE):
             self._on_ok(event)
         elif btn_id == wx.ID_CANCEL:
             self._on_cancel(event)
@@ -240,7 +253,20 @@ class NewGroupDialog:
         url_pattern = self.pattern_field.GetValue()
         source = self.source_choice_box.GetClientData(
             self.source_choice_box.GetSelection())
+        if self._saving_source_would_create_cycle_func(source):
+            dialog = wx.MessageDialog(
+                self.dialog,
+                message='Cannot use that Source because it has this group as a Source.',
+                caption='Source Cycle Created',
+                style=wx.OK,
+            )
+            dialog.Name = 'cr-source-cycle-created'
+            position_dialog_initially(dialog)
+            choice = ShowModal(dialog)
+            assert wx.ID_OK == choice
+            return
         self._on_finish(name, url_pattern, source)
+        
         self.dialog.Destroy()
     
     def _on_cancel(self, event: wx.CommandEvent) -> None:

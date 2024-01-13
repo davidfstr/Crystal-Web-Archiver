@@ -832,8 +832,10 @@ class RootResourceNode(_ResourceNode):
     # === Comparison ===
     
     def __eq__(self, other):
-        return isinstance(other, RootResourceNode) and (
-            self.root_resource == other.root_resource)
+        return (
+            isinstance(other, RootResourceNode) and
+            self.root_resource == other.root_resource
+        )
     def __hash__(self):
         return hash(self.root_resource)
 
@@ -1090,8 +1092,10 @@ class ResourceGroupNode(Node):
     # === Comparison ===
     
     def __eq__(self, other) -> bool:
-        return isinstance(other, ResourceGroupNode) and (
-            self.resource_group == other.resource_group)
+        return (
+            isinstance(other, ResourceGroupNode) and
+            self.resource_group == other.resource_group
+        )
     def __hash__(self) -> int:
         return hash(self.resource_group)
 
