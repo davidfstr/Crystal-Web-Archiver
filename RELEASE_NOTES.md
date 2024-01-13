@@ -28,6 +28,8 @@ Release Notes ⋮
         * Improve suggested source when creating a new group.
     * Main Window
         * Prevent resizing the window to be too small.
+    * Use ⚓️ and 📁 icons consistently in the UI to refer to 
+      Root URLs and Groups respectively.
 
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,

@@ -1,7 +1,9 @@
 # TODO: Consider extracting functions shared between dialogs to own module
 from crystal.browser.addrooturl import AddRootUrlDialog, fields_hide_hint_when_focused
+from crystal.browser.entitytree import ResourceGroupNode, RootResourceNode
 from crystal.model import Project, ResourceGroup, ResourceGroupSource
 from crystal.progress import CancelLoadUrls
+from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import position_dialog_initially
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
@@ -146,9 +148,19 @@ class AddGroupDialog:
             name='cr-add-group-dialog__source-field')
         self.source_choice_box.Append('none', None)
         for rr in self._project.root_resources:
-            self.source_choice_box.Append(rr.display_name, rr)
+            self.source_choice_box.Append(
+                decorate_label(
+                    RootResourceNode.ICON,
+                    RootResourceNode.calculate_title_of(rr),
+                    RootResourceNode.ICON_TRUNCATION_FIX),
+                rr)
         for rg in self._project.resource_groups:
-            self.source_choice_box.Append(rg.display_name, rg)
+            self.source_choice_box.Append(
+                decorate_label(
+                    ResourceGroupNode.ICON,
+                    ResourceGroupNode.calculate_title_of(rg),
+                    ResourceGroupNode.ICON_TRUNCATION_FIX),
+                rg)
         self.source_choice_box.SetSelection(0)
         if initial_source is not None:
             for i in range(self.source_choice_box.GetCount()):

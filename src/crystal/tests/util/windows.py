@@ -17,6 +17,7 @@ from crystal.tests.util.wait import (
 )
 from crystal.util.xos import is_mac_os
 import os.path
+import re
 import sys
 import tempfile
 import traceback
@@ -364,6 +365,7 @@ class AddUrlDialog:
 
 class AddGroupDialog:
     _NONE_SOURCE_TITLE = 'none'
+    _SOURCE_TITLE_RE = re.compile(r'^(?:[^a-zA-Z0-9]+ )?(.*?)(?: - (.*?))? *$')
     
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
@@ -412,14 +414,41 @@ class AddGroupDialog:
         selection_ci = self.source_field.GetSelection()
         if selection_ci == wx.NOT_FOUND:
             return None
-        source_name = self.source_field.GetString(selection_ci)
-        if source_name == self._NONE_SOURCE_TITLE:
+        source_title = self.source_field.GetString(selection_ci)
+        if source_title == self._NONE_SOURCE_TITLE:
             return None
-        return source_name
+        m = self._SOURCE_TITLE_RE.fullmatch(source_title)
+        assert m is not None
+        source_name = m.group(2)
+        if source_name is not None:
+            return source_name
+        else:
+            # If the referenced source has no name, allow referring to it by its display URL
+            cur_source_display_url = m.group(1)
+            assert cur_source_display_url is not None
+            return cur_source_display_url
+            
     def _set_source(self, source_name: Optional[str]) -> None:
         if source_name is None:
-            source_name = self._NONE_SOURCE_TITLE
-        selection_ci = self.source_field.GetStrings().index(source_name)
+            selection_ci = 0
+        else:
+            for (selection_ci, source_title) in enumerate(self.source_field.GetStrings()):
+                if selection_ci == 0:
+                    continue
+                m = self._SOURCE_TITLE_RE.fullmatch(source_title)
+                assert m is not None
+                cur_source_name = m.group(2)
+                if cur_source_name is not None:
+                    if cur_source_name == source_name:
+                        break
+                else:
+                    # If the referenced source has no name, allow referring to it by its display URL
+                    cur_source_display_url = m.group(1)
+                    assert cur_source_display_url is not None
+                    if cur_source_display_url == source_name:
+                        break
+            else:
+                raise ValueError(f'Source not found: {source_name}')
         self.source_field.SetSelection(selection_ci)
     source = property(_get_source, _set_source)
     

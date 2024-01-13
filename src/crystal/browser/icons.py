@@ -80,4 +80,28 @@ def _add_badge_to_background(background: wx.Bitmap, badge: wx.Bitmap) -> wx.Bitm
     return background_plus_badge
 
 
+def add_transparent_left_border(original: wx.Bitmap, thickness: int) -> wx.Bitmap:
+    if thickness == 0:
+        return original
+    
+    bordered = wx.Bitmap()
+    success = bordered.Create(
+        original.Width + thickness,
+        original.Height,
+        original.Depth)
+    if not success:
+        raise Exception('Failed to create a wx.Bitmap')
+    
+    dc = wx.MemoryDC(bordered)
+    dc.Clear()  # fill bitmap with white
+    dc.DrawBitmap(
+        original,
+        x=thickness,
+        y=0,
+        useMask=True)
+    dc.SelectObject(wx.NullBitmap)  # commit changes to bordered
+    bordered.SetMaskColour(wx.Colour(255, 255, 255))  # replace white with transparent
+    return bordered
+
+
 # ------------------------------------------------------------------------------
