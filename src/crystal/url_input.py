@@ -80,7 +80,7 @@ def _candidate_urls_from_user_input(url_input: str) -> List[str]:
     In the current implementation:
     * If no https:// or http:// prefix is given,
       try first the former then the latter.
-    * If no www. domain prefix is given,
+    * If additionally no www. domain prefix is given,
       try first without the prefix then with the prefix.
     """
     # While running tests, unless CRYSTAL_URLOPEN_MOCKED=True,
@@ -99,7 +99,9 @@ def _candidate_urls_from_user_input(url_input: str) -> List[str]:
     
     url_parts = urlparse(url_input)
     if url_parts.scheme in ('', 'https', 'http'):
-        # If missing scheme, try https:// then http://
+        # If missing scheme:
+        # 1. try https:// then http://
+        # 2. try variations on www
         if url_parts.scheme == '':
             scheme_candidates = ('https', 'http')  # type: Tuple[str, ...]
             
@@ -116,20 +118,17 @@ def _candidate_urls_from_user_input(url_input: str) -> List[str]:
                     netloc=new_netloc,
                     path=new_path
                 )  # reinterpret
-        elif url_parts.scheme == 'https':
-            scheme_candidates = ('https', 'http')
-        elif url_parts.scheme == 'http':
-            scheme_candidates = ('http', 'https')
+            
+            # 1. If has www, then try non-www domain if www domain fails
+            # 2. If missing www, then try it if non-www domain fails
+            if url_parts.netloc.startswith('www.'):
+                netloc_candidates = (url_parts.netloc, url_parts.netloc[len('www.'):])  # type: Tuple[str, ...]
+            elif url_parts.netloc != '' and not url_parts.netloc.startswith('www.'):
+                netloc_candidates = (url_parts.netloc, 'www.' + url_parts.netloc)
+            else:
+                netloc_candidates = (url_parts.netloc,)
         else:
-            raise AssertionError()
-        
-        # 1. If has www, then try non-www domain if www domain fails
-        # 2. If missing www, then try it if non-www domain fails
-        if url_parts.netloc.startswith('www.'):
-            netloc_candidates = (url_parts.netloc, url_parts.netloc[len('www.'):])  # type: Tuple[str, ...]
-        elif url_parts.netloc != '' and not url_parts.netloc.startswith('www.'):
-            netloc_candidates = (url_parts.netloc, 'www.' + url_parts.netloc)
-        else:
+            scheme_candidates = (url_parts.scheme,)
             netloc_candidates = (url_parts.netloc,)
         
         # If empty path then normalize to /
