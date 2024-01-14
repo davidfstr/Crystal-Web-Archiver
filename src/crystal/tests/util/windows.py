@@ -380,7 +380,7 @@ class NewGroupDialog:
         self = NewGroupDialog(ready=True)
         add_group_dialog = await wait_for(
             NewGroupDialog.window_condition(),
-            timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            timeout=5.0,  # 4.2s observed for macOS test runners on GitHub Actions
             stacklevel_extra=1,
         )  # type: wx.Window
         self.name_field = add_group_dialog.FindWindow(name='cr-new-group-dialog__name-field')
