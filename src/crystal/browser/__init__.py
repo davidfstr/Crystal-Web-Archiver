@@ -13,6 +13,7 @@ from crystal.model import (
 from crystal.progress import (
     CancelLoadUrls,
     DummyOpenProjectProgressListener,
+    LoadUrlsProgressDialog,
     OpenProjectProgressListener,
 )
 from crystal.server import ProjectServer
@@ -124,6 +125,12 @@ class MainWindow:
             min_width = entity_pane.GetBestSize().Width
             min_height = task_pane.GetBestSize().Height * 2
             raw_frame.MinSize = wx.Size(min_width, min_height)
+            
+            # Attach Project's LoadUrlsProgressListener to main window's frame
+            # HACK: Is using private API of Project
+            load_urls_progress_listener = project._load_urls_progress_listener
+            if isinstance(load_urls_progress_listener, LoadUrlsProgressDialog):
+                load_urls_progress_listener.parent = raw_frame
             
             self._frame = raw_frame
         except:
