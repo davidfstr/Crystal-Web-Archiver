@@ -721,8 +721,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                         sound1_request_url,
                         headers={
                             'Referer': home_url
-                        },
-                        timeout=DEFAULT_WAIT_TIMEOUT)
+                        })
                 
                 # Ensure console does log that link to sound is being dynamically rewriten
                 assert (

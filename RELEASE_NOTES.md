@@ -33,6 +33,8 @@ Release Notes ⋮
 
 * Workflow improvements
     * Can now edit the name and source of Root URLs and Groups after creation.
+    * Can mark resource group as "do not download" to prevent their members
+      from being downloaded when in an embedded context.
 
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,

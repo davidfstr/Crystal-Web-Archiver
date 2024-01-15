@@ -1379,6 +1379,13 @@ class Project(ListenableMixin):
             if hasattr(lis, 'resource_group_did_instantiate'):
                 lis.resource_group_did_instantiate(group)  # type: ignore[attr-defined]
     
+    # Called when a new ResourceGroup changes its do-not-download status
+    def _resource_group_did_change_do_not_download(self, group: ResourceGroup) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'resource_group_did_change_do_not_download'):
+                lis.resource_group_did_change_do_not_download(group)  # type: ignore[attr-defined]
+    
     # === Close ===
     
     def close(self) -> None:
@@ -3138,6 +3145,7 @@ class ResourceGroup(ListenableMixin):
             name: str,  # possibly ''
             url_pattern: str,
             source: Union[ResourceGroupSource, EllipsisType]=None,
+            *, do_not_download: bool=False,
             _id: Optional[int]=None) -> None:
         """
         Arguments:
@@ -3156,6 +3164,7 @@ class ResourceGroup(ListenableMixin):
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         self._source = None  # type: Union[ResourceGroupSource, EllipsisType]
+        self._do_not_download = do_not_download
         
         # Calculate members on demand rather than up front
         self._members = None  # type: Optional[List[Resource]]
@@ -3271,6 +3280,15 @@ class ResourceGroup(ListenableMixin):
         
         self._source = value
     source = cast(ResourceGroupSource, property(_get_source, _set_source))
+    
+    def _get_do_not_download(self) -> bool:
+        return self._do_not_download
+    def _set_do_not_download(self, value: bool) -> None:
+        if self._do_not_download == value:
+            return
+        self._do_not_download = value
+        self.project._resource_group_did_change_do_not_download(self)
+    do_not_download = cast(bool, property(_get_do_not_download, _set_do_not_download))
     
     @staticmethod
     def create_re_for_url_pattern(url_pattern: str) -> Pattern:

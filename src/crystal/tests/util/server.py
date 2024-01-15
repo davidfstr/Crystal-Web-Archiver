@@ -27,6 +27,16 @@ from zipfile import ZipFile
 @contextmanager
 def served_project(
         zipped_project_filename: str,
+        **kwargs,
+        ) -> Iterator[ProjectServer]:
+    with extracted_project(zipped_project_filename) as project_dirpath:
+        with served_project_from_filepath(project_dirpath, **kwargs) as sp:
+            yield sp
+
+
+@contextmanager
+def served_project_from_filepath(
+        project_dirpath: str,
         *, fetch_date_of_resources_set_to: Optional[datetime.datetime]=None,
         port: Optional[int]=None,
         ) -> Iterator[ProjectServer]:
@@ -34,50 +44,49 @@ def served_project(
         if not datetime_is_aware(fetch_date_of_resources_set_to):
             raise ValueError('Expected fetch_date_of_resources_set_to to be an aware datetime')
     
-    with extracted_project(zipped_project_filename) as project_filepath:
-        must_alter_fetch_date = (fetch_date_of_resources_set_to is not None)
-        project_server = None  # type: Optional[ProjectServer]
-        project = fg_call_and_wait(lambda: Project(project_filepath, readonly=True if not must_alter_fetch_date else False))
-        try:
-            # Alter the fetch date of every ResourceRevision in the project
-            # to match "fetch_date_of_resources_set_to", if provided
-            if must_alter_fetch_date:
-                def fg_task() -> None:
-                    for r in project.resources:
-                        for rr in list(r.revisions()):
-                            if rr.metadata is None:
-                                print(
-                                    f'Warning: Unable to alter fetch date of '
-                                    f'resource revision lacking HTTP headers: {rr}')
-                                continue
-                            
-                            assert fetch_date_of_resources_set_to is not None
-                            rr_new_date = http_date.format(fetch_date_of_resources_set_to)
-                            
-                            # New Metadata = Old Metadata with Date and Age headers replaced
-                            rr_new_metadata = deepcopy(rr.metadata)
-                            rr_new_metadata['headers'] = [
-                                [cur_name, cur_value]
-                                for (cur_name, cur_value) in
-                                rr_new_metadata['headers']
-                                if cur_name.lower() not in ['date', 'age']
-                            ] + [['Date', rr_new_date]]
-                            
-                            rr._alter_metadata(rr_new_metadata, ignore_readonly=True)
-                fg_call_and_wait(fg_task)
-            
-            # Start server
-            project_server = ProjectServer(project,
-                port=(port or 2798),  # CRYT on telephone keypad
-                verbosity='indent',
-            )
-            yield project_server
-        finally:
-            def close_project() -> None:
-                if project_server is not None:
-                    project_server.close()
-                project.close()
-            fg_call_and_wait(close_project)
+    must_alter_fetch_date = (fetch_date_of_resources_set_to is not None)
+    project_server = None  # type: Optional[ProjectServer]
+    project = fg_call_and_wait(lambda: Project(project_dirpath, readonly=True if not must_alter_fetch_date else False))
+    try:
+        # Alter the fetch date of every ResourceRevision in the project
+        # to match "fetch_date_of_resources_set_to", if provided
+        if must_alter_fetch_date:
+            def fg_task() -> None:
+                for r in project.resources:
+                    for rr in list(r.revisions()):
+                        if rr.metadata is None:
+                            print(
+                                f'Warning: Unable to alter fetch date of '
+                                f'resource revision lacking HTTP headers: {rr}')
+                            continue
+                        
+                        assert fetch_date_of_resources_set_to is not None
+                        rr_new_date = http_date.format(fetch_date_of_resources_set_to)
+                        
+                        # New Metadata = Old Metadata with Date and Age headers replaced
+                        rr_new_metadata = deepcopy(rr.metadata)
+                        rr_new_metadata['headers'] = [
+                            [cur_name, cur_value]
+                            for (cur_name, cur_value) in
+                            rr_new_metadata['headers']
+                            if cur_name.lower() not in ['date', 'age']
+                        ] + [['Date', rr_new_date]]
+                        
+                        rr._alter_metadata(rr_new_metadata, ignore_readonly=True)
+            fg_call_and_wait(fg_task)
+        
+        # Start server
+        project_server = ProjectServer(project,
+            port=(port or 2798),  # CRYT on telephone keypad
+            verbosity='indent',
+        )
+        yield project_server
+    finally:
+        def close_project() -> None:
+            if project_server is not None:
+                project_server.close()
+            project.close()
+        fg_call_and_wait(close_project)
 
 
 @contextmanager
@@ -95,8 +104,8 @@ def extracted_project(
             fn for fn in os.listdir(project_parent_dirpath)
             if fn.endswith('.crystalproj')
         ]
-        project_filepath = os.path.join(project_parent_dirpath, project_filename)
-        yield project_filepath
+        project_dirpath = os.path.join(project_parent_dirpath, project_filename)
+        yield project_dirpath
 
 
 @contextmanager
@@ -124,6 +133,7 @@ async def fetch_archive_url(
     return await bg_fetch_url(get_request_url(archive_url, port), headers=headers, timeout=timeout)
 
 
+# TODO: Rename as HttpResponse or ProjectServerResponse
 class WebPage:
     def __init__(self, status: int, headers: EmailMessage, content_bytes: bytes) -> None:
         self._status = status

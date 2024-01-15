@@ -884,6 +884,7 @@ class DownloadResourceTask(Task):
                     link_urls_seen = set()
                     base_url = self._resource.url  # cache
                     project = self._resource.project  # cache
+                    dnd_groups = [g for g in project.resource_groups if g.do_not_download]  # cache
                     for link in links:
                         if not link.embedded:
                             continue
@@ -902,7 +903,8 @@ class DownloadResourceTask(Task):
                         #       by ParseResourceRevisionLinks and being
                         #       accessed here.
                         link_resource = Resource(project, link_url)
-                        embedded_resources.append(link_resource)
+                        if not any([g.contains_url(link_resource.url) for g in dnd_groups]):
+                            embedded_resources.append(link_resource)
                     return embedded_resources
                 embedded_resources = fg_call_and_wait(fg_task)
                 

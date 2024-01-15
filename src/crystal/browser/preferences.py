@@ -48,12 +48,14 @@ class PreferencesDialog:
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         
         project_box_sizer = wx.StaticBoxSizer(wx.VERTICAL, dialog, label='Project')
-        project_box_sizer.Add(self._create_project_fields(project_box_sizer.GetStaticBox()))
+        project_box_sizer.Add(wrap_static_box_sizer_child(
+            self._create_project_fields(project_box_sizer.GetStaticBox())))
         dialog_sizer.Add(project_box_sizer, flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         
         session_box_sizer = wx.StaticBoxSizer(wx.VERTICAL, dialog, label='Session')
-        session_box_sizer.Add(self._create_session_fields(session_box_sizer.GetStaticBox()))
+        session_box_sizer.Add(wrap_static_box_sizer_child(
+            self._create_session_fields(session_box_sizer.GetStaticBox())))
         dialog_sizer.Add(session_box_sizer, flag=wx.EXPAND|(wx.ALL & ~wx.TOP),
             border=_WINDOW_INNER_PADDING)
         
@@ -90,7 +92,7 @@ class PreferencesDialog:
             self.html_parser_field,
             flag=wx.EXPAND, pos=wx.GBPosition(1, 1))
         
-        return wrap_static_box_sizer_child(fields_sizer)
+        return fields_sizer
     
     def _create_session_fields(self, parent: wx.Window) -> wx.Sizer:
         fields_sizer = wx.GridBagSizer(
@@ -125,7 +127,7 @@ class PreferencesDialog:
             self.cookie_field,
             flag=wx.EXPAND, pos=wx.GBPosition(4, 1))
         
-        return wrap_static_box_sizer_child(fields_sizer)
+        return fields_sizer
     
     def _create_stale_before_field(self, parent: wx.Window) -> wx.Sizer:
         import wx.adv  # import late because does print spurious messages on macOS
