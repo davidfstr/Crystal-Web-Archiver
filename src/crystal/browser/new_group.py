@@ -11,7 +11,7 @@ from crystal.util.wx_dialog import (
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux
 import sys
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Tuple, Union
 import wx
 
 
@@ -68,42 +68,15 @@ class NewGroupDialog:
         bind(dialog, wx.EVT_BUTTON, self._on_button)
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         
-        # NOTE: Don't use wx.CollapsiblePane on wxGTK/Linux because
-        #       it doesn't resize its parent window properly on
-        #       expand and unexpand events
-        preview_box_collapsible = not is_linux()
-        preview_box: Union[wx.Window, wx.Sizer]
-        preview_box_root: wx.Window
-        preview_box_root_sizer: wx.BoxSizer
-        preview_box_flags: int
-        preview_box_border: int
-        if preview_box_collapsible:
-            preview_box = wx.CollapsiblePane(
-                dialog, label='Preview Members',
-                name='cr-new-group-dialog__preview-members')
-            preview_box.Expand()
-            preview_box_root = preview_box.GetPane()
-            preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
-            preview_box_root.SetSizer(preview_box_root_sizer)
-            preview_box_flags = 0
-            preview_box_border = 0
-        else:
-            preview_box_root_sizer = wx.StaticBoxSizer(
-                wx.VERTICAL, dialog, label='Preview Members')
-            preview_box = preview_box_root_sizer
-            preview_box_root = preview_box_root_sizer.GetStaticBox()
-            preview_box_flags = wx.TOP
-            preview_box_border = 10
-        
-        preview_box_root_sizer.Add(
-            wrap_static_box_sizer_child(self._create_preview_box_content(preview_box_root)),
-            proportion=1,
-            flag=wx.EXPAND)
-        
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
             self._create_fields(dialog, initial_url_pattern, initial_source, initial_name, is_edit),
             flag=wx.EXPAND)
+        (
+            preview_box,
+            preview_box_flags,
+            preview_box_border,
+        ) = self._create_preview_box(dialog)
         content_sizer.Add(preview_box, proportion=1, flag=wx.EXPAND|preview_box_flags, border=preview_box_border)
         
         ok_button_id = (wx.ID_NEW if not is_edit else wx.ID_SAVE)
@@ -192,6 +165,45 @@ class NewGroupDialog:
         fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         
         return fields_sizer
+    
+    def _create_preview_box(self, parent: wx.Window) -> Tuple[Union[wx.Window, wx.Sizer], int, int]:
+        # NOTE: Don't use wx.CollapsiblePane on wxGTK/Linux because
+        #       it doesn't resize its parent window properly on
+        #       expand and unexpand events
+        preview_box_collapsible = not is_linux()
+        preview_box: Union[wx.Window, wx.Sizer]
+        preview_box_root: wx.Window
+        preview_box_root_sizer: wx.BoxSizer
+        preview_box_flags: int
+        preview_box_border: int
+        if preview_box_collapsible:
+            preview_box = wx.CollapsiblePane(
+                parent, label='Preview Members',
+                name='cr-new-group-dialog__preview-members')
+            preview_box.Expand()
+            preview_box_root = preview_box.GetPane()
+            preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
+            preview_box_root.SetSizer(preview_box_root_sizer)
+            preview_box_flags = 0
+            preview_box_border = 0
+        else:
+            preview_box_root_sizer = wx.StaticBoxSizer(
+                wx.VERTICAL, parent, label='Preview Members')
+            preview_box = preview_box_root_sizer
+            preview_box_root = preview_box_root_sizer.GetStaticBox()
+            preview_box_flags = wx.TOP
+            preview_box_border = 10
+        
+        preview_box_root_sizer.Add(
+            wrap_static_box_sizer_child(self._create_preview_box_content(preview_box_root)),
+            proportion=1,
+            flag=wx.EXPAND)
+        
+        return (
+            preview_box,
+            preview_box_flags,
+            preview_box_border,
+        )
     
     def _create_preview_box_content(self, parent: wx.Window) -> wx.Sizer:
         content_sizer = wx.BoxSizer(wx.VERTICAL)
