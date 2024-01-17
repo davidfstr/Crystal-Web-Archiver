@@ -610,12 +610,12 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
                 ocd = await OpenOrCreateDialog.wait_for()
                 mw = await ocd.create_and_leave_open(project_dirpath)
                 #
-                print('OK')
                 return mw
             #
             result_cell = [Ellipsis]
             def get_result(result_cell):
                 result_cell[0] = run_test(lambda: create_new_project())
+                print('OK')
             #
             t = Thread(target=lambda: get_result(result_cell))
             t.start()
