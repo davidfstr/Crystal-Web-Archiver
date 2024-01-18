@@ -203,7 +203,10 @@ def _run_tests(test_names: List[str]) -> bool:
         elif isinstance(result, AssertionError):
             print('F', end='')
         elif isinstance(result, SkipTest):
-            print('s', end='')
+            if str(result).startswith('covered by:'):
+                print('c', end='')
+            else:
+                print('s', end='')
         else:
             print('E', end='')
     print()
