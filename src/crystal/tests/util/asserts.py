@@ -1,12 +1,14 @@
+from crystal.tests.util.screenshots import screenshot_if_raises_deco
 from unittest import TestCase
 
 
 class _DummyTestCase(TestCase):
     maxDiff = None
 
-# All of these assert methods provide a better error message upon failure
-# than a bare assert statement
-assertEqual = _DummyTestCase().assertEqual
-assertNotEqual = _DummyTestCase().assertEqual
-assertIn = _DummyTestCase().assertIn
-assertNotIn = _DummyTestCase().assertNotIn
+# Advantages of these assert methods over a bare assert statement:
+# 1. A better error message is provided, including the operands that were compared
+# 2. A screenshot will be taken automatically upon failure
+assertEqual = screenshot_if_raises_deco(_DummyTestCase().assertEqual)
+assertNotEqual = screenshot_if_raises_deco(_DummyTestCase().assertEqual)
+assertIn = screenshot_if_raises_deco(_DummyTestCase().assertIn)
+assertNotIn = screenshot_if_raises_deco(_DummyTestCase().assertNotIn)

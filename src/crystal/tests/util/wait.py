@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from crystal.tests.util.screenshots import take_error_screenshot
 from crystal.tests.util.runner import bg_sleep
 import datetime
 import time
@@ -90,6 +91,7 @@ async def wait_for(
         *, period: Optional[float]=None,
         message: Optional[Callable[[], str]]=None,
         stacklevel_extra: int=0,
+        screenshot_on_error: bool=True,
         ) -> _T:
     """
     Waits up to `timeout` seconds for the specified condition to become non-None,
@@ -125,6 +127,10 @@ async def wait_for(
                     message_str = f'Timed out waiting {timeout}s for {condition_description}'
                 else:
                     message_str = f'Timed out waiting {timeout}s for {condition!r}'
+                
+                # Screenshot the timeout error
+                if screenshot_on_error:
+                    take_error_screenshot()
                 
                 hard_timeout_exceeded = True
                 raise WaitTimedOut(message_str)

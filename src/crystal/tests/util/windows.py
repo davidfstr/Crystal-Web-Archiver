@@ -9,7 +9,6 @@ from crystal.tests.util.controls import (
     TreeItem
 )
 from crystal.tests.util.runner import bg_sleep, pump_wx_events
-from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
     tree_has_no_children_condition,
@@ -92,9 +91,8 @@ class OpenOrCreateDialog:
             with file_dialog_returning(project_dirpath):
                 click_button(self.create_button)
                 
-                with screenshot_if_raises():
-                    mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
-                    return mw
+                mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
+                return mw
         except:
             # Close any project that was opened
             new_opened_project = Project._last_opened_project  # capture
@@ -123,8 +121,7 @@ class OpenOrCreateDialog:
         with file_dialog_returning(itempath_to_open):
             click_button(self.open_button)
             
-            with screenshot_if_raises():
-                mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
+            mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
         exc_info_while_close = None
         try:

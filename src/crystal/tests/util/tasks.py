@@ -3,7 +3,6 @@ from __future__ import annotations
 import crystal.task
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
-from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, tree_has_children_condition, 
     tree_has_no_children_condition, wait_for, wait_while, WaitTimedOut
@@ -35,17 +34,17 @@ async def wait_for_download_to_start_and_finish(
     period = DEFAULT_WAIT_PERIOD
     
     # Wait for start of download
-    with screenshot_if_raises():
-        try:
-            await wait_for(
-                tree_has_children_condition(task_tree),
-                timeout=4.0,  # 2.0s isn't long enough for Windows test runners on GitHub Actions
-                stacklevel_extra=(1 + stacklevel_extra))
-        except WaitTimedOut:
-            if immediate_finish_ok:
-                return
-            else:
-                raise
+    try:
+        await wait_for(
+            tree_has_children_condition(task_tree),
+            timeout=4.0,  # 2.0s isn't long enough for Windows test runners on GitHub Actions
+            stacklevel_extra=(1 + stacklevel_extra),
+            screenshot_on_error=not immediate_finish_ok)
+    except WaitTimedOut:
+        if immediate_finish_ok:
+            return
+        else:
+            raise
     
     # Wait until download task is observed that says how many items are being downloaded
     item_count: Optional[int]

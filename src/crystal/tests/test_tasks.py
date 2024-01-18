@@ -53,10 +53,9 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                 # Download the resource
                 assert False == missing_r.already_downloaded_this_session
                 missing_rr_future = missing_r.download()  # uses DownloadResourceTask
-                with screenshot_if_raises():
-                    await wait_for(
-                        lambda: missing_rr_future.done() or None,
-                        timeout=MAX_TIME_TO_DOWNLOAD_404_URL)
+                await wait_for(
+                    lambda: missing_rr_future.done() or None,
+                    timeout=MAX_TIME_TO_DOWNLOAD_404_URL)
                 assert True == missing_r.already_downloaded_this_session
                 
                 # Download the resource again, and ensure it downloads immediately
@@ -87,13 +86,12 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     assert False == r.already_downloaded_this_session
                 drg_task = comic_g.create_download_task()  # a DownloadResourceGroupTask
                 project.add_task(drg_task)
-                with screenshot_if_raises():
-                    await wait_for(
-                        lambda: drg_task.complete or None,
-                        timeout=(
-                            MAX_TIME_TO_DOWNLOAD_404_URL +
-                            (MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY * COMIC_G_FINAL_MEMBER_COUNT)
-                        ))
+                await wait_for(
+                    lambda: drg_task.complete or None,
+                    timeout=(
+                        MAX_TIME_TO_DOWNLOAD_404_URL +
+                        (MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY * COMIC_G_FINAL_MEMBER_COUNT)
+                    ))
                 assert COMIC_G_FINAL_MEMBER_COUNT == len(comic_g.members)
                 for r in comic_rs:
                     assert True == r.already_downloaded_this_session

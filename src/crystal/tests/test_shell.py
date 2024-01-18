@@ -7,7 +7,6 @@ from crystal.tests.util.wait import (
     WaitTimedOut,
 )
 from crystal.tests.util.windows import MainWindow
-from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.xos import skip_on_windows
@@ -372,13 +371,12 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                 assertEqual('', _py_eval(crystal, 'from crystal.server import ProjectServer'))
                 assertEqual('', _py_eval(crystal, 'from io import StringIO'))
                 # Test can start ProjectServer
-                with screenshot_if_raises():
-                    assertEqual(
-                        "",
-                        _py_eval(
-                            crystal, f'server = ProjectServer(p, stdout=StringIO())',
-                            timeout=8.0  # 2.0s and 4.0s isn't long enough for macOS test runners on GitHub Actions
-                        ))
+                assertEqual(
+                    "",
+                    _py_eval(
+                        crystal, f'server = ProjectServer(p, stdout=StringIO())',
+                        timeout=8.0  # 2.0s and 4.0s isn't long enough for macOS test runners on GitHub Actions
+                    ))
                 port = literal_eval(_py_eval(crystal, f'server.port'))
                 request_url = literal_eval(_py_eval(crystal, f'server.get_request_url({home_url!r})'))
                 
