@@ -13,12 +13,10 @@ class _AbstractProgressDialog:
     _dialog_title: str  # abstract
     _CancelException: Type[Exception]  # abstract
     
-    parent: Optional[wx.Window]
     _dialog_style: Optional[int]
     _dialog: Optional[wx.ProgressDialog]
     
     def __init__(self) -> None:
-        self.parent = None
         self._dialog_style = None
         self._dialog = None
         self.reset()
@@ -71,7 +69,6 @@ class _AbstractProgressDialog:
                 # TODO: Shouldn't the maximum of the previous dialog version,
                 #       if any, be preserved here?
                 maximum=1,
-                parent=self.parent,
                 style=new_style
             )
             self._dialog.Name = new_name

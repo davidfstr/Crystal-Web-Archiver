@@ -46,8 +46,6 @@ Release Notes ⋮
 
 * Fixes
     * Fix disappearance of error nodes when new root URL or group is added.
-    * Fix flicker effect related to the Crystal app deactivating momentarily
-      when the "Loading URLs..." dialog closes on Windows.
 
 ### v1.7.0b (December 18, 2023)
 
