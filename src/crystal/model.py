@@ -798,22 +798,9 @@ class Project(ListenableMixin):
         
         # Configure tqdm to efficiently report process approximately every
         # TARGET_MAX_DELAY_BETWEEN_REPORTS seconds
-        class ProgressBar(tqdm):
-            def __init__(self, *args, **kwargs) -> None:
-                self._initializing = True
-                super().__init__(*args, **kwargs)
-                self._initializing = False
-            
-            @overrides
-            def refresh(self, nolock=False, lock_args=None) -> bool:
-                return super().refresh(nolock=True, lock_args=lock_args)
-            
-            @overrides
-            def display(self, *args, **kwargs) -> None:
-                if not self._initializing:
-                    report_processing_row_func(index, self.miniters)  # may raise
-        
-        with ProgressBar(
+        with Project._ProcessTableRows_ProgressBar(
+            report_processing_row_func=report_processing_row_func,
+            index_func=lambda: index,
             initial=0,
             total=approx_row_count,
             mininterval=(
@@ -838,6 +825,30 @@ class Project(ListenableMixin):
                 report_processing_row_func(row_count - 1, progress_bar.miniters)  # may raise
         
         report_did_process_rows_func(row_count)  # may raise
+    
+    class _ProcessTableRows_ProgressBar(tqdm):
+        def __init__(self,
+                *, report_processing_row_func: Callable[[int, float], None],
+                index_func: Callable[[], int],
+                **kwargs) -> None:
+            self._report_processing_row_func = report_processing_row_func
+            self._index_func = index_func
+            
+            self._initializing = True
+            super().__init__(**kwargs)
+            self._initializing = False
+        
+        @overrides
+        def refresh(self, nolock=False, lock_args=None) -> bool:
+            return super().refresh(nolock=True, lock_args=lock_args)
+        
+        @overrides
+        def display(self, *args, **kwargs) -> None:
+            if not self._initializing:
+                self._report_processing_row_func(
+                    self._index_func(),
+                    self.miniters
+                )  # may raise
     
     # === Properties ===
     
