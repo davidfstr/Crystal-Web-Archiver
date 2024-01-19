@@ -821,8 +821,6 @@ class Project(ListenableMixin):
                     progress_bar.update()
                     process_row_func(row)  # may raise
                     row_count += 1
-            if row_count != 0:
-                report_processing_row_func(row_count - 1, progress_bar.miniters)  # may raise
         
         report_did_process_rows_func(row_count)  # may raise
     
