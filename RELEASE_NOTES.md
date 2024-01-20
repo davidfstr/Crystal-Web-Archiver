@@ -45,6 +45,8 @@ Release Notes ⋮
       as warning annotations.
     * A screenshot is taken automatically whenever a timeout error occurs
       and whenever a rich assertion method (from `asserts.py`) fails.
+    * Test modules are discovered automatically from the filesystem,
+      rather than requiring them to be explicitly hardcoded.
 
 * Fixes
     * Fix disappearance of error nodes when new root URL or group is added.
