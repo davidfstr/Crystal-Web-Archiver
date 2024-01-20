@@ -173,6 +173,9 @@ def _run_tests(test_names: List[str]) -> bool:
         print(f'$ crystal --test {" ".join(failed_test_names)}')
         print()
     
+    # Play bell sound in terminal
+    print('\a', end='', flush=True)
+    
     return is_ok
 
 

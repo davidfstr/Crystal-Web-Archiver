@@ -47,6 +47,7 @@ Release Notes ⋮
       and whenever a rich assertion method (from `asserts.py`) fails.
     * Test modules are discovered automatically from the filesystem,
       rather than requiring them to be explicitly hardcoded.
+    * A terminal bell sound is played automatically when tests finish running.
 
 * Fixes
     * Fix disappearance of error nodes when new root URL or group is added.
