@@ -7,6 +7,7 @@ from crystal.tests.util.wait import (
     WaitTimedOut,
 )
 from crystal.tests.util.windows import MainWindow
+from crystal.tests.util.screenshots import take_error_screenshot
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.xos import skip_on_windows
@@ -827,6 +828,9 @@ def _read_until(
             # If hard timeout exceeded then raise
             delta_time = time.time() - start_time
             if did_time_out or delta_time >= hard_timeout:
+                # Screenshot the timeout error
+                take_error_screenshot()
+                
                 hard_timeout_exceeded = True
                 read_so_far = read_buffer.decode(stream.encoding)
                 raise ReadUntilTimedOut(

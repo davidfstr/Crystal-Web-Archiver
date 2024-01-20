@@ -43,6 +43,8 @@ Release Notes ⋮
       at the end of the test run.
     * Warnings logged during a test run are reported to GitHub Actions
       as warning annotations.
+    * A screenshot is taken automatically whenever a timeout error occurs
+      and whenever a rich assertion method (from `asserts.py`) fails.
 
 * Fixes
     * Fix disappearance of error nodes when new root URL or group is added.
