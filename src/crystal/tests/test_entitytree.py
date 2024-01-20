@@ -245,7 +245,10 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
                 # Expand RootResourceNode and ensure it now lists the links in
                 # the redownloaded revision
                 home_ti.Expand()
-                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                await wait_for(
+                    first_child_of_tree_item_is_not_loading_condition(home_ti),
+                    timeout=3.0  # took 2.2s on Linux CI
+                )
                 children = home_ti.Children
                 assert not (
                     len(children) >= 1 and 
