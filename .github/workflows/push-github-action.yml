@@ -121,6 +121,10 @@ jobs:
       #       when running tests later
       - name: Install at-spi2-core
         run: sudo apt-get install -y at-spi2-core
+      
+      # NOTE: Needed for screenshot support while running tests
+      - name: Install scrot
+        run: sudo apt-get install scrot
 
       - name: Install wxPython dependencies
         run: sudo apt-get install -y libgtk-3-dev
