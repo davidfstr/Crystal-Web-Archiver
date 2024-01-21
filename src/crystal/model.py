@@ -1328,7 +1328,7 @@ class Project(ListenableMixin):
         if task_was_complete:
             self.root_task.child_task_did_complete(task)
     
-    # === Events ===
+    # === Events: Resource Lifecycle ===
     
     # Called when a new Resource is created after the project has loaded
     def _resource_did_instantiate(self, resource: Resource) -> None:
@@ -1340,13 +1340,6 @@ class Project(ListenableMixin):
         for lis in self.listeners:
             if hasattr(lis, 'resource_did_instantiate'):
                 lis.resource_did_instantiate(resource)  # type: ignore[attr-defined]
-    
-    # Called when a new ResourceRevision is created after the project has loaded
-    def _resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
-        # Notify normal listeners
-        for lis in self.listeners:
-            if hasattr(lis, 'resource_revision_did_instantiate'):
-                lis.resource_revision_did_instantiate(revision)  # type: ignore[attr-defined]
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
@@ -1365,12 +1358,31 @@ class Project(ListenableMixin):
         for rg in self.resource_groups:
             rg._resource_will_delete(resource)
     
+    # === Events: Resource Revision Lifecycle ===
+    
+    # Called when a new ResourceRevision is created after the project has loaded
+    def _resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'resource_revision_did_instantiate'):
+                lis.resource_revision_did_instantiate(revision)  # type: ignore[attr-defined]
+    
+    # === Events: Root Resource Lifecycle ===
+    
     # Called when a new RootResource is created after the project has loaded
     def _root_resource_did_instantiate(self, root_resource: RootResource) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'root_resource_did_instantiate'):
                 lis.root_resource_did_instantiate(root_resource)  # type: ignore[attr-defined]
+    
+    def _root_resource_did_forget(self, root_resource: RootResource) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'root_resource_did_forget'):
+                lis.root_resource_did_forget(root_resource)  # type: ignore[attr-defined]
+    
+    # === Events: Resource Group Lifecycle ===
     
     # Called when a new ResourceGroup is created after the project has loaded
     def _resource_group_did_instantiate(self, group: ResourceGroup) -> None:
@@ -1379,12 +1391,17 @@ class Project(ListenableMixin):
             if hasattr(lis, 'resource_group_did_instantiate'):
                 lis.resource_group_did_instantiate(group)  # type: ignore[attr-defined]
     
-    # Called when a new ResourceGroup changes its do-not-download status
     def _resource_group_did_change_do_not_download(self, group: ResourceGroup) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_change_do_not_download'):
                 lis.resource_group_did_change_do_not_download(group)  # type: ignore[attr-defined]
+    
+    def _resource_group_did_forget(self, group: ResourceGroup) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'resource_group_did_forget'):
+                lis.resource_group_did_forget(group)  # type: ignore[attr-defined]
     
     # === Close ===
     
@@ -2176,6 +2193,8 @@ class RootResource:
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         del self.project._root_resources[self.resource]
+        
+        self.project._root_resource_did_forget(self)
     
     # === Properties ===
     
@@ -3219,6 +3238,8 @@ class ResourceGroup(ListenableMixin):
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.project._resource_groups.remove(self)
+        
+        self.project._resource_group_did_forget(self)
     
     # === Properties ===
     
@@ -3283,7 +3304,9 @@ class ResourceGroup(ListenableMixin):
     
     def _get_do_not_download(self) -> bool:
         return self._do_not_download
-    def _set_do_not_download(self, value: bool) -> None:
+    # NOTE: The "save" parameter will be used to control whether the new value
+    #       will be persisted, once persistence support for this option is added
+    def _set_do_not_download(self, value: bool, *, save: bool=True) -> None:
         if self._do_not_download == value:
             return
         self._do_not_download = value

@@ -230,9 +230,13 @@ async def test_then_embedded_resource_in_entity_tree_appears_with_do_not_downloa
         await _assert_tree_item_icon_tooltip_contains(comic_image_r_ti, 'Ignored')
         
         # Test: test_given_embedded_resource_also_in_a_non_do_not_download_group_then_embedded_resource_in_entity_tree_does_not_appear_with_do_not_download_badge
-        specific_comic_image_rg = ResourceGroup(
-            project, 'air_gap_2x.png', comic_image_r_url)
-        await _assert_tree_item_icon_tooltip_contains(comic_image_r_ti, 'Undownloaded')
+        if True:
+            specific_comic_image_rg = ResourceGroup(
+                project, 'air_gap_2x.png', comic_image_r_url)
+            await _assert_tree_item_icon_tooltip_contains(comic_image_r_ti, 'Undownloaded')
+            
+            specific_comic_image_rg.delete()
+            await _assert_tree_item_icon_tooltip_contains(comic_image_r_ti, 'Ignored')
 
 
 @skip('covered by: test_then_embedded_resource_in_entity_tree_appears_with_do_not_download_badge')

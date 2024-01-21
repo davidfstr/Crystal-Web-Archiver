@@ -574,10 +574,6 @@ class MainWindow:
         assert selected_or_related_entity is not None
         
         selected_or_related_entity.delete()
-        
-        # TODO: This update() should happen in response to an event
-        #       fired by the entity itself.
-        self.entity_tree.update()
     
     def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity

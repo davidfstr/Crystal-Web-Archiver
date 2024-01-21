@@ -131,14 +131,16 @@ class EntityTree:
     
     # === Updates ===
     
+    # TODO: Can this be marked with @fg_affinity?
     def update(self):
         """
         Updates the nodes in this tree, usually due to a project change.
         """
         self.root.update_descendants()
     
-    # === Event: Resource Did Instantiate ===
+    # === Events: Resource Lifecycle ===
     
+    # TODO: Can this be marked with @fg_affinity?
     def resource_did_instantiate(self, resource: Resource) -> None:
         # TODO: Optimize to only refresh those groups that could potentially
         #       be affected by this particular resource being instantiated
@@ -160,32 +162,45 @@ class EntityTree:
         finally:
             self._group_nodes_need_updating = False
     
-    # === Event: Resource Revision Did Instantiate ===
+    # === Events: Resource Revision Lifecycle ===
     
+    # TODO: Can this be marked with @fg_affinity? Then remove interior fg_call_later().
     def resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
         fg_call_later(lambda:
             self.root.update_icon_set_of_descendants_with_resource(revision.resource))
     
-    # === Event: Root Resource Did Instantiate ===
+    # === Events: Root Resource Lifecycle ===
     
+    # TODO: Can this be marked with @fg_affinity?
     def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
         self.update()
     
-    # === Event: Resource Group Did Instantiate ===
+    @fg_affinity
+    def root_resource_did_forget(self, root_resource: RootResource) -> None:
+        self.update()
     
+    # === Events: Resource Group Lifecycle ===
+    
+    # TODO: Can this be marked with @fg_affinity? Then remove interior fg_call_later().
     def resource_group_did_instantiate(self, group: ResourceGroup) -> None:
         self.update()
         
-        # If new group has do_not_download=False, then some badges related
-        # to that status may need to be updated
+        # Some badges related to the ResourceGroup.do_not_download status
+        # may need to be updated
         fg_call_later(lambda:
             self.root.update_icon_set_of_descendants_in_group(group))
     
-    # === Event: Resource Group Did Change Do-Not-Download ===
-    
+    @fg_affinity
     def resource_group_did_change_do_not_download(self, group: ResourceGroup) -> None:
-        fg_call_later(lambda:
-            self.root.update_icon_set_of_descendants_in_group(group))
+        self.root.update_icon_set_of_descendants_in_group(group)
+    
+    @fg_affinity
+    def resource_group_did_forget(self, group: ResourceGroup) -> None:
+        self.update()
+        
+        # Some badges related to the ResourceGroup.do_not_download status
+        # may need to be updated
+        self.root.update_icon_set_of_descendants_in_group(group)
     
     # === Event: Min Fetch Date Did Change ===
     
