@@ -253,7 +253,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     assert False == (await is_url_not_in_archive(atom_feed_url))
                     assert False == (await is_url_not_in_archive(rss_feed_url))
             
-                # Test can update membership of resource group, when other resource group is source
+                # Test can update members of resource group, when other resource group is source
                 if True:
                     # Undownload all members of the feed group
                     await _undownload_url([atom_feed_url, rss_feed_url], mw, project_dirpath)
@@ -280,7 +280,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     # which should download members of feed group automatically
                     assert tree_has_no_children_condition(mw.task_tree)()
                     feed_item_group_ti.SelectItem()
-                    click_button(mw.update_membership_button)
+                    click_button(mw.update_members_button)
                     await wait_for_download_to_start_and_finish(mw.task_tree)
                 
                 # Ensure members of the feed group were downloaded
@@ -390,7 +390,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 # Test cannot download/update/forget existing resource group in read-only project
                 feed_group_ti.SelectItem()
                 assert False == mw.download_button.IsEnabled()
-                assert False == mw.update_membership_button.IsEnabled()
+                assert False == mw.update_members_button.IsEnabled()
                 assert False == mw.forget_button.IsEnabled()
                 
                 # Start server

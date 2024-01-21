@@ -219,6 +219,12 @@ def tree_item_has_no_children_condition(
     return tree_item_has_no_children
 
 
+def is_enabled_condition(window: wx.Window) -> Callable[[], Optional[bool]]:
+    def is_enabled() -> Optional[bool]:
+        return window.Enabled or None
+    return is_enabled
+
+
 def not_condition(condition: Callable[[], Optional[_T]]) -> Callable[[], Optional[bool]]:
     def not_() -> Optional[bool]:
         if condition():

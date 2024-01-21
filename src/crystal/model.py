@@ -990,10 +990,8 @@ class Project(ListenableMixin):
             for lis in self.listeners:
                 if hasattr(lis, 'min_fetch_date_did_change'):
                     lis.min_fetch_date_did_change()  # type: ignore[attr-defined]
-    min_fetch_date = property(
-        _get_min_fetch_date,
-        _set_min_fetch_date,
-        doc="""
+    min_fetch_date = property(_get_min_fetch_date, _set_min_fetch_date, doc=
+        """
         If non-None then any resource fetched <= this datetime
         will be considered stale and subject to being redownloaded.
         
@@ -2102,8 +2100,8 @@ class RootResource:
     Persisted and auto-saved.
     """
     project: Project
-    name: str
-    resource: Resource
+    _name: str
+    _resource: Resource
     _id: int  # or None if deleted
     
     # === Init ===
@@ -2132,8 +2130,8 @@ class RootResource:
         else:
             self = object.__new__(cls)
             self.project = project
-            self.name = name
-            self.resource = resource
+            self._name = name
+            self._resource = resource
             
             if project._loading:
                 assert _id is not None
@@ -2174,10 +2172,32 @@ class RootResource:
     
     # === Properties ===
     
+    def _get_name(self) -> str:
+        """Name of this root resource. Possibly ''."""
+        return self._name
+    def _set_name(self, name: str) -> None:
+        if self._name == name:
+            return
+        
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        c = self.project._db.cursor()
+        c.execute('update root_resource set name=? where id=?', (
+            name,
+            self._id,))
+        self.project._db.commit()
+        
+        self._name = name
+    name = cast(str, property(_get_name, _set_name))
+    
     @property
     def display_name(self) -> str:
-        """Name of this root resource that is used in the UI."""
+        """Name of this root resource that is used in the UI. Never ''."""
         return self.name or self.url
+    
+    @property
+    def resource(self) -> Resource:
+        return self._resource
     
     @property
     def url(self) -> str:
@@ -3137,7 +3157,7 @@ class ResourceGroup(ListenableMixin):
             raise ValueError('Cannot create group with empty pattern')
         
         self.project = project
-        self.name = name
+        self._name = name
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         self._source = None  # type: Union[ResourceGroupSource, EllipsisType]
@@ -3198,6 +3218,24 @@ class ResourceGroup(ListenableMixin):
     
     # === Properties ===
     
+    def _get_name(self) -> str:
+        """Name of this resource group. Possibly ''."""
+        return self._name
+    def _set_name(self, name: str) -> None:
+        if self._name == name:
+            return
+        
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        c = self.project._db.cursor()
+        c.execute('update resource_group set name=? where id=?', (
+            name,
+            self._id,))
+        self.project._db.commit()
+        
+        self._name = name
+    name = cast(str, property(_get_name, _set_name))
+    
     @property
     def display_name(self) -> str:
         """Name of this group that is used in the UI."""
@@ -3215,6 +3253,9 @@ class ResourceGroup(ListenableMixin):
             raise ValueError('Expected ResourceGroup.init_source() to have been already called')
         return self._source
     def _set_source(self, value: ResourceGroupSource) -> None:
+        if value == self._source:
+            return
+        
         if value is None:
             source_type = None
             source_id = None
@@ -3364,7 +3405,7 @@ class ResourceGroup(ListenableMixin):
         from crystal.task import DownloadResourceGroupTask
         return DownloadResourceGroupTask(self)
     
-    def update_membership(self) -> None:
+    def update_members(self) -> None:
         """
         Updates the membership of this group asynchronously.
         

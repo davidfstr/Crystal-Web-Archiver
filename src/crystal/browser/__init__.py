@@ -31,6 +31,7 @@ from crystal.util.xos import (
 from crystal.util.xthreading import (
     bg_call_later, fg_affinity, fg_call_later, fg_call_and_wait, set_is_quitting
 )
+from functools import partial
 import os
 import time
 from typing import ContextManager, Iterator, Optional
@@ -195,17 +196,23 @@ class MainWindow:
         self._new_root_url_action = Action(wx.ID_ANY,
             'New &Root URL...',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('R')),
-            self._on_add_url,
+            self._on_new_root_url,
             enabled=(not self._readonly),
             button_bitmap=TREE_NODE_ICONS()['entitytree_root_resource'],
             button_label='New &Root URL...')
         self._new_group_action = Action(wx.ID_ANY,
             'New &Group...',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('G')),
-            self._on_add_group,
+            self._on_new_group,
             enabled=(not self._readonly),
             button_bitmap=dict(DEFAULT_FOLDER_ICON_SET())[wx.TreeItemIcon_Normal],
             button_label='New &Group...')
+        self._edit_action = Action(wx.ID_ANY,
+            '&Edit...',
+            accel=wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_RETURN),
+            action_func=self._on_edit_entity,
+            enabled=False,
+            button_label=decorate_label('✏️', '&Edit...', ''))
         self._forget_action = Action(wx.ID_ANY,
             '&Forget',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_BACK),
@@ -218,14 +225,16 @@ class MainWindow:
             self._on_download_entity,
             enabled=False,
             button_label=decorate_label('⬇', '&Download', ''))
-        self._update_membership_action = Action(wx.ID_ANY,
-            'Update &Membership',
+        self._update_members_action = Action(wx.ID_ANY,
+            'Update &Members',
             accel=None,
-            action_func=self._on_update_group_membership,
+            action_func=self._on_update_group_members,
             enabled=False,
-            button_label=decorate_label('🔎', 'Update &Membership', ' '))
+            button_label=decorate_label('🔎', 'Update &Members', ' '))
         self._view_action = Action(wx.ID_ANY,
             '&View',
+            # TODO: Consider adding Space as a alternate accelerator
+            #wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_SPACE),
             wx.AcceleratorEntry(wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('O')),
             self._on_view_entity,
             enabled=False,
@@ -271,10 +280,11 @@ class MainWindow:
         entity_menu = wx.Menu()
         self._new_root_url_action.append_menuitem_to(entity_menu)
         self._new_group_action.append_menuitem_to(entity_menu)
+        self._edit_action.append_menuitem_to(entity_menu)
         self._forget_action.append_menuitem_to(entity_menu)
         entity_menu.AppendSeparator()
         self._download_action.append_menuitem_to(entity_menu)
-        self._update_membership_action.append_menuitem_to(entity_menu)
+        self._update_members_action.append_menuitem_to(entity_menu)
         self._view_action.append_menuitem_to(entity_menu)
         
         menubar = wx.MenuBar()
@@ -329,30 +339,29 @@ class MainWindow:
     def _create_button_bar(self, parent: wx.Window):
         readonly = self._readonly  # cache
         
-        add_url_button = self._new_root_url_action.create_button(parent, name='cr-add-url-button')
-        
-        add_group_button = self._new_group_action.create_button(parent, name='cr-add-group-button')
-        
-        remove_entity_button = self._forget_action.create_button(parent, name='cr-forget-button')
-        
+        new_root_url_button = self._new_root_url_action.create_button(parent, name='cr-add-url-button')
+        new_group_button = self._new_group_action.create_button(parent, name='cr-add-group-button')
+        edit_entity_button = self._edit_action.create_button(parent, name='cr-edit-button')
+        forget_entity_button = self._forget_action.create_button(parent, name='cr-forget-button')
         download_button = self._download_action.create_button(parent, name='cr-download-button')
-        
-        update_membership_button = self._update_membership_action.create_button(
-            parent, name='cr-update-membership-button')
+        update_members_button = self._update_members_action.create_button(
+            parent, name='cr-update-members-button')
         
         view_button = self._view_action.create_button(parent, name='cr-view-button')
         
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        content_sizer.Add(add_url_button)
+        content_sizer.Add(new_root_url_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(add_group_button)
+        content_sizer.Add(new_group_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(remove_entity_button)
+        content_sizer.Add(edit_entity_button)
+        content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
+        content_sizer.Add(forget_entity_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING * 2)
         content_sizer.AddStretchSpacer()
         content_sizer.Add(download_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(update_membership_button)
+        content_sizer.Add(update_members_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
         content_sizer.Add(view_button)
         return content_sizer
@@ -430,25 +439,26 @@ class MainWindow:
         
         event.Skip()  # continue dispose of frame
     
-    # === Entity Pane: Events ===
+    # === Entity Pane: New/Edit Root Url ===
     
-    def _on_add_url(self, event: wx.CommandEvent) -> None:
-        def root_url_exists(url: str) -> bool:
-            r = self.project.get_resource(url)
-            if r is None:
-                return False
-            rr = self.project.get_root_resource(r)
-            return rr is not None
-            
+    def _on_new_root_url(self, event: wx.CommandEvent) -> None:
         NewRootUrlDialog(
-            self._frame, self._on_add_url_dialog_ok,
-            url_exists_func=root_url_exists,
+            self._frame,
+            self._on_new_root_url_dialog_ok,
+            url_exists_func=self._root_url_exists,
             initial_url=self._suggested_url_or_url_pattern_for_selection or '',
             initial_name=self._suggested_name_for_selection or '',
         )
     
+    def _root_url_exists(self, url: str) -> bool:
+        r = self.project.get_resource(url)
+        if r is None:
+            return False
+        rr = self.project.get_root_resource(r)
+        return rr is not None
+    
     @fg_affinity
-    def _on_add_url_dialog_ok(self, name: str, url: str) -> None:
+    def _on_new_root_url_dialog_ok(self, name: str, url: str) -> None:
         if url == '':
             raise ValueError('Invalid blank URL')
         try:
@@ -456,30 +466,103 @@ class MainWindow:
         except RootResource.AlreadyExists:
             raise ValueError('Invalid duplicate URL')
     
-    def _on_add_group(self, event: wx.CommandEvent) -> None:
+    @fg_affinity
+    def _on_edit_root_url_dialog_ok(self, rr: RootResource, name: str, url: str) -> None:
+        if url != rr.url:
+            raise ValueError()
+        rr.name = name
+        
+        # TODO: This update should happen in response to an event
+        #       fired by the entity itself.
+        self.entity_tree.root.update_title_of_descendants()  # update names in titles
+    
+    # === Entity Pane: New/Edit Group ===
+    
+    def _on_new_group(self, event: wx.CommandEvent) -> None:
         try:
             NewGroupDialog(
-                self._frame, self._on_add_group_dialog_ok,
+                self._frame,
+                self._on_new_group_dialog_ok,
                 self.project,
+                saving_source_would_create_cycle_func=lambda source: False,
                 initial_url_pattern=self._suggested_url_or_url_pattern_for_selection or '',
                 initial_source=self._suggested_source_for_selection,
                 initial_name=self._suggested_name_for_selection or '')
         except CancelLoadUrls:
             pass
     
-    def _on_add_group_dialog_ok(self, name: str, url_pattern: str, source):
+    @fg_affinity
+    def _on_new_group_dialog_ok(self, name: str, url_pattern: str, source: ResourceGroupSource) -> None:
         # TODO: Validate user input:
-        #       * Is name or url_pattern empty?
-        #       * Is name or url_pattern already taken?
-        rg = ResourceGroup(self.project, name, url_pattern, source)
+        #       * Is url_pattern empty?
+        #       * Is url_pattern already taken?
+        ResourceGroup(self.project, name, url_pattern, source)
     
-    def _on_forget_entity(self, event):
+    @fg_affinity
+    def _on_edit_group_dialog_ok(self, rg: ResourceGroup, name: str, url_pattern: str, source: ResourceGroupSource) -> None:
+        if url_pattern != rg.url_pattern:
+            raise ValueError()
+        (rg.name, rg.source) = (name, source)
+        
+        # TODO: This update should happen in response to an event
+        #       fired by the entity itself.
+        self.entity_tree.root.update_title_of_descendants()  # update names in titles
+    
+    def _saving_source_would_create_cycle(self, rg: ResourceGroup, source: ResourceGroupSource) -> bool:
+        ancestor_source = source  # type: ResourceGroupSource
+        while ancestor_source is not None:
+            if ancestor_source == rg:
+                return True
+            if isinstance(ancestor_source, ResourceGroup):
+                ancestor_source = ancestor_source.source  # reinterpret
+            else:
+                ancestor_source = None
+        return False
+    
+    # === Entity Pane: Other Commands ===
+    
+    def _on_edit_entity(self, event) -> None:
         selected_entity_pair = self.entity_tree.selected_entity_pair
         selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        assert selected_or_related_entity is not None
+        
+        if isinstance(selected_or_related_entity, RootResource):
+            rr = selected_or_related_entity
+            NewRootUrlDialog(
+                self._frame,
+                partial(self._on_edit_root_url_dialog_ok, rr),
+                url_exists_func=self._root_url_exists,
+                initial_url=rr.url,
+                initial_name=rr.name,
+                is_edit=True,
+            )
+        elif isinstance(selected_or_related_entity, ResourceGroup):
+            rg = selected_or_related_entity
+            try:
+                NewGroupDialog(
+                    self._frame,
+                    partial(self._on_edit_group_dialog_ok, rg),
+                    self.project,
+                    saving_source_would_create_cycle_func=
+                        partial(self._saving_source_would_create_cycle, rg),
+                    initial_url_pattern=rg.url_pattern,
+                    initial_source=rg.source,
+                    initial_name=rg.name,
+                    is_edit=True)
+            except CancelLoadUrls:
+                pass
+        else:
+            raise AssertionError()
+    
+    def _on_forget_entity(self, event) -> None:
+        selected_entity_pair = self.entity_tree.selected_entity_pair
+        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        assert selected_or_related_entity is not None
         
         selected_or_related_entity.delete()
-        # TODO: This update() should happen in response to a delete
-        #       event fired by the entity itself.
+        
+        # TODO: This update() should happen in response to an event
+        #       fired by the entity itself.
         self.entity_tree.update()
     
     def _on_download_entity(self, event) -> None:
@@ -545,9 +628,9 @@ class MainWindow:
                 fg_call_and_wait(fg_task)
         bg_call_later(bg_task)
     
-    def _on_update_group_membership(self, event):
+    def _on_update_group_members(self, event):
         selected_entity = self.entity_tree.selected_entity
-        selected_entity.update_membership()
+        selected_entity.update_members()
     
     def _on_view_entity(self, event) -> None:
         # TODO: If the server couldn't be started (ex: due to the default port being in
@@ -605,19 +688,24 @@ class MainWindow:
         
         return self._project_server
     
+    # === Entity Pane: Events ===
+    
     def _on_selected_entity_changed(self, event: wx.TreeEvent) -> None:
         selected_entity_pair = self.entity_tree.selected_entity_pair  # cache
         selected_entity = selected_entity_pair[0]
         selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
         
         readonly = self._readonly  # cache
+        self._edit_action.enabled = (
+            (not readonly) and
+            isinstance(selected_or_related_entity, (ResourceGroup, RootResource)))
         self._forget_action.enabled = (
             (not readonly) and
             isinstance(selected_or_related_entity, (ResourceGroup, RootResource)))
         self._download_action.enabled = (
             (not readonly) and
             selected_entity is not None)
-        self._update_membership_action.enabled = (
+        self._update_members_action.enabled = (
             (not readonly) and
             isinstance(selected_entity, ResourceGroup))
         self._view_action.enabled = (

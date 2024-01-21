@@ -31,6 +31,9 @@ Release Notes ⋮
     * Use ⚓️ and 📁 icons consistently in the UI to refer to 
       Root URLs and Groups respectively.
 
+* Workflow improvements
+    * Can now edit the name and source of Root URLs and Groups after creation.
+
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,
       without introducing an invalid `<script>` tag.
