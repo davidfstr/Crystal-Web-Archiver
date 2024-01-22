@@ -200,13 +200,15 @@ def fg_call_and_wait(
     if is_foreground_thread():
         return callable(*args)
     else:
-        condition = threading.Condition()
-        callable_done = False
+        event = threading.Event()
+        callable_started = False
         callable_result = None
         callable_exc_info = None
         
         def fg_task() -> None:
-            nonlocal callable_done, callable_result, callable_exc_info
+            nonlocal callable_started, callable_result, callable_exc_info
+            
+            callable_started = True
             
             # Run task
             try:
@@ -215,16 +217,23 @@ def fg_call_and_wait(
                 callable_exc_info = sys.exc_info()
             
             # Send signal
-            with condition:
-                callable_done = True
-                condition.notify()
+            event.set()
         fg_task.callable = callable  # type: ignore[attr-defined]
         fg_call_later(fg_task, profile=profile)
         
         # Wait for signal
-        with condition:
-            while not callable_done:
-                condition.wait()
+        while True:
+            if not callable_started:
+                if event.wait(timeout=1.0):
+                    break
+                if not has_foreground_thread():
+                    # Presumably the foreground thread did shutdown
+                    # while fg_call_later was scheduling a callable
+                    # that now will never actually run
+                    raise NoForegroundThreadError()
+            else:
+                if event.wait():
+                    break
         
         # Reraise callable's exception, if applicable
         if callable_exc_info is not None:

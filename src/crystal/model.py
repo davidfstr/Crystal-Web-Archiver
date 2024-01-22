@@ -2377,15 +2377,14 @@ class ResourceRevision:
         #       bit would be wrong. Avoid that scenario.
         resource._definitely_has_no_revisions = False
         
-        condition = threading.Condition()
-        callable_done = False
+        event = threading.Event()
         callable_exc_info = None
         
         # Asynchronously:
         # 1. Create the ResourceRevision row in the database
         # 2. Get the database ID
         def fg_task() -> None:
-            nonlocal callable_done, callable_exc_info
+            nonlocal callable_exc_info
             try:
                 RR = ResourceRevision
                 
@@ -2401,9 +2400,7 @@ class ResourceRevision:
             except BaseException as e:
                 callable_exc_info = sys.exc_info()
             finally:
-                with condition:
-                    callable_done = True
-                    condition.notify()
+                event.set()
         # NOTE: Use profile=False because no obvious further optimizations exist
         fg_call_later(fg_task, profile=False)
         
@@ -2422,9 +2419,7 @@ class ResourceRevision:
                 body_file = None
         finally:
             # Wait for ResourceRevision row to be created in database
-            with condition:
-                while not callable_done:
-                    condition.wait()
+            event.wait()
             row_created_ok = self._id is not None
             
             if body_file is not None:
