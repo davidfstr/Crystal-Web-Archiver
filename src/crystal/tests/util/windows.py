@@ -101,7 +101,6 @@ class OpenOrCreateDialog:
                     new_opened_project.close()
             
             raise
-        
     
     @asynccontextmanager
     async def open(self, 
