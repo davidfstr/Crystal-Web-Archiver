@@ -9,12 +9,16 @@ from functools import wraps
 import gc
 from importlib import import_module
 import os
+import pathlib
 import sys
 import time
 import traceback
-from typing import Any, Callable, Coroutine, Dict, List, Iterator, Optional, Tuple
+from typing import (
+    Any, Callable, Coroutine, Dict, List, Iterator, Optional, Tuple, Union
+)
 from unittest import SkipTest
 import warnings
+import zipfile
 
 
 # Path to parent directory of the "crystal" package
@@ -199,15 +203,18 @@ def _discover_test_functions(tests_dirpath: str) -> Iterator[Callable]:
         perhaps due to a syntax error or a runtime error 
         in code executed at the top-level
     """
-    for (parent_dirpath, dirnames, filenames) in os.walk(tests_dirpath):
+    if zipfile.is_zipfile(tests_dirpath):
+        tests_path = zipfile.Path(tests_dirpath)  # type: _AbstractPath
+    else:
+        tests_path = pathlib.Path(tests_dirpath)
+    
+    for (parent_path, dirnames, filenames) in _path_walk(tests_path):
         # Visit files in sorted order
         for fn in sorted(filenames):
             if fn.startswith('test_') and fn.endswith('.py'):
-                module_relpath = os.path.relpath(
-                    os.path.join(parent_dirpath, fn),
-                    start=tests_dirpath)
+                module_relpath = _path_relative_to(parent_path / fn, tests_path)
                 module_importpath = '.'.join(
-                    module_relpath[:-len('.py')].split(os.path.sep)
+                    str(module_relpath)[:-len('.py')].split(os.path.sep)
                 )
                 try:
                     module = import_module(module_importpath)
@@ -217,6 +224,33 @@ def _discover_test_functions(tests_dirpath: str) -> Iterator[Callable]:
         
         # Visit subdirectories in sorted order
         dirnames[:] = sorted(dirnames)
+
+
+_AbstractPath = Union[pathlib.Path, zipfile.Path]
+
+# Backport of Path.walk() from Python 3.12
+def _path_walk(path: _AbstractPath) -> Iterator[Tuple[_AbstractPath, List[str], List[str]]]:
+    dirnames = []
+    filenames = []
+    for itempath in path.iterdir():
+        if itempath.is_file():
+            filenames.append(itempath.name)
+        elif itempath.is_dir():
+            dirnames.append(itempath.name)
+    
+    yield (path, dirnames, filenames)
+    for dirname in dirnames:
+        yield from _path_walk(path / dirname)
+
+
+# Version of Path.relative_to() that works on ziplib.Path objects too
+def _path_relative_to(self: _AbstractPath, other: _AbstractPath) -> pathlib.PurePath:
+    if isinstance(self, pathlib.Path) and isinstance(other, pathlib.Path):
+        return self.relative_to(other)
+    elif isinstance(self, zipfile.Path) or isinstance(other, zipfile.Path):
+        return pathlib.PurePath(str(self)).relative_to(pathlib.PurePath(str(other)))
+    else:
+        raise ValueError()
 
 
 def _test_functions_in_module(mod) -> List[Callable]:
