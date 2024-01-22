@@ -1,4 +1,30 @@
 from contextlib import contextmanager
+from crystal.tests import (
+    test_disk_io_errors,
+    test_download,
+    test_download_body,
+    test_entitytree,
+    test_file_extension_visibility,
+    test_icons,
+    test_install_to_desktop,
+    test_load_urls,
+    test_log_drawer,
+    test_menus,
+    test_new_group,
+    test_new_root_url,
+    test_open_project,
+    test_parse_html,
+    test_profile,
+    test_project_migrate,
+    test_readonly_mode,
+    test_server,
+    test_shell,
+    test_ssd,
+    test_tasks,
+    test_tasktree,
+    test_workflows,
+    test_xthreading,
+)
 from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
@@ -6,7 +32,6 @@ from crystal.util.xthreading import bg_affinity
 from crystal.util.xtime import sleep_profiled
 from functools import wraps
 import gc
-from importlib import import_module
 import os
 import sys
 import time
@@ -18,6 +43,48 @@ import warnings
 
 # Path to parent directory of the "crystal" package
 _SOURCE_DIRPATH = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+
+def _test_functions_in_module(mod) -> List[Callable]:
+    return [
+        f for f in mod.__dict__.values() 
+        if (
+            callable(f) and 
+            getattr(f, '__name__', '').startswith('test_') and
+            # NOTE: Need to check stringness explicitly to exclude "call" from 
+            #       "from unittest.mock import call"
+            isinstance(getattr(f, '__name__', ''), str)
+        )
+    ]
+
+# TODO: Avoid the need to manually enumerate all test modules individually
+_TEST_FUNCS = (
+    _test_functions_in_module(test_disk_io_errors) +
+    _test_functions_in_module(test_download) +
+    _test_functions_in_module(test_download_body) +
+    _test_functions_in_module(test_entitytree) +
+    _test_functions_in_module(test_file_extension_visibility) +
+    _test_functions_in_module(test_icons) +
+    _test_functions_in_module(test_install_to_desktop) +
+    _test_functions_in_module(test_load_urls) +
+    _test_functions_in_module(test_log_drawer) +
+    _test_functions_in_module(test_menus) +
+    _test_functions_in_module(test_new_group) +
+    _test_functions_in_module(test_new_root_url) +
+    _test_functions_in_module(test_open_project) +
+    _test_functions_in_module(test_parse_html) +
+    _test_functions_in_module(test_profile) +
+    _test_functions_in_module(test_project_migrate) +
+    _test_functions_in_module(test_readonly_mode) +
+    _test_functions_in_module(test_server) +
+    _test_functions_in_module(test_shell) +
+    _test_functions_in_module(test_ssd) +
+    _test_functions_in_module(test_tasks) +
+    _test_functions_in_module(test_tasktree) +
+    _test_functions_in_module(test_workflows) +
+    _test_functions_in_module(test_xthreading) +
+    []
+)
 
 
 _TestFuncId = Tuple[str, str]  # (module, func_name)
@@ -47,12 +114,7 @@ def _run_tests(test_names: List[str]) -> bool:
     with warnings.catch_warnings(record=True) as warning_list, _warnings_sent_to_ci():
         assert warning_list is not None
         
-        # Discover all test functions,
-        # possibly raising ImportError if a test module cannot be imported
-        test_funcs = list(_discover_test_functions(_SOURCE_DIRPATH))
-        
-        # Run each test function
-        for test_func in test_funcs:
+        for test_func in _TEST_FUNCS:
             if not callable(test_func):
                 raise ValueError(f'Test function is not callable: {test_func}')
             test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
@@ -177,53 +239,6 @@ def _run_tests(test_names: List[str]) -> bool:
     print('\a', end='', flush=True)
     
     return is_ok
-
-
-def _discover_test_functions(tests_dirpath: str) -> Iterator[Callable]:
-    """
-    Discovers a list of test functions found within the specified dirpath.
-    
-    Test functions will be returned ordered such that:
-    - test modules are sorted by fully qualified name
-    - test functions appear in the order they are defined in the test module
-    
-    Raises:
-    * ImportError -- 
-        if a test module failed to import,
-        perhaps due to a syntax error or a runtime error 
-        in code executed at the top-level
-    """
-    for (parent_dirpath, dirnames, filenames) in os.walk(tests_dirpath):
-        # Visit files in sorted order
-        for fn in sorted(filenames):
-            if fn.startswith('test_') and fn.endswith('.py'):
-                module_relpath = os.path.relpath(
-                    os.path.join(parent_dirpath, fn),
-                    start=tests_dirpath)
-                module_importpath = '.'.join(
-                    module_relpath[:-len('.py')].split(os.path.sep)
-                )
-                try:
-                    module = import_module(module_importpath)
-                except Exception:
-                    raise ImportError(f'Error while importing test module {module_importpath!r}')
-                yield from _test_functions_in_module(module)
-        
-        # Visit subdirectories in sorted order
-        dirnames[:] = sorted(dirnames)
-
-
-def _test_functions_in_module(mod) -> List[Callable]:
-    return [
-        f for f in mod.__dict__.values() 
-        if (
-            callable(f) and 
-            getattr(f, '__name__', '').startswith('test_') and
-            # NOTE: Need to check stringness explicitly to exclude "call" from 
-            #       "from unittest.mock import call"
-            isinstance(getattr(f, '__name__', ''), str)
-        )
-    ]
 
 
 @contextmanager
