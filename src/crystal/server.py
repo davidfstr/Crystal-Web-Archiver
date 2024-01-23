@@ -39,9 +39,11 @@ Verbosity = Literal['normal', 'indent']
 
 
 class ProjectServer:
-    """
-    Runs the archive server on a daemon thread.
-    """
+    """Runs the archive server on a thread."""
+    
+    # NOTE: Only changed when tests are running
+    _last_created: 'Optional[ProjectServer]'=None
+    
     def __init__(self,
             project: Project,
             port: Optional[int]=None,
@@ -95,6 +97,10 @@ class ProjectServer:
             finally:
                 self._server.server_close()
         bg_call_later(bg_task, daemon=True)
+        
+        # Export reference to self, if running tests
+        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+            ProjectServer._last_created = self
     
     def close(self) -> None:
         self._server.shutdown()
@@ -534,12 +540,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return None
     
     def _find_group_matching_archive_url(self, archive_url: str) -> Optional[ResourceGroup]:
+        # ...excluding "do not download" groups
         for rg in self.project.resource_groups:
-            if rg.contains_url(archive_url):
+            if rg.contains_url(archive_url) and not rg.do_not_download:
                 return rg
         return None
     
     @staticmethod
+    @bg_affinity
     def _try_download_revision_dynamically(resource: Resource, *, needs_result: bool) -> Optional[ResourceRevision]:
         try:
             return resource.download(

@@ -9,31 +9,38 @@ from crystal.util.wx_dialog import (
     CreateButtonSizer, position_dialog_initially, ShowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
-from crystal.util.xos import is_linux
+from crystal.util.xos import is_linux, is_mac_os, is_windows
 import sys
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Tuple, Union
 import wx
 
 
 _WINDOW_INNER_PADDING = 10
 _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
+_SCROLL_RATE = 20
+_ABOVE_OPTIONS_PADDING = 10
+
+_OPTIONS_SHOWN_LABEL = 'Basic Options'
+_OPTIONS_NOT_SHOWN_LABEL = 'Advanced Options'
 
 
 class NewGroupDialog:
     _INITIAL_URL_PATTERN_WIDTH = NewRootUrlDialog._INITIAL_URL_WIDTH
     _MAX_VISIBLE_PREVIEW_URLS = 100
+    _SHOW_SEQUENTIAL_OPTION = False  # hide feature until it is finished
     
     # === Init ===
     
     def __init__(self,
             parent: wx.Window,
-            on_finish: Callable[[str, str, ResourceGroupSource], None],
+            on_finish: Callable[[str, str, ResourceGroupSource, bool], None],
             project: Project,
             saving_source_would_create_cycle_func: Callable[[ResourceGroupSource], bool],
             initial_url_pattern: str='',
             initial_source: ResourceGroupSource=None,
             initial_name: str='',
+            initial_do_not_download: bool=False,
             is_edit: bool=False,
             ) -> None:
         """
@@ -68,48 +75,30 @@ class NewGroupDialog:
         bind(dialog, wx.EVT_BUTTON, self._on_button)
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         
-        # NOTE: Don't use wx.CollapsiblePane on wxGTK/Linux because
-        #       it doesn't resize its parent window properly on
-        #       expand and unexpand events
-        preview_box_collapsible = not is_linux()
-        preview_box: Union[wx.Window, wx.Sizer]
-        preview_box_root: wx.Window
-        preview_box_root_sizer: wx.BoxSizer
-        preview_box_flags: int
-        preview_box_border: int
-        if preview_box_collapsible:
-            preview_box = wx.CollapsiblePane(
-                dialog, label='Preview Members',
-                name='cr-new-group-dialog__preview-members')
-            preview_box.Expand()
-            preview_box_root = preview_box.GetPane()
-            preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
-            preview_box_root.SetSizer(preview_box_root_sizer)
-            preview_box_flags = 0
-            preview_box_border = 0
-        else:
-            preview_box_root_sizer = wx.StaticBoxSizer(
-                wx.VERTICAL, dialog, label='Preview Members')
-            preview_box = preview_box_root_sizer
-            preview_box_root = preview_box_root_sizer.GetStaticBox()
-            preview_box_flags = wx.TOP
-            preview_box_border = 10
-        
-        preview_box_root_sizer.Add(
-            wrap_static_box_sizer_child(self._create_preview_box_content(preview_box_root)),
-            proportion=1,
-            flag=wx.EXPAND)
-        
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
             self._create_fields(dialog, initial_url_pattern, initial_source, initial_name, is_edit),
             flag=wx.EXPAND)
-        content_sizer.Add(preview_box, proportion=1, flag=wx.EXPAND|preview_box_flags, border=preview_box_border)
+        (
+            preview_box,
+            preview_box_flags,
+            preview_box_border,
+        ) = self._create_preview_box(dialog)
+        content_sizer.Add(
+            preview_box,
+            proportion=1,
+            flag=wx.EXPAND|preview_box_flags,
+            border=preview_box_border)
         
-        ok_button_id = (wx.ID_NEW if not is_edit else wx.ID_SAVE)
+        self._options_sizer = self._create_advanced_options(dialog, initial_do_not_download)
+        content_sizer.Add(
+            self._options_sizer,
+            flag=wx.EXPAND|wx.TOP,
+            border=_ABOVE_OPTIONS_PADDING)
+        
         dialog_sizer.Add(content_sizer, proportion=1, flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
-        dialog_sizer.Add(CreateButtonSizer(dialog, ok_button_id, wx.ID_CANCEL), flag=wx.EXPAND|wx.BOTTOM,
+        dialog_sizer.Add(self._create_buttons(dialog, is_edit), flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
         
         if not fields_hide_hint_when_focused():
@@ -121,8 +110,9 @@ class NewGroupDialog:
         self._update_preview_urls()
         
         position_dialog_initially(dialog)
-        dialog.Show(True)
         dialog.Fit()
+        self._on_options_toggle()  # collapse options initially
+        dialog.Show(True)
         
         dialog.MinSize = dialog.Size
         dialog.MaxSize = wx.Size(wx.DefaultCoord, wx.DefaultCoord)
@@ -193,6 +183,46 @@ class NewGroupDialog:
         
         return fields_sizer
     
+    def _create_preview_box(self, parent: wx.Window) -> Tuple[Union[wx.Window, wx.Sizer], int, int]:
+        # NOTE: Don't use wx.CollapsiblePane on wxGTK/Linux because
+        #       it doesn't resize its parent window properly on
+        #       expand and unexpand events
+        preview_box_collapsible = not is_linux()
+        preview_box: Union[wx.Window, wx.Sizer]
+        preview_box_root: wx.Window
+        preview_box_root_sizer: wx.BoxSizer
+        preview_box_flags: int
+        preview_box_border: int
+        if preview_box_collapsible:
+            preview_box = wx.CollapsiblePane(
+                parent, label='Preview Members',
+                name='cr-new-group-dialog__preview-members')
+            preview_box.Expand()
+            preview_box_root = preview_box.GetPane()
+            preview_box_root_sizer = wx.BoxSizer(wx.VERTICAL)
+            preview_box_root.SetSizer(preview_box_root_sizer)
+            preview_box_flags = 0
+            preview_box_border = 0
+        else:
+            preview_box_root_sizer = wx.StaticBoxSizer(
+                wx.VERTICAL, parent, label='Preview Members')
+            preview_box = preview_box_root_sizer
+            preview_box_root = preview_box_root_sizer.GetStaticBox()
+            preview_box_flags = wx.TOP
+            preview_box_border = 10
+        
+        preview_box_root_sizer.Add(
+            wrap_static_box_sizer_child(
+                self._create_preview_box_content(preview_box_root)),
+            proportion=1,
+            flag=wx.EXPAND)
+        
+        return (
+            preview_box,
+            preview_box_flags,
+            preview_box_border,
+        )
+    
     def _create_preview_box_content(self, parent: wx.Window) -> wx.Sizer:
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         
@@ -204,6 +234,145 @@ class NewGroupDialog:
         content_sizer.Add(self.url_list, proportion=1, flag=wx.EXPAND)
         
         return content_sizer
+    
+    def _create_advanced_options(self, parent: wx.Window, *args, **kwargs) -> wx.StaticBoxSizer:
+        options_sizer = wx.StaticBoxSizer(wx.VERTICAL, parent, label='Advanced Options')
+        options_sizer.Add(
+            wrap_static_box_sizer_child(
+                self._create_advanced_options_content(
+                    options_sizer.GetStaticBox(),
+                    *args, **kwargs)),
+            flag=wx.EXPAND)
+        return options_sizer
+    
+    def _create_advanced_options_content(self,
+            parent: wx.Window,
+            initial_do_not_download: bool,
+            ) -> wx.Sizer:
+        options_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        options_sizer.Add(
+            wx.StaticText(parent, label='These options reset when Crystal quits.'),
+        )
+        
+        self.do_not_download_checkbox = wx.CheckBox(
+            parent, label='Do not download members when embedded',
+            name='cr-new-group-dialog__do-not-download-checkbox')
+        self.do_not_download_checkbox.Value = initial_do_not_download
+        options_sizer.Add(
+            self.do_not_download_checkbox,
+            flag=wx.TOP,
+            border=8,
+        )
+        if self._SHOW_SEQUENTIAL_OPTION:
+            options_sizer.AddSpacer(_FORM_ROW_SPACING)
+            
+            sequential_row = wx.BoxSizer(wx.HORIZONTAL)
+            if True:
+                self.sequential_checkbox = wx.CheckBox(
+                    parent, label='Sequential members',
+                    name='cr-new-group-dialog__sequential-checkbox')
+                minimum_choice_values = ['0', '1', '2']
+                # TODO: Allow the user to specify any integer value, via a wx.ComboBox
+                self.minimum_choice_box = wx.Choice(
+                    parent,
+                    choices=minimum_choice_values)
+                self.minimum_choice_box.Selection = minimum_choice_values.index('2')
+                
+                sequential_row.Add(self.sequential_checkbox, flag=wx.CENTER)
+                sequential_row.Add(wx.StaticText(parent, label='–'), flag=wx.CENTER)
+                sequential_row.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+                sequential_row.Add(wx.StaticText(parent, label='Minimum:'), flag=wx.CENTER)
+                sequential_row.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+                sequential_row.Add(self.minimum_choice_box, flag=wx.CENTER)
+                
+            options_sizer.Add(sequential_row)
+            
+            wildcard_row_scroller = wx.ScrolledWindow(parent, style=wx.HSCROLL|wx.ALWAYS_SHOW_SB)
+            if True:
+                wildcard_row = wx.BoxSizer(wx.HORIZONTAL)
+                if True:
+                    url_pattern_fragments = [
+                        'https://xkcd.com/',
+                        '/',
+                        #'/longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglongmoremoremore',
+                    ]
+                    url_pattern_wildcards = ['#']
+                    assert len(url_pattern_fragments) == len(url_pattern_wildcards) + 1
+                    
+                    wildcard_labels = [
+                        wx.StaticText(wildcard_row_scroller, label=upf)
+                        for upf in url_pattern_fragments
+                    ]
+                    for wl in wildcard_labels:
+                        wl.SetForegroundColour(
+                            wx.Colour(
+                                255 * 5//8,
+                                255 * 5//8,
+                                255 * 5//8,
+                            )  # light gray
+                        )
+                    
+                    wildcard_buttons = [
+                        wx.RadioButton(
+                            wildcard_row_scroller,
+                            label=upw,
+                            style=(wx.RB_GROUP if i == 0 else 0))
+                        for (i, upw) in enumerate(url_pattern_wildcards)
+                    ]
+                    wildcard_buttons[0].Value = True  # select first wildcard by default
+                    
+                    for (wl, wb) in zip(wildcard_labels, wildcard_buttons):
+                        wildcard_row.Add(wl, flag=wx.CENTER)
+                        wildcard_row.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+                        wildcard_row.Add(wb, flag=wx.CENTER)
+                        wildcard_row.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+                    wildcard_row.Add(wildcard_labels[-1], flag=wx.CENTER)
+                
+                # NOTE: MUST SetScrollRate to something for scrollbars to work 
+                wildcard_row_scroller.SetScrollRate(_SCROLL_RATE, 0)
+                
+                wildcard_row_scroller.SetSizer(wildcard_row)
+                virtual_size = wildcard_row.ComputeFittingWindowSize(wildcard_row_scroller)
+                wildcard_row_scroller.SetMinSize(wx.Size(
+                    # Prevent scroller's min width from inheriting its virtual min width,
+                    # so that the parent can define the width of the scroller
+                    0,
+                    # Force scroller's min height to match its virtual min height
+                    virtual_size.Height
+                ))
+            
+            if is_mac_os():
+                checkbox_text_x = 20
+            elif is_windows():
+                checkbox_text_x = 16
+            elif is_linux():
+                checkbox_text_x = 24
+            else:
+                raise AssertionError()
+            options_sizer.Add(
+                wildcard_row_scroller,
+                flag=wx.LEFT|wx.EXPAND,
+                # Indent the wildcard row such that its left edge aligns with
+                # the "Sequential members" checkbox label
+                border=checkbox_text_x)
+        
+        return options_sizer
+    
+    def _create_buttons(self, parent: wx.Window, is_edit: bool) -> wx.Sizer:
+        ok_button_id = (wx.ID_NEW if not is_edit else wx.ID_SAVE)
+        
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        self._options_button = wx.Button(parent, wx.ID_MORE, _OPTIONS_SHOWN_LABEL)
+        button_sizer.Add(
+            self._options_button,
+            flag=wx.CENTER|wx.LEFT,
+            border=_WINDOW_INNER_PADDING)
+        
+        button_sizer.AddStretchSpacer()
+        button_sizer.Add(CreateButtonSizer(parent, ok_button_id, wx.ID_CANCEL), flag=wx.CENTER)
+        return button_sizer
     
     # === Operations ===
     
@@ -241,16 +410,18 @@ class NewGroupDialog:
     def _on_button(self, event: wx.CommandEvent) -> None:
         btn_id = event.GetEventObject().GetId()
         if btn_id in (wx.ID_NEW, wx.ID_SAVE):
-            self._on_ok(event)
+            self._on_ok()
         elif btn_id == wx.ID_CANCEL:
-            self._on_cancel(event)
+            self._on_cancel()
+        elif btn_id == wx.ID_MORE:
+            self._on_options_toggle()
     
     def _on_close(self, event: wx.CloseEvent) -> None:
-        self._on_cancel(event)
+        self._on_cancel()
     
-    def _on_ok(self, event: wx.CommandEvent) -> None:
-        name = self.name_field.GetValue()
-        url_pattern = self.pattern_field.GetValue()
+    def _on_ok(self) -> None:
+        name = self.name_field.Value
+        url_pattern = self.pattern_field.Value
         source = self.source_choice_box.GetClientData(
             self.source_choice_box.GetSelection())
         if self._saving_source_would_create_cycle_func(source):
@@ -265,9 +436,37 @@ class NewGroupDialog:
             choice = ShowModal(dialog)
             assert wx.ID_OK == choice
             return
-        self._on_finish(name, url_pattern, source)
+        do_not_download = self.do_not_download_checkbox.Value
+        self._on_finish(name, url_pattern, source, do_not_download)
         
         self.dialog.Destroy()
     
-    def _on_cancel(self, event: wx.CommandEvent) -> None:
+    def _on_cancel(self) -> None:
         self.dialog.Destroy()
+    
+    def _on_options_toggle(self) -> None:
+        options = self._options_sizer.GetStaticBox()
+        if options.Shown:
+            # Hide
+            self._options_button.Label = _OPTIONS_NOT_SHOWN_LABEL
+            
+            options_height = options.Size.Height + _ABOVE_OPTIONS_PADDING
+            options.Shown = False
+            self.dialog.SetSize(
+                x=wx.DefaultCoord,
+                y=wx.DefaultCoord,
+                width=wx.DefaultCoord,
+                height=self.dialog.Size.Height - options_height,
+                sizeFlags=wx.SIZE_USE_EXISTING)
+        else:
+            # Show
+            self._options_button.Label = _OPTIONS_SHOWN_LABEL
+            
+            options.Shown = True
+            options_height = options.Size.Height + _ABOVE_OPTIONS_PADDING
+            self.dialog.SetSize(
+                x=wx.DefaultCoord,
+                y=wx.DefaultCoord,
+                width=wx.DefaultCoord,
+                height=self.dialog.Size.Height + options_height,
+                sizeFlags=wx.SIZE_USE_EXISTING)

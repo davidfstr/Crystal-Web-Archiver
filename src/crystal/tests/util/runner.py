@@ -74,13 +74,17 @@ def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
 def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
         url: str,
         *, headers: Optional[Dict[str, str]]=None,
-        timeout: float,
+        timeout: Optional[float]=None,
         ) -> Awaitable[WebPage]:  # or Generator[Command, object, WebPage]
     """
     Switch to a background thread, fetch the specified URL, and
     then resume this foreground thread.
     """
     from crystal.tests.util.server import WebPage
+    from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+    
+    if timeout is None:
+        timeout = DEFAULT_WAIT_TIMEOUT
     
     page_or_error = yield FetchUrlCommand(url, headers, timeout)
     if isinstance(page_or_error, WebPage):

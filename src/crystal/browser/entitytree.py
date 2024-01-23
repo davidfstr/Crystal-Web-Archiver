@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from crystal.browser.icons import BADGED_TREE_NODE_ICON, TREE_NODE_ICONS
+from crystal.browser.icons import (
+    BADGED_ART_PROVIDER_TREE_NODE_ICON, BADGED_TREE_NODE_ICON, TREE_NODE_ICONS,
+)
 from crystal.doc.generic import Link
 from crystal.doc.html.soup import TEXT_LINK_TYPE_TITLE
 from crystal.model import (
@@ -129,14 +131,16 @@ class EntityTree:
     
     # === Updates ===
     
+    # TODO: Can this be marked with @fg_affinity?
     def update(self):
         """
         Updates the nodes in this tree, usually due to a project change.
         """
         self.root.update_descendants()
     
-    # === Event: Resource Did Instantiate ===
+    # === Events: Resource Lifecycle ===
     
+    # TODO: Can this be marked with @fg_affinity?
     def resource_did_instantiate(self, resource: Resource) -> None:
         # TODO: Optimize to only refresh those groups that could potentially
         #       be affected by this particular resource being instantiated
@@ -158,27 +162,51 @@ class EntityTree:
         finally:
             self._group_nodes_need_updating = False
     
-    # === Event: Resource Revision Did Instantiate ===
+    # === Events: Resource Revision Lifecycle ===
     
+    # TODO: Can this be marked with @fg_affinity? Then remove interior fg_call_later().
     def resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
         fg_call_later(lambda:
             self.root.update_icon_set_of_descendants_with_resource(revision.resource))
     
-    # === Event: Root Resource Did Instantiate ===
+    # === Events: Root Resource Lifecycle ===
     
+    # TODO: Can this be marked with @fg_affinity?
     def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
         self.update()
     
-    # === Event: Resource Group Did Instantiate ===
+    @fg_affinity
+    def root_resource_did_forget(self, root_resource: RootResource) -> None:
+        self.update()
     
+    # === Events: Resource Group Lifecycle ===
+    
+    # TODO: Can this be marked with @fg_affinity? Then remove interior fg_call_later().
     def resource_group_did_instantiate(self, group: ResourceGroup) -> None:
         self.update()
+        
+        # Some badges related to the ResourceGroup.do_not_download status
+        # may need to be updated
+        fg_call_later(lambda:
+            self.root.update_icon_set_of_descendants_in_group(group))
+    
+    @fg_affinity
+    def resource_group_did_change_do_not_download(self, group: ResourceGroup) -> None:
+        self.root.update_icon_set_of_descendants_in_group(group)
+    
+    @fg_affinity
+    def resource_group_did_forget(self, group: ResourceGroup) -> None:
+        self.update()
+        
+        # Some badges related to the ResourceGroup.do_not_download status
+        # may need to be updated
+        self.root.update_icon_set_of_descendants_in_group(group)
     
     # === Event: Min Fetch Date Did Change ===
     
     def min_fetch_date_did_change(self) -> None:
         fg_call_later(lambda:
-            self.root.update_icon_set_of_descendants_with_resource(None))
+            self.root.update_icon_set_of_descendants())
     
     # === Event: Right Click ===
     
@@ -362,6 +390,12 @@ class Node:
         """
         self._call_on_descendants('update_title')
     
+    def update_icon_set_of_descendants(self) -> None:
+        """
+        Updates the icon set of this node's descendants, usually due to a project change.
+        """
+        self.update_icon_set_of_descendants_with_resource(None)
+    
     def update_icon_set_of_descendants_with_resource(self, resource: Optional[Resource]) -> None:
         """
         Updates the icon set of this node's descendants, usually due to a project change.
@@ -374,6 +408,21 @@ class Node:
                 self.update_icon_set()
         for child in self.children:
             child.update_icon_set_of_descendants_with_resource(resource)
+    
+    def update_icon_set_of_descendants_in_group(self, group: ResourceGroup) -> None:
+        """
+        Updates the icon set of this node's descendants, usually due to a project change.
+        
+        Only update if the entity's resource is in the specified group.
+        """
+        if isinstance(self.entity, (RootResource, Resource)):
+            if self.entity.resource in group:
+                self.update_icon_set()
+        elif isinstance(self.entity, ResourceGroup):
+            if self.entity == group:
+                self.update_icon_set()
+        for child in self.children:
+            child.update_icon_set_of_descendants_in_group(group)
     
     def _call_on_descendants(self, method_name) -> None:
         getattr(self, method_name)()
@@ -538,6 +587,19 @@ class _ResourceNode(Node):
         return self._status_badge_name_value
     
     def _calculate_status_badge_name(self) -> Optional[str]:
+        is_dnd_url = False
+        url = self.resource.url  # cache
+        for rg in self.resource.project.resource_groups:
+            if rg.contains_url(url):
+                if rg.do_not_download:
+                    is_dnd_url = True
+                else:
+                    is_dnd_url = False
+                    break
+        
+        if is_dnd_url:
+            return 'prohibition'
+        
         freshest_rr = self.resource.default_revision(stale_ok=True)
         if freshest_rr is None:
             # Not downloaded
@@ -570,6 +632,8 @@ class _ResourceNode(Node):
             return 'Stale'
         elif status_badge_name == 'warning':
             return 'Error downloading'
+        elif status_badge_name == 'prohibition':
+            return 'Ignored'
         else:
             raise AssertionError('Unknown resource status badge: ' + status_badge_name)
     
@@ -958,19 +1022,63 @@ class ClusterNode(Node):
         return hash(self._children_tuple)
 
 
-class ResourceGroupNode(Node):
+class _GroupedNode(Node):  # abstract
+    entity_tooltip: str  # abstract
+    
     ICON = '📁'
     ICON_TRUNCATION_FIX = ' '
+    
+    def __init__(self,
+            resource_group: ResourceGroup,
+            *, source: DeferrableResourceGroupSource,
+            ) -> None:
+        self.resource_group = resource_group
+        super().__init__(source=source)
+    
+    # === Properties ===
+    
+    def calculate_icon_set(self) -> Optional[IconSet]:
+        return (
+            (wx.TreeItemIcon_Normal, BADGED_ART_PROVIDER_TREE_NODE_ICON(
+                wx.ART_FOLDER,
+                self._status_badge_name()
+            )),
+            (wx.TreeItemIcon_Expanded, BADGED_ART_PROVIDER_TREE_NODE_ICON(
+                wx.ART_FOLDER_OPEN,
+                self._status_badge_name()
+            )),
+        )
+    
+    def _status_badge_name(self) -> Optional[str]:
+        if self.resource_group.do_not_download:
+            return 'prohibition'
+        else:
+            return None
+    
+    @property
+    def icon_tooltip(self) -> Optional[str]:
+        status_badge_name = self._status_badge_name()
+        if status_badge_name is None:
+            return f'{self.entity_tooltip.capitalize()}'
+        elif status_badge_name == 'prohibition':
+            return f'Ignored {self.entity_tooltip}'
+        else:
+            raise AssertionError()
+
+
+class ResourceGroupNode(_GroupedNode):
+    entity_tooltip = 'group'
     
     _MAX_VISIBLE_CHILDREN = 100
     _MORE_CHILDREN_TO_SHOW = 20
     
     def __init__(self, resource_group: ResourceGroup) -> None:
-        self.resource_group = resource_group
-        super().__init__(source=lambda: resource_group.source)
+        super().__init__(resource_group, source=lambda: resource_group.source)
         self._max_visible_children = self._MAX_VISIBLE_CHILDREN
         
         self.view = NodeView()
+        # NOTE: Defer expensive calculation until if/when the icon_set is used
+        self.view.icon_set = self.calculate_icon_set
         self.view.title = self.calculate_title()
         self.view.expandable = True
         
@@ -979,10 +1087,6 @@ class ResourceGroupNode(Node):
         assert not self._children_loaded
     
     # === Properties ===
-    
-    @property
-    def icon_tooltip(self) -> Optional[str]:
-        return 'Group'
     
     def calculate_title(self) -> str:
         return self.calculate_title_of(self.resource_group)
@@ -1100,17 +1204,20 @@ class ResourceGroupNode(Node):
         return hash(self.resource_group)
 
 
-class GroupedLinkedResourcesNode(Node):
+class GroupedLinkedResourcesNode(_GroupedNode):
+    entity_tooltip = 'grouped URLs'
+    
     def __init__(self,
             resource_group: ResourceGroup,
             root_rsrc_nodes: List[RootResourceNode],
             linked_rsrc_nodes: List[LinkedResourceNode],
             source: ResourceGroupSource,
             ) -> None:
-        self.resource_group = resource_group
-        super().__init__(source=source)
+        super().__init__(resource_group, source=source)
         
         self.view = NodeView()
+        # NOTE: Defer expensive calculation until if/when the icon_set is used
+        self.view.icon_set = self.calculate_icon_set
         #self.view.title = ... (set below)
         self.view.expandable = True
         
@@ -1120,10 +1227,6 @@ class GroupedLinkedResourcesNode(Node):
         self.view.title = self.calculate_title()  # after self.children is initialized
     
     # === Properties ===
-    
-    @property
-    def icon_tooltip(self) -> Optional[str]:
-        return 'Grouped URLs'
     
     def calculate_title(self) -> str:
         project = self.resource_group.project

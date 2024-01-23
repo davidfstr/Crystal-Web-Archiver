@@ -43,7 +43,7 @@ _WINDOW_INNER_PADDING = 10
 
 class MainWindow:
     project: Project
-    frame: wx.Frame
+    _frame: wx.Frame
     entity_tree: EntityTree
     task_tree: TaskTree
     
@@ -492,17 +492,30 @@ class MainWindow:
             pass
     
     @fg_affinity
-    def _on_new_group_dialog_ok(self, name: str, url_pattern: str, source: ResourceGroupSource) -> None:
+    def _on_new_group_dialog_ok(self,
+            name: str,
+            url_pattern: str,
+            source: ResourceGroupSource,
+            do_not_download: bool,
+            ) -> None:
         # TODO: Validate user input:
         #       * Is url_pattern empty?
         #       * Is url_pattern already taken?
-        ResourceGroup(self.project, name, url_pattern, source)
+        rg = ResourceGroup(
+            self.project, name, url_pattern, source,
+            do_not_download=do_not_download)
     
     @fg_affinity
-    def _on_edit_group_dialog_ok(self, rg: ResourceGroup, name: str, url_pattern: str, source: ResourceGroupSource) -> None:
+    def _on_edit_group_dialog_ok(self,
+            rg: ResourceGroup,
+            name: str,
+            url_pattern: str,
+            source: ResourceGroupSource,
+            do_not_download: bool,
+            ) -> None:
         if url_pattern != rg.url_pattern:
             raise ValueError()
-        (rg.name, rg.source) = (name, source)
+        (rg.name, rg.source, rg.do_not_download) = (name, source, do_not_download)
         
         # TODO: This update should happen in response to an event
         #       fired by the entity itself.
@@ -548,6 +561,7 @@ class MainWindow:
                     initial_url_pattern=rg.url_pattern,
                     initial_source=rg.source,
                     initial_name=rg.name,
+                    initial_do_not_download=rg.do_not_download,
                     is_edit=True)
             except CancelLoadUrls:
                 pass
@@ -560,10 +574,6 @@ class MainWindow:
         assert selected_or_related_entity is not None
         
         selected_or_related_entity.delete()
-        
-        # TODO: This update() should happen in response to an event
-        #       fired by the entity itself.
-        self.entity_tree.update()
     
     def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
