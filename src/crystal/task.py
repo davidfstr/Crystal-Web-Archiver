@@ -248,7 +248,10 @@ class Task(ListenableMixin):
         the subclass plans to instead use append_child() to populate that
         empty list.
         """
-        assert len(self._children) == 0, 'Cannot replace existing children with new children'
+        assert len(self._children) == 0, (
+            f'Cannot replace existing children with new children. '
+            f'Current children are: {self._children}'
+        )
         self._children = children
         
         for lis in self.listeners:
@@ -1258,7 +1261,11 @@ class DownloadResourceGroupMembersTask(Task):
         
         return super().try_get_next_task_unit()
     
+    @fg_affinity
     def _load_children(self) -> None:
+        if self._children_loaded:
+            return
+        
         group = self.group  # cache
         
         if self._LAZY_LOAD_CHILDREN:
