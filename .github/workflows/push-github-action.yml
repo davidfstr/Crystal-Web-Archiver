@@ -26,6 +26,7 @@ jobs:
           #- macos-12  # same as macos-latest as of 2023-03-22
           - macos-latest
         python-version: ["3.8", "3.9"]
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15  # 150% of normal time: 9 min 50 secs, as of 2023-12-17
     steps:
@@ -97,6 +98,7 @@ jobs:
           #       to compile new wxPython .wgn files
           - ubuntu-22.04
         python-version: ["3.8", "3.9"]
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 6  # 150% of normal time: 3 min 40 sec, as of 2023-12-17
     steps:
@@ -186,6 +188,7 @@ jobs:
           - windows-2019  # based on Windows 10
           - windows-latest
         python-version: ["3.8", "3.9"]
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 23  # 150% of normal time: 14 min 40 secs, as of 2023-12-17
     steps:
