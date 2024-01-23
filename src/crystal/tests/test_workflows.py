@@ -969,12 +969,14 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 # Download: Home, Comic #1
                 if True:
                     home_ti.SelectItem()
-                    await mw.click_download_button()
+                    await mw.click_download_button(
+                        immediate_finish_ok=True)
                     await wait_for_download_to_start_and_finish(mw.task_tree,
                         immediate_finish_ok=True)
                     
                     comic1_ti.SelectItem()
-                    await mw.click_download_button()
+                    await mw.click_download_button(
+                        immediate_finish_ok=True)
                     await wait_for_download_to_start_and_finish(mw.task_tree,
                         immediate_finish_ok=True)
                 
