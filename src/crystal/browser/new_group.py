@@ -28,7 +28,7 @@ _OPTIONS_NOT_SHOWN_LABEL = 'Advanced Options'
 class NewGroupDialog:
     _INITIAL_URL_PATTERN_WIDTH = NewRootUrlDialog._INITIAL_URL_WIDTH
     _MAX_VISIBLE_PREVIEW_URLS = 100
-    _SHOW_SEQUENTIAL_OPTION = False  # hide feature until it is finished
+    _SHOW_SEQUENTIAL_OPTION = True  # hide feature until it is finished
     
     # === Init ===
     
