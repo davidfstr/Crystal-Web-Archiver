@@ -36,6 +36,10 @@ Release Notes ⋮
     * Can mark resource group as "do not download" to prevent their members
       from being downloaded when in an embedded context.
 
+* Downloading improvements
+    * Remaining time is now reported while downloading groups whose members
+      are slow to download, taking >7 seconds each.
+
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,
       without introducing an invalid `<script>` tag.

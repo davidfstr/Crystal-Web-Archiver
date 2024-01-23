@@ -13,9 +13,14 @@ class ProgressBarCalculator:
     _VERBOSE = False
     
     # Calibration notes:
-    # - 0.10 seems too low
-    # - 0.15 seems too high
-    _MINIMUM_RATE_TO_REPORT = 0.13
+    # - Minimalist Baker can take 10s - 17s to download a single recipe page.
+    #   Even with a group growth rate of 0, that means a download rate between
+    #   0.05 - 0.1.
+    _MINIMUM_TOTAL_RATE_TO_REPORT_REMAINING_TIME = 0.0
+    # Calibration notes:
+    # - 0.10 seems "too low"
+    # - 0.15 seems "too high"
+    _MINIMUM_GROWTH_RATE_TO_REPORT = 0.13
     
     _MAXIMUM_DELAY_BETWEEN_GROWTH_UPDATES = 10.0  # seconds
     
@@ -54,14 +59,14 @@ class ProgressBarCalculator:
         
         remaining = (
             (total - n) / rate
-            if rate > self._MINIMUM_RATE_TO_REPORT and total
+            if rate > self._MINIMUM_TOTAL_RATE_TO_REPORT_REMAINING_TIME and total
             else 0
         )
         # TODO: Call ProgressBarCalculator.format_interval() directly,
         #       rather than through a monkeypatch
         remaining_str = (
             tqdm.format_interval(remaining)
-            if rate > self._MINIMUM_RATE_TO_REPORT
+            if rate > self._MINIMUM_TOTAL_RATE_TO_REPORT_REMAINING_TIME
             else '?'
         )
         
@@ -72,7 +77,7 @@ class ProgressBarCalculator:
             if time_per_item_done is not None
             else '?'
         ) + '/item'
-        if (growth_rate_of_total or 0.0) > self._MINIMUM_RATE_TO_REPORT:
+        if (growth_rate_of_total or 0.0) > self._MINIMUM_GROWTH_RATE_TO_REPORT:
             assert time_per_item_add is not None
             time_per_item_str += ', ' + (
                 f'{time_per_item_add:.2f}s'
