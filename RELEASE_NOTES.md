@@ -58,6 +58,8 @@ Release Notes ⋮
 
 * Fixes
     * Fix disappearance of error nodes when new root URL or group is added.
+    * Prevent system idle sleep while tasks are running,
+      in more situations on macOS.
 
 ### v1.7.0b (December 18, 2023)
 

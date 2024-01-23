@@ -47,7 +47,15 @@ class Caffeination:
             if caffeinated:
                 assert cls._caffeinator is None
                 cls._caffeinator = subprocess.Popen(
-                    ['caffeinate', '-w', str(os.getpid())],
+                    [
+                        'caffeinate',
+                        # Wait for Crystal process to terminate
+                        '-w', str(os.getpid()),
+                        # No idle sleep
+                        '-i',
+                        # No sleep while on A/C power
+                        '-s'
+                    ],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL)
                 assert cls._caffeinator.poll() is None, \
