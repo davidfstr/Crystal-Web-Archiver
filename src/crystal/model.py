@@ -2403,7 +2403,7 @@ class ResourceRevision:
         #       bit would be wrong. Avoid that scenario.
         resource._definitely_has_no_revisions = False
         
-        event = threading.Event()
+        row_create_attempted_event = threading.Event()
         callable_exc_info = None
         
         # Asynchronously:
@@ -2426,7 +2426,7 @@ class ResourceRevision:
             except BaseException as e:
                 callable_exc_info = sys.exc_info()
             finally:
-                event.set()
+                row_create_attempted_event.set()
         # NOTE: Use profile=False because no obvious further optimizations exist
         fg_call_later(fg_task, profile=False)
         
@@ -2445,7 +2445,7 @@ class ResourceRevision:
                 body_file = None
         finally:
             # Wait for ResourceRevision row to be created in database
-            event.wait()
+            row_create_attempted_event.wait()
             row_created_ok = self._id is not None
             
             if body_file is not None:
