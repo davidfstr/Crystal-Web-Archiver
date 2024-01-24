@@ -3401,12 +3401,10 @@ class ResourceGroup(ListenableMixin):
                 self._members.append(resource)
     
     def _resource_will_delete(self, resource: Resource) -> None:
-        if self._members is not None:
-            try:
+        if self.contains_url(resource.url):
+            if self._members is not None:
                 # NOTE: Slow. O(n). OK for now because deleting resources is rare.
                 self._members.remove(resource)
-            except ValueError:  # not in list
-                pass
     
     # === Operations: Download ===
     
