@@ -78,11 +78,11 @@ import time
 import traceback
 from tqdm import tqdm
 from typing import (
-    Any, BinaryIO, Callable, cast, Dict, Iterable, Iterator,
+    Any, BinaryIO, Callable, cast, Dict, Generic, Iterable, Iterator,
     List, Literal, Optional, overload, Pattern, Sequence, TYPE_CHECKING,
-    Tuple, TypedDict, Union
+    Tuple, TypedDict, TypeVar, Union
 )
-from typing_extensions import Self
+from typing_extensions import deprecated, Self
 from urllib.parse import urlparse, urlunparse
 from weakref import WeakValueDictionary
 
@@ -102,6 +102,9 @@ if TYPE_CHECKING:
 # into a visual flamegraph using the "flameprof" PyPI module,
 # or analyzed using the built-in "pstats" module.
 _PROFILE_MIGRATE_REVISIONS = False
+
+
+_TK = TypeVar('_TK', bound='Task')
 
 
 class Project(ListenableMixin):
@@ -1472,7 +1475,7 @@ class ProjectClosedError(Exception):
     pass
 
 
-class _WeakTaskRef:
+class _WeakTaskRef(Generic[_TK]):
     """
     Holds a reference to a Task until that task completes.
     """
@@ -1481,13 +1484,13 @@ class _WeakTaskRef:
     # which each contain _WeakTaskRef instances
     __slots__ = ('_task',)
     
-    def __init__(self, task: Optional[Task]=None) -> None:
+    def __init__(self, task: Optional[_TK]=None) -> None:
         self._task = None
         self.task = task
     
-    def _get_task(self) -> Optional[Task]:
+    def _get_task(self) -> Optional[_TK]:
         return self._task
-    def _set_task(self, value: Optional[Task]) -> None:
+    def _set_task(self, value: Optional[_TK]) -> None:
         if self._task:
             self._task.listeners.remove(self)
         self._task = value
@@ -1527,9 +1530,9 @@ class Resource:
     
     project: Project
     _url: str
-    _download_body_task_ref: Optional[_WeakTaskRef]
-    _download_task_ref: Optional[_WeakTaskRef]
-    _download_task_noresult_ref: Optional[_WeakTaskRef]
+    _download_body_task_ref: 'Optional[_WeakTaskRef[DownloadResourceBodyTask]]'
+    _download_task_ref: 'Optional[_WeakTaskRef[DownloadResourceTask]]'
+    _download_task_noresult_ref: 'Optional[_WeakTaskRef[DownloadResourceTask]]'
     _already_downloaded_this_session: bool
     _definitely_has_no_revisions: bool
     _id: int  # or None if not finished initializing or deleted
@@ -1852,16 +1855,22 @@ class Resource:
             download more resources.
         * ProjectHasTooManyRevisionsError
         """
-        task = self.create_download_body_task()
-        if not task.complete:
-            self.project.add_task(task)
+        (task, created) = self.get_or_create_download_body_task()
+        if created:
+            if not task.complete:
+                self.project.add_task(task)
         return task.future
     
+    @deprecated('Use get_or_create_download_body_task() instead.')
     def create_download_body_task(self) -> 'DownloadResourceBodyTask':
+        (task, _) = self.get_or_create_download_body_task()
+        return task
+    
+    def get_or_create_download_body_task(self) -> 'Tuple[DownloadResourceBodyTask, bool]':
         """
-        Creates a Task to download this resource's body.
+        Gets/creates a Task to download this resource's body.
         
-        The caller is responsible for adding the returned Task as the child of an
+        The caller is responsible for adding a returned created Task as the child of an
         appropriate parent task so that the UI displays it.
         
         This task is never complete immediately after initialization.
@@ -1904,16 +1913,24 @@ class Resource:
             download more resources.
         * ProjectHasTooManyRevisionsError
         """
-        task = self.create_download_task(needs_result=needs_result, is_embedded=is_embedded)
-        if not task.complete:
-            self.project.add_task(task)
+        (task, created) = self.get_or_create_download_task(
+            needs_result=needs_result, is_embedded=is_embedded)
+        if created:
+            if not task.complete:
+                self.project.add_task(task)
         return task.get_future(wait_for_embedded)
     
-    def create_download_task(self, *, needs_result: bool=True, is_embedded: bool=False) -> 'DownloadResourceTask':
+    @deprecated('Use get_or_create_download_task() instead.')
+    def create_download_task(self, *args, **kwargs) -> 'DownloadResourceTask':
+        (task, _) = self.get_or_create_download_task(*args, **kwargs)
+        return task
+    
+    def get_or_create_download_task(self, *, needs_result: bool=True, is_embedded: bool=False) -> 'Tuple[DownloadResourceTask, bool]':
         """
-        Creates a Task to download this resource and all its embedded resources.
+        Gets/creates a Task to download this resource and all its embedded resources.
+        Returns the task and whether it was created.
         
-        The caller is responsible for adding the returned Task as the child of an
+        The caller is responsible for adding a returned created Task as the child of an
         appropriate parent task so that the UI displays it.
         
         This task may be complete immediately after initialization.
@@ -1929,18 +1946,22 @@ class Resource:
             if self._download_task_noresult_ref is None:
                 self._download_task_noresult_ref = _WeakTaskRef()
             task_ref = self._download_task_noresult_ref
-        return self._get_task_or_create(
-            task_ref,
-            task_factory
-        )
+        return self._get_task_or_create(task_ref, task_factory)
     
-    def _get_task_or_create(self, task_ref: _WeakTaskRef, task_factory):
+    def _get_task_or_create(self,
+            task_ref: _WeakTaskRef,
+            task_factory: Callable[[], _TK]
+            ) -> Tuple[_TK, bool]:
+        """
+        Gets/creates a task.
+        Returns the task and whether it was created.
+        """
         if task_ref.task is not None:
-            return task_ref.task
-        
-        task = task_factory()
-        task_ref.task = task
-        return task
+            return (task_ref.task, False)
+        else:
+            task = task_factory()
+            task_ref.task = task
+            return (task, True)
     
     # === Revisions ===
     

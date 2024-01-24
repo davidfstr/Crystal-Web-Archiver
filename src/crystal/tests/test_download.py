@@ -4,6 +4,8 @@ from contextlib import redirect_stderr
 from crystal.model import Project, Resource
 import crystal.task
 from crystal.tests.util.runner import bg_sleep
+from crystal.tests.util.server import served_project
+from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xthreading import bg_call_later
@@ -14,6 +16,33 @@ import tempfile
 from textwrap import dedent
 from typing import List
 from unittest import skip
+
+
+# ------------------------------------------------------------------------------
+# Resource.download() Tests
+
+@skip('covered by: test_given_downloading_resource_when_start_download_resource_then_existing_download_task_returned')
+async def test_given_not_downloading_resource_when_start_download_resource_then_download_task_created_and_returned() -> None:
+    pass
+
+
+async def test_given_downloading_resource_when_start_download_resource_then_existing_download_task_returned() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            r = Resource(project, home_url)
+            
+            rr_future = r.download()
+            
+            rr_future2 = r.download()
+            assert rr_future2 is rr_future
+            
+            await wait_for_download_to_start_and_finish(mw.task_tree)
 
 
 # ------------------------------------------------------------------------------

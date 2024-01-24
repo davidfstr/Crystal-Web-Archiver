@@ -60,6 +60,7 @@ Release Notes ⋮
     * Fix disappearance of error nodes when new root URL or group is added.
     * Prevent system idle sleep while tasks are running,
       in more situations on macOS.
+    * Don't crash when use UI to try to download a URL that is already downloading.
 
 ### v1.7.0b (December 18, 2023)
 
