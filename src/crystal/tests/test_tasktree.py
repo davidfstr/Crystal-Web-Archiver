@@ -129,11 +129,6 @@ async def test_when_start_downloading_large_group_then_show_100_children_plus_tr
             assert not parent_ttn.task.children[-1].complete
             _mark_as_complete(parent_ttn.task.children[-1])
             assert parent_ttn.task.complete
-        
-        _cleanup_download_of_resource_group(
-            download_rg_ttn,
-            download_rg_members_ttn,
-            project)
 
 
 @skip('covered by: test_when_start_downloading_large_group_then_show_100_children_plus_trailing_more_node')
@@ -152,6 +147,25 @@ async def test_while_downloading_large_group_then_keeps_no_more_than_100_member_
     #     _materialized_child_task_count(...) - _unmaterialized_child_task_count(...) <= N
     # for any N, including 100
     pass
+
+
+async def test_given_group_has_leading_completed_children_when_start_downloading_large_group_then_shows_no_more_then_5_leading_completed_children() -> None:
+    N = 5
+    M = 3
+    
+    with _children_marked_as_complete_upon_creation(list(range(1, (M + 1) + 1))):
+        async with _project_with_resource_group_starting_to_download(
+                    resource_count=N + 4,
+                    small_max_visible_children=N,
+                    small_max_leading_complete_children=M,
+                    scheduler_thread_enabled=False,
+                ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            parent_ttn = download_rg_members_ttn
+            
+            assertEqual(1, _viewport_offset(parent_ttn))
 
 
 # === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit leading completed children ===
@@ -281,12 +295,6 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
             ([True] * M) + ([False] * (N - M)) == 
             [_is_complete(tn) for tn in children_tns[1:-1]]
         )
-        
-        # Cleanup: Complete all children
-        _cleanup_download_of_resource_group(
-            download_rg_ttn,
-            download_rg_members_ttn,
-            project)
 
 
 @skip('covered by: test_given_showing_less_than_5_leading_completed_children_when_new_leading_child_completes_then_maintain_viewport_position_and_show_one_more_leading_completed_children')
@@ -313,19 +321,7 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
     N = 5
     M = 3
     
-    # Prepare: Mark child (N + 1) and (N + 2) as complete immediately upon creation
-    super_goc_download_task = Resource.get_or_create_download_task
-    def get_or_create_download_task(*args, **kwargs) -> 'Tuple[DownloadResourceTask, bool]':
-        (task, created) = super_goc_download_task(*args, **kwargs)
-        
-        if task._resource.url.endswith(f'/https/xkcd.com/{N + 1}/'):
-            _mark_as_complete(task)
-        if task._resource.url.endswith(f'/https/xkcd.com/{N + 2}/'):
-            _mark_as_complete(task)
-        
-        return (task, created)
-    
-    with patch('crystal.model.Resource.get_or_create_download_task', get_or_create_download_task), \
+    with _children_marked_as_complete_upon_creation([N + 1, N + 2]), \
             patch('crystal.browser.tasktree.TaskTreeNode._will_restart_task_child_did_complete') as will_restart, \
             patch('crystal.browser.tasktree.TaskTreeNode._did_restart_task_child_did_complete') as did_restart:
         async with _project_with_resource_group_starting_to_download(
@@ -387,12 +383,24 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
                 ),
             ], list(zip(will_restart.call_args_list, did_restart.call_args_list)))
             will_restart.reset_mock(); did_restart.reset_mock()
-            
-            # Cleanup: Complete all children
-            _cleanup_download_of_resource_group(
-                download_rg_ttn,
-                download_rg_members_ttn,
-                project)
+
+
+@contextmanager
+def _children_marked_as_complete_upon_creation(ordinals: List[int]) -> Iterator[None]:
+    # Prepare: Mark appropriate children as complete immediately upon creation
+    super_goc_download_task = Resource.get_or_create_download_task
+    def get_or_create_download_task(*args, **kwargs) -> 'Tuple[DownloadResourceTask, bool]':
+        (task, created) = super_goc_download_task(*args, **kwargs)
+        
+        for n in ordinals:
+            if task._resource.url.endswith(f'/https/xkcd.com/{n}/'):
+                _mark_as_complete(task)
+                break
+        
+        return (task, created)
+    
+    with patch('crystal.model.Resource.get_or_create_download_task', get_or_create_download_task):
+        yield
 
 
 # === Test: DownloadResourceGroupMembersTask: Observe when group member added ===
@@ -478,12 +486,6 @@ async def test_given_downloading_group_and_many_uncompleted_children_remaining_w
         assert all([_is_download_resource_node(tn) for tn in children_tns[1:]])
         assert ((M+2)+2) + N == _materialized_child_task_count(parent_ttn)
         assert ((M+2)+2) == _unmaterialized_child_task_count(parent_ttn)
-        
-        # Cleanup: Complete all children
-        _cleanup_download_of_resource_group(
-            download_rg_ttn,
-            download_rg_members_ttn,
-            project)
 
 
 @skip('covered by: test_given_downloading_group_and_many_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_shows_download_task_for_member_added')
@@ -565,12 +567,21 @@ async def _project_with_resource_group_starting_to_download(
                     next_resource_ordinal += 1
                     return r
                 
-                yield (
-                    mw,
-                    _ttn_for_task(download_rg_task),
-                    _ttn_for_task(download_rg_members_task),
-                    create_resource,
-                )
+                download_rg_ttn = _ttn_for_task(download_rg_task)
+                download_rg_members_ttn = _ttn_for_task(download_rg_members_task)
+                try:
+                    yield (
+                        mw,
+                        download_rg_ttn,
+                        download_rg_members_ttn,
+                        create_resource,
+                    )
+                finally:
+                    # Cleanup: Complete all children
+                    _cleanup_download_of_resource_group(
+                        download_rg_ttn,
+                        download_rg_members_ttn,
+                        project)
 
 
 def _cleanup_download_of_resource_group(
@@ -692,6 +703,7 @@ def _is_complete(tn: NodeView) -> bool:
 def _mark_as_complete(task: Task) -> None:
     assert not task.complete
     task.finish()
+    assert task.complete
 
 
 class _NullTask(_PlaceholderTask):

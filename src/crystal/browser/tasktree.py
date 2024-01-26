@@ -132,10 +132,13 @@ class TaskTreeNode:
                 assert is_foreground_thread()  # to access _suppress_complete_events_for_unappended_children
                 self._suppress_complete_events_for_unappended_children = True
                 try:
-                    for child in task.children[:visible_child_count]:
-                        self.task_did_append_child(task, child)
+                    children_to_append = task.children[:visible_child_count]
                 finally:
                     self._suppress_complete_events_for_unappended_children = False
+                for child in children_to_append:
+                    # NOTE: Will also call task_child_did_complete() if the
+                    #       child is initially complete
+                    self.task_did_append_child(task, child)
                 
                 # Create more node as a placeholder for the remaining tasks, if needed
                 if visible_child_count < child_count:
@@ -143,6 +146,8 @@ class TaskTreeNode:
             else:
                 # Greedily create tree node for each task
                 for child in task.children:
+                    # NOTE: Will also call task_child_did_complete() if the
+                    #       child is initially complete
                     self.task_did_append_child(task, child)
         fg_call_later(fg_task)
     

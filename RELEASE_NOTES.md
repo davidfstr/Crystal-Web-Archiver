@@ -57,10 +57,14 @@ Release Notes ⋮
     * A terminal bell sound is played automatically when tests finish running.
 
 * Fixes
-    * Fix disappearance of error nodes when new root URL or group is added.
+    * Don't crash when downloading a group that already contains some member
+      URLs that were already downloaded.
+        * This crash bug was introduced in v1.7.0b with the new strategy of
+          creating member download tasks on demand rather than upfront.
+    * Don't crash when use UI to try to download a URL that is already downloading.
     * Prevent system idle sleep while tasks are running,
       in more situations on macOS.
-    * Don't crash when use UI to try to download a URL that is already downloading.
+    * Fix disappearance of error nodes when new root URL or group is added.
 
 ### v1.7.0b (December 18, 2023)
 
