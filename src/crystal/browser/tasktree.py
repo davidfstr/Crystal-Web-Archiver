@@ -3,7 +3,7 @@ from crystal.task import DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQU
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
 from crystal.util.xcollections.lazy import AppendableLazySequence
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import wx
 
 
@@ -211,11 +211,29 @@ class TaskTreeNode:
                         break
                 
                 if num_leading_complete_children > self._MAX_LEADING_COMPLETE_CHILDREN:
+                    children_state_func = lambda: (first_more_node.more_count, last_more_node.more_count)
+                    
                     while num_leading_complete_children > self._MAX_LEADING_COMPLETE_CHILDREN:
                         # Slide first of last_more_node up into last of intermediate_nodes
                         if last_more_node.more_count >= 1:
+                            initial_children_state = children_state_func()  # capture
+                            
                             trailing_child_index = first_more_node.more_count + len(intermediate_nodes)
+                            # NOTE: May trigger materialization of a new Task child
                             trailing_child_task = task.children[trailing_child_index]
+                            if children_state_func() != initial_children_state:
+                                # Children list was concurrently modified,
+                                # probably by a nested call to
+                                # task_child_did_complete() triggered by the
+                                # materialization of a task that started in the
+                                # completed state.
+                                # 
+                                # Restart event handling.
+                                self._will_restart_task_child_did_complete(children_state_func())
+                                self.task_child_did_complete(task, child)
+                                self._did_restart_task_child_did_complete(children_state_func())
+                                return
+                            
                             trailing_child_ttnode = TaskTreeNode(trailing_child_task)
                             trailing_child_node = trailing_child_ttnode.tree_node
                             
@@ -243,6 +261,14 @@ class TaskTreeNode:
                     self._num_visible_children = len(intermediate_nodes)
                     self.tree_node.children = new_children
         fg_call_later(fg_task)
+    
+    # NOTE: Patched by automated tests
+    def _will_restart_task_child_did_complete(self, more_counts: Tuple[int, int]) -> None:
+        pass
+    
+    # NOTE: Patched by automated tests
+    def _did_restart_task_child_did_complete(self, more_counts: Tuple[int, int]) -> None:
+        pass
     
     def task_did_clear_children(self,
             task: Task,
@@ -292,6 +318,8 @@ class _MoreNodeView(NodeView):
     def _set_more_count(self, more_count: int) -> None:
         if more_count == self._more_count:
             return
+        if more_count < 0:
+            raise ValueError(f'Cannot set negative more_count: {more_count}')
         self._more_count = more_count
         self.title = f'{self._more_count:n} more'
     more_count = property(_get_more_count, _set_more_count)

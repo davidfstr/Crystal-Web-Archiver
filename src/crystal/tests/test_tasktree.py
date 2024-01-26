@@ -2,12 +2,15 @@ from contextlib import (
     AbstractContextManager, asynccontextmanager, contextmanager, nullcontext,
 )
 from crystal.browser.tasktree import _MoreNodeView, TaskTreeNode
+from crystal.model import Resource
 import crystal.task
 from crystal.task import (
+    DownloadResourceTask,
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask, 
     _PlaceholderTask, SCHEDULING_STYLE_ROUND_ROBIN, Task, 
     UpdateResourceGroupMembersTask,
 )
+from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.data import MAX_TIME_TO_DOWNLOAD_404_URL
 from crystal.tests.util.downloads import load_children_of_drg_task
@@ -23,7 +26,7 @@ import math
 import tempfile
 from typing import AsyncIterator, Callable, cast, Iterator, List, Optional, Sequence, Tuple
 from unittest import skip
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 
 # === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit visible children ===
@@ -302,8 +305,94 @@ async def test_given_showing_5_leading_completed_children_when_new_nonleading_ch
 
     
 @skip('covered by: test_given_showing_less_than_5_leading_completed_children_when_new_leading_child_completes_then_maintain_viewport_position_and_show_one_more_leading_completed_children')
-async def test_given_showing_5_leading_completed_children_when_new_leading_child_completes_with_a_following_completed_child_then_shift_viewport_down_multiple_times_and_still_show_5_leading_completed_children() -> None:
+async def test_given_showing_5_leading_completed_children_when_new_leading_child_completes_with_a_following_completed_materialized_child_then_shift_viewport_down_multiple_times_and_still_show_5_leading_completed_children() -> None:
     pass
+
+
+async def test_given_showing_5_leading_completed_children_when_new_leading_child_completes_with_a_following_completed_unmaterialized_child_then_shift_viewport_down_multiple_times_and_still_show_5_leading_completed_children() -> None:
+    N = 5
+    M = 3
+    
+    # Prepare: Mark child (N + 1) and (N + 2) as complete immediately upon creation
+    super_goc_download_task = Resource.get_or_create_download_task
+    def get_or_create_download_task(*args, **kwargs) -> 'Tuple[DownloadResourceTask, bool]':
+        (task, created) = super_goc_download_task(*args, **kwargs)
+        
+        if task._resource.url.endswith(f'/https/xkcd.com/{N + 1}/'):
+            _mark_as_complete(task)
+        if task._resource.url.endswith(f'/https/xkcd.com/{N + 2}/'):
+            _mark_as_complete(task)
+        
+        return (task, created)
+    
+    with patch('crystal.model.Resource.get_or_create_download_task', get_or_create_download_task), \
+            patch('crystal.browser.tasktree.TaskTreeNode._will_restart_task_child_did_complete') as will_restart, \
+            patch('crystal.browser.tasktree.TaskTreeNode._did_restart_task_child_did_complete') as did_restart:
+        async with _project_with_resource_group_starting_to_download(
+                    resource_count=N + 4,
+                    small_max_visible_children=N,
+                    small_max_leading_complete_children=M,
+                    scheduler_thread_enabled=False,
+                ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            parent_ttn = download_rg_members_ttn
+            
+            (children_tns, children_tasks) = \
+                (parent_ttn.tree_node.children, parent_ttn.task.children)
+            
+            # Complete first (N-1) children
+            assert N >= M + 1
+            for t in children_tasks[:N-1]:
+                if not t.complete:
+                    _mark_as_complete(t)
+            assert 1 == _viewport_offset(parent_ttn)
+            (children_tns, children_tasks) = \
+                (parent_ttn.tree_node.children, parent_ttn.task.children)
+            assert len(children_tns) == N + 2
+            assert all([_is_download_resource_node(tn) for tn in children_tns[1:-1]])
+            assert 1 == _value_of_more_node(children_tns[0])
+            assert 3 == _value_of_more_node(children_tns[-1])
+            
+            # Ensure did cover error handling code
+            assertEqual([
+                (  # restart #1
+                    call((0, 3)),  # (first_more_value, last_more_value) before restart
+                    call((0, 3)),  # (first_more_value, last_more_value) after restart
+                ),
+            ], list(zip(will_restart.call_args_list, did_restart.call_args_list)))
+            will_restart.reset_mock(); did_restart.reset_mock()
+            
+            # Complete child N.
+            # 
+            # Ensure shifts viewport 3 times:
+            # - once for completed child (N) and
+            # - once for completed child (N + 1) that becomes materialized
+            # - once for completed child (N + 2) that becomes materialized
+            _mark_as_complete(children_tasks[N - 1])
+            assert 4 == _viewport_offset(parent_ttn)
+            (children_tns, children_tasks) = \
+                (parent_ttn.tree_node.children, parent_ttn.task.children)
+            assert len(children_tns) == N + 1
+            assert all([_is_download_resource_node(tn) for tn in children_tns[1:]])
+            assert 4 == _value_of_more_node(children_tns[0])
+            #assert 0 == _value_of_more_node(children_tns[-1])
+            
+            # Ensure did cover error handling code
+            assertEqual([
+                (  # restart #1
+                    call((3, 1)),  # (first_more_value, last_more_value) before restart
+                    call((4, 0)),  # (first_more_value, last_more_value) after restart
+                ),
+            ], list(zip(will_restart.call_args_list, did_restart.call_args_list)))
+            will_restart.reset_mock(); did_restart.reset_mock()
+            
+            # Cleanup: Complete all children
+            _cleanup_download_of_resource_group(
+                download_rg_ttn,
+                download_rg_members_ttn,
+                project)
 
 
 # === Test: DownloadResourceGroupMembersTask: Observe when group member added ===
