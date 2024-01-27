@@ -43,16 +43,10 @@ async def test_when_download_html_page_then_does_not_download_embedded_resource_
         assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
         
         # Expand HTML page children in entity tree
-        (comic_image_rg_ti,) = [
-            child for child in home_ti.Children
-            if child.Text.startswith(f'{comic_image_rg_pattern} - ')
-        ]
+        comic_image_rg_ti = home_ti.find_child(comic_image_rg_pattern)
         comic_image_rg_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_image_rg_ti))
-        (comic_image_r_ti,) = [
-            child for child in comic_image_rg_ti.Children
-            if child.Text.startswith(f'{comic_image_r_url} - ')
-        ]
+        comic_image_r_ti = comic_image_rg_ti.find_child(comic_image_r_url)
         
         home_r = project.get_resource(home_url)
         assert home_r is not None
@@ -82,10 +76,7 @@ async def test_then_embedded_resource_does_not_appear_in_a_hidden_embedded_clust
         hidden_embedded_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(hidden_embedded_ti))
         
-        () = [
-            child for child in hidden_embedded_ti.Children
-            if child.Text.startswith(f'{comic_image_r_url} - ')
-        ]
+        assert None == hidden_embedded_ti.try_find_child(comic_image_r_url)
 
 
 async def test_when_browse_to_html_page_and_browser_requests_embedded_resource_then_do_not_dynamically_download_embedded_resource_and_instead_return_http_404() -> None:
@@ -125,16 +116,10 @@ async def test_given_embedded_resource_selected_in_entity_tree_when_press_downlo
         assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
         
         # Expand HTML page children in entity tree
-        (comic_image_rg_ti,) = [
-            child for child in home_ti.Children
-            if child.Text.startswith(f'{comic_image_rg_pattern} - ')
-        ]
+        comic_image_rg_ti = home_ti.find_child(comic_image_rg_pattern)
         comic_image_rg_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_image_rg_ti))
-        (comic_image_r_ti,) = [
-            child for child in comic_image_rg_ti.Children
-            if child.Text.startswith(f'{comic_image_r_url} - ')
-        ]
+        comic_image_r_ti = comic_image_rg_ti.find_child(comic_image_r_url)
         
         comic_image_r = project.get_resource(comic_image_r_url)
         assert comic_image_r is not None
@@ -164,16 +149,10 @@ async def test_given_do_not_download_group_selected_in_entity_tree_when_press_do
         await wait_for_download_to_start_and_finish(mw.task_tree)
         
         # Expand group children in entity tree
-        (comic_image_rg_ti,) = [
-            child for child in root_ti.Children
-            if child.Text.startswith(f'{comic_image_rg_pattern} - ')
-        ]
+        comic_image_rg_ti = root_ti.find_child(comic_image_rg_pattern)
         comic_image_rg_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_image_rg_ti))
-        (comic_image_r_ti,) = [
-            child for child in comic_image_rg_ti.Children
-            if child.Text == comic_image_r_url
-        ]
+        comic_image_r_ti = comic_image_rg_ti.find_child(comic_image_r_url)
         
         comic_image_r = project.get_resource(comic_image_r_url)
         assert comic_image_r is not None
@@ -200,31 +179,19 @@ async def test_then_embedded_resource_in_entity_tree_appears_with_do_not_downloa
         assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
         
         # Expand HTML page children in entity tree
-        (comic_image_rg_ti,) = [
-            child for child in home_ti.Children
-            if child.Text.startswith(f'{comic_image_rg_pattern} - ')
-        ]
+        comic_image_rg_ti = home_ti.find_child(comic_image_rg_pattern)
         comic_image_rg_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_image_rg_ti))
-        (comic_image_r_ti,) = [
-            child for child in comic_image_rg_ti.Children
-            if child.Text.startswith(f'{comic_image_r_url} - ')
-        ]
+        comic_image_r_ti = comic_image_rg_ti.find_child(comic_image_r_url)
         
         await _assert_tree_item_icon_tooltip_contains(comic_image_rg_ti, 'Ignored')
         await _assert_tree_item_icon_tooltip_contains(comic_image_r_ti, 'Ignored')
         
         # Expand group children in entity tree
-        (comic_image_rg_ti,) = [
-            child for child in root_ti.Children
-            if child.Text.startswith(f'{comic_image_rg_pattern} - ')
-        ]
+        comic_image_rg_ti = root_ti.find_child(comic_image_rg_pattern)
         comic_image_rg_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_image_rg_ti))
-        (comic_image_r_ti,) = [
-            child for child in comic_image_rg_ti.Children
-            if child.Text == comic_image_r_url
-        ]
+        comic_image_r_ti = comic_image_rg_ti.find_child(comic_image_r_url)
         
         await _assert_tree_item_icon_tooltip_contains(comic_image_rg_ti, 'Ignored')
         await _assert_tree_item_icon_tooltip_contains(comic_image_r_ti, 'Ignored')

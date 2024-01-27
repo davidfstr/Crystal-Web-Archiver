@@ -28,24 +28,15 @@ async def test_can_edit_name_of_root_url() -> None:
             
             home_ti.Expand()
             await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-            (home_ti__home_ti,) = [
-                child for child in home_ti.Children
-                if child.Text.startswith(f'{home_url} - ')
-            ]
+            home_ti__home_ti = home_ti.find_child(home_url)
             assert home_ti__home_ti.Text.endswith('Home')
             
-            (home_g_ti,) = [
-                child for child in root_ti.Children
-                if child.Text.startswith(f'{home_g_pattern} - ')
-            ]
+            home_g_ti = root_ti.find_child(home_g_pattern)
             assert home_g_ti.Text.endswith('Home Group')
             
             home_g_ti.Expand()
             await wait_for(first_child_of_tree_item_is_not_loading_condition(home_g_ti))
-            (home_g_ti__home_ti,) = [
-                child for child in home_g_ti.Children
-                if child.Text.startswith(f'{home_url} - ')
-            ]
+            home_g_ti__home_ti = home_g_ti.find_child(home_url)
             assert home_g_ti__home_ti.Text.endswith('Home')
             
             # Ensure can rename top-level RootResourceNode

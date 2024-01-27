@@ -55,10 +55,7 @@ async def test_can_create_root_url(*, ensure_revisions_not_deleted: bool=False) 
                 await nud.ok()
                 
                 # Ensure appearance is correct
-                (home_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{home_url} - ')
-                ]
+                home_ti = root_ti.find_child(home_url)
                 assert f'{home_url} - Home' == home_ti.Text
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'root URL')
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'Undownloaded')
@@ -83,10 +80,7 @@ async def test_can_create_root_url(*, ensure_revisions_not_deleted: bool=False) 
                 click_button(mw.forget_button)
                 
                 # Ensure cannot find root URL
-                () = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{home_url} - ')
-                ]
+                assert None == root_ti.try_find_child(home_url)
                 if not is_windows():
                     selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
                     assert (selected_ti is None) or (selected_ti == root_ti)
@@ -101,10 +95,7 @@ async def test_can_create_root_url(*, ensure_revisions_not_deleted: bool=False) 
                 
                 # 1. Ensure appearance is correct
                 # 2. Ensure previously downloaded revisions still exist
-                (home_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{home_url} - ')
-                ]
+                home_ti = root_ti.find_child(home_url)
                 assert f'{home_url} - Home' == home_ti.Text
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'root URL')
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
@@ -149,10 +140,7 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
             assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
             
             # Select the Atom Feed link from the home URL
-            (atom_feed_ti,) = [
-                child for child in home_ti.Children
-                if child.Text.startswith(f'{atom_feed_url} - ')
-            ]  # ensure did find sub-resource
+            atom_feed_ti = home_ti.find_child(atom_feed_url)  # ensure did find sub-resource
             atom_feed_ti.SelectItem()
             
             # Create a root resource to label the link
@@ -174,10 +162,7 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
             
             # 1. Ensure the new root resource does now label the link
             # 2. Ensure the labeled link is selected immediately after closing the add URL dialog
-            (atom_feed_ti,) = [
-                child for child in home_ti.Children
-                if child.Text.startswith(f'{atom_feed_url} - ')
-            ]  # ensure did find sub-resource
+            atom_feed_ti = home_ti.find_child(atom_feed_url)  # ensure did find sub-resource
             assert (
                 # title format of labeled sub-resource
                 f'{atom_feed_url} - Atom Feed' ==
@@ -192,10 +177,7 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
                 
                 # 1. Ensure can find the unlabeled link
                 # 2. Ensure that unlabeled link is selected immediately after forgetting the root resource
-                (atom_feed_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{atom_feed_url} - ')
-                ]  # ensure did find sub-resource
+                atom_feed_ti = home_ti.find_child(atom_feed_url)  # ensure did find sub-resource
                 assert (
                     # title format of unlabeled sub-resource
                     f'{atom_feed_url} - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed' ==

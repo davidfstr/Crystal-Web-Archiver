@@ -100,10 +100,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 # Test can re-download resource (by expanding tree node)
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                (comic1_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic1_url} - ')
-                ]  # ensure did find sub-resource for Comic #1
+                comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
                 assert f'{comic1_url} - Link: |<, Link: |<' == comic1_ti.Text  # title format of sub-resource
                 
                 # Test can download resource (by expanding tree node)
@@ -112,10 +109,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     await wait_for_download_to_start_and_finish(mw.task_tree)
                     assert first_child_of_tree_item_is_not_loading_condition(comic1_ti)()
                     
-                    (comic2_ti,) = [
-                        child for child in comic1_ti.Children
-                        if child.Text.startswith(f'{comic2_url} - ')
-                    ]  # ensure did find sub-resource for Comic #2
+                    comic2_ti = comic1_ti.find_child(comic2_url)  # ensure did find sub-resource for Comic #2
                     assert f'{comic2_url} - Link: Next >, Link: Next >' == comic2_ti.Text  # title format of sub-resource
                     
                     comic1_ti.Collapse()
@@ -157,10 +151,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     
                     # Ensure the new resource group does now group sub-resources
                     if True:
-                        (grouped_subresources_ti,) = [
-                            child for child in home_ti.Children
-                            if child.Text.startswith(f'{comic_pattern} - ')
-                        ]  # ensure did find grouped sub-resources
+                        grouped_subresources_ti = home_ti.find_child(comic_pattern)  # ensure did find grouped sub-resources
                         assert re.fullmatch(
                             rf'{re.escape(comic_pattern)} - \d+ of Comic',  # title format of grouped sub-resources
                             grouped_subresources_ti.Text)
@@ -168,10 +159,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         grouped_subresources_ti.Expand()
                         await wait_for(first_child_of_tree_item_is_not_loading_condition(grouped_subresources_ti))
                         
-                        (comic1_ti,) = [
-                            child for child in grouped_subresources_ti.Children
-                            if child.Text.startswith(f'{comic1_url} - ')
-                        ]  # contains first comic
+                        comic1_ti = grouped_subresources_ti.find_child(comic1_url)  # contains first comic
                         assert len(grouped_subresources_ti.Children) >= 2  # contains last comic too
                         
                         grouped_subresources_ti.Collapse()
@@ -179,10 +167,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     home_ti.Collapse()
                     
                     # Ensure the new resource group appears at the root of the entity tree
-                    (comic_group_ti,) = [
-                        child for child in root_ti.Children
-                        if child.Text.startswith(f'{comic_pattern} - ')
-                    ]  # ensure did find resource group at root of entity tree
+                    comic_group_ti = root_ti.find_child(comic_pattern)  # ensure did find resource group at root of entity tree
                     assert f'{comic_pattern} - Comic' == comic_group_ti.Text  # title format of resource group
                     
                     comic_group_ti.Expand()
@@ -204,14 +189,8 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         home_ti.Expand()
                         await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
                         
-                        (atom_feed_ti,) = [
-                            child for child in home_ti.Children
-                            if child.Text.startswith(f'{atom_feed_url} - ')
-                        ]  # contains atom feed
-                        (rss_feed_ti,) = [
-                            child for child in home_ti.Children
-                            if child.Text.startswith(f'{rss_feed_url} - ')
-                        ]  # contains rss feed
+                        atom_feed_ti = home_ti.find_child(atom_feed_url)  # contains atom feed
+                        rss_feed_ti = home_ti.find_child(rss_feed_url)  # contains rss feed
                         
                         atom_feed_ti.SelectItem()
                         
@@ -224,10 +203,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         
                         home_ti.Collapse()
                         
-                        (feed_group_ti,) = [
-                            child for child in root_ti.Children
-                            if child.Text.startswith(f'{feed_pattern} - ')
-                        ]
+                        feed_group_ti = root_ti.find_child(feed_pattern)
                         
                         feed_group_ti.Expand()
                         await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_group_ti))
@@ -271,10 +247,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         ngd.source = 'Feed'
                         await ngd.ok()
                         
-                        (feed_item_group_ti,) = [
-                            child for child in root_ti.Children
-                            if child.Text.startswith(f'{feed_item_pattern} - ')
-                        ]
+                        feed_item_group_ti = root_ti.find_child(feed_item_pattern)
                     
                     # Update members of feed item group,
                     # which should download members of feed group automatically
@@ -298,10 +271,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 assert root_ti is not None
                 
                 # Start server
-                (home_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{home_url} - ')
-                ]
+                home_ti = root_ti.find_child(home_url)
                 home_ti.SelectItem()
                 with assert_does_open_webbrowser_to(get_request_url(home_url)):
                     click_button(mw.view_button)
@@ -312,10 +282,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 # Test can still re-download resource (by expanding tree node)
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                (grouped_subresources_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]
+                grouped_subresources_ti = home_ti.find_child(comic_pattern)
                 
                 # Test can forget resource group
                 if True:
@@ -323,21 +290,12 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     click_button(mw.forget_button)
                     
                     # Ensure the forgotten resource group no longer groups sub-resources
-                    () = [
-                        child for child in home_ti.Children
-                        if child.Text.startswith(f'{comic_pattern} - ')
-                    ]  # ensure did not find grouped sub-resources
-                    (comic1_ti,) = [
-                        child for child in home_ti.Children
-                        if child.Text.startswith(f'{comic1_url} - ')
-                    ]  # ensure did find sub-resource for Comic #1
+                    assert None == home_ti.try_find_child(comic_pattern)  # ensure did not find grouped sub-resources
+                    comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
                     
                     # Ensure the forgotten resource group no longer appears at the root of the entity tree
                     home_ti.Collapse()
-                    () = [
-                        child for child in root_ti.Children
-                        if child.Text.startswith(f'{comic_pattern} - ')
-                    ]  # ensure did not find resource group at root of entity tree
+                    assert None == root_ti.try_find_child(comic_pattern)  # ensure did not find resource group at root of entity tree
                 
                 # Test can forget root resource
                 if True:
@@ -345,10 +303,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     click_button(mw.forget_button)
                     
                     # Ensure the forgotten root resource no longer appears at the root of the entity tree
-                    () = [
-                        child for child in root_ti.Children
-                        if child.Text.startswith(f'{home_url} - ')
-                    ]  # ensure did not find resource
+                    assert None == root_ti.try_find_child(home_url)  # ensure did not find resource
                     
                     # Ensure that the resource for the forgotten root resource is NOT deleted
                     assert False == (await is_url_not_in_archive(home_url))
@@ -370,10 +325,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 
                 # Test cannot download/forget existing resource in read-only project
                 if True:
-                    (feed_group_ti,) = [
-                        child for child in root_ti.Children
-                        if child.Text.startswith(f'{feed_pattern} - ')
-                    ]
+                    feed_group_ti = root_ti.find_child(feed_pattern)
                     
                     feed_group_ti.Expand()
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_group_ti))
@@ -559,10 +511,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 assert False == (await is_url_not_in_archive(target_url))
                 
                 # Forget resource group matching target
-                (target_group_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{target_group_pattern} - ')
-                ]
+                target_group_ti = root_ti.find_child(target_group_pattern)
                 target_group_ti.SelectItem()
                 click_button(mw.forget_button)
                 
@@ -604,10 +553,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 assert False == (await is_url_not_in_archive(target_url))
                 
                 # Forget root resource matching target
-                (target_rr_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{target_url} - ')
-                ]
+                target_rr_ti = root_ti.find_child(target_url)
                 target_rr_ti.SelectItem()
                 click_button(mw.forget_button)
                 
@@ -660,10 +606,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                 # Ensure home page has no normal link to Sound #1
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                () = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{sound1_url} - ')
-                ]
+                assert None == home_ti.try_find_child(sound1_url)
                 
                 # Ensure home page has no embedded link to Sound #1
                 (embedded_cluster_ti,) = [
@@ -672,10 +615,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                 ]
                 embedded_cluster_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                () = [
-                    child for child in embedded_cluster_ti.Children
-                    if child.Text.startswith(f'{sound1_url} - ')
-                ]
+                assert None == embedded_cluster_ti.try_find_child(sound1_url)
                 
                 home_ti.Collapse()
             
@@ -773,10 +713,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 # Ensure home page has link to Comic #1
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                (comic1_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic1_url} - ')
-                ]  # ensure did find sub-resource for Comic #1
+                comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
                 
                 # Create group Comic
                 if True:
@@ -804,10 +741,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 assert root_ti is not None
                 
                 # Ensure "Forget" and "Download" are disabled when resource is selected
-                (home_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{home_url} - ')
-                ]
+                home_ti = root_ti.find_child(home_url)
                 home_ti.SelectItem()
                 assert False == mw.forget_button.Enabled
                 assert False == mw.download_button.Enabled
@@ -816,15 +750,9 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 # 2. Ensure home page has reference to Comic #1
                 home_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                (linked_comic_group_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]
+                linked_comic_group_ti = home_ti.find_child(comic_pattern)
                 linked_comic_group_ti.Expand()
-                (comic1_ti,) = [
-                    child for child in linked_comic_group_ti.Children
-                    if child.Text.startswith(f'{comic1_url} - ')
-                ]  # ensure did find sub-resource for Comic #1
+                comic1_ti = linked_comic_group_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
                 
                 # Ensure expanding an undownloaded resource (Comic #1)
                 # does show a "Cannot download" placeholder node
@@ -835,10 +763,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 assert 'Cannot download: Project is read only' == cannot_download_ti.Text
                 
                 # Ensure "Forget" and "Download" are disabled when group is selected
-                (comic_group_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]  # ensure did find resource group at root of entity tree
+                comic_group_ti = root_ti.find_child(comic_pattern)  # ensure did find resource group at root of entity tree
                 comic_group_ti.SelectItem()
                 assert False == mw.forget_button.Enabled
                 assert False == mw.download_button.Enabled
@@ -1062,10 +987,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 first_child_of_tree_item_is_not_loading_condition(home_ti),
                 timeout=4.0  # 2.0s isn't long enough for Windows test runners on GitHub Actions
             )
-            (comic1_ti,) = [
-                child for child in home_ti.Children
-                if child.Text.startswith(f'{comic1_url} - ')
-            ]  # ensure did find sub-resource for Comic #1
+            comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
             
             # 1. Test can create unnamed resource group
             # 2. Ensure unnamed root resource shows as source with OK title
@@ -1083,10 +1005,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 # 1. Ensure the new resource group does now group sub-resources
                 # 2. Ensure grouped sub-resources for unnamed group has OK title
                 if True:
-                    (grouped_subresources_ti,) = [
-                        child for child in home_ti.Children
-                        if child.Text.startswith(f'{comic_pattern} - ')
-                    ]  # ensure did find grouped sub-resources
+                    grouped_subresources_ti = home_ti.find_child(comic_pattern)  # ensure did find grouped sub-resources
                     assert re.fullmatch(
                         rf'{re.escape(comic_pattern)} - \d+ links?',  # title format of grouped sub-resources
                         grouped_subresources_ti.Text)
@@ -1094,10 +1013,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                     grouped_subresources_ti.Expand()
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(grouped_subresources_ti))
                     
-                    (comic1_ti,) = [
-                        child for child in grouped_subresources_ti.Children
-                        if child.Text.startswith(f'{comic1_url} - ')
-                    ]  # contains first comic
+                    comic1_ti = grouped_subresources_ti.find_child(comic1_url)  # contains first comic
                     assert len(grouped_subresources_ti.Children) >= 2  # contains last comic too
                     
                     grouped_subresources_ti.Collapse()

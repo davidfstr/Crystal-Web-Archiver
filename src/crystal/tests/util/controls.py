@@ -79,6 +79,8 @@ class TreeItem:
         self.tree = tree
         self.id = id
     
+    # === Peer Queries and Actions ===
+    
     @property
     def Text(self) -> str:
         return self.tree.GetItemText(self.id)
@@ -125,6 +127,63 @@ class TreeItem:
     @property
     def Children(self) -> List[TreeItem]:
         return get_children_of_tree_item(self.tree, self.id)
+    
+    def find_child(parent_ti: TreeItem, url_or_url_pattern: str, url_prefix: Optional[str]=None) -> TreeItem:
+        """
+        Returns the first child of the specified parent tree item with the
+        specified URL or URL pattern.
+        
+        Raises TreeItem.ChildNotFound if such a child is not found.
+        """
+        if url_prefix is not None:
+            assert url_prefix.endswith('/')
+            if url_or_url_pattern.startswith(url_prefix):
+                url_or_url_pattern = '/' + url_or_url_pattern[len(url_prefix):]  # reinterpret
+        try:
+            (matching_child_ti,) = [
+                child for child in parent_ti.Children
+                if child.Text.startswith(f'{url_or_url_pattern} - ')
+            ]
+        except ValueError:
+            try:
+                (matching_child_ti,) = [
+                    child for child in parent_ti.Children
+                    if child.Text == url_or_url_pattern
+                ]
+            except ValueError:
+                raise TreeItem.ChildNotFound(
+                    f'Child {url_or_url_pattern} not found in specified TreeItem'
+                ) from None
+        return matching_child_ti
+    
+    def try_find_child(parent_ti: TreeItem, *args, **kwargs) -> Optional[TreeItem]:
+        try:
+            return parent_ti.find_child(*args, **kwargs)
+        except TreeItem.ChildNotFound:
+            return None
+
+    def find_child_by_title(parent_ti: TreeItem, title_fragment: str) -> TreeItem:
+        """
+        Returns the first child of the specified parent tree item whose
+        title contains the specified fragment.
+        
+        Raises TreeItem.ChildNotFound if such a child is not found.
+        """
+        try:
+            (matching_child_ti,) = [
+                child for child in parent_ti.Children
+                if title_fragment in child.Text
+            ]
+            return matching_child_ti
+        except ValueError:
+            raise TreeItem.ChildNotFound(
+                f'Child with title fragment {title_fragment!r} not found in specified TreeItem'
+            ) from None
+    
+    class ChildNotFound(AssertionError):
+        pass
+    
+    # === Comparison ===
     
     def __eq__(self, other: object) -> bool:
         if is_windows():

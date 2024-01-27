@@ -26,16 +26,10 @@ async def test_can_edit_name_of_group() -> None:
             
             home_ti.Expand()
             await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-            (home_ti__comic_ti,) = [
-                child for child in home_ti.Children
-                if child.Text.startswith(f'{comic_pattern} - ')
-            ]
+            home_ti__comic_ti = home_ti.find_child(comic_pattern)
             assert home_ti__comic_ti.Text.endswith('Comics')
             
-            (comic_ti,) = [
-                child for child in root_ti.Children
-                if child.Text.startswith(f'{comic_pattern} - ')
-            ]
+            comic_ti = root_ti.find_child(comic_pattern)
             assert comic_ti.Text.endswith('Comics')
             
             # Ensure can rename top-level ResourceGroupNode
@@ -56,10 +50,7 @@ async def test_can_edit_name_of_group() -> None:
                 
                 ngd.name_field.Value = 'Comics2'
                 await ngd.ok()
-                (comic_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]
+                comic_ti = root_ti.find_child(comic_pattern)
                 assert comic_ti.Text.endswith('Comics2')
                 
                 # Ensure selection did not change
@@ -67,10 +58,7 @@ async def test_can_edit_name_of_group() -> None:
                 
                 # Ensure all copies of comic node have updated name
                 assert home_ti.IsExpanded()
-                (home_ti__comic_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]
+                home_ti__comic_ti = home_ti.find_child(comic_pattern)
                 assert home_ti__comic_ti.Text.endswith('Comics2')
             
             # Ensure can rename nested GroupedLinkedResourcesNode
@@ -94,17 +82,11 @@ async def test_can_edit_name_of_group() -> None:
                 
                 # Ensure selection did not change
                 assert home_ti.IsExpanded()
-                (home_ti__comic_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]
+                home_ti__comic_ti = home_ti.find_child(comic_pattern)
                 assert home_ti__comic_ti.IsSelected()
                 
                 # Ensure all copies of home node have updated name
-                (comic_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]
+                comic_ti = root_ti.find_child(comic_pattern)
                 assert comic_ti.Text.endswith('Comics')
                 assert home_ti__comic_ti.Text.endswith('Comics')
 
@@ -119,10 +101,7 @@ async def test_can_edit_source_of_group() -> None:
             assert project is not None
             
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            (comic_ti,) = [
-                child for child in root_ti.Children
-                if child.Text.startswith(f'{comic_pattern} - ')
-            ]
+            comic_ti = root_ti.find_child(comic_pattern)
             comic_ti.SelectItem()
             
             # Ensure can edit source to be root resource
@@ -145,10 +124,7 @@ async def test_can_edit_source_of_group() -> None:
             # Ensure can edit source to be group
             if True:
                 ResourceGroup(project, 'First Comic', first_comic_pattern)
-                (first_comic_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{first_comic_pattern} - ')
-                ]
+                first_comic_ti = root_ti.find_child(first_comic_pattern)
                 
                 assert comic_ti.IsSelected()
                 

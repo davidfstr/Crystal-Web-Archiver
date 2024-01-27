@@ -80,10 +80,7 @@ async def test_can_create_group_with_source(*, with_source: bool=True) -> None:
                 await ngd.ok()
                 
                 # Ensure appearance is correct
-                (comic_ti,) = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]
+                comic_ti = root_ti.find_child(comic_pattern)
                 assert f'{comic_pattern} - Comic' == comic_ti.Text
                 await _assert_tree_item_icon_tooltip_contains(comic_ti, 'Group')
                 
@@ -100,10 +97,7 @@ async def test_can_create_group_with_source(*, with_source: bool=True) -> None:
                 click_button(mw.forget_button)
                 
                 # Ensure cannot find group
-                () = [
-                    child for child in root_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]
+                assert None == root_ti.try_find_child(comic_pattern)
                 if not is_windows():
                     selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
                     assert (selected_ti is None) or (selected_ti == root_ti)
@@ -157,10 +151,7 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
             
             # Select a comic link from the home URL
-            (comic1_ti,) = [
-                child for child in home_ti.Children
-                if child.Text.startswith(f'{comic1_url} - ')
-            ]  # ensure did find sub-resource for Comic #1
+            comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
             assert f'{comic1_url} - Link: |<, Link: |<' == comic1_ti.Text  # ensure expected links grouped
             comic1_ti.SelectItem()
             
@@ -206,20 +197,14 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             # 1. Ensure the new resource group does now bundle the comic links together
             # 2. Ensure the bundled link is selected immediately after closing the add group dialog
             if True:
-                (grouped_subresources_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic_pattern} - ')
-                ]  # ensure did find grouped sub-resources
+                grouped_subresources_ti = home_ti.find_child(comic_pattern)  # ensure did find grouped sub-resources
                 assert re.fullmatch(
                     rf'{re.escape(comic_pattern)} - \d+ of Comic',  # title format of grouped sub-resources
                     grouped_subresources_ti.Text)
                 
                 # Ensure the bundled link is selected immediately after closing the add group dialog
                 assert grouped_subresources_ti.IsExpanded()
-                (comic1_ti,) = [
-                    child for child in grouped_subresources_ti.Children
-                    if child.Text.startswith(f'{comic1_url} - ')
-                ]  # contains first comic
+                comic1_ti = grouped_subresources_ti.find_child(comic1_url)  # contains first comic
                 assert len(grouped_subresources_ti.Children) >= 2  # contains last comic too
                 assert comic1_ti.IsSelected()
             
@@ -231,10 +216,7 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 
                 # 1. Ensure can find the first unbundled link
                 # 2. Ensure that first unbundled link is selected immediately after forgetting the group
-                (comic1_ti,) = [
-                    child for child in home_ti.Children
-                    if child.Text.startswith(f'{comic1_url} - ')
-                ]  # ensure did find sub-resource for Comic #1
+                comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
                 assert comic1_ti.IsSelected()
 
 
@@ -421,57 +403,8 @@ async def _source_name_for_node(node_ti: TreeItem, mw: MainWindow) -> Optional[s
 
 # === Utility ===
 
-# TODO: Consider moving this function to a test utility module and using it
-#       everywhere in existing tests
-def _find_child(parent_ti: TreeItem, url_or_url_pattern: str, url_prefix: Optional[str]=None) -> TreeItem:
-    """
-    Returns the first child of the specified parent tree item with the
-    specified URL or URL pattern.
-    
-    Raises if such a child is not found.
-    """
-    if url_prefix is not None:
-        assert url_prefix.endswith('/')
-        if url_or_url_pattern.startswith(url_prefix):
-            url_or_url_pattern = '/' + url_or_url_pattern[len(url_prefix):]  # reinterpret
-    try:
-        (matching_child_ti,) = [
-            child for child in parent_ti.Children
-            if child.Text.startswith(f'{url_or_url_pattern} - ')
-        ]
-    except ValueError:
-        try:
-            (matching_child_ti,) = [
-                child for child in parent_ti.Children
-                if child.Text == url_or_url_pattern
-            ]
-        except ValueError:
-            raise AssertionError(
-                f'Child {url_or_url_pattern} not found in specified TreeItem'
-            ) from None
-    return matching_child_ti
-
-
-# TODO: Consider moving this function to a test utility module and using it
-#       everywhere in existing tests
-def _find_child_by_title(parent_ti: TreeItem, title_fragment: str) -> TreeItem:
-    """
-    Returns the first child of the specified parent tree item whose
-    title contains the specified fragment.
-    
-    Raises if such a child is not found.
-    """
-    try:
-        (matching_child_ti,) = [
-            child for child in parent_ti.Children
-            if title_fragment in child.Text
-        ]
-        return matching_child_ti
-    except ValueError:
-        raise AssertionError(
-            f'Child with title fragment {title_fragment!r} not found in specified TreeItem'
-        ) from None
-
+_find_child = TreeItem.find_child
+_find_child_by_title = TreeItem.find_child_by_title
 
 # NOTE: Only for use with tree items in EntityTree
 _assert_tree_item_icon_tooltip_contains = EntityTree.assert_tree_item_icon_tooltip_contains
