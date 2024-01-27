@@ -78,10 +78,7 @@ wmi = { version = "*", markers = "sys_platform == 'win32'" }
 typing-extensions = "^4.8.0"
 
 [tool.poetry.dev-dependencies]
-# NOTE: pytest ^7.0 (7.2.2) failed to install on any Windows with error:
-#       "Backend 'setuptools.build_meta:__legacy__' is not available",
-#       even after upgrading setuptools and pip.
-pytest = "^6.0"
+pytest = ">=7.0,<8.0"
 mypy = "==1.6.1"
 types-tzlocal = "^4.2.0"
 PyScreeze = "^0.1.28"
