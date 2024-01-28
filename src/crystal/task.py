@@ -1375,9 +1375,15 @@ class DownloadResourceGroupMembersTask(Task):
         if (self._children_loaded and
                 self.num_children_complete == len(self.children) and 
                 self._done_updating_group):
-            self.finish()
+            if not self.complete:
+                self.finish()
     
     def finish(self) -> None:
+        if self.complete:
+            print(f'Warning: finish() called on already-finished task. Ignoring call.', file=sys.stderr)
+            traceback.print_stack(file=sys.stderr)
+            return
+        
         self.group.listeners.remove(self)
         if self._use_extra_listener_assertions:
             assert self not in self.group.listeners
