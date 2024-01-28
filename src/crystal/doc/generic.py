@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 
-def create_external_link(relative_url: str, type_title: str, title: str, embedded: bool) -> Link:
+def create_external_link(relative_url: str, type_title: str, title: Optional[str], embedded: bool) -> Link:
     import crystal.doc.html.soup as soup
     
     # HACK: Reuse existing link class rather than create a new one just for the generic case

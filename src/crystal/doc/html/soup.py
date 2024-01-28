@@ -58,6 +58,7 @@ _XPS_FOR_PARSER_LIBRARY_T = {T: _XPaths(
 
 
 TEXT_LINK_TYPE_TITLE = 'Link'
+FAVICON_TYPE_TITLE = 'Icon'
 
 
 def parse_html_and_links(
@@ -139,7 +140,7 @@ def parse_html_and_links(
                         relative_url_path.endswith('.png'))
                 ):
             title = None
-            type_title = 'Icon'
+            type_title = FAVICON_TYPE_TITLE
             embedded = True
         elif tag_name == 'link' and (
                 ('rel' in tag_attrs and 'preload' in tag_attrs['rel'])):
@@ -320,6 +321,26 @@ class HtmlDocument(Document):
         self._is_html = is_html
     
     def try_insert_script(self, script_url: str) -> bool:
+        def create_script(html: FastSoup) -> Tag:
+            script = html.new_tag('script')
+            html.tag_attrs(script)['src'] = script_url
+            return script
+        return self._try_insert_html_element(create_script) is not None
+    
+    def try_insert_favicon_link(self, favicon_url: str) -> Optional[Link]:
+        def create_link(html: FastSoup) -> Tag:
+            link = self._html.new_tag('link')
+            self._html.tag_attrs(link)['rel'] = 'icon'
+            self._html.tag_attrs(link)['href'] = favicon_url
+            return link
+        link_tag = self._try_insert_html_element(create_link)
+        if link_tag is None:
+            return None
+        link = HtmlLink.create_from_tag(
+            link_tag, self._html, 'href', FAVICON_TYPE_TITLE, None, True)
+        return link
+    
+    def _try_insert_html_element(self, create_element_func: Callable[[FastSoup], Tag]) -> Optional[Tag]:
         if not self._is_html:
             # Don't try to insert an HTML link into a non-HTML document,
             # such as an XML document
@@ -327,12 +348,11 @@ class HtmlDocument(Document):
         
         first_element = self._html.find(True)
         if first_element is not None:
-            script = self._html.new_tag('script')
-            self._html.tag_attrs(script)['src'] = script_url
-            self._html.tag_insert_before(first_element, script)
-            return True
+            new_element = create_element_func(self._html)
+            self._html.tag_insert_before(first_element, new_element)
+            return new_element
         else:
-            return False
+            return None
     
     def __str__(self) -> str:
         return str(self._html)

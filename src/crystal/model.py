@@ -14,6 +14,7 @@ import copy
 from crystal.doc.css import parse_css_and_links
 from crystal.doc.generic import create_external_link
 from crystal.doc.html import parse_html_and_links
+from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.doc.json import parse_json_and_links
 from crystal.doc.xml import parse_xml_and_links
 from crystal.plugins import (
@@ -2989,6 +2990,29 @@ class ResourceRevision:
             if doc_and_links is not None:
                 (doc, links) = doc_and_links
                 content_type_with_options = 'text/html; charset=utf-8'
+                
+                # Add implicit link to default favicon
+                # if no explicit favicon specified and path is /
+                if urlparse(self._url).path == '/':
+                    has_explicit_favicon_link = False
+                    for link in links:
+                        if link.type_title == FAVICON_TYPE_TITLE:
+                            has_explicit_favicon_link = True
+                            break
+                    
+                    if not has_explicit_favicon_link:
+                        # Insert implicit favicon link
+                        if isinstance(doc, HtmlDocument):
+                            # Try insert read-write favicon link
+                            favicon_link = doc.try_insert_favicon_link('/favicon.ico')
+                        else:
+                            favicon_link = None
+                        if favicon_link is None:
+                            # Insert read-only favicon link
+                            favicon_link = create_external_link(
+                                '/favicon.ico', FAVICON_TYPE_TITLE, None, True)
+                        assert favicon_link is not None
+                        links.append(favicon_link)
         elif self.is_css and self.has_body:
             with self.open() as body:
                 body_bytes = body.read()

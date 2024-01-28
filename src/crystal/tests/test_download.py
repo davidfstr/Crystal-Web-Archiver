@@ -3,6 +3,7 @@
 from contextlib import redirect_stderr
 from crystal.model import Project, Resource
 import crystal.task
+from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
@@ -18,6 +19,9 @@ from textwrap import dedent
 from typing import List
 from unittest import skip
 from unittest.mock import patch
+
+
+_FAVICON_PATH = '/favicon.ico'
 
 
 # ------------------------------------------------------------------------------
@@ -77,7 +81,7 @@ async def test_downloads_embedded_resources() -> None:
             while not revision_future.done():
                 await bg_sleep(DEFAULT_WAIT_PERIOD)
             
-            assert ['/', '/assets/image.png'] == server.requested_paths
+            assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
 
 
 async def test_does_not_download_embedded_resources_of_http_4xx_and_5xx_pages() -> None:
@@ -121,7 +125,7 @@ async def test_does_not_download_embedded_resources_of_http_4xx_and_5xx_pages() 
             while not revision_future.done():
                 await bg_sleep(DEFAULT_WAIT_PERIOD)
             
-            assert ['/'] == server.requested_paths
+            assertEqual(['/'], server.requested_paths)
 
 
 async def test_does_not_download_embedded_resources_of_recognized_binary_resource() -> None:
@@ -146,7 +150,7 @@ async def test_does_not_download_embedded_resources_of_recognized_binary_resourc
             while not revision_future.done():
                 await bg_sleep(DEFAULT_WAIT_PERIOD)
             
-            assert ['/'] == server.requested_paths
+            assertEqual(['/'], server.requested_paths)
 
 
 async def test_does_not_download_forever_given_embedded_resources_form_a_cycle() -> None:
@@ -190,7 +194,7 @@ async def test_does_not_download_forever_given_embedded_resources_form_a_cycle()
             while not revision_future.done():
                 await bg_sleep(DEFAULT_WAIT_PERIOD)
             
-            assert ['/', '/assets/image.png'] == server.requested_paths
+            assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
 
 
 async def test_does_not_download_forever_given_embedded_resources_nest_infinitely() -> None:
@@ -235,12 +239,13 @@ async def test_does_not_download_forever_given_embedded_resources_nest_infinitel
                 await bg_sleep(DEFAULT_WAIT_PERIOD)
             
             assert 3 == crystal.task._MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH
-            assert [
+            assertEqual([
                 '/',
                 '/assets/image.png',  # 1
                 '/assets/assets/image.png',  # 2
-                '/assets/assets/assets/image.png'  # 3
-            ] == server.requested_paths
+                '/assets/assets/assets/image.png',  # 3
+                _FAVICON_PATH,
+            ], server.requested_paths)
 
 
 async def test_when_download_resource_given_revision_body_missing_then_redownloads_revision_body() -> None:
@@ -271,7 +276,7 @@ async def test_when_download_resource_given_revision_body_missing_then_redownloa
                 while not revision_future.done():
                     await bg_sleep(DEFAULT_WAIT_PERIOD)
                 
-                assert ['/', '/assets/image.png'] == server.requested_paths
+                assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
                 server.requested_paths.clear()
                 
                 rr = revision_future.result()
@@ -296,7 +301,7 @@ async def test_when_download_resource_given_revision_body_missing_then_redownloa
                     ' is missing its body on disk. Redownloading it.'
                     in captured_stderr.getvalue()
                 )
-                assert ['/'] == server.requested_paths
+                assertEqual(['/'], server.requested_paths)
 
 
 async def test_when_download_resource_given_all_embedded_resources_already_downloaded_then_completes_early() -> None:
@@ -340,7 +345,7 @@ async def test_when_download_resource_given_all_embedded_resources_already_downl
             while not revision_future.done():
                 await bg_sleep(DEFAULT_WAIT_PERIOD)
             
-            assert ['/', '/assets/image.png'] == server.requested_paths
+            assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
             server.requested_paths.clear()
             
             r = Resource(project, server.get_url('/index.php'))
@@ -348,7 +353,7 @@ async def test_when_download_resource_given_all_embedded_resources_already_downl
             while not revision_future.done():
                 await bg_sleep(DEFAULT_WAIT_PERIOD)
             
-            assert ['/index.php'] == server.requested_paths
+            assertEqual(['/index.php'], server.requested_paths)
 
 
 async def test_given_same_resource_embedded_multiple_times_then_downloads_it_only_once() -> None:
@@ -380,7 +385,7 @@ async def test_given_same_resource_embedded_multiple_times_then_downloads_it_onl
             while not revision_future.done():
                 await bg_sleep(DEFAULT_WAIT_PERIOD)
             
-            assert ['/', '/assets/image.png'] == server.requested_paths
+            assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
 
 
 # ------------------------------------------------------------------------------

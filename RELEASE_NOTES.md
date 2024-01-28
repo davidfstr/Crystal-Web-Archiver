@@ -46,6 +46,9 @@ Release Notes ⋮
     * Don't crash when use UI to try to download a URL that is already downloading.
     * Don't crash when try to download a group that has no member URLs.
 
+* Crawling improvements
+    * Download implicit favicon referenced by root page of any domain.
+
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,
       without introducing an invalid `<script>` tag.
