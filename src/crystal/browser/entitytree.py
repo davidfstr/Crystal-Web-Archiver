@@ -223,13 +223,16 @@ class EntityTree:
                 menu.Append(_ID_CLEAR_PREFIX, 'Clear Default URL Prefix')
             else:
                 menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
+        else:
+            menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
+            menu.Enable(_ID_SET_PREFIX, False)
         
         # Show popup menu
-        if menu.GetMenuItemCount() > 0:
-            if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'False':
-                self.peer.PopupMenu(menu, event.GetPoint())
-            else:
-                print('(Suppressing popup menu while CRYSTAL_RUNNING_TESTS=True)')
+        assert menu.GetMenuItemCount() > 0
+        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'False':
+            self.peer.PopupMenu(menu, event.GetPoint())
+        else:
+            print('(Suppressing popup menu while CRYSTAL_RUNNING_TESTS=True)')
         menu.Destroy()
     
     def _on_popup_menuitem_selected(self, event):
