@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
 _URL_WITH_TP_IMAGE_ID = re.compile(r'^(https?://[^?]+)\?tp_image_id=[0-9]+$')
+_URL_WITH_OM_HIDE = re.compile(r'^(https?://[^?]+)\?omhide=[a-z]+$')
 
 def normalize_url(old_url: str, **kwargs) -> str:
     if not old_url.startswith('https://minimalistbaker.com/'):
@@ -16,6 +17,11 @@ def normalize_url(old_url: str, **kwargs) -> str:
     m = _URL_WITH_TP_IMAGE_ID.fullmatch(old_url)
     if m is not None:
         # Chop off tp_image_id=... part
+        return m.group(1)
+    
+    m = _URL_WITH_OM_HIDE.fullmatch(old_url)
+    if m is not None:
+        # Chop off omhide=... part
         return m.group(1)
     
     return old_url
