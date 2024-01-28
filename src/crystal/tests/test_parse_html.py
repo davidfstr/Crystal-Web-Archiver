@@ -436,9 +436,30 @@ def test_does_not_recognize_mailto_or_data_or_javascript_urls_as_links() -> None
     pass  # see: is_unrewritable_url()
 
 
-@skip('not yet automated')
-def test_recognizes_http_redirect_as_a_link() -> None:
-    pass  # type_title = 'Redirect'
+async def test_recognizes_http_redirect_as_a_link() -> None:
+    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        os.rmdir(project_dirpath)
+        with Project(project_dirpath) as project:
+            rr = ResourceRevision.create_from_response(
+                Resource(project, 'https://www.xkcd.com/'),
+                metadata=ResourceRevisionMetadata(
+                    http_version=10,
+                    status_code=301,
+                    reason_phrase='Moved Permanently',
+                    headers=[
+                        ['Location', 'https://xkcd.com/'],
+                    ],
+                ),
+                body_stream=BytesIO(b''))
+            (doc, links, _) = rr.document_and_links()
+            
+            # Ensure inserts redirect link
+            (redirect_link,) = [
+                link for link in links if
+                link.type_title == 'Redirect' and
+                link.relative_url == 'https://xkcd.com/' and
+                link.embedded
+            ]
 
 
 @skip('fails: not yet implemented')

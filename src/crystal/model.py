@@ -3039,7 +3039,7 @@ class ResourceRevision:
         if redirect_url is not None:
             redirect_title = self._redirect_title
             assert redirect_title is not None
-            links.append(create_external_link(redirect_url, redirect_title, 'Redirect', True))
+            links.append(create_external_link(redirect_url, 'Redirect', redirect_title, True))
         
         # Allow plugins to postprocess results
         url = self.resource.url  # cache
