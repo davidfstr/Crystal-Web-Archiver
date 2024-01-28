@@ -584,6 +584,8 @@ _OK_THREAD_STOP_SUFFIX = (
     'OK\n',
     # If thread finishes before the "t.start()" fully completes and writes the next '>>> ' prompt
     'OK\n>>> ',
+    # If the next '>>> ' prompt is written in the middle of "OK" + "\n" being printed.
+    'OK>>> \n',
     # TODO: Determine how this empiricially observed situation is possible
     'OK\n>>> >>> ',
 )
