@@ -65,6 +65,8 @@ Release Notes ⋮
     * Prevent system idle sleep while tasks are running,
       in more situations on macOS.
     * Fix disappearance of error nodes when new root URL or group is added.
+    * If try to create group with empty URL pattern, show error dialog
+      rather than silently failing.
 
 ### v1.7.0b (December 18, 2023)
 

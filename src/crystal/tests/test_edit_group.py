@@ -141,12 +141,12 @@ async def test_can_edit_source_of_group() -> None:
                 assert 'First Comic' == ngd.source
                 await ngd.ok()
             
-            did_respond_to_source_cycle_created_model = False
-            def click_ok_in_source_cycle_created_model(dialog: wx.Dialog) -> int:
+            did_respond_to_source_cycle_created_modal = False
+            def click_ok_in_source_cycle_created_modal(dialog: wx.Dialog) -> int:
                 assert 'cr-source-cycle-created' == dialog.Name
                 
-                nonlocal did_respond_to_source_cycle_created_model
-                did_respond_to_source_cycle_created_model = True
+                nonlocal did_respond_to_source_cycle_created_modal
+                did_respond_to_source_cycle_created_modal = True
                 
                 return wx.ID_OK
             
@@ -161,10 +161,10 @@ async def test_can_edit_source_of_group() -> None:
                 
                 ngd.source = 'Comics'
                 
-                with patch('crystal.browser.new_group.ShowModal', click_ok_in_source_cycle_created_model):
+                with patch('crystal.browser.new_group.ShowModal', click_ok_in_source_cycle_created_modal):
                     click_button(ngd.ok_button)
-                    assert did_respond_to_source_cycle_created_model
-                    did_respond_to_source_cycle_created_model = False  # reset
+                    assert did_respond_to_source_cycle_created_modal
+                    did_respond_to_source_cycle_created_modal = False  # reset
                 
                 await ngd.cancel()
             
@@ -179,10 +179,10 @@ async def test_can_edit_source_of_group() -> None:
                 
                 ngd.source = 'Comics'
                 
-                with patch('crystal.browser.new_group.ShowModal', click_ok_in_source_cycle_created_model):
+                with patch('crystal.browser.new_group.ShowModal', click_ok_in_source_cycle_created_modal):
                     click_button(ngd.ok_button)
-                    assert did_respond_to_source_cycle_created_model
-                    did_respond_to_source_cycle_created_model = False  # reset
+                    assert did_respond_to_source_cycle_created_modal
+                    did_respond_to_source_cycle_created_modal = False  # reset
                 
                 await ngd.cancel()
 

@@ -422,6 +422,18 @@ class NewGroupDialog:
     def _on_ok(self) -> None:
         name = self.name_field.Value
         url_pattern = self.pattern_field.Value
+        if len(url_pattern) == 0:
+            dialog = wx.MessageDialog(
+                self.dialog,
+                message='Please enter a URL pattern.',
+                caption='Empty URL Pattern',
+                style=wx.OK,
+            )
+            dialog.Name = 'cr-empty-url-pattern'
+            position_dialog_initially(dialog)
+            choice = ShowModal(dialog)
+            assert wx.ID_OK == choice
+            return
         source = self.source_choice_box.GetClientData(
             self.source_choice_box.GetSelection())
         if self._saving_source_would_create_cycle_func(source):

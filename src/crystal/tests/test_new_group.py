@@ -14,7 +14,9 @@ from crystal.util.xos import is_windows
 import re
 from typing import Optional
 from unittest import skip
+from unittest.mock import patch
 from urllib.parse import urlparse
+import wx
 
 
 # === Test: Create & Delete Standalone ===
@@ -105,6 +107,32 @@ async def test_can_create_group_with_source(*, with_source: bool=True) -> None:
 
 async def test_can_create_group_with_no_source() -> None:
     await test_can_create_group_with_source(with_source=False)
+
+
+async def test_cannot_create_group_with_empty_url_pattern() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            assert mw.add_group_button.Enabled
+            click_button(mw.add_group_button)
+            ngd = await NewGroupDialog.wait_for()
+            
+            did_respond_to_empty_url_pattern_modal = False
+            def click_ok_in_empty_url_pattern_modal(dialog: wx.Dialog) -> int:
+                assert 'cr-empty-url-pattern' == dialog.Name
+                
+                nonlocal did_respond_to_empty_url_pattern_modal
+                did_respond_to_empty_url_pattern_modal = True
+                
+                return wx.ID_OK
+            
+            ngd.pattern_field.Value = ''
+            ngd.name_field.Value = 'Comic'
+            with patch('crystal.browser.new_group.ShowModal', click_ok_in_empty_url_pattern_modal):
+                click_button(ngd.ok_button)
+                assert did_respond_to_empty_url_pattern_modal
+                did_respond_to_empty_url_pattern_modal = False  # reset
+            
+            await ngd.cancel()
 
 
 @skip('covered by: test_can_create_group_with_source')
