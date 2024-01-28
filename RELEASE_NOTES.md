@@ -39,6 +39,12 @@ Release Notes ⋮
 * Downloading improvements
     * Remaining time is now reported while downloading groups whose members
       are slow to download, taking >7 seconds each.
+    * Don't crash when downloading a group that already contains some member
+      URLs that were already downloaded.
+        * This crash bug was introduced in v1.7.0b with the new strategy of
+          creating member download tasks on demand rather than upfront.
+    * Don't crash when use UI to try to download a URL that is already downloading.
+    * Don't crash when try to download a group that has no member URLs.
 
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,
@@ -57,11 +63,6 @@ Release Notes ⋮
     * A terminal bell sound is played automatically when tests finish running.
 
 * Fixes
-    * Don't crash when downloading a group that already contains some member
-      URLs that were already downloaded.
-        * This crash bug was introduced in v1.7.0b with the new strategy of
-          creating member download tasks on demand rather than upfront.
-    * Don't crash when use UI to try to download a URL that is already downloading.
     * Prevent system idle sleep while tasks are running,
       in more situations on macOS.
     * Fix disappearance of error nodes when new root URL or group is added.

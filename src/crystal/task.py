@@ -1257,7 +1257,10 @@ class DownloadResourceGroupMembersTask(Task):
     @overrides
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
         if not self._children_loaded:
-            return lambda: fg_call_and_wait(self._load_children)
+            def fg_task() -> None:
+                self._load_children()
+                self._update_completed_status()
+            return lambda: fg_call_and_wait(fg_task)
         
         return super().try_get_next_task_unit()
     

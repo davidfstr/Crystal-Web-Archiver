@@ -3,11 +3,12 @@
 from contextlib import redirect_stderr
 from crystal.model import Project, Resource
 import crystal.task
+from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
-from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for
+from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
 from crystal.util.xthreading import bg_call_later
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import io
@@ -16,6 +17,7 @@ import tempfile
 from textwrap import dedent
 from typing import List
 from unittest import skip
+from unittest.mock import patch
 
 
 # ------------------------------------------------------------------------------
@@ -400,6 +402,37 @@ async def test_can_download_group_with_root_resource_as_source() -> None:
 async def test_can_download_group_with_group_as_source() -> None:
     # See section: "Test can update membership of resource group, when other resource group is source"
     pass
+
+
+async def test_can_download_empty_group() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
+            assert mw.add_group_button.Enabled
+            click_button(mw.add_group_button)
+            ngd = await NewGroupDialog.wait_for()
+            
+            ngd.pattern_field.Value = comic_pattern
+            ngd.name_field.Value = 'Comic'
+            await ngd.ok()
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            comic_ti = root_ti.find_child(comic_pattern)
+            comic_ti.SelectItem()
+            
+            class DownloadResourceGroupTaskSpy(crystal.task.DownloadResourceGroupTask):
+                finish_call_count = 0
+                
+                def finish(self, *args, **kwargs):
+                    DownloadResourceGroupTaskSpy.finish_call_count += 1
+                    return super().finish(*args, **kwargs)
+            
+            with patch('crystal.task.DownloadResourceGroupTask', DownloadResourceGroupTaskSpy):
+                click_button(mw.download_button)
+                await wait_for(lambda: DownloadResourceGroupTaskSpy.finish_call_count >= 1 or None)
+                assert 1 == DownloadResourceGroupTaskSpy.finish_call_count
 
 
 # ------------------------------------------------------------------------------

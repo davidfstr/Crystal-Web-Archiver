@@ -132,7 +132,7 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     )
 
 
-async def test_given_running_tests_then_uses_extra_listener_assertions() -> None:
+def test_given_running_tests_then_uses_extra_listener_assertions() -> None:
     assert True == Task._USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS
 
 
