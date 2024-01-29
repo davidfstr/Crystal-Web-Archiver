@@ -104,6 +104,8 @@ class Task(ListenableMixin):
     """The name of the icon resource used for this task, or None to use the default icon."""
     scheduling_style = SCHEDULING_STYLE_NONE  # abstract for container task types
     """For a container task, defines the order that task units from children will be executed in."""
+    all_children_complete_implies_this_task_complete = True
+    """For a container task, whether all of its children being complete implies that the container should be complete."""
     
     _USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS = (
         os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
@@ -445,7 +447,15 @@ class Task(ListenableMixin):
                                 return unit
                             cur_child_index += 1
                         return None
-                return None
+                # (All children are complete yet this container task is not complete)
+                
+                if type(self).all_children_complete_implies_this_task_complete:
+                    assert all([c.complete for c in self.children])
+                    assert not self.complete  # checked earlier in this function
+                    raise AssertionError(
+                        f'{self!r} has all complete children yet is not itself marked as complete')
+                else:
+                    return None
             elif self.scheduling_style == SCHEDULING_STYLE_ROUND_ROBIN:
                 if self._next_child_index == 0:
                     # NOTE: Ignore known-slow operation that has no further obvious optimizations
@@ -804,6 +814,8 @@ class DownloadResourceTask(Task):
             self._download_body_task.dispose()
         self._download_body_with_embedded_future = \
             _FUTURE_WITH_TASK_DISPOSED_EXCEPTION  # garbage collect old value
+    
+    # === Events ===
     
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task is self._download_body_task:
@@ -1239,6 +1251,7 @@ class DownloadResourceGroupMembersTask(Task):
     
     icon_name = 'tasktree_download_group_members'
     scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
+    all_children_complete_implies_this_task_complete = False
     
     def __init__(self, group: ResourceGroup) -> None:
         super().__init__(
@@ -1472,6 +1485,7 @@ class RootTask(Task):
     """
     icon_name = None
     scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
+    all_children_complete_implies_this_task_complete = False
     
     def __init__(self):
         super().__init__(title='ROOT')
