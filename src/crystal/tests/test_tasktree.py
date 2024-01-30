@@ -160,12 +160,33 @@ async def test_given_group_has_leading_completed_children_when_start_downloading
                     small_max_leading_complete_children=M,
                     scheduler_thread_enabled=False,
                 ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
             parent_ttn = download_rg_members_ttn
             
             assertEqual(1, _viewport_offset(parent_ttn))
+
+
+async def test_given_group_has_more_leading_completed_children_than_visible_children_when_start_downloading_then_moves_viewport_to_appropriate_location() -> None:
+    N = 5
+    M = 3
+    
+    with _children_marked_as_complete_upon_creation(list(range(1, (N + 1) + 1))):
+        async with _project_with_resource_group_starting_to_download(
+                    resource_count=N + 4,
+                    small_max_visible_children=N,
+                    small_max_leading_complete_children=M,
+                    scheduler_thread_enabled=False,
+                ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
+            parent_ttn = download_rg_members_ttn
+            
+            assertEqual(3, _viewport_offset(parent_ttn))
+            assertEqual(N, _viewport_length(parent_ttn))
+            
+            # Ensure does not crash when update Task._next_child_index
+            # in way that passes through children that were unmaterialized
+            # (and which should be assumed to be complete)
+            # 
+            # In particular ensure UnmaterializedItemError is handled correctly.
+            parent_ttn.task.try_get_next_task_unit()
 
 
 # === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit leading completed children ===

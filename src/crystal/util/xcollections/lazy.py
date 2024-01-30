@@ -1,5 +1,7 @@
 from enum import Enum
-from typing import Any, Callable, Generic, List, overload, Sequence, TypeVar, Union
+from typing import (
+    Any, Callable, Generic, Iterator, List, overload, Sequence, TypeVar, Union,
+)
 
 
 _E = TypeVar('_E')
@@ -62,6 +64,10 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     def __getitem__(self, index: Union[int, slice]):
         """
         Returns the item at the specified index, materializing it if necessary.
+        
+        Raises:
+        * UnmaterializedItemError --
+            if specified item was explicitly unmaterialized
         """
         if isinstance(index, slice):
             if index.start is not None and index.start < 0:
@@ -90,7 +96,7 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
             #       case of the following if-statement
             if True:
                 # Disallow access to unmaterialized items that were once materialized
-                raise ValueError('Cannot access item that was explicitly unmaterialized')
+                raise UnmaterializedItemError()
             else:
                 # Recreate unmaterialized item that was previously materialized
                 item = self._cached_prefix[index] = self._createitem_func(index)
@@ -122,3 +128,16 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     #       this list if it is anywhere in this list at all.
     def __contains__(self, item: object) -> bool:
         return item in self._cached_prefix
+    
+    def materialized_items(self) -> Iterator[_E]:
+        items = []
+        for item in self._cached_prefix:
+            if not isinstance(item, _UnmaterializedItem):
+                items.append(item)
+        return iter(items)
+
+
+class UnmaterializedItemError(ValueError):
+    def __init__(self) -> None:
+        super().__init__('Cannot access item that was explicitly unmaterialized')
+

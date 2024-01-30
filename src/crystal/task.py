@@ -10,7 +10,7 @@ from crystal.util.profile import (
 )
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xcollections.dedup import dedup_list
-from crystal.util.xcollections.lazy import AppendableLazySequence
+from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItemError
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util.xsqlite3 import is_database_closed_error
@@ -437,7 +437,12 @@ class Task(ListenableMixin):
                 raise ValueError('Container task has not specified a scheduling style.')
             elif self.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
                 while self._next_child_index < len(self.children):
-                    if self.children[self._next_child_index].complete:
+                    try:
+                        next_child_complete = self.children[self._next_child_index].complete
+                    except UnmaterializedItemError:
+                        # Assume that any unmaterialized item must be complete
+                        next_child_complete = True
+                    if next_child_complete:
                         self._next_child_index += 1
                     else:
                         cur_child_index = self._next_child_index
@@ -450,7 +455,13 @@ class Task(ListenableMixin):
                 # (All children are complete yet this container task is not complete)
                 
                 if type(self).all_children_complete_implies_this_task_complete:
-                    assert all([c.complete for c in self.children])
+                    if isinstance(self.children, list):
+                        assert all([c.complete for c in self.children])
+                    elif isinstance(self.children, AppendableLazySequence):
+                        assert all([c.complete for c in self.children.materialized_items()])
+                    else:
+                        # No safe way to assert that all children are complete
+                        pass
                     assert not self.complete  # checked earlier in this function
                     raise AssertionError(
                         f'{self!r} has all complete children yet is not itself marked as complete')
