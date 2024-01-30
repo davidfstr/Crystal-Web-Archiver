@@ -58,7 +58,10 @@ class _InvalidURL(ValueError):
 
 
 def is_unrewritable_url(relative_url: str) -> bool:
+    # Don't rewrite certain schemes
     for prefix in ('mailto:', 'javascript:', 'data:'):
         if relative_url.startswith(prefix):
             return True
+    
+    # Otherwise OK to rewrite
     return False

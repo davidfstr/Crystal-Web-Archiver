@@ -163,7 +163,7 @@ class HttpResourceRequest(ResourceRequest):
             known_etags: Iterable[str]=()
             ) -> None:
         if urlparse(url).scheme not in ('http', 'https'):
-            raise ValueError
+            raise ValueError('Expected URL with http or https scheme')
         self.url = url
         self._request_cookie = request_cookie
         self._known_etags = known_etags

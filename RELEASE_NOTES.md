@@ -49,6 +49,10 @@ Release Notes ⋮
 * Crawling improvements
     * Download implicit favicon referenced by root page of any domain.
 
+* Parsing improvements
+    * Gracefully handle references to invalid URLs like `"//*[@id='"`
+      rather than crashing.
+
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,
       without introducing an invalid `<script>` tag.

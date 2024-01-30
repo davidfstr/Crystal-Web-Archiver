@@ -505,23 +505,24 @@ class _RequestHandler(BaseHTTPRequestHandler):
             if ((referer_urlparts.netloc == '' and referer_urlparts.path.startswith('/')) or 
                     referer_urlparts.netloc == self._server_host):
                 referer_archive_url = self.get_archive_url(referer_urlparts.path)
-                referer_archive_urlparts = urlparse(referer_archive_url)
-                assert isinstance(referer_archive_urlparts.scheme, str)
-                assert isinstance(referer_archive_urlparts.netloc, str)
-                requested_archive_url = '%s://%s%s' % (
-                    referer_archive_urlparts.scheme,
-                    referer_archive_urlparts.netloc,
-                    self.path,
-                )
-                redirect_url = self.get_request_url(requested_archive_url)
-                
-                self._print_warning('*** Dynamically rewriting link from %s: %s' % (
-                    referer_archive_url,
-                    requested_archive_url,
-                ))
-                
-                self.send_redirect(redirect_url, vary_referer=True)
-                return
+                if referer_archive_url is not None:
+                    referer_archive_urlparts = urlparse(referer_archive_url)
+                    assert isinstance(referer_archive_urlparts.scheme, str)
+                    assert isinstance(referer_archive_urlparts.netloc, str)
+                    requested_archive_url = '%s://%s%s' % (
+                        referer_archive_urlparts.scheme,
+                        referer_archive_urlparts.netloc,
+                        self.path,
+                    )
+                    redirect_url = self.get_request_url(requested_archive_url)
+                    
+                    self._print_warning('*** Dynamically rewriting link from %s: %s' % (
+                        referer_archive_url,
+                        requested_archive_url,
+                    ))
+                    
+                    self.send_redirect(redirect_url, vary_referer=True)
+                    return
         
         # Serve Welcome page
         path_parts = urlparse(self.path)

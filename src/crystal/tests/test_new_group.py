@@ -15,7 +15,6 @@ import re
 from typing import Optional
 from unittest import skip
 from unittest.mock import patch
-from urllib.parse import urlparse
 import wx
 
 

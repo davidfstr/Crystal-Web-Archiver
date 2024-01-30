@@ -105,6 +105,10 @@ def _main(args: List[str]) -> None:
         except ImportError:
             sys.exit('Can\'t find the main "crystal" package on your Python path.')
     
+    # Initialize global configuration
+    from crystal.util.xurllib import patch_urlparse_to_never_raise_valueerror
+    patch_urlparse_to_never_raise_valueerror()
+    
     # Filter out strange "psn" argument (ex: '-psn_0_438379') that
     # macOS does sometimes pass upon first launch when run as a
     # binary downloaded from the internet.

@@ -8,6 +8,7 @@ from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.model import (
     Project, Resource, ResourceRevision, ResourceRevisionMetadata, RootResource
 )
+from crystal.tests.util.asserts import assertEqual, assertRaises
 from crystal.tests.util.controls import click_button
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
@@ -24,6 +25,7 @@ from textwrap import dedent
 from typing import Iterator, List, Tuple
 from unittest import skip
 from unittest.mock import Mock, patch
+from urllib.parse import ParseResult, urlparse, urljoin
 
 
 # ------------------------------------------------------------------------------
@@ -434,6 +436,54 @@ def test_recognizes_unknown_attribute_reference_to_absolute_url() -> None:
 @skip('not yet automated')
 def test_does_not_recognize_mailto_or_data_or_javascript_urls_as_links() -> None:
     pass  # see: is_unrewritable_url()
+
+
+async def test_does_recognize_invalid_relative_urls_as_links() -> None:
+    # Ensure test data is detected as an invalid relative URL
+    # using native urllib functions
+    assert hasattr(urlparse, '_super'), \
+        'Expected urlparse() to be patched by patch_urlparse_to_never_raise_exception()'
+    assertRaises(
+        ValueError,
+        lambda: urlparse._super("//*[@id='"))  # type: ignore[attr-defined]
+    
+    # Ensure test data is detected as an valid relative URL
+    # using patched urllib functions
+    assertEqual(
+        ParseResult(scheme='', netloc='', path="//*[@id='", params='', query='', fragment=''),
+        urlparse("//*[@id='"))
+    assertEqual(
+        "//*[@id='",
+        urljoin('https://example.com/', "//*[@id='"))
+    
+    # Ensure does recognize invalid relative URL as a link in general
+    HTML_TEXT = '''<a href="//*[@id='"><a href="#">'''
+    (_, links) = _parse_html_and_links(HTML_TEXT)
+    (bad_link, good_link) = links
+    assert "//*[@id='" == bad_link.relative_url
+    assert '#' == good_link.relative_url
+    
+    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        os.rmdir(project_dirpath)
+        with Project(project_dirpath) as project:
+            rr = ResourceRevision.create_from_response(
+                Resource(project, 'https://example.com/'),
+                metadata=ResourceRevisionMetadata(
+                    http_version=10,
+                    status_code=200,
+                    reason_phrase='OK',
+                    headers=[
+                        ['Content-Type', 'text/html'],
+                    ],
+                ),
+                body_stream=BytesIO(HTML_TEXT.encode('utf-8')))
+            (doc, links, _) = rr.document_and_links()
+            
+            # Ensure does recognize invalid relative URL as a document link
+            (bad_link, good_link, favicon_link) = links
+            assert "//*[@id='" == bad_link.relative_url
+            assert '#' == good_link.relative_url
+            assert '/favicon.ico' == favicon_link.relative_url
 
 
 async def test_recognizes_http_redirect_as_a_link() -> None:

@@ -1760,9 +1760,9 @@ class Resource:
             new_url = requote_uri(old_url)
             if new_url != old_url:
                 alternatives.append(new_url)
-            del url_parts  # prevent accidental future use
         else:
             new_url = urlunparse(url_parts)
+        del url_parts  # prevent accidental future use
         
         # Allow plugins to normalize URLs further
         old_url = new_url
