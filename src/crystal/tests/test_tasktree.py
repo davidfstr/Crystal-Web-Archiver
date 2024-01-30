@@ -163,6 +163,7 @@ async def test_given_group_has_leading_completed_children_when_start_downloading
             parent_ttn = download_rg_members_ttn
             
             assertEqual(1, _viewport_offset(parent_ttn))
+            assertEqual(N, _viewport_length(parent_ttn))
 
 
 async def test_given_group_has_more_leading_completed_children_than_visible_children_when_start_downloading_then_moves_viewport_to_appropriate_location() -> None:
@@ -669,6 +670,11 @@ def _viewport(ttn: TaskTreeNode) -> Tuple[int, int, bool, bool]:
 def _viewport_offset(ttn: TaskTreeNode) -> int:
     (offset, _, _, _) = _viewport(ttn)
     return offset
+
+
+def _viewport_length(ttn: TaskTreeNode) -> int:
+    (_, length, _, _) = _viewport(ttn)
+    return length
 
 
 def _materialized_child_task_count(parent_ttn: TaskTreeNode) -> int:
