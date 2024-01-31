@@ -1,7 +1,10 @@
 from crystal.browser.icons import TREE_NODE_ICONS
-from crystal.task import DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task
+from crystal.task import (
+    DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task,
+    UNMATERIALIZED_TASK, UNMATERIALIZED_TASK_TITLE,
+)
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
-from crystal.util.xcollections.lazy import AppendableLazySequence
+from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItem
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
 from typing import List, Optional, Tuple
 import wx
@@ -30,6 +33,9 @@ class TaskTree:
 
 
 class TaskTreeNode:
+    """
+    View controller for an individual node of the task tree.
+    """
     # The following limits are enforced for SCHEDULING_STYLE_SEQUENTIAL tasks only
     _MAX_LEADING_COMPLETE_CHILDREN = 5
     _MAX_VISIBLE_CHILDREN = 100
@@ -42,9 +48,6 @@ class TaskTreeNode:
         '_suppress_complete_events_for_unappended_children',
     )
     
-    """
-    View controller for an individual node of the task tree.
-    """
     def __init__(self, task: Task) -> None:
         self.task = task
         
@@ -194,7 +197,7 @@ class TaskTreeNode:
                 return
             
             if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
-                # Find first_more_node, intermediate_nodes, and last_more_node
+                # Find (first_more_node, intermediate_nodes, last_more_node)
                 assert len(self.tree_node.children) >= 1, (
                     f"Expected child to be in this task's children list: "
                     f"{child}"
@@ -211,28 +214,55 @@ class TaskTreeNode:
                 else:
                     last_more_node = _MoreNodeView()
                 
+                # Count num_leading_complete_children
                 num_leading_complete_children = 0
-                intermediate_tasks = self.task.children[
-                    first_more_node.more_count :
-                    (first_more_node.more_count + len(intermediate_nodes))
-                ]
+                task_children = self.task.children  # cache
+                if isinstance(task_children, AppendableLazySequence):
+                    intermediate_tasks = [
+                        task_children.__getitem__(i, True)  # unmaterialized_ok=True
+                        for i in range(
+                            first_more_node.more_count,
+                            first_more_node.more_count + len(intermediate_nodes)
+                        )
+                    ]
+                else:
+                    intermediate_tasks = [
+                        task_children[i]
+                        for i in range(
+                            first_more_node.more_count,
+                            first_more_node.more_count + len(intermediate_nodes)
+                        )
+                    ]
                 for t in intermediate_tasks:
-                    if t.complete:
+                    # NOTE: Assumes that any UnmaterializedItem is complete
+                    if isinstance(t, UnmaterializedItem) or t.complete:
                         num_leading_complete_children += 1
                     else:
                         break
+                del intermediate_tasks  # prevent accidental usage later
                 
+                # If need to slide children up, then do so
                 if num_leading_complete_children > self._MAX_LEADING_COMPLETE_CHILDREN:
                     children_state_func = lambda: (first_more_node.more_count, last_more_node.more_count)
                     
+                    # While we still need to slide children up, slide up by one position
                     while num_leading_complete_children > self._MAX_LEADING_COMPLETE_CHILDREN:
                         # Slide first of last_more_node up into last of intermediate_nodes
                         if last_more_node.more_count >= 1:
                             initial_children_state = children_state_func()  # capture
                             
                             trailing_child_index = first_more_node.more_count + len(intermediate_nodes)
-                            # NOTE: May trigger materialization of a new Task child
-                            trailing_child_task = task.children[trailing_child_index]
+                            if isinstance(task.children, AppendableLazySequence):
+                                # NOTE: May trigger materialization of a new Task child
+                                trailing_child_maybe_task = task.children.__getitem__(trailing_child_index, True)  # unmaterialized_ok=True
+                                trailing_child_task = (
+                                    UNMATERIALIZED_TASK
+                                    if isinstance(trailing_child_maybe_task, UnmaterializedItem)
+                                    else trailing_child_maybe_task
+                                )
+                            else:
+                                # NOTE: May trigger materialization of a new Task child
+                                trailing_child_task = task.children[trailing_child_index]
                             if children_state_func() != initial_children_state:
                                 # Children list was concurrently modified,
                                 # probably by a nested call to
@@ -254,24 +284,41 @@ class TaskTreeNode:
                         
                         # Slide first of intermediate_nodes up into first_more_node
                         if True:
-                            intermediate_nodes_0_task = task.children[first_more_node.more_count]
-                            assert intermediate_nodes_0_task.complete
+                            # 1. Ensure child node which is sliding up is complete
+                            # 2. Free that child node (if held by an AppendableLazySequence)
                             if isinstance(task.children, AppendableLazySequence):
-                                task.children.unmaterialize(first_more_node.more_count)
+                                intermediate_nodes_0_task = task.children.__getitem__(first_more_node.more_count, True)  # unmaterialized_ok=True
+                                if isinstance(intermediate_nodes_0_task, UnmaterializedItem):
+                                    # NOTE: Assumes that any UnmaterializedItem is complete
+                                    pass
+                                else:
+                                    assert intermediate_nodes_0_task.complete
+                                    
+                                    # Free the child, because it will no longer be visible in the UI
+                                    task.children.unmaterialize(first_more_node.more_count)
+                            else:
+                                intermediate_nodes_0_task = task.children[first_more_node.more_count]
+                                assert intermediate_nodes_0_task.complete
                             
                             first_more_node.more_count += 1
                             del intermediate_nodes[0]
                             num_leading_complete_children -= 1
                     
-                    new_children = []
-                    if first_more_node.more_count != 0:
-                        new_children.append(first_more_node)
-                    new_children.extend(intermediate_nodes)
-                    if last_more_node.more_count != 0:
-                        new_children.append(last_more_node)
+                    # Ensure no UNMATERIALIZED_TASKs left in intermediate_nodes after sliding
+                    if len(intermediate_nodes) >= 1:
+                        assert intermediate_nodes[0].title != UNMATERIALIZED_TASK_TITLE
                     
-                    self._num_visible_children = len(intermediate_nodes)
-                    self.tree_node.children = new_children
+                    # Commit changes to the children list
+                    if True:
+                        new_children = []
+                        if first_more_node.more_count != 0:
+                            new_children.append(first_more_node)
+                        new_children.extend(intermediate_nodes)
+                        if last_more_node.more_count != 0:
+                            new_children.append(last_more_node)
+                        
+                        self._num_visible_children = len(intermediate_nodes)
+                        self.tree_node.children = new_children
         fg_call_later(fg_task)
     
     # NOTE: Patched by automated tests

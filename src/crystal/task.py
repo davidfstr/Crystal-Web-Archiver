@@ -1150,21 +1150,14 @@ class _PlaceholderTask(Task):  # abstract
             return None  # default value
 
 
-class _AlreadyDownloadedException(Exception):
-    pass
-
-class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
+class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
     """
-    Placeholder task that marks resources that have already been downloaded.
+    Abstract _PlaceholderTask that should only ever have one instance.
     
     This task is always complete immediately after initialization.
     """
-    def __init__(self) -> None:
-        super().__init__(
-            title='Already downloaded',
-            exception=_AlreadyDownloadedException().with_traceback(None),
-            prefinish=True,
-        )
+    def __init__(self, title: str) -> None:
+        super().__init__(title, prefinish=True)
     
     # Don't allow parent to be set on a flyweight task
     def _get_parent(self) -> Optional[Task]:
@@ -1172,11 +1165,33 @@ class _AlreadyDownloadedPlaceholderTask(_PlaceholderTask):
     def _set_parent(self, parent: Optional[Task]) -> None:
         pass
     parent = cast(Optional[Task], property(_get_parent, _set_parent))
+
+
+class _AlreadyDownloadedPlaceholderTask(_FlyweightPlaceholderTask):
+    """
+    Placeholder task that marks resources that have already been downloaded.
+    
+    This task is always complete immediately after initialization.
+    """
+    def __init__(self) -> None:
+        super().__init__(title='Already downloaded')
     
     def __repr__(self) -> str:
         return f'_ALREADY_DOWNLOADED_PLACEHOLDER_TASK'
 
 _ALREADY_DOWNLOADED_PLACEHOLDER_TASK = _AlreadyDownloadedPlaceholderTask()
+
+
+UNMATERIALIZED_TASK_TITLE = '__unmaterialized__'
+
+class UnmaterializedTask(_FlyweightPlaceholderTask):
+    def __init__(self) -> None:
+        super().__init__(title=UNMATERIALIZED_TASK_TITLE)
+    
+    def __repr__(self) -> str:
+        return f'UNMATERIALIZED_TASK'
+
+UNMATERIALIZED_TASK = UnmaterializedTask()
 
 
 class _DownloadResourcesPlaceholderTask(_PlaceholderTask):

@@ -2,12 +2,13 @@ from enum import Enum
 from typing import (
     Any, Callable, Generic, Iterator, List, overload, Sequence, TypeVar, Union,
 )
+from typing_extensions import Literal
 
 
 _E = TypeVar('_E')
 
 
-class _UnmaterializedItem(Enum):
+class UnmaterializedItem(Enum):
     VALUE = None
 
 class AppendableLazySequence(Generic[_E], Sequence[_E]):
@@ -45,7 +46,7 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
         self._materializeitem_func = materializeitem_func
         self._unmaterializeitem_func = unmaterializeitem_func
         self._len_func = len_func
-        self._cached_prefix = []  # type: List[Union[_E, _UnmaterializedItem]]
+        self._cached_prefix = []  # type: List[Union[_E, UnmaterializedItem]]
     
     @property
     def cached_prefix_len(self) -> int:
@@ -59,9 +60,12 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     def __getitem__(self, index: int) -> _E:
         ...
     @overload
+    def __getitem__(self, index: int, unmaterialized_ok: Literal[True]) -> Union[_E, UnmaterializedItem]:
+        ...
+    @overload
     def __getitem__(self, index: slice) -> Sequence[_E]:
         ...
-    def __getitem__(self, index: Union[int, slice]):
+    def __getitem__(self, index: Union[int, slice], unmaterialized_ok: bool=False):
         """
         Returns the item at the specified index, materializing it if necessary.
         
@@ -90,7 +94,9 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
             self._cached_prefix.append(child)
             self._materializeitem_func(child)
         item = self._cached_prefix[index]
-        if isinstance(item, _UnmaterializedItem):
+        if isinstance(item, UnmaterializedItem):
+            if unmaterialized_ok:
+                return item
             # NOTE: In the future it MIGHT be desirable to allow rematerializing
             #       items that were once materialized, by enabling the False
             #       case of the following if-statement
@@ -100,7 +106,7 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
             else:
                 # Recreate unmaterialized item that was previously materialized
                 item = self._cached_prefix[index] = self._createitem_func(index)
-                assert not isinstance(item, _UnmaterializedItem)
+                assert not isinstance(item, UnmaterializedItem)
         return item
     
     def unmaterialize(self, index: int) -> None:
@@ -116,9 +122,9 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
             raise IndexError()
         if index < len(self._cached_prefix):
             item = self._cached_prefix[index]
-            if not isinstance(item, _UnmaterializedItem):
+            if not isinstance(item, UnmaterializedItem):
                 self._unmaterializeitem_func(item)
-                self._cached_prefix[index] = _UnmaterializedItem.VALUE
+                self._cached_prefix[index] = UnmaterializedItem.VALUE
     
     def __len__(self) -> int:
         return self._len_func()
@@ -132,7 +138,7 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     def materialized_items(self) -> Iterator[_E]:
         items = []
         for item in self._cached_prefix:
-            if not isinstance(item, _UnmaterializedItem):
+            if not isinstance(item, UnmaterializedItem):
                 items.append(item)
         return iter(items)
 

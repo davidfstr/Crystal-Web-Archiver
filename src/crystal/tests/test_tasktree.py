@@ -19,7 +19,7 @@ from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wa
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.ui.tree2 import NodeView
 from crystal.util.xcollections.lazy import (
-    AppendableLazySequence, _UnmaterializedItem,
+    AppendableLazySequence, UnmaterializedItem,
 )
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 import math
@@ -155,7 +155,7 @@ async def test_given_group_has_leading_completed_children_when_start_downloading
     
     with _children_marked_as_complete_upon_creation(list(range(1, (M + 1) + 1))):
         async with _project_with_resource_group_starting_to_download(
-                    resource_count=N + 4,
+                    resource_count=N + M + 1,
                     small_max_visible_children=N,
                     small_max_leading_complete_children=M,
                     scheduler_thread_enabled=False,
@@ -172,7 +172,7 @@ async def test_given_group_has_more_leading_completed_children_than_visible_chil
     
     with _children_marked_as_complete_upon_creation(list(range(1, (N + 1) + 1))):
         async with _project_with_resource_group_starting_to_download(
-                    resource_count=N + 4,
+                    resource_count=N + M + 1,
                     small_max_visible_children=N,
                     small_max_leading_complete_children=M,
                     scheduler_thread_enabled=False,
@@ -187,6 +187,26 @@ async def test_given_group_has_more_leading_completed_children_than_visible_chil
             # (and which should be assumed to be complete)
             # 
             # In particular ensure UnmaterializedItemError is handled correctly.
+            parent_ttn.task.try_get_next_task_unit()
+    
+    with _children_marked_as_complete_upon_creation(list(range(1, (N + M + 1) + 1))):
+        async with _project_with_resource_group_starting_to_download(
+                    resource_count=N + M + 2,
+                    small_max_visible_children=N,
+                    small_max_leading_complete_children=M,
+                    scheduler_thread_enabled=False,
+                ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
+            parent_ttn = download_rg_members_ttn
+            
+            assertEqual(6, _viewport_offset(parent_ttn))
+            assertEqual(M, _viewport_length(parent_ttn))
+            
+            # Ensure does not crash when update
+            # (first_more_node, intermediate_nodes, last_more_node)
+            # in way that passes through children that were unmaterialized
+            # (and which should be assumed to be complete)
+            # 
+            # In particular ensure UnmaterializedItem is handled correctly.
             parent_ttn.task.try_get_next_task_unit()
 
 
@@ -617,7 +637,7 @@ def _cleanup_download_of_resource_group(
     materialized_children = (
         [
             t for t in children._cached_prefix
-            if not isinstance(t, _UnmaterializedItem)
+            if not isinstance(t, UnmaterializedItem)
         ] + list(children[children.cached_prefix_len:])
         if isinstance(children, AppendableLazySequence)
         else children
@@ -699,7 +719,7 @@ def _unmaterialized_child_task_count(parent_ttn: TaskTreeNode) -> int:
     children = parent_ttn.task.children
     if isinstance(children, AppendableLazySequence):
         return sum([
-            isinstance(t, _UnmaterializedItem)
+            isinstance(t, UnmaterializedItem)
             for t in children._cached_prefix
         ])
     elif isinstance(children, list):
