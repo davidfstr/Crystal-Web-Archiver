@@ -89,6 +89,9 @@ SCHEDULING_STYLE_ROUND_ROBIN = 2
 """One task unit will be executed from each child during a scheduler pass."""
 
 
+CrashReason = str
+
+
 class Task(ListenableMixin):
     """
     Encapsulates a long-running process that reports its status occasionally.
@@ -150,6 +153,7 @@ class Task(ListenableMixin):
     __slots__ = (
         '_title',
         '_subtitle',
+        '_crash_reason',
         '_parent',
         '_children',
         '_num_children_complete',
@@ -169,6 +173,7 @@ class Task(ListenableMixin):
         
         self._title = title
         self._subtitle = 'Queued'
+        self._crash_reason = None  # type: Optional[CrashReason]
         self._parent = None  # type: Optional[Task]
         self._children = []  # type: Sequence[Task]
         self._num_children_complete = 0
@@ -201,6 +206,15 @@ class Task(ListenableMixin):
             if hasattr(lis, 'task_subtitle_did_change'):
                 lis.task_subtitle_did_change(self)  # type: ignore[attr-defined]
     subtitle = property(_get_subtitle, _set_subtitle)
+    
+    def _get_crash_reason(self) -> Optional[CrashReason]:
+        return self._crash_reason
+    def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
+        self._crash_reason = value
+        for lis in self.listeners:
+            if hasattr(lis, 'task_crash_reason_did_change'):
+                lis.task_crash_reason_did_change(self)  # type: ignore[attr-defined]
+    crash_reason = property(_get_crash_reason, _set_crash_reason)
     
     # TODO: Alter parent tracking to support multiple parents,
     #       since in truth a Task can already have multiple parents,
@@ -1217,12 +1231,19 @@ class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
     def __init__(self, title: str) -> None:
         super().__init__(title, prefinish=True)
     
-    # Don't allow parent to be set on a flyweight task
-    def _get_parent(self) -> Optional[Task]:
-        return None
-    def _set_parent(self, parent: Optional[Task]) -> None:
+    # Ignore any crash reason set on a flyweight task
+    @overrides
+    def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
+        # NOTE: Swallowing the bad set operation rather than raising another
+        #       exception because calling error-handling code is not expected
+        #       to be able to handle a followup exception raised in this context.
         pass
-    parent = cast(Optional[Task], property(_get_parent, _set_parent))
+    
+    # Ignore any parent set on a flyweight task
+    @property
+    @overrides
+    def parent(self) -> Optional[Task]:
+        return None
 
 
 class _AlreadyDownloadedPlaceholderTask(_FlyweightPlaceholderTask):

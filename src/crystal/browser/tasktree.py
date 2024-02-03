@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import (
+    CrashReason,
     DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task,
 )
 from crystal.ui.tree import NodeView as NodeView1
@@ -40,6 +41,9 @@ class TaskTreeNode:
     # The following limits are enforced for SCHEDULING_STYLE_SEQUENTIAL tasks only
     _MAX_LEADING_COMPLETE_CHILDREN = 5
     _MAX_VISIBLE_CHILDREN = 100
+    
+    _CRASH_TEXT_COLOR = wx.Colour(255, 0, 0)  # red
+    _CRASH_SUBTITLE = 'Something went wrong'
     
     # Optimize per-instance memory use, since there may be very many TaskTreeNode objects
     __slots__ = (
@@ -117,11 +121,38 @@ class TaskTreeNode:
         fg_call_and_wait(fg_task)
     
     def task_subtitle_did_change(self, task: Task) -> None:
-        new_subtitle = self.task.subtitle  # capture
+        task_subtitle = self.task.subtitle  # capture
+        task_crash_reason = self.task.crash_reason  # capture
         def fg_task() -> None:
-            self.tree_node.subtitle = new_subtitle
+            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
         # NOTE: Use profile=False because no obvious further optimizations exist
         fg_call_later(fg_task, profile=False)
+    
+    def task_crash_reason_did_change(self, task: Task) -> None:
+        task_crash_reason = self.task.crash_reason  # capture
+        task_subtitle = self.task.subtitle  # capture
+        def fg_task() -> None:
+            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
+            if task_crash_reason is not None:
+                self.tree_node.text_color = self._CRASH_TEXT_COLOR
+                self.tree_node.bold = True
+                # (TODO: Set tooltip when hovering over tree node text to task_crash_reason)
+            else:
+                self.tree_node.text_color = None
+                self.tree_node.bold = False
+                # (TODO: Clear tooltip when hovering over tree node text)
+        # NOTE: Use profile=False because no obvious further optimizations exist
+        fg_call_later(fg_task, profile=False)
+    
+    @classmethod
+    def _calculate_tree_node_subtitle(cls,
+            task_subtitle: str,
+            task_crash_reason: Optional[CrashReason]) -> str:
+        return (
+            task_subtitle
+            if task_crash_reason is None
+            else cls._CRASH_SUBTITLE
+        )
     
     def task_did_complete(self, task: Task) -> None:
         self.task.listeners.remove(self)
