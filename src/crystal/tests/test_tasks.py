@@ -1,6 +1,6 @@
 from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
-    ProjectFreeSpaceTooLowError, scheduler_thread_context, Task
+    ProjectFreeSpaceTooLowError, scheduler_thread_context, Task,
 )
 from crystal.tests.util.asserts import *
 from crystal.tests.util.data import (
@@ -8,18 +8,14 @@ from crystal.tests.util.data import (
     MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
 )
 from crystal.tests.util.downloads import load_children_of_drg_task
-from crystal.tests.util.runner import bg_sleep
-from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.model import Project, Resource, ResourceGroup
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xcollections.lazy import AppendableLazySequence
-import tempfile
-from tqdm import tqdm
 from typing import NamedTuple
 from unittest import skip
 from unittest.mock import patch, Mock, PropertyMock
@@ -213,8 +209,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
     with subtests.test('given project on small disk and less than 5 percent of disk free'):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
             # Define URLs
-            if True:
-                home_url = sp.get_request_url('https://xkcd.com/')
+            home_url = sp.get_request_url('https://xkcd.com/')
             
             async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
                 project = Project._last_opened_project
@@ -231,8 +226,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
     with subtests.test('given project on large disk and less than 4 gib of disk free'):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
             # Define URLs
-            if True:
-                home_url = sp.get_request_url('https://xkcd.com/')
+            home_url = sp.get_request_url('https://xkcd.com/')
             
             async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
                 project = Project._last_opened_project

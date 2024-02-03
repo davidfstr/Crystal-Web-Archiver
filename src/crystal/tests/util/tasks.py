@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from crystal.model import Project
 import crystal.task
-from crystal.task import scheduler_thread_context
+from crystal.task import scheduler_thread_context, Task
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.wait import (
@@ -12,7 +13,7 @@ from crystal.tests.util.wait import (
 from crystal.util.xthreading import fg_affinity
 import math
 import re
-from typing import Callable, List, Optional
+from typing import Callable, List, Iterator, Optional
 from unittest.mock import patch
 import wx
 
@@ -143,6 +144,33 @@ def append_deferred_top_level_tasks(project: Project) -> None:
         
         # Postcondition
         assert len(project.root_task._children_to_add_soon) == 0
+
+
+# ------------------------------------------------------------------------------
+# Utility: Scheduler Manual Control
+
+scheduler_disabled = patch('crystal.task.start_schedule_forever', lambda task: None)
+
+
+def mark_as_complete(task: Task) -> None:
+    assert not task.complete
+    task.finish()
+    assert task.complete
+
+
+@contextmanager
+def clear_top_level_tasks_on_exit(project: Project) -> Iterator[None]:
+    try:
+        yield
+    finally:
+        # Force root task children to complete
+        for c in project.root_task.children:
+            if not c.complete:
+                mark_as_complete(c)
+        
+        # Clear root task children
+        assert None == project.root_task.try_get_next_task_unit()
+        assert len(project.root_task.children) == 0
 
 
 # ------------------------------------------------------------------------------
