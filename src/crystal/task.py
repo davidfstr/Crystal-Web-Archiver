@@ -526,7 +526,7 @@ class Task(ListenableMixin):
     # === Internal Events ===
     
     @final
-    def task_subtitle_did_change(self, task):
+    def task_subtitle_did_change(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
         
@@ -534,7 +534,7 @@ class Task(ListenableMixin):
             self.child_task_subtitle_did_change(task)
     
     @final
-    def task_did_complete(self, task):
+    def task_did_complete(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
         
