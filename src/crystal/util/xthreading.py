@@ -7,12 +7,14 @@ This thread is responsible for:
 (2) mediating access to model elements (including the underlying database).
 """
 
+from collections import deque
 from crystal.util.profile import create_profiled_callable
 from enum import Enum
 from functools import wraps
 import os
 import sys
 import threading
+import traceback
 from typing import Callable, cast, Generator, Iterator, Optional, overload, TypeVar
 from typing_extensions import ParamSpec
 import wx
@@ -113,8 +115,15 @@ def bg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
 # ------------------------------------------------------------------------------
 # Call on Foreground Thread
 
+# Whether to explicitly manage the queue of deferred foreground tasks,
+# instead of letting wxPython manage the queue internally.
+# 
+# Can be useful for debugging, because when True the queue of deferred foreground tasks
+# is directly inspectable by examining the "_fg_calls" variable in this module.
+_MANAGE_FG_CALLS_EXPLICITLY = False
+
 def fg_call_later(
-        callable: Callable[_P, _R],
+        callable: Callable[_P, None],
         # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
         *, args=(),
         profile: bool=True,
@@ -157,7 +166,13 @@ def fg_call_later(
         callable(*args)
     else:
         try:
-            wx.CallAfter(callable, *args)
+            if _MANAGE_FG_CALLS_EXPLICITLY:
+                if len(args) == 0:
+                    _fg_call_later_in_order(callable)
+                else:
+                    _fg_call_later_in_order(lambda: callable(*args))
+            else:
+                wx.CallAfter(callable, *args)
         except Exception as e:
             if not has_foreground_thread():
                 raise NoForegroundThreadError()
@@ -170,6 +185,25 @@ def fg_call_later(
                 raise NoForegroundThreadError()
             else:
                 raise
+
+
+_fg_calls = deque()  # type: deque[Callable[[], None]]
+
+def _fg_call_later_in_order(callable: Callable[[], None]) -> None:
+    _fg_calls.append(callable)
+    wx.CallAfter(_do_fg_calls)
+
+def _do_fg_calls() -> None:
+    while True:
+        try:
+            cur_fg_call = _fg_calls.popleft()  # type: Callable[[], None]
+        except IndexError:
+            break
+        try:
+            cur_fg_call()
+        except Exception:
+            # Print traceback of any unhandled exception
+            traceback.print_exc()
 
 
 def fg_call_and_wait(
