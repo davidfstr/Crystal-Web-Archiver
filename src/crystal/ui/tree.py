@@ -411,6 +411,11 @@ class NodeView:
         for c in self._children:
             c.dispose()
         self._children = []
+    
+    # === Utility ===
+    
+    def __repr__(self) -> str:
+        return f'<NodeView {self.title!r}>'
 
 NULL_NODE_VIEW = NodeView()
 
