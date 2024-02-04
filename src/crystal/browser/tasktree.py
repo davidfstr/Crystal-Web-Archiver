@@ -122,46 +122,44 @@ class TaskTreeNode:
         self.task.listeners.remove(self)
     
     def task_did_set_children(self, task: Task, child_count: int) -> None:
-        # TODO: Rewrite to not access Task.children in an unsynchronized manner.
-        def fg_task() -> None:
-            if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
-                # Create tree node for each visible task
-                visible_child_count = min(child_count, self._MAX_VISIBLE_CHILDREN)
-                assert is_foreground_thread()  # to access _suppress_complete_events_for_unappended_children
-                self._suppress_complete_events_for_unappended_children = True
-                try:
-                    # NOTE: If `task.children` is an AppendableLazySequence then accessing it can
-                    #       (1) materialize a child that is already complete, and
-                    #       (2) call self.task_child_did_complete() on that child
-                    #           BEFORE the inside of the loop can call
-                    #           self.task_did_append_child() on this child
-                    #       So suppress the handling of any such
-                    #       self.task_child_did_complete() events temporarily.
-                    children_to_append = task.children[:visible_child_count]
-                    for child in children_to_append:
-                        # NOTE: Will also call task_child_did_complete() if the
-                        #       child is initially complete, but the event handling
-                        #       will be suppressed by the enclosing block
-                        self.task_did_append_child(task, child)
-                finally:
-                    self._suppress_complete_events_for_unappended_children = False
-                assert self._num_visible_children == visible_child_count
-                
-                # Create more node as a placeholder for the remaining tasks, if needed
-                if visible_child_count < child_count:
-                    self.tree_node.append_child(_MoreNodeView(child_count - visible_child_count))
-                
-                # Apply deferred child-complete actions
+        if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
+            # Create tree node for each visible task
+            visible_child_count = min(child_count, self._MAX_VISIBLE_CHILDREN)
+            self._suppress_complete_events_for_unappended_children = True
+            try:
+                # NOTE: If `task.children` is an AppendableLazySequence then accessing it can
+                #       (1) materialize a child that is already complete, and
+                #       (2) call self.task_child_did_complete() on that child
+                #           BEFORE the inside of the loop can call
+                #           self.task_did_append_child() on this child
+                #       So suppress the handling of any such
+                #       self.task_child_did_complete() events temporarily.
+                children_to_append = task.children[:visible_child_count]
                 for child in children_to_append:
-                    if child.complete:
-                        self.task_child_did_complete(task, child)
-            else:
-                # Greedily create tree node for each task
-                for child in task.children:
                     # NOTE: Will also call task_child_did_complete() if the
-                    #       child is initially complete
+                    #       child is initially complete, but the event handling
+                    #       will be suppressed by the enclosing block
                     self.task_did_append_child(task, child)
-        fg_call_later(fg_task)
+            finally:
+                self._suppress_complete_events_for_unappended_children = False
+            assert self._num_visible_children == visible_child_count
+            
+            # Create more node as a placeholder for the remaining tasks, if needed
+            if visible_child_count < child_count:
+                def fg_task() -> None:
+                    self.tree_node.append_child(_MoreNodeView(child_count - visible_child_count))
+                fg_call_later(fg_task)
+            
+            # Apply deferred child-complete actions
+            for child in children_to_append:
+                if child.complete:
+                    self.task_child_did_complete(task, child)
+        else:
+            # Greedily create tree node for each task
+            for child in task.children:
+                # NOTE: Will also call task_child_did_complete() if the
+                #       child is initially complete
+                self.task_did_append_child(task, child)
     
     def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
         # TODO: Rewrite to not access Task.children in an unsynchronized manner.
@@ -196,7 +194,6 @@ class TaskTreeNode:
     def task_child_did_complete(self, task: Task, child: Task) -> None:
         # TODO: Rewrite to not access Task.children in an unsynchronized manner.
         def fg_task() -> None:
-            assert is_foreground_thread()  # to access _suppress_complete_events_for_unappended_children
             if self._suppress_complete_events_for_unappended_children:
                 return
             
