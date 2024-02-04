@@ -1,6 +1,7 @@
 import atexit
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
+from functools import wraps
 import inspect
 import sys
 import threading
@@ -94,6 +95,7 @@ def create_profiled_callable(title: str, max_duration: float, callable: Callable
     Decorates the specified callable such that it prints
     a warning to the console if its runtime is long.
     """
+    @wraps(callable)
     def profiled_callable() -> None:
         def message_func() -> str:
             # TODO: Remove support for nested callable objects that are
