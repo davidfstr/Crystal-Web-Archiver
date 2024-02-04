@@ -74,10 +74,10 @@ class TaskTreeNode:
         self._first_incomplete_child_index = 0
         self._ignore_complete_events = False
         
-        # TODO: Rewrite to not access Task.children in an unsynchronized manner.
         # NOTE: Transition to foreground thread here BEFORE making very many
         #       calls to self.task_did_append_child() so that we don't need to
         #       make very many thread transitions in that function
+        task_children_count = len(self.task.children)  # capture
         def fg_task() -> None:
             # Update current progress dialog, if found,
             # in preparation for appending tasks
@@ -88,7 +88,7 @@ class TaskTreeNode:
             if DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
                 progress_dialog = None  # type: Optional[wx.Window]
             else:
-                if len(self.task.children) >= 100:
+                if task_children_count >= 100:
                     assert is_foreground_thread()
                     progress_dialog = wx.FindWindowByName('cr-starting-download')
                     if progress_dialog is not None:
@@ -102,11 +102,11 @@ class TaskTreeNode:
                         
                         # Change progress dialog message
                         progress_dialog_old_message = progress_dialog.Message
-                        progress_dialog.Pulse(f'Adding {len(self.task.children):n} tasks...')
+                        progress_dialog.Pulse(f'Adding {task_children_count:n} tasks...')
                 else:
                     progress_dialog = None
             
-            self.task_did_set_children(self.task, len(self.task.children))
+            self.task_did_set_children(self.task, task_children_count)
             
             if progress_dialog is not None:
                 assert isinstance(progress_dialog, wx.ProgressDialog)
