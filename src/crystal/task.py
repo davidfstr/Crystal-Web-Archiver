@@ -1585,31 +1585,11 @@ class RootTask(Task):
 
 
 # ------------------------------------------------------------------------------
-# Schedule
+# Scheduler
 
 # TODO: Eliminate polling by adding logic to sleep appropriately until the
 #       root task has more children to process.
 _ROOT_TASK_POLL_INTERVAL = .1 # secs
-
-
-# TODO: Move production implementation of scheduling logic from
-#       start_schedule_forever() to this method and delegate from that
-#       method to this method. Such movement will reduce logic duplication.
-def schedule_forever(task: Task) -> None:
-    """
-    Runs the specified task synchronously until it completes.
-    
-    This function is intended for testing.
-    """
-    while True:
-        unit = task.try_get_next_task_unit()
-        if unit is None:
-            if task.complete:
-                break
-            else:
-                sleep(_ROOT_TASK_POLL_INTERVAL)
-                continue
-        unit()
 
 
 def start_schedule_forever(task: Task) -> None:
