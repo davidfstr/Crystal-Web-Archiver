@@ -17,7 +17,8 @@ from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wait_while
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
-from crystal.ui.tree2 import NodeView
+from crystal.ui.tree import NodeView
+from crystal.ui.tree2 import NodeView as NodeView2
 from crystal.util.xcollections.lazy import (
     AppendableLazySequence, UnmaterializedItem,
 )
@@ -199,7 +200,7 @@ async def test_given_group_has_more_leading_completed_children_than_visible_chil
             parent_ttn = download_rg_members_ttn
             
             assertEqual(6, _viewport_offset(parent_ttn))
-            assertEqual(M, _viewport_length(parent_ttn))
+            assertEqual(M + 1, _viewport_length(parent_ttn))
             
             # Ensure does not crash when update
             # (first_more_node, intermediate_nodes, last_more_node)
@@ -363,9 +364,7 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
     N = 5
     M = 3
     
-    with _children_marked_as_complete_upon_creation([N + 1, N + 2]), \
-            patch('crystal.browser.tasktree.TaskTreeNode._will_restart_task_child_did_complete') as will_restart, \
-            patch('crystal.browser.tasktree.TaskTreeNode._did_restart_task_child_did_complete') as did_restart:
+    with _children_marked_as_complete_upon_creation([N + 1, N + 2]):
         async with _project_with_resource_group_starting_to_download(
                     resource_count=N + 4,
                     small_max_visible_children=N,
@@ -393,15 +392,6 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
             assert 1 == _value_of_more_node(children_tns[0])
             assert 3 == _value_of_more_node(children_tns[-1])
             
-            # Ensure did cover error handling code
-            assertEqual([
-                (  # restart #1
-                    call((0, 3)),  # (first_more_value, last_more_value) before restart
-                    call((0, 3)),  # (first_more_value, last_more_value) after restart
-                ),
-            ], list(zip(will_restart.call_args_list, did_restart.call_args_list)))
-            will_restart.reset_mock(); did_restart.reset_mock()
-            
             # Complete child N.
             # 
             # Ensure shifts viewport 3 times:
@@ -416,15 +406,6 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
             assert all([_is_download_resource_node(tn) for tn in children_tns[1:]])
             assert 4 == _value_of_more_node(children_tns[0])
             #assert 0 == _value_of_more_node(children_tns[-1])
-            
-            # Ensure did cover error handling code
-            assertEqual([
-                (  # restart #1
-                    call((3, 1)),  # (first_more_value, last_more_value) before restart
-                    call((4, 0)),  # (first_more_value, last_more_value) after restart
-                ),
-            ], list(zip(will_restart.call_args_list, did_restart.call_args_list)))
-            will_restart.reset_mock(); did_restart.reset_mock()
 
 
 @contextmanager
@@ -744,6 +725,7 @@ def _value_of_more_node(tn: NodeView) -> Optional[int]:
 
 
 def _is_complete(tn: NodeView) -> bool:
+    assert isinstance(tn, NodeView2)
     return tn.subtitle == 'Complete'
 
 

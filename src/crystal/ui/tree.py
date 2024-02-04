@@ -18,7 +18,7 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_raising
 )
 from crystal.util.xthreading import fg_affinity
-from typing import Callable, Container, Dict, List, NewType, NoReturn, Optional, Tuple, Union
+from typing import Callable, cast, Container, Dict, List, NewType, NoReturn, Optional, Tuple, Union
 import wx
 
 
@@ -271,7 +271,7 @@ class NodeView:
         return self._children
     def _set_children(self, new_children: List[NodeView]) -> None:
         self.set_children(new_children)
-    children = property(_get_children, _set_children)
+    children = cast('List[NodeView]', property(_get_children, _set_children))
     
     def set_children(self,
             new_children: List[NodeView],
