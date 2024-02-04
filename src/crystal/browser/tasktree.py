@@ -217,6 +217,11 @@ class TaskTreeNode:
                 # Count num_leading_complete_children
                 num_leading_complete_children = 0
                 task_children = self.task.children  # cache
+                assert (
+                    first_more_node.more_count + 
+                    len(intermediate_nodes) + 
+                    last_more_node.more_count
+                ) <= len(task_children), 'Task children and TreeNode children in task tree are out of sync'
                 if isinstance(task_children, AppendableLazySequence):
                     intermediate_tasks = [
                         task_children.__getitem__(i, True)  # unmaterialized_ok=True
