@@ -239,16 +239,23 @@ def fg_call_and_wait(
         callable_result = None
         callable_exc_info = None
         
+        waiting_calling_thread = threading.current_thread()  # capture
+        
         def fg_task() -> None:
             nonlocal callable_started, callable_result, callable_exc_info
             
             callable_started = True
             
+            fg_thread = threading.current_thread()
+            
             # Run task
+            setattr(fg_thread, '_cr_waiting_calling_thread', waiting_calling_thread)
             try:
                 callable_result = callable(*args)
             except BaseException as e:
                 callable_exc_info = sys.exc_info()
+            finally:
+                setattr(fg_thread, '_cr_waiting_calling_thread', None)
             
             # Send signal
             event.set()
@@ -280,6 +287,17 @@ def fg_call_and_wait(
 
 class NoForegroundThreadError(ValueError):
     pass
+
+
+@fg_affinity
+def fg_waiting_calling_thread() -> Optional[threading.Thread]:
+    """
+    If the current task running on the foreground thread was scheduled
+    by a call to fg_call_and_wait(), returns the thread that made that call.
+    Otherwise returns None.
+    """
+    fg_thread = threading.current_thread()
+    return getattr(fg_thread, '_cr_waiting_calling_thread', None)
 
 
 # ------------------------------------------------------------------------------

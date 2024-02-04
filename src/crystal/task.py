@@ -16,18 +16,22 @@ from crystal.util.xgc import gc_disabled
 from crystal.util.xsqlite3 import is_database_closed_error
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, 
+    fg_waiting_calling_thread,
     is_foreground_thread, NoForegroundThreadError
 )
+from functools import wraps
 import os
 from overrides import overrides
 import shutil
 import sys
+import threading
 from time import sleep
 import traceback
 from typing import (
     Any, Callable, cast, final, List, Literal, Iterator, Optional,
-    Sequence, Tuple, TYPE_CHECKING, Union
+    Sequence, Tuple, TYPE_CHECKING, TypeVar, Union
 )
+from typing_extensions import ParamSpec
 from weakref import WeakSet
 
 if TYPE_CHECKING:
@@ -42,6 +46,35 @@ if TYPE_CHECKING:
 # into a visual flamegraph using the "flameprof" PyPI module,
 # or analyzed using the built-in "pstats" module.
 _PROFILE_SCHEDULER = False
+
+
+_P = ParamSpec('_P')
+_R = TypeVar('_R')
+
+
+# ------------------------------------------------------------------------------
+# Scheduler (Early)
+
+def scheduler_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
+    """
+    Marks the decorated function as needing to be called from either the
+    scheduler thread or a task that is synced with the scheduler thread.
+    
+    Calling the decorated function from an inappropriate context will immediately
+    raise an AssertionError.
+    
+    The following kinds of manipulations need to happen on the scheduler thread:
+    - read/writes to Task.children,
+      except for the RootTask (which only requires accesses to be on the foreground thread)
+    """
+    if __debug__:  # no -O passed on command line?
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            assert is_synced_with_scheduler_thread()
+            return func(*args, **kwargs)
+        return wrapper
+    else:
+        return func
 
 
 # ------------------------------------------------------------------------------
@@ -1592,12 +1625,16 @@ class RootTask(Task):
 _ROOT_TASK_POLL_INTERVAL = .1 # secs
 
 
-def start_schedule_forever(task: Task) -> None:
+def start_schedule_forever(task: RootTask) -> None:
     """
     Asynchronously runs the specified task until it completes,
     or until there is no foreground thread remaining.
     """
     def bg_task() -> None:
+        setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
+        assert _is_scheduler_thread()
+        assert is_synced_with_scheduler_thread()
+        
         if _PROFILE_SCHEDULER:
             profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
         else:
@@ -1607,6 +1644,8 @@ def start_schedule_forever(task: Task) -> None:
                 try:
                     with profiling_context as profiler:
                         while True:
+                            #@fg_affinity
+                            #@scheduler_affinity
                             def fg_task() -> Tuple[Optional[Callable[[], None]], bool]:
                                 return (task.try_get_next_task_unit(), task.complete)
                             try:
@@ -1621,7 +1660,7 @@ def start_schedule_forever(task: Task) -> None:
                                     sleep(_ROOT_TASK_POLL_INTERVAL)
                                     continue
                             try:
-                                unit()  # Run unit directly on this bg thread
+                                unit()  # Run unit directly on this scheduler thread
                             except NoForegroundThreadError:
                                 # Probably the app was closed. Ignore error.
                                 return
@@ -1648,6 +1687,29 @@ def start_schedule_forever(task: Task) -> None:
                 assert profiler is not None
                 profiler.dump_stats('scheduler.prof')
     bg_call_later(bg_task, daemon=True)
+
+
+def is_synced_with_scheduler_thread() -> bool:
+    """
+    Returns whether this thread is a scheduler thread,
+    or this thread is running a task that a scheduler thread is waiting on.
+    """
+    if _is_scheduler_thread():
+        return True
+    if is_foreground_thread():
+        if _is_scheduler_thread(fg_waiting_calling_thread()):
+            return True
+    return False
+
+
+def _is_scheduler_thread(thread: Optional[threading.Thread]=None) -> bool:
+    """
+    Returns whether this thread is a scheduler thread,
+    responsible for running Tasks in a Project.
+    """
+    if thread is None:
+        thread = threading.current_thread()
+    return getattr(thread, '_cr_is_scheduler_thread', False)
 
 
 # ------------------------------------------------------------------------------
