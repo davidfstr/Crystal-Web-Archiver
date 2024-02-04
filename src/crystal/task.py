@@ -220,9 +220,24 @@ class Task(ListenableMixin):
         
         Callers should use append_child() instead of modifying the returned list.
         
-        Note that some Task subclasses - notably RootTask - require (and enforce)
-        that accesses to the children list occur on a particular thread.
+        Task subclasses require (and enforce) that accesses to the 
+        children list occur on a particular thread, usually the scheduler thread.
         """
+        # For tasks that have been added to the task tree,
+        # force any children access to synchronize with scheduler thread
+        if self.parent is not None:
+            if not is_synced_with_scheduler_thread():
+                cur_task = self
+                while cur_task.parent is not None:
+                    cur_task = cur_task.parent
+                self_within_root_task = isinstance(cur_task, RootTask)
+                
+                if self_within_root_task:
+                    raise AssertionError(
+                        'Unsafe to access children of a task within a RootTask '
+                        'without the caller being synchronized with '
+                        'the scheduler thread')
+        
         return self._children
     
     @final
@@ -1554,7 +1569,9 @@ class RootTask(Task):
     @fg_affinity  # force any access to synchronize with foreground thread
     @overrides
     def children(self) -> Sequence[Task]:
-        return super().children
+        # NOTE: Bypass the usual thread synchronization check in super().children,
+        #       because here the analogous check is handled by @fg_affinity
+        return self._children
     
     @overrides
     def append_child(self, child: Task, *args, **kwargs) -> None:
