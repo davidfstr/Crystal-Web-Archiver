@@ -769,7 +769,11 @@ class Project(ListenableMixin):
         group_2_source = {}
         for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
                 'select name, url_pattern, source_type, source_id, id from resource_group')):
-            group = ResourceGroup(self, name, url_pattern, source=Ellipsis, _id=id)
+            group = ResourceGroup(
+                self, name, url_pattern, source=Ellipsis,
+                do_not_download=name.startswith('Ignore:'),
+                _id=id,
+            )
             group_2_source[group] = (source_type, source_id)
         for (group, (source_type, source_id)) in group_2_source.items():
             if source_type is None:
