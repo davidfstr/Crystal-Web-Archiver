@@ -7,8 +7,8 @@ import crystal.task
 from crystal.task import (
     DownloadResourceTask,
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask, 
-    _PlaceholderTask, SCHEDULING_STYLE_ROUND_ROBIN, Task, 
-    UpdateResourceGroupMembersTask,
+    _PlaceholderTask, SCHEDULING_STYLE_ROUND_ROBIN, scheduler_thread_context,
+    Task, UpdateResourceGroupMembersTask,
 )
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import click_button, TreeItem
@@ -546,9 +546,15 @@ async def _project_with_resource_group_starting_to_download(
         else cast(AbstractContextManager, nullcontext())
     )  # type: AbstractContextManager
     
+    simulated_scheduler_context = (
+        scheduler_thread_context()
+        if not scheduler_thread_enabled
+        else nullcontext()
+    )  # type: AbstractContextManager
+    
     # NOTE: NOT using the xkcd test data, because I want all xkcd URLs to give HTTP 404
     with served_project('testdata_bongo.cat.crystalproj.zip') as sp, \
-            scheduler_patched:
+            scheduler_patched, simulated_scheduler_context:
         # Define URLs
         if True:
             home_url = sp.get_request_url('https://xkcd.com/')
