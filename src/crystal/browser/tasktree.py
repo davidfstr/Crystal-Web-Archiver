@@ -68,6 +68,7 @@ class TaskTreeNode:
         self._num_visible_children = 0
         self._suppress_complete_events_for_unappended_children = False
         
+        # TODO: Rewrite to not access Task.children in an unsynchronized manner.
         # NOTE: Transition to foreground thread here BEFORE making very many
         #       calls to self.task_did_append_child() so that we don't need to
         #       make very many thread transitions in that function
@@ -121,6 +122,7 @@ class TaskTreeNode:
         self.task.listeners.remove(self)
     
     def task_did_set_children(self, task: Task, child_count: int) -> None:
+        # TODO: Rewrite to not access Task.children in an unsynchronized manner.
         def fg_task() -> None:
             if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
                 # Create tree node for each visible task
@@ -162,6 +164,7 @@ class TaskTreeNode:
         fg_call_later(fg_task)
     
     def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
+        # TODO: Rewrite to not access Task.children in an unsynchronized manner.
         def fg_task() -> None:
             nonlocal child
             if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
@@ -191,6 +194,7 @@ class TaskTreeNode:
         fg_call_later(fg_task)
     
     def task_child_did_complete(self, task: Task, child: Task) -> None:
+        # TODO: Rewrite to not access Task.children in an unsynchronized manner.
         def fg_task() -> None:
             assert is_foreground_thread()  # to access _suppress_complete_events_for_unappended_children
             if self._suppress_complete_events_for_unappended_children:
