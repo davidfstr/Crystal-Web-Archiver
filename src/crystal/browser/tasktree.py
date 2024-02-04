@@ -162,11 +162,9 @@ class TaskTreeNode:
                 self.task_did_append_child(task, child)
     
     def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
-        # TODO: Rewrite to not access Task.children in an unsynchronized manner.
-        def fg_task() -> None:
-            nonlocal child
-            if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
-                    self._num_visible_children == self._MAX_VISIBLE_CHILDREN):
+        if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
+                self._num_visible_children == self._MAX_VISIBLE_CHILDREN):
+            def fg_task() -> None:
                 # Find last_more_node, or create if missing
                 last_child_tree_node = self.tree_node.children[-1]
                 if isinstance(last_child_tree_node, _MoreNodeView):
@@ -177,19 +175,21 @@ class TaskTreeNode:
                 
                 # Increase more_count instead of appending new child
                 last_more_node.more_count += 1
-            else:
-                # Lookup (and materialize) child if necessary
-                if child is None:
-                    child = task.children[-1]  # lookup child
-                
-                # Append tree node for new task child
-                child_ttnode = TaskTreeNode(child)
-                self.tree_node.append_child(child_ttnode.tree_node)
-                self._num_visible_children += 1
+            fg_call_later(fg_task)
+        else:
+            # Lookup (and materialize) child if necessary
+            if child is None:
+                child = task.children[-1]  # lookup child
             
-            if child is not None and child.complete:
-                self.task_child_did_complete(task, child)
-        fg_call_later(fg_task)
+            # Append tree node for new task child
+            child_ttnode = TaskTreeNode(child)
+            self._num_visible_children += 1
+            def fg_task() -> None:
+                self.tree_node.append_child(child_ttnode.tree_node)
+            fg_call_later(fg_task)
+        
+        if child is not None and child.complete:
+            self.task_child_did_complete(task, child)
     
     def task_child_did_complete(self, task: Task, child: Task) -> None:
         # TODO: Rewrite to not access Task.children in an unsynchronized manner.
