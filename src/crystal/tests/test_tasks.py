@@ -1,6 +1,6 @@
 from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
-    ProjectFreeSpaceTooLowError, Task
+    ProjectFreeSpaceTooLowError, scheduler_thread_context, Task
 )
 from crystal.tests.util.asserts import *
 from crystal.tests.util.data import (
@@ -102,6 +102,7 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     
                     load_children_of_drg_task(drg_task, task_added_to_project=False)
                     
+                    # Precondition
                     # NOTE: The group won't appear to be immediately downloaded yet
                     #       because no code has tried to access the lazily-loaded
                     #       DownloadResourceTask children yet and thus doesn't
@@ -114,6 +115,12 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                         drg_task.complete
                     )
                     
+                    project.add_task(drg_task)
+                    with scheduler_thread_context():
+                        task_unit = project.root_task.try_get_next_task_unit()
+                        assert task_unit is None
+                    
+                    # Postcondition
                     # NOTE: Adding the DownloadResourceGroupTask to the project's
                     #       task tree will cause the TaskTreeNode to start accessing
                     #       the DownloadResourceTask children because it wants to
@@ -122,7 +129,6 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     #       to be created and observed as being already complete.
                     #       With all of those children complete the ancestor
                     #       DownloadResourceGroupTask will also be completed.
-                    project.add_task(drg_task)
                     assert (True, COMIC_G_FINAL_MEMBER_COUNT, True) == (
                         isinstance(drg_task._download_members_task.children, AppendableLazySequence),
                         drg_task._download_members_task.children.cached_prefix_len

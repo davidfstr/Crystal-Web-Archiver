@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import crystal.task
+from crystal.task import scheduler_thread_context
 import socket
 from typing import Iterator, NoReturn, TYPE_CHECKING
 from unittest.mock import patch
@@ -34,9 +35,10 @@ def load_children_of_drg_task(
     # Precondition
     assert not drg_task._download_members_task._children_loaded
     
-    task_unit = drg_task._download_members_task.try_get_next_task_unit()
-    assert task_unit is not None
-    task_unit()
+    with scheduler_thread_context():
+        task_unit = drg_task._download_members_task.try_get_next_task_unit()
+        assert task_unit is not None
+        task_unit()
     
     # Postcondition
     assert drg_task._download_members_task._children_loaded
