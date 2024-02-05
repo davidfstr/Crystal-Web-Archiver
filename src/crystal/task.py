@@ -1561,9 +1561,10 @@ class RootTask(Task):
     scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
     all_children_complete_implies_this_task_complete = False
     
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(title='ROOT')
         self.subtitle = 'Running'
+        self._children_to_add_soon = []  # type: List[Tuple[Task, bool]]
     
     @property  # type: ignore[misc]
     @fg_affinity  # force any access to synchronize with foreground thread
@@ -1574,26 +1575,46 @@ class RootTask(Task):
         return self._children
     
     @overrides
-    def append_child(self, child: Task, *args, **kwargs) -> None:
+    def append_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
+        Appends a child to this RootTasks's children, queuing it to be
+        scheduled soon.
+        
+        Can be called from any thread.
+        
         Raises:
         * ProjectClosedError -- if this project is closed
         """
         def fg_task() -> None:
             assert child not in self.children
+            assert child not in [c for (c, _) in self._children_to_add_soon]
             
             if self.complete:
                 from crystal.model import ProjectClosedError
                 raise ProjectClosedError()
             
-            super(RootTask, self).append_child(child, *args, **kwargs)
-        # NOTE: Must synchronize access to RootTask.children with foreground thread
+            # Defer append child until next call to RootTask.try_get_next_task_unit(),
+            # which will have a lock on the scheduler thread (and access to Task.children)
+            self._children_to_add_soon.append((child, already_complete_ok))
+        # NOTE: Must synchronize access to {self.children,
+        #       self._children_to_add_soon, self.complete} with foreground thread
         fg_call_and_wait(fg_task)
     
     @fg_affinity
+    @scheduler_affinity
     def try_get_next_task_unit(self):
         if self.complete:
             return None
+        
+        if len(self._children_to_add_soon) != 0:
+            children_to_add_soon = list(self._children_to_add_soon)  # capture
+            self._children_to_add_soon.clear()
+            
+            # Append deferred children
+            for (child, already_complete_ok) in children_to_add_soon:
+                super().append_child(child, already_complete_ok=already_complete_ok)
+            assert len(self._children_to_add_soon) == 0, \
+                'RootTask._children_to_add_soon was modified concurrently unexpectedly'
         
         # Only the root task is allowed to have no children normally
         if len(self.children) == 0:
