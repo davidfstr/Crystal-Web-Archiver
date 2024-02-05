@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+from crystal.model import Project
 import crystal.task
+from crystal.task import scheduler_thread_context
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, tree_has_children_condition, 
     tree_has_no_children_condition, wait_for, wait_while, WaitTimedOut
 )
+from crystal.util.xthreading import fg_affinity
 import math
 import re
 from typing import Callable, List, Optional
+from unittest.mock import patch
 import wx
 
 
@@ -117,6 +121,28 @@ def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], Optiona
             return None  # done
         return first_task_ti.Text
     return first_task_title
+
+
+# ------------------------------------------------------------------------------
+# Utility: Append Deferred Top-Level Tasks
+
+@fg_affinity
+def append_deferred_top_level_tasks(project: Project) -> None:
+    """
+    For any children whose appending to a project's RootTask was deferred by
+    RootTask.append_child(), apply those appends now.
+    
+    Listeners that respond to the append of a child may take other actions
+    directly after the append, such as completing the just-appended child.
+    """
+    with scheduler_thread_context():
+        # Disable super().try_get_next_task_unit() call in RootTask.try_get_next_task_unit()
+        with patch('crystal.task.Task.try_get_next_task_unit', return_value=None):
+            task_unit = project.root_task.try_get_next_task_unit()
+        assert task_unit is None
+        
+        # Postcondition
+        assert len(project.root_task._children_to_add_soon) == 0
 
 
 # ------------------------------------------------------------------------------
