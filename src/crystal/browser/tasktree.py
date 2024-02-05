@@ -318,25 +318,23 @@ class TaskTreeNode:
             task: Task,
             child_indexes: Optional[List[int]]=None
             ) -> None:
-        if task != self.task:
-            return
-        def fg_task() -> None:
-            if child_indexes is None:
+        assert task is self.task
+        if child_indexes is None:
+            self._num_visible_children = 0
+            def fg_task() -> None:
                 self.tree_node.children = []  # type: ignore[misc]
-                self._num_visible_children = 0
-            else:
-                if self.task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
-                    raise NotImplementedError()
+            fg_call_later(fg_task)
+        else:
+            if self.task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
+                raise NotImplementedError()
+            self._num_visible_children -= len(child_indexes)
+            def fg_task() -> None:
                 self.tree_node.children = [  # type: ignore[misc]
                     c
                     for (i, c) in enumerate(self.tree_node.children)
                     if i not in child_indexes
                 ]
-                # HACK: The only current caller that passes non-None
-                #       child_indexes guarantees that no complete children
-                #       will remain
-                self._num_visible_children = len(self.tree_node.children)
-        fg_call_later(fg_task)
+            fg_call_later(fg_task)
     
     def dispose(self) -> None:
         self.task.listeners.remove(self)

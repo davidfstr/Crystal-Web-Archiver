@@ -397,6 +397,10 @@ class Task(ListenableMixin):
     def finalize_children(self, final_children: List[Task]) -> None:
         """
         Replace all completed children with a new set of completed children.
+        
+        NOTE: task_did_complete() events are NOT fired for the new final_children,
+        because its assumed that most of them were children of this task before
+        and that their task_did_complete() events were already fired.
         """
         if not all([c.complete for c in self.children]):
             raise ValueError('Some children are not complete.')
@@ -407,6 +411,8 @@ class Task(ListenableMixin):
         
         for c in final_children:
             self.append_child(c, already_complete_ok=True)
+        # NOTE: Must manually update some bookkeeping normally done by
+        #       task_did_complete() because that event type isn't being fired
         self._num_children_complete = len(final_children)
     
     def clear_children_if_all_complete(self) -> bool:
