@@ -441,8 +441,12 @@ class Task(ListenableMixin):
         child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
         if len(child_indexes_to_remove) == 0:
             return
+        for child in [c for c in self._children if c.complete]:
+            child._parent = None
+            if self._use_extra_listener_assertions:
+                assert self not in child.listeners
         self._children = [c for c in self.children if not c.complete]
-        self._num_children_complete -= len(child_indexes_to_remove)
+        self._num_children_complete = 0
         
         # NOTE: Call these listeners also inside the lock
         #       because they are likely to be updating
