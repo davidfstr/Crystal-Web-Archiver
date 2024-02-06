@@ -25,10 +25,6 @@ def bisect_key_right(
     When applying `order_preserving_key` to every element of `a` in order,
     it must result in a list that is itself sorted. If this condition is
     not true then the bisection result is undefined.
-    
-    This function temporarily mutates the internal state of `a` and
-    must not be called concurrently on the same `a`. To prevent concurrent use,
-    this function enforces that it can only be run on the foreground thread.
     """
     return _LazySortedKeyListAdapter(a, order_preserving_key).bisect_key_right(x)
 
