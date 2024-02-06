@@ -70,6 +70,12 @@ Release Notes ⋮
     * A terminal bell sound is played automatically when tests finish running.
 
 * Fixes
+    * Fixed multiple cases where code updating the task tree accessed
+      the task hierarchy without synchronizing with the scheduler thread,
+      which could cause crashes when downloading groups containing members
+      that were already downloaded in the same session.
+        * Access to the task hierarchy is now protected with @scheduler_affinity
+          and explicit is_synced_with_scheduler_thread() checks.
     * Prevent system idle sleep while tasks are running,
       in more situations on macOS.
     * Fix disappearance of error nodes when new root URL or group is added.
