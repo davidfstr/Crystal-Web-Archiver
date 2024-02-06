@@ -13,6 +13,12 @@ Release Notes ⋮
 ### main (v2.0.0?)
 
 * First-time-run experience improvements
+    * New Root URL Dialog:
+        * Accept URLs in loose format, similar to what regular web browsers accept.
+        * Better error message when try to create duplicate root URL.
+        * Disallow create of empty root URL.
+    * New Group Dialog:
+        * Improve suggested source when creating a new group.
     * New Root URL and New Group Dialogs:
         * Improve suggested name when creating a new root URL or group.
         * Make it optional to provide a name.
@@ -20,12 +26,6 @@ Release Notes ⋮
         * Update the selected node in the Entity Tree intelligently after
           creating or forgetting a root URL or a group.
         * Allow resizing.
-    * New Root URL Dialog:
-        * Accept URLs in loose format, similar to what regular web browsers accept.
-        * Better error message when try to create duplicate root URL.
-        * Disallow create of empty root URL.
-    * New Group Dialog:
-        * Improve suggested source when creating a new group.
     * Main Window
         * Prevent resizing the window to be too small.
     * Use ⚓️ and 📁 icons consistently in the UI to refer to 
@@ -69,13 +69,21 @@ Release Notes ⋮
       and whenever a rich assertion method (from `asserts.py`) fails.
     * A terminal bell sound is played automatically when tests finish running.
 
-* Fixes
+* Major fixes
     * Fixed multiple cases where code updating the task tree accessed
       the task hierarchy without synchronizing with the scheduler thread,
       which could cause crashes when downloading groups containing members
       that were already downloaded in the same session.
         * Access to the task hierarchy is now protected with @scheduler_affinity
           and explicit is_synced_with_scheduler_thread() checks.
+        * This issue was first introduced in v1.7.0b and is now fixed.
+    * For projects on a non-SSD drive, fix issue where newly created groups
+      did not find any member URLs that were discovered since the project was opened.
+      It was previously necessary to reopen a project to reliably find all
+      members of a recently created group.
+        * This issue was first introduced in v1.7.0b and is now fixed.
+
+* Minor fixes
     * Prevent system idle sleep while tasks are running,
       in more situations on macOS.
     * Fix disappearance of error nodes when new root URL or group is added.

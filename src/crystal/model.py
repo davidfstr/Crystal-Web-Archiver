@@ -49,6 +49,7 @@ from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
 from crystal.util.xcollections.ordereddict import as_ordereddict
+from crystal.util.xcollections.sortedlist import BLACK_HOLE_SORTED_LIST
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
@@ -221,9 +222,9 @@ class Project(ListenableMixin):
         self.path = path
         
         self._properties = dict()               # type: Dict[str, str]
-        self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
         self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
         self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
+        self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
         self._readonly = True  # will reinitialize after database is located
@@ -330,6 +331,8 @@ class Project(ListenableMixin):
         
         # Define initial configuration
         self._request_cookie = None  # type: Optional[str]
+        
+        self._check_url_collection_invariants()
         
         # Export reference to self, if running tests
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
@@ -1051,11 +1054,10 @@ class Project(ListenableMixin):
             
             # Index Resources
             progress_listener.indexing_resources()
-            self._sorted_resource_urls = SortedList()
-            self._sorted_resource_urls.update([r.url for r in resources])
             self._resource_for_url = as_ordereddict({r.url: r for r in resources})  # replace
             self._resource_for_id = as_ordereddict({r._id: r for r in resources})  # replace
-            del resources  # garbage collect early
+            self._sorted_resource_urls = SortedList([r.url for r in resources])
+            self._check_url_collection_invariants()
         finally:
             progress_listener.reset()
     
@@ -1066,6 +1068,28 @@ class Project(ListenableMixin):
         by a prior call to load_urls().
         """
         return self._sorted_resource_urls is not None
+    
+    
+    @fg_affinity
+    def _check_url_collection_invariants(self) -> None:
+        """
+        Checks that all internal collections tracking URLs and Resources
+        appear to be in sync, raising if not.
+        
+        Operations that make bulk modifications to a project's collection of
+        resources should call this method.
+        
+        Runtime complexity: O(1)
+        """
+        INCONSISTENT_URL_COLLECTIONS = 'Project URL collections are inconsistent with each other'
+        
+        count1 = len(self._resource_for_url)
+        count2 = len(self._resource_for_id)
+        if self._sorted_resource_urls is None:
+            assert count1 == count2, INCONSISTENT_URL_COLLECTIONS
+        else:
+            count3 = len(self._sorted_resource_urls)
+            assert count1 == count2 == count3, INCONSISTENT_URL_COLLECTIONS
     
     @fg_affinity
     def resources_matching_pattern(self,
@@ -1085,6 +1109,8 @@ class Project(ListenableMixin):
         self.load_urls()
         if self._did_load_urls:
             assert self._sorted_resource_urls is not None
+            
+            self._check_url_collection_invariants()
             
             sorted_resource_urls = self._sorted_resource_urls  # cache
             resource_for_url = self._resource_for_url  # cache
@@ -1118,13 +1144,18 @@ class Project(ListenableMixin):
         resources = []
         resource_for_id = self._resource_for_id  # cache
         resource_for_url = self._resource_for_url  # cache
+        sorted_resource_urls = self._sorted_resource_urls or BLACK_HOLE_SORTED_LIST  # cache
         for (id, url) in resources_data:
             resource = resource_for_id.get(id)
             if resource is None:
                 resource = Resource(self, url, _id=id)
-                resource_for_id[id] = resource
                 resource_for_url[url] = resource
+                resource_for_id[id] = resource
+                sorted_resource_urls.add(url)
             resources.append(resource)
+        
+        self._check_url_collection_invariants()
+        
         return resources
     
     @fg_affinity
@@ -1151,6 +1182,8 @@ class Project(ListenableMixin):
         self.load_urls()
         if self._did_load_urls:
             assert self._sorted_resource_urls is not None
+            
+            self._check_url_collection_invariants()
             
             sorted_resource_urls = self._sorted_resource_urls  # cache
             
@@ -1246,8 +1279,11 @@ class Project(ListenableMixin):
             [(id,)] = rows
             
             resource = Resource(self, url, _id=id)
-            self._resource_for_id[id] = resource
             self._resource_for_url[url] = resource
+            self._resource_for_id[id] = resource
+            if self._sorted_resource_urls is not None:
+                self._sorted_resource_urls.add(url)
+            self._check_url_collection_invariants()
             
             return resource
     
@@ -1273,6 +1309,9 @@ class Project(ListenableMixin):
             resource = Resource(self, url, _id=id)
             self._resource_for_id[id] = resource
             self._resource_for_url[url] = resource
+            if self._sorted_resource_urls is not None:
+                self._sorted_resource_urls.add(url)
+            self._check_url_collection_invariants()
             
             return resource
     
@@ -1347,16 +1386,28 @@ class Project(ListenableMixin):
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
-        del self._resource_for_url[old_url]
-        self._resource_for_url[new_url] = resource
+        # Update URL collections
+        if True:
+            del self._resource_for_url[old_url]
+            self._resource_for_url[new_url] = resource
+            
+            if self._sorted_resource_urls is not None:
+                self._sorted_resource_urls.remove(old_url)
+                self._sorted_resource_urls.add(new_url)
+            
+            self._check_url_collection_invariants()
         
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
             rg._resource_did_alter_url(resource, old_url, new_url)
     
     def _resource_will_delete(self, resource: Resource) -> None:
+        # Update URL collections
         del self._resource_for_url[resource.url]
         del self._resource_for_id[resource._id]
+        if self._sorted_resource_urls is not None:
+            self._sorted_resource_urls.remove(resource.url)
+        self._check_url_collection_invariants()
         
         # Notify resource groups (which are like hardwired listeners)
         for rg in self.resource_groups:
@@ -1627,6 +1678,11 @@ class Resource:
             # Record self in Project
             project._resource_for_url[self._url] = self
             project._resource_for_id[id] = self
+            if project._sorted_resource_urls is not None:
+                project._sorted_resource_urls.add(self._url)
+            # NOTE: Don't check invariants here to save a little performance,
+            #       since this method (_finish_init) is called very many times
+            #project._check_url_collection_invariants()
             
             # Notify listeners that self did instantiate
             project._resource_did_instantiate(self)
@@ -1634,6 +1690,7 @@ class Resource:
             # Record self in Project
             # (Caller is responsible for updating Project._resource_for_url)
             # (Caller is responsible for updating Project._resource_for_id)
+            # (Caller is responsible for updating Project._sorted_resource_urls)
             pass
     
     # === Init (Many) ===

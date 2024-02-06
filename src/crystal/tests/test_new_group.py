@@ -2,9 +2,11 @@ from crystal.model import Project, Resource, RootResource, ResourceGroup
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.server import served_project
+from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
+    tree_item_has_no_children_condition,
     wait_for,
 )
 from crystal.tests.util.windows import (
@@ -426,6 +428,80 @@ async def _source_name_for_node(node_ti: TreeItem, mw: MainWindow) -> Optional[s
     source_name = ngd.source  # capture
     await ngd.cancel()
     return source_name
+
+
+# === Test: Preview Members ===
+
+@skip('covered by: test_given_resource_node_with_multiple_link_children_matching_url_pattern_can_create_new_group_to_bundle_those_links_together')
+async def test_given_pattern_contains_no_wildcards_then_preview_members_show_1_matching_url() -> None:
+    pass
+
+
+@skip('covered by: test_given_resource_node_with_multiple_link_children_matching_url_pattern_can_create_new_group_to_bundle_those_links_together')
+async def test_given_pattern_contains_wildcards_then_preview_members_show_all_matching_urls() -> None:
+    pass
+
+
+async def test_given_urls_loaded_and_new_url_created_when_show_new_group_dialog_and_input_pattern_matching_new_url_then_preview_members_shows_new_url() -> None:
+    with database_on_ssd(False), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic2_url = sp.get_request_url('https://xkcd.com/2/')
+            comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            # Create initial entities
+            home_rr = RootResource(project, 'Home', Resource(project, home_url))
+            ResourceGroup(project, 'Comic', comic_pattern, source=home_rr)
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = _find_child(root_ti, home_url)
+            comic_ti = _find_child(root_ti, comic_pattern)
+            
+            # Expand Comic group, to formally load URLs
+            # Prepare to spy on whether LoadUrlsProgressDialog appears
+            with patch.object(
+                    project._load_urls_progress_listener,
+                    'will_load_resources',
+                    wraps=project._load_urls_progress_listener.will_load_resources) as progress_listener_method:
+                comic_ti.Expand()
+                await wait_for(tree_item_has_no_children_condition(comic_ti))
+                assert 0 == len(comic_ti.Children)
+                
+                # Ensure did show LoadUrlsProgressDialog
+                assert progress_listener_method.call_count >= 1
+            
+            # Expand home URL, to discover initial comic URLs
+            home_ti.Expand()
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+            assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
+            assert len(comic_ti.Children) >= 2  # contains at least the first and last comics
+            
+            # Start creating a duplicate Comic group
+            if True:
+                assert mw.add_group_button.Enabled
+                click_button(mw.add_group_button)
+                ngd = await NewGroupDialog.wait_for()
+                
+                # Input new URL pattern with wildcard, to match comics
+                ngd.pattern_field.Value = comic_pattern
+                
+                # Ensure preview members show the appropriate matching URLs
+                member_urls = [
+                    ngd.preview_members_list.GetString(i)
+                    for i in range(ngd.preview_members_list.GetCount())
+                ]
+                assert comic1_url in member_urls  # contains first comic
+                assert len(member_urls) >= 2  # contains last comic too
+                
+                await ngd.cancel()
 
 
 # === Utility ===

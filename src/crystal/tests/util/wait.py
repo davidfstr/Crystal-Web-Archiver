@@ -202,16 +202,15 @@ def tree_has_children_condition(
 def tree_has_no_children_condition(
         tree: wx.TreeCtrl, 
         ) -> Callable[[], Optional[bool]]:
-    return tree_item_has_no_children_condition(tree, tree.GetRootItem())
+    from crystal.tests.util.controls import TreeItem
+    return tree_item_has_no_children_condition(TreeItem(tree, tree.GetRootItem()))
 
 
 def tree_item_has_no_children_condition(
-        # TODO: Use TreeItem rather than (wx.TreeCtrl, wx.TreeItemId) pair
-        tree: wx.TreeCtrl, 
-        tii: wx.TreeItemId
+        ti: TreeItem
         ) -> Callable[[], Optional[bool]]:
     def tree_item_has_no_children() -> Optional[bool]:
-        first_child_tii = tree.GetFirstChild(tii)[0]
+        first_child_tii = ti.tree.GetFirstChild(ti.id)[0]
         if not first_child_tii.IsOk():
             return True
         else:
