@@ -15,7 +15,7 @@ import os
 import sys
 import threading
 import traceback
-from typing import Callable, cast, Generator, Iterator, Optional, overload, TypeVar
+from typing import Callable, cast, Deque, Generator, Iterator, Optional, overload, TypeVar
 from typing_extensions import ParamSpec
 import wx
 
@@ -187,7 +187,7 @@ def fg_call_later(
                 raise
 
 
-_fg_calls = deque()  # type: deque[Callable[[], None]]
+_fg_calls = deque()  # type: Deque[Callable[[], None]]
 
 def _fg_call_later_in_order(callable: Callable[[], None]) -> None:
     _fg_calls.append(callable)
