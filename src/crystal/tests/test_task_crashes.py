@@ -121,7 +121,7 @@ async def test_given_inside_unraisable_context_when_exception_raised_then_traceb
 # - DRGT = DownloadResourceGroupTask
 
 async def test_when_T_try_get_next_task_unit_crashes_then_T_displays_as_crashed() -> None:
-    with scheduler_disabled, scheduler_thread_context(), \
+    with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -154,7 +154,7 @@ async def test_when_T_try_get_next_task_unit_crashes_then_T_displays_as_crashed(
 
 
 async def test_when_DRT_child_task_did_complete_event_crashes_then_DRT_displays_as_crashed() -> None:
-    with scheduler_disabled, scheduler_thread_context(), \
+    with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -198,7 +198,7 @@ async def test_when_DRT_child_task_did_complete_event_crashes_then_DRT_displays_
 
 
 async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() -> None:
-    with scheduler_disabled, scheduler_thread_context(), \
+    with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
@@ -253,7 +253,7 @@ async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() 
 
 
 async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_as_crashed() -> None:
-    with scheduler_disabled, scheduler_thread_context(), \
+    with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')

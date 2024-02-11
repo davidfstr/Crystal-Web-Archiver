@@ -150,7 +150,17 @@ def append_deferred_top_level_tasks(project: Project) -> None:
 # ------------------------------------------------------------------------------
 # Utility: Scheduler Manual Control
 
-scheduler_disabled = patch('crystal.task.start_schedule_forever', lambda task: None)
+@contextmanager
+def scheduler_disabled() -> Iterator[None]:
+    """
+    Context where the scheduler thread is disabled for any Projects that are opened.
+    
+    Projects opened before entering this context will continue to have active
+    scheduler threads.
+    """
+    with patch('crystal.task.start_schedule_forever', lambda task: None), \
+            scheduler_thread_context():
+        yield
 
 
 @contextmanager

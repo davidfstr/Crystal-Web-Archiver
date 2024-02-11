@@ -545,21 +545,15 @@ async def _project_with_resource_group_starting_to_download(
     if not (small_max_leading_complete_children <= small_max_visible_children):
         raise ValueError()
     
-    scheduler_patched = (
-        scheduler_disabled
+    scheduler_maybe_disabled = (
+        scheduler_disabled()
         if not scheduler_thread_enabled
         else cast(AbstractContextManager, nullcontext())
     )  # type: AbstractContextManager
     
-    simulated_scheduler_context = (
-        scheduler_thread_context()
-        if not scheduler_thread_enabled
-        else nullcontext()
-    )  # type: AbstractContextManager
-    
     # NOTE: NOT using the xkcd test data, because I want all xkcd URLs to give HTTP 404
-    with served_project('testdata_bongo.cat.crystalproj.zip') as sp, \
-            scheduler_patched, simulated_scheduler_context:
+    with scheduler_maybe_disabled, \
+            served_project('testdata_bongo.cat.crystalproj.zip') as sp:
         # Define URLs
         if True:
             home_url = sp.get_request_url('https://xkcd.com/')
