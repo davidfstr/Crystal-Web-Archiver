@@ -1240,18 +1240,6 @@ class _AlreadyDownloadedPlaceholderTask(_FlyweightPlaceholderTask):
 _ALREADY_DOWNLOADED_PLACEHOLDER_TASK = _AlreadyDownloadedPlaceholderTask()
 
 
-UNMATERIALIZED_TASK_TITLE = '__unmaterialized__'
-
-class UnmaterializedTask(_FlyweightPlaceholderTask):
-    def __init__(self) -> None:
-        super().__init__(title=UNMATERIALIZED_TASK_TITLE)
-    
-    def __repr__(self) -> str:
-        return f'UNMATERIALIZED_TASK'
-
-UNMATERIALIZED_TASK = UnmaterializedTask()
-
-
 class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
     """
     Placeholder task that replaces 0 or more DownloadResourceTasks,
