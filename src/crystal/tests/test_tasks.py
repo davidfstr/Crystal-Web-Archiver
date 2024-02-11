@@ -1,6 +1,6 @@
 from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
-    ProjectFreeSpaceTooLowError, scheduler_thread_context, Task,
+    ProjectFreeSpaceTooLowError, Task,
 )
 from crystal.tests.util.asserts import *
 from crystal.tests.util.data import (
@@ -11,6 +11,7 @@ from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
+from crystal.tests.util.tasks import scheduler_thread_context
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup
@@ -111,6 +112,9 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                         drg_task.complete
                     )
                     
+                    # TODO: Disable the scheduler thread before trying to control
+                    #       it manually. Currently it's not safe to make the
+                    #       scheduler_thread_context() assertion.
                     project.add_task(drg_task)
                     with scheduler_thread_context():
                         task_unit = project.root_task.try_get_next_task_unit()

@@ -3,13 +3,13 @@ from crystal.task import (
     bulkhead,
     DownloadResourceGroupTask, DownloadResourceGroupMembersTask, 
     _DownloadResourcesPlaceholderTask, DownloadResourceTask,
-    scheduler_thread_context, Task, UpdateResourceGroupMembersTask
+    Task, UpdateResourceGroupMembersTask
 )
 from crystal.tests.util.controls import click_button
 from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
-    clear_top_level_tasks_on_exit, scheduler_disabled
+    clear_top_level_tasks_on_exit, scheduler_disabled, scheduler_thread_context
 )
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog

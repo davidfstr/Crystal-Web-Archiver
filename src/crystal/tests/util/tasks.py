@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from crystal.model import Project
 import crystal.task
-from crystal.task import scheduler_thread_context, Task
+from crystal.task import _is_scheduler_thread, Task
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.wait import (
@@ -13,6 +13,7 @@ from crystal.tests.util.wait import (
 from crystal.util.xthreading import fg_affinity
 import math
 import re
+import threading
 from typing import Callable, List, Iterator, Optional
 from unittest.mock import patch
 import wx
@@ -150,6 +151,22 @@ def append_deferred_top_level_tasks(project: Project) -> None:
 # Utility: Scheduler Manual Control
 
 scheduler_disabled = patch('crystal.task.start_schedule_forever', lambda task: None)
+
+
+@contextmanager
+def scheduler_thread_context() -> Iterator[None]:
+    """
+    Context which executes its contents as if it was on a scheduler thread.
+    
+    For testing use only.
+    """
+    old_is_scheduler_thread = _is_scheduler_thread()  # capture
+    setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
+    try:
+        assert _is_scheduler_thread()
+        yield
+    finally:
+        setattr(threading.current_thread(), '_cr_is_scheduler_thread', old_is_scheduler_thread)
 
 
 def mark_as_complete(task: Task) -> None:

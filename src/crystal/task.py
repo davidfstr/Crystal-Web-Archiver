@@ -1877,20 +1877,4 @@ def _is_scheduler_thread(thread: Optional[threading.Thread]=None) -> bool:
     return getattr(thread, '_cr_is_scheduler_thread', False)
 
 
-@contextmanager
-def scheduler_thread_context() -> Iterator[None]:
-    """
-    Context which executes its contents as if it was on a scheduler thread.
-    
-    For testing use only.
-    """
-    old_is_scheduler_thread = _is_scheduler_thread()  # capture
-    setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
-    try:
-        assert _is_scheduler_thread()
-        yield
-    finally:
-        setattr(threading.current_thread(), '_cr_is_scheduler_thread', old_is_scheduler_thread)
-
-
 # ------------------------------------------------------------------------------

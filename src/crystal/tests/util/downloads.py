@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 import crystal.task
-from crystal.task import scheduler_thread_context
+from crystal.tests.util.tasks import scheduler_thread_context
 import socket
 from typing import Iterator, NoReturn, TYPE_CHECKING
 from unittest.mock import patch

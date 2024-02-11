@@ -7,7 +7,7 @@ import crystal.task
 from crystal.task import (
     DownloadResourceTask,
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask, 
-    _PlaceholderTask, SCHEDULING_STYLE_ROUND_ROBIN, scheduler_thread_context,
+    _PlaceholderTask, SCHEDULING_STYLE_ROUND_ROBIN,
     Task, UpdateResourceGroupMembersTask,
 )
 from crystal.tests.util.asserts import assertEqual
@@ -18,7 +18,7 @@ from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
     mark_as_complete as _mark_as_complete,
-    scheduler_disabled,
+    scheduler_disabled, scheduler_thread_context,
 )
 from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wait_while
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
