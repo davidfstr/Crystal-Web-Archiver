@@ -22,18 +22,16 @@ def _hexcolor_to_color(hexcolor: str) -> wx.Colour:
         int(hexcolor[5:7], 16)
     )
 
-# TODO: Is using private API of `cli`.
-#       Consider publicizing constants referenced here.
 _CODE_PREFIX = '\033'
 _COLOR_CODES = OrderedDict([
     # NOTE: Color hex values determined by matching what
     #       the Terminal app on macOS uses for these color codes
-    (cli._TERM_FG_GREEN,  _hexcolor_to_color('#33BD26')),
-    (cli._TERM_FG_RED,    _hexcolor_to_color('#C33820')),
-    (cli._TERM_FG_YELLOW, _hexcolor_to_color('#AEAD24')),
-    (cli._TERM_FG_CYAN,   _hexcolor_to_color('#33BBC7')),
+    (cli.TERMINAL_FG_GREEN,  _hexcolor_to_color('#33BD26')),
+    (cli.TERMINAL_FG_RED,    _hexcolor_to_color('#C33820')),
+    (cli.TERMINAL_FG_YELLOW, _hexcolor_to_color('#AEAD24')),
+    (cli.TERMINAL_FG_CYAN,   _hexcolor_to_color('#33BBC7')),
 ])  # type: Dict[str, wx.Colour]
-_RESET_CODE = cli._TERM_RESET
+_RESET_CODE = cli.TERMINAL_RESET
 
 
 # TODO: Avoid inheriting directly from wx.Frame because doing so
