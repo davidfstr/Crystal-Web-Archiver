@@ -24,6 +24,7 @@ import shutil
 import sys
 import threading
 import time
+import traceback
 try:
     from typing import TYPE_CHECKING
 except ImportError:
@@ -74,6 +75,50 @@ def _main(args: List[str]) -> None:
             getattr(sys, 'frozen', None) is None):
         import faulthandler
         faulthandler.enable()
+    
+    # Print uncaught exceptions
+    if True:
+        # Print uncaught exceptions raised by Thread.run()
+        def threading_excepthook(args) -> None:
+            from crystal.util import cli
+            
+            err_file = sys.stderr
+            print(cli.TERMINAL_FG_RED, end='', file=err_file)
+            print('Exception in background thread:', file=err_file)
+            traceback.print_exception(
+                args.exc_type, args.exc_value, args.exc_traceback,
+                file=err_file)
+            print(cli.TERMINAL_RESET, end='', file=err_file)
+            err_file.flush()
+        threading.excepthook = threading_excepthook
+        
+        # Print uncaught exceptions raised in the main thread
+        def sys_excepthook(exc_type, exc_value, exc_traceback) -> None:
+            from crystal.util import cli
+            
+            err_file = sys.stderr
+            print(cli.TERMINAL_FG_RED, end='', file=err_file)
+            print('Exception in main thread:', file=err_file)
+            traceback.print_exception(
+                exc_type, exc_value, exc_traceback,
+                file=err_file)
+            print(cli.TERMINAL_RESET, end='', file=err_file)
+            err_file.flush()
+        sys.excepthook = sys_excepthook
+        
+        # Print exceptions occurring in unraisable contexts
+        def sys_unraisablehook(args) -> None:
+            from crystal.util import cli
+            
+            err_file = sys.stderr
+            print(cli.TERMINAL_FG_RED, end='', file=err_file)
+            print('Exception in unraisable context:', file=err_file)
+            traceback.print_exception(
+                args.exc_type, args.exc_value, args.exc_traceback,
+                file=err_file)
+            print(cli.TERMINAL_RESET, end='', file=err_file)
+            err_file.flush()
+        sys.unraisablehook = sys_unraisablehook
     
     # If running as Windows executable, also load .py files and adjacent
     # resources from the "lib" directory. Notably "tzinfo" data.

@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
 from crystal.util.caffeination import Caffeination
+from crystal.util import cli
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import (
     create_profiling_context, ignore_runtime_from_enclosing_warn_if_slow,
@@ -106,15 +107,20 @@ def bulkhead(
         except BaseException as e:
             # Print traceback to assist in debugging in the terminal,
             # including ancestor callers of @bulkhead
+            err_file = sys.stderr
+            print(cli.TERMINAL_FG_YELLOW, end='', file=err_file)
             if e.__traceback__ is not None:
                 here_tb = traceback.extract_stack()
                 exc_tb = traceback.extract_tb(e.__traceback__)
                 full_tb_summary = here_tb[:-1] + exc_tb  # type: List[traceback.FrameSummary]
-                print('Traceback (most recent call last):')
+                print('Exception in bulkhead:', file=err_file)
+                print('Traceback (most recent call last):', file=err_file)
                 for x in traceback.format_list(full_tb_summary):
-                    print(x, end='')
+                    print(x, end='', file=err_file)
             for x in traceback.format_exception_only(type(e), e):
-                print(x, end='')
+                print(x, end='', file=err_file)
+            print(cli.TERMINAL_RESET, end='', file=err_file)
+            err_file.flush()
             
             # Crash the task. Abort.
             self.crash_reason = e

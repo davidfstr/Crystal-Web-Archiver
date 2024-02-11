@@ -1,4 +1,6 @@
 from contextlib import contextmanager
+from crystal.util import cli
+import sys
 import traceback
 from typing import Callable, Iterator, TYPE_CHECKING
 
@@ -15,11 +17,11 @@ def bind(
     """
     Equivalent to wx.Window.Bind(), but safer.
     """
-    window.Bind(event_type, bind_target()(target), *args)
+    window.Bind(event_type, _bind_target()(target), *args)
 
 
 @contextmanager
-def bind_target() -> Iterator[None]:
+def _bind_target() -> Iterator[None]:
     """
     Decorates any function that is a target of wx.Window.Bind().
     
@@ -33,4 +35,10 @@ def bind_target() -> Iterator[None]:
     try:
         yield
     except BaseException as e:
-        traceback.print_exc()
+        err_file = sys.stderr
+        print(cli.TERMINAL_FG_RED, end='', file=err_file)
+        print('Exception in wxPython listener:', file=err_file)
+        traceback.print_exc(file=err_file)
+        print(cli.TERMINAL_RESET, end='', file=err_file)
+        err_file.flush()
+

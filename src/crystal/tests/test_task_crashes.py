@@ -1,7 +1,11 @@
+from contextlib import redirect_stderr
 from crystal.task import (
-    DownloadResourceGroupTask, DownloadResourceGroupMembersTask, DownloadResourceTask,
-    scheduler_thread_context, UpdateResourceGroupMembersTask
+    bulkhead,
+    DownloadResourceGroupTask, DownloadResourceGroupMembersTask, 
+    _DownloadResourcesPlaceholderTask, DownloadResourceTask,
+    scheduler_thread_context, Task, UpdateResourceGroupMembersTask
 )
+from crystal.tests.util.controls import click_button
 from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
@@ -10,13 +14,101 @@ from crystal.tests.util.tasks import (
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup
+from crystal.util import cli
+from crystal.util.wx_bind import bind
 from crystal.util.xfutures import Future
-from crystal.util.xthreading import bg_call_later
+from crystal.util.xthreading import bg_call_later, is_foreground_thread
+from io import StringIO
+import sys
 from typing import Callable, Optional, TypeVar
+from unittest import skip
 from unittest.mock import patch
+import wx
 
 
 _R = TypeVar('_R')
+
+
+# ------------------------------------------------------------------------------
+# Test: Print Unhandled Exceptions
+#
+# In general:
+# - Tracebacks for all unhandled exceptions should be printed to the stderr.
+# - If such an exception is forwarded to the GUI, it need only be printed in
+#   a yellow warning color, since it should be visible to GUI-only users.
+# - If such an exception is NOT forwarded to the GUI, it should be printed in
+#   a red error color, since it is INVISIBLE to GUI-only users.
+
+async def test_given_inside_bulkhead_when_unhandled_exception_raised_then_traceback_printed_to_stderr_as_yellow_warning() -> None:
+    def the_bulkhead_caller() -> None:
+        some_task = _DownloadResourcesPlaceholderTask(1)
+        
+        @bulkhead
+        def the_bulkhead(task_context: Task) -> None:
+            raise ValueError('Unhandled error inside bulkhead')
+        the_bulkhead(some_task)
+        
+    with redirect_stderr(StringIO()) as captured_stderr:
+        the_bulkhead_caller()
+    assert 'Exception in bulkhead:' in captured_stderr.getvalue()
+    assert 'Traceback' in captured_stderr.getvalue()
+    assert cli.TERMINAL_FG_YELLOW in captured_stderr.getvalue()
+
+
+async def test_given_inside_wxpython_listener_when_exception_raised_then_traceback_printed_to_stderr_as_red_error() -> None:
+    frame = wx.Frame(None, title='Button Frame')
+    try:
+        button = wx.Button(frame, label='Button')
+        def action_func(event: wx.CommandEvent):
+            raise ValueError('Simulated error in wxPython listener')
+        bind(button, wx.EVT_BUTTON, action_func)
+        
+        assert is_foreground_thread()
+        with redirect_stderr(StringIO()) as captured_stderr:
+            click_button(button)
+        assert 'Exception in wxPython listener:' in captured_stderr.getvalue()
+        assert 'Traceback' in captured_stderr.getvalue()
+        assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
+    finally:
+        frame.Destroy()
+
+
+async def test_given_inside_background_thread_when_exception_raised_then_traceback_printed_to_stderr_as_red_error() -> None:
+    def bg_task() -> None:
+        raise ValueError('Simulated error in background thread')
+    with redirect_stderr(StringIO()) as captured_stderr:
+        thread = bg_call_later(bg_task)
+        thread.join()
+    assert 'Exception in background thread:' in captured_stderr.getvalue()
+    assert 'Traceback' in captured_stderr.getvalue()
+    assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
+
+
+async def test_given_inside_main_thread_when_exception_raised_then_traceback_printed_to_stderr_as_red_error() -> None:
+    try:
+        raise ValueError('Simulated crash in main thread')
+    except Exception as e_:
+        e = e_  # capture
+    
+    with redirect_stderr(StringIO()) as captured_stderr:
+        sys.excepthook(type(e), e, e.__traceback__)
+    assert 'Exception in main thread:' in captured_stderr.getvalue()
+    assert 'Traceback' in captured_stderr.getvalue()
+    assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
+
+
+async def test_given_inside_unraisable_context_when_exception_raised_then_traceback_printed_to_stderr_as_red_error() -> None:
+    def object_holder() -> None:
+        class CrashesDuringFinalization:
+            def __del__(self) -> None:
+                raise ValueError('Simulated error in object.__del__')
+        CrashesDuringFinalization()
+    
+    with redirect_stderr(StringIO()) as captured_stderr:
+        object_holder()
+    assert 'Exception in unraisable context:' in captured_stderr.getvalue()
+    assert 'Traceback' in captured_stderr.getvalue()
+    assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
 
 
 # ------------------------------------------------------------------------------
