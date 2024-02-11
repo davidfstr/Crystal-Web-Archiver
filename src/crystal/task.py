@@ -1422,17 +1422,20 @@ class DownloadResourceGroupMembersTask(Task):
         assert self._children_loaded  # because set earlier in this function
     
     def group_did_add_member(self, group: ResourceGroup, member: Resource) -> None:
+        # NOTE: Unfortunately self._children_loaded may be unset here due to a race condition:
+        #       https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
+        if not self._children_loaded:
+            fg_call_and_wait(self._load_children)
+        assert self._pbc is not None
+        
         if self._LAZY_LOAD_CHILDREN:
             self.notify_did_append_child(None)
         else:
             download_task = member.create_download_task(needs_result=False, is_embedded=False)
             self.append_child(download_task, already_complete_ok=True)
         
-        # NOTE: Unfortunately self._pbc may be None here due to a race condition:
-        #       https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
-        if self._pbc is not None:
-            self._pbc.total += 1
-            self._update_subtitle()
+        self._pbc.total += 1
+        self._update_subtitle()
         
         if not self._LAZY_LOAD_CHILDREN:
             # Apply deferred child-complete actions
