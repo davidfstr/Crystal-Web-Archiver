@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import Project
 import crystal.task
 from crystal.task import _is_scheduler_thread, Task
@@ -124,6 +125,15 @@ def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], Optiona
         return first_task_ti.Text
     return first_task_title
 
+
+# ------------------------------------------------------------------------------
+# Utility: Task -> TaskTreeNode
+
+def ttn_for_task(task: Task) -> TaskTreeNode:
+    for lis in task.listeners:
+        if isinstance(lis, TaskTreeNode):
+            return lis
+    raise AssertionError(f'Unable to locate TaskTreeNode for {task!r}')
 
 # ------------------------------------------------------------------------------
 # Utility: Append Deferred Top-Level Tasks

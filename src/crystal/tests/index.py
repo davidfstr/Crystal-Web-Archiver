@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from crystal.tests import (
+    test_bulkheads,
     test_disk_io_errors,
     test_do_not_download_groups,
     test_download,
@@ -23,7 +24,6 @@ from crystal.tests import (
     test_server,
     test_shell,
     test_ssd,
-    test_task_crashes,
     test_tasks,
     test_tasktree,
     test_workflows,
@@ -63,6 +63,7 @@ def _test_functions_in_module(mod) -> List[Callable]:
 
 # TODO: Avoid the need to manually enumerate all test modules individually
 _TEST_FUNCS = (
+    _test_functions_in_module(test_bulkheads) +
     _test_functions_in_module(test_disk_io_errors) +
     _test_functions_in_module(test_do_not_download_groups) +
     _test_functions_in_module(test_download) +
@@ -86,7 +87,6 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_server) +
     _test_functions_in_module(test_shell) +
     _test_functions_in_module(test_ssd) +
-    _test_functions_in_module(test_task_crashes) +
     _test_functions_in_module(test_tasks) +
     _test_functions_in_module(test_tasktree) +
     _test_functions_in_module(test_workflows) +

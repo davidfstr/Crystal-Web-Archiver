@@ -19,6 +19,7 @@ from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
     mark_as_complete as _mark_as_complete,
     scheduler_disabled, scheduler_thread_context,
+    ttn_for_task as _ttn_for_task,
 )
 from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wait_while
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
@@ -635,13 +636,6 @@ def _cleanup_download_of_resource_group(
     assert _is_complete(download_rg_ttn.tree_node)
     assert None == project.root_task.try_get_next_task_unit()  # clear root task
     assert len(project.root_task.children) == 0
-
-
-def _ttn_for_task(task: Task) -> TaskTreeNode:
-    for lis in task.listeners:
-        if isinstance(lis, TaskTreeNode):
-            return lis
-    raise AssertionError(f'Unable to locate TaskTreeNode for {task!r}')
 
 
 def _viewport(ttn: TaskTreeNode) -> Tuple[int, int, bool, bool]:
