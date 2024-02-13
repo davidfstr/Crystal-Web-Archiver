@@ -32,6 +32,9 @@ from crystal.progress import (
 )
 from crystal import resources as resources_
 from crystal.util import http_date
+from crystal.util.bulkheads import (
+    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg
+)
 from crystal.util.db import (
     DatabaseConnection,
     DatabaseCursor,
@@ -1550,12 +1553,9 @@ class _WeakTaskRef(Generic[_TK]):
             self._task.listeners.append(self)
     task = property(_get_task, _set_task)
     
-    # TODO: Need to extract bulkhead logic (@captures_crashes_to*)
-    #       to module separate from crystal.task, so that can use here.
-    #@captures_crashes_to_task_arg
+    @captures_crashes_to_task_arg
     def task_did_complete(self, task: Task) -> None:
         self.task = None
-    task_did_complete._captures_crashes = True  # type: ignore[attr-defined]
     
     def __repr__(self) -> str:
         return f'_WeakTaskRef({self._task!r})'
