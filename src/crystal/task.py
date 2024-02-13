@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
+from crystal.util.bulkheads import (
+    call_bulkhead,
+    captures_crashes_to_self,
+    CrashReason,
+    does_not_capture_crashes,
+)
 from crystal.util.caffeination import Caffeination
 from crystal.util import cli
 from crystal.util.listenable import ListenableMixin
@@ -22,7 +28,9 @@ from crystal.util.xthreading import (
 )
 from functools import wraps
 import os
-from overrides import overrides
+# TODO: Replace all uses of @override_dynamic with @override.
+#       The former doesn't compose with @captures_crashes_to*.
+from overrides import overrides as override_dynamic
 import shutil
 import sys
 import threading
@@ -33,7 +41,7 @@ from typing import (
     Any, Callable, cast, final, List, Literal, Iterator, Optional,
     Sequence, Tuple, TYPE_CHECKING, TypeVar, Union
 )
-from typing_extensions import Concatenate, ParamSpec
+from typing_extensions import Concatenate, override, ParamSpec
 from weakref import WeakSet
 
 if TYPE_CHECKING:
@@ -50,8 +58,6 @@ if TYPE_CHECKING:
 _PROFILE_SCHEDULER = False
 
 
-_S = TypeVar('_S')
-_TK = TypeVar('_TK', bound='Task')
 _P = ParamSpec('_P')
 _R = TypeVar('_R')
 
@@ -79,169 +85,6 @@ def scheduler_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
         return wrapper
     else:
         return func
-
-
-# ------------------------------------------------------------------------------
-# Bulkheads
-
-CrashReason = BaseException  # with .__traceback__ set to a TracebackType
-
-
-def captures_crashes_to_self(
-        task_method: 'Callable[Concatenate[_TK, _P], Optional[_R]]'
-        ) -> 'Callable[Concatenate[_TK, _P], Optional[_R]]':
-    """
-    A Task method that captures any raised exceptions to itself,
-    as the "crash reason" of the task.
-    
-    If the task was already crashed (with a non-None "crash reason") then
-    this method will immediately abort, returning None.
-    """
-    @wraps(task_method)
-    @_mark_bulkhead
-    def bulkhead(self: '_TK', *args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-        if self.crash_reason is not None:
-            # Task has already crashed. Abort.
-            return None
-        try:
-            return task_method(self, *args, **kwargs)
-        except BaseException as e:
-            # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead
-            _print_bulkhead_exception(e)
-            
-            # Crash the task. Abort.
-            self.crash_reason = e
-            return None
-    return bulkhead
-
-
-def captures_crashes_to_task_arg(
-        method: 'Callable[Concatenate[_S, _TK, _P], Optional[_R]]'
-        ) -> 'Callable[Concatenate[_S, _TK, _P], Optional[_R]]':
-    """
-    A method that captures any raised exceptions to its first Task argument,
-    as the "crash reason" of the task.
-    
-    If the task was already crashed (with a non-None "crash reason") then
-    this method will immediately abort, returning None.
-    """
-    @wraps(method)
-    @_mark_bulkhead
-    def bulkhead(self: '_S', task: _TK, *args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-        if task.crash_reason is not None:
-            # Task has already crashed. Abort.
-            return None
-        try:
-            return method(self, task, *args, **kwargs)
-        except BaseException as e:
-            # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead
-            _print_bulkhead_exception(e)
-            
-            # Crash the task. Abort.
-            task.crash_reason = e
-            return None
-    return bulkhead
-
-
-def captures_crashes_to(task: Task) -> Callable[[Callable[_P, Optional[_R]]], Callable[_P, Optional[_R]]]:
-    """
-    A method that captures any raised exceptions to the specified Task,
-    as the "crash reason" of the task.
-    
-    If the task was already crashed (with a non-None "crash reason") then
-    this method will immediately abort, returning None.
-    """
-    def decorate(func: Callable[_P, Optional[_R]]) -> Callable[_P, Optional[_R]]:
-        @wraps(func)
-        @_mark_bulkhead
-        def bulkhead(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-            if task.crash_reason is not None:
-                # Task has already crashed. Abort.
-                return None
-            try:
-                return func(*args, **kwargs)
-            except BaseException as e:
-                # Print traceback to assist in debugging in the terminal,
-                # including ancestor callers of bulkhead
-                _print_bulkhead_exception(e)
-                
-                # Crash the task. Abort.
-                task.crash_reason = e
-                return None
-        return bulkhead
-    return decorate
-
-
-def captures_crashes_to_stderr(func: Callable[_P, Optional[_R]]) -> Callable[_P, Optional[_R]]:
-    """
-    A method that captures any raised exceptions, and prints them to stderr.
-    """
-    @wraps(func)
-    @_mark_bulkhead
-    def bulkhead(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-        try:
-            return func(*args, **kwargs)
-        except BaseException as e:
-            # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead
-            _print_bulkhead_exception(e, is_error=True)
-            
-            # Abort.
-            return None
-    return bulkhead
-
-
-def does_not_capture_crashes(func: Callable[_P, _R]) -> Callable[_P, _R]:
-    """
-    Explicitly marks functions that intentionally do not capture crashes,
-    allowing them to bubble up to their caller.
-    """
-    return func
-
-
-def _mark_bulkhead(bulkhead: Callable[_P, _R]) -> Callable[_P, _R]:
-    bulkhead._crashes_captured = True  # type: ignore[attr-defined]
-    return bulkhead
-
-
-def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False) -> None:
-    # Print traceback to assist in debugging in the terminal,
-    # including ancestor callers of bulkhead
-    err_file = sys.stderr
-    print(
-        cli.TERMINAL_FG_RED if is_error else cli.TERMINAL_FG_YELLOW,
-        end='', file=err_file)
-    if e.__traceback__ is not None:
-        here_tb = traceback.extract_stack(sys._getframe().f_back)
-        exc_tb = traceback.extract_tb(e.__traceback__)
-        full_tb_summary = here_tb[:-1] + exc_tb  # type: List[traceback.FrameSummary]
-        print('Exception in bulkhead:', file=err_file)
-        print('Traceback (most recent call last):', file=err_file)
-        for x in traceback.format_list(full_tb_summary):
-            print(x, end='', file=err_file)
-    for x in traceback.format_exception_only(type(e), e):
-        print(x, end='', file=err_file)
-    print(cli.TERMINAL_RESET, end='', file=err_file)
-    err_file.flush()
-
-
-def call_bulkhead(
-        bulkhead: Callable[_P, _R],
-        /, *args: _P.args,
-        **kwargs: _P.kwargs
-        ) -> '_R':
-    """
-    Calls a method marked as @captures_crashes_to*,
-    which does not reraise exceptions from its interior.
-    
-    Raises AssertionError if the specified method is not actually
-    marked with @captures_crashes_to*.
-    """
-    if getattr(bulkhead, '_crashes_captured', False) != True:
-        raise AssertionError(f'Expected callable {bulkhead!r} to be decorated with @captures_crashes_to*')
-    return bulkhead(*args, **kwargs)
 
 
 # ------------------------------------------------------------------------------
@@ -378,7 +221,7 @@ class Task(ListenableMixin):
         for lis in self.listeners:
             if hasattr(lis, 'task_crash_reason_did_change'):
                 call_bulkhead(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
-    crash_reason = property(_get_crash_reason, _set_crash_reason)
+    crash_reason = cast(CrashReason, property(_get_crash_reason, _set_crash_reason))
     
     # TODO: Alter parent tracking to support multiple parents,
     #       since in truth a Task can already have multiple parents,
@@ -1066,7 +909,7 @@ class DownloadResourceTask(Task):
                     self._download_body_with_embedded_future = Future()
                 return self._download_body_with_embedded_future
     
-    @overrides
+    @override
     @captures_crashes_to_self
     def dispose(self) -> None:
         super().dispose()
@@ -1357,7 +1200,7 @@ class ParseResourceRevisionLinks(Task):
         
         return (links, linked_resources)
     
-    @overrides
+    @override
     @captures_crashes_to_self
     def dispose(self) -> None:
         super().dispose()
@@ -1414,7 +1257,7 @@ class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
         super().__init__(title, prefinish=True)
     
     # Ignore any crash reason set on a flyweight task
-    @overrides
+    @override_dynamic
     def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
         # NOTE: Swallowing the bad set operation rather than raising another
         #       exception because calling error-handling code is not expected
@@ -1423,7 +1266,7 @@ class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
     
     # Ignore any parent set on a flyweight task
     @property
-    @overrides
+    @override_dynamic
     def parent(self) -> Optional[Task]:
         return None
 
@@ -1544,7 +1387,7 @@ class DownloadResourceGroupMembersTask(Task):
         self._pbc = None  # type: Optional[ProgressBarCalculator]
         self._children_loaded = False
     
-    @overrides
+    @override
     @captures_crashes_to_self
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
         if not self._children_loaded:
@@ -1785,13 +1628,13 @@ class RootTask(Task):
     
     @property  # type: ignore[misc]
     @fg_affinity  # force any access to synchronize with foreground thread
-    @overrides
+    @override_dynamic
     def children(self) -> Sequence[Task]:
         # NOTE: Bypass the usual thread synchronization check in super().children,
         #       because here the analogous check is handled by @fg_affinity
         return self._children
     
-    @overrides
+    @override_dynamic
     def append_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
         Appends a child to this RootTasks's children, queuing it to be
@@ -1818,7 +1661,7 @@ class RootTask(Task):
         #       self._children_to_add_soon, self.complete} with foreground thread
         fg_call_and_wait(fg_task)
     
-    @overrides
+    @override
     @captures_crashes_to_self
     @fg_affinity
     @scheduler_affinity
@@ -1855,7 +1698,7 @@ class RootTask(Task):
     
     # === Protected Operations: Finish & Cleanup ===
     
-    @overrides
+    @override_dynamic
     def clear_children_if_all_complete(self) -> bool:
         raise NotImplementedError(
             'RootTask does not support clear_children_if_all_complete '
@@ -1863,7 +1706,7 @@ class RootTask(Task):
             'is not prepared to deal with concurrent modification of '
             'RootTask.children.')
     
-    @overrides
+    @override_dynamic
     def clear_completed_children(self) -> None:
         @does_not_capture_crashes
         def fg_task() -> None:

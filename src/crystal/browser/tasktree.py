@@ -1,10 +1,12 @@
 from contextlib import contextmanager
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import (
+    DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task,
+)
+from crystal.util.bulkheads import (
     captures_crashes_to,
     captures_crashes_to_stderr, captures_crashes_to_task_arg,
     CrashReason,
-    DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task,
 )
 from crystal.ui.tree import NodeView as NodeView1
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
