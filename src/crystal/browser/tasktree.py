@@ -5,7 +5,8 @@ from crystal.task import (
 )
 from crystal.util.bulkheads import (
     captures_crashes_to,
-    captures_crashes_to_stderr, captures_crashes_to_task_arg,
+    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
+    captures_crashes_to_stderr,
     CrashReason,
 )
 from crystal.ui.tree import NodeView as NodeView1

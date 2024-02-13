@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
 from crystal.util.bulkheads import (
-    call_bulkhead,
+    run_bulkhead_call,
     captures_crashes_to_self,
     CrashReason,
     does_not_capture_crashes,
@@ -211,7 +211,7 @@ class Task(ListenableMixin):
         self._subtitle = value
         for lis in self.listeners:
             if hasattr(lis, 'task_subtitle_did_change'):
-                call_bulkhead(lis.task_subtitle_did_change, self)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_subtitle_did_change, self)  # type: ignore[attr-defined]
     subtitle = property(_get_subtitle, _set_subtitle)
     
     def _get_crash_reason(self) -> Optional[CrashReason]:
@@ -220,7 +220,7 @@ class Task(ListenableMixin):
         self._crash_reason = value
         for lis in self.listeners:
             if hasattr(lis, 'task_crash_reason_did_change'):
-                call_bulkhead(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
     crash_reason = cast(CrashReason, property(_get_crash_reason, _set_crash_reason))
     
     # TODO: Alter parent tracking to support multiple parents,
@@ -328,7 +328,7 @@ class Task(ListenableMixin):
         
         for lis in self.listeners:
             if hasattr(lis, 'task_did_set_children'):
-                call_bulkhead(lis.task_did_set_children, self, len(children))  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_did_set_children, self, len(children))  # type: ignore[attr-defined]
     
     def materialize_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
@@ -373,7 +373,7 @@ class Task(ListenableMixin):
         """
         for lis in self.listeners:
             if hasattr(lis, 'task_did_append_child'):
-                call_bulkhead(lis.task_did_append_child, self, child)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_did_append_child, self, child)  # type: ignore[attr-defined]
     
     # === Protected Operations: Greedy Children ===
     
@@ -414,7 +414,7 @@ class Task(ListenableMixin):
         # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
         for lis in list(self.listeners):
             if hasattr(lis, 'task_did_complete'):
-                call_bulkhead(lis.task_did_complete, self)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_did_complete, self)  # type: ignore[attr-defined]
     
     def finalize_children(self, final_children: List[Task]) -> None:
         """
@@ -459,7 +459,7 @@ class Task(ListenableMixin):
             #       synchronized with the modified child list.
             for lis in self.listeners:
                 if hasattr(lis, 'task_did_clear_children'):
-                    call_bulkhead(lis.task_did_clear_children, self)  # type: ignore[attr-defined]
+                    run_bulkhead_call(lis.task_did_clear_children, self)  # type: ignore[attr-defined]
         return all_children_complete
     
     def clear_completed_children(self) -> None:
@@ -482,7 +482,7 @@ class Task(ListenableMixin):
         #       synchronized with the modified child list.
         for lis in self.listeners:
             if hasattr(lis, 'task_did_clear_children'):
-                call_bulkhead(lis.task_did_clear_children, self, child_indexes_to_remove)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_did_clear_children, self, child_indexes_to_remove)  # type: ignore[attr-defined]
     
     # === Public Operations ===
     
@@ -637,7 +637,7 @@ class Task(ListenableMixin):
             self.child_task_did_complete(task)
         for lis in self.listeners:
             if hasattr(lis, 'task_child_did_complete'):
-                call_bulkhead(lis.task_child_did_complete, self, task)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_child_did_complete, self, task)  # type: ignore[attr-defined]
     
     # === Utility ===
     
@@ -1689,7 +1689,7 @@ class RootTask(Task):
     
     @captures_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
-        call_bulkhead(task.dispose)
+        run_bulkhead_call(task.dispose)
     
     @captures_crashes_to_self
     def did_schedule_all_children(self) -> None:
@@ -1762,7 +1762,7 @@ def start_schedule_forever(task: RootTask) -> None:
                             @does_not_capture_crashes
                             def fg_task() -> Tuple[Optional[Callable[[], None]], bool]:
                                 return (
-                                    call_bulkhead(task.try_get_next_task_unit),
+                                    run_bulkhead_call(task.try_get_next_task_unit),
                                     task.complete
                                 )
                             try:
@@ -1777,10 +1777,10 @@ def start_schedule_forever(task: RootTask) -> None:
                                     sleep(_ROOT_TASK_POLL_INTERVAL)
                                     continue
                             # TODO: All except clauses below are probably dead code, 
-                            #       since call_bulkhead() doesn't raise exceptions.
+                            #       since run_bulkhead_call() doesn't raise exceptions.
                             #       Remove this dead code.
                             try:
-                                call_bulkhead(unit)  # Run unit directly on this scheduler thread
+                                run_bulkhead_call(unit)  # Run unit directly on this scheduler thread
                             except NoForegroundThreadError:
                                 # Probably the app was closed. Ignore error.
                                 return

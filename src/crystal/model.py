@@ -1555,7 +1555,7 @@ class _WeakTaskRef(Generic[_TK]):
     #@captures_crashes_to_task_arg
     def task_did_complete(self, task: Task) -> None:
         self.task = None
-    task_did_complete._crashes_captured = True  # type: ignore[attr-defined]
+    task_did_complete._captures_crashes = True  # type: ignore[attr-defined]
     
     def __repr__(self) -> str:
         return f'_WeakTaskRef({self._task!r})'

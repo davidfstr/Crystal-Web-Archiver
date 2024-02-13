@@ -7,7 +7,7 @@ from typing_extensions import Concatenate, ParamSpec
 
 
 _S = TypeVar('_S')
-_TK = TypeVar('_TK', bound='Task')
+_B = TypeVar('_B', bound='Bulkhead')
 _P = ParamSpec('_P')
 _R = TypeVar('_R')
 
@@ -19,94 +19,94 @@ CrashReason = BaseException  # with .__traceback__ set to a TracebackType
 
 
 # TODO: Rename concept to Bulkhead
-class Task(Protocol):
+class Bulkhead(Protocol):
     crash_reason: CrashReason
 
 
 def captures_crashes_to_self(
-        task_method: 'Callable[Concatenate[_TK, _P], Optional[_R]]'
-        ) -> 'Callable[Concatenate[_TK, _P], Optional[_R]]':
+        bulkhead_method: 'Callable[Concatenate[_B, _P], Optional[_R]]'
+        ) -> 'Callable[Concatenate[_B, _P], Optional[_R]]':
     """
-    A Task method that captures any raised exceptions to itself,
-    as the "crash reason" of the task.
+    A Bulkhead method that captures any raised exceptions to itself,
+    as the "crash reason" of the bulkhead.
     
-    If the task was already crashed (with a non-None "crash reason") then
+    If the bulkhead was already crashed (with a non-None "crash reason") then
     this method will immediately abort, returning None.
     """
-    @wraps(task_method)
-    @_mark_bulkhead
-    def bulkhead(self: '_TK', *args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
+    @wraps(bulkhead_method)
+    @_mark_bulkhead_call
+    def bulkhead_call(self: '_B', *args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
         if self.crash_reason is not None:
-            # Task has already crashed. Abort.
+            # Bulkhead has already crashed. Abort.
             return None
         try:
-            return task_method(self, *args, **kwargs)
+            return bulkhead_method(self, *args, **kwargs)
         except BaseException as e:
             # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead
+            # including ancestor callers of bulkhead_call
             _print_bulkhead_exception(e)
             
-            # Crash the task. Abort.
+            # Crash the bulkhead. Abort.
             self.crash_reason = e
             return None
-    return bulkhead
+    return bulkhead_call
 
 
-def captures_crashes_to_task_arg(
-        method: 'Callable[Concatenate[_S, _TK, _P], Optional[_R]]'
-        ) -> 'Callable[Concatenate[_S, _TK, _P], Optional[_R]]':
+def captures_crashes_to_bulkhead_arg(
+        method: 'Callable[Concatenate[_S, _B, _P], Optional[_R]]'
+        ) -> 'Callable[Concatenate[_S, _B, _P], Optional[_R]]':
     """
-    A method that captures any raised exceptions to its first Task argument,
-    as the "crash reason" of the task.
+    A method that captures any raised exceptions to its first Bulkhead argument,
+    as the "crash reason" of the bulkhead.
     
-    If the task was already crashed (with a non-None "crash reason") then
+    If the bulkhead was already crashed (with a non-None "crash reason") then
     this method will immediately abort, returning None.
     """
     @wraps(method)
-    @_mark_bulkhead
-    def bulkhead(self: '_S', task: _TK, *args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-        if task.crash_reason is not None:
-            # Task has already crashed. Abort.
+    @_mark_bulkhead_call
+    def bulkhead_call(self: '_S', bulkhead: _B, *args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
+        if bulkhead.crash_reason is not None:
+            # Bulkhead has already crashed. Abort.
             return None
         try:
-            return method(self, task, *args, **kwargs)
+            return method(self, bulkhead, *args, **kwargs)
         except BaseException as e:
             # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead
+            # including ancestor callers of bulkhead_call
             _print_bulkhead_exception(e)
             
-            # Crash the task. Abort.
-            task.crash_reason = e
+            # Crash the bulkhead. Abort.
+            bulkhead.crash_reason = e
             return None
-    return bulkhead
+    return bulkhead_call
 
 
-def captures_crashes_to(task: Task) -> Callable[[Callable[_P, Optional[_R]]], Callable[_P, Optional[_R]]]:
+def captures_crashes_to(bulkhead: Bulkhead) -> Callable[[Callable[_P, Optional[_R]]], Callable[_P, Optional[_R]]]:
     """
-    A method that captures any raised exceptions to the specified Task,
-    as the "crash reason" of the task.
+    A method that captures any raised exceptions to the specified Bulkhead,
+    as the "crash reason" of the bulkhead.
     
-    If the task was already crashed (with a non-None "crash reason") then
+    If the bulkhead was already crashed (with a non-None "crash reason") then
     this method will immediately abort, returning None.
     """
     def decorate(func: Callable[_P, Optional[_R]]) -> Callable[_P, Optional[_R]]:
         @wraps(func)
-        @_mark_bulkhead
-        def bulkhead(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-            if task.crash_reason is not None:
-                # Task has already crashed. Abort.
+        @_mark_bulkhead_call
+        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
+            if bulkhead.crash_reason is not None:
+                # Bulkhead has already crashed. Abort.
                 return None
             try:
                 return func(*args, **kwargs)
             except BaseException as e:
                 # Print traceback to assist in debugging in the terminal,
-                # including ancestor callers of bulkhead
+                # including ancestor callers of bulkhead_call
                 _print_bulkhead_exception(e)
                 
-                # Crash the task. Abort.
-                task.crash_reason = e
+                # Crash the bulkhead. Abort.
+                bulkhead.crash_reason = e
                 return None
-        return bulkhead
+        return bulkhead_call
     return decorate
 
 
@@ -115,18 +115,18 @@ def captures_crashes_to_stderr(func: Callable[_P, Optional[_R]]) -> Callable[_P,
     A method that captures any raised exceptions, and prints them to stderr.
     """
     @wraps(func)
-    @_mark_bulkhead
-    def bulkhead(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
+    @_mark_bulkhead_call
+    def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
         try:
             return func(*args, **kwargs)
         except BaseException as e:
             # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead
+            # including ancestor callers of bulkhead_call
             _print_bulkhead_exception(e, is_error=True)
             
             # Abort.
             return None
-    return bulkhead
+    return bulkhead_call
 
 
 def does_not_capture_crashes(func: Callable[_P, _R]) -> Callable[_P, _R]:
@@ -137,14 +137,14 @@ def does_not_capture_crashes(func: Callable[_P, _R]) -> Callable[_P, _R]:
     return func
 
 
-def _mark_bulkhead(bulkhead: Callable[_P, _R]) -> Callable[_P, _R]:
-    bulkhead._crashes_captured = True  # type: ignore[attr-defined]
-    return bulkhead
+def _mark_bulkhead_call(bulkhead_call: Callable[_P, _R]) -> Callable[_P, _R]:
+    bulkhead_call._captures_crashes = True  # type: ignore[attr-defined]
+    return bulkhead_call
 
 
 def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False) -> None:
     # Print traceback to assist in debugging in the terminal,
-    # including ancestor callers of bulkhead
+    # including ancestor callers of bulkhead_call
     err_file = sys.stderr
     print(
         cli.TERMINAL_FG_RED if is_error else cli.TERMINAL_FG_YELLOW,
@@ -163,8 +163,8 @@ def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False) -> None
     err_file.flush()
 
 
-def call_bulkhead(
-        bulkhead: Callable[_P, _R],
+def run_bulkhead_call(
+        bulkhead_call: Callable[_P, _R],
         /, *args: _P.args,
         **kwargs: _P.kwargs
         ) -> '_R':
@@ -175,9 +175,9 @@ def call_bulkhead(
     Raises AssertionError if the specified method is not actually
     marked with @captures_crashes_to*.
     """
-    if getattr(bulkhead, '_crashes_captured', False) != True:
-        raise AssertionError(f'Expected callable {bulkhead!r} to be decorated with @captures_crashes_to*')
-    return bulkhead(*args, **kwargs)
+    if getattr(bulkhead_call, '_captures_crashes', False) != True:
+        raise AssertionError(f'Expected callable {bulkhead_call!r} to be decorated with @captures_crashes_to*')
+    return bulkhead_call(*args, **kwargs)
 
 
 # ------------------------------------------------------------------------------
