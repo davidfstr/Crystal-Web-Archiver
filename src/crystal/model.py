@@ -1550,8 +1550,12 @@ class _WeakTaskRef(Generic[_TK]):
             self._task.listeners.append(self)
     task = property(_get_task, _set_task)
     
+    # TODO: Need to extract bulkhead logic (@captures_crashes_to*)
+    #       to module separate from crystal.task, so that can use here.
+    #@captures_crashes_to_task_arg
     def task_did_complete(self, task: Task) -> None:
         self.task = None
+    task_did_complete._crashes_captured = True  # type: ignore[attr-defined]
     
     def __repr__(self) -> str:
         return f'_WeakTaskRef({self._task!r})'

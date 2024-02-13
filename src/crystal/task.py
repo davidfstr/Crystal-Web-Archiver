@@ -240,7 +240,7 @@ def call_bulkhead(
     marked with @captures_crashes_to*.
     """
     if getattr(bulkhead, '_crashes_captured', False) != True:
-        raise AssertionError('Expected callable to be decorated with @captures_crashes_to*')
+        raise AssertionError(f'Expected callable {bulkhead!r} to be decorated with @captures_crashes_to*')
     return bulkhead(*args, **kwargs)
 
 
@@ -368,7 +368,7 @@ class Task(ListenableMixin):
         self._subtitle = value
         for lis in self.listeners:
             if hasattr(lis, 'task_subtitle_did_change'):
-                lis.task_subtitle_did_change(self)  # type: ignore[attr-defined]
+                call_bulkhead(lis.task_subtitle_did_change, self)  # type: ignore[attr-defined]
     subtitle = property(_get_subtitle, _set_subtitle)
     
     def _get_crash_reason(self) -> Optional[CrashReason]:
@@ -377,7 +377,7 @@ class Task(ListenableMixin):
         self._crash_reason = value
         for lis in self.listeners:
             if hasattr(lis, 'task_crash_reason_did_change'):
-                lis.task_crash_reason_did_change(self)  # type: ignore[attr-defined]
+                call_bulkhead(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
     crash_reason = property(_get_crash_reason, _set_crash_reason)
     
     # TODO: Alter parent tracking to support multiple parents,
@@ -485,7 +485,7 @@ class Task(ListenableMixin):
         
         for lis in self.listeners:
             if hasattr(lis, 'task_did_set_children'):
-                lis.task_did_set_children(self, len(children))  # type: ignore[attr-defined]
+                call_bulkhead(lis.task_did_set_children, self, len(children))  # type: ignore[attr-defined]
     
     def materialize_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
@@ -530,7 +530,7 @@ class Task(ListenableMixin):
         """
         for lis in self.listeners:
             if hasattr(lis, 'task_did_append_child'):
-                lis.task_did_append_child(self, child)  # type: ignore[attr-defined]
+                call_bulkhead(lis.task_did_append_child, self, child)  # type: ignore[attr-defined]
     
     # === Protected Operations: Greedy Children ===
     
@@ -571,7 +571,7 @@ class Task(ListenableMixin):
         # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
         for lis in list(self.listeners):
             if hasattr(lis, 'task_did_complete'):
-                lis.task_did_complete(self)  # type: ignore[attr-defined]
+                call_bulkhead(lis.task_did_complete, self)  # type: ignore[attr-defined]
     
     def finalize_children(self, final_children: List[Task]) -> None:
         """
@@ -616,7 +616,7 @@ class Task(ListenableMixin):
             #       synchronized with the modified child list.
             for lis in self.listeners:
                 if hasattr(lis, 'task_did_clear_children'):
-                    lis.task_did_clear_children(self)  # type: ignore[attr-defined]
+                    call_bulkhead(lis.task_did_clear_children, self)  # type: ignore[attr-defined]
         return all_children_complete
     
     def clear_completed_children(self) -> None:
@@ -639,7 +639,7 @@ class Task(ListenableMixin):
         #       synchronized with the modified child list.
         for lis in self.listeners:
             if hasattr(lis, 'task_did_clear_children'):
-                lis.task_did_clear_children(self, child_indexes_to_remove)  # type: ignore[attr-defined]
+                call_bulkhead(lis.task_did_clear_children, self, child_indexes_to_remove)  # type: ignore[attr-defined]
     
     # === Public Operations ===
     
@@ -770,6 +770,7 @@ class Task(ListenableMixin):
     # === Internal Events ===
     
     @final
+    @captures_crashes_to_self
     def task_subtitle_did_change(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
@@ -778,6 +779,7 @@ class Task(ListenableMixin):
             self.child_task_subtitle_did_change(task)
     
     @final
+    @captures_crashes_to_self
     def task_did_complete(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
@@ -792,7 +794,7 @@ class Task(ListenableMixin):
             self.child_task_did_complete(task)
         for lis in self.listeners:
             if hasattr(lis, 'task_child_did_complete'):
-                lis.task_child_did_complete(self, task)  # type: ignore[attr-defined]
+                call_bulkhead(lis.task_child_did_complete, self, task)  # type: ignore[attr-defined]
     
     # === Utility ===
     
