@@ -20,6 +20,13 @@ from typing_extensions import ParamSpec
 import wx
 
 
+# Whether to explicitly manage the queue of deferred foreground tasks,
+# instead of letting wxPython manage the queue internally.
+# 
+# Can be useful for debugging, because when True the queue of deferred foreground tasks
+# is directly inspectable by examining the "_fg_calls" variable in this module.
+_DEBUG_FG_CALL_QUEUE = False
+
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.
 _PROFILE_FG_TASKS = os.environ.get('CRYSTAL_NO_PROFILE_FG_TASKS', 'False') != 'True'
@@ -115,13 +122,6 @@ def bg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
 # ------------------------------------------------------------------------------
 # Call on Foreground Thread
 
-# Whether to explicitly manage the queue of deferred foreground tasks,
-# instead of letting wxPython manage the queue internally.
-# 
-# Can be useful for debugging, because when True the queue of deferred foreground tasks
-# is directly inspectable by examining the "_fg_calls" variable in this module.
-_MANAGE_FG_CALLS_EXPLICITLY = False
-
 def fg_call_later(
         callable: Callable[_P, None],
         # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
@@ -166,7 +166,7 @@ def fg_call_later(
         callable(*args)
     else:
         try:
-            if _MANAGE_FG_CALLS_EXPLICITLY:
+            if _DEBUG_FG_CALL_QUEUE:
                 if len(args) == 0:
                     _fg_call_later_in_order(callable)
                 else:
