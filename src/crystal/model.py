@@ -1595,6 +1595,7 @@ class Resource:
     
     # === Init (One) ===
     
+    @fg_affinity
     def __new__(cls, 
             project: Project,
             url: str,
@@ -1666,6 +1667,7 @@ class Resource:
     def _is_finished_initializing(self) -> bool:
         return self._id is not None
     
+    @fg_affinity
     def _finish_init(self, id: int, creating: bool) -> None:
         """
         Finishes initializing a Resource that was created with
@@ -1700,6 +1702,7 @@ class Resource:
     # === Init (Many) ===
     
     @staticmethod
+    @fg_affinity
     def bulk_create(
             project: Project,
             urls: List[str],
@@ -2213,6 +2216,7 @@ class RootResource:
     
     # === Init ===
     
+    @fg_affinity
     def __new__(cls, project: Project, name: str, resource: Resource, _id: Optional[int]=None) -> RootResource:
         """
         Creates a new root resource.
@@ -2259,6 +2263,7 @@ class RootResource:
     
     # === Delete ===
     
+    @fg_affinity
     def delete(self) -> None:
         """
         Deletes this root resource.
@@ -2284,6 +2289,7 @@ class RootResource:
     def _get_name(self) -> str:
         """Name of this root resource. Possibly ''."""
         return self._name
+    @fg_affinity
     def _set_name(self, name: str) -> None:
         if self._name == name:
             return
@@ -2612,6 +2618,7 @@ class ResourceRevision:
     # TODO: Optimize implementation to avoid unnecessarily loading all
     #       sibling revisions of the requested revision.
     @staticmethod
+    @fg_affinity
     def load(project: Project, id: int) -> Optional[ResourceRevision]:
         """
         Loads the existing revision with the specified ID,
