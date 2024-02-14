@@ -221,7 +221,7 @@ class Task(ListenableMixin):
         for lis in self.listeners:
             if hasattr(lis, 'task_crash_reason_did_change'):
                 run_bulkhead_call(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
-    crash_reason = cast(CrashReason, property(_get_crash_reason, _set_crash_reason))
+    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
     
     # TODO: Alter parent tracking to support multiple parents,
     #       since in truth a Task can already have multiple parents,

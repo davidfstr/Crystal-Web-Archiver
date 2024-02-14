@@ -18,9 +18,8 @@ _R = TypeVar('_R')
 CrashReason = BaseException  # with .__traceback__ set to a TracebackType
 
 
-# TODO: Rename concept to Bulkhead
 class Bulkhead(Protocol):
-    crash_reason: CrashReason
+    crash_reason: Optional[CrashReason]
 
 
 def captures_crashes_to_self(
