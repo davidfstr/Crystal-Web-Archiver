@@ -1,4 +1,5 @@
 from crystal.url_input import UrlCleaner
+from crystal.util.bulkheads import captures_crashes_to_stderr
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
     CreateButtonSizer, position_dialog_initially, ShowModal,
@@ -187,6 +188,7 @@ class NewRootUrlDialog:
         
         # If field still focused after a tick,
         # stop cleaning any old URL input
+        @captures_crashes_to_stderr  # no good location in UI to route crashes too
         def fg_task() -> None:
             # NOTE: Cannot use url_field.HasFocus() because doesn't work in automated tests
             if not self._url_field_focused:
