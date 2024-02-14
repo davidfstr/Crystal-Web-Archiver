@@ -8,6 +8,7 @@ This thread is responsible for:
 """
 
 from collections import deque
+from crystal.util.bulkheads import captures_crashes_to_stderr
 from crystal.util.profile import create_profiled_callable
 from enum import Enum
 from functools import wraps
@@ -241,14 +242,14 @@ def fg_call_and_wait(
         
         waiting_calling_thread = threading.current_thread()  # capture
         
+        @captures_crashes_to_stderr
         def fg_task() -> None:
             nonlocal callable_started, callable_result, callable_exc_info
             
             callable_started = True
             
-            fg_thread = threading.current_thread()
-            
             # Run task
+            fg_thread = threading.current_thread()
             setattr(fg_thread, '_cr_waiting_calling_thread', waiting_calling_thread)
             try:
                 callable_result = callable(*args)
