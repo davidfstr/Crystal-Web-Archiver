@@ -576,13 +576,13 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
                 # In TaskTreeNode.task_did_append_child,
                 # crash the line: child = task.children[-1]  # lookup child
                 if True:
-                    task_did_append_child = TaskTreeNode.task_did_append_child
+                    super_task_did_append_child = TaskTreeNode.task_did_append_child
                     # NOTE: Need some kind of @captures_crashes_to* here to pass caller checks
                     @captures_crashes_to_stderr
                     def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
                         # Corrupt the value of task.children
                         task._children = []
-                        return task_did_append_child(self, task, child)
+                        return super_task_did_append_child(self, task, child)
                     
                     # Load children of DownloadResourceGroupMembersTask
                     unit = project.root_task.try_get_next_task_unit()  # step scheduler
