@@ -28,7 +28,7 @@ jobs:
         python-version: ["3.8", "3.9"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15  # 150% of normal time: 9 min 50 secs, as of 2023-12-17
+    timeout-minutes: 23  # 150% of normal time: 15 min, as of 2024-02-16
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
