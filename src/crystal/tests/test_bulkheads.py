@@ -22,12 +22,15 @@ from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup
 from crystal.ui.tree import NodeView
 from crystal.util.bulkheads import (
+    captures_crashes_to,
     captures_crashes_to_self, captures_crashes_to_stderr,
+    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
+    run_bulkhead_call,
 )
 from crystal.util import cli
 from crystal.util.wx_bind import bind
 from crystal.util.xfutures import Future
-from crystal.util.xthreading import bg_call_later, is_foreground_thread
+from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
 from io import StringIO
 import sys
 from typing import Callable, Optional, TypeVar
@@ -40,6 +43,96 @@ _R = TypeVar('_R')
 
 
 _CRASH = ValueError('Simulated crash')
+
+
+# ------------------------------------------------------------------------------
+# Test: captures_crashes_to*
+
+async def test_captures_crashes_to_self_decorator_works() -> None:
+    class MyTask(_DownloadResourcesPlaceholderTask):
+        def __init__(self) -> None:
+            super().__init__(1)
+        
+        @captures_crashes_to_self
+        def protected_method(self) -> None:
+            raise ValueError('Unhandled error inside protected method')
+    my_task = MyTask()
+    
+    assert my_task.crash_reason is None
+    my_task.protected_method()
+    assert my_task.crash_reason is not None
+
+
+async def test_captures_crashes_to_bulkhead_arg_decorator_works() -> None:
+    class MyTask(_DownloadResourcesPlaceholderTask):
+        def __init__(self) -> None:
+            super().__init__(1)
+        
+        @captures_crashes_to_task_arg
+        def task_foo_did_change(self, task: Task) -> None:
+            raise ValueError('Unhandled error inside protected method')
+    my_task = MyTask()
+    other_task = _DownloadResourcesPlaceholderTask(1)
+    
+    assert other_task.crash_reason is None
+    assert my_task.crash_reason is None
+    
+    my_task.task_foo_did_change(other_task)
+    
+    assert other_task.crash_reason is not None
+    assert my_task.crash_reason is None
+
+
+async def test_captures_crashes_to_decorator_works() -> None:
+    class MyTask(_DownloadResourcesPlaceholderTask):
+        def __init__(self) -> None:
+            super().__init__(1)
+        
+        def foo_did_bar(self) -> None:
+            @captures_crashes_to(self)
+            def fg_task() -> None:
+                raise ValueError('Unhandled error inside protected method')
+            fg_call_and_wait(fg_task)
+    my_task = MyTask()
+    
+    assert my_task.crash_reason is None
+    my_task.foo_did_bar()
+    assert my_task.crash_reason is not None
+
+
+async def test_captures_crashes_to_stderr_decorator_works() -> None:
+    @captures_crashes_to_stderr
+    def report_error() -> None:
+        raise ValueError('Unhandled error inside protected method')
+    
+    with redirect_stderr(StringIO()) as captured_stderr:
+        report_error()
+    assert 'Exception in bulkhead:' in captured_stderr.getvalue()
+    assert 'Traceback' in captured_stderr.getvalue()
+    assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
+
+
+async def test_given_callable_decorated_by_captures_crashes_to_star_decorator_when_run_bulkhead_call_used_then_calls_callable() -> None:
+    @captures_crashes_to_stderr
+    def protected_method():
+        protected_method.called = True
+    
+    def unprotected_method():
+        unprotected_method.called = True
+    
+    run_bulkhead_call(protected_method)
+    assert True == getattr(protected_method, 'called', False)
+    
+    try:
+        run_bulkhead_call(unprotected_method)
+    except AssertionError:
+        pass  # expected
+    assert False == getattr(unprotected_method, 'called', False)
+
+
+@skip('covered by: test_given_callable_decorated_by_captures_crashes_to_star_decorator_when_run_bulkhead_call_used_then_calls_callable')
+async def test_given_not_callable_decorated_by_captures_crashes_to_star_decorator_when_run_bulkhead_call_used_then_raises() -> None:
+    pass
 
 
 # ------------------------------------------------------------------------------
