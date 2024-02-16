@@ -308,7 +308,7 @@ def bg_call_later(
         # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
         *, args=(),
         daemon: bool=False,
-        ) -> None:
+        ) -> threading.Thread:
     """
     Calls the specified callable on a new background thread.
     
@@ -321,6 +321,7 @@ def bg_call_later(
     """
     thread = threading.Thread(target=callable, args=args, daemon=daemon)
     thread.start()
+    return thread
 
 
 # ------------------------------------------------------------------------------

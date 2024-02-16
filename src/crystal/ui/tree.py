@@ -191,11 +191,15 @@ class NodeView:
     * The full list of supported event names is given by
       `_EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.values()`.
     """
+    DEFAULT_TEXT_COLOR = wx.Colour(0, 0, 0)  # black
+    
     # Optimize per-instance memory use, since there may be very many NodeView objects
     __slots__ = (
         'delegate',
         'peer',
         '_title',
+        '_text_color',
+        '_bold',
         '_expandable',
         '_icon_set_func',
         '_icon_set',
@@ -207,6 +211,7 @@ class NodeView:
         self.delegate = None  # type: object
         self.peer = None  # type: Optional[NodeViewPeer]
         self._title = ''
+        self._text_color = None  # type: Optional[wx.Colour]
         self._expandable = False
         self._icon_set_func = None  # type: Optional[Callable[[], Optional[IconSet]]]
         self._icon_set = None  # type: Optional[IconSet]
@@ -221,6 +226,22 @@ class NodeView:
         if self.peer:
             self.peer.SetItemText(value)
     title = property(_get_title, _set_title)
+    
+    def _get_text_color(self) -> Optional[wx.Colour]:
+        return self._text_color
+    def _set_text_color(self, value: Optional[wx.Colour]) -> None:
+        self._text_color = value
+        if self.peer:
+            self.peer.SetItemTextColour(value or self.DEFAULT_TEXT_COLOR)
+    text_color = property(_get_text_color, _set_text_color)
+    
+    def _get_bold(self) -> bool:
+        return self._bold
+    def _set_bold(self, value: bool) -> None:
+        self._bold = value
+        if self.peer:
+            self.peer.SetItemBold(value)
+    bold = property(_get_bold, _set_bold)
     
     def _get_expandable(self) -> bool:
         return self._expandable
@@ -392,6 +413,8 @@ class NodeView:
         
         # Trigger property logic to update peer
         self.title = self.title
+        if self._text_color is not None:
+            self.text_color = self.text_color
         self.expandable = self.expandable
         self.icon_set = self.icon_set
         self.set_children(self.children, _initial=True)
@@ -455,6 +478,20 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemText(node_id, text)
+    
+    @fg_affinity
+    def SetItemTextColour(self, colour: wx.Colour) -> None:
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.SetItemTextColour(node_id, colour)
+    
+    @fg_affinity
+    def SetItemBold(self, bold: bool) -> None:
+        node_id = self.node_id  # cache
+        if node_id.IsOk():
+            with wrapped_object_deleted_error_ignored():
+                self.tree_peer.SetItemBold(node_id, bold)
     
     @fg_affinity
     def SetItemHasChildren(self, has: bool) -> None:

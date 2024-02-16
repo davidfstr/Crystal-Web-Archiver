@@ -25,16 +25,6 @@ class Shell:
         self._project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
         self._window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
         
-        # Define exit instructions,
-        # based on site.setquit()'s definition in Python 3.8
-        if os.sep == '\\':
-            eof = 'Ctrl-Z plus Return'
-        else:
-            eof = 'Ctrl-D (i.e. EOF)'
-        exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
-        
-        python_version = '.'.join([str(x) for x in sys.version_info[:3]])
-        
         # Ensure help(), exit(), and quit() are available,
         # even when running as a frozen .app or .exe
         site.sethelper()  # help
@@ -42,22 +32,7 @@ class Shell:
         
         self._ensure_guppy_available()
         
-        threading.Thread(
-            target=lambda: fg_interact(
-                banner=(
-                    f'Crystal {crystal_version} (Python {python_version})\n'
-                    'Type "help" for more information.\n'
-                    'Variables "project" and "window" are available.\n'
-                    f'{exit_instructions}.'
-                ),
-                local=dict(
-                    project=self._project_proxy,
-                    window=self._window_proxy,
-                ),
-                exitmsg='now waiting for all windows to close...',
-            ),
-            daemon=False,
-        ).start()
+        threading.Thread(target=self._run, daemon=False).start()
     
     @staticmethod
     def _ensure_guppy_available() -> None:
@@ -78,6 +53,33 @@ class Shell:
             import guppy.heapy.Part
             import guppy.heapy.OutputHandling
         except ImportError:
+            pass
+    
+    def _run(self) -> None:
+        # Define exit instructions,
+        # based on site.setquit()'s definition in Python 3.8
+        if os.sep == '\\':
+            eof = 'Ctrl-Z plus Return'
+        else:
+            eof = 'Ctrl-D (i.e. EOF)'
+        exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
+        
+        python_version = '.'.join([str(x) for x in sys.version_info[:3]])
+        try:
+            fg_interact(
+                banner=(
+                    f'Crystal {crystal_version} (Python {python_version})\n'
+                    'Type "help" for more information.\n'
+                    'Variables "project" and "window" are available.\n'
+                    f'{exit_instructions}.'
+                ),
+                local=dict(
+                    project=self._project_proxy,
+                    window=self._window_proxy,
+                ),
+                exitmsg='now waiting for all windows to close...',
+            )
+        except SystemExit:
             pass
     
     def attach(self, project: Project, window: MainWindow) -> None:
