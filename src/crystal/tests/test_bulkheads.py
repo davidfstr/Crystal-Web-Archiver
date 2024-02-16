@@ -49,16 +49,16 @@ _CRASH = ValueError('Simulated crash')
 #   a red error color, since it is INVISIBLE to GUI-only users.
 
 async def test_given_inside_bulkhead_when_unhandled_exception_raised_then_traceback_printed_to_stderr_as_yellow_warning() -> None:
-    def the_bulkhead_caller() -> None:
-        some_task = _DownloadResourcesPlaceholderTask(1)
-        
-        @captures_crashes_to_self
-        def the_bulkhead(task_context: Task) -> None:
-            raise ValueError('Unhandled error inside bulkhead')
-        the_bulkhead(some_task)
-        
     with redirect_stderr(StringIO()) as captured_stderr:
-        the_bulkhead_caller()
+        class MyTask(_DownloadResourcesPlaceholderTask):
+            def __init__(self) -> None:
+                super().__init__(1)
+            
+            @captures_crashes_to_self
+            def protected_method(self) -> None:
+                raise ValueError('Unhandled error inside protected method')
+        
+        MyTask().protected_method()
     assert 'Exception in bulkhead:' in captured_stderr.getvalue()
     assert 'Traceback' in captured_stderr.getvalue()
     assert cli.TERMINAL_FG_YELLOW in captured_stderr.getvalue()
