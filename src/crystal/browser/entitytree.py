@@ -21,6 +21,14 @@ from crystal.task import (
 )
 # TODO: Expand this star import
 from crystal.ui.tree import *
+from crystal.util.bulkheads import (
+    Bulkhead,
+    captures_crashes_to,
+    captures_crashes_to_self,
+    captures_crashes_to_stderr,
+    CrashReason,
+    run_bulkhead_call,
+)
 from crystal.util.wx_bind import bind
 from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xfutures import Future
@@ -49,7 +57,7 @@ _ID_CLEAR_PREFIX = 102
 GetTooltipEvent, EVT_TREE_ITEM_ICON_GETTOOLTIP = wx.lib.newevent.NewEvent()
 
 
-class EntityTree:
+class EntityTree(Bulkhead):
     """
     Displays a tree of top-level project entities.
     """
@@ -61,6 +69,8 @@ class EntityTree:
         Raises:
         * CancelOpenProject
         """
+        self._crash_reason = None  # type: Optional[CrashReason]
+        
         self.view = TreeView(parent_peer, name='cr-entity-tree')
         self.view.delegate = self
         self.root = RootNode(project, self.view.root, progress_listener)
@@ -77,6 +87,28 @@ class EntityTree:
         bind(self.peer, EVT_TREE_ITEM_ICON_GETTOOLTIP, self._on_get_tooltip_event)
         # For tests only
         bind(self.peer, wx.EVT_MENU, self._on_popup_menuitem_selected)
+    
+    # === Bulkhead ===
+    
+    def _get_crash_reason(self) -> Optional[CrashReason]:
+        return self._crash_reason
+    def _set_crash_reason(self, reason: Optional[CrashReason]) -> None:
+        from crystal.task import CrashedTask
+        
+        if reason is None:
+            self._crash_reason = None
+        else:
+            if self._crash_reason is not None:
+                # Ignore subsequent crashes until the first one is cleared
+                return
+            self._crash_reason = reason
+            
+            # Report crash to Task Tree
+            def clear_crash_reason() -> None:
+                self.crash_reason = None
+            crash_reason_view = CrashedTask('Updating entity tree', reason, clear_crash_reason)
+            self._project.add_task(crash_reason_view)
+    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
     
     # === Properties ===
     
@@ -131,7 +163,7 @@ class EntityTree:
     
     # === Updates ===
     
-    # TODO: Can this be marked with @fg_affinity?
+    # TODO: Should this be marked with: @captures_crashes_to_self
     def update(self):
         """
         Updates the nodes in this tree, usually due to a project change.
@@ -140,7 +172,7 @@ class EntityTree:
     
     # === Events: Resource Lifecycle ===
     
-    # TODO: Can this be marked with @fg_affinity?
+    @captures_crashes_to_self
     def resource_did_instantiate(self, resource: Resource) -> None:
         # TODO: Optimize to only refresh those groups that could potentially
         #       be affected by this particular resource being instantiated
@@ -152,48 +184,66 @@ class EntityTree:
             return
         else:
             self._group_nodes_need_updating = True
-            fg_call_later(self._refresh_group_nodes_now, force_later=True)
-    
-    def _refresh_group_nodes_now(self) -> None:
-        try:
-            for rgn in self.root.children:
-                if type(rgn) is ResourceGroupNode:
-                    rgn.update_children()
-        finally:
-            self._group_nodes_need_updating = False
+            @captures_crashes_to_stderr
+            def fg_task_later() -> None:
+                try:
+                    try:
+                        root_children = self.root.children
+                    except BaseException as e:
+                        self.root.crash_reason = e
+                        return
+                    for rgn in root_children:
+                        if isinstance(rgn, ResourceGroupNode):
+                            run_bulkhead_call(rgn.update_children)
+                finally:
+                    self._group_nodes_need_updating = False
+            fg_call_later(fg_task_later, force_later=True)
     
     # === Events: Resource Revision Lifecycle ===
     
-    # TODO: Can this be marked with @fg_affinity? Then remove interior fg_call_later().
+    @captures_crashes_to_self
     def resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
-        fg_call_later(lambda:
-            self.root.update_icon_set_of_descendants_with_resource(revision.resource))
+        @captures_crashes_to(self)
+        def fg_task() -> None:
+            self.root.update_icon_set_of_descendants_with_resource(revision.resource)
+        fg_call_later(fg_task)
     
     # === Events: Root Resource Lifecycle ===
     
-    # TODO: Can this be marked with @fg_affinity?
+    @captures_crashes_to_self
     def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
         self.update()
     
+    @captures_crashes_to_self
+    # TODO: Do not recommend asserting that a listener method will be called
+    #       from any particular thread
     @fg_affinity
     def root_resource_did_forget(self, root_resource: RootResource) -> None:
         self.update()
     
     # === Events: Resource Group Lifecycle ===
     
-    # TODO: Can this be marked with @fg_affinity? Then remove interior fg_call_later().
+    @captures_crashes_to_self
     def resource_group_did_instantiate(self, group: ResourceGroup) -> None:
         self.update()
         
         # Some badges related to the ResourceGroup.do_not_download status
         # may need to be updated
-        fg_call_later(lambda:
-            self.root.update_icon_set_of_descendants_in_group(group))
+        @captures_crashes_to(self)
+        def fg_task() -> None:
+            self.root.update_icon_set_of_descendants_in_group(group)
+        fg_call_later(fg_task)
     
+    @captures_crashes_to_self
+    # TODO: Do not recommend asserting that a listener method will be called
+    #       from any particular thread
     @fg_affinity
     def resource_group_did_change_do_not_download(self, group: ResourceGroup) -> None:
         self.root.update_icon_set_of_descendants_in_group(group)
     
+    @captures_crashes_to_self
+    # TODO: Do not recommend asserting that a listener method will be called
+    #       from any particular thread
     @fg_affinity
     def resource_group_did_forget(self, group: ResourceGroup) -> None:
         self.update()
@@ -204,12 +254,16 @@ class EntityTree:
     
     # === Event: Min Fetch Date Did Change ===
     
+    @captures_crashes_to_self
     def min_fetch_date_did_change(self) -> None:
-        fg_call_later(lambda:
-            self.root.update_icon_set_of_descendants())
+        @captures_crashes_to(self)
+        def fg_task() -> None:
+            self.root.update_icon_set_of_descendants()
+        fg_call_later(fg_task)
     
     # === Event: Right Click ===
     
+    @captures_crashes_to_self
     def on_right_click(self, event, node_view: NodeView) -> None:
         node = Node.for_node_view(node_view)
         self._right_clicked_node = node
@@ -235,11 +289,14 @@ class EntityTree:
             print('(Suppressing popup menu while CRYSTAL_RUNNING_TESTS=True)')
         menu.Destroy()
     
-    def _on_popup_menuitem_selected(self, event):
+    @captures_crashes_to_self
+    def _on_popup_menuitem_selected(self, event) -> None:
         node = self._right_clicked_node
+        assert node is not None
         
         item_id = event.GetId()
         if item_id == _ID_SET_PREFIX:
+            assert isinstance(node, _ResourceNode)
             self._project.default_url_prefix = (
                 EntityTree._get_url_prefix_for_resource(node.resource))
             self._did_change_default_url_prefix()
@@ -274,6 +331,7 @@ class EntityTree:
     # === Event: Mouse Motion, Get Tooltip ===
     
     # Update the tooltip whenever hovering the mouse over a tree node icon
+    @captures_crashes_to_self
     def _on_mouse_motion(self, event: wx.MouseEvent) -> None:
         (tree_item_id, hit_flags) = self.peer.HitTest(event.Position)
         if (hit_flags & wx.TREE_HITTEST_ONITEMICON) != 0:
@@ -283,6 +341,7 @@ class EntityTree:
         
         self.peer.SetToolTip(new_tooltip)
     
+    @captures_crashes_to_self
     def _on_get_tooltip_event(self, event: wx.Event) -> None:
         event.tooltip_cell[0] = self._icon_tooltip_for_tree_item_id(event.tree_item_id)
     
@@ -312,10 +371,11 @@ def _sequence_with_matching_elements_replaced(new_seq, old_seq):
 NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
 
 
-class Node:
+class Node(Bulkhead):
     def __init__(self, *, source: DeferrableResourceGroupSource) -> None:
         self._source = source
         self._children = []  # type: List[Node]
+        self._crash_reason = None  # type: Optional[CrashReason]
     
     @staticmethod
     def for_node_view(node_view: NodeView) -> Node:
@@ -378,6 +438,34 @@ class Node:
             return self._source()
         else:
             return self._source
+    
+    # === Bulkhead ===
+    
+    def _get_crash_reason(self) -> Optional[CrashReason]:
+        return self._crash_reason
+    def _set_crash_reason(self, reason: Optional[CrashReason]) -> None:
+        """
+        Called when a crash occurs while expanding this node,
+        to display the crash information in the UI as a single child error node.
+        """
+        assert reason is not None, 'Clearing the crash reason is not supported'
+        self._crash_reason = reason
+        # TODO: Actually expose the reason itself in a tooltip
+        # TODO: Consider allowing the crash to be dismissed, similar to how CrashedTask does
+        self._set_error_child(_ErrorNode.CRASH_TITLE, is_crash=True)
+    crash_reason = cast(CrashReason, property(_get_crash_reason, _set_crash_reason))
+    
+    # protected
+    def _set_error_child(self, message: str, *, is_crash: bool=False) -> None:
+        """
+        Sets the children of this node to a single error node.
+        
+        Can be called from any thread.
+        """
+        @captures_crashes_to_stderr
+        def fg_task() -> None:
+            self.children = [_ErrorNode(message, is_crash=is_crash)]
+        fg_call_later(fg_task)
     
     # === Updates ===
     
@@ -528,7 +616,10 @@ class _LoadingNode(Node):
 
 
 class _ErrorNode(Node):
-    def __init__(self, title: str) -> None:
+    CRASH_TEXT_COLOR = wx.Colour(255, 0, 0)  # red
+    CRASH_TITLE = 'Something went wrong'
+    
+    def __init__(self, title: str, *, is_crash: bool=False) -> None:
         super().__init__(source=None)
         
         self.view = NodeView()
@@ -536,6 +627,9 @@ class _ErrorNode(Node):
             (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_warning']),
         )
         self.view.title = title
+        if is_crash:
+            self.view.text_color = _ErrorNode.CRASH_TEXT_COLOR
+            self.view.bold = True
     
     # === Updates ===
     
@@ -669,27 +763,22 @@ class _ResourceNode(Node):
             self.download_future = self.resource.download()
             
             def download_done(future: 'Future[ResourceRevision]') -> None:
-                def set_error_child_later(message: str) -> None:
-                    def fg_task() -> None:
-                        self.children = [_ErrorNode(message)]
-                    fg_call_later(fg_task)
-                
                 try:
                     revision = future.result()
                 except CannotDownloadWhenProjectReadOnlyError:
-                    set_error_child_later('Cannot download: Project is read only')
+                    self._set_error_child('Cannot download: Project is read only')
                 except ProjectFreeSpaceTooLowError:
-                    set_error_child_later('Cannot download: Disk is full')
+                    self._set_error_child('Cannot download: Disk is full')
                 except ProjectHasTooManyRevisionsError:
-                    set_error_child_later('Cannot download: Project has too many revisions')
+                    self._set_error_child('Cannot download: Project has too many revisions')
                 except Exception:
-                    set_error_child_later('Cannot download: Unexpected error')
+                    self._set_error_child('Cannot download: Unexpected error')
                 else:
                     revision = revision.resolve_http_304()  # reinterpret
                     
                     error_dict = revision.error_dict
                     if error_dict is not None:
-                        set_error_child_later(
+                        self._set_error_child(
                             f'Error downloading URL: {error_dict["type"]}: {error_dict["message"]}')
                         return
                     
@@ -703,10 +792,10 @@ class _ResourceNode(Node):
                         #       even when it internally deletes and redownloads a revision
                         #       whose body is missing
                         except (RevisionBodyMissingError, RevisionDeletedError):
-                            set_error_child_later(
+                            self._set_error_child(
                                 'Cannot list links: URL revision body is missing. Recommend delete and redownload.')
                         except Exception:
-                            set_error_child_later(
+                            self._set_error_child(
                                 'Cannot list links: Unexpected error')
                         else:
                             fg_call_later(self.update_children)
@@ -715,6 +804,7 @@ class _ResourceNode(Node):
     
     # === Updates ===
     
+    @captures_crashes_to_self
     def update_children(self) -> None:
         """
         Updates this node's children.
@@ -1116,6 +1206,7 @@ class ResourceGroupNode(_GroupedNode):
         else:
             return True
     
+    @captures_crashes_to_self
     def update_children(self, force_populate: bool=False) -> None:
         if not force_populate:
             if not self._children_loaded:
@@ -1157,6 +1248,7 @@ class ResourceGroupNode(_GroupedNode):
     def on_expanded(self, event: wx.TreeEvent) -> None:
         # If this is the first expansion attempt, populate the children
         if not self._children_loaded:
+            @captures_crashes_to(self)
             def fg_task_later() -> None:
                 # Show progress dialog in advance if will need to load all project URLs
                 try:

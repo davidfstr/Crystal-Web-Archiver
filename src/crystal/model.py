@@ -33,7 +33,8 @@ from crystal.progress import (
 from crystal import resources as resources_
 from crystal.util import http_date
 from crystal.util.bulkheads import (
-    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg
+    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
+    captures_crashes_to_stderr,
 )
 from crystal.util.db import (
     DatabaseConnection,
@@ -2498,6 +2499,7 @@ class ResourceRevision:
         # Asynchronously:
         # 1. Create the ResourceRevision row in the database
         # 2. Get the database ID
+        @captures_crashes_to_stderr
         def fg_task() -> None:
             nonlocal callable_exc_info
             try:

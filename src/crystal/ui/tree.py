@@ -212,6 +212,7 @@ class NodeView:
         self.peer = None  # type: Optional[NodeViewPeer]
         self._title = ''
         self._text_color = None  # type: Optional[wx.Colour]
+        self._bold = False
         self._expandable = False
         self._icon_set_func = None  # type: Optional[Callable[[], Optional[IconSet]]]
         self._icon_set = None  # type: Optional[IconSet]
@@ -415,6 +416,8 @@ class NodeView:
         self.title = self.title
         if self._text_color is not None:
             self.text_color = self.text_color
+        if self.bold:
+            self.bold = self.bold
         self.expandable = self.expandable
         self.icon_set = self.icon_set
         self.set_children(self.children, _initial=True)

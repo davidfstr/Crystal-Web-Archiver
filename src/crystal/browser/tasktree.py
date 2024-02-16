@@ -74,7 +74,9 @@ class TaskTreeNode:
                 (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()[self.task.icon_name]),
             )
         self.tree_node.title = self.task.title
-        self.tree_node.subtitle = self.task.subtitle
+        self.tree_node.subtitle = self._calculate_tree_node_subtitle(
+            self.task.subtitle,
+            self.task.crash_reason)
         self.tree_node.expandable = not callable(task)
         
         self._num_visible_children = 0

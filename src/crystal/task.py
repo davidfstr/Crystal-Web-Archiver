@@ -3,10 +3,11 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
 from crystal.util.bulkheads import (
-    run_bulkhead_call,
+    Bulkhead,
     captures_crashes_to_self,
     CrashReason,
     does_not_capture_crashes,
+    run_bulkhead_call,
 )
 from crystal.util.caffeination import Caffeination
 from crystal.util import cli
@@ -99,7 +100,7 @@ SCHEDULING_STYLE_ROUND_ROBIN = 2
 """One task unit will be executed from each child during a scheduler pass."""
 
 
-class Task(ListenableMixin):
+class Task(ListenableMixin, Bulkhead):
     """
     Encapsulates a long-running process that reports its status occasionally.
     A task may depend on the results of a child task during its execution.
@@ -659,6 +660,34 @@ _TASK_DISPOSED_EXCEPTION = TaskDisposedException()
 
 _FUTURE_WITH_TASK_DISPOSED_EXCEPTION = Future()  # type: Future[Any]
 _FUTURE_WITH_TASK_DISPOSED_EXCEPTION.set_exception(_TASK_DISPOSED_EXCEPTION)
+
+
+# ------------------------------------------------------------------------------
+# CrashedTask
+
+class CrashedTask(Task):
+    """
+    Crashed task that presents a fixed title.
+    """
+    # TODO: Rename icon as 'tree_warning' so that icon owned by EntityTree
+    #       is not referenced here (in a TaskTree context).
+    icon_name = 'entitytree_warning'
+    
+    def __init__(self, title: str, reason: CrashReason, dismiss_func: Callable[[], None]) -> None:
+        super().__init__(title=title)
+        self.crash_reason = reason
+        self._dismiss_func = dismiss_func  # type: Optional[Callable[[], None]]
+    
+    @bg_affinity
+    def __call__(self):
+        raise AssertionError('Cannot run a crashed task')
+    
+    @override
+    def finish(self) -> None:
+        super().finish()
+        if self._dismiss_func is not None:
+            self._dismiss_func()
+            self._dismiss_func = None  # garbage collect
 
 
 # ------------------------------------------------------------------------------
