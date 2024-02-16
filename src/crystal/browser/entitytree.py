@@ -756,7 +756,8 @@ class _ResourceNode(Node):
     
     # === Events ===
     
-    def on_expanded(self, event):
+    @captures_crashes_to_self
+    def on_expanded(self, event: wx.TreeEvent) -> None:
         # If this is the first expansion attempt, start an asynchronous task to fetch
         # the resource and subsequently update the children
         if self.download_future is None:
@@ -1247,6 +1248,7 @@ class ResourceGroupNode(_GroupedNode):
     
     # === Events ===
     
+    @captures_crashes_to_self
     def on_expanded(self, event: wx.TreeEvent) -> None:
         # If this is the first expansion attempt, populate the children
         if not self._children_loaded:
@@ -1283,10 +1285,11 @@ class ResourceGroupNode(_GroupedNode):
             more_node.view.peer.SelectItem(False)
         
         self._max_visible_children += self._MORE_CHILDREN_TO_SHOW
+        # NOTE: Does NOT raise here if update_children() crashes internally
         self.update_children()
         
         # Restore selected node
-        if more_node_was_selected:
+        if more_node_was_selected and len(self.children) >= 1:
             node_in_position_of_old_more_node = self.children[old_children_len - 1]
             node_in_position_of_old_more_node.view.peer.SelectItem()
     
@@ -1394,7 +1397,7 @@ class MorePlaceholderNode(Node):
     
     # === Events ===
     
-    def on_expanded(self, event):
+    def on_expanded(self, event: wx.TreeEvent) -> None:
         if hasattr(self._delegate, 'on_more_expanded'):
             self._delegate.on_more_expanded(self)  # type: ignore[attr-defined]
     

@@ -1,11 +1,12 @@
 from contextlib import redirect_stderr
+from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.task import (
     DownloadResourceGroupTask, DownloadResourceGroupMembersTask, 
     _DownloadResourcesPlaceholderTask, DownloadResourceTask,
     Task, UpdateResourceGroupMembersTask
 )
-from crystal.tests.util.controls import click_button
+from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import (
@@ -13,7 +14,10 @@ from crystal.tests.util.tasks import (
     clear_top_level_tasks_on_exit, scheduler_disabled, scheduler_thread_context,
     ttn_for_task,
 )
-from crystal.tests.util.wait import wait_for
+from crystal.tests.util.wait import (
+    first_child_of_tree_item_is_not_loading_condition,
+    wait_for,
+)
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup
 from crystal.ui.tree import NodeView
@@ -610,6 +614,142 @@ async def test_when_TTN_task_did_clear_children_crashes_at_top_level_then_T_disp
 async def test_when_TTN_task_did_clear_children_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     # TODO: Crash the line: self.tree_node.children = [... if i not in child_indexes]
     pass
+
+
+# ------------------------------------------------------------------------------
+# Test: Common Crash Locations in EntityTree
+# 
+# Below, some abbreviations are used in test names:
+# - ET = EntityTree
+# - RN = _ResourceNode
+# - RGN = ResourceGroupNode
+
+@skip('not yet automated')
+async def test_when_RN_on_expanded_crashes_at_top_level_then_children_replaced_with_error_node() -> None:
+    # TODO: In _ResourceNode.on_expanded,
+    #       crash the line: self.download_future = self.resource.download()
+    pass
+
+
+@skip('not yet automated')
+async def test_when_RN_on_expanded_crashes_while_updating_children_then_children_replaced_with_error_node() -> None:
+    # TODO: In _ResourceNode.update_children,
+    #       crash the line: children.append(RootResourceNode(...))
+    pass
+
+
+async def test_when_RGN_on_expanded_crashes_while_loading_urls_then_children_replaced_with_error_node() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+        feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                atom_feed_r = Resource(project, atom_feed_url)
+                rss_feed_r = Resource(project, rss_feed_url)
+                
+                # Create ResourceGroupNode
+                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                feed_ti = root_ti.find_child(feed_pattern)
+                
+                # In ResourceGroupNode.on_expanded,
+                # crash the line: self.resource_group.project.load_urls()
+                with patch.object(project, 'load_urls', side_effect=_CRASH):
+                    feed_ti.Expand()
+                    await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
+                
+                # Postconditions
+                (error_ti,) = feed_ti.Children
+                assert _ErrorNode.CRASH_TITLE == error_ti.Text
+                assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
+                assert True == error_ti.Bold
+
+
+async def test_when_RGN_on_expanded_crashes_while_updating_children_then_children_replaced_with_error_node() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+        feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                atom_feed_r = Resource(project, atom_feed_url)
+                rss_feed_r = Resource(project, rss_feed_url)
+                
+                # Create ResourceGroupNode
+                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                feed_ti = root_ti.find_child(feed_pattern)
+                
+                # In ResourceGroupNode.update_children,
+                # crash the line: children_rs.append(NormalResourceNode(...))
+                with patch('crystal.browser.entitytree.NormalResourceNode', side_effect=_CRASH):
+                    feed_ti.Expand()
+                    await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
+                
+                # Postconditions
+                (error_ti,) = feed_ti.Children
+                assert _ErrorNode.CRASH_TITLE == error_ti.Text
+                assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
+                assert True == error_ti.Bold
+
+
+async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantiate_then_RGN_children_replaced_with_error_node() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+        feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                atom_feed_r = Resource(project, atom_feed_url)
+                
+                # Create ResourceGroupNode
+                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                feed_ti = root_ti.find_child(feed_pattern)
+                
+                # Expand ResourceGroupNode
+                feed_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
+                
+                super_update_children = ResourceGroupNode.update_children
+                # NOTE: Need some kind of @captures_crashes_to* here to pass caller checks
+                @captures_crashes_to_stderr
+                def update_children(self, *args, **kwargs) -> None:
+                    update_children.called = True  # type: ignore[attr-defined]
+                    return super_update_children(self, *args, **kwargs)
+                update_children.called = False  # type: ignore[attr-defined]
+                
+                # In ResourceGroupNode.update_children,
+                # crash the line: children_rs.append(NormalResourceNode(...))
+                with patch('crystal.browser.entitytree.NormalResourceNode', side_effect=_CRASH), \
+                        patch.object(ResourceGroupNode, 'update_children', update_children):
+                    rss_feed_r = Resource(project, rss_feed_url)
+                    await wait_for(lambda: update_children.called or None)  # type: ignore[attr-defined]
+                
+                # Postconditions
+                (error_ti,) = feed_ti.Children
+                assert _ErrorNode.CRASH_TITLE == error_ti.Text
+                assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
+                assert True == error_ti.Bold
 
 
 # ------------------------------------------------------------------------------

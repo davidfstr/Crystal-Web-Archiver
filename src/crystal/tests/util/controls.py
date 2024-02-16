@@ -85,6 +85,14 @@ class TreeItem:
     def Text(self) -> str:
         return self.tree.GetItemText(self.id)
     
+    @property
+    def TextColour(self) -> wx.Colour:
+        return self.tree.GetItemTextColour(self.id)
+    
+    @property
+    def Bold(self) -> bool:
+        return self.tree.IsBold(self.id)
+    
     def SelectItem(self) -> None:
         self.tree.SelectItem(self.id)
     
