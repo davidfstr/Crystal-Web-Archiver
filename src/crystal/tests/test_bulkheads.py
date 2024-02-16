@@ -1,7 +1,6 @@
 from contextlib import redirect_stderr
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.task import (
-    captures_crashes_to_self, captures_crashes_to_stderr,
     DownloadResourceGroupTask, DownloadResourceGroupMembersTask, 
     _DownloadResourcesPlaceholderTask, DownloadResourceTask,
     Task, UpdateResourceGroupMembersTask
@@ -18,6 +17,9 @@ from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup
 from crystal.ui.tree import NodeView
+from crystal.util.bulkheads import (
+    captures_crashes_to_self, captures_crashes_to_stderr,
+)
 from crystal.util import cli
 from crystal.util.wx_bind import bind
 from crystal.util.xfutures import Future
