@@ -664,7 +664,7 @@ class _ResourceNode(Node):
         self.children = [_LoadingNode()]
         
         self.resource = resource
-        self.download_future = None
+        self.download_future = None  # type: Optional[Future[ResourceRevision]]
         self.resource_links = None  # type: Optional[List[Link]]
     
     # === Properties ===
@@ -819,7 +819,7 @@ class _ResourceNode(Node):
             return
         
         # Partition links and create resources
-        resources_2_links = defaultordereddict(list)
+        resources_2_links = defaultordereddict(list)  # type: Dict[Resource, List[Link]]
         if self.resource_links:
             for link in self.resource_links:
                 url = urljoin(self.resource.url, link.relative_url)
@@ -827,7 +827,9 @@ class _ResourceNode(Node):
                 resources_2_links[resource].append(link)
         
         linked_root_resources = []
-        group_2_root_and_normal_resources = defaultordereddict(lambda: (list(), list()))
+        group_2_root_and_normal_resources = defaultordereddict(
+            lambda: (list(), list())
+        )  # type: Dict[ResourceGroup, Tuple[List[Tuple[RootResource, List[Link]]], List[Tuple[Resource, List[Link]]]]]
         linked_other_resources = []
         lowpri_offsite_resources = []
         # TODO: Recognize cluster: (Hidden: Banned by robots.txt)
@@ -866,7 +868,7 @@ class _ResourceNode(Node):
                         linked_other_resources.append((r, links_to_r))
         
         # Create children and update UI
-        children = []
+        children = []  # type: List[Node]
         
         for (rr, links_to_r) in linked_root_resources:
             children.append(RootResourceNode(rr,
