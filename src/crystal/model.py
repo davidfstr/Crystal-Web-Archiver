@@ -35,6 +35,7 @@ from crystal.util import http_date
 from crystal.util.bulkheads import (
     captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
     captures_crashes_to_stderr,
+    run_bulkhead_call,
 )
 from crystal.util.db import (
     DatabaseConnection,
@@ -1000,7 +1001,7 @@ class Project(ListenableMixin):
                     r.already_downloaded_this_session = False
             for lis in self.listeners:
                 if hasattr(lis, 'min_fetch_date_did_change'):
-                    lis.min_fetch_date_did_change()  # type: ignore[attr-defined]
+                    run_bulkhead_call(lis.min_fetch_date_did_change)  # type: ignore[attr-defined]
     min_fetch_date = property(_get_min_fetch_date, _set_min_fetch_date, doc=
         """
         If non-None then any resource fetched <= this datetime
@@ -1386,7 +1387,7 @@ class Project(ListenableMixin):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_did_instantiate'):
-                lis.resource_did_instantiate(resource)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_did_instantiate, resource)  # type: ignore[attr-defined]
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
@@ -1424,7 +1425,7 @@ class Project(ListenableMixin):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_revision_did_instantiate'):
-                lis.resource_revision_did_instantiate(revision)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_revision_did_instantiate, revision)  # type: ignore[attr-defined]
     
     # === Events: Root Resource Lifecycle ===
     
@@ -1433,13 +1434,13 @@ class Project(ListenableMixin):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'root_resource_did_instantiate'):
-                lis.root_resource_did_instantiate(root_resource)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.root_resource_did_instantiate, root_resource)  # type: ignore[attr-defined]
     
     def _root_resource_did_forget(self, root_resource: RootResource) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'root_resource_did_forget'):
-                lis.root_resource_did_forget(root_resource)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.root_resource_did_forget, root_resource)  # type: ignore[attr-defined]
     
     # === Events: Resource Group Lifecycle ===
     
@@ -1448,19 +1449,19 @@ class Project(ListenableMixin):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_instantiate'):
-                lis.resource_group_did_instantiate(group)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_group_did_instantiate, group)  # type: ignore[attr-defined]
     
     def _resource_group_did_change_do_not_download(self, group: ResourceGroup) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_change_do_not_download'):
-                lis.resource_group_did_change_do_not_download(group)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_group_did_change_do_not_download, group)  # type: ignore[attr-defined]
     
     def _resource_group_did_forget(self, group: ResourceGroup) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_forget'):
-                lis.resource_group_did_forget(group)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_group_did_forget, group)  # type: ignore[attr-defined]
     
     # === Close ===
     
@@ -3505,7 +3506,7 @@ class ResourceGroup(ListenableMixin):
             
             for lis in self.listeners:
                 if hasattr(lis, 'group_did_add_member'):
-                    lis.group_did_add_member(self, resource)  # type: ignore[attr-defined]
+                    run_bulkhead_call(lis.group_did_add_member, self, resource)  # type: ignore[attr-defined]
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
