@@ -29,6 +29,7 @@ from crystal.util.bulkheads import (
     CrashReason,
     run_bulkhead_call,
 )
+from crystal.util.notimplemented import NotImplemented, NotImplementedType
 from crystal.util.wx_bind import bind
 from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xfutures import Future
@@ -36,7 +37,8 @@ from crystal.util.xthreading import bg_call_later, fg_call_later
 import os
 import threading
 import time
-from typing import cast, List, Optional, Union
+from typing import cast, final, List, Optional, Union
+from typing_extensions import override
 from urllib.parse import urljoin, urlparse, urlunparse
 import wx
 import wx.lib.newevent
@@ -529,19 +531,29 @@ class Node(Bulkhead):
         """
         pass
     
+    @final
     def update_title(self) -> None:
         """
         Updates this node's title. Usually due to a project change.
         """
-        if hasattr(self, 'calculate_title'):
-            self.view.title = self.calculate_title()  # type: ignore[attr-defined]
+        maybe_title = self.calculate_title()
+        if not isinstance(maybe_title, NotImplementedType):
+            self.view.title = maybe_title
     
+    def calculate_title(self) -> Union[str, NotImplementedType]:
+        return NotImplemented
+    
+    @final
     def update_icon_set(self) -> None:
         """
         Updates this node's icon set. Usually due to a project change.
         """
-        if hasattr(self, 'calculate_icon_set'):
-            self.view.icon_set = self.calculate_icon_set()  # type: ignore[attr-defined]
+        maybe_icon_set = self.calculate_icon_set()
+        if not isinstance(maybe_icon_set, NotImplementedType):
+            self.view.icon_set = maybe_icon_set
+    
+    def calculate_icon_set(self) -> Union[Optional[IconSet], NotImplementedType]:
+        return NotImplemented
     
     # === Dispose ===
     
@@ -577,6 +589,7 @@ class RootNode(Node):
     
     # === Updates ===
     
+    @override
     def update_children(self, 
             progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
         """
@@ -611,6 +624,7 @@ class _LoadingNode(Node):
     
     # === Updates ===
     
+    @override
     def update_children(self):
         pass
 
@@ -633,6 +647,7 @@ class _ErrorNode(Node):
     
     # === Updates ===
     
+    @override
     def update_children(self):
         pass
 
@@ -669,6 +684,7 @@ class _ResourceNode(Node):
     
     # === Properties ===
     
+    @override
     def calculate_icon_set(self) -> Optional[IconSet]:
         return (
             (wx.TreeItemIcon_Normal, BADGED_TREE_NODE_ICON(
@@ -806,6 +822,7 @@ class _ResourceNode(Node):
     # === Updates ===
     
     @captures_crashes_to_self
+    @override
     def update_children(self) -> None:
         """
         Updates this node's children.
@@ -976,6 +993,7 @@ class RootResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'root URL'
     
+    @override
     def calculate_title(self) -> str:
         return self.calculate_title_of(self.root_resource)
     
@@ -1022,6 +1040,7 @@ class NormalResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'URL'
     
+    @override
     def calculate_title(self) -> str:
         project = self.resource.project
         return '%s' % project.get_display_url(self.resource.url)
@@ -1059,6 +1078,7 @@ class LinkedResourceNode(_ResourceNode):
     def _entity_tooltip(self) -> str:
         return 'URL'
     
+    @override
     def calculate_title(self) -> str:
         project = self.resource.project
         link_titles = ', '.join([self._full_title_of_link(link) for link in self.links])
@@ -1136,6 +1156,7 @@ class _GroupedNode(Node):  # abstract
     
     # === Properties ===
     
+    @override
     def calculate_icon_set(self) -> Optional[IconSet]:
         return (
             (wx.TreeItemIcon_Normal, BADGED_ART_PROVIDER_TREE_NODE_ICON(
@@ -1187,6 +1208,7 @@ class ResourceGroupNode(_GroupedNode):
     
     # === Properties ===
     
+    @override
     def calculate_title(self) -> str:
         return self.calculate_title_of(self.resource_group)
     
@@ -1213,6 +1235,7 @@ class ResourceGroupNode(_GroupedNode):
             return True
     
     @captures_crashes_to_self
+    @override
     def update_children(self, force_populate: bool=False) -> None:
         if not force_populate:
             if not self._children_loaded:
@@ -1335,6 +1358,7 @@ class GroupedLinkedResourcesNode(_GroupedNode):
     
     # === Properties ===
     
+    @override
     def calculate_title(self) -> str:
         project = self.resource_group.project
         display_url_pattern = project.get_display_url(self.resource_group.url_pattern)
