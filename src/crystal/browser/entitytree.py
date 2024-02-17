@@ -912,6 +912,9 @@ class _ResourceNode(Node):
         
         self.children = children
     
+    # NOTE: If crash while trying to determine which new node to select,
+    #       fallback to just clearing the selection
+    @captures_crashes_to_stderr
     def on_selection_deleted(self,
             old_selected_node_view: NodeView,
             ) -> Optional[NodeView]:
@@ -1277,6 +1280,10 @@ class ResourceGroupNode(_GroupedNode):
                 fg_call_later(fg_task_later, profile=False)
             bg_call_later(bg_task)
     
+    # NOTE: If the more-node crashes while expanding, replace the entire list
+    #       of sibling children with a single error node. A bit of an extreme
+    #       response, but is probably the safest thing to do.
+    @captures_crashes_to_self
     def on_more_expanded(self, more_node: MorePlaceholderNode) -> None:
         # Save selected node
         old_children_len = len(self.children)  # capture
@@ -1397,9 +1404,10 @@ class MorePlaceholderNode(Node):
     
     # === Events ===
     
+    @captures_crashes_to_self
     def on_expanded(self, event: wx.TreeEvent) -> None:
         if hasattr(self._delegate, 'on_more_expanded'):
-            self._delegate.on_more_expanded(self)  # type: ignore[attr-defined]
+            run_bulkhead_call(self._delegate.on_more_expanded, self)  # type: ignore[attr-defined]
     
     # === Comparison ===
     

@@ -10,6 +10,7 @@ This abstraction provides:
 from __future__ import annotations
 
 from crystal.progress import OpenProjectProgressListener
+from crystal.util.bulkheads import run_bulkhead_call
 from crystal.util.wx_bind import bind
 from crystal.util.wx_error import (
     is_wrapped_object_deleted_error,
@@ -154,7 +155,11 @@ class TreeView:
             event_type_id = event.GetEventType()
             delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
             if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
-                getattr(self.delegate, delegate_callable_attr)(event, node_view)
+                run_bulkhead_call(
+                    getattr(self.delegate, delegate_callable_attr),
+                    event,
+                    node_view
+                )
     
     def dispose(self) -> None:
         self.delegate = None
@@ -429,7 +434,10 @@ class NodeView:
             event_type_id = event.GetEventType()
             delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
             if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
-                getattr(self.delegate, delegate_callable_attr)(event)
+                run_bulkhead_call(
+                    getattr(self.delegate, delegate_callable_attr),
+                    event
+                )
     
     def dispose(self) -> None:
         self.delegate = None
