@@ -1,11 +1,12 @@
 from contextlib import redirect_stderr
 from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
 from crystal.browser.tasktree import TaskTreeNode
-from crystal.doc.generic import create_external_link
+from crystal.doc.generic import create_external_link, Link
 from crystal import task
 from crystal.task import (
     DownloadResourceGroupTask, DownloadResourceGroupMembersTask, 
     _DownloadResourcesPlaceholderTask, DownloadResourceTask,
+    ParseResourceRevisionLinks,
     Task, UpdateResourceGroupMembersTask
 )
 from crystal.tests.util.controls import click_button, TreeItem
@@ -22,7 +23,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.model import Project, Resource, ResourceGroup
+from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.ui.tree import NodeView
 from crystal.util.bulkheads import (
     captures_crashes_to,
@@ -36,7 +37,7 @@ from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
 from io import StringIO
 import sys
-from typing import Callable, Optional, Tuple, TypeVar
+from typing import Callable, List, Optional, Tuple, TypeVar
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -917,31 +918,17 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 await _bg_call_and_wait(scheduler_thread_context()(unit))
                 assert download_r_task.children[2].children[0].complete
                 
-                PRRL_call_result__1_link = (
-                    [create_external_link('/', type_title='Simulated Link', title=None, embedded=True)],
-                    [home_r]
-                )  # type: Tuple[List[Link], List[Resource]]
-                
                 # RT > DRT > DRT[0] > ParseResourceRevisionLinks
                 unit = project.root_task.try_get_next_task_unit()  # step scheduler
                 assert unit is not None
-                assert not download_r_task.children[2].children[1].complete
-                # 1. Force ParseResourceRevisionLinks to return 1 embedded link.
-                # 2. Patch urljoin() to simulate effect of calling urlparse('//[oops'),
-                #    which raises an exception in stock Python:
-                #    https://discuss.python.org/t/urlparse-can-sometimes-raise-an-exception-should-it/44465
-                #    
-                #    NOTE: Overrides the fix in commit 5aaaba57076d537a4872bb3cf7270112ca497a06,
-                #          reintroducing the related bug it fixed.
-                with patch.object(download_r_task.children[2].children[1], '__call__', return_value=PRRL_call_result__1_link) as mock_call, \
-                        patch('crystal.task.urljoin', side_effect=ValueError('Invalid IPv6 URL')):
-                    await _bg_call_and_wait(scheduler_thread_context()(unit))
-                    assert mock_call.call_count >= 1
-                assert download_r_task.children[2].children[1].complete
+                await _run_unit_from_PRRL_and_crash_task(
+                    download_r_task.children[2].children[1],
+                    unit,
+                    home_r)
                 
                 unit = project.root_task.try_get_next_task_unit()  # step scheduler
                 
-                # Postcondition:
+                # Postconditions:
                 # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
                 #    when tried to resolve relative_urls from links parsed by
                 #    ParseResourceRevisionLinks to absolute URLs
@@ -958,6 +945,221 @@ async def test_when_DRT_child_of_DRGMT_crashes_then_DRGMT_displays_as_crashed() 
         DownloadResourceGroupMembersTask.scheduling_style
     )
     skipTest('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
+
+
+async def test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_DRGMT_child_completes() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+        feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                home_r = Resource(project, home_url)
+                atom_feed_r = Resource(project, atom_feed_url)
+                rss_feed_r = Resource(project, rss_feed_url)
+                
+                # Create UpdateResourceGroupMembersTask
+                home_rr = RootResource(project, 'Home', home_r)
+                feed_g = ResourceGroup(project, '', feed_pattern, source=home_rr)
+                feed_g.download(); append_deferred_top_level_tasks(project)
+                (download_rg_task,) = project.root_task.children
+                assert isinstance(download_rg_task, DownloadResourceGroupTask)
+                (update_rg_members_task, download_rg_members_task) = download_rg_task.children
+                assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
+                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+                
+                # Preconditions
+                assert download_rg_task.crash_reason is None
+                assert update_rg_members_task.crash_reason is None
+                
+                # RT > DRGT > URGMT > DRT > DownloadResourceBodyTask
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not update_rg_members_task.children[0].children[0].complete
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert update_rg_members_task.children[0].children[0].complete
+                
+                # RT > DRGT > DRGMT @ _load_children_and_update_completed_status
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert len(download_rg_members_task.children) == 0
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert len(download_rg_members_task.children) == 2
+                
+                # RT > DRGT > URGMT > DRT > ParseResourceRevisionLinks
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                await _run_unit_from_PRRL_and_crash_task(
+                    update_rg_members_task.children[0].children[1],
+                    unit,
+                    home_r)
+                
+                # RT > DRGT > DRGMT > ... (doesn't matter)
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                
+                # 1. RT > DRGT > URGMT -- notices crashed child
+                # 2. RT > DRGT > DRGMT > ... (doesn't matter)
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                
+                # Postconditions #1:
+                # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
+                #    when tried to resolve relative_urls from links parsed by
+                #    ParseResourceRevisionLinks to absolute URLs
+                # 2. Ensure crash cascades to URGMT
+                # 3. Ensure crash does NOT cascade to DRGT yet,
+                #    because DRGMT is not complete
+                # 4. Ensure crash does not cascade to the RootTask
+                assert update_rg_members_task.children[0].crash_reason is not None
+                assert update_rg_members_task.crash_reason is not None
+                assert download_rg_task.crash_reason is None
+                assert project.root_task.crash_reason is None
+                
+                # Wait for DRGMT to complete
+                while not download_rg_members_task.complete:
+                    assert download_rg_members_task.crash_reason is None
+                    
+                    # RT > DRGT > DRGMT > ... (doesn't matter)
+                    unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                    assert unit is not None
+                    await _bg_call_and_wait(scheduler_thread_context()(unit))
+                
+                # RT > DRGT -- notices crashed URGMT child
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                
+                # Postconditions #2
+                # 1. Ensure crash from URGMT cascades to DRGT after DRGMT completes
+                # 2. Ensure crash does not cascade to the RootTask
+                assert download_rg_task.crash_reason is not None
+                assert project.root_task.crash_reason is None
+
+
+async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_URGMT_child_completes() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+        feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                home_r = Resource(project, home_url)
+                atom_feed_r = Resource(project, atom_feed_url)
+                rss_feed_r = Resource(project, rss_feed_url)
+                
+                # Create DownloadResourceGroupMembersTask
+                home_rr = RootResource(project, 'Home', home_r)
+                feed_g = ResourceGroup(project, '', feed_pattern, source=home_rr)
+                feed_g.download(); append_deferred_top_level_tasks(project)
+                (download_rg_task,) = project.root_task.children
+                assert isinstance(download_rg_task, DownloadResourceGroupTask)
+                (update_rg_members_task, download_rg_members_task) = download_rg_task.children
+                assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
+                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+                
+                # Preconditions
+                assert download_rg_task.crash_reason is None
+                assert download_rg_members_task.crash_reason is None
+                
+                # RT > DRGT > URGMT > ... (doesn't matter)
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not update_rg_members_task.children[0].children[0].complete
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert update_rg_members_task.children[0].children[0].complete
+                
+                # RT > DRGT > DRGMT @ _load_children_and_update_completed_status
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert len(download_rg_members_task.children) == 0
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert len(download_rg_members_task.children) == 2
+                
+                # RT > DRGT > URGMT > ... (doesn't matter)
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not update_rg_members_task.children[0].children[1].complete
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert update_rg_members_task.children[0].children[1].complete
+                
+                # RT > DRGT > DRGMT > DRT > DownloadResourceBodyTask
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not download_rg_members_task.children[0].children[0].complete
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert download_rg_members_task.children[0].children[0].complete
+                
+                # RT > DRGT > URGMT > ... (doesn't matter)
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not update_rg_members_task.children[0].children[2].children[0].complete
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert update_rg_members_task.children[0].children[2].children[0].complete
+                
+                # RT > DRGT > DRGMT > DRT > ParseResourceRevisionLinks
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                await _run_unit_from_PRRL_and_crash_task(
+                    download_rg_members_task.children[0].children[1],
+                    unit,
+                    home_r)
+                
+                # RT > DRGT > URGMT > ... (doesn't matter)
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                
+                # 1. RT > DRGT > DRGMT -- notices crashed child
+                # 2. RT > DRGT > URGMT > ... (doesn't matter)
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                
+                # Postconditions #1:
+                # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
+                #    when tried to resolve relative_urls from links parsed by
+                #    ParseResourceRevisionLinks to absolute URLs
+                # 2. Ensure crash cascades to DRGMT
+                # 3. Ensure crash does NOT cascade to DRGT yet,
+                #    because URGMT is not complete
+                # 4. Ensure crash does not cascade to the RootTask
+                assert download_rg_members_task.children[0].crash_reason is not None
+                assert download_rg_members_task.crash_reason is not None
+                assert download_rg_task.crash_reason is None
+                assert project.root_task.crash_reason is None
+                
+                # Wait for URGMT to complete
+                while not update_rg_members_task.complete:
+                    assert update_rg_members_task.crash_reason is None
+                    
+                    # RT > DRGT > URGMT > ... (doesn't matter)
+                    unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                    assert unit is not None
+                    await _bg_call_and_wait(scheduler_thread_context()(unit))
+                
+                # RT > DRGT -- notices crashed DRGMT child
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                
+                # Postconditions #2
+                # 1. Ensure crash from DRGMT cascades to DRGT after URGMT completes
+                # 2. Ensure crash does not cascade to the RootTask
+                assert download_rg_task.crash_reason is not None
+                assert project.root_task.crash_reason is None
 
 
 # ------------------------------------------------------------------------------
@@ -982,6 +1184,29 @@ async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[flo
     # NOTE: Releases foreground thread while waiting
     await wait_for(lambda: result_cell.done() or None, timeout)
     return result_cell.result()
+
+
+async def _run_unit_from_PRRL_and_crash_task(prrl_task: Task, unit, home_r: Resource) -> None:
+    assert isinstance(prrl_task, ParseResourceRevisionLinks)
+    
+    _PRRL_call_result__1_link = (
+        [create_external_link('/', type_title='Simulated Link', title=None, embedded=True)],
+        [home_r]
+    )  # type: Tuple[List[Link], List[Resource]]
+    
+    assert not prrl_task.complete
+    # 1. Force ParseResourceRevisionLinks to return 1 embedded link.
+    # 2. Patch urljoin() to simulate effect of calling urlparse('//[oops'),
+    #    which raises an exception in stock Python:
+    #    https://discuss.python.org/t/urlparse-can-sometimes-raise-an-exception-should-it/44465
+    #    
+    #    NOTE: Overrides the fix in commit 5aaaba57076d537a4872bb3cf7270112ca497a06,
+    #          reintroducing the related bug it fixed.
+    with patch.object(prrl_task, '__call__', return_value=_PRRL_call_result__1_link) as mock_call, \
+            patch('crystal.task.urljoin', side_effect=ValueError('Invalid IPv6 URL')):
+        await _bg_call_and_wait(scheduler_thread_context()(unit))
+        assert mock_call.call_count >= 1
+    assert prrl_task.complete
 
 
 # ------------------------------------------------------------------------------

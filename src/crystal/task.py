@@ -150,6 +150,8 @@ class Task(ListenableMixin, Bulkhead):
     """For a container task, defines the order that task units from children will be executed in."""
     all_children_complete_implies_this_task_complete = True
     """For a container task, whether all of its children being complete implies that the container should be complete."""
+    all_incomplete_children_crashed_implies_this_task_should_crash = True
+    """For a container task, whether all of its incomplete children being crashed implies that the container should crash as well."""
     
     _USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS = (
         os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
@@ -576,6 +578,14 @@ class Task(ListenableMixin, Bulkhead):
                     cur_child_index = (cur_child_index + 1) % len(self.children)
                     if cur_child_index == self._next_child_index:
                         # Wrapped around and back to where we started without finding anything to do
+                        if type(self).all_incomplete_children_crashed_implies_this_task_should_crash:
+                            first_crashed_child = next((c for c in self.children if c.crash_reason is not None), None)
+                            if first_crashed_child is not None:
+                                # Presumably this parent task cannot proceed because all
+                                # child tasks are either crashed or complete.
+                                # So crash this parent task with the same reason
+                                # as one of the crashed children.
+                                self.crash_reason = first_crashed_child.crash_reason
                         return None
                     if cur_child_index == 0:
                         # NOTE: Ignore known-slow operation that has no further obvious optimizations
@@ -647,6 +657,15 @@ class Task(ListenableMixin, Bulkhead):
         for lis in self.listeners:
             if hasattr(lis, 'task_child_did_complete'):
                 run_bulkhead_call(lis.task_child_did_complete, self, task)  # type: ignore[attr-defined]
+    
+    @final
+    @captures_crashes_to_self
+    def task_crash_reason_did_change(self, task: Task) -> None:
+        if self._use_extra_listener_assertions:
+            assert task in self.children_unsynchronized
+        
+        if hasattr(self, 'child_task_did_crash'):
+            self.child_task_did_crash(task)
     
     # === Utility ===
     
@@ -1632,6 +1651,11 @@ class DownloadResourceGroupTask(Task):
         if self.num_children_complete == len(self.children) and not self.complete:
             self.finish()
     
+    @captures_crashes_to_self
+    def child_task_did_crash(self, task: Task) -> None:
+        if task == self._update_members_task:
+            self._download_members_task.group_did_finish_updating()
+    
     def finish(self) -> None:
         Caffeination.remove_caffeine()
         
@@ -1657,6 +1681,7 @@ class RootTask(Task):
     icon_name = None
     scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
     all_children_complete_implies_this_task_complete = False
+    all_incomplete_children_crashed_implies_this_task_should_crash = False
     
     def __init__(self) -> None:
         super().__init__(title='ROOT')
