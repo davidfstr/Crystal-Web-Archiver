@@ -101,14 +101,24 @@ class EntityTree(Bulkhead):
             self._crash_reason = None
         else:
             if self._crash_reason is not None:
-                # Ignore subsequent crashes until the first one is cleared
+                # Ignore subsequent crashes until the first one is dismissed
                 return
             self._crash_reason = reason
             
             # Report crash to Task Tree
-            def clear_crash_reason() -> None:
+            def dismiss_crash_reason() -> None:
+                assert not crash_reason_view.complete
+                
+                # Recreate entity tree children
+                self.root.set_children([])
+                self.root.update_children()
+                
+                # Remove the CrashedTask soon
+                crash_reason_view.finish()
+                
+                # Clear the crash reason
                 self.crash_reason = None
-            crash_reason_view = CrashedTask('Updating entity tree', reason, clear_crash_reason)
+            crash_reason_view = CrashedTask('Updating entity tree', reason, dismiss_crash_reason)
             self._project.add_task(crash_reason_view)
     crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
     

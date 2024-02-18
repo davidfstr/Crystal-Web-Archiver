@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import Project
 import crystal.task
-from crystal.task import _is_scheduler_thread, Task
+from crystal.task import _is_scheduler_thread, scheduler_affinity, Task
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.wait import (
@@ -23,21 +23,21 @@ import wx
 # ------------------------------------------------------------------------------
 # Utility: Wait for Download
 
+_MAX_DOWNLOAD_DURATION_PER_STANDARD_ITEM = (
+    4 +  # fetch + parse time
+    crystal.task.DELAY_BETWEEN_DOWNLOADS
+) * 2.5  # fudge factor
+_MAX_DOWNLOAD_DURATION_PER_LARGE_ITEM = (
+    _MAX_DOWNLOAD_DURATION_PER_STANDARD_ITEM * 
+    4
+)
+MAX_DOWNLOAD_DURATION_PER_ITEM = _MAX_DOWNLOAD_DURATION_PER_LARGE_ITEM
+
 async def wait_for_download_to_start_and_finish(
         task_tree: wx.TreeCtrl,
         *, immediate_finish_ok: bool=False,
         stacklevel_extra: int=0
         ) -> None:
-    # TODO: Allow caller to tune "max_download_duration_per_item"
-    max_download_duration_per_standard_item = (
-        4 +  # fetch + parse time
-        crystal.task.DELAY_BETWEEN_DOWNLOADS
-    ) * 2.5  # fudge factor
-    max_download_duration_per_large_item = (
-        max_download_duration_per_standard_item * 
-        4
-    )
-    
     period = DEFAULT_WAIT_PERIOD
     
     # Wait for start of download
@@ -53,6 +53,8 @@ async def wait_for_download_to_start_and_finish(
         else:
             raise
     
+    # TODO: Eliminate fancy logic to determine `item_count` because it's no longer being used
+    # 
     # Wait until download task is observed that says how many items are being downloaded
     item_count: Optional[int]
     first_task_title_func = first_task_title_progression(task_tree)
@@ -103,9 +105,9 @@ async def wait_for_download_to_start_and_finish(
     # Wait while downloading
     await wait_while(
         first_task_title_func,
-        progress_timeout=max_download_duration_per_large_item,
+        progress_timeout=MAX_DOWNLOAD_DURATION_PER_ITEM,
         progress_timeout_message=lambda: (
-            f'Subresource download timed out after {max_download_duration_per_large_item:.1f}s: '
+            f'Subresource download timed out after {MAX_DOWNLOAD_DURATION_PER_ITEM:.1f}s: '
             f'Stuck at status: {first_task_title_func()!r}'
         ),
         period=period,
@@ -147,11 +149,10 @@ def append_deferred_top_level_tasks(project: Project) -> None:
     Listeners that respond to the append of a child may take other actions
     directly after the append, such as completing the just-appended child.
     """
+    # TODO: Shouldn't this method be marked as @scheduler_affinity,
+    #       rather than asserting an interior scheduler_thread_context()?
     with scheduler_thread_context():
-        # Disable super().try_get_next_task_unit() call in RootTask.try_get_next_task_unit()
-        with patch('crystal.task.Task.try_get_next_task_unit', return_value=None):
-            task_unit = project.root_task.try_get_next_task_unit()
-        assert task_unit is None
+        project.root_task.append_deferred_top_level_tasks()
         
         # Postcondition
         assert len(project.root_task._children_to_add_soon) == 0
@@ -196,10 +197,14 @@ def mark_as_complete(task: Task) -> None:
 
 
 @contextmanager
+@scheduler_affinity  # manual control of scheduler thread is assumed
 def clear_top_level_tasks_on_exit(project: Project) -> Iterator[None]:
     try:
         yield
     finally:
+        # Uncrash root task, if it was crashed
+        project.root_task.crash_reason = None
+        
         # Force root task children to complete
         for c in project.root_task.children:
             if not c.complete:

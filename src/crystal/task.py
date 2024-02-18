@@ -5,6 +5,8 @@ import cProfile
 from crystal.util.bulkheads import (
     Bulkhead,
     captures_crashes_to_self,
+    captures_crashes_to_stderr,
+    crashes_captured_to,
     CrashReason,
     does_not_capture_crashes,
     run_bulkhead_call,
@@ -32,7 +34,10 @@ import os
 import shutil
 import sys
 import threading
-from time import sleep
+from time import (
+    sleep,
+    sleep as scheduler_sleep,
+)
 from types import TracebackType
 import traceback
 from typing import (
@@ -190,6 +195,17 @@ class Task(ListenableMixin, Bulkhead):
         self._future = None  # type: Optional[Future]  # used by leaf tasks
         self._next_child_index = 0
     
+    # === Bulkhead ===
+    
+    def _get_crash_reason(self) -> Optional[CrashReason]:
+        return self._crash_reason
+    def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
+        self._crash_reason = value
+        for lis in self.listeners:
+            if hasattr(lis, 'task_crash_reason_did_change'):
+                run_bulkhead_call(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
+    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
+    
     # === Properties ===
     
     @property
@@ -213,15 +229,6 @@ class Task(ListenableMixin, Bulkhead):
             if hasattr(lis, 'task_subtitle_did_change'):
                 run_bulkhead_call(lis.task_subtitle_did_change, self)  # type: ignore[attr-defined]
     subtitle = property(_get_subtitle, _set_subtitle)
-    
-    def _get_crash_reason(self) -> Optional[CrashReason]:
-        return self._crash_reason
-    def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
-        self._crash_reason = value
-        for lis in self.listeners:
-            if hasattr(lis, 'task_crash_reason_did_change'):
-                run_bulkhead_call(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
-    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
     
     # TODO: Alter parent tracking to support multiple parents,
     #       since in truth a Task can already have multiple parents,
@@ -466,13 +473,18 @@ class Task(ListenableMixin, Bulkhead):
         """
         Clears all of this task's children which are complete.
         """
+        if self._next_child_index != 0:
+            raise ValueError('Unsafe to call clear_completed_children unless _next_child_index == 0')
+        
         child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
         if len(child_indexes_to_remove) == 0:
             return
         for child in [c for c in self._children if c.complete]:
             child._parent = None
             if self._use_extra_listener_assertions:
-                assert self not in child.listeners
+                assert self not in child.listeners, (
+                    f'Expected {self=} to no longer be listening to completed {child=}'
+                )
         self._children = [c for c in self.children if not c.complete]
         self._num_children_complete = 0
         
@@ -706,9 +718,8 @@ class CrashedTask(Task):
     def __call__(self):
         raise AssertionError('Cannot run a crashed task')
     
-    @override
-    def finish(self) -> None:
-        super().finish()
+    # TODO: Actually call this from the UI somewhere
+    def dismiss(self) -> None:
         if self._dismiss_func is not None:
             self._dismiss_func()
             self._dismiss_func = None  # garbage collect
@@ -1685,6 +1696,62 @@ class RootTask(Task):
         self.subtitle = 'Running'
         self._children_to_add_soon = []  # type: List[Tuple[Task, bool]]
     
+    # === Bulkhead ===
+    
+    @override
+    def _get_crash_reason(self) -> Optional[CrashReason]:
+        return self._crash_reason
+    @override
+    @captures_crashes_to_stderr
+    def _set_crash_reason(self, reason: Optional[CrashReason]) -> None:
+        if reason is None:
+            self._crash_reason = None
+        else:
+            if self._crash_reason is not None:
+                # Ignore subsequent crashes until the first one is cleared
+                return
+            self._crash_reason = reason
+            
+            # Try to mark all preexisting tasks with "scheduler crashed" subtitle
+            try:
+                # NOTE: Might raise if RootTask is in a sufficiently invalid state
+                self._mark_children_subtitles_as_scheduler_crashed(self)
+            except Exception:
+                # Fail silently
+                pass
+            
+            # Report crash to Task Tree
+            @fg_affinity
+            def dismiss_all_scheduled_tasks() -> None:
+                # Clear the crash reason
+                self.crash_reason = None
+                
+                # Remove all top-level tasks, including the CrashedTask
+                self._next_child_index = 0
+                for child in self.children:
+                    if not child.complete:
+                        child.finish()
+                self.clear_completed_children()
+            crash_reason_view = CrashedTask('Scheduler crashed', reason, dismiss_all_scheduled_tasks)
+            # NOTE: Might raise if RootTask is in a sufficiently invalid state
+            self.append_child(crash_reason_view)
+            @does_not_capture_crashes
+            def fg_task() -> None:
+                # NOTE: Might raise if RootTask is in a sufficiently invalid state
+                self.append_deferred_top_level_tasks()
+            fg_call_and_wait(fg_task)
+    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
+    
+    @classmethod
+    def _mark_children_subtitles_as_scheduler_crashed(cls, parent: Task) -> None:
+        for child in parent.children:
+            if child.complete:
+                continue
+            child.subtitle = 'Scheduler crashed'
+            cls._mark_children_subtitles_as_scheduler_crashed(child)
+    
+    # === Properties ===
+    
     @property  # type: ignore[misc]
     @fg_affinity  # force any access to synchronize with foreground thread
     @override
@@ -1720,14 +1787,9 @@ class RootTask(Task):
         #       self._children_to_add_soon, self.complete} with foreground thread
         fg_call_and_wait(fg_task)
     
-    @override
-    @captures_crashes_to_self
     @fg_affinity
     @scheduler_affinity
-    def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
-        if self.complete:
-            return None
-        
+    def append_deferred_top_level_tasks(self) -> None:
         if len(self._children_to_add_soon) != 0:
             children_to_add_soon = list(self._children_to_add_soon)  # capture
             self._children_to_add_soon.clear()
@@ -1737,6 +1799,18 @@ class RootTask(Task):
                 super().append_child(child, already_complete_ok=already_complete_ok)
             assert len(self._children_to_add_soon) == 0, \
                 'RootTask._children_to_add_soon was modified concurrently unexpectedly'
+    
+    # === Public Operations ===
+    
+    @override
+    @captures_crashes_to_self
+    @fg_affinity
+    @scheduler_affinity
+    def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
+        if self.complete:
+            return None
+        
+        self.append_deferred_top_level_tasks()
         
         # Only the root task is allowed to have no children normally
         if len(self.children) == 0:
@@ -1796,12 +1870,16 @@ class RootTask(Task):
 _ROOT_TASK_POLL_INTERVAL = .1 # secs
 
 
-def start_schedule_forever(task: RootTask) -> None:
+def start_schedule_forever(root_task: RootTask) -> None:
     """
-    Asynchronously runs the specified task until it completes,
+    Asynchronously runs the specified RootTask until it completes,
     or until there is no foreground thread remaining.
     """
-    def bg_task() -> None:
+    # NOTE: Don't use @crashes_captured_to(root_task) because a RootTask
+    #       crashed in this outer context could not have the crash dismissed
+    #       such that the RootTask would actually start running again properly
+    @captures_crashes_to_stderr
+    def bg_daemon_task() -> None:
         setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
         assert _is_scheduler_thread()
         assert is_synced_with_scheduler_thread()
@@ -1811,61 +1889,42 @@ def start_schedule_forever(task: RootTask) -> None:
         else:
             profiling_context = nullcontext(enter_result=None)
         try:
-            while True:
-                try:
-                    with profiling_context as profiler:
-                        while True:
+            with profiling_context as profiler:
+                while True:
+                    # NOTE: Use enter_if_crashed=True so that the usual
+                    #       `sleep(_ROOT_TASK_POLL_INTERVAL)` logic will be
+                    #       used to poll until the root task becomes uncrashed
+                    with crashes_captured_to(root_task, enter_if_crashed=True):
+                        if root_task.crash_reason is None:
                             # NOTE: Some decorators omitted as a (speculative) performance optimization
+                            #@does_not_capture_crashes
                             #@fg_affinity
                             #@scheduler_affinity
-                            @does_not_capture_crashes
                             def fg_task() -> Tuple[Optional[Callable[[], None]], bool]:
                                 return (
-                                    run_bulkhead_call(task.try_get_next_task_unit),
-                                    task.complete
+                                    run_bulkhead_call(root_task.try_get_next_task_unit),
+                                    root_task.complete
                                 )
                             try:
                                 (unit, task_complete) = fg_call_and_wait(fg_task)
                             except NoForegroundThreadError:
                                 return
-                            
-                            if unit is None:
-                                if task_complete:
-                                    return
-                                else:
-                                    sleep(_ROOT_TASK_POLL_INTERVAL)
-                                    continue
-                            # TODO: All except clauses below are probably dead code, 
-                            #       since run_bulkhead_call() doesn't raise exceptions.
-                            #       Remove this dead code.
-                            try:
-                                run_bulkhead_call(unit)  # Run unit directly on this scheduler thread
-                            except NoForegroundThreadError:
-                                # Probably the app was closed. Ignore error.
+                        else:
+                            unit = None
+                            task_complete = False
+                        
+                        if unit is None:
+                            if task_complete:
                                 return
-                            except Exception as e:
-                                if is_database_closed_error(e):
-                                    # Probably the project was closed. Ignore error.
-                                    return
-                                else:
-                                    raise
-                except Exception:
-                    print(f'*** Scheduler thread crashed. Will try to restart.', file=sys.stderr)
-                    traceback.print_exc(file=sys.stderr)
-                    
-                    # Delay so that if we get into a retry loop,
-                    # we don't completely hog the CPU
-                    sleep(1.0)
-                    
-                    # Rewind to first top-level task and restart
-                    if task.scheduling_style == SCHEDULING_STYLE_ROUND_ROBIN:
-                        task._next_child_index = 0
-                    continue
+                            else:
+                                scheduler_sleep(_ROOT_TASK_POLL_INTERVAL)
+                                continue
+                        run_bulkhead_call(unit)  # Run unit directly on this scheduler thread
         finally:
             if _PROFILE_SCHEDULER:
                 assert profiler is not None
                 profiler.dump_stats('scheduler.prof')
-    bg_call_later(bg_task, daemon=True)
+    bg_call_later(bg_daemon_task, daemon=True)
 
 
 def is_synced_with_scheduler_thread() -> bool:

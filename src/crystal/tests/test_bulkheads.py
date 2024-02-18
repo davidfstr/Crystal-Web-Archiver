@@ -3,7 +3,9 @@ from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.doc.generic import create_external_link, Link
 from crystal import task
+import crystal.task
 from crystal.task import (
+    CrashedTask,
     DownloadResourceGroupTask, DownloadResourceGroupMembersTask, 
     _DownloadResourcesPlaceholderTask, DownloadResourceTask,
     ParseResourceRevisionLinks,
@@ -15,20 +17,25 @@ from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
-    clear_top_level_tasks_on_exit, scheduler_disabled, scheduler_thread_context,
+    clear_top_level_tasks_on_exit,
+    first_task_title_progression,
+    MAX_DOWNLOAD_DURATION_PER_ITEM,
+    scheduler_disabled, scheduler_thread_context,
     ttn_for_task,
 )
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
-    wait_for,
+    wait_for, wait_while,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.ui.tree import NodeView
 from crystal.util.bulkheads import (
+    BulkheadCell,
     captures_crashes_to,
     captures_crashes_to_self, captures_crashes_to_stderr,
     captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
+    crashes_captured_to,
     run_bulkhead_call,
 )
 from crystal.util import cli
@@ -102,6 +109,32 @@ async def test_captures_crashes_to_decorator_works() -> None:
     assert my_task.crash_reason is None
     my_task.foo_did_bar()
     assert my_task.crash_reason is not None
+
+
+def test_crashes_captured_to_context_manager_works() -> None:
+    bulkhead = BulkheadCell()
+    assert None == bulkhead.crash_reason
+    
+    try:
+        with crashes_captured_to(bulkhead):
+            pass
+    except NotImplementedError:
+        pass
+    else:
+        raise AssertionError(
+            'Expected crashes_captured_to() to raise NotImplementedError')
+    
+    with crashes_captured_to(bulkhead, enter_if_crashed=True):
+        pass
+    assert None == bulkhead.crash_reason
+    
+    with crashes_captured_to(bulkhead, enter_if_crashed=True):
+        def foo() -> None:
+            def bar() -> None:
+                raise _CRASH
+            bar()
+        foo()
+    assert _CRASH == bulkhead.crash_reason
 
 
 async def test_captures_crashes_to_stderr_decorator_works() -> None:
@@ -1160,6 +1193,137 @@ async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
                 # 2. Ensure crash does not cascade to the RootTask
                 assert download_rg_task.crash_reason is not None
                 assert project.root_task.crash_reason is None
+
+
+# ------------------------------------------------------------------------------
+# Test: Crashes at the Top-Level and Root
+
+@skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed, test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_DRGMT_child_completes, test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_URGMT_child_completes')
+async def test_when_child_of_RT_crashes_then_RT_does_NOT_display_as_crashed() -> None:
+    pass
+
+
+async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                root_task = project.root_task
+                
+                # Create DownloadResourceTask #1 in RootTask, pre-appended
+                home_r = Resource(project, home_url)
+                home_r.download(); append_deferred_top_level_tasks(project)
+                
+                # Create DownloadResourceTask #2 in RootTask, un-appended
+                atom_feed_r = Resource(project, atom_feed_url)
+                atom_feed_r.download();
+                
+                # Preconditions
+                assert root_task.crash_reason is None
+                (download_r_task1,) = project.root_task.children
+                assert isinstance(download_r_task1, DownloadResourceTask)
+                
+                # RT @ try_get_next_task_unit
+                # 
+                # In RootTask.try_get_next_task_unit,
+                # in RootTask.append_deferred_top_level_tasks,
+                # crash the line: super().append_child(...)
+                super_append_child = Task.append_child
+                def append_child(self, child: Task, *args, **kwargs) -> None:
+                    if isinstance(child, DownloadResourceTask):
+                        # Simulate crash when appending a DownloadResourceTask
+                        append_child.call_count += 1  # type: ignore[attr-defined]
+                        raise _CRASH
+                    else:
+                        return super_append_child(self, child, *args, **kwargs)
+                append_child.call_count = 0  # type: ignore[attr-defined]
+                with patch.object(Task, 'append_child', append_child):
+                    unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                    assert append_child.call_count >= 1  # type: ignore[attr-defined]
+                    assert unit is None
+                
+                # Postconditions
+                assert root_task.crash_reason is not None
+                (download_r_task1, scheduler_crashed_task) = project.root_task.children
+                assert isinstance(download_r_task1, DownloadResourceTask)
+                assert isinstance(scheduler_crashed_task, CrashedTask)
+                for child in root_task.children:
+                    if not isinstance(child, CrashedTask) and not child.complete:
+                        assert 'Scheduler crashed' == child.subtitle
+
+
+@skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
+async def test_when_RT_marked_as_crashed_then_scheduler_crashed_task_appears_and_all_other_tasks_marked_with_scheduler_crashed_subtitle() -> None:
+    pass
+
+
+async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashed_and_scheduler_crashed_task_appears() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            root_task = project.root_task
+            
+            # Crash the scheduler event loop, for project
+            super_scheduler_sleep = crystal.task.scheduler_sleep
+            def scheduler_sleep(*args, **kwargs) -> None:
+                f = sys._getframe(1)
+                root_task_of_caller = f.f_locals['root_task']
+                if root_task_of_caller == root_task and not scheduler_sleep.called:  # type: ignore[attr-defined]
+                    scheduler_sleep.called = True  # type: ignore[attr-defined]
+                    raise _CRASH
+                else:
+                    super_scheduler_sleep(*args, **kwargs)
+            scheduler_sleep.called = False  # type: ignore[attr-defined]
+            with patch('crystal.task.scheduler_sleep', scheduler_sleep):
+                # Create DownloadResourceTask
+                home_r = Resource(project, home_url)
+                home_r.download()
+                
+                first_task_title = first_task_title_progression(mw.task_tree)
+                def progression_func():
+                    if root_task.crash_reason is not None:
+                        # Stop
+                        if (len(root_task.children) >= 1 and 
+                                isinstance(root_task.children[-1], CrashedTask)):
+                            return None
+                        else:
+                            return '(crashed; waiting for CrashedTask to appear)'
+                    else:
+                        # Keep waiting while first task title is changing
+                        title = first_task_title()
+                        if title is None:
+                            return '(waiting for first task to start)'
+                        else:
+                            return title
+                await wait_while(
+                    progression_func,
+                    progress_timeout=MAX_DOWNLOAD_DURATION_PER_ITEM)
+            
+            # Postconditions
+            assert scheduler_sleep.called  # type: ignore[attr-defined]
+            assert root_task.crash_reason is not None
+            (*_, scheduler_crashed_task) = root_task.children
+            assert isinstance(scheduler_crashed_task, CrashedTask)
+            for child in root_task.children:
+                if not isinstance(child, CrashedTask) and not child.complete:
+                    assert 'Scheduler crashed' == child.subtitle
+            
+            # Dismiss scheduler crash, clearing the task tree
+            scheduler_crashed_task.dismiss()
+            assert len(root_task.children) == 0
 
 
 # ------------------------------------------------------------------------------
