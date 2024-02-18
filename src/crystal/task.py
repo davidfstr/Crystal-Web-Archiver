@@ -29,9 +29,6 @@ from crystal.util.xthreading import (
 )
 from functools import wraps
 import os
-# TODO: Replace all uses of @override_dynamic with @override.
-#       The former doesn't compose with @captures_crashes_to*.
-from overrides import overrides as override_dynamic
 import shutil
 import sys
 import threading
@@ -1313,7 +1310,7 @@ class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
         super().__init__(title, prefinish=True)
     
     # Ignore any crash reason set on a flyweight task
-    @override_dynamic
+    @override
     def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
         # NOTE: Swallowing the bad set operation rather than raising another
         #       exception because calling error-handling code is not expected
@@ -1322,7 +1319,7 @@ class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
     
     # Ignore any parent set on a flyweight task
     @property
-    @override_dynamic
+    @override
     def parent(self) -> Optional[Task]:
         return None
 
@@ -1690,13 +1687,13 @@ class RootTask(Task):
     
     @property  # type: ignore[misc]
     @fg_affinity  # force any access to synchronize with foreground thread
-    @override_dynamic
+    @override
     def children(self) -> Sequence[Task]:
         # NOTE: Bypass the usual thread synchronization check in super().children,
         #       because here the analogous check is handled by @fg_affinity
         return self._children
     
-    @override_dynamic
+    @override
     def append_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
         Appends a child to this RootTasks's children, queuing it to be
@@ -1760,7 +1757,7 @@ class RootTask(Task):
     
     # === Protected Operations: Finish & Cleanup ===
     
-    @override_dynamic
+    @override
     def clear_children_if_all_complete(self) -> bool:
         raise NotImplementedError(
             'RootTask does not support clear_children_if_all_complete '
@@ -1768,7 +1765,7 @@ class RootTask(Task):
             'is not prepared to deal with concurrent modification of '
             'RootTask.children.')
     
-    @override_dynamic
+    @override
     def clear_completed_children(self) -> None:
         @does_not_capture_crashes
         def fg_task() -> None:
