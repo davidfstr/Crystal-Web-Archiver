@@ -1,10 +1,13 @@
 from contextlib import contextmanager
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import (
-    DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task,
+    CrashedTask, DownloadResourceGroupMembersTask, RootTask,
+    SCHEDULING_STYLE_SEQUENTIAL, Task,
 )
 from crystal.util.bulkheads import (
+    Bulkhead, BulkheadCell,
     captures_crashes_to,
+    captures_crashes_to_bulkhead_arg,
     captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
     captures_crashes_to_stderr,
     CrashReason,
@@ -77,6 +80,8 @@ class TaskTreeNode:
         self.tree_node.subtitle = self._calculate_tree_node_subtitle(
             self.task.subtitle,
             self.task.crash_reason)
+        self.tree_node.text_color = self._calculate_tree_node_text_color(self.task.crash_reason)
+        self.tree_node.bold = self._calculate_tree_node_bold(self.task.crash_reason)
         self.tree_node.expandable = not callable(task)
         
         self._num_visible_children = 0
@@ -147,14 +152,14 @@ class TaskTreeNode:
         @captures_crashes_to_stderr
         def fg_task() -> None:
             self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
+            self.tree_node.text_color = self._calculate_tree_node_text_color(task_crash_reason)
+            self.tree_node.bold = self._calculate_tree_node_bold(task_crash_reason)
             if task_crash_reason is not None:
-                self.tree_node.text_color = self._CRASH_TEXT_COLOR
-                self.tree_node.bold = True
                 # (TODO: Set tooltip when hovering over tree node text to task_crash_reason)
+                pass
             else:
-                self.tree_node.text_color = None
-                self.tree_node.bold = False
                 # (TODO: Clear tooltip when hovering over tree node text)
+                pass
         # NOTE: Use profile=False because no obvious further optimizations exist
         fg_call_later(fg_task, profile=False)
     
@@ -167,6 +172,20 @@ class TaskTreeNode:
             if task_crash_reason is None
             else cls._CRASH_SUBTITLE
         )
+    
+    @classmethod
+    def _calculate_tree_node_text_color(cls,
+            task_crash_reason: Optional[CrashReason]) -> Optional[wx.Colour]:
+        return (
+            cls._CRASH_TEXT_COLOR
+            if task_crash_reason is not None
+            else None
+        )
+    
+    @classmethod
+    def _calculate_tree_node_bold(cls,
+            task_crash_reason: Optional[CrashReason]) -> bool:
+        return task_crash_reason is not None
     
     @captures_crashes_to_task_arg
     def task_did_complete(self, task: Task) -> None:
@@ -211,11 +230,20 @@ class TaskTreeNode:
                 #       child is initially complete
                 self.task_did_append_child(task, child)
     
-    @captures_crashes_to_task_arg
+    @captures_crashes_to_stderr
     def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
+        if isinstance(task, RootTask) and isinstance(child, CrashedTask):
+            # Specially, allow RootTask to append a CrashedTask when RootTask is crashed
+            bulkhead = BulkheadCell()  # type: Bulkhead
+        else:
+            bulkhead = task
+        self._task_did_append_child(bulkhead, task, child)
+    
+    @captures_crashes_to_bulkhead_arg
+    def _task_did_append_child(self, bulkhead: Bulkhead, task: Task, child: Optional[Task]) -> None:
         if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
                 self._num_visible_children == self._MAX_VISIBLE_CHILDREN):
-            @captures_crashes_to(task)
+            @captures_crashes_to(bulkhead)
             def fg_task() -> None:
                 # Find last_more_node, or create if missing
                 last_child_tree_node = self.tree_node.children[-1]
@@ -236,7 +264,7 @@ class TaskTreeNode:
             # Append tree node for new task child
             child_ttnode = TaskTreeNode(child)
             self._num_visible_children += 1
-            @captures_crashes_to(task)
+            @captures_crashes_to(bulkhead)
             def fg_task() -> None:
                 self.tree_node.append_child(child_ttnode.tree_node)
             fg_call_later(fg_task)

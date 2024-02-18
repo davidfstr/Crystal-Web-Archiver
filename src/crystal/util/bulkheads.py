@@ -1,8 +1,9 @@
+from contextlib import contextmanager
 from crystal.util import cli
 from functools import wraps
 import sys
 import traceback
-from typing import Callable, List, Optional, Protocol, TypeVar
+from typing import Callable, Iterator, List, Optional, Protocol, TypeVar
 from typing_extensions import Concatenate, ParamSpec
 
 
@@ -18,8 +19,22 @@ _R = TypeVar('_R')
 CrashReason = BaseException  # with .__traceback__ set to a TracebackType
 
 
-class Bulkhead(Protocol):
+class Bulkhead(Protocol):  # abstract
+    """
+    A sink for unhandled exceptions (i.e. crashes).
+    """
     crash_reason: Optional[CrashReason]
+
+
+class BulkheadCell(Bulkhead):
+    """
+    A concrete Bulkhead which stores any crash that occurs,
+    but takes no special action to report such crashes.
+    """
+    crash_reason: Optional[CrashReason]
+    
+    def __init__(self, value: Optional[CrashReason]=None) -> None:
+        self.crash_reason = value
 
 
 def captures_crashes_to_self(
@@ -109,6 +124,33 @@ def captures_crashes_to(bulkhead: Bulkhead) -> Callable[[Callable[_P, Optional[_
     return decorate
 
 
+@contextmanager
+def crashes_captured_to(bulkhead: Bulkhead, *, enter_if_crashed: bool=False) -> Iterator[None]:
+    """
+    Context that captures any raised exceptions to the specified Bulkhead,
+    as the "crash reason" of the bulkhead.
+    
+    If the bulkhead was already crashed (with a non-None "crash reason")
+    when entering the context, the contents of the context will be skipped,
+    unless enter_if_crashed=True.
+    """
+    if not enter_if_crashed:
+        # NOTE: It's probably not actually possible to implement the
+        #       enter_if_crashed=False case because the context manager
+        #       protocol provides no reasonable way to skip the interior
+        #       context entirely.
+        raise NotImplementedError()
+    try:
+        yield
+    except BaseException as e:
+        # Print traceback to assist in debugging in the terminal
+        _print_bulkhead_exception(e, fix_tb=lambda here_tb, exc_tb: here_tb[:-3] + exc_tb[1:])
+        
+        # Crash the bulkhead. Abort.
+        bulkhead.crash_reason = e
+        return
+
+
 def captures_crashes_to_stderr(func: Callable[_P, Optional[_R]]) -> Callable[_P, Optional[_R]]:
     """
     A method that captures any raised exceptions, and prints them to stderr.
@@ -141,7 +183,10 @@ def _mark_bulkhead_call(bulkhead_call: Callable[_P, _R]) -> Callable[_P, _R]:
     return bulkhead_call
 
 
-def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False) -> None:
+_ExtractedTraceback = List[traceback.FrameSummary]
+_FixTbFunc = Callable[[_ExtractedTraceback, _ExtractedTraceback], _ExtractedTraceback]
+
+def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False, fix_tb: Optional[_FixTbFunc]=None) -> None:
     # Print traceback to assist in debugging in the terminal,
     # including ancestor callers of bulkhead_call
     err_file = sys.stderr
@@ -149,9 +194,11 @@ def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False) -> None
         cli.TERMINAL_FG_RED if is_error else cli.TERMINAL_FG_YELLOW,
         end='', file=err_file)
     if e.__traceback__ is not None:
-        here_tb = traceback.extract_stack(sys._getframe().f_back)
+        here_tb = traceback.extract_stack(sys._getframe(1))
         exc_tb = traceback.extract_tb(e.__traceback__)
-        full_tb_summary = here_tb[:-1] + exc_tb  # type: List[traceback.FrameSummary]
+        if fix_tb is None:
+            fix_tb = lambda here_tb, exc_tb: here_tb[:-1] + exc_tb
+        full_tb_summary = fix_tb(here_tb, exc_tb)  # type: _ExtractedTraceback
         print('Exception in bulkhead:', file=err_file)
         print('Traceback (most recent call last):', file=err_file)
         for x in traceback.format_list(full_tb_summary):
