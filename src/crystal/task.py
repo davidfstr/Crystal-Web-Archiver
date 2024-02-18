@@ -534,7 +534,13 @@ class Task(ListenableMixin, Bulkhead):
                     else:
                         cur_child_index = self._next_child_index
                         while cur_child_index < len(self.children):
-                            unit = self.children[cur_child_index].try_get_next_task_unit()
+                            cur_child = self.children[cur_child_index]
+                            if cur_child.crash_reason is not None:
+                                # If child crashed then this parent task cannot
+                                # proceed and must crash for the same reason
+                                self.crash_reason = cur_child.crash_reason
+                                return None
+                            unit = cur_child.try_get_next_task_unit()
                             if unit is not None:
                                 return unit
                             cur_child_index += 1
@@ -605,7 +611,9 @@ class Task(ListenableMixin, Bulkhead):
             raise AssertionError(f'Future for {self!r} was already done')
         self._future.set_running_or_notify_cancel()
         try:
-            self._future.set_result(self())
+            # NOTE: Prefer `self.__call__()` over `self()` because the former
+            #       is easier to mock in automated tests
+            self._future.set_result(self.__call__())
         except BaseException as e:
             self._future.set_exception(e)
         finally:

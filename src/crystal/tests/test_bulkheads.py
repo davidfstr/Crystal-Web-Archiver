@@ -1,6 +1,8 @@
 from contextlib import redirect_stderr
 from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
 from crystal.browser.tasktree import TaskTreeNode
+from crystal.doc.generic import create_external_link
+from crystal import task
 from crystal.task import (
     DownloadResourceGroupTask, DownloadResourceGroupMembersTask, 
     _DownloadResourcesPlaceholderTask, DownloadResourceTask,
@@ -9,6 +11,7 @@ from crystal.task import (
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
+from crystal.tests.util.skip import skipTest
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
     clear_top_level_tasks_on_exit, scheduler_disabled, scheduler_thread_context,
@@ -33,7 +36,7 @@ from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
 from io import StringIO
 import sys
-from typing import Callable, Optional, TypeVar
+from typing import Callable, Optional, Tuple, TypeVar
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -221,10 +224,10 @@ async def test_given_inside_unraisable_context_when_exception_raised_then_traceb
 # Test: Common Crash Locations in Task
 # 
 # Below, some abbreviations are used in test names:
-# - T = Task
-# - DRT = DownloadResourceTask
 # - DRGMT = DownloadResourceGroupMembersTask
 # - DRGT = DownloadResourceGroupTask
+# - DRT = DownloadResourceTask
+# - T = Task
 
 async def test_when_T_try_get_next_task_unit_crashes_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
@@ -714,8 +717,8 @@ async def test_when_TTN_task_did_clear_children_crashes_in_deferred_fg_task_then
 # 
 # Below, some abbreviations are used in test names:
 # - ET = EntityTree
-# - RN = _ResourceNode
 # - RGN = ResourceGroupNode
+# - RN = _ResourceNode
 
 @skip('not yet automated')
 async def test_when_RN_on_expanded_crashes_at_top_level_then_children_replaced_with_error_node() -> None:
@@ -843,6 +846,118 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
                 assert _ErrorNode.CRASH_TITLE == error_ti.Text
                 assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
                 assert True == error_ti.Bold
+
+
+# ------------------------------------------------------------------------------
+# Test: Crashes Cascade to Ancestors
+# 
+# Below, some abbreviations are used in test names:
+# - DRBT = DownloadResourceBodyTask
+# - DRGMT = DownloadResourceGroupMembersTask
+# - DRGT = DownloadResourceGroupTask
+# - DRT = DownloadResourceTask
+# - PRRL = ParseResourceRevisionLinks
+# - RT = RootTask
+# - URGMT = UpdateResourceGroupMembersTask
+
+@skip('not yet automated: hard to crash DRT (or any leaf task) in a realistic way')
+async def test_when_DRBT_child_of_DRT_crashes_then_DRT_displays_as_crashed() -> None:
+    pass
+
+
+@skip('not yet automated: hard to crash PRRL (or any leaf task) in a realistic way')
+async def test_when_PRRL_child_of_DRT_crashes_then_DRT_displays_as_crashed() -> None:
+    pass
+
+
+async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed() -> None:
+    assert (
+        task.SCHEDULING_STYLE_SEQUENTIAL == 
+        DownloadResourceTask.scheduling_style
+    )
+    
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                # Create DownloadResourceTask
+                home_r = Resource(project, home_url)
+                home_r.download(); append_deferred_top_level_tasks(project)
+                (download_r_task,) = project.root_task.children
+                assert isinstance(download_r_task, DownloadResourceTask)
+                
+                # Precondition
+                assert download_r_task.crash_reason is None
+                
+                # RT > DRT > DownloadResourceBodyTask
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not download_r_task.children[0].complete
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert download_r_task.children[0].complete
+                
+                # RT > DRT > ParseResourceRevisionLinks
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not download_r_task.children[1].complete
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert download_r_task.children[1].complete
+                assert len(download_r_task.children) >= 3
+                
+                # RT > DRT > DRT[0] > DownloadResourceBodyTask
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not download_r_task.children[2].children[0].complete
+                await _bg_call_and_wait(scheduler_thread_context()(unit))
+                assert download_r_task.children[2].children[0].complete
+                
+                PRRL_call_result__1_link = (
+                    [create_external_link('/', type_title='Simulated Link', title=None, embedded=True)],
+                    [home_r]
+                )  # type: Tuple[List[Link], List[Resource]]
+                
+                # RT > DRT > DRT[0] > ParseResourceRevisionLinks
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                assert unit is not None
+                assert not download_r_task.children[2].children[1].complete
+                # 1. Force ParseResourceRevisionLinks to return 1 embedded link.
+                # 2. Patch urljoin() to simulate effect of calling urlparse('//[oops'),
+                #    which raises an exception in stock Python:
+                #    https://discuss.python.org/t/urlparse-can-sometimes-raise-an-exception-should-it/44465
+                #    
+                #    NOTE: Overrides the fix in commit 5aaaba57076d537a4872bb3cf7270112ca497a06,
+                #          reintroducing the related bug it fixed.
+                with patch.object(download_r_task.children[2].children[1], '__call__', return_value=PRRL_call_result__1_link) as mock_call, \
+                        patch('crystal.task.urljoin', side_effect=ValueError('Invalid IPv6 URL')):
+                    await _bg_call_and_wait(scheduler_thread_context()(unit))
+                    assert mock_call.call_count >= 1
+                assert download_r_task.children[2].children[1].complete
+                
+                unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                
+                # Postcondition:
+                # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
+                #    when tried to resolve relative_urls from links parsed by
+                #    ParseResourceRevisionLinks to absolute URLs
+                # 2. Ensure crash cascades to parent of inner DownloadResourceTask
+                # 3. Ensure crash cascade stops just before reaching the RootTask
+                assert download_r_task.children[2].crash_reason is not None
+                assert download_r_task.crash_reason is not None
+                assert project.root_task.crash_reason is None
+
+
+async def test_when_DRT_child_of_DRGMT_crashes_then_DRGMT_displays_as_crashed() -> None:
+    assert (
+        task.SCHEDULING_STYLE_SEQUENTIAL == 
+        DownloadResourceGroupMembersTask.scheduling_style
+    )
+    skipTest('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
 
 
 # ------------------------------------------------------------------------------
