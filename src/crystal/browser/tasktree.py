@@ -64,7 +64,7 @@ class TaskTree:
             menu.Enable(_ID_DISMISS, False)
         
         # Show popup menu
-        self.peer.PopupMenu(menu, event.GetPoint())
+        self.peer.PopupMenu(menu)
         menu.Destroy()
     
     def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
