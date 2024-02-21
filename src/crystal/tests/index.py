@@ -113,7 +113,7 @@ def run_tests(test_names: List[str]) -> bool:
         return _run_tests(test_names)
 
 
-def _run_tests(test_names: List[str]) -> bool:
+def _run_tests(target_test_names: List[str], /) -> bool:
     assert os.environ.get('CRYSTAL_RUNNING_TESTS') == 'True'
     
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
@@ -129,8 +129,8 @@ def _run_tests(test_names: List[str]) -> bool:
             test_name = f'{test_func_id[0]}.{test_func_id[1]}'
             
             # Only run test if it was requested (or if all tests are to be run)
-            if len(test_names) > 0:
-                if test_name not in test_names and test_func.__module__ not in test_names:
+            if len(target_test_names) > 0:
+                if test_name not in target_test_names and test_func.__module__ not in target_test_names:
                     continue
             run_count += 1
             
