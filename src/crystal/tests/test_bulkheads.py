@@ -11,7 +11,7 @@ from crystal.task import (
     ParseResourceRevisionLinks,
     Task, UpdateResourceGroupMembersTask
 )
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.controls import click_button, select_menuitem, TreeItem
 from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
@@ -970,6 +970,26 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 assert download_r_task.children[2].crash_reason is not None
                 assert download_r_task.crash_reason is not None
                 assert project.root_task.crash_reason is None
+                
+                # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
+                root_ti = TreeItem.GetRootItem(mw.task_tree)
+                (download_r_ti,) = root_ti.Children
+                async with download_r_ti.right_click_returning_popup_menu() as menu:
+                    (dismiss_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Dismiss'
+                    ]
+                    assert dismiss_menuitem.Enabled
+                    
+                    # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
+                    if True:
+                        await select_menuitem(menu, dismiss_menuitem.Id)
+                        
+                        # RT -- notices all finished children; clears them
+                        unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                        assert unit is None
+                        
+                        () = root_ti.Children
 
 
 async def test_when_DRT_child_of_DRGMT_crashes_then_DRGMT_displays_as_crashed() -> None:
@@ -1324,6 +1344,19 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
             # Dismiss scheduler crash, clearing the task tree
             scheduler_crashed_task.dismiss()
             assert len(root_task.children) == 0
+
+
+# ------------------------------------------------------------------------------
+# Test: Dismissing Crashes
+
+@skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
+async def test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem() -> None:
+    pass
+
+
+@skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
+async def test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed() -> None:
+    pass
 
 
 # ------------------------------------------------------------------------------

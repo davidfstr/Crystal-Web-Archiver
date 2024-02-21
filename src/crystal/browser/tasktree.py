@@ -14,10 +14,15 @@ from crystal.util.bulkheads import (
 )
 from crystal.ui.tree import NodeView as NodeView1
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
+from crystal.util.wx_bind import bind
 from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItemError
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
+import os
 from typing import Iterator, List, Optional, Tuple
 import wx
+
+
+_ID_DISMISS = 101
 
 
 class TaskTree:
@@ -28,7 +33,10 @@ class TaskTree:
         self.root = TaskTreeNode(root_task)
         
         self.tree = TreeView(parent_peer, name='cr-task-tree')
+        self.tree.delegate = self
         self.tree.root = self.root.tree_node
+        
+        self._right_clicked_node = None  # type: Optional[TaskTreeNode]
         
         self.tree.peer.SetInitialSize((750, 200))
     
@@ -36,6 +44,58 @@ class TaskTree:
     def peer(self) -> wx.TreeCtrl:
         """The wx.TreeCtrl controlled by this class."""
         return self.tree.peer
+    
+    # === Event: Right Click ===
+    
+    @captures_crashes_to_stderr
+    def on_right_click(self, event: wx.MouseEvent, node_view: NodeView) -> None:
+        node = TaskTreeNode.for_node_view(node_view)
+        self._right_clicked_node = node
+        
+        # Create popup menu
+        menu = wx.Menu()
+        bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
+        menu.Append(_ID_DISMISS, 'Dismiss')
+        if isinstance(node.task, CrashedTask):
+            pass
+        elif self._is_dismissable_top_level_task(node.task):
+            pass
+        else:
+            menu.Enable(_ID_DISMISS, False)
+        
+        # Show popup menu
+        self.peer.PopupMenu(menu, event.GetPoint())
+        menu.Destroy()
+    
+    def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
+        node = self._right_clicked_node
+        assert node is not None
+        
+        item_id = event.GetId()
+        if item_id == _ID_DISMISS:
+            if isinstance(node.task, CrashedTask):
+                node.task.dismiss()
+            elif self._is_dismissable_top_level_task(node.task):
+                self._dismiss_top_level_task(node.task)
+            else:
+                raise AssertionError(f'Do not know how to dismiss: {node.task}')
+    
+    @classmethod
+    def _is_dismissable_top_level_task(cls, task: Task) -> bool:
+        return (
+            task.crash_reason is not None and
+            isinstance(task.parent, RootTask) and
+            task.parent.crash_reason is None
+        )
+    
+    @classmethod
+    def _dismiss_top_level_task(cls, task: Task) -> None:
+        if not cls._is_dismissable_top_level_task(task):
+            raise ValueError()
+        if not task.complete:
+            task.finish()
+    
+    # === Dispose ===
     
     def dispose(self) -> None:
         self.root.dispose()
@@ -72,6 +132,7 @@ class TaskTreeNode:
             self.task.listeners.append(self)
         
         self.tree_node = NodeView()
+        self.tree_node.delegate = self
         if self.task.icon_name is not None:
             self.tree_node.icon_set = (
                 (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()[self.task.icon_name]),
@@ -132,6 +193,12 @@ class TaskTreeNode:
                 assert progress_dialog_old_message is not None
                 progress_dialog.Pulse(progress_dialog_old_message)
         fg_call_and_wait(fg_task)
+    
+    @staticmethod
+    def for_node_view(node_view: NodeView) -> 'TaskTreeNode':
+        node = node_view.delegate
+        assert isinstance(node, TaskTreeNode)
+        return node
     
     @captures_crashes_to_task_arg
     def task_subtitle_did_change(self, task: Task) -> None:
