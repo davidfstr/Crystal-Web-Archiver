@@ -299,7 +299,7 @@ class EntityTree(Bulkhead):
         assert menu.GetMenuItemCount() > 0
         
         # Show popup menu
-        self.peer.PopupMenu(menu, event.GetPoint())
+        self.peer.PopupMenu(menu)
         menu.Destroy()
     
     @captures_crashes_to_self
