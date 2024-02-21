@@ -718,7 +718,6 @@ class CrashedTask(Task):
     def __call__(self):
         raise AssertionError('Cannot run a crashed task')
     
-    # TODO: Actually call this from the UI somewhere
     def dismiss(self) -> None:
         if self._dismiss_func is not None:
             self._dismiss_func()

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
+from crystal.tests.util.runner import pump_wx_events
 from crystal.util.xos import is_windows
-from typing import Iterator, List, Optional
-import unittest.mock
+from typing import AsyncIterator, Callable, Iterator, List, Optional
+from unittest.mock import patch
 import wx
 
 
@@ -49,12 +50,20 @@ def click_checkbox(checkbox: wx.CheckBox) -> None:
 
 @contextmanager
 def file_dialog_returning(filepath: str) -> Iterator[None]:
-    with unittest.mock.patch('wx.FileDialog', spec=True) as MockFileDialog:
+    with patch('wx.FileDialog', spec=True) as MockFileDialog:
         instance = MockFileDialog.return_value
         instance.ShowModal.return_value = wx.ID_OK
         instance.GetPath.return_value = filepath
         
         yield
+
+
+# ------------------------------------------------------------------------------
+# Utility: Controls: wx.Menu
+
+async def select_menuitem(menu: wx.Menu, menuitem_id: int) -> None:
+    wx.PostEvent(menu, wx.MenuEvent(type=wx.EVT_MENU.typeId, id=menuitem_id, menu=None))
+    await pump_wx_events()
 
 
 # ------------------------------------------------------------------------------
@@ -136,6 +145,8 @@ class TreeItem:
     def Children(self) -> List[TreeItem]:
         return get_children_of_tree_item(self.tree, self.id)
     
+    # === Entity Tree: Find Child ===
+    
     def find_child(parent_ti: TreeItem, url_or_url_pattern: str, url_prefix: Optional[str]=None) -> TreeItem:
         """
         Returns the first child of the specified parent tree item with the
@@ -190,6 +201,34 @@ class TreeItem:
     
     class ChildNotFound(AssertionError):
         pass
+    
+    # === Operations ===
+    
+    @asynccontextmanager
+    async def right_click_returning_popup_menu(self) -> AsyncIterator[wx.Menu]:
+        captured_menu = None  # type: Optional[wx.Menu]
+        destroy_captured_menu = None  # type: Optional[Callable[[], None]]
+        def PopupMenu(menu: wx.Menu, *args, **kwargs) -> bool:
+            nonlocal captured_menu, destroy_captured_menu
+            captured_menu = menu
+            destroy_captured_menu = captured_menu.Destroy
+            # Prevent caller from immediately destroying the menu we're about to return
+            def do_nothing(*args, **kwargs) -> None:
+                pass
+            captured_menu.Destroy = do_nothing
+            return True
+        with patch.object(self.tree, 'PopupMenu', PopupMenu):
+            await self.right_click()
+            assert captured_menu is not None
+            assert destroy_captured_menu is not None
+            try:
+                yield captured_menu
+            finally:
+                destroy_captured_menu()
+    
+    async def right_click(self) -> None:
+        wx.PostEvent(self.tree, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.tree, self.id))
+        await pump_wx_events()
     
     # === Comparison ===
     
