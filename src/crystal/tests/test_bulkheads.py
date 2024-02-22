@@ -1229,6 +1229,7 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             project = Project._last_opened_project
@@ -1243,7 +1244,7 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 
                 # Create DownloadResourceTask #2 in RootTask, un-appended
                 atom_feed_r = Resource(project, atom_feed_url)
-                atom_feed_r.download();
+                atom_feed_r.download()
                 
                 # Preconditions
                 assert root_task.crash_reason is None
@@ -1277,6 +1278,36 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 for child in root_task.children:
                     if not isinstance(child, CrashedTask) and not child.complete:
                         assert 'Scheduler crashed' == child.subtitle
+                
+                # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
+                root_ti = TreeItem.GetRootItem(mw.task_tree)
+                (download_r_ti, scheduler_crashed_ti) = root_ti.Children
+                async with scheduler_crashed_ti.right_click_returning_popup_menu() as menu:
+                    (dismiss_all_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Dismiss All'
+                    ]
+                    assert dismiss_all_menuitem.Enabled
+                    
+                    # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed
+                    await select_menuitem(menu, dismiss_all_menuitem.Id)
+                    () = root_ti.Children
+                
+                # ...and new top level tasks can be added that will run
+                if True:
+                    # Create DownloadResourceTask #3 in RootTask, pre-appended
+                    rss_feed_r = Resource(project, rss_feed_url)
+                    rss_feed_r.download(); append_deferred_top_level_tasks(project)
+                    
+                    # Preconditions
+                    assert root_task.crash_reason is None
+                    (download_r_task2,) = project.root_task.children
+                    assert isinstance(download_r_task2, DownloadResourceTask)
+                    
+                    # Ensure task runs (at least one step)
+                    unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                    assert unit is not None
+                    await _bg_call_and_wait(scheduler_thread_context()(unit))
 
 
 @skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
@@ -1356,6 +1387,16 @@ async def test_given_regular_crashed_task_at_top_level_when_right_click_task_the
 
 @skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
 async def test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed() -> None:
+    pass
+
+
+@skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
+async def test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem() -> None:
+    pass
+
+
+@skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
+async def test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed() -> None:
     pass
 
 

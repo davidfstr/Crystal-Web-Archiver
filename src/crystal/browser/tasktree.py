@@ -55,12 +55,12 @@ class TaskTree:
         # Create popup menu
         menu = wx.Menu()
         bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
-        menu.Append(_ID_DISMISS, 'Dismiss')
         if isinstance(node.task, CrashedTask):
-            pass
+            menu.Append(_ID_DISMISS, node.task.dismiss_action_title)
         elif self._is_dismissable_top_level_task(node.task):
-            pass
+            menu.Append(_ID_DISMISS, 'Dismiss')
         else:
+            menu.Append(_ID_DISMISS, 'Dismiss')
             menu.Enable(_ID_DISMISS, False)
         
         # Show popup menu
