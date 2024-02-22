@@ -942,6 +942,7 @@ async def test_can_download_and_serve_a_site_requiring_cookie_authentication() -
     pass
 
 
+# FIXME: mark: deadlock seen here on Windows
 async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() -> None:
     """
     Test that can successfully download a site without needing to name any
