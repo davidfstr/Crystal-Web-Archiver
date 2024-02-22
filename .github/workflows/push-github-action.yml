@@ -93,7 +93,7 @@ jobs:
 
       - name: Run UI tests
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test crystal.tests.test_bulkheads
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test
 
       - name: Upload screenshot if test failure
         if: failure()
@@ -159,7 +159,7 @@ jobs:
         run: |
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
-          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test" "crystal.tests.test_bulkheads"
+          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
 
       - name: Upload screenshot if test failure
         if: failure()
