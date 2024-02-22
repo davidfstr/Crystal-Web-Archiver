@@ -309,6 +309,7 @@ async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_
 # - T = Task
 # - TTN = TaskTreeNode
 
+@skip('DISABLED during segfault bisect')
 @skip('not yet automated: hard to automate: hard to patch')
 async def test_when_TTN_task_crash_reason_did_change_crashes_at_top_level_then_crash_reason_printed_to_stderr() -> None:
     # TODO: In TaskTreeNode.task_crash_reason_did_change,
@@ -318,6 +319,7 @@ async def test_when_TTN_task_crash_reason_did_change_crashes_at_top_level_then_c
     pass
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_crash_reason_did_change_crashes_in_deferred_fg_task_then_crash_reason_printed_to_stderr() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -362,6 +364,7 @@ async def test_when_TTN_task_crash_reason_did_change_crashes_in_deferred_fg_task
                     assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_did_set_children_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -411,6 +414,7 @@ async def test_when_TTN_task_did_set_children_crashes_at_top_level_then_T_displa
                 assert download_rg_members_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_did_set_children_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -453,6 +457,7 @@ async def test_when_TTN_task_did_set_children_crashes_in_deferred_fg_task_then_T
                 assert download_rg_members_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -495,6 +500,7 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
                 assert download_r_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -529,6 +535,7 @@ async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T
                 assert download_r_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -563,6 +570,7 @@ async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_disp
                 assert download_r_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_child_did_complete_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -598,12 +606,14 @@ async def test_when_TTN_task_child_did_complete_crashes_in_deferred_fg_task_then
                 assert download_r_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 @skip('not yet automated')
 async def test_when_TTN_task_did_clear_children_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     # TODO: Crash the line: if self.task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL: raise NotImplementedError()
     pass
 
 
+@skip('DISABLED during segfault bisect')
 @skip('not yet automated')
 async def test_when_TTN_task_did_clear_children_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     # TODO: Crash the line: self.tree_node.children = [... if i not in child_indexes]
