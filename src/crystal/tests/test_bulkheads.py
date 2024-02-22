@@ -453,6 +453,7 @@ async def test_when_TTN_task_did_set_children_crashes_in_deferred_fg_task_then_T
                 assert download_rg_members_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -495,6 +496,7 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
                 assert download_r_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -529,6 +531,7 @@ async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T
                 assert download_r_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -563,6 +566,7 @@ async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_disp
                 assert download_r_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 async def test_when_TTN_task_child_did_complete_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -598,12 +602,14 @@ async def test_when_TTN_task_child_did_complete_crashes_in_deferred_fg_task_then
                 assert download_r_task.crash_reason is not None
 
 
+@skip('DISABLED during segfault bisect')
 @skip('not yet automated')
 async def test_when_TTN_task_did_clear_children_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     # TODO: Crash the line: if self.task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL: raise NotImplementedError()
     pass
 
 
+@skip('DISABLED during segfault bisect')
 @skip('not yet automated')
 async def test_when_TTN_task_did_clear_children_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     # TODO: Crash the line: self.tree_node.children = [... if i not in child_indexes]
