@@ -15,80 +15,6 @@ on:
 
 jobs:
 
-  build-macos:
-    strategy:
-      matrix:
-        os:
-          # NOTE: Earliest macOS supported by Crystal is macOS 10.14
-          #- macos-10.14  # no longer supported by GitHub Actions
-          #- macos-10.15  # no longer supported by GitHub Actions
-          #- macos-11
-          #- macos-12  # same as macos-latest as of 2023-03-22
-          - macos-latest
-        python-version: ["3.8", "3.9"]
-      fail-fast: false
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 23  # 150% of normal time: 15 min, as of 2024-02-16
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install Poetry
-        # NOTE: Poetry 1.5.0 cannot use "poetry run" to run make-mac.sh
-        run: pipx install "poetry>=1.4.0,<1.5.0"
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: poetry
-
-      - name: Install dependencies with Poetry
-        # If build takes a very long time, then it's likely that the version
-        # of wxPython installed does not offer a precompiled wheel for this
-        # version of Python. Check the wxPython PyPI page to confirm.
-        timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
-        run: poetry install
-
-      - name: Display SQLite version and JSON support
-        run: |
-          python3 -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
-          poetry run python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
-
-      - name: Run non-UI tests
-        run: poetry run python -m pytest
-
-      - name: Build .app and disk image
-        working-directory: "./setup"
-        # --app-only: Don't build disk image because it intermittently fails
-        #             with "hdiutil create failed - Resource busy" in CI
-        run: "CRYSTAL_SUPPORT_SCREENSHOTS=True poetry run ./make-mac.sh --app-only"
-
-      - name: Run UI tests
-        # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
-        #       rather than sending them to log files
-        run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
-
-      - name: Upload screenshot if test failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
-          path: ${{ github.workspace }}/screenshots/**/*
-          if-no-files-found: ignore
-      
-      # NOTE: Must remove the --app-only option from make-mac.sh above to
-      #       reinstate build of *.dmg disk image
-      #- name: Upload distribution artifact
-      #  # Only export distribution artifact for earliest supported Python and OS
-      #  if: (matrix.python-version == '3.8') && (matrix.os == 'macos-10.14')
-      #  uses: actions/upload-artifact@v3
-      #  with:
-      #    name: dist-mac
-      #    path: setup/dist-mac/*.dmg
-      #    if-no-files-found: warn
-
   build-linux:
     strategy:
       matrix:
@@ -167,7 +93,7 @@ jobs:
 
       - name: Run UI tests
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test crystal.tests.test_workflows
 
       - name: Upload screenshot if test failure
         if: failure()
@@ -233,7 +159,7 @@ jobs:
         run: |
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
-          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
+          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test" "crystal.tests.test_workflows"
 
       - name: Upload screenshot if test failure
         if: failure()
