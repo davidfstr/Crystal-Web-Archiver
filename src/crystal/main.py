@@ -357,6 +357,9 @@ def _main(args: List[str]) -> None:
             # Immediately enter testing mode
             os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
             
+            from crystal.util.tqdm_debug import patch_tqdm_to_debug_deadlocks
+            patch_tqdm_to_debug_deadlocks(on_deadlock='keep_trying')
+            
             # Block until test-related modules are done loading,
             # before starting bg_task() on background thread
             from crystal.tests.index import run_tests
