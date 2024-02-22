@@ -1037,9 +1037,22 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 assert download_r_task.crash_reason is not None
                 assert project.root_task.crash_reason is None
                 
-                # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
                 root_ti = TreeItem.GetRootItem(mw.task_tree)
                 (download_r_ti,) = root_ti.Children
+                
+                # test_given_crashed_task_not_at_top_level_when_right_click_task_then_menu_appears_with_disabled_dismiss_menuitem
+                download_r_ti.Expand()
+                (download_rb_ti, prrl_ti, download_r1_ti, *_) = download_r_ti.Children
+                assert download_r1_ti.Text.endswith(TaskTreeNode._CRASH_SUBTITLE)
+                def show_popup(menu: wx.Menu) -> None:
+                    (dismiss_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Dismiss'
+                    ]
+                    assert not dismiss_menuitem.Enabled
+                await download_r1_ti.right_click_showing_popup_menu(show_popup)
+                
+                # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
                 def show_popup(menu: wx.Menu) -> None:
                     (dismiss_menuitem,) = [
                         mi for mi in menu.MenuItems
@@ -1475,6 +1488,13 @@ async def test_given_updating_entity_tree_crashed_task_at_top_level_when_right_c
 
 @skip('covered by: test_when_ET_root_resource_did_instantiate_crashes_then_updating_entity_tree_crashed_task_appears')
 async def test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed() -> None:
+    pass
+
+
+# TODO: Make this menuitem *enabled* iff the top-level ancestor task is crashed (very likely),
+#       and make dismissing it have the same effect as dismissing the ancestor top-level task
+@skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
+async def test_given_crashed_task_not_at_top_level_when_right_click_task_then_menu_appears_with_disabled_dismiss_menuitem() -> None:
     pass
 
 
