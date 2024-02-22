@@ -1,4 +1,5 @@
 from contextlib import redirect_stderr
+from crystal.browser import MainWindow as RealMainWindow
 from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.doc.generic import create_external_link, Link
@@ -747,7 +748,7 @@ async def test_when_TTN_task_did_clear_children_crashes_in_deferred_fg_task_then
 
 
 # ------------------------------------------------------------------------------
-# Test: Common Crash Locations in EntityTree
+# Test: Common Crash Locations in entitytree.Node
 # 
 # Below, some abbreviations are used in test names:
 # - ET = EntityTree
@@ -880,6 +881,71 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
                 assert _ErrorNode.CRASH_TITLE == error_ti.Text
                 assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
                 assert True == error_ti.Bold
+
+
+# ------------------------------------------------------------------------------
+# Test: Common Crash Locations in EntityTree
+
+# NOTE: This has not been observed to be a *common* crash location.
+#       It is, however, the only test currently covering what happens what
+#       a crash happens at the level of the EntityTree itself (as opposed
+#       to inside one of its nodes).
+async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entity_tree_crashed_task_appears() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            rmw = RealMainWindow._last_created
+            assert rmw is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                # Preconditions
+                et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                () = et_root_ti.Children
+                
+                with patch('crystal.browser.entitytree.RootResourceNode', side_effect=_CRASH):
+                    home_rr = RootResource(project, 'Home', Resource(project, home_url))
+                
+                # Postconditions
+                if True:
+                    assert rmw.entity_tree.crash_reason is not None
+                    
+                    et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                    () = et_root_ti.Children
+                    
+                    project.root_task.append_deferred_top_level_tasks()
+                    (updating_et_crashed_task,) = project.root_task.children
+                    assert isinstance(updating_et_crashed_task, CrashedTask)
+                
+                # test_given_updating_entity_tree_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_refresh_menuitem
+                root_ti = TreeItem.GetRootItem(mw.task_tree)
+                (scheduler_crashed_ti,) = root_ti.Children
+                def show_popup(menu: wx.Menu) -> None:
+                    (refresh_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Refresh'
+                    ]
+                    assert refresh_menuitem.Enabled
+                    
+                    # test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed
+                    select_menuitem_now(menu, refresh_menuitem.Id)
+                    if True:
+                        assert rmw.entity_tree.crash_reason is None
+                        
+                        et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                        (home_ti,) = et_root_ti.Children
+                        
+                        # RT -- notices all finished children; clears them
+                        unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                        assert unit is None
+                        
+                        () = project.root_task.children
+                await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
 
 
 # ------------------------------------------------------------------------------
@@ -1399,6 +1465,16 @@ async def test_given_scheduler_crashed_task_at_top_level_when_right_click_task_t
 
 @skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
 async def test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed() -> None:
+    pass
+
+
+@skip('covered by: test_when_ET_root_resource_did_instantiate_crashes_then_updating_entity_tree_crashed_task_appears')
+async def test_given_updating_entity_tree_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_refresh_menuitem() -> None:
+    pass
+
+
+@skip('covered by: test_when_ET_root_resource_did_instantiate_crashes_then_updating_entity_tree_crashed_task_appears')
+async def test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed() -> None:
     pass
 
 

@@ -1740,7 +1740,7 @@ class RootTask(Task):
                 'Scheduler crashed',
                 reason,
                 dismiss_all_scheduled_tasks,
-                'Dismiss All')
+                dismiss_action_title='Dismiss All')
             # NOTE: Might raise if RootTask is in a sufficiently invalid state
             self.append_child(crash_reason_view)
             @does_not_capture_crashes

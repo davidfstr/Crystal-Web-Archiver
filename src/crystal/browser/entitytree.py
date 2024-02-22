@@ -121,7 +121,8 @@ class EntityTree(Bulkhead):
             crash_reason_view = CrashedTask(
                 'Updating entity tree',
                 reason,
-                dismiss_crash_reason)
+                dismiss_crash_reason,
+                dismiss_action_title='Refresh')
             self._project.add_task(crash_reason_view)
     crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
     

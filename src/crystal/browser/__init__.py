@@ -47,6 +47,9 @@ class MainWindow:
     entity_tree: EntityTree
     task_tree: TaskTree
     
+    # NOTE: Only changed when tests are running
+    _last_created: 'Optional[MainWindow]'=None
+    
     def __init__(self,
             project: Project,
             progress_listener: Optional[OpenProjectProgressListener]=None,
@@ -130,6 +133,10 @@ class MainWindow:
         except:
             raw_frame.Destroy()
             raise
+        
+        # Export reference to self, if running tests
+        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+            MainWindow._last_created = self
     
     @property
     def _readonly(self) -> bool:
