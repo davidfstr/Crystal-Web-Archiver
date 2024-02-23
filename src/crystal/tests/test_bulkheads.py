@@ -1182,7 +1182,10 @@ async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[flo
             result_cell.set_exception(e)
     bg_call_later(bg_task)
     # NOTE: Releases foreground thread while waiting
-    await wait_for(lambda: result_cell.done() or None, timeout)
+    await wait_for(
+        lambda: result_cell.done() or None, timeout,
+        message=lambda: f'Timed out waiting for {callable}',
+        stacklevel_extra=1)
     return result_cell.result()
 
 
