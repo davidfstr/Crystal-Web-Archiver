@@ -1501,6 +1501,8 @@ async def test_given_crashed_task_not_at_top_level_when_right_click_task_then_me
 # ------------------------------------------------------------------------------
 # Utility
 
+_DEFAULT_WAIT_TIMEOUT_FOR_UNIT = 3.0
+
 async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[float]=None) -> _R:
     """
     Start the specified callable on a background thread and
@@ -1509,6 +1511,9 @@ async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[flo
     The foreground thread IS released while waiting, so the callable can safely
     make calls to fg_call_later() and fg_call_and_wait() without deadlocking.
     """
+    if timeout is None:
+        timeout = _DEFAULT_WAIT_TIMEOUT_FOR_UNIT
+    
     result_cell = Future()  # type: Future[_R]
     def bg_task() -> None:
         result_cell.set_running_or_notify_cancel()
