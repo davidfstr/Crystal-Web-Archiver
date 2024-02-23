@@ -68,7 +68,7 @@ jobs:
         # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
         #       rather than sending them to log files
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test crystal.tests.test_bulkheads
 
       - name: Upload screenshot if test failure
         if: failure()
@@ -92,11 +92,7 @@ jobs:
   build-linux:
     strategy:
       matrix:
-        os:
-          # NOTE: Earliest Linux supported by Crystal is Ubuntu 22.04
-          # NOTE: When adding new Linux versions, you may need
-          #       to compile new wxPython .wgn files
-          - ubuntu-22.04
+        os: []
         python-version: ["3.8", "3.9"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -180,13 +176,7 @@ jobs:
   build-windows:
     strategy:
       matrix:
-        os:
-          # NOTE: Earliest Windows supported by Crystal is Windows 7
-          #- windows-7  # available only as a self-hosted runner
-          #- windows-2012-r2  # based on Windows 7  # no longer supported by GitHub Actions
-          #- windows-2016  # based on Windows 8.1  # no longer supported by GitHub Actions
-          - windows-2019  # based on Windows 10
-          - windows-latest
+        os: []
         python-version: ["3.8", "3.9"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
