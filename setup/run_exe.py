@@ -1,5 +1,6 @@
 import argparse
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -79,15 +80,25 @@ def main(args: List[str]) -> None:
             process_thread = threading.Thread(target=run_process, daemon=False)
             process_thread.start()
             
-            while True:
-                print(stdout_stream.read(), end='')
-                print(stderr_stream.read(), end='')
-                sys.stdout.flush()
-                
-                if not process_thread.is_alive():
-                    break
-                
-                process_thread.join(timeout=_POLL_INTERVAL)
+            try:
+                while True:
+                    print(stdout_stream.read(), end='')
+                    print(stderr_stream.read(), end='')
+                    sys.stdout.flush()
+                    
+                    if not process_thread.is_alive():
+                        break
+                    
+                    process_thread.join(timeout=_POLL_INTERVAL)
+            except KeyboardInterrupt:
+                if os.environ.get('CI') == 'true':
+                    print('*** CI environment is terminating this job with SIGINT.')
+                    print('*** Is timeout-minutes set too low in push-github-action.yml?')
+                    # Exit with code (128 + <signal number>) to align with shell conventions
+                    # https://unix.stackexchange.com/a/386856/380012
+                    sys.exit(128 + signal.SIGINT)
+                else:
+                    raise
             
             sys.exit(process_returncode if process_returncode is not None else 1)
 
