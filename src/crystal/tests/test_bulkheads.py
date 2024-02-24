@@ -11,7 +11,7 @@ from crystal.task import (
     ParseResourceRevisionLinks,
     Task, UpdateResourceGroupMembersTask
 )
-from crystal.tests.util.controls import click_button, select_menuitem, TreeItem
+from crystal.tests.util.controls import click_button, select_menuitem_now, TreeItem
 from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
@@ -974,7 +974,7 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
                 root_ti = TreeItem.GetRootItem(mw.task_tree)
                 (download_r_ti,) = root_ti.Children
-                async with download_r_ti.right_click_returning_popup_menu() as menu:
+                def show_popup(menu: wx.Menu) -> None:
                     (dismiss_menuitem,) = [
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'Dismiss'
@@ -983,13 +983,14 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                     
                     # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
                     if True:
-                        await select_menuitem(menu, dismiss_menuitem.Id)
+                        select_menuitem_now(menu, dismiss_menuitem.Id)
                         
                         # RT -- notices all finished children; clears them
                         unit = project.root_task.try_get_next_task_unit()  # step scheduler
                         assert unit is None
                         
                         () = root_ti.Children
+                await download_r_ti.right_click_showing_popup_menu(show_popup)
 
 
 async def test_when_DRT_child_of_DRGMT_crashes_then_DRGMT_displays_as_crashed() -> None:
@@ -1282,7 +1283,7 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
                 root_ti = TreeItem.GetRootItem(mw.task_tree)
                 (download_r_ti, scheduler_crashed_ti) = root_ti.Children
-                async with scheduler_crashed_ti.right_click_returning_popup_menu() as menu:
+                def show_popup(menu: wx.Menu) -> None:
                     (dismiss_all_menuitem,) = [
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'Dismiss All'
@@ -1290,8 +1291,9 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                     assert dismiss_all_menuitem.Enabled
                     
                     # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed
-                    await select_menuitem(menu, dismiss_all_menuitem.Id)
+                    select_menuitem_now(menu, dismiss_all_menuitem.Id)
                     () = root_ti.Children
+                await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
                 
                 # ...and new top level tasks can be added that will run
                 if True:

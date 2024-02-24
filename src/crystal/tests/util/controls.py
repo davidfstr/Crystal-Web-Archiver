@@ -62,8 +62,22 @@ def file_dialog_returning(filepath: str) -> Iterator[None]:
 # Utility: Controls: wx.Menu
 
 async def select_menuitem(menu: wx.Menu, menuitem_id: int) -> None:
-    wx.PostEvent(menu, wx.MenuEvent(type=wx.EVT_MENU.typeId, id=menuitem_id, menu=None))
+    _post_select_menuitem(menu, menuitem_id)
     await pump_wx_events()
+
+
+def select_menuitem_now(menu: wx.Menu, menuitem_id: int) -> None:
+    # Run inner event loop to process any resulting wx.EVT_MENU event immediately,
+    # so that the event handler is called before the wx.Menu is disposed
+    loop = wx.GetApp().GetTraits().CreateEventLoop()
+    with wx.EventLoopActivator(loop):
+        _post_select_menuitem(menu, menuitem_id)
+        loop.Dispatch()
+        loop.Exit(0)
+
+
+def _post_select_menuitem(menu: wx.Menu, menuitem_id: int) -> None:
+    wx.PostEvent(menu, wx.MenuEvent(type=wx.EVT_MENU.typeId, id=menuitem_id, menu=None))
 
 
 # ------------------------------------------------------------------------------
@@ -204,27 +218,15 @@ class TreeItem:
     
     # === Operations ===
     
-    @asynccontextmanager
-    async def right_click_returning_popup_menu(self) -> AsyncIterator[wx.Menu]:
-        captured_menu = None  # type: Optional[wx.Menu]
-        destroy_captured_menu = None  # type: Optional[Callable[[], None]]
+    async def right_click_showing_popup_menu(self, show_popup_menu: Callable[[wx.Menu], None]) -> None:
         def PopupMenu(menu: wx.Menu, *args, **kwargs) -> bool:
-            nonlocal captured_menu, destroy_captured_menu
-            captured_menu = menu
-            destroy_captured_menu = captured_menu.Destroy
-            # Prevent caller from immediately destroying the menu we're about to return
-            def do_nothing(*args, **kwargs) -> None:
-                pass
-            captured_menu.Destroy = do_nothing
+            PopupMenu.called = True  # type: ignore[attr-defined]
+            show_popup_menu(menu)
             return True
+        PopupMenu.called = False  # type: ignore[attr-defined]
         with patch.object(self.tree, 'PopupMenu', PopupMenu):
             await self.right_click()
-            assert captured_menu is not None
-            assert destroy_captured_menu is not None
-            try:
-                yield captured_menu
-            finally:
-                destroy_captured_menu()
+            assert PopupMenu.called  # type: ignore[attr-defined]
     
     async def right_click(self) -> None:
         wx.PostEvent(self.tree, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.tree, self.id))
