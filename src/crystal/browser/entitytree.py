@@ -299,7 +299,7 @@ class EntityTree(Bulkhead):
         
         # Show popup menu
         self.peer.PopupMenu(menu, event.GetPoint())
-        menu.Destroy()
+        #menu.Destroy()
     
     @captures_crashes_to_self
     def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
