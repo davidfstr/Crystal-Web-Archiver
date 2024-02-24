@@ -224,7 +224,8 @@ class TreeItem:
             try:
                 yield captured_menu
             finally:
-                destroy_captured_menu()
+                captured_menu.Destroy = destroy_captured_menu
+                captured_menu.Destroy()
     
     async def right_click(self) -> None:
         wx.PostEvent(self.tree, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.tree, self.id))
