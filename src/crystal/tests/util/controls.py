@@ -206,6 +206,7 @@ class TreeItem:
     
     @asynccontextmanager
     async def right_click_returning_popup_menu(self) -> AsyncIterator[wx.Menu]:
+        print(f'FIXME: right_click_returning_popup_menu: starting')
         captured_menu = None  # type: Optional[wx.Menu]
         destroy_captured_menu = None  # type: Optional[Callable[[], None]]
         def PopupMenu(menu: wx.Menu, *args, **kwargs) -> bool:
@@ -225,6 +226,7 @@ class TreeItem:
                 yield captured_menu
             finally:
                 destroy_captured_menu()
+        print(f'FIXME: right_click_returning_popup_menu: ending')
     
     async def right_click(self) -> None:
         wx.PostEvent(self.tree, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.tree, self.id))
