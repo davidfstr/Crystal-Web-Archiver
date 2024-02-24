@@ -68,7 +68,7 @@ jobs:
         # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
         #       rather than sending them to log files
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test crystal.tests.test_bulkheads
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ CRYSTAL_FAULTHANDLER=True "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test crystal.tests.test_bulkheads
 
       - name: Upload screenshot if test failure
         if: failure()
