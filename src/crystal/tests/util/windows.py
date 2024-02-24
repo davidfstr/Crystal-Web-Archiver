@@ -6,7 +6,7 @@ from crystal.browser.new_root_url import NewRootUrlDialog as RealNewRootUrlDialo
 from crystal.model import Project
 from crystal.tests.util.controls import (
     click_button, file_dialog_returning,
-    select_menuitem, TreeItem
+    select_menuitem_now, TreeItem
 )
 from crystal.tests.util.runner import bg_sleep, pump_wx_events
 from crystal.tests.util.tasks import first_task_title_progression
@@ -542,7 +542,8 @@ class EntityTree:
         
         if tree_item.tree != self.window:
             raise ValueError()
-        async with tree_item.right_click_returning_popup_menu() as menu:
+        
+        def show_popup(menu: wx.Menu) -> None:
             (set_prefix_menuitem,) = [
                 mi for mi in menu.MenuItems
                 # TODO: Search for menuitem by title rather than by internal ID
@@ -550,7 +551,10 @@ class EntityTree:
             ]
             assert set_prefix_menuitem.Enabled
             
-            await select_menuitem(menu, set_prefix_menuitem.Id)
+            select_menuitem_now(menu, set_prefix_menuitem.Id)
+            
+        await tree_item.right_click_showing_popup_menu(show_popup)
+        await pump_wx_events()
 
 
 # ------------------------------------------------------------------------------
