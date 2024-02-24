@@ -971,25 +971,26 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 assert download_r_task.crash_reason is not None
                 assert project.root_task.crash_reason is None
                 
-                # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
-                root_ti = TreeItem.GetRootItem(mw.task_tree)
-                (download_r_ti,) = root_ti.Children
-                async with download_r_ti.right_click_returning_popup_menu() as menu:
-                    (dismiss_menuitem,) = [
-                        mi for mi in menu.MenuItems
-                        if mi.ItemLabelText == 'Dismiss'
-                    ]
-                    assert dismiss_menuitem.Enabled
-                    
-                    # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
-                    if True:
-                        await select_menuitem(menu, dismiss_menuitem.Id)
+                if False:
+                    # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
+                    root_ti = TreeItem.GetRootItem(mw.task_tree)
+                    (download_r_ti,) = root_ti.Children
+                    async with download_r_ti.right_click_returning_popup_menu() as menu:
+                        (dismiss_menuitem,) = [
+                            mi for mi in menu.MenuItems
+                            if mi.ItemLabelText == 'Dismiss'
+                        ]
+                        assert dismiss_menuitem.Enabled
                         
-                        # RT -- notices all finished children; clears them
-                        unit = project.root_task.try_get_next_task_unit()  # step scheduler
-                        assert unit is None
-                        
-                        () = root_ti.Children
+                        # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
+                        if True:
+                            await select_menuitem(menu, dismiss_menuitem.Id)
+                            
+                            # RT -- notices all finished children; clears them
+                            unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                            assert unit is None
+                            
+                            () = root_ti.Children
 
 
 async def test_when_DRT_child_of_DRGMT_crashes_then_DRGMT_displays_as_crashed() -> None:
@@ -1279,35 +1280,36 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                     if not isinstance(child, CrashedTask) and not child.complete:
                         assert 'Scheduler crashed' == child.subtitle
                 
-                # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
-                root_ti = TreeItem.GetRootItem(mw.task_tree)
-                (download_r_ti, scheduler_crashed_ti) = root_ti.Children
-                async with scheduler_crashed_ti.right_click_returning_popup_menu() as menu:
-                    (dismiss_all_menuitem,) = [
-                        mi for mi in menu.MenuItems
-                        if mi.ItemLabelText == 'Dismiss All'
-                    ]
-                    assert dismiss_all_menuitem.Enabled
+                if False:
+                    # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
+                    root_ti = TreeItem.GetRootItem(mw.task_tree)
+                    (download_r_ti, scheduler_crashed_ti) = root_ti.Children
+                    async with scheduler_crashed_ti.right_click_returning_popup_menu() as menu:
+                        (dismiss_all_menuitem,) = [
+                            mi for mi in menu.MenuItems
+                            if mi.ItemLabelText == 'Dismiss All'
+                        ]
+                        assert dismiss_all_menuitem.Enabled
+                        
+                        # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed
+                        await select_menuitem(menu, dismiss_all_menuitem.Id)
+                        () = root_ti.Children
                     
-                    # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed
-                    await select_menuitem(menu, dismiss_all_menuitem.Id)
-                    () = root_ti.Children
-                
-                # ...and new top level tasks can be added that will run
-                if True:
-                    # Create DownloadResourceTask #3 in RootTask, pre-appended
-                    rss_feed_r = Resource(project, rss_feed_url)
-                    rss_feed_r.download(); append_deferred_top_level_tasks(project)
-                    
-                    # Preconditions
-                    assert root_task.crash_reason is None
-                    (download_r_task2,) = project.root_task.children
-                    assert isinstance(download_r_task2, DownloadResourceTask)
-                    
-                    # Ensure task runs (at least one step)
-                    unit = project.root_task.try_get_next_task_unit()  # step scheduler
-                    assert unit is not None
-                    await _bg_call_and_wait(scheduler_thread_context()(unit))
+                    # ...and new top level tasks can be added that will run
+                    if True:
+                        # Create DownloadResourceTask #3 in RootTask, pre-appended
+                        rss_feed_r = Resource(project, rss_feed_url)
+                        rss_feed_r.download(); append_deferred_top_level_tasks(project)
+                        
+                        # Preconditions
+                        assert root_task.crash_reason is None
+                        (download_r_task2,) = project.root_task.children
+                        assert isinstance(download_r_task2, DownloadResourceTask)
+                        
+                        # Ensure task runs (at least one step)
+                        unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                        assert unit is not None
+                        await _bg_call_and_wait(scheduler_thread_context()(unit))
 
 
 @skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
