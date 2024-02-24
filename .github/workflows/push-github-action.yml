@@ -68,7 +68,7 @@ jobs:
         # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
         #       rather than sending them to log files
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ CRYSTAL_FAULTHANDLER=True "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
 
       - name: Upload screenshot if test failure
         if: failure()
@@ -167,7 +167,7 @@ jobs:
 
       - name: Run UI tests
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots CRYSTAL_FAULTHANDLER=True poetry run xvfb-run crystal --test
 
       - name: Upload screenshot if test failure
         if: failure()
@@ -233,6 +233,7 @@ jobs:
         run: |
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
+          $env:CRYSTAL_FAULTHANDLER = "True"
           poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
 
       - name: Upload screenshot if test failure
