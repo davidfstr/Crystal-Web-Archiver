@@ -219,14 +219,21 @@ class TreeItem:
     # === Operations ===
     
     async def right_click_showing_popup_menu(self, show_popup_menu: Callable[[wx.Menu], None]) -> None:
+        raised_exc = None  # type: Optional[Exception]
         def PopupMenu(menu: wx.Menu, *args, **kwargs) -> bool:
+            nonlocal raised_exc
             PopupMenu.called = True  # type: ignore[attr-defined]
-            show_popup_menu(menu)
+            try:
+                show_popup_menu(menu)
+            except Exception as e:
+                raised_exc = e
             return True
         PopupMenu.called = False  # type: ignore[attr-defined]
         with patch.object(self.tree, 'PopupMenu', PopupMenu):
             await self.right_click()
-            assert PopupMenu.called  # type: ignore[attr-defined]
+        assert PopupMenu.called  # type: ignore[attr-defined]
+        if raised_exc is not None:
+            raise raised_exc
     
     async def right_click(self) -> None:
         wx.PostEvent(self.tree, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.tree, self.id))
