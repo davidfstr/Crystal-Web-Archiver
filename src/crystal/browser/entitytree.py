@@ -118,7 +118,11 @@ class EntityTree(Bulkhead):
                 
                 # Clear the crash reason
                 self.crash_reason = None
-            crash_reason_view = CrashedTask('Updating entity tree', reason, dismiss_crash_reason)
+            crash_reason_view = CrashedTask(
+                'Updating entity tree',
+                reason,
+                dismiss_crash_reason,
+                dismiss_action_title='Refresh')
             self._project.add_task(crash_reason_view)
     crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
     
@@ -276,7 +280,7 @@ class EntityTree(Bulkhead):
     # === Event: Right Click ===
     
     @captures_crashes_to_self
-    def on_right_click(self, event, node_view: NodeView) -> None:
+    def on_right_click(self, event: wx.MouseEvent, node_view: NodeView) -> None:
         node = Node.for_node_view(node_view)
         self._right_clicked_node = node
         
@@ -292,17 +296,14 @@ class EntityTree(Bulkhead):
         else:
             menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
             menu.Enable(_ID_SET_PREFIX, False)
+        assert menu.GetMenuItemCount() > 0
         
         # Show popup menu
-        assert menu.GetMenuItemCount() > 0
-        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'False':
-            self.peer.PopupMenu(menu, event.GetPoint())
-        else:
-            print('(Suppressing popup menu while CRYSTAL_RUNNING_TESTS=True)')
+        self.peer.PopupMenu(menu, event.GetPoint())
         menu.Destroy()
     
     @captures_crashes_to_self
-    def _on_popup_menuitem_selected(self, event) -> None:
+    def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
         node = self._right_clicked_node
         assert node is not None
         

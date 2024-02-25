@@ -709,16 +709,20 @@ class CrashedTask(Task):
     #       is not referenced here (in a TaskTree context).
     icon_name = 'entitytree_warning'
     
-    def __init__(self, title: str, reason: CrashReason, dismiss_func: Callable[[], None]) -> None:
+    def __init__(self,
+            title: str,
+            reason: CrashReason,
+            dismiss_func: Callable[[], None],
+            dismiss_action_title: str='Dismiss') -> None:
         super().__init__(title=title)
         self.crash_reason = reason
         self._dismiss_func = dismiss_func  # type: Optional[Callable[[], None]]
+        self.dismiss_action_title = dismiss_action_title
     
     @bg_affinity
     def __call__(self):
         raise AssertionError('Cannot run a crashed task')
     
-    # TODO: Actually call this from the UI somewhere
     def dismiss(self) -> None:
         if self._dismiss_func is not None:
             self._dismiss_func()
@@ -1732,7 +1736,11 @@ class RootTask(Task):
                     if not child.complete:
                         child.finish()
                 self.clear_completed_children()
-            crash_reason_view = CrashedTask('Scheduler crashed', reason, dismiss_all_scheduled_tasks)
+            crash_reason_view = CrashedTask(
+                'Scheduler crashed',
+                reason,
+                dismiss_all_scheduled_tasks,
+                dismiss_action_title='Dismiss All')
             # NOTE: Might raise if RootTask is in a sufficiently invalid state
             self.append_child(crash_reason_view)
             @does_not_capture_crashes

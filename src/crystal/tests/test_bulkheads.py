@@ -1,4 +1,5 @@
 from contextlib import redirect_stderr
+from crystal.browser import MainWindow as RealMainWindow
 from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.doc.generic import create_external_link, Link
@@ -11,7 +12,7 @@ from crystal.task import (
     ParseResourceRevisionLinks,
     Task, UpdateResourceGroupMembersTask
 )
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.controls import click_button, select_menuitem_now, TreeItem
 from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
@@ -747,7 +748,7 @@ async def test_when_TTN_task_did_clear_children_crashes_in_deferred_fg_task_then
 
 
 # ------------------------------------------------------------------------------
-# Test: Common Crash Locations in EntityTree
+# Test: Common Crash Locations in entitytree.Node
 # 
 # Below, some abbreviations are used in test names:
 # - ET = EntityTree
@@ -883,6 +884,71 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
 
 
 # ------------------------------------------------------------------------------
+# Test: Common Crash Locations in EntityTree
+
+# NOTE: This has not been observed to be a *common* crash location.
+#       It is, however, the only test currently covering what happens what
+#       a crash happens at the level of the EntityTree itself (as opposed
+#       to inside one of its nodes).
+async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entity_tree_crashed_task_appears() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            rmw = RealMainWindow._last_created
+            assert rmw is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                # Preconditions
+                et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                () = et_root_ti.Children
+                
+                with patch('crystal.browser.entitytree.RootResourceNode', side_effect=_CRASH):
+                    home_rr = RootResource(project, 'Home', Resource(project, home_url))
+                
+                # Postconditions
+                if True:
+                    assert rmw.entity_tree.crash_reason is not None
+                    
+                    et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                    () = et_root_ti.Children
+                    
+                    project.root_task.append_deferred_top_level_tasks()
+                    (updating_et_crashed_task,) = project.root_task.children
+                    assert isinstance(updating_et_crashed_task, CrashedTask)
+                
+                # test_given_updating_entity_tree_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_refresh_menuitem
+                root_ti = TreeItem.GetRootItem(mw.task_tree)
+                (scheduler_crashed_ti,) = root_ti.Children
+                def show_popup(menu: wx.Menu) -> None:
+                    (refresh_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Refresh'
+                    ]
+                    assert refresh_menuitem.Enabled
+                    
+                    # test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed
+                    select_menuitem_now(menu, refresh_menuitem.Id)
+                    if True:
+                        assert rmw.entity_tree.crash_reason is None
+                        
+                        et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                        (home_ti,) = et_root_ti.Children
+                        
+                        # RT -- notices all finished children; clears them
+                        unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                        assert unit is None
+                        
+                        () = project.root_task.children
+                await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
+
+
+# ------------------------------------------------------------------------------
 # Test: Crashes Cascade to Ancestors
 # 
 # Below, some abbreviations are used in test names:
@@ -970,6 +1036,40 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 assert download_r_task.children[2].crash_reason is not None
                 assert download_r_task.crash_reason is not None
                 assert project.root_task.crash_reason is None
+                
+                root_ti = TreeItem.GetRootItem(mw.task_tree)
+                (download_r_ti,) = root_ti.Children
+                
+                # test_given_crashed_task_not_at_top_level_when_right_click_task_then_menu_appears_with_disabled_dismiss_menuitem
+                download_r_ti.Expand()
+                (download_rb_ti, prrl_ti, download_r1_ti, *_) = download_r_ti.Children
+                assert download_r1_ti.Text.endswith(TaskTreeNode._CRASH_SUBTITLE)
+                def show_popup(menu: wx.Menu) -> None:
+                    (dismiss_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Dismiss'
+                    ]
+                    assert not dismiss_menuitem.Enabled
+                await download_r1_ti.right_click_showing_popup_menu(show_popup)
+                
+                # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
+                def show_popup(menu: wx.Menu) -> None:
+                    (dismiss_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Dismiss'
+                    ]
+                    assert dismiss_menuitem.Enabled
+                    
+                    # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
+                    if True:
+                        select_menuitem_now(menu, dismiss_menuitem.Id)
+                        
+                        # RT -- notices all finished children; clears them
+                        unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                        assert unit is None
+                        
+                        () = root_ti.Children
+                await download_r_ti.right_click_showing_popup_menu(show_popup)
 
 
 async def test_when_DRT_child_of_DRGMT_crashes_then_DRGMT_displays_as_crashed() -> None:
@@ -1209,6 +1309,7 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             project = Project._last_opened_project
@@ -1223,7 +1324,7 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 
                 # Create DownloadResourceTask #2 in RootTask, un-appended
                 atom_feed_r = Resource(project, atom_feed_url)
-                atom_feed_r.download();
+                atom_feed_r.download()
                 
                 # Preconditions
                 assert root_task.crash_reason is None
@@ -1256,7 +1357,39 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 assert isinstance(scheduler_crashed_task, CrashedTask)
                 for child in root_task.children:
                     if not isinstance(child, CrashedTask) and not child.complete:
-                        assert 'Scheduler crashed' == child.subtitle
+                        assert child.subtitle in ['Scheduler crashed', 'Complete'], \
+                            f'Top-level task has unexpected subtitle: {child.subtitle}'
+                
+                # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
+                root_ti = TreeItem.GetRootItem(mw.task_tree)
+                (download_r_ti, scheduler_crashed_ti) = root_ti.Children
+                def show_popup(menu: wx.Menu) -> None:
+                    (dismiss_all_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Dismiss All'
+                    ]
+                    assert dismiss_all_menuitem.Enabled
+                    
+                    # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed
+                    select_menuitem_now(menu, dismiss_all_menuitem.Id)
+                    () = root_ti.Children
+                await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
+                
+                # ...and new top level tasks can be added that will run
+                if True:
+                    # Create DownloadResourceTask #3 in RootTask, pre-appended
+                    rss_feed_r = Resource(project, rss_feed_url)
+                    rss_feed_r.download(); append_deferred_top_level_tasks(project)
+                    
+                    # Preconditions
+                    assert root_task.crash_reason is None
+                    (download_r_task2,) = project.root_task.children
+                    assert isinstance(download_r_task2, DownloadResourceTask)
+                    
+                    # Ensure task runs (at least one step)
+                    unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                    assert unit is not None
+                    await _bg_call_and_wait(scheduler_thread_context()(unit))
 
 
 @skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
@@ -1318,8 +1451,8 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
             (*_, scheduler_crashed_task) = root_task.children
             assert isinstance(scheduler_crashed_task, CrashedTask)
             for child in root_task.children:
-                if not isinstance(child, CrashedTask) and not child.complete:
-                    assert 'Scheduler crashed' == child.subtitle
+                assert child.subtitle in ['Scheduler crashed', 'Complete'], \
+                    f'Top-level task has unexpected subtitle: {child.subtitle}'
             
             # Dismiss scheduler crash, clearing the task tree
             scheduler_crashed_task.dismiss()
@@ -1327,7 +1460,49 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
 
 
 # ------------------------------------------------------------------------------
+# Test: Dismissing Crashes
+
+@skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
+async def test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem() -> None:
+    pass
+
+
+@skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
+async def test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed() -> None:
+    pass
+
+
+@skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
+async def test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem() -> None:
+    pass
+
+
+@skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')
+async def test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed() -> None:
+    pass
+
+
+@skip('covered by: test_when_ET_root_resource_did_instantiate_crashes_then_updating_entity_tree_crashed_task_appears')
+async def test_given_updating_entity_tree_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_refresh_menuitem() -> None:
+    pass
+
+
+@skip('covered by: test_when_ET_root_resource_did_instantiate_crashes_then_updating_entity_tree_crashed_task_appears')
+async def test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed() -> None:
+    pass
+
+
+# TODO: Make this menuitem *enabled* iff the top-level ancestor task is crashed (very likely),
+#       and make dismissing it have the same effect as dismissing the ancestor top-level task
+@skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
+async def test_given_crashed_task_not_at_top_level_when_right_click_task_then_menu_appears_with_disabled_dismiss_menuitem() -> None:
+    pass
+
+
+# ------------------------------------------------------------------------------
 # Utility
+
+_DEFAULT_WAIT_TIMEOUT_FOR_UNIT = 3.0
 
 async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[float]=None) -> _R:
     """
@@ -1337,6 +1512,9 @@ async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[flo
     The foreground thread IS released while waiting, so the callable can safely
     make calls to fg_call_later() and fg_call_and_wait() without deadlocking.
     """
+    if timeout is None:
+        timeout = _DEFAULT_WAIT_TIMEOUT_FOR_UNIT
+    
     result_cell = Future()  # type: Future[_R]
     def bg_task() -> None:
         result_cell.set_running_or_notify_cancel()
