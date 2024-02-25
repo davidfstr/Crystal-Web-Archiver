@@ -346,6 +346,20 @@ def start_thread_switching_coroutine(
         coro: Generator[SwitchToThread, None, _R],
         /,
         ) -> None:
+    """
+    Starts the specified thread-switching-coroutine on a new background thread.
+    
+    A thread-switching-coroutine starts executing on the thread given by `first_command`.
+    Whenever the coroutine wants to switch to a different thread it yields
+    a new `SwitchToThread` command. A coroutine may ask to switch to the
+    same thread it was running on before without any effect.
+    
+    If the caller is running on the foreground thread and the prefix of the
+    thread-switching-coroutine is configured to execute on the foreground thread
+    (when first_command == SwitchToThread.FOREGROUND and subsequent yields
+    also say SwitchToThread.FOREGROUND), then that prefix is run to completion
+    synchronously before this method returns.
+    """
     # If is foreground thread, immediately run any prefix of the coroutine
     # that wants to be on the foreground thread
     if is_foreground_thread():
@@ -371,6 +385,17 @@ def run_thread_switching_coroutine(
         coro: Generator[SwitchToThread, None, _R],
         /,
         ) -> _R:
+    """
+    Runs the specified thread-switching-coroutine on the caller's
+    background thread until it completes.
+    
+    A thread-switching-coroutine starts executing on the thread given by `first_command`.
+    Whenever the coroutine wants to switch to a different thread it yields
+    a new `SwitchToThread` command. A coroutine may ask to switch to the
+    same thread it was running on before without any effect.
+    
+    Raises if the caller is not running on a background thread.
+    """
     command = first_command
     while True:
         if command == SwitchToThread.BACKGROUND:
