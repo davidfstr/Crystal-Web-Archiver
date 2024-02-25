@@ -67,7 +67,7 @@ async def test_captures_crashes_to_self_decorator_works() -> None:
         
         @captures_crashes_to_self
         def protected_method(self) -> None:
-            raise ValueError('Unhandled error inside protected method')
+            raise _CRASH
     my_task = MyTask()
     
     assert my_task.crash_reason is None
@@ -82,7 +82,7 @@ async def test_captures_crashes_to_bulkhead_arg_decorator_works() -> None:
         
         @captures_crashes_to_task_arg
         def task_foo_did_change(self, task: Task) -> None:
-            raise ValueError('Unhandled error inside protected method')
+            raise _CRASH
     my_task = MyTask()
     other_task = _DownloadResourcesPlaceholderTask(1)
     
@@ -103,7 +103,7 @@ async def test_captures_crashes_to_decorator_works() -> None:
         def foo_did_bar(self) -> None:
             @captures_crashes_to(self)
             def fg_task() -> None:
-                raise ValueError('Unhandled error inside protected method')
+                raise _CRASH
             fg_call_and_wait(fg_task)
     my_task = MyTask()
     
@@ -141,7 +141,7 @@ def test_crashes_captured_to_context_manager_works() -> None:
 async def test_captures_crashes_to_stderr_decorator_works() -> None:
     @captures_crashes_to_stderr
     def report_error() -> None:
-        raise ValueError('Unhandled error inside protected method')
+        raise _CRASH
     
     with redirect_stderr(StringIO()) as captured_stderr:
         report_error()
@@ -191,7 +191,7 @@ async def test_given_inside_bulkhead_when_unhandled_exception_raised_then_traceb
             
             @captures_crashes_to_self
             def protected_method(self) -> None:
-                raise ValueError('Unhandled error inside protected method')
+                raise _CRASH
         
         MyTask().protected_method()
     assert 'Exception in bulkhead:' in captured_stderr.getvalue()
@@ -204,7 +204,7 @@ async def test_given_inside_wxpython_listener_when_exception_raised_then_traceba
     try:
         button = wx.Button(frame, label='Button')
         def action_func(event: wx.CommandEvent):
-            raise ValueError('Simulated error in wxPython listener')
+            raise _CRASH
         bind(button, wx.EVT_BUTTON, action_func)
         
         assert is_foreground_thread()
@@ -219,7 +219,7 @@ async def test_given_inside_wxpython_listener_when_exception_raised_then_traceba
 
 async def test_given_inside_background_thread_when_exception_raised_then_traceback_printed_to_stderr_as_red_error() -> None:
     def bg_task() -> None:
-        raise ValueError('Simulated error in background thread')
+        raise _CRASH
     with redirect_stderr(StringIO()) as captured_stderr:
         thread = bg_call_later(bg_task)
         thread.join()
@@ -230,7 +230,7 @@ async def test_given_inside_background_thread_when_exception_raised_then_traceba
 
 async def test_given_inside_main_thread_when_exception_raised_then_traceback_printed_to_stderr_as_red_error() -> None:
     try:
-        raise ValueError('Simulated crash in main thread')
+        raise _CRASH
     except Exception as e_:
         e = e_  # capture
     
@@ -245,7 +245,7 @@ async def test_given_inside_unraisable_context_when_exception_raised_then_traceb
     def object_holder() -> None:
         class CrashesDuringFinalization:
             def __del__(self) -> None:
-                raise ValueError('Simulated error in object.__del__')
+                raise _CRASH
         CrashesDuringFinalization()
     
     with redirect_stderr(StringIO()) as captured_stderr:
@@ -375,11 +375,6 @@ async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() 
                 assert False == children_loaded_after_init
                 assert 'Queued' == subtitle_after_init
                 
-                initialize_children_error = ValueError(
-                    'Simulated error raised by task_did_set_children() listener '
-                    'that was called by initialize_children()'
-                )
-                
                 # Precondition
                 assert download_rg_members_task.crash_reason is None
                 
@@ -389,7 +384,7 @@ async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() 
                 # Patch DownloadResourceGroupMembersTask.initialize_children() to reintroduce
                 # a bug in DownloadResourceGroupMembersTask._load_children() that was
                 # fixed in commit 44f5bd429201972d324df1287e673ddef9ffa936
-                with patch.object(download_rg_members_task, 'initialize_children', side_effect=initialize_children_error):
+                with patch.object(download_rg_members_task, 'initialize_children', side_effect=_CRASH):
                     await _bg_call_and_wait(scheduler_thread_context()(unit))
                 
                 # Postcondition
@@ -427,6 +422,9 @@ async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_
                     # Simulate failure of `self._pbc.total += 1`
                     # due to self._pbc being unset, due to known issue:
                     # https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
+                    # 
+                    # TODO: Once that issue is fixed, replace the next line with:
+                    #           raise _CRASH
                     raise AttributeError("'DownloadResourceGroupMembersTask' object has no attribute '_pbc'")
                 
                 # Precondition
