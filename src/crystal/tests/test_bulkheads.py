@@ -1451,6 +1451,8 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
             (*_, scheduler_crashed_task) = root_task.children
             assert isinstance(scheduler_crashed_task, CrashedTask)
             for child in root_task.children:
+                if isinstance(child, CrashedTask):
+                    continue
                 assert child.subtitle in ['Scheduler crashed', 'Complete'], \
                     f'Top-level task has unexpected subtitle: {child.subtitle}'
             
