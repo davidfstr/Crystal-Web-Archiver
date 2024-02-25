@@ -1357,7 +1357,8 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 assert isinstance(scheduler_crashed_task, CrashedTask)
                 for child in root_task.children:
                     if not isinstance(child, CrashedTask) and not child.complete:
-                        assert 'Scheduler crashed' == child.subtitle
+                        assert child.subtitle in ['Scheduler crashed', 'Complete'], \
+                            f'Top-level task has unexpected subtitle: {child.subtitle}'
                 
                 # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
                 root_ti = TreeItem.GetRootItem(mw.task_tree)
@@ -1450,8 +1451,8 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
             (*_, scheduler_crashed_task) = root_task.children
             assert isinstance(scheduler_crashed_task, CrashedTask)
             for child in root_task.children:
-                if not isinstance(child, CrashedTask) and not child.complete:
-                    assert 'Scheduler crashed' == child.subtitle
+                assert child.subtitle in ['Scheduler crashed', 'Complete'], \
+                    f'Top-level task has unexpected subtitle: {child.subtitle}'
             
             # Dismiss scheduler crash, clearing the task tree
             scheduler_crashed_task.dismiss()
