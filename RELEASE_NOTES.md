@@ -57,6 +57,12 @@ Release Notes ⋮
     * XML files like Atom feeds and RSS feeds are now served correctly,
       without introducing an invalid `<script>` tag.
 
+* Error handling improvements
+    * If a task crashes, show it as crashed in the UI and allow it to be dismissed.
+    * If the scheduler thread crashes, show it as crashed in the UI and allow it to be restarted.
+    * If an update to the entity tree crashes,
+      show the crash in the UI and allow the entity tree to be refreshed.
+
 * Testing improvements
     * Waits now use a soft timeout in addition to a hard timeout,
       which makes it easier to tune/bump timeout durations as needed.
@@ -68,6 +74,8 @@ Release Notes ⋮
     * A screenshot is taken automatically whenever a timeout error occurs
       and whenever a rich assertion method (from `asserts.py`) fails.
     * A terminal bell sound is played automatically when tests finish running.
+    * When an abort() or SIGABRT occurs while running tests during continuous integration,
+      print a stack trace using faulthandler.
 
 * Major fixes
     * Fixed multiple cases where code updating the task tree accessed
