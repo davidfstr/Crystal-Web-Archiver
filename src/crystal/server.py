@@ -8,6 +8,7 @@ from __future__ import annotations
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
+from crystal.util.bulkheads import captures_crashes_to_stderr
 from crystal.util.cli import (
     print_error,
     print_info,
@@ -29,6 +30,7 @@ import re
 import shutil
 from textwrap import dedent
 from typing import Dict, Generator, Iterator, List, Literal, Optional
+from typing_extensions import override
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 
 
@@ -89,6 +91,12 @@ class ProjectServer:
         self._server = server
         self._port = port
         
+        # NOTE: It's very hard to crash _HttpServer itself such that an
+        #       unhandled exception would escape to this level.
+        #       Most errors already get routed to _HttpServer.handle_error().
+        #       For those errors that somehow manage to escape anyway,
+        #       just route them to stderr for now.
+        @captures_crashes_to_stderr
         def bg_task() -> None:
             try:
                 if verbosity == 'normal':
@@ -291,6 +299,12 @@ class _HttpServer(HTTPServer):
     project: Project
     verbosity: Verbosity
     stdout: Optional[TextIOBase]
+    
+    @override
+    def handle_error(self, request, client_address):
+        # Print to stderr a message starting with
+        # 'Exception occurred during processing of request from'
+        return super().handle_error(request, client_address)
 
 
 class _RequestHandler(BaseHTTPRequestHandler):
