@@ -134,6 +134,8 @@ sources of entities, and the ability to rename entities after creation.
       as warning annotations.
     * A screenshot is taken automatically whenever a timeout error occurs
       and whenever a rich assertion method (from `asserts.py`) fails.
+    * Test modules are discovered automatically from the filesystem,
+      rather than requiring them to be explicitly hardcoded.
     * A terminal bell sound is played automatically when tests finish running.
     * When an abort() or SIGABRT occurs while running tests during continuous integration,
       print a stack trace using faulthandler.
