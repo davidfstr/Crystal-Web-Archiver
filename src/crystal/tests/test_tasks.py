@@ -272,13 +272,8 @@ async def test_when_download_resource_group_members_then_displays_estimated_time
 # ==============================================================================
 # Test: Scheduler
 
-@skip('not yet automated')
-async def test_when_get_task_unit_raises_unexpected_exception_then_scheduler_restarts():
-    pass
-
-
-@skip('not yet automated')
-async def test_when_run_task_unit_raises_unexpected_exception_then_scheduler_restarts():
+@skip('covered by: test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashed_and_scheduler_crashed_task_appears')
+async def test_when_scheduler_thread_crashes_then_scheduler_crashed_task_appears():
     pass
 
 
