@@ -221,9 +221,13 @@ def run_bulkhead_call(
     Raises AssertionError if the specified method is not actually
     marked with @captures_crashes_to*.
     """
-    if getattr(bulkhead_call, '_captures_crashes', False) != True:
-        raise AssertionError(f'Expected callable {bulkhead_call!r} to be decorated with @captures_crashes_to*')
+    ensure_is_bulkhead_call(bulkhead_call)
     return bulkhead_call(*args, **kwargs)
+
+
+def ensure_is_bulkhead_call(callable: Callable) -> None:
+    if getattr(callable, '_captures_crashes', False) != True:
+        raise AssertionError(f'Expected callable {callable!r} to be decorated with @captures_crashes_to*')
 
 
 # ------------------------------------------------------------------------------

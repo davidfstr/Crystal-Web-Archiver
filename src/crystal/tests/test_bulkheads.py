@@ -1525,6 +1525,7 @@ async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[flo
         timeout = _DEFAULT_WAIT_TIMEOUT_FOR_UNIT
     
     result_cell = Future()  # type: Future[_R]
+    @captures_crashes_to_stderr
     def bg_task() -> None:
         result_cell.set_running_or_notify_cancel()
         try:

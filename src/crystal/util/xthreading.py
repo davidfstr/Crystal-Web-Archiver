@@ -8,7 +8,7 @@ This thread is responsible for:
 """
 
 from collections import deque
-from crystal.util.bulkheads import captures_crashes_to_stderr, run_bulkhead_call
+from crystal.util.bulkheads import captures_crashes_to_stderr, ensure_is_bulkhead_call
 from crystal.util.profile import create_profiled_callable
 from enum import Enum
 from functools import partial, wraps
@@ -40,6 +40,9 @@ _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
 # Whether to enforce that callables scheduled with fg_call_later()
 # be decorated with @captures_crashes_to*.
 _DEFERRED_FG_CALLS_MUST_CAPTURE_CRASHES = True
+# Whether to enforce that callables scheduled with bg_call_later()
+# be decorated with @captures_crashes_to*.
+_DEFERRED_BG_CALLS_MUST_CAPTURE_CRASHES = True
 
 
 _P = ParamSpec('_P')
@@ -160,8 +163,7 @@ def fg_call_later(
     is_fg_thread = is_foreground_thread()  # cache
     
     if _DEFERRED_FG_CALLS_MUST_CAPTURE_CRASHES:
-        callable = partial(run_bulkhead_call, callable, *args)  # type: ignore[assignment]
-        args=()
+        ensure_is_bulkhead_call(callable)
     
     if _PROFILE_FG_TASKS and profile and not is_fg_thread:
         callable = create_profiled_callable(
@@ -328,6 +330,8 @@ def bg_call_later(
         if True, forces the background thread to be a daemon,
         and not prevent program termination while it is running.
     """
+    if _DEFERRED_BG_CALLS_MUST_CAPTURE_CRASHES:
+        ensure_is_bulkhead_call(callable)
     thread = threading.Thread(target=callable, args=args, daemon=daemon)
     thread.start()
     return thread

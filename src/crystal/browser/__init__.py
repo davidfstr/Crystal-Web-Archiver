@@ -21,6 +21,7 @@ from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
 from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
+from crystal.util.bulkheads import captures_crashes_to_stderr, captures_crashes_to
 from crystal.util.finderinfo import get_hide_file_extension
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
@@ -613,6 +614,7 @@ class MainWindow:
                 # NOTE: It would be simpler to implement this logic with wx.Timer
                 #       but wx.Timer seems to not work well if very many lambdas
                 #       are scheduled with fg_call_later at the same time.
+                @captures_crashes_to_stderr
                 def elapsed_time_updater() -> None:
                     while True:
                         time.sleep(1.0)
@@ -629,6 +631,13 @@ class MainWindow:
             else:
                 progress_dialog = None
         
+        # Run download() on a background thread because it can take a long time
+        # to instantiate the tree of related download tasks (when _LAZY_LOAD_CHILDREN == False)
+        # 
+        # NOTE: Loudly crashes the entire scheduler thread upon failure.
+        #       If this failure mode ends up happening commonly,
+        #       suggest implementing a less drastic failure mode.
+        @captures_crashes_to(self.project.root_task)
         def bg_task() -> None:
             assert selected_entity is not None
             
