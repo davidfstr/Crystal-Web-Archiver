@@ -1347,7 +1347,11 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
                 def progression_func():
                     if root_task.crash_reason is not None:
                         # Stop
-                        return None
+                        if (len(root_task.children) >= 1 and 
+                                isinstance(root_task.children[-1], CrashedTask)):
+                            return None
+                        else:
+                            return '(crashed; waiting for CrashedTask to appear)'
                     else:
                         # Keep waiting while first task title is changing
                         title = first_task_title()
