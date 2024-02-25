@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
+from crystal.util.bulkheads import (
+    Bulkhead,
+    captures_crashes_to_self,
+    captures_crashes_to_stderr,
+    crashes_captured_to,
+    CrashReason,
+    does_not_capture_crashes,
+    run_bulkhead_call,
+)
 from crystal.util.caffeination import Caffeination
+from crystal.util import cli
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import (
     create_profiling_context, ignore_runtime_from_enclosing_warn_if_slow,
@@ -21,17 +31,20 @@ from crystal.util.xthreading import (
 )
 from functools import wraps
 import os
-from overrides import overrides
 import shutil
 import sys
 import threading
-from time import sleep
+from time import (
+    sleep,
+    sleep as scheduler_sleep,
+)
+from types import TracebackType
 import traceback
 from typing import (
     Any, Callable, cast, final, List, Literal, Iterator, Optional,
     Sequence, Tuple, TYPE_CHECKING, TypeVar, Union
 )
-from typing_extensions import ParamSpec
+from typing_extensions import Concatenate, override, ParamSpec
 from weakref import WeakSet
 
 if TYPE_CHECKING:
@@ -89,7 +102,7 @@ SCHEDULING_STYLE_ROUND_ROBIN = 2
 """One task unit will be executed from each child during a scheduler pass."""
 
 
-class Task(ListenableMixin):
+class Task(ListenableMixin, Bulkhead):
     """
     Encapsulates a long-running process that reports its status occasionally.
     A task may depend on the results of a child task during its execution.
@@ -139,6 +152,8 @@ class Task(ListenableMixin):
     """For a container task, defines the order that task units from children will be executed in."""
     all_children_complete_implies_this_task_complete = True
     """For a container task, whether all of its children being complete implies that the container should be complete."""
+    all_incomplete_children_crashed_implies_this_task_should_crash = True
+    """For a container task, whether all of its incomplete children being crashed implies that the container should crash as well."""
     
     _USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS = (
         os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
@@ -150,6 +165,7 @@ class Task(ListenableMixin):
     __slots__ = (
         '_title',
         '_subtitle',
+        '_crash_reason',
         '_parent',
         '_children',
         '_num_children_complete',
@@ -169,6 +185,7 @@ class Task(ListenableMixin):
         
         self._title = title
         self._subtitle = 'Queued'
+        self._crash_reason = None  # type: Optional[CrashReason]
         self._parent = None  # type: Optional[Task]
         self._children = []  # type: Sequence[Task]
         self._num_children_complete = 0
@@ -177,6 +194,17 @@ class Task(ListenableMixin):
         self._did_yield_self = False            # used by leaf tasks
         self._future = None  # type: Optional[Future]  # used by leaf tasks
         self._next_child_index = 0
+    
+    # === Bulkhead ===
+    
+    def _get_crash_reason(self) -> Optional[CrashReason]:
+        return self._crash_reason
+    def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
+        self._crash_reason = value
+        for lis in self.listeners:
+            if hasattr(lis, 'task_crash_reason_did_change'):
+                run_bulkhead_call(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
+    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
     
     # === Properties ===
     
@@ -199,7 +227,7 @@ class Task(ListenableMixin):
         self._subtitle = value
         for lis in self.listeners:
             if hasattr(lis, 'task_subtitle_did_change'):
-                lis.task_subtitle_did_change(self)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_subtitle_did_change, self)  # type: ignore[attr-defined]
     subtitle = property(_get_subtitle, _set_subtitle)
     
     # TODO: Alter parent tracking to support multiple parents,
@@ -279,6 +307,7 @@ class Task(ListenableMixin):
         else:
             raise ValueError('Container tasks do not define a result by default.')
     
+    @captures_crashes_to_self
     def dispose(self) -> None:
         """
         Replaces this task's future with a new future that raises a 
@@ -306,7 +335,7 @@ class Task(ListenableMixin):
         
         for lis in self.listeners:
             if hasattr(lis, 'task_did_set_children'):
-                lis.task_did_set_children(self, len(children))  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_did_set_children, self, len(children))  # type: ignore[attr-defined]
     
     def materialize_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
@@ -351,7 +380,7 @@ class Task(ListenableMixin):
         """
         for lis in self.listeners:
             if hasattr(lis, 'task_did_append_child'):
-                lis.task_did_append_child(self, child)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_did_append_child, self, child)  # type: ignore[attr-defined]
     
     # === Protected Operations: Greedy Children ===
     
@@ -392,7 +421,7 @@ class Task(ListenableMixin):
         # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
         for lis in list(self.listeners):
             if hasattr(lis, 'task_did_complete'):
-                lis.task_did_complete(self)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_did_complete, self)  # type: ignore[attr-defined]
     
     def finalize_children(self, final_children: List[Task]) -> None:
         """
@@ -437,20 +466,25 @@ class Task(ListenableMixin):
             #       synchronized with the modified child list.
             for lis in self.listeners:
                 if hasattr(lis, 'task_did_clear_children'):
-                    lis.task_did_clear_children(self)  # type: ignore[attr-defined]
+                    run_bulkhead_call(lis.task_did_clear_children, self)  # type: ignore[attr-defined]
         return all_children_complete
     
     def clear_completed_children(self) -> None:
         """
         Clears all of this task's children which are complete.
         """
+        if self._next_child_index != 0:
+            raise ValueError('Unsafe to call clear_completed_children unless _next_child_index == 0')
+        
         child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
         if len(child_indexes_to_remove) == 0:
             return
         for child in [c for c in self._children if c.complete]:
             child._parent = None
             if self._use_extra_listener_assertions:
-                assert self not in child.listeners
+                assert self not in child.listeners, (
+                    f'Expected {self=} to no longer be listening to completed {child=}'
+                )
         self._children = [c for c in self.children if not c.complete]
         self._num_children_complete = 0
         
@@ -460,10 +494,11 @@ class Task(ListenableMixin):
         #       synchronized with the modified child list.
         for lis in self.listeners:
             if hasattr(lis, 'task_did_clear_children'):
-                lis.task_did_clear_children(self, child_indexes_to_remove)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_did_clear_children, self, child_indexes_to_remove)  # type: ignore[attr-defined]
     
     # === Public Operations ===
     
+    @captures_crashes_to_self
     @fg_affinity
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
         """
@@ -477,6 +512,11 @@ class Task(ListenableMixin):
         as the solitary task unit. As a task unit, it must be designed to
         run on any thread.
         """
+        
+        # If this task previously crashed and either itself or its children are
+        # in a potentially invalid state, refuse to run this task any further
+        if self.crash_reason is not None:
+            return None
         
         if self.complete:
             return None
@@ -505,7 +545,13 @@ class Task(ListenableMixin):
                     else:
                         cur_child_index = self._next_child_index
                         while cur_child_index < len(self.children):
-                            unit = self.children[cur_child_index].try_get_next_task_unit()
+                            cur_child = self.children[cur_child_index]
+                            if cur_child.crash_reason is not None:
+                                # If child crashed then this parent task cannot
+                                # proceed and must crash for the same reason
+                                self.crash_reason = cur_child.crash_reason
+                                return None
+                            unit = cur_child.try_get_next_task_unit()
                             if unit is not None:
                                 return unit
                             cur_child_index += 1
@@ -541,6 +587,14 @@ class Task(ListenableMixin):
                     cur_child_index = (cur_child_index + 1) % len(self.children)
                     if cur_child_index == self._next_child_index:
                         # Wrapped around and back to where we started without finding anything to do
+                        if type(self).all_incomplete_children_crashed_implies_this_task_should_crash:
+                            first_crashed_child = next((c for c in self.children if c.crash_reason is not None), None)
+                            if first_crashed_child is not None:
+                                # Presumably this parent task cannot proceed because all
+                                # child tasks are either crashed or complete.
+                                # So crash this parent task with the same reason
+                                # as one of the crashed children.
+                                self.crash_reason = first_crashed_child.crash_reason
                         return None
                     if cur_child_index == 0:
                         # NOTE: Ignore known-slow operation that has no further obvious optimizations
@@ -567,6 +621,7 @@ class Task(ListenableMixin):
             return False  # children did not change
     
     @bg_affinity
+    @captures_crashes_to_self
     def _call_self_and_record_result(self):
         # (Ignore client requests to cancel)
         if self._future is None:
@@ -575,7 +630,9 @@ class Task(ListenableMixin):
             raise AssertionError(f'Future for {self!r} was already done')
         self._future.set_running_or_notify_cancel()
         try:
-            self._future.set_result(self())
+            # NOTE: Prefer `self.__call__()` over `self()` because the former
+            #       is easier to mock in automated tests
+            self._future.set_result(self.__call__())
         except BaseException as e:
             self._future.set_exception(e)
         finally:
@@ -584,6 +641,7 @@ class Task(ListenableMixin):
     # === Internal Events ===
     
     @final
+    @captures_crashes_to_self
     def task_subtitle_did_change(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
@@ -592,6 +650,7 @@ class Task(ListenableMixin):
             self.child_task_subtitle_did_change(task)
     
     @final
+    @captures_crashes_to_self
     def task_did_complete(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
@@ -606,7 +665,16 @@ class Task(ListenableMixin):
             self.child_task_did_complete(task)
         for lis in self.listeners:
             if hasattr(lis, 'task_child_did_complete'):
-                lis.task_child_did_complete(self, task)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.task_child_did_complete, self, task)  # type: ignore[attr-defined]
+    
+    @final
+    @captures_crashes_to_self
+    def task_crash_reason_did_change(self, task: Task) -> None:
+        if self._use_extra_listener_assertions:
+            assert task in self.children_unsynchronized
+        
+        if hasattr(self, 'child_task_did_crash'):
+            self.child_task_did_crash(task)
     
     # === Utility ===
     
@@ -628,6 +696,37 @@ _TASK_DISPOSED_EXCEPTION = TaskDisposedException()
 
 _FUTURE_WITH_TASK_DISPOSED_EXCEPTION = Future()  # type: Future[Any]
 _FUTURE_WITH_TASK_DISPOSED_EXCEPTION.set_exception(_TASK_DISPOSED_EXCEPTION)
+
+
+# ------------------------------------------------------------------------------
+# CrashedTask
+
+class CrashedTask(Task):
+    """
+    Crashed task that presents a fixed title.
+    """
+    # TODO: Rename icon as 'tree_warning' so that icon owned by EntityTree
+    #       is not referenced here (in a TaskTree context).
+    icon_name = 'entitytree_warning'
+    
+    def __init__(self,
+            title: str,
+            reason: CrashReason,
+            dismiss_func: Callable[[], None],
+            dismiss_action_title: str='Dismiss') -> None:
+        super().__init__(title=title)
+        self.crash_reason = reason
+        self._dismiss_func = dismiss_func  # type: Optional[Callable[[], None]]
+        self.dismiss_action_title = dismiss_action_title
+    
+    @bg_affinity
+    def __call__(self):
+        raise AssertionError('Cannot run a crashed task')
+    
+    def dismiss(self) -> None:
+        if self._dismiss_func is not None:
+            self._dismiss_func()
+            self._dismiss_func = None  # garbage collect
 
 
 # ------------------------------------------------------------------------------
@@ -735,6 +834,7 @@ class DownloadResourceBodyTask(Task):
         if self._resource.definitely_has_no_revisions:
             body_revision = None
         else:
+            @does_not_capture_crashes
             def fg_task() -> Optional[ResourceRevision]:
                 DRBT = DownloadResourceBodyTask
                 if DRBT._dr_profiling_context is None:
@@ -877,6 +977,8 @@ class DownloadResourceTask(Task):
                     self._download_body_with_embedded_future = Future()
                 return self._download_body_with_embedded_future
     
+    @override
+    @captures_crashes_to_self
     def dispose(self) -> None:
         super().dispose()
         if self._download_body_task is not None:
@@ -886,11 +988,13 @@ class DownloadResourceTask(Task):
     
     # === Events ===
     
+    @captures_crashes_to_self
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task is self._download_body_task:
             if not task.complete:
                 self.subtitle = task.subtitle
     
+    @captures_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         from crystal.model import (
             ProjectHasTooManyRevisionsError, RevisionBodyMissingError
@@ -963,6 +1067,7 @@ class DownloadResourceTask(Task):
                 self._parse_links_task = None  # reinterpret
             else:
                 # Identify embedded resources
+                @does_not_capture_crashes
                 def fg_task() -> List[Resource]:
                     embedded_resources = []
                     link_urls_seen = set()
@@ -1163,6 +1268,8 @@ class ParseResourceRevisionLinks(Task):
         
         return (links, linked_resources)
     
+    @override
+    @captures_crashes_to_self
     def dispose(self) -> None:
         super().dispose()
         self._resource_revision = None
@@ -1217,12 +1324,19 @@ class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
     def __init__(self, title: str) -> None:
         super().__init__(title, prefinish=True)
     
-    # Don't allow parent to be set on a flyweight task
-    def _get_parent(self) -> Optional[Task]:
-        return None
-    def _set_parent(self, parent: Optional[Task]) -> None:
+    # Ignore any crash reason set on a flyweight task
+    @override
+    def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
+        # NOTE: Swallowing the bad set operation rather than raising another
+        #       exception because calling error-handling code is not expected
+        #       to be able to handle a followup exception raised in this context.
         pass
-    parent = cast(Optional[Task], property(_get_parent, _set_parent))
+    
+    # Ignore any parent set on a flyweight task
+    @property
+    @override
+    def parent(self) -> Optional[Task]:
+        return None
 
 
 class _AlreadyDownloadedPlaceholderTask(_FlyweightPlaceholderTask):
@@ -1294,10 +1408,12 @@ class UpdateResourceGroupMembersTask(Task):
                 self.task_did_complete(download_task)
         # (NOTE: self.complete might be True now)
     
+    @captures_crashes_to_self
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if not task.complete:
             self.subtitle = task.subtitle
     
+    @captures_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
@@ -1339,15 +1455,21 @@ class DownloadResourceGroupMembersTask(Task):
         self._pbc = None  # type: Optional[ProgressBarCalculator]
         self._children_loaded = False
     
-    @overrides
+    @override
+    @captures_crashes_to_self
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
         if not self._children_loaded:
-            def fg_task() -> None:
-                self._load_children()
-                self._update_completed_status()
-            return lambda: fg_call_and_wait(fg_task)
+            return self._load_children_and_update_completed_status
         
         return super().try_get_next_task_unit()
+    
+    @captures_crashes_to_self
+    def _load_children_and_update_completed_status(self) -> None:
+        @does_not_capture_crashes
+        def fg_task() -> None:
+            self._load_children()
+            self._update_completed_status()
+        fg_call_and_wait(fg_task)
     
     @fg_affinity
     def _load_children(self) -> None:
@@ -1409,6 +1531,7 @@ class DownloadResourceGroupMembersTask(Task):
         
         assert self._children_loaded  # because set earlier in this function
     
+    @captures_crashes_to_self
     def group_did_add_member(self, group: ResourceGroup, member: Resource) -> None:
         # NOTE: Unfortunately self._children_loaded may be unset here due to a race condition:
         #       https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
@@ -1431,11 +1554,13 @@ class DownloadResourceGroupMembersTask(Task):
                 self.task_did_complete(download_task)
             # (NOTE: self.complete might be True now)
     
+    @captures_crashes_to_self
     def group_did_finish_updating(self) -> None:
         self._done_updating_group = True
         self._update_subtitle()
         self._update_completed_status()
     
+    @captures_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
@@ -1520,6 +1645,7 @@ class DownloadResourceGroupTask(Task):
     def group(self) -> ResourceGroup:
         return self._update_members_task.group
     
+    @captures_crashes_to_self
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task == self._update_members_task and not self._started_downloading_members:
             self.subtitle = 'Updating group members...'
@@ -1527,6 +1653,7 @@ class DownloadResourceGroupTask(Task):
             self.subtitle = task.subtitle
             self._started_downloading_members = True
     
+    @captures_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
@@ -1535,6 +1662,11 @@ class DownloadResourceGroupTask(Task):
         
         if self.num_children_complete == len(self.children) and not self.complete:
             self.finish()
+    
+    @captures_crashes_to_self
+    def child_task_did_crash(self, task: Task) -> None:
+        if task == self._update_members_task:
+            self._download_members_task.group_did_finish_updating()
     
     def finish(self) -> None:
         Caffeination.remove_caffeine()
@@ -1561,21 +1693,82 @@ class RootTask(Task):
     icon_name = None
     scheduling_style = SCHEDULING_STYLE_ROUND_ROBIN
     all_children_complete_implies_this_task_complete = False
+    all_incomplete_children_crashed_implies_this_task_should_crash = False
     
     def __init__(self) -> None:
         super().__init__(title='ROOT')
         self.subtitle = 'Running'
         self._children_to_add_soon = []  # type: List[Tuple[Task, bool]]
     
+    # === Bulkhead ===
+    
+    @override
+    def _get_crash_reason(self) -> Optional[CrashReason]:
+        return self._crash_reason
+    @override
+    @captures_crashes_to_stderr
+    def _set_crash_reason(self, reason: Optional[CrashReason]) -> None:
+        if reason is None:
+            self._crash_reason = None
+        else:
+            if self._crash_reason is not None:
+                # Ignore subsequent crashes until the first one is cleared
+                return
+            self._crash_reason = reason
+            
+            # Try to mark all preexisting tasks with "scheduler crashed" subtitle
+            try:
+                # NOTE: Might raise if RootTask is in a sufficiently invalid state
+                self._mark_children_subtitles_as_scheduler_crashed(self)
+            except Exception:
+                # Fail silently
+                pass
+            
+            # Report crash to Task Tree
+            @fg_affinity
+            def dismiss_all_scheduled_tasks() -> None:
+                # Clear the crash reason
+                self.crash_reason = None
+                
+                # Remove all top-level tasks, including the CrashedTask
+                self._next_child_index = 0
+                for child in self.children:
+                    if not child.complete:
+                        child.finish()
+                self.clear_completed_children()
+            crash_reason_view = CrashedTask(
+                'Scheduler crashed',
+                reason,
+                dismiss_all_scheduled_tasks,
+                dismiss_action_title='Dismiss All')
+            # NOTE: Might raise if RootTask is in a sufficiently invalid state
+            self.append_child(crash_reason_view)
+            @does_not_capture_crashes
+            def fg_task() -> None:
+                # NOTE: Might raise if RootTask is in a sufficiently invalid state
+                self.append_deferred_top_level_tasks()
+            fg_call_and_wait(fg_task)
+    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
+    
+    @classmethod
+    def _mark_children_subtitles_as_scheduler_crashed(cls, parent: Task) -> None:
+        for child in parent.children:
+            if child.complete:
+                continue
+            child.subtitle = 'Scheduler crashed'
+            cls._mark_children_subtitles_as_scheduler_crashed(child)
+    
+    # === Properties ===
+    
     @property  # type: ignore[misc]
     @fg_affinity  # force any access to synchronize with foreground thread
-    @overrides
+    @override
     def children(self) -> Sequence[Task]:
         # NOTE: Bypass the usual thread synchronization check in super().children,
         #       because here the analogous check is handled by @fg_affinity
         return self._children
     
-    @overrides
+    @override
     def append_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
         Appends a child to this RootTasks's children, queuing it to be
@@ -1586,6 +1779,7 @@ class RootTask(Task):
         Raises:
         * ProjectClosedError -- if this project is closed
         """
+        @does_not_capture_crashes
         def fg_task() -> None:
             assert child not in self.children
             assert child not in [c for (c, _) in self._children_to_add_soon]
@@ -1603,10 +1797,7 @@ class RootTask(Task):
     
     @fg_affinity
     @scheduler_affinity
-    def try_get_next_task_unit(self):
-        if self.complete:
-            return None
-        
+    def append_deferred_top_level_tasks(self) -> None:
         if len(self._children_to_add_soon) != 0:
             children_to_add_soon = list(self._children_to_add_soon)  # capture
             self._children_to_add_soon.clear()
@@ -1616,6 +1807,18 @@ class RootTask(Task):
                 super().append_child(child, already_complete_ok=already_complete_ok)
             assert len(self._children_to_add_soon) == 0, \
                 'RootTask._children_to_add_soon was modified concurrently unexpectedly'
+    
+    # === Public Operations ===
+    
+    @override
+    @captures_crashes_to_self
+    @fg_affinity
+    @scheduler_affinity
+    def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
+        if self.complete:
+            return None
+        
+        self.append_deferred_top_level_tasks()
         
         # Only the root task is allowed to have no children normally
         if len(self.children) == 0:
@@ -1623,14 +1826,20 @@ class RootTask(Task):
         
         return super().try_get_next_task_unit()
     
-    def child_task_did_complete(self, task: Task) -> None:
-        task.dispose()
+    # === Events ===
     
+    @captures_crashes_to_self
+    def child_task_did_complete(self, task: Task) -> None:
+        run_bulkhead_call(task.dispose)
+    
+    @captures_crashes_to_self
     def did_schedule_all_children(self) -> None:
         # Remove completed children after each scheduling pass
         self.clear_completed_children()
     
-    @overrides
+    # === Protected Operations: Finish & Cleanup ===
+    
+    @override
     def clear_children_if_all_complete(self) -> bool:
         raise NotImplementedError(
             'RootTask does not support clear_children_if_all_complete '
@@ -1638,12 +1847,15 @@ class RootTask(Task):
             'is not prepared to deal with concurrent modification of '
             'RootTask.children.')
     
-    @overrides
+    @override
     def clear_completed_children(self) -> None:
+        @does_not_capture_crashes
         def fg_task() -> None:
             super(RootTask, self).clear_completed_children()
         # NOTE: Must synchronize access to RootTask.children with foreground thread
         fg_call_and_wait(fg_task)
+    
+    # === Public Operations ===
     
     def interrupt(self) -> None:
         """
@@ -1651,6 +1863,8 @@ class RootTask(Task):
         by interrupting the scheduler thread.
         """
         self.finish()
+    
+    # === Utility ===
     
     def __repr__(self) -> str:
         return f'<RootTask at 0x{id(self):x}>'
@@ -1664,12 +1878,16 @@ class RootTask(Task):
 _ROOT_TASK_POLL_INTERVAL = .1 # secs
 
 
-def start_schedule_forever(task: RootTask) -> None:
+def start_schedule_forever(root_task: RootTask) -> None:
     """
-    Asynchronously runs the specified task until it completes,
+    Asynchronously runs the specified RootTask until it completes,
     or until there is no foreground thread remaining.
     """
-    def bg_task() -> None:
+    # NOTE: Don't use @crashes_captured_to(root_task) because a RootTask
+    #       crashed in this outer context could not have the crash dismissed
+    #       such that the RootTask would actually start running again properly
+    @captures_crashes_to_stderr
+    def bg_daemon_task() -> None:
         setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
         assert _is_scheduler_thread()
         assert is_synced_with_scheduler_thread()
@@ -1679,53 +1897,42 @@ def start_schedule_forever(task: RootTask) -> None:
         else:
             profiling_context = nullcontext(enter_result=None)
         try:
-            while True:
-                try:
-                    with profiling_context as profiler:
-                        while True:
+            with profiling_context as profiler:
+                while True:
+                    # NOTE: Use enter_if_crashed=True so that the usual
+                    #       `sleep(_ROOT_TASK_POLL_INTERVAL)` logic will be
+                    #       used to poll until the root task becomes uncrashed
+                    with crashes_captured_to(root_task, enter_if_crashed=True):
+                        if root_task.crash_reason is None:
+                            # NOTE: Some decorators omitted as a (speculative) performance optimization
+                            #@does_not_capture_crashes
                             #@fg_affinity
                             #@scheduler_affinity
                             def fg_task() -> Tuple[Optional[Callable[[], None]], bool]:
-                                return (task.try_get_next_task_unit(), task.complete)
+                                return (
+                                    run_bulkhead_call(root_task.try_get_next_task_unit),
+                                    root_task.complete
+                                )
                             try:
                                 (unit, task_complete) = fg_call_and_wait(fg_task)
                             except NoForegroundThreadError:
                                 return
-                            
-                            if unit is None:
-                                if task_complete:
-                                    return
-                                else:
-                                    sleep(_ROOT_TASK_POLL_INTERVAL)
-                                    continue
-                            try:
-                                unit()  # Run unit directly on this scheduler thread
-                            except NoForegroundThreadError:
-                                # Probably the app was closed. Ignore error.
+                        else:
+                            unit = None
+                            task_complete = False
+                        
+                        if unit is None:
+                            if task_complete:
                                 return
-                            except Exception as e:
-                                if is_database_closed_error(e):
-                                    # Probably the project was closed. Ignore error.
-                                    return
-                                else:
-                                    raise
-                except Exception:
-                    print(f'*** Scheduler thread crashed. Will try to restart.', file=sys.stderr)
-                    traceback.print_exc(file=sys.stderr)
-                    
-                    # Delay so that if we get into a retry loop,
-                    # we don't completely hog the CPU
-                    sleep(1.0)
-                    
-                    # Rewind to first top-level task and restart
-                    if task.scheduling_style == SCHEDULING_STYLE_ROUND_ROBIN:
-                        task._next_child_index = 0
-                    continue
+                            else:
+                                scheduler_sleep(_ROOT_TASK_POLL_INTERVAL)
+                                continue
+                        run_bulkhead_call(unit)  # Run unit directly on this scheduler thread
         finally:
             if _PROFILE_SCHEDULER:
                 assert profiler is not None
                 profiler.dump_stats('scheduler.prof')
-    bg_call_later(bg_task, daemon=True)
+    bg_call_later(bg_daemon_task, daemon=True)
 
 
 def is_synced_with_scheduler_thread() -> bool:
@@ -1749,22 +1956,6 @@ def _is_scheduler_thread(thread: Optional[threading.Thread]=None) -> bool:
     if thread is None:
         thread = threading.current_thread()
     return getattr(thread, '_cr_is_scheduler_thread', False)
-
-
-@contextmanager
-def scheduler_thread_context() -> Iterator[None]:
-    """
-    Context which executes its contents as if it was on a scheduler thread.
-    
-    For testing use only.
-    """
-    old_is_scheduler_thread = _is_scheduler_thread()  # capture
-    setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
-    try:
-        assert _is_scheduler_thread()
-        yield
-    finally:
-        setattr(threading.current_thread(), '_cr_is_scheduler_thread', old_is_scheduler_thread)
 
 
 # ------------------------------------------------------------------------------

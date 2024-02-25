@@ -28,17 +28,17 @@ jobs:
         python-version: ["3.8", "3.9"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15  # 150% of normal time: 9 min 50 secs, as of 2023-12-17
+    timeout-minutes: 23  # 150% of normal time: 15 min, as of 2024-02-16
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Poetry
         # NOTE: Poetry 1.5.0 cannot use "poetry run" to run make-mac.sh
         run: pipx install "poetry>=1.4.0,<1.5.0"
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: poetry
@@ -68,7 +68,7 @@ jobs:
         # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
         #       rather than sending them to log files
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ CRYSTAL_FAULTHANDLER=True "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
 
       - name: Upload screenshot if test failure
         if: failure()
@@ -100,16 +100,16 @@ jobs:
         python-version: ["3.8", "3.9"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 6  # 150% of normal time: 3 min 40 sec, as of 2023-12-17
+    timeout-minutes: 9  # 150% of normal time: 5 min 29 sec, as of 2024-02-24
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Poetry
         run: pipx install poetry
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: poetry
@@ -167,7 +167,7 @@ jobs:
 
       - name: Run UI tests
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots CRYSTAL_FAULTHANDLER=True poetry run xvfb-run crystal --test
 
       - name: Upload screenshot if test failure
         if: failure()
@@ -190,16 +190,16 @@ jobs:
         python-version: ["3.8", "3.9"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 23  # 150% of normal time: 14 min 40 secs, as of 2023-12-17
+    timeout-minutes: 35  # 150% of normal time: 23 min, as of 2024-02-22
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Poetry
         run: pipx install poetry
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: poetry
@@ -233,6 +233,7 @@ jobs:
         run: |
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
+          $env:CRYSTAL_FAULTHANDLER = "True"
           poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
 
       - name: Upload screenshot if test failure

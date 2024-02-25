@@ -7,7 +7,7 @@ import crystal.task
 from crystal.task import (
     DownloadResourceTask,
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask, 
-    _PlaceholderTask, SCHEDULING_STYLE_ROUND_ROBIN, scheduler_thread_context,
+    _PlaceholderTask, SCHEDULING_STYLE_ROUND_ROBIN,
     Task, UpdateResourceGroupMembersTask,
 )
 from crystal.tests.util.asserts import assertEqual
@@ -15,7 +15,12 @@ from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.data import MAX_TIME_TO_DOWNLOAD_404_URL
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
-from crystal.tests.util.tasks import append_deferred_top_level_tasks
+from crystal.tests.util.tasks import (
+    append_deferred_top_level_tasks,
+    mark_as_complete as _mark_as_complete,
+    scheduler_disabled, scheduler_thread_context,
+    ttn_for_task as _ttn_for_task,
+)
 from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wait_while
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.ui.tree import NodeView
@@ -541,21 +546,15 @@ async def _project_with_resource_group_starting_to_download(
     if not (small_max_leading_complete_children <= small_max_visible_children):
         raise ValueError()
     
-    scheduler_patched = (
-        patch('crystal.task.start_schedule_forever', lambda task: None)
+    scheduler_maybe_disabled = (
+        scheduler_disabled()
         if not scheduler_thread_enabled
         else cast(AbstractContextManager, nullcontext())
     )  # type: AbstractContextManager
     
-    simulated_scheduler_context = (
-        scheduler_thread_context()
-        if not scheduler_thread_enabled
-        else nullcontext()
-    )  # type: AbstractContextManager
-    
     # NOTE: NOT using the xkcd test data, because I want all xkcd URLs to give HTTP 404
-    with served_project('testdata_bongo.cat.crystalproj.zip') as sp, \
-            scheduler_patched, simulated_scheduler_context:
+    with scheduler_maybe_disabled, \
+            served_project('testdata_bongo.cat.crystalproj.zip') as sp:
         # Define URLs
         if True:
             home_url = sp.get_request_url('https://xkcd.com/')
@@ -637,13 +636,6 @@ def _cleanup_download_of_resource_group(
     assert _is_complete(download_rg_ttn.tree_node)
     assert None == project.root_task.try_get_next_task_unit()  # clear root task
     assert len(project.root_task.children) == 0
-
-
-def _ttn_for_task(task: Task) -> TaskTreeNode:
-    for lis in task.listeners:
-        if isinstance(lis, TaskTreeNode):
-            return lis
-    raise AssertionError(f'Unable to locate TaskTreeNode for {task!r}')
 
 
 def _viewport(ttn: TaskTreeNode) -> Tuple[int, int, bool, bool]:
@@ -734,24 +726,3 @@ def _value_of_more_node(tn: NodeView) -> Optional[int]:
 def _is_complete(tn: NodeView) -> bool:
     assert isinstance(tn, NodeView2)
     return tn.subtitle == 'Complete'
-
-
-def _mark_as_complete(task: Task) -> None:
-    assert not task.complete
-    task.finish()
-    assert task.complete
-
-
-class _NullTask(_PlaceholderTask):
-    """
-    Null task. For special purposes.
-    
-    This task is always complete immediately after initialization.
-    """
-    def __init__(self) -> None:
-        super().__init__(title='<null>', prefinish=True)
-    
-    def __repr__(self) -> str:
-        return f'<_NullTask>'
-
-_NULL_TASK = _NullTask()

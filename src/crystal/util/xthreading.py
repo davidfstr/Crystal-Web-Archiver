@@ -8,9 +8,10 @@ This thread is responsible for:
 """
 
 from collections import deque
+from crystal.util.bulkheads import captures_crashes_to_stderr, run_bulkhead_call
 from crystal.util.profile import create_profiled_callable
 from enum import Enum
-from functools import wraps
+from functools import partial, wraps
 import os
 import sys
 import threading
@@ -35,6 +36,10 @@ _PROFILE_FG_TASKS = os.environ.get('CRYSTAL_NO_PROFILE_FG_TASKS', 'False') != 'T
 # If profiling is enabled, warnings will be printed for tasks whose runtime
 # exceeds this threshold.
 _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
+
+# Whether to enforce that callables scheduled with fg_call_later()
+# be decorated with @captures_crashes_to*.
+_DEFERRED_FG_CALLS_MUST_CAPTURE_CRASHES = True
 
 
 _P = ParamSpec('_P')
@@ -154,6 +159,10 @@ def fg_call_later(
     
     is_fg_thread = is_foreground_thread()  # cache
     
+    if _DEFERRED_FG_CALLS_MUST_CAPTURE_CRASHES:
+        callable = partial(run_bulkhead_call, callable, *args)  # type: ignore[assignment]
+        args=()
+    
     if _PROFILE_FG_TASKS and profile and not is_fg_thread:
         callable = create_profiled_callable(
             'Slow foreground task',
@@ -170,7 +179,7 @@ def fg_call_later(
                 if len(args) == 0:
                     _fg_call_later_in_order(callable)
                 else:
-                    _fg_call_later_in_order(lambda: callable(*args))
+                    _fg_call_later_in_order(partial(callable, *args))
             else:
                 wx.CallAfter(callable, *args)
         except Exception as e:
@@ -241,14 +250,14 @@ def fg_call_and_wait(
         
         waiting_calling_thread = threading.current_thread()  # capture
         
+        @captures_crashes_to_stderr
         def fg_task() -> None:
             nonlocal callable_started, callable_result, callable_exc_info
             
             callable_started = True
             
-            fg_thread = threading.current_thread()
-            
             # Run task
+            fg_thread = threading.current_thread()
             setattr(fg_thread, '_cr_waiting_calling_thread', waiting_calling_thread)
             try:
                 callable_result = callable(*args)
@@ -308,7 +317,7 @@ def bg_call_later(
         # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
         *, args=(),
         daemon: bool=False,
-        ) -> None:
+        ) -> threading.Thread:
     """
     Calls the specified callable on a new background thread.
     
@@ -321,6 +330,7 @@ def bg_call_later(
     """
     thread = threading.Thread(target=callable, args=args, daemon=daemon)
     thread.start()
+    return thread
 
 
 # ------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
-    ProjectFreeSpaceTooLowError, scheduler_thread_context, Task
+    ProjectFreeSpaceTooLowError, Task,
 )
 from crystal.tests.util.asserts import *
 from crystal.tests.util.data import (
@@ -8,18 +8,15 @@ from crystal.tests.util.data import (
     MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
 )
 from crystal.tests.util.downloads import load_children_of_drg_task
-from crystal.tests.util.runner import bg_sleep
-from crystal.tests.util.screenshots import screenshot_if_raises
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
+from crystal.tests.util.tasks import scheduler_thread_context
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.model import Project, Resource, ResourceGroup
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xcollections.lazy import AppendableLazySequence
-import tempfile
-from tqdm import tqdm
 from typing import NamedTuple
 from unittest import skip
 from unittest.mock import patch, Mock, PropertyMock
@@ -115,6 +112,9 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                         drg_task.complete
                     )
                     
+                    # TODO: Disable the scheduler thread before trying to control
+                    #       it manually. Currently it's not safe to make the
+                    #       scheduler_thread_context() assertion.
                     project.add_task(drg_task)
                     with scheduler_thread_context():
                         task_unit = project.root_task.try_get_next_task_unit()
@@ -213,8 +213,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
     with subtests.test('given project on small disk and less than 5 percent of disk free'):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
             # Define URLs
-            if True:
-                home_url = sp.get_request_url('https://xkcd.com/')
+            home_url = sp.get_request_url('https://xkcd.com/')
             
             async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
                 project = Project._last_opened_project
@@ -231,8 +230,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
     with subtests.test('given project on large disk and less than 4 gib of disk free'):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
             # Define URLs
-            if True:
-                home_url = sp.get_request_url('https://xkcd.com/')
+            home_url = sp.get_request_url('https://xkcd.com/')
             
             async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
                 project = Project._last_opened_project
@@ -274,13 +272,8 @@ async def test_when_download_resource_group_members_then_displays_estimated_time
 # ==============================================================================
 # Test: Scheduler
 
-@skip('not yet automated')
-async def test_when_get_task_unit_raises_unexpected_exception_then_scheduler_restarts():
-    pass
-
-
-@skip('not yet automated')
-async def test_when_run_task_unit_raises_unexpected_exception_then_scheduler_restarts():
+@skip('covered by: test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashed_and_scheduler_crashed_task_appears')
+async def test_when_scheduler_thread_crashes_then_scheduler_crashed_task_appears():
     pass
 
 

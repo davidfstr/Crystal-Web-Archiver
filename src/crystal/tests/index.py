@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from crystal.tests import (
+    test_bulkheads,
     test_disk_io_errors,
     test_do_not_download_groups,
     test_download,
@@ -62,6 +63,7 @@ def _test_functions_in_module(mod) -> List[Callable]:
 
 # TODO: Avoid the need to manually enumerate all test modules individually
 _TEST_FUNCS = (
+    _test_functions_in_module(test_bulkheads) +
     _test_functions_in_module(test_disk_io_errors) +
     _test_functions_in_module(test_do_not_download_groups) +
     _test_functions_in_module(test_download) +
@@ -138,7 +140,12 @@ def _run_tests(test_names: List[str]) -> bool:
             print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]})')
             print('-' * 70)
             try:
-                run_test(test_func)
+                try:
+                    run_test(test_func)
+                finally:
+                    # Flush any stderr output immediately,
+                    # to keep aligned with stdout output from the test
+                    sys.stderr.flush()
             except AssertionError as e:
                 result_for_test_func_id[test_func_id] = e
                 

@@ -1,14 +1,28 @@
 from contextlib import contextmanager
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import (
-    DownloadResourceGroupMembersTask, SCHEDULING_STYLE_SEQUENTIAL, Task,
+    CrashedTask, DownloadResourceGroupMembersTask, RootTask,
+    SCHEDULING_STYLE_SEQUENTIAL, Task,
+)
+from crystal.util.bulkheads import (
+    Bulkhead, BulkheadCell,
+    captures_crashes_to,
+    captures_crashes_to_bulkhead_arg,
+    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
+    captures_crashes_to_stderr,
+    CrashReason,
 )
 from crystal.ui.tree import NodeView as NodeView1
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
+from crystal.util.wx_bind import bind
 from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItemError
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
+import os
 from typing import Iterator, List, Optional, Tuple
 import wx
+
+
+_ID_DISMISS = 101
 
 
 class TaskTree:
@@ -19,7 +33,10 @@ class TaskTree:
         self.root = TaskTreeNode(root_task)
         
         self.tree = TreeView(parent_peer, name='cr-task-tree')
+        self.tree.delegate = self
         self.tree.root = self.root.tree_node
+        
+        self._right_clicked_node = None  # type: Optional[TaskTreeNode]
         
         self.tree.peer.SetInitialSize((750, 200))
     
@@ -27,6 +44,58 @@ class TaskTree:
     def peer(self) -> wx.TreeCtrl:
         """The wx.TreeCtrl controlled by this class."""
         return self.tree.peer
+    
+    # === Event: Right Click ===
+    
+    @captures_crashes_to_stderr
+    def on_right_click(self, event: wx.MouseEvent, node_view: NodeView) -> None:
+        node = TaskTreeNode.for_node_view(node_view)
+        self._right_clicked_node = node
+        
+        # Create popup menu
+        menu = wx.Menu()
+        bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
+        if isinstance(node.task, CrashedTask):
+            menu.Append(_ID_DISMISS, node.task.dismiss_action_title)
+        elif self._is_dismissable_top_level_task(node.task):
+            menu.Append(_ID_DISMISS, 'Dismiss')
+        else:
+            menu.Append(_ID_DISMISS, 'Dismiss')
+            menu.Enable(_ID_DISMISS, False)
+        
+        # Show popup menu
+        self.peer.PopupMenu(menu)
+        menu.Destroy()
+    
+    def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
+        node = self._right_clicked_node
+        assert node is not None
+        
+        item_id = event.GetId()
+        if item_id == _ID_DISMISS:
+            if isinstance(node.task, CrashedTask):
+                node.task.dismiss()
+            elif self._is_dismissable_top_level_task(node.task):
+                self._dismiss_top_level_task(node.task)
+            else:
+                raise AssertionError(f'Do not know how to dismiss: {node.task}')
+    
+    @classmethod
+    def _is_dismissable_top_level_task(cls, task: Task) -> bool:
+        return (
+            task.crash_reason is not None and
+            isinstance(task.parent, RootTask) and
+            task.parent.crash_reason is None
+        )
+    
+    @classmethod
+    def _dismiss_top_level_task(cls, task: Task) -> None:
+        if not cls._is_dismissable_top_level_task(task):
+            raise ValueError()
+        if not task.complete:
+            task.finish()
+    
+    # === Dispose ===
     
     def dispose(self) -> None:
         self.root.dispose()
@@ -40,6 +109,9 @@ class TaskTreeNode:
     # The following limits are enforced for SCHEDULING_STYLE_SEQUENTIAL tasks only
     _MAX_LEADING_COMPLETE_CHILDREN = 5
     _MAX_VISIBLE_CHILDREN = 100
+    
+    _CRASH_TEXT_COLOR = wx.Colour(255, 0, 0)  # red
+    _CRASH_SUBTITLE = 'Something went wrong'
     
     # Optimize per-instance memory use, since there may be very many TaskTreeNode objects
     __slots__ = (
@@ -60,12 +132,17 @@ class TaskTreeNode:
             self.task.listeners.append(self)
         
         self.tree_node = NodeView()
+        self.tree_node.delegate = self
         if self.task.icon_name is not None:
             self.tree_node.icon_set = (
                 (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()[self.task.icon_name]),
             )
         self.tree_node.title = self.task.title
-        self.tree_node.subtitle = self.task.subtitle
+        self.tree_node.subtitle = self._calculate_tree_node_subtitle(
+            self.task.subtitle,
+            self.task.crash_reason)
+        self.tree_node.text_color = self._calculate_tree_node_text_color(self.task.crash_reason)
+        self.tree_node.bold = self._calculate_tree_node_bold(self.task.crash_reason)
         self.tree_node.expandable = not callable(task)
         
         self._num_visible_children = 0
@@ -77,6 +154,7 @@ class TaskTreeNode:
         #       calls to self.task_did_append_child() so that we don't need to
         #       make very many thread transitions in that function
         task_children_count = len(self.task.children)  # capture
+        @captures_crashes_to(task)
         def fg_task() -> None:
             # Update current progress dialog, if found,
             # in preparation for appending tasks
@@ -116,16 +194,71 @@ class TaskTreeNode:
                 progress_dialog.Pulse(progress_dialog_old_message)
         fg_call_and_wait(fg_task)
     
+    @staticmethod
+    def for_node_view(node_view: NodeView) -> 'TaskTreeNode':
+        node = node_view.delegate
+        assert isinstance(node, TaskTreeNode)
+        return node
+    
+    @captures_crashes_to_task_arg
     def task_subtitle_did_change(self, task: Task) -> None:
-        new_subtitle = self.task.subtitle  # capture
+        task_subtitle = self.task.subtitle  # capture
+        task_crash_reason = self.task.crash_reason  # capture
+        @captures_crashes_to(task)
         def fg_task() -> None:
-            self.tree_node.subtitle = new_subtitle
+            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
         # NOTE: Use profile=False because no obvious further optimizations exist
         fg_call_later(fg_task, profile=False)
     
+    # NOTE: Cannot use @captures_crashes_to_task_arg because would create infinite loop
+    @captures_crashes_to_stderr
+    def task_crash_reason_did_change(self, task: Task) -> None:
+        task_crash_reason = self.task.crash_reason  # capture
+        task_subtitle = self.task.subtitle  # capture
+        # NOTE: Cannot use @captures_crashes_to(task) because would create infinite loop
+        @captures_crashes_to_stderr
+        def fg_task() -> None:
+            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
+            self.tree_node.text_color = self._calculate_tree_node_text_color(task_crash_reason)
+            self.tree_node.bold = self._calculate_tree_node_bold(task_crash_reason)
+            if task_crash_reason is not None:
+                # (TODO: Set tooltip when hovering over tree node text to task_crash_reason)
+                pass
+            else:
+                # (TODO: Clear tooltip when hovering over tree node text)
+                pass
+        # NOTE: Use profile=False because no obvious further optimizations exist
+        fg_call_later(fg_task, profile=False)
+    
+    @classmethod
+    def _calculate_tree_node_subtitle(cls,
+            task_subtitle: str,
+            task_crash_reason: Optional[CrashReason]) -> str:
+        return (
+            task_subtitle
+            if task_crash_reason is None
+            else cls._CRASH_SUBTITLE
+        )
+    
+    @classmethod
+    def _calculate_tree_node_text_color(cls,
+            task_crash_reason: Optional[CrashReason]) -> Optional[wx.Colour]:
+        return (
+            cls._CRASH_TEXT_COLOR
+            if task_crash_reason is not None
+            else None
+        )
+    
+    @classmethod
+    def _calculate_tree_node_bold(cls,
+            task_crash_reason: Optional[CrashReason]) -> bool:
+        return task_crash_reason is not None
+    
+    @captures_crashes_to_task_arg
     def task_did_complete(self, task: Task) -> None:
         self.task.listeners.remove(self)
     
+    @captures_crashes_to_task_arg
     def task_did_set_children(self, task: Task, child_count: int) -> None:
         if task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
             # Create tree node for each visible task
@@ -148,6 +281,7 @@ class TaskTreeNode:
             
             # Create more node as a placeholder for the remaining tasks, if needed
             if visible_child_count < child_count:
+                @captures_crashes_to(task)
                 def fg_task() -> None:
                     self.tree_node.append_child(_MoreNodeView(child_count - visible_child_count))
                 fg_call_later(fg_task)
@@ -163,9 +297,20 @@ class TaskTreeNode:
                 #       child is initially complete
                 self.task_did_append_child(task, child)
     
+    @captures_crashes_to_stderr
     def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
+        if isinstance(task, RootTask) and isinstance(child, CrashedTask):
+            # Specially, allow RootTask to append a CrashedTask when RootTask is crashed
+            bulkhead = BulkheadCell()  # type: Bulkhead
+        else:
+            bulkhead = task
+        self._task_did_append_child(bulkhead, task, child)
+    
+    @captures_crashes_to_bulkhead_arg
+    def _task_did_append_child(self, bulkhead: Bulkhead, task: Task, child: Optional[Task]) -> None:
         if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
                 self._num_visible_children == self._MAX_VISIBLE_CHILDREN):
+            @captures_crashes_to(bulkhead)
             def fg_task() -> None:
                 # Find last_more_node, or create if missing
                 last_child_tree_node = self.tree_node.children[-1]
@@ -186,6 +331,7 @@ class TaskTreeNode:
             # Append tree node for new task child
             child_ttnode = TaskTreeNode(child)
             self._num_visible_children += 1
+            @captures_crashes_to(bulkhead)
             def fg_task() -> None:
                 self.tree_node.append_child(child_ttnode.tree_node)
             fg_call_later(fg_task)
@@ -202,6 +348,7 @@ class TaskTreeNode:
         finally:
             self._ignore_complete_events = False
     
+    @captures_crashes_to_task_arg
     def task_child_did_complete(self, task: Task, child: Task) -> None:
         assert task is self.task
         if task.scheduling_style != SCHEDULING_STYLE_SEQUENTIAL:
@@ -277,6 +424,7 @@ class TaskTreeNode:
         
         # Update visible children
         task_children_count = len(task.children)  # capture
+        @captures_crashes_to(task)
         def fg_task() -> None:
             # Find (first_more_node, intermediate_nodes, last_more_node)
             intermediate_nodes = list(self.tree_node.children)
@@ -313,6 +461,7 @@ class TaskTreeNode:
             unmaterialize_tasks()
         fg_call_later(fg_task)
     
+    @captures_crashes_to_task_arg
     def task_did_clear_children(self,
             task: Task,
             child_indexes: Optional[List[int]]=None
@@ -320,6 +469,7 @@ class TaskTreeNode:
         assert task is self.task
         if child_indexes is None:
             self._num_visible_children = 0
+            @captures_crashes_to(task)
             def fg_task() -> None:
                 self.tree_node.children = []  # type: ignore[misc]
             fg_call_later(fg_task)
@@ -327,6 +477,7 @@ class TaskTreeNode:
             if self.task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL:
                 raise NotImplementedError()
             self._num_visible_children -= len(child_indexes)
+            @captures_crashes_to(task)
             def fg_task() -> None:
                 self.tree_node.children = [  # type: ignore[misc]
                     c

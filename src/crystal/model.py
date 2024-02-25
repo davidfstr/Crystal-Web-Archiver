@@ -32,6 +32,11 @@ from crystal.progress import (
 )
 from crystal import resources as resources_
 from crystal.util import http_date
+from crystal.util.bulkheads import (
+    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
+    captures_crashes_to_stderr,
+    run_bulkhead_call,
+)
 from crystal.util.db import (
     DatabaseConnection,
     DatabaseCursor,
@@ -996,7 +1001,7 @@ class Project(ListenableMixin):
                     r.already_downloaded_this_session = False
             for lis in self.listeners:
                 if hasattr(lis, 'min_fetch_date_did_change'):
-                    lis.min_fetch_date_did_change()  # type: ignore[attr-defined]
+                    run_bulkhead_call(lis.min_fetch_date_did_change)  # type: ignore[attr-defined]
     min_fetch_date = property(_get_min_fetch_date, _set_min_fetch_date, doc=
         """
         If non-None then any resource fetched <= this datetime
@@ -1382,7 +1387,7 @@ class Project(ListenableMixin):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_did_instantiate'):
-                lis.resource_did_instantiate(resource)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_did_instantiate, resource)  # type: ignore[attr-defined]
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:
@@ -1420,7 +1425,7 @@ class Project(ListenableMixin):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_revision_did_instantiate'):
-                lis.resource_revision_did_instantiate(revision)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_revision_did_instantiate, revision)  # type: ignore[attr-defined]
     
     # === Events: Root Resource Lifecycle ===
     
@@ -1429,13 +1434,13 @@ class Project(ListenableMixin):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'root_resource_did_instantiate'):
-                lis.root_resource_did_instantiate(root_resource)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.root_resource_did_instantiate, root_resource)  # type: ignore[attr-defined]
     
     def _root_resource_did_forget(self, root_resource: RootResource) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'root_resource_did_forget'):
-                lis.root_resource_did_forget(root_resource)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.root_resource_did_forget, root_resource)  # type: ignore[attr-defined]
     
     # === Events: Resource Group Lifecycle ===
     
@@ -1444,19 +1449,19 @@ class Project(ListenableMixin):
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_instantiate'):
-                lis.resource_group_did_instantiate(group)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_group_did_instantiate, group)  # type: ignore[attr-defined]
     
     def _resource_group_did_change_do_not_download(self, group: ResourceGroup) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_change_do_not_download'):
-                lis.resource_group_did_change_do_not_download(group)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_group_did_change_do_not_download, group)  # type: ignore[attr-defined]
     
     def _resource_group_did_forget(self, group: ResourceGroup) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_forget'):
-                lis.resource_group_did_forget(group)  # type: ignore[attr-defined]
+                run_bulkhead_call(lis.resource_group_did_forget, group)  # type: ignore[attr-defined]
     
     # === Close ===
     
@@ -1550,6 +1555,7 @@ class _WeakTaskRef(Generic[_TK]):
             self._task.listeners.append(self)
     task = property(_get_task, _set_task)
     
+    @captures_crashes_to_task_arg
     def task_did_complete(self, task: Task) -> None:
         self.task = None
     
@@ -1591,6 +1597,7 @@ class Resource:
     
     # === Init (One) ===
     
+    @fg_affinity
     def __new__(cls, 
             project: Project,
             url: str,
@@ -1662,6 +1669,7 @@ class Resource:
     def _is_finished_initializing(self) -> bool:
         return self._id is not None
     
+    @fg_affinity
     def _finish_init(self, id: int, creating: bool) -> None:
         """
         Finishes initializing a Resource that was created with
@@ -1696,6 +1704,7 @@ class Resource:
     # === Init (Many) ===
     
     @staticmethod
+    @fg_affinity
     def bulk_create(
             project: Project,
             urls: List[str],
@@ -2209,6 +2218,7 @@ class RootResource:
     
     # === Init ===
     
+    @fg_affinity
     def __new__(cls, project: Project, name: str, resource: Resource, _id: Optional[int]=None) -> RootResource:
         """
         Creates a new root resource.
@@ -2255,6 +2265,7 @@ class RootResource:
     
     # === Delete ===
     
+    @fg_affinity
     def delete(self) -> None:
         """
         Deletes this root resource.
@@ -2280,6 +2291,7 @@ class RootResource:
     def _get_name(self) -> str:
         """Name of this root resource. Possibly ''."""
         return self._name
+    @fg_affinity
     def _set_name(self, name: str) -> None:
         if self._name == name:
             return
@@ -2488,6 +2500,7 @@ class ResourceRevision:
         # Asynchronously:
         # 1. Create the ResourceRevision row in the database
         # 2. Get the database ID
+        @captures_crashes_to_stderr
         def fg_task() -> None:
             nonlocal callable_exc_info
             try:
@@ -2608,6 +2621,7 @@ class ResourceRevision:
     # TODO: Optimize implementation to avoid unnecessarily loading all
     #       sibling revisions of the requested revision.
     @staticmethod
+    @fg_affinity
     def load(project: Project, id: int) -> Optional[ResourceRevision]:
         """
         Loads the existing revision with the specified ID,
@@ -3492,7 +3506,7 @@ class ResourceGroup(ListenableMixin):
             
             for lis in self.listeners:
                 if hasattr(lis, 'group_did_add_member'):
-                    lis.group_did_add_member(self, resource)  # type: ignore[attr-defined]
+                    run_bulkhead_call(lis.group_did_add_member, self, resource)  # type: ignore[attr-defined]
     
     def _resource_did_alter_url(self, 
             resource: Resource, old_url: str, new_url: str) -> None:

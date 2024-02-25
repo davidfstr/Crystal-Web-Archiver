@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from crystal.util.xthreading import bg_affinity, fg_affinity, fg_call_and_wait
+import sys
 import time
-from types import coroutine
+import traceback
+from types import coroutine, FrameType
 from typing import (
     Awaitable, Callable, Dict, Generic, Optional, TYPE_CHECKING, TypeVar, Union
 )
@@ -117,7 +119,7 @@ def bg_breakpoint(  # type: ignore[misc]  # ignore non-Generator return type her
         from crystal.tests.util.runner import bg_breakpoint
         await bg_breakpoint()
     """
-    yield BreakpointCommand()
+    yield BreakpointCommand(sys._getframe(1))
 
 
 class Command(Generic[_T]):  # abstract
@@ -165,8 +167,14 @@ class PumpWxEventsCommand(Command[None]):
 
 
 class BreakpointCommand(Command[None]):
+    def __init__(self, frame: FrameType) -> None:
+        self._frame = frame
+    
     @bg_affinity
     def run(self) -> None:
+        print('Breakpoint hit at:')
+        traceback.print_stack(self._frame)
+        
         import pdb
         pdb.set_trace()
 

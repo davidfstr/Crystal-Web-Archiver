@@ -6,7 +6,7 @@ from crystal.browser.new_root_url import NewRootUrlDialog as RealNewRootUrlDialo
 from crystal.model import Project
 from crystal.tests.util.controls import (
     click_button, file_dialog_returning,
-    TreeItem
+    select_menuitem_now, TreeItem
 )
 from crystal.tests.util.runner import bg_sleep, pump_wx_events
 from crystal.tests.util.tasks import first_task_title_progression
@@ -538,18 +538,22 @@ class EntityTree:
             f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
     
     async def set_default_url_prefix_to_resource_at_tree_item(self, tree_item: TreeItem) -> None:
-        # TODO: Publicize constant
         from crystal.browser.entitytree import _ID_SET_PREFIX
         
         if tree_item.tree != self.window:
             raise ValueError()
         
-        # Simulate right-click on tree node, opening (and closing) a menu
-        wx.PostEvent(self.window, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.window, tree_item.id))
-        await pump_wx_events()
-        
-        # Simulate click on menuitem "Set As Default URL Prefix"
-        wx.PostEvent(self.window, wx.MenuEvent(type=wx.EVT_MENU.typeId, id=_ID_SET_PREFIX, menu=None))
+        def show_popup(menu: wx.Menu) -> None:
+            (set_prefix_menuitem,) = [
+                mi for mi in menu.MenuItems
+                # TODO: Search for menuitem by title rather than by internal ID
+                if mi.Id == _ID_SET_PREFIX
+            ]
+            assert set_prefix_menuitem.Enabled
+            
+            select_menuitem_now(menu, set_prefix_menuitem.Id)
+            
+        await tree_item.right_click_showing_popup_menu(show_popup)
         await pump_wx_events()
 
 
