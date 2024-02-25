@@ -61,23 +61,11 @@ def file_dialog_returning(filepath: str) -> Iterator[None]:
 # ------------------------------------------------------------------------------
 # Utility: Controls: wx.Menu
 
-async def select_menuitem(menu: wx.Menu, menuitem_id: int) -> None:
-    _post_select_menuitem(menu, menuitem_id)
-    await pump_wx_events()
-
-
 def select_menuitem_now(menu: wx.Menu, menuitem_id: int) -> None:
-    # Run inner event loop to process any resulting wx.EVT_MENU event immediately,
+    # Process the related wx.EVT_MENU event immediately,
     # so that the event handler is called before the wx.Menu is disposed
-    loop = wx.GetApp().GetTraits().CreateEventLoop()
-    with wx.EventLoopActivator(loop):
-        _post_select_menuitem(menu, menuitem_id)
-        loop.Dispatch()
-        loop.Exit(0)
-
-
-def _post_select_menuitem(menu: wx.Menu, menuitem_id: int) -> None:
-    wx.PostEvent(menu, wx.MenuEvent(type=wx.EVT_MENU.typeId, id=menuitem_id, menu=None))
+    event = wx.MenuEvent(type=wx.EVT_MENU.typeId, id=menuitem_id, menu=None)
+    menu.ProcessEvent(event)
 
 
 # ------------------------------------------------------------------------------
