@@ -344,6 +344,7 @@ class SwitchToThread(Enum):
 def start_thread_switching_coroutine(
         first_command: SwitchToThread,
         coro: Generator[SwitchToThread, None, _R],
+        capture_crashes_to_deco: Callable[[Callable[[], None]], Callable[[], None]],
         /,
         ) -> None:
     """
@@ -363,17 +364,23 @@ def start_thread_switching_coroutine(
     # If is foreground thread, immediately run any prefix of the coroutine
     # that wants to be on the foreground thread
     if is_foreground_thread():
-        command = first_command
-        while command == SwitchToThread.FOREGROUND:
-            try:
-                command = next(coro)
-            except StopIteration as e:
-                return
-        assert command == SwitchToThread.BACKGROUND
-        
-        first_command = command  # reinterpret
+        @capture_crashes_to_deco
+        def fg_task() -> None:
+            nonlocal first_command
+            
+            command = first_command
+            while command == SwitchToThread.FOREGROUND:
+                try:
+                    command = next(coro)
+                except StopIteration as e:
+                    return
+            assert command == SwitchToThread.BACKGROUND
+            
+            first_command = command  # reinterpret
+        fg_task()
     
     # Run remainder of coroutine on a new background thread
+    @capture_crashes_to_deco
     def bg_task() -> None:
         run_thread_switching_coroutine(first_command, coro)
     bg_call_later(bg_task)
