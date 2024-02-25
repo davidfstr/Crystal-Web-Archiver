@@ -140,7 +140,12 @@ def _run_tests(test_names: List[str]) -> bool:
             print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]})')
             print('-' * 70)
             try:
-                run_test(test_func)
+                try:
+                    run_test(test_func)
+                finally:
+                    # Flush any stderr output immediately,
+                    # to keep aligned with stdout output from the test
+                    sys.stderr.flush()
             except AssertionError as e:
                 result_for_test_func_id[test_func_id] = e
                 
