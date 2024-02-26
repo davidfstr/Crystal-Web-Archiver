@@ -8,7 +8,7 @@ This thread is responsible for:
 """
 
 from collections import deque
-from crystal.util.bulkheads import captures_crashes_to_stderr, run_bulkhead_call
+from crystal.util.bulkheads import captures_crashes_to_stderr, ensure_is_bulkhead_call
 from crystal.util.profile import create_profiled_callable
 from enum import Enum
 from functools import partial, wraps
@@ -40,6 +40,9 @@ _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
 # Whether to enforce that callables scheduled with fg_call_later()
 # be decorated with @captures_crashes_to*.
 _DEFERRED_FG_CALLS_MUST_CAPTURE_CRASHES = True
+# Whether to enforce that callables scheduled with bg_call_later()
+# be decorated with @captures_crashes_to*.
+_DEFERRED_BG_CALLS_MUST_CAPTURE_CRASHES = True
 
 
 _P = ParamSpec('_P')
@@ -160,8 +163,7 @@ def fg_call_later(
     is_fg_thread = is_foreground_thread()  # cache
     
     if _DEFERRED_FG_CALLS_MUST_CAPTURE_CRASHES:
-        callable = partial(run_bulkhead_call, callable, *args)  # type: ignore[assignment]
-        args=()
+        ensure_is_bulkhead_call(callable)
     
     if _PROFILE_FG_TASKS and profile and not is_fg_thread:
         callable = create_profiled_callable(
@@ -328,6 +330,8 @@ def bg_call_later(
         if True, forces the background thread to be a daemon,
         and not prevent program termination while it is running.
     """
+    if _DEFERRED_BG_CALLS_MUST_CAPTURE_CRASHES:
+        ensure_is_bulkhead_call(callable)
     thread = threading.Thread(target=callable, args=args, daemon=daemon)
     thread.start()
     return thread
@@ -344,22 +348,43 @@ class SwitchToThread(Enum):
 def start_thread_switching_coroutine(
         first_command: SwitchToThread,
         coro: Generator[SwitchToThread, None, _R],
+        capture_crashes_to_deco: Callable[[Callable[[], None]], Callable[[], None]],
         /,
         ) -> None:
+    """
+    Starts the specified thread-switching-coroutine on a new background thread.
+    
+    A thread-switching-coroutine starts executing on the thread given by `first_command`.
+    Whenever the coroutine wants to switch to a different thread it yields
+    a new `SwitchToThread` command. A coroutine may ask to switch to the
+    same thread it was running on before without any effect.
+    
+    If the caller is running on the foreground thread and the prefix of the
+    thread-switching-coroutine is configured to execute on the foreground thread
+    (when first_command == SwitchToThread.FOREGROUND and subsequent yields
+    also say SwitchToThread.FOREGROUND), then that prefix is run to completion
+    synchronously before this method returns.
+    """
     # If is foreground thread, immediately run any prefix of the coroutine
     # that wants to be on the foreground thread
     if is_foreground_thread():
-        command = first_command
-        while command == SwitchToThread.FOREGROUND:
-            try:
-                command = next(coro)
-            except StopIteration as e:
-                return
-        assert command == SwitchToThread.BACKGROUND
-        
-        first_command = command  # reinterpret
+        @capture_crashes_to_deco
+        def fg_task() -> None:
+            nonlocal first_command
+            
+            command = first_command
+            while command == SwitchToThread.FOREGROUND:
+                try:
+                    command = next(coro)
+                except StopIteration as e:
+                    return
+            assert command == SwitchToThread.BACKGROUND
+            
+            first_command = command  # reinterpret
+        fg_task()
     
     # Run remainder of coroutine on a new background thread
+    @capture_crashes_to_deco
     def bg_task() -> None:
         run_thread_switching_coroutine(first_command, coro)
     bg_call_later(bg_task)
@@ -371,6 +396,17 @@ def run_thread_switching_coroutine(
         coro: Generator[SwitchToThread, None, _R],
         /,
         ) -> _R:
+    """
+    Runs the specified thread-switching-coroutine on the caller's
+    background thread until it completes.
+    
+    A thread-switching-coroutine starts executing on the thread given by `first_command`.
+    Whenever the coroutine wants to switch to a different thread it yields
+    a new `SwitchToThread` command. A coroutine may ask to switch to the
+    same thread it was running on before without any effect.
+    
+    Raises if the caller is not running on a background thread.
+    """
     command = first_command
     while True:
         if command == SwitchToThread.BACKGROUND:

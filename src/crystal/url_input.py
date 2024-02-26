@@ -1,4 +1,5 @@
 from crystal.download import HTTP_REQUEST_TIMEOUT
+from crystal.util.bulkheads import captures_crashes_to_stderr
 from crystal.util.xthreading import (
     bg_affinity, fg_affinity, start_thread_switching_coroutine, SwitchToThread,
 )
@@ -32,28 +33,38 @@ class UrlCleaner:
         url_candidates = _candidate_urls_from_user_input(self.url_input)
         start_thread_switching_coroutine(
             SwitchToThread.FOREGROUND,
-            self._run(url_candidates)
+            self._run(url_candidates),
+            captures_crashes_to_stderr,
         )
     
     @fg_affinity
     def _run(self, url_candidates: List[str]) -> Generator[SwitchToThread, None, None]:
+        assert len(url_candidates) >= 1
+        
         self._on_running_changed_func(True)
         if len(url_candidates) == 1:
             cleaned_url = url_candidates[0]
             self._finish(cleaned_url)
             return
         
-        yield SwitchToThread.BACKGROUND
         try:
-            cleaned_url = _resolve_url_from_candidates(
-                url_candidates, lambda: self._cancelled)
-        except _ResolveCanceled:
-            return
-        
-        yield SwitchToThread.FOREGROUND
-        if self._cancelled:
-            return
-        self._finish(cleaned_url)
+            yield SwitchToThread.BACKGROUND
+            try:
+                cleaned_url = _resolve_url_from_candidates(
+                    url_candidates, lambda: self._cancelled)
+            except _ResolveCanceled:
+                yield SwitchToThread.FOREGROUND
+                assert self._cancelled
+                return
+            except:
+                # Fallback to first candidate
+                cleaned_url = url_candidates[0]
+                raise
+        finally:
+            yield SwitchToThread.FOREGROUND
+            if self._cancelled:
+                return
+            self._finish(cleaned_url)
     
     @fg_affinity
     def _finish(self, cleaned_url: Optional[str]) -> None:

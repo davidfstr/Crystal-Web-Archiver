@@ -45,6 +45,7 @@ from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
 from io import StringIO
 import sys
+import threading
 from typing import Callable, List, Optional, Tuple, TypeVar
 from unittest import skip
 from unittest.mock import patch
@@ -221,7 +222,15 @@ async def test_given_inside_background_thread_when_exception_raised_then_traceba
     def bg_task() -> None:
         raise _CRASH
     with redirect_stderr(StringIO()) as captured_stderr:
-        thread = bg_call_later(bg_task)
+        # NOTE: Most creators of background threads in Crystal prefer to use
+        #       bg_call_later() rather than creating a Thread directly.
+        #       
+        #       bg_call_later() already enforces that its callable
+        #       is wrapped with @captures_crashes_to* and reports any
+        #       unhandled exceptions somewhere sensible, but bare
+        #       Threads don't.
+        thread = threading.Thread(target=bg_task)
+        thread.start()
         thread.join()
     assert 'Exception in background thread:' in captured_stderr.getvalue()
     assert 'Traceback' in captured_stderr.getvalue()
@@ -1516,6 +1525,7 @@ async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[flo
         timeout = _DEFAULT_WAIT_TIMEOUT_FOR_UNIT
     
     result_cell = Future()  # type: Future[_R]
+    @captures_crashes_to_stderr
     def bg_task() -> None:
         result_cell.set_running_or_notify_cancel()
         try:

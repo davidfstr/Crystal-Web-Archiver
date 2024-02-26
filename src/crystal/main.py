@@ -363,8 +363,12 @@ def _main(args: List[str]) -> None:
             # Block until test-related modules are done loading,
             # before starting bg_task() on background thread
             from crystal.tests.index import run_tests
+            from crystal.util.bulkheads import captures_crashes_to_stderr
             from crystal.util.xthreading import NoForegroundThreadError
             
+            # NOTE: Any unhandled exception will probably call os._exit(1)
+            #       before reaching this decorator.
+            @captures_crashes_to_stderr
             def bg_task():
                 # (Don't import anything here, because strange things can
                 #  happen if the foreground thread tries to import the

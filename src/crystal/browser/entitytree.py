@@ -810,6 +810,7 @@ class _ResourceNode(Node):
                             f'Error downloading URL: {error_dict["type"]}: {error_dict["message"]}')
                         return
                     
+                    @captures_crashes_to(self)
                     def bg_task() -> None:
                         # Link parsing is I/O intensive, so do it on a background thread
                         try:
@@ -1302,6 +1303,7 @@ class ResourceGroupNode(_GroupedNode):
                     return
                 
                 self.update_children(force_populate=True)
+            @captures_crashes_to(self)
             def bg_task():
                 # Give time for the loading node to display
                 time.sleep(.1)
