@@ -99,7 +99,7 @@ def fg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
         @wraps(func)
         def wrapper(*args, **kwargs):
             assert is_foreground_thread()
-            return func(*args, **kwargs)
+            return func(*args, **kwargs)  # cr-traceback: ignore
         return wrapper
     else:
         return func
@@ -121,7 +121,7 @@ def bg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
         @wraps(func)
         def wrapper(*args, **kwargs):
             assert not is_foreground_thread()
-            return func(*args, **kwargs)
+            return func(*args, **kwargs)  # cr-traceback: ignore
         return wrapper
     else:
         return func
@@ -262,7 +262,7 @@ def fg_call_and_wait(
             fg_thread = threading.current_thread()
             setattr(fg_thread, '_cr_waiting_calling_thread', waiting_calling_thread)
             try:
-                callable_result = callable(*args)
+                callable_result = callable(*args)  # cr-traceback: ignore
             except BaseException as e:
                 callable_exc_info = sys.exc_info()
             finally:
@@ -291,7 +291,7 @@ def fg_call_and_wait(
         if callable_exc_info is not None:
             exc_info = callable_exc_info
             assert exc_info[1] is not None
-            raise exc_info[1].with_traceback(exc_info[2])
+            raise exc_info[1].with_traceback(exc_info[2])  # cr-traceback: ignore
         
         return cast(_R, callable_result)
 

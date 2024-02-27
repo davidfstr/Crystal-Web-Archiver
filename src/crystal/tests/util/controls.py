@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager, contextmanager
 from crystal.tests.util.runner import pump_wx_events
+from crystal.util.wx_treeitem_gettooltip import GetTooltipEvent
 from crystal.util.xos import is_windows
 from typing import AsyncIterator, Callable, Iterator, List, Optional
 from unittest.mock import patch
@@ -103,6 +104,13 @@ class TreeItem:
     @property
     def Bold(self) -> bool:
         return self.tree.IsBold(self.id)
+    
+    @property
+    def Tooltip(self) -> Optional[str]:
+        event = GetTooltipEvent(tree_item_id=self.id, tooltip_cell=[Ellipsis])
+        self.tree.ProcessEvent(event)  # callee should set: event.tooltip_cell[0]
+        assert event.tooltip_cell[0] is not Ellipsis
+        return event.tooltip_cell[0]
     
     def SelectItem(self) -> None:
         self.tree.SelectItem(self.id)
@@ -224,6 +232,9 @@ class TreeItem:
             raise raised_exc
     
     async def right_click(self) -> None:
+        # TODO: Consider calling ProcessEvent directly rather than relying
+        #       on pump_wx_events(), which has been observed to be unreliable
+        #       on Windows in the past for posting individual events
         wx.PostEvent(self.tree, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.tree, self.id))
         await pump_wx_events()
     

@@ -84,7 +84,7 @@ def scheduler_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
         @wraps(func)
         def wrapper(*args, **kwargs):
             assert is_synced_with_scheduler_thread()
-            return func(*args, **kwargs)
+            return func(*args, **kwargs)  # cr-traceback: ignore
         return wrapper
     else:
         return func

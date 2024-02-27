@@ -33,6 +33,7 @@ from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.xthreading import bg_affinity
+from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
 from crystal.util.xtime import sleep_profiled
 from functools import wraps
 import gc
@@ -43,10 +44,6 @@ import traceback
 from typing import Any, Callable, Coroutine, Dict, List, Iterator, Optional, Tuple
 from unittest import SkipTest
 import warnings
-
-
-# Path to parent directory of the "crystal" package
-_SOURCE_DIRPATH = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 
 def _test_functions_in_module(mod) -> List[Callable]:
@@ -234,8 +231,8 @@ def _run_tests(test_names: List[str]) -> bool:
         print()
         print('Warnings:')
         for w in warning_list:
-            if w.filename.startswith(_SOURCE_DIRPATH):
-                short_filepath = os.path.relpath(w.filename, start=_SOURCE_DIRPATH)
+            if w.filename.startswith(_CRYSTAL_PACKAGE_PARENT_DIRPATH):
+                short_filepath = os.path.relpath(w.filename, start=_CRYSTAL_PACKAGE_PARENT_DIRPATH)
             else:
                 short_filepath = w.filename
             w_str = warnings.formatwarning(w.message, w.category, short_filepath, w.lineno, w.line)

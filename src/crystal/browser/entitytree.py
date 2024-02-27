@@ -31,6 +31,7 @@ from crystal.util.bulkheads import (
 )
 from crystal.util.notimplemented import NotImplemented, NotImplementedType
 from crystal.util.wx_bind import bind
+from crystal.util.wx_treeitem_gettooltip import EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent
 from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_later
@@ -41,7 +42,6 @@ from typing import cast, final, List, Optional, Union
 from typing_extensions import override
 from urllib.parse import urljoin, urlparse, urlunparse
 import wx
-import wx.lib.newevent
 
 
 DeferrableResourceGroupSource = Union[
@@ -52,11 +52,6 @@ DeferrableResourceGroupSource = Union[
 
 _ID_SET_PREFIX = 101
 _ID_CLEAR_PREFIX = 102
-
-
-# Similar to wx's EVT_TREE_ITEM_GETTOOLTIP event,
-# but cross-platform and focused on the icon specifically
-GetTooltipEvent, EVT_TREE_ITEM_ICON_GETTOOLTIP = wx.lib.newevent.NewEvent()
 
 
 class EntityTree(Bulkhead):
@@ -86,9 +81,7 @@ class EntityTree(Bulkhead):
         
         bind(self.peer, wx.EVT_MOTION, self._on_mouse_motion)
         # For tests only
-        bind(self.peer, EVT_TREE_ITEM_ICON_GETTOOLTIP, self._on_get_tooltip_event)
-        # For tests only
-        bind(self.peer, wx.EVT_MENU, self._on_popup_menuitem_selected)
+        bind(self.peer, EVT_TREE_ITEM_GETTOOLTIP, self._on_get_tooltip_event)
     
     # === Bulkhead ===
     

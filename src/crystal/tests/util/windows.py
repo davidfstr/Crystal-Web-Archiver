@@ -513,23 +513,9 @@ class EntityTree:
         self.window = window
     
     async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> Optional[str]:
-        from crystal.browser.entitytree import GetTooltipEvent
-        
         if tree_item.tree != self.window:
             raise ValueError()
-        
-        event = GetTooltipEvent(tree_item_id=tree_item.id, tooltip_cell=[Ellipsis])
-        wx.PostEvent(self.window, event)  # callee should set: event.tooltip_cell[0]
-        # Try multiple times, since Windows sometimes doesn't seem to pump
-        # all events immediately
-        for _ in range(3):
-            await pump_wx_events()
-            if event.tooltip_cell[0] is not Ellipsis:
-                break
-            await bg_sleep(50/1000)
-        else:
-            raise AssertionError('GetTooltipEvent did not return tooltip')
-        return event.tooltip_cell[0]
+        return tree_item.Tooltip
     
     @staticmethod
     async def assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
@@ -554,6 +540,7 @@ class EntityTree:
             select_menuitem_now(menu, set_prefix_menuitem.Id)
             
         await tree_item.right_click_showing_popup_menu(show_popup)
+        # TODO: Is this unused? If so, remove. If not, comment.
         await pump_wx_events()
 
 

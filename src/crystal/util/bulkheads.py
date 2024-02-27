@@ -54,7 +54,7 @@ def captures_crashes_to_self(
             # Bulkhead has already crashed. Abort.
             return None
         try:
-            return bulkhead_method(self, *args, **kwargs)
+            return bulkhead_method(self, *args, **kwargs)  # cr-traceback: ignore
         except BaseException as e:
             # Print traceback to assist in debugging in the terminal,
             # including ancestor callers of bulkhead_call
@@ -83,7 +83,7 @@ def captures_crashes_to_bulkhead_arg(
             # Bulkhead has already crashed. Abort.
             return None
         try:
-            return method(self, bulkhead, *args, **kwargs)
+            return method(self, bulkhead, *args, **kwargs)  # cr-traceback: ignore
         except BaseException as e:
             # Print traceback to assist in debugging in the terminal,
             # including ancestor callers of bulkhead_call
@@ -111,7 +111,7 @@ def captures_crashes_to(bulkhead: Bulkhead) -> Callable[[Callable[_P, Optional[_
                 # Bulkhead has already crashed. Abort.
                 return None
             try:
-                return func(*args, **kwargs)
+                return func(*args, **kwargs)  # cr-traceback: ignore
             except BaseException as e:
                 # Print traceback to assist in debugging in the terminal,
                 # including ancestor callers of bulkhead_call
@@ -141,7 +141,7 @@ def crashes_captured_to(bulkhead: Bulkhead, *, enter_if_crashed: bool=False) -> 
         #       context entirely.
         raise NotImplementedError()
     try:
-        yield
+        yield  # cr-traceback: ignore
     except BaseException as e:
         # Print traceback to assist in debugging in the terminal
         _print_bulkhead_exception(e, fix_tb=lambda here_tb, exc_tb: here_tb[:-3] + exc_tb[1:])
@@ -159,7 +159,7 @@ def captures_crashes_to_stderr(func: Callable[_P, Optional[_R]]) -> Callable[_P,
     @_mark_bulkhead_call
     def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
         try:
-            return func(*args, **kwargs)
+            return func(*args, **kwargs)  # cr-traceback: ignore
         except BaseException as e:
             # Print traceback to assist in debugging in the terminal,
             # including ancestor callers of bulkhead_call
@@ -222,7 +222,7 @@ def run_bulkhead_call(
     marked with @captures_crashes_to*.
     """
     ensure_is_bulkhead_call(bulkhead_call)
-    return bulkhead_call(*args, **kwargs)
+    return bulkhead_call(*args, **kwargs)  # cr-traceback: ignore
 
 
 def ensure_is_bulkhead_call(callable: Callable) -> None:

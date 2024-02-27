@@ -1047,6 +1047,16 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 root_ti = TreeItem.GetRootItem(mw.task_tree)
                 (download_r_ti,) = root_ti.Children
                 
+                # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+                tooltip = download_r_ti.Tooltip
+                assert tooltip is not None
+                assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
+                assert (
+                    'at crystal/task.py:' in tooltip or
+                    'at crystal/task.pyc:' in tooltip or
+                    r'at crystal\task.pyc:' in tooltip
+                ), f'Tooltip was: {tooltip}'
+                
                 # test_given_crashed_task_not_at_top_level_when_right_click_task_then_menu_appears_with_disabled_dismiss_menuitem
                 download_r_ti.Expand()
                 (download_rb_ti, prrl_ti, download_r1_ti, *_) = download_r_ti.Children
@@ -1182,6 +1192,19 @@ async def test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
                 # 2. Ensure crash does not cascade to the RootTask
                 assert download_rg_task.crash_reason is not None
                 assert project.root_task.crash_reason is None
+                
+                root_ti = TreeItem.GetRootItem(mw.task_tree)
+                (download_rg_ti,) = root_ti.Children
+                
+                # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+                tooltip = download_rg_ti.Tooltip
+                assert tooltip is not None
+                assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
+                assert (
+                    'at crystal/task.py:' in tooltip or
+                    'at crystal/task.pyc:' in tooltip or
+                    r'at crystal\task.pyc:' in tooltip
+                ), f'Tooltip was: {tooltip}'
 
 
 async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_URGMT_child_completes() -> None:
@@ -1300,6 +1323,19 @@ async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
                 # 2. Ensure crash does not cascade to the RootTask
                 assert download_rg_task.crash_reason is not None
                 assert project.root_task.crash_reason is None
+                
+                root_ti = TreeItem.GetRootItem(mw.task_tree)
+                (download_rg_ti,) = root_ti.Children
+                
+                # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+                tooltip = download_rg_ti.Tooltip
+                assert tooltip is not None
+                assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
+                assert (
+                    'at crystal/task.py:' in tooltip or
+                    'at crystal/task.pyc:' in tooltip or
+                    r'at crystal\task.pyc:' in tooltip
+                ), f'Tooltip was: {tooltip}'
 
 
 # ------------------------------------------------------------------------------
@@ -1367,9 +1403,21 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                         assert child.subtitle in ['Scheduler crashed', 'Complete'], \
                             f'Top-level task has unexpected subtitle: {child.subtitle}'
                 
-                # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
                 root_ti = TreeItem.GetRootItem(mw.task_tree)
                 (download_r_ti, scheduler_crashed_ti) = root_ti.Children
+                
+                # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+                tooltip = scheduler_crashed_ti.Tooltip
+                assert tooltip is not None
+                assert 'ValueError: Simulated crash' in tooltip, f'Tooltip was: {tooltip}'
+                assert (
+                    'at crystal/task.py:' in tooltip or
+                    'at crystal/task.pyc:' in tooltip or
+                    r'at crystal\task.pyc:' in tooltip
+                ), f'Tooltip was: {tooltip}'
+                assert 'in append_deferred_top_level_tasks' in tooltip, f'Tooltip was: {tooltip}'
+                
+                # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
                 def show_popup(menu: wx.Menu) -> None:
                     (dismiss_all_menuitem,) = [
                         mi for mi in menu.MenuItems
@@ -1463,6 +1511,20 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
                 assert child.subtitle in ['Scheduler crashed', 'Complete'], \
                     f'Top-level task has unexpected subtitle: {child.subtitle}'
             
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (*_, scheduler_crashed_ti) = root_ti.Children
+            
+            # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+            tooltip = scheduler_crashed_ti.Tooltip
+            assert tooltip is not None
+            assert 'ValueError: Simulated crash' in tooltip, f'Tooltip was: {tooltip}'
+            assert (
+                'at crystal/task.py:' in tooltip or
+                'at crystal/task.pyc:' in tooltip or
+                r'at crystal\task.pyc:' in tooltip
+            ), f'Tooltip was: {tooltip}'
+            assert 'in bg_daemon_task' in tooltip, f'Tooltip was: {tooltip}'
+            
             # Dismiss scheduler crash, clearing the task tree
             scheduler_crashed_task.dismiss()
             assert len(root_task.children) == 0
@@ -1505,6 +1567,21 @@ async def test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task
 #       and make dismissing it have the same effect as dismissing the ancestor top-level task
 @skip('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
 async def test_given_crashed_task_not_at_top_level_when_right_click_task_then_menu_appears_with_disabled_dismiss_menuitem() -> None:
+    pass
+
+
+# ------------------------------------------------------------------------------
+# Test: Crash Node Tooltips
+
+_test_names = [
+    'test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed',
+    'test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_DRGMT_child_completes',
+    'test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_URGMT_child_completes',
+    'test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed',
+    'test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashed_and_scheduler_crashed_task_appears',
+]
+@skip(f'covered by: {", ".join(_test_names)}')
+async def test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears() -> None:
     pass
 
 

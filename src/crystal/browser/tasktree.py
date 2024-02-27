@@ -15,8 +15,10 @@ from crystal.util.bulkheads import (
 from crystal.ui.tree import NodeView as NodeView1
 from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
 from crystal.util.wx_bind import bind
+from crystal.util.wx_treeitem_gettooltip import EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent
 from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItemError
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
+from crystal.util.xtraceback import format_exception_for_user
 import os
 from typing import Iterator, List, Optional, Tuple
 import wx
@@ -39,6 +41,10 @@ class TaskTree:
         self._right_clicked_node = None  # type: Optional[TaskTreeNode]
         
         self.tree.peer.SetInitialSize((750, 200))
+        
+        bind(self.peer, wx.EVT_MOTION, self._on_mouse_motion)
+        # For tests only
+        bind(self.peer, EVT_TREE_ITEM_GETTOOLTIP, self._on_get_tooltip_event)
     
     @property
     def peer(self) -> wx.TreeCtrl:
@@ -95,6 +101,32 @@ class TaskTree:
         if not task.complete:
             task.finish()
     
+    # === Event: Mouse Motion, Get Tooltip ===
+    
+    # Update the tooltip whenever hovering the mouse over a tree node icon
+    @captures_crashes_to_stderr
+    def _on_mouse_motion(self, event: wx.MouseEvent) -> None:
+        (tree_item_id, hit_flags) = self.peer.HitTest(event.Position)
+        TREEITEM_BODY_FLAGS = (
+            wx.TREE_HITTEST_ONITEMICON |
+            wx.TREE_HITTEST_ONITEMLABEL
+        )
+        if (hit_flags & TREEITEM_BODY_FLAGS) != 0:
+            new_tooltip = self._tooltip_for_tree_item_id(tree_item_id)
+        else:
+            new_tooltip = None
+        
+        self.peer.SetToolTip(new_tooltip)
+    
+    @captures_crashes_to_stderr
+    def _on_get_tooltip_event(self, event: wx.Event) -> None:
+        event.tooltip_cell[0] = self._tooltip_for_tree_item_id(event.tree_item_id)
+    
+    def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId) -> Optional[str]:
+        node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
+        node = TaskTreeNode.for_node_view(node_view)
+        return node.tooltip
+    
     # === Dispose ===
     
     def dispose(self) -> None:
@@ -121,6 +153,7 @@ class TaskTreeNode:
         '_visible_children_offset',
         '_first_incomplete_child_index',
         '_ignore_complete_events',
+        '_crash_reason_and_tooltip',
     )
     
     def __init__(self, task: Task) -> None:
@@ -149,6 +182,7 @@ class TaskTreeNode:
         self._visible_children_offset = 0
         self._first_incomplete_child_index = 0
         self._ignore_complete_events = False
+        self._crash_reason_and_tooltip = None  # type: Optional[Tuple[BaseException, str]]
         
         # NOTE: Transition to foreground thread here BEFORE making very many
         #       calls to self.task_did_append_child() so that we don't need to
@@ -200,35 +234,7 @@ class TaskTreeNode:
         assert isinstance(node, TaskTreeNode)
         return node
     
-    @captures_crashes_to_task_arg
-    def task_subtitle_did_change(self, task: Task) -> None:
-        task_subtitle = self.task.subtitle  # capture
-        task_crash_reason = self.task.crash_reason  # capture
-        @captures_crashes_to(task)
-        def fg_task() -> None:
-            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
-        # NOTE: Use profile=False because no obvious further optimizations exist
-        fg_call_later(fg_task, profile=False)
-    
-    # NOTE: Cannot use @captures_crashes_to_task_arg because would create infinite loop
-    @captures_crashes_to_stderr
-    def task_crash_reason_did_change(self, task: Task) -> None:
-        task_crash_reason = self.task.crash_reason  # capture
-        task_subtitle = self.task.subtitle  # capture
-        # NOTE: Cannot use @captures_crashes_to(task) because would create infinite loop
-        @captures_crashes_to_stderr
-        def fg_task() -> None:
-            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
-            self.tree_node.text_color = self._calculate_tree_node_text_color(task_crash_reason)
-            self.tree_node.bold = self._calculate_tree_node_bold(task_crash_reason)
-            if task_crash_reason is not None:
-                # (TODO: Set tooltip when hovering over tree node text to task_crash_reason)
-                pass
-            else:
-                # (TODO: Clear tooltip when hovering over tree node text)
-                pass
-        # NOTE: Use profile=False because no obvious further optimizations exist
-        fg_call_later(fg_task, profile=False)
+    # === Properties ===
     
     @classmethod
     def _calculate_tree_node_subtitle(cls,
@@ -253,6 +259,54 @@ class TaskTreeNode:
     def _calculate_tree_node_bold(cls,
             task_crash_reason: Optional[CrashReason]) -> bool:
         return task_crash_reason is not None
+    
+    @property
+    def tooltip(self) -> Optional[str]:
+        """
+        The tooltip to display when the mouse hovers over this node.
+        """
+        if self.task.crash_reason is None:
+            # Clear any cached tooltip
+            self._crash_reason_and_tooltip = None
+            
+            return None
+        else:
+            # Return cached tooltip, if available
+            if self._crash_reason_and_tooltip is not None:
+                (last_crash_reason, last_tooltip) = self._crash_reason_and_tooltip
+                if last_crash_reason is self.task.crash_reason:
+                    return last_tooltip
+            
+            # Calculate and cache tooltip
+            tooltip = format_exception_for_user(self.task.crash_reason).rstrip('\n')
+            self._crash_reason_and_tooltip = (self.task.crash_reason, tooltip)
+            return tooltip
+    
+    # === Events ===
+    
+    @captures_crashes_to_task_arg
+    def task_subtitle_did_change(self, task: Task) -> None:
+        task_subtitle = self.task.subtitle  # capture
+        task_crash_reason = self.task.crash_reason  # capture
+        @captures_crashes_to(task)
+        def fg_task() -> None:
+            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
+        # NOTE: Use profile=False because no obvious further optimizations exist
+        fg_call_later(fg_task, profile=False)
+    
+    # NOTE: Cannot use @captures_crashes_to_task_arg because would create infinite loop
+    @captures_crashes_to_stderr
+    def task_crash_reason_did_change(self, task: Task) -> None:
+        task_crash_reason = self.task.crash_reason  # capture
+        task_subtitle = self.task.subtitle  # capture
+        # NOTE: Cannot use @captures_crashes_to(task) because would create infinite loop
+        @captures_crashes_to_stderr
+        def fg_task() -> None:
+            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
+            self.tree_node.text_color = self._calculate_tree_node_text_color(task_crash_reason)
+            self.tree_node.bold = self._calculate_tree_node_bold(task_crash_reason)
+        # NOTE: Use profile=False because no obvious further optimizations exist
+        fg_call_later(fg_task, profile=False)
     
     @captures_crashes_to_task_arg
     def task_did_complete(self, task: Task) -> None:
@@ -486,10 +540,14 @@ class TaskTreeNode:
                 ]
             fg_call_later(fg_task)
     
+    # === Dispose ===
+    
     def dispose(self) -> None:
         self.task.listeners.remove(self)
         self.tree_node.dispose()
         self.tree_node = NULL_NODE_VIEW
+    
+    # === Utility ===
     
     def __repr__(self) -> str:
         return f'TaskTreeNode({self.task!r})'
