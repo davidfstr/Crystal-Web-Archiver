@@ -983,10 +983,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
             
             # Expand root resource
             home_ti.Expand()
-            await wait_for(
-                first_child_of_tree_item_is_not_loading_condition(home_ti),
-                timeout=4.0  # 2.0s isn't long enough for Windows test runners on GitHub Actions
-            )
+            await wait_for_download_to_start_and_finish(mw.task_tree)
             comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
             
             # 1. Test can create unnamed resource group
