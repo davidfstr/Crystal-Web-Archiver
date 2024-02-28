@@ -1,8 +1,8 @@
 from crystal.util.xos import is_windows
-from overrides import overrides
 from tqdm import tqdm
-from tqdm.std import EMA
+from tqdm.std import EMA  # type: ignore[attr-defined]
 from typing import Optional, Tuple
+from typing_extensions import override
 
 
 class ProgressBarCalculator:
@@ -95,12 +95,16 @@ class ProgressBarCalculator:
                 if isinstance(rate, (float, int))
                 else f'{rate}'
             )
+            dn = format_floatlike(self._rc_n._tqdm._ema_dn())  # type: ignore[attr-defined]
+            dt = format_floatlike(self._rc_n._tqdm._ema_dt())  # type: ignore[attr-defined]
+            dntotal = format_floatlike(self._rc_total._tqdm._ema_dn())  # type: ignore[attr-defined]
+            dttotal = format_floatlike(self._rc_total._tqdm._ema_dt())  # type: ignore[attr-defined]
             time_per_item_str += (
                 f', rate={format_floatlike(rate)}, '
-                f'{self._DELTA}n={format_floatlike(self._rc_n._tqdm._ema_dn())}/'
-                f'{format_floatlike(self._rc_n._tqdm._ema_dt())}, '
-                f'{self._DELTA}total={format_floatlike(self._rc_total._tqdm._ema_dn())}/'
-                f'{format_floatlike(self._rc_total._tqdm._ema_dt())}'
+                f'{self._DELTA}n={dn}/'
+                f'{dt}, '
+                f'{self._DELTA}total={dntotal}/'
+                f'{dttotal}'
             )
         
         return (remaining_str, time_per_item_str)
@@ -125,7 +129,7 @@ class ProgressBarCalculator:
     # === Utility ===
     
     @staticmethod
-    def format_interval(t: int) -> str:
+    def format_interval(t: float) -> str:
         """
         Formats a number of seconds as a clock time,
         `[H:]MM:SS` or `Dd + H:MM:SS`
@@ -175,8 +179,8 @@ class RateCalculator:
     
     @property
     def rate(self) -> Optional[float]:
-        dn = self._tqdm._ema_dn()  # cache
-        dt = self._tqdm._ema_dt()  # cache
+        dn = self._tqdm._ema_dn()  # type: ignore[attr-defined]  # cache
+        dt = self._tqdm._ema_dt()  # type: ignore[attr-defined]  # cache
         rate = dn / dt if dt else None
         return rate
     
@@ -191,11 +195,11 @@ class RateCalculator:
             raise ValueError()
         if delta_n == 0:
             # Force the effect of: self._tqdm.update(0)
-            cur_t = self._tqdm._time()
+            cur_t = self._tqdm._time()  # type: ignore[attr-defined]
             dt = cur_t - self._tqdm.last_print_t
             dn = 0
-            self._tqdm._ema_dn(dn)
-            self._tqdm._ema_dt(dt)
+            self._tqdm._ema_dn(dn)  # type: ignore[attr-defined]
+            self._tqdm._ema_dt(dt)  # type: ignore[attr-defined]
             self._tqdm.last_print_t = cur_t
         else:
             self._tqdm.update(delta_n)
@@ -205,11 +209,11 @@ class RateCalculator:
 
 
 class _TqdmWithoutDisplay(tqdm):
-    @overrides
-    def refresh(self, nolock=False, lock_args=None) -> bool:
+    @override
+    def refresh(self, nolock=False, lock_args=None):
         return super().refresh(nolock=True, lock_args=lock_args)
     
-    @overrides
+    @override
     def display(self, *args, **kwargs) -> None:
         pass  # do nothing
 
@@ -226,4 +230,4 @@ class DevNullFile:
 
 # Monkeypatch tqdm.format_interval() so that tqdm.format_meter() will use it
 # when formatting timedeltas
-tqdm.format_interval = ProgressBarCalculator.format_interval
+tqdm.format_interval = ProgressBarCalculator.format_interval  # type: ignore[method-assign]

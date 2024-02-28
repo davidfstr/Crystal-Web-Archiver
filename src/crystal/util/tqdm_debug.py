@@ -1,5 +1,5 @@
 import threading
-from tqdm.std import TqdmDefaultWriteLock
+from tqdm.std import TqdmDefaultWriteLock  # type: ignore[attr-defined]
 import traceback
 from typing import List, Tuple
 from typing_extensions import assert_never, Literal

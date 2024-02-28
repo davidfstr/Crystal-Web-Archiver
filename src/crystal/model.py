@@ -71,7 +71,6 @@ import json
 import math
 import mimetypes
 import os
-from overrides import overrides
 import pathlib
 import re
 import shutil
@@ -89,7 +88,7 @@ from typing import (
     List, Literal, Optional, overload, Pattern, Sequence, TYPE_CHECKING,
     Tuple, TypedDict, TypeVar, Union
 )
-from typing_extensions import deprecated, Self
+from typing_extensions import deprecated, override, Self
 from urllib.parse import urlparse, urlunparse
 from weakref import WeakValueDictionary
 
@@ -848,11 +847,11 @@ class Project(ListenableMixin):
             super().__init__(**kwargs)
             self._initializing = False
         
-        @overrides
-        def refresh(self, nolock=False, lock_args=None) -> bool:
+        @override
+        def refresh(self, nolock=False, lock_args=None):
             return super().refresh(nolock=True, lock_args=lock_args)
         
-        @overrides
+        @override
         def display(self, *args, **kwargs) -> None:
             if not self._initializing:
                 self._report_processing_row_func(

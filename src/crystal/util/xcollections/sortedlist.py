@@ -1,5 +1,5 @@
-from overrides import overrides
 from sortedcontainers import SortedList
+from typing_extensions import override
 
 
 class BlackHoleSortedList(SortedList):
@@ -9,19 +9,19 @@ class BlackHoleSortedList(SortedList):
     def __init__(self, iterable=None, key=None):
         super().__init__()
     
-    @overrides
+    @override
     def add(self, value):
         pass
     
-    @overrides
+    @override
     def update(self, iterable):
         pass
     
-    @overrides
+    @override
     def __iadd__(self, other):
         return self
     
-    @overrides
+    @override
     def __imul__(self, num):
         return self
 

@@ -22,8 +22,8 @@ from crystal.tests.util.wait import wait_for, window_condition
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
 import os.path
-from overrides import overrides
 from typing import AsyncIterator, cast, Iterator, Optional, Tuple
+from typing_extensions import override
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -451,7 +451,7 @@ async def _project_opened_without_migrating(
         project_dirpath: str
         ) -> AsyncIterator[Tuple[MainWindow, Project]]:
     class NonUpgradingProject(Project):
-        @overrides
+        @override
         def _apply_migrations(self, *args, **kwargs) -> None:
             pass
     

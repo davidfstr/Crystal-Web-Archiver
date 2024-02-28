@@ -1,8 +1,7 @@
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
-from overrides import overrides
 import sys
 from typing import Optional, Type
-from typing_extensions import Self
+from typing_extensions import override, Self
 import wx
 
 
@@ -193,7 +192,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
     
     # === Phase 0 ===
     
-    @overrides
+    @override
     def opening_project(self) -> None:
         self._show_noncancelable_indeterminate_message(
             f'Opening project...')
@@ -214,7 +213,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
     
     # === Phase 1: Upgrade Revisions ===
     
-    @overrides
+    @override
     def upgrading_project(self, message: str) -> None:
         """
         Called immediately before a minor upgrade of a project is about to start.
@@ -224,7 +223,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         self._show_noncancelable_indeterminate_message(
             f'Upgrading project: {message}')
     
-    @overrides
+    @override
     def will_upgrade_revisions(self, approx_revision_count: int, can_veto: bool) -> None:
         """
         Called immediately before a major upgrade of project revisions is about
@@ -297,7 +296,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
             else:
                 raise AssertionError()
     
-    @overrides
+    @override
     def upgrading_revision(self, index: int, revisions_per_second: float) -> None:
         """
         Called about once every second while project is being upgraded,
@@ -309,7 +308,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         print(f'Upgrading revisions: {index:n} / {self._approx_revision_count:n} ({int(revisions_per_second):n} rev/sec)')
         self._update(index)
     
-    @overrides
+    @override
     def did_upgrade_revisions(self, revision_count: int) -> None:
         """
         Called immediately after a major upgrade completes.
@@ -320,7 +319,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
     # === Phase 2: Load ===
     
     # Step 1
-    @overrides
+    @override
     def loading_root_resources(self, root_resource_count: int) -> None:
         """
         Raises:
@@ -336,7 +335,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         self._update(0, initial_message)
     
     # Step 2
-    @overrides
+    @override
     def loading_resource_groups(self, resource_group_count: int) -> None:
         """
         Raises:
@@ -350,7 +349,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
             f'Loading {resource_group_count:n} resource groups...')
     
     # Step 3
-    @overrides
+    @override
     def loading_root_resource_views(self) -> None:
         """
         Raises:
@@ -365,7 +364,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
             f'Creating {self._root_resource_count:n} root resource views...')
     
     # Step 4
-    @overrides
+    @override
     def loading_resource_group_views(self) -> None:
         """
         Raises:
@@ -380,7 +379,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
             f'Creating {self._resource_group_count} resource group views...')
     
     # Step 5
-    @overrides
+    @override
     def creating_entity_tree_nodes(self, entity_tree_node_count: int) -> None:
         """
         Raises:
@@ -440,7 +439,7 @@ class LoadUrlsProgressDialog(_AbstractProgressDialog, LoadUrlsProgressListener):
     def __init__(self) -> None:
         super().__init__()
     
-    @overrides
+    @override
     def will_load_resources(self, approx_resource_count: int) -> None:
         """
         Called immediately before resources will be loaded.
@@ -455,7 +454,7 @@ class LoadUrlsProgressDialog(_AbstractProgressDialog, LoadUrlsProgressListener):
         self._dialog.SetRange(max(approx_resource_count, 1))
         self._update(0, initial_message)
     
-    @overrides
+    @override
     def loading_resource(self, index: int) -> None:
         """
         Called periodically while resources are being loaded, to report progress.
@@ -465,7 +464,7 @@ class LoadUrlsProgressDialog(_AbstractProgressDialog, LoadUrlsProgressListener):
         """
         self._update(index)
     
-    @overrides
+    @override
     def did_load_resources(self, resource_count: int) -> None:
         """
         Called immediately after resources finished loading.
@@ -474,7 +473,7 @@ class LoadUrlsProgressDialog(_AbstractProgressDialog, LoadUrlsProgressListener):
         self._resource_count = resource_count
         self._dialog.SetRange(max(resource_count, 1))
     
-    @overrides
+    @override
     def indexing_resources(self) -> None:
         """
         Raises:
