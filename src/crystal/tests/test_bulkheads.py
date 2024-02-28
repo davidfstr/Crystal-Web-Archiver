@@ -40,13 +40,14 @@ from crystal.util.bulkheads import (
     run_bulkhead_call,
 )
 from crystal.util import cli
+from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.wx_bind import bind
 from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
 from io import StringIO
 import sys
 import threading
-from typing import Callable, List, Optional, Tuple, TypeVar
+from typing import Callable, cast, List, Optional, Tuple, TypeVar, Union
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -67,12 +68,30 @@ async def test_captures_crashes_to_self_decorator_works() -> None:
             super().__init__(1)
         
         @captures_crashes_to_self
-        def protected_method(self) -> None:
+        def foo_did_bar(self) -> None:
             raise _CRASH
     my_task = MyTask()
     
     assert my_task.crash_reason is None
-    my_task.protected_method()
+    my_task.foo_did_bar()
+    assert my_task.crash_reason is not None
+
+
+async def test_captures_crashes_to_self_decorator_with_custom_return_value_works() -> None:
+    class MyTask(_DownloadResourcesPlaceholderTask):
+        def __init__(self) -> None:
+            super().__init__(1)
+        
+        @captures_crashes_to_self(return_if_crashed=cast(Union[int, EllipsisType], Ellipsis))
+        def calculate_foo(self) -> Union[int, EllipsisType]:
+            if False:
+                return 1
+            else:
+                raise _CRASH
+    my_task = MyTask()
+    
+    assert my_task.crash_reason is None
+    assert Ellipsis == my_task.calculate_foo()
     assert my_task.crash_reason is not None
 
 
@@ -96,6 +115,29 @@ async def test_captures_crashes_to_bulkhead_arg_decorator_works() -> None:
     assert my_task.crash_reason is None
 
 
+async def test_captures_crashes_to_bulkhead_arg_decorator_with_custom_return_value_works() -> None:
+    class MyTask(_DownloadResourcesPlaceholderTask):
+        def __init__(self) -> None:
+            super().__init__(1)
+        
+        @captures_crashes_to_task_arg(return_if_crashed=cast(Union[int, EllipsisType], Ellipsis))
+        def calculate_foo(self, task: Task) -> Union[int, EllipsisType]:
+            if False:
+                return 1
+            else:
+                raise _CRASH
+    my_task = MyTask()
+    other_task = _DownloadResourcesPlaceholderTask(1)
+    
+    assert other_task.crash_reason is None
+    assert my_task.crash_reason is None
+    
+    assert Ellipsis == my_task.calculate_foo(other_task)
+    
+    assert other_task.crash_reason is not None
+    assert my_task.crash_reason is None
+
+
 async def test_captures_crashes_to_decorator_works() -> None:
     class MyTask(_DownloadResourcesPlaceholderTask):
         def __init__(self) -> None:
@@ -111,6 +153,21 @@ async def test_captures_crashes_to_decorator_works() -> None:
     assert my_task.crash_reason is None
     my_task.foo_did_bar()
     assert my_task.crash_reason is not None
+
+
+async def test_captures_crashes_to_decorator_with_custom_return_value_works() -> None:
+    bulkhead = BulkheadCell()
+    
+    @captures_crashes_to(bulkhead, return_if_crashed=cast(Union[int, EllipsisType], Ellipsis))
+    def calculate_foo() -> Union[int, EllipsisType]:
+        if False:
+            return 1
+        else:
+            raise _CRASH
+    
+    assert bulkhead.crash_reason is None
+    assert Ellipsis == calculate_foo()
+    assert bulkhead.crash_reason is not None
 
 
 def test_crashes_captured_to_context_manager_works() -> None:
@@ -146,6 +203,21 @@ async def test_captures_crashes_to_stderr_decorator_works() -> None:
     
     with redirect_stderr(StringIO()) as captured_stderr:
         report_error()
+    assert 'Exception in bulkhead:' in captured_stderr.getvalue()
+    assert 'Traceback' in captured_stderr.getvalue()
+    assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
+
+
+async def test_captures_crashes_to_stderr_decorator_with_custom_return_value_works() -> None:
+    @captures_crashes_to_stderr(return_if_crashed=cast(Union[int, EllipsisType], Ellipsis))
+    def calculate_foo() -> Union[int, EllipsisType]:
+        if False:
+            return 1
+        else:
+            raise _CRASH
+    
+    with redirect_stderr(StringIO()) as captured_stderr:
+        assert Ellipsis == calculate_foo()
     assert 'Exception in bulkhead:' in captured_stderr.getvalue()
     assert 'Traceback' in captured_stderr.getvalue()
     assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
