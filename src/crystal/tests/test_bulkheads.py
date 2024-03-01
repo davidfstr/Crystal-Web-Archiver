@@ -82,8 +82,8 @@ async def test_captures_crashes_to_self_decorator_with_custom_return_value_works
         def __init__(self) -> None:
             super().__init__(1)
         
-        @captures_crashes_to_self(return_if_crashed=cast(Union[int, EllipsisType], Ellipsis))
-        def calculate_foo(self) -> Union[int, EllipsisType]:
+        @captures_crashes_to_self(return_if_crashed=Ellipsis)
+        def calculate_foo(self) -> int:
             if False:
                 return 1
             else:
@@ -120,8 +120,8 @@ async def test_captures_crashes_to_bulkhead_arg_decorator_with_custom_return_val
         def __init__(self) -> None:
             super().__init__(1)
         
-        @captures_crashes_to_task_arg(return_if_crashed=cast(Union[int, EllipsisType], Ellipsis))
-        def calculate_foo(self, task: Task) -> Union[int, EllipsisType]:
+        @captures_crashes_to_task_arg(return_if_crashed=Ellipsis)
+        def calculate_foo(self, task: Task) -> int:
             if False:
                 return 1
             else:
@@ -158,8 +158,8 @@ async def test_captures_crashes_to_decorator_works() -> None:
 async def test_captures_crashes_to_decorator_with_custom_return_value_works() -> None:
     bulkhead = BulkheadCell()
     
-    @captures_crashes_to(bulkhead, return_if_crashed=cast(Union[int, EllipsisType], Ellipsis))
-    def calculate_foo() -> Union[int, EllipsisType]:
+    @captures_crashes_to(bulkhead, return_if_crashed=Ellipsis)
+    def calculate_foo() -> int:
         if False:
             return 1
         else:
@@ -209,8 +209,8 @@ async def test_captures_crashes_to_stderr_decorator_works() -> None:
 
 
 async def test_captures_crashes_to_stderr_decorator_with_custom_return_value_works() -> None:
-    @captures_crashes_to_stderr(return_if_crashed=cast(Union[int, EllipsisType], Ellipsis))
-    def calculate_foo() -> Union[int, EllipsisType]:
+    @captures_crashes_to_stderr(return_if_crashed=Ellipsis)
+    def calculate_foo() -> int:
         if False:
             return 1
         else:

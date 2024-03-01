@@ -3,7 +3,9 @@ from crystal.util import cli
 from functools import wraps
 import sys
 import traceback
-from typing import Callable, Iterator, List, Optional, overload, Protocol, TypeVar
+from typing import (
+    Callable, Iterator, List, Optional, overload, Protocol, TypeVar, Union
+)
 from typing_extensions import Concatenate, ParamSpec
 
 
@@ -11,7 +13,8 @@ _S = TypeVar('_S')
 _B = TypeVar('_B', bound='Bulkhead')
 _P = ParamSpec('_P')
 _R = TypeVar('_R')
-_InnerR = TypeVar('_InnerR')
+_RT = TypeVar('_RT')
+_RF = TypeVar('_RF')
 
 
 # ------------------------------------------------------------------------------
@@ -40,24 +43,24 @@ class BulkheadCell(Bulkhead):
 
 @overload
 def captures_crashes_to_self(
-        bulkhead_method: Callable[Concatenate[_B, _P], Optional[_InnerR]]
-        ) -> Callable[Concatenate[_B, _P], Optional[_InnerR]]:
+        bulkhead_method: Callable[Concatenate[_B, _P], _RT]
+        ) -> Callable[Concatenate[_B, _P], Union[_RT, None]]:
     ...
 
 @overload
 def captures_crashes_to_self(
-        *, return_if_crashed: _R
-        ) -> Callable[[Callable[Concatenate[_B, _P], _R]], Callable[Concatenate[_B, _P], _R]]:
+        *, return_if_crashed: _RF
+        ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], Union[_RT, _RF]]]:
     ...
 
 @overload
 def captures_crashes_to_self(
-        ) -> Callable[[Callable[Concatenate[_B, _P], Optional[_InnerR]]], Callable[Concatenate[_B, _P], Optional[_InnerR]]]:
+        ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], Union[_RT, None]]]:
     ...
 
 def captures_crashes_to_self(
-        bulkhead_method: Optional[Callable[Concatenate[_B, _P], _R]]=None,
-        *, return_if_crashed=None
+        bulkhead_method: Optional[Callable[Concatenate[_B, _P], _RT]]=None,
+        *, return_if_crashed=None  # _RF
         ):
     """
     A Bulkhead method that captures any raised exceptions to itself,
@@ -77,11 +80,11 @@ def captures_crashes_to_self(
                 ...
     """
     def decorate(
-            bulkhead_method: Callable[Concatenate[_B, _P], _R]
-            ) -> Callable[Concatenate[_B, _P], _R]:
+            bulkhead_method: Callable[Concatenate[_B, _P], _RT]
+            ) -> Callable[Concatenate[_B, _P], Union[_RT, _RF]]:
         @wraps(bulkhead_method)
         @_mark_bulkhead_call
-        def bulkhead_call(self: _B, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        def bulkhead_call(self: _B, *args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
             if self.crash_reason is not None:
                 # Bulkhead has already crashed. Abort.
                 return return_if_crashed
@@ -104,24 +107,24 @@ def captures_crashes_to_self(
 
 @overload
 def captures_crashes_to_bulkhead_arg(
-        method: Callable[Concatenate[_S, _B, _P], Optional[_InnerR]]
-        ) -> Callable[Concatenate[_S, _B, _P], Optional[_InnerR]]:
+        method: Callable[Concatenate[_S, _B, _P], _RT]
+        ) -> Callable[Concatenate[_S, _B, _P], Union[_RT, None]]:
     ...
 
 @overload
 def captures_crashes_to_bulkhead_arg(
-        *, return_if_crashed: _R
-        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _R]], Callable[Concatenate[_S, _B, _P], _R]]:
+        *, return_if_crashed: _RF
+        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], Union[_RT, _RF]]]:
     ...
 
 @overload
 def captures_crashes_to_bulkhead_arg(
-        ) -> Callable[[Callable[Concatenate[_S, _B, _P], Optional[_InnerR]]], Callable[Concatenate[_S, _B, _P], Optional[_InnerR]]]:
+        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], Union[_RT, None]]]:
     ...
 
 def captures_crashes_to_bulkhead_arg(
-        method: Optional[Callable[Concatenate[_S, _B, _P], _R]]=None,
-        *, return_if_crashed=None
+        method: Optional[Callable[Concatenate[_S, _B, _P], _RT]]=None,
+        *, return_if_crashed=None  # _RF
         ):
     """
     A method that captures any raised exceptions to its first Bulkhead argument,
@@ -141,11 +144,11 @@ def captures_crashes_to_bulkhead_arg(
                 ...
     """
     def decorate(
-            method: Callable[Concatenate[_S, _B, _P], _R]
-            ) -> Callable[Concatenate[_S, _B, _P], _R]:
+            method: Callable[Concatenate[_S, _B, _P], _RT]
+            ) -> Callable[Concatenate[_S, _B, _P], Union[_RT, _RF]]:
         @wraps(method)
         @_mark_bulkhead_call
-        def bulkhead_call(self: _S, bulkhead: _B, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        def bulkhead_call(self: _S, bulkhead: _B, *args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
             if bulkhead.crash_reason is not None:
                 # Bulkhead has already crashed. Abort.
                 return return_if_crashed
@@ -169,20 +172,20 @@ def captures_crashes_to_bulkhead_arg(
 @overload
 def captures_crashes_to(
         bulkhead: Bulkhead
-        ) -> Callable[[Callable[_P, Optional[_InnerR]]], Callable[_P, Optional[_InnerR]]]:
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, None]]]:
     ...
 
 @overload
 def captures_crashes_to(
         bulkhead: Bulkhead,
-        return_if_crashed: _R
-        ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+        return_if_crashed: _RF
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
     ...
 
 def captures_crashes_to(
         bulkhead: Bulkhead,
-        return_if_crashed=None
-        ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+        return_if_crashed=None  # _RF
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
     """
     A method that captures any raised exceptions to the specified Bulkhead,
     as the "crash reason" of the bulkhead.
@@ -199,10 +202,10 @@ def captures_crashes_to(
         def calculate_foo() -> Union[Result, EllipsisType]:
             ...
     """
-    def decorate(func: Callable[_P, _R]) -> Callable[_P, _R]:
+    def decorate(func: Callable[_P, _RT]) -> Callable[_P, Union[_RT, _RF]]:
         @wraps(func)
         @_mark_bulkhead_call
-        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
             if bulkhead.crash_reason is not None:
                 # Bulkhead has already crashed. Abort.
                 return return_if_crashed
@@ -253,24 +256,24 @@ def crashes_captured_to(bulkhead: Bulkhead, *, enter_if_crashed: bool=False) -> 
 
 @overload
 def captures_crashes_to_stderr(
-        func: Callable[_P, Optional[_InnerR]]
-        ) -> Callable[_P, Optional[_InnerR]]:
+        func: Callable[_P, _RT]
+        ) -> Callable[_P, Union[_RT, None]]:
     ...
 
 @overload
 def captures_crashes_to_stderr(
-        *, return_if_crashed: _R
-        ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+        *, return_if_crashed: _RF
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
     ...
 
 @overload
 def captures_crashes_to_stderr(
-        ) -> Callable[[Callable[_P, Optional[_InnerR]]], Callable[_P, Optional[_InnerR]]]:
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, None]]]:
     ...
 
 def captures_crashes_to_stderr(
-        func: Optional[Callable[_P, _R]]=None,
-        *, return_if_crashed=None
+        func: Optional[Callable[_P, _RT]]=None,
+        *, return_if_crashed=None  # _RF
         ):
     """
     A method that captures any raised exceptions, and prints them to stderr.
@@ -284,10 +287,10 @@ def captures_crashes_to_stderr(
         def calculate_foo(self) -> Union[Result, EllipsisType]:
             ...
     """
-    def decorate(func: Callable[_P, _R]) -> Callable[_P, _R]:
+    def decorate(func: Callable[_P, _RT]) -> Callable[_P, Union[_RT, _RF]]:
         @wraps(func)
         @_mark_bulkhead_call
-        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
             try:
                 return func(*args, **kwargs)  # cr-traceback: ignore
             except BaseException as e:
