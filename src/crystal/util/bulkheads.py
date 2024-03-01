@@ -42,23 +42,23 @@ class BulkheadCell(Bulkhead):
 
 
 @overload
-def captures_crashes_to_self(
+def capture_crashes_to_self(
         bulkhead_method: Callable[Concatenate[_B, _P], _RT]
         ) -> Callable[Concatenate[_B, _P], Union[_RT, None]]:
     ...
 
 @overload
-def captures_crashes_to_self(
+def capture_crashes_to_self(
         *, return_if_crashed: _RF
         ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], Union[_RT, _RF]]]:
     ...
 
 @overload
-def captures_crashes_to_self(
+def capture_crashes_to_self(
         ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], Union[_RT, None]]]:
     ...
 
-def captures_crashes_to_self(
+def capture_crashes_to_self(
         bulkhead_method: Optional[Callable[Concatenate[_B, _P], _RT]]=None,
         *, return_if_crashed=None  # _RF
         ):
@@ -71,11 +71,11 @@ def captures_crashes_to_self(
     
     Examples:
         class MyBulkhead(Bulkhead):
-            @captures_crashes_to_self
+            @capture_crashes_to_self
             def foo_did_bar(self) -> None:
                 ...
             
-            @captures_crashes_to_self(return_if_crashed=Ellipsis)
+            @capture_crashes_to_self(return_if_crashed=Ellipsis)
             def calculate_foo(self) -> Union[Result, EllipsisType]:
                 ...
     """
@@ -106,23 +106,23 @@ def captures_crashes_to_self(
 
 
 @overload
-def captures_crashes_to_bulkhead_arg(
+def capture_crashes_to_bulkhead_arg(
         method: Callable[Concatenate[_S, _B, _P], _RT]
         ) -> Callable[Concatenate[_S, _B, _P], Union[_RT, None]]:
     ...
 
 @overload
-def captures_crashes_to_bulkhead_arg(
+def capture_crashes_to_bulkhead_arg(
         *, return_if_crashed: _RF
         ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], Union[_RT, _RF]]]:
     ...
 
 @overload
-def captures_crashes_to_bulkhead_arg(
+def capture_crashes_to_bulkhead_arg(
         ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], Union[_RT, None]]]:
     ...
 
-def captures_crashes_to_bulkhead_arg(
+def capture_crashes_to_bulkhead_arg(
         method: Optional[Callable[Concatenate[_S, _B, _P], _RT]]=None,
         *, return_if_crashed=None  # _RF
         ):
@@ -135,11 +135,11 @@ def captures_crashes_to_bulkhead_arg(
     
     Examples:
         class MyBulkhead(Bulkhead):
-            @captures_crashes_to_bulkhead_arg
+            @capture_crashes_to_bulkhead_arg
             def other_foo_did_bar(self, other: Bulkhead) -> None:
                 ...
             
-            @captures_crashes_to_bulkhead_arg(return_if_crashed=Ellipsis)
+            @capture_crashes_to_bulkhead_arg(return_if_crashed=Ellipsis)
             def calculate_baz(self, other: Bulkhead) -> Union[Result, EllipsisType]:
                 ...
     """
@@ -170,19 +170,19 @@ def captures_crashes_to_bulkhead_arg(
 
 
 @overload
-def captures_crashes_to(
+def capture_crashes_to(
         bulkhead: Bulkhead
         ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, None]]]:
     ...
 
 @overload
-def captures_crashes_to(
+def capture_crashes_to(
         bulkhead: Bulkhead,
         return_if_crashed: _RF
         ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
     ...
 
-def captures_crashes_to(
+def capture_crashes_to(
         bulkhead: Bulkhead,
         return_if_crashed=None  # _RF
         ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
@@ -194,11 +194,11 @@ def captures_crashes_to(
     this method will immediately abort, returning `return_if_crashed`.
     
     Examples:
-        @captures_crashes_to(bulkhead)
+        @capture_crashes_to(bulkhead)
         def foo_did_bar() -> None:
             ...
         
-        @captures_crashes_to(bulkhead, return_if_crashed=Ellipsis)
+        @capture_crashes_to(bulkhead, return_if_crashed=Ellipsis)
         def calculate_foo() -> Union[Result, EllipsisType]:
             ...
     """
@@ -255,23 +255,23 @@ def crashes_captured_to(bulkhead: Bulkhead, *, enter_if_crashed: bool=False) -> 
 
 
 @overload
-def captures_crashes_to_stderr(
+def capture_crashes_to_stderr(
         func: Callable[_P, _RT]
         ) -> Callable[_P, Union[_RT, None]]:
     ...
 
 @overload
-def captures_crashes_to_stderr(
+def capture_crashes_to_stderr(
         *, return_if_crashed: _RF
         ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
     ...
 
 @overload
-def captures_crashes_to_stderr(
+def capture_crashes_to_stderr(
         ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, None]]]:
     ...
 
-def captures_crashes_to_stderr(
+def capture_crashes_to_stderr(
         func: Optional[Callable[_P, _RT]]=None,
         *, return_if_crashed=None  # _RF
         ):
@@ -279,11 +279,11 @@ def captures_crashes_to_stderr(
     A method that captures any raised exceptions, and prints them to stderr.
     
     Examples:
-        @captures_crashes_to_stderr
+        @capture_crashes_to_stderr
         def foo(self) -> None:
             ...
         
-        @captures_crashes_to_stderr(return_if_crashed=Ellipsis)
+        @capture_crashes_to_stderr(return_if_crashed=Ellipsis)
         def calculate_foo(self) -> Union[Result, EllipsisType]:
             ...
     """
@@ -352,11 +352,11 @@ def run_bulkhead_call(
         **kwargs: _P.kwargs
         ) -> '_R':
     """
-    Calls a method marked as @captures_crashes_to*,
+    Calls a method marked as @capture_crashes_to*,
     which does not reraise exceptions from its interior.
     
     Raises AssertionError if the specified method is not actually
-    marked with @captures_crashes_to*.
+    marked with @capture_crashes_to*.
     """
     ensure_is_bulkhead_call(bulkhead_call)
     return bulkhead_call(*args, **kwargs)  # cr-traceback: ignore
@@ -364,7 +364,7 @@ def run_bulkhead_call(
 
 def ensure_is_bulkhead_call(callable: Callable) -> None:
     if getattr(callable, '_captures_crashes', False) != True:
-        raise AssertionError(f'Expected callable {callable!r} to be decorated with @captures_crashes_to*')
+        raise AssertionError(f'Expected callable {callable!r} to be decorated with @capture_crashes_to*')
 
 
 # ------------------------------------------------------------------------------

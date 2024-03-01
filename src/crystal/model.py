@@ -33,8 +33,8 @@ from crystal.progress import (
 from crystal import resources as resources_
 from crystal.util import http_date
 from crystal.util.bulkheads import (
-    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
-    captures_crashes_to_stderr,
+    capture_crashes_to_bulkhead_arg as capture_crashes_to_task_arg,
+    capture_crashes_to_stderr,
     run_bulkhead_call,
 )
 from crystal.util.db import (
@@ -1554,7 +1554,7 @@ class _WeakTaskRef(Generic[_TK]):
             self._task.listeners.append(self)
     task = property(_get_task, _set_task)
     
-    @captures_crashes_to_task_arg
+    @capture_crashes_to_task_arg
     def task_did_complete(self, task: Task) -> None:
         self.task = None
     
@@ -2499,7 +2499,7 @@ class ResourceRevision:
         # Asynchronously:
         # 1. Create the ResourceRevision row in the database
         # 2. Get the database ID
-        @captures_crashes_to_stderr
+        @capture_crashes_to_stderr
         def fg_task() -> None:
             nonlocal callable_exc_info
             try:

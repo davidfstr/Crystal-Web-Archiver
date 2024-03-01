@@ -4,8 +4,8 @@ from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
 from crystal.util.bulkheads import (
     Bulkhead,
-    captures_crashes_to_self,
-    captures_crashes_to_stderr,
+    capture_crashes_to_self,
+    capture_crashes_to_stderr,
     crashes_captured_to,
     CrashReason,
     does_not_capture_crashes,
@@ -307,7 +307,7 @@ class Task(ListenableMixin, Bulkhead):
         else:
             raise ValueError('Container tasks do not define a result by default.')
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def dispose(self) -> None:
         """
         Replaces this task's future with a new future that raises a 
@@ -498,7 +498,7 @@ class Task(ListenableMixin, Bulkhead):
     
     # === Public Operations ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     @fg_affinity
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
         """
@@ -621,7 +621,7 @@ class Task(ListenableMixin, Bulkhead):
             return False  # children did not change
     
     @bg_affinity
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def _call_self_and_record_result(self):
         # (Ignore client requests to cancel)
         if self._future is None:
@@ -641,7 +641,7 @@ class Task(ListenableMixin, Bulkhead):
     # === Internal Events ===
     
     @final
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def task_subtitle_did_change(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
@@ -650,7 +650,7 @@ class Task(ListenableMixin, Bulkhead):
             self.child_task_subtitle_did_change(task)
     
     @final
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def task_did_complete(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
@@ -668,7 +668,7 @@ class Task(ListenableMixin, Bulkhead):
                 run_bulkhead_call(lis.task_child_did_complete, self, task)  # type: ignore[attr-defined]
     
     @final
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def task_crash_reason_did_change(self, task: Task) -> None:
         if self._use_extra_listener_assertions:
             assert task in self.children_unsynchronized
@@ -978,7 +978,7 @@ class DownloadResourceTask(Task):
                 return self._download_body_with_embedded_future
     
     @override
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def dispose(self) -> None:
         super().dispose()
         if self._download_body_task is not None:
@@ -988,13 +988,13 @@ class DownloadResourceTask(Task):
     
     # === Events ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task is self._download_body_task:
             if not task.complete:
                 self.subtitle = task.subtitle
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         from crystal.model import (
             ProjectHasTooManyRevisionsError, RevisionBodyMissingError
@@ -1269,7 +1269,7 @@ class ParseResourceRevisionLinks(Task):
         return (links, linked_resources)
     
     @override
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def dispose(self) -> None:
         super().dispose()
         self._resource_revision = None
@@ -1408,12 +1408,12 @@ class UpdateResourceGroupMembersTask(Task):
                 self.task_did_complete(download_task)
         # (NOTE: self.complete might be True now)
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if not task.complete:
             self.subtitle = task.subtitle
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
@@ -1456,14 +1456,14 @@ class DownloadResourceGroupMembersTask(Task):
         self._children_loaded = False
     
     @override
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
         if not self._children_loaded:
             return self._load_children_and_update_completed_status
         
         return super().try_get_next_task_unit()
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def _load_children_and_update_completed_status(self) -> None:
         @does_not_capture_crashes
         def fg_task() -> None:
@@ -1531,7 +1531,7 @@ class DownloadResourceGroupMembersTask(Task):
         
         assert self._children_loaded  # because set earlier in this function
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def group_did_add_member(self, group: ResourceGroup, member: Resource) -> None:
         # NOTE: Unfortunately self._children_loaded may be unset here due to a race condition:
         #       https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
@@ -1554,13 +1554,13 @@ class DownloadResourceGroupMembersTask(Task):
                 self.task_did_complete(download_task)
             # (NOTE: self.complete might be True now)
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def group_did_finish_updating(self) -> None:
         self._done_updating_group = True
         self._update_subtitle()
         self._update_completed_status()
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
@@ -1645,7 +1645,7 @@ class DownloadResourceGroupTask(Task):
     def group(self) -> ResourceGroup:
         return self._update_members_task.group
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if task == self._update_members_task and not self._started_downloading_members:
             self.subtitle = 'Updating group members...'
@@ -1653,7 +1653,7 @@ class DownloadResourceGroupTask(Task):
             self.subtitle = task.subtitle
             self._started_downloading_members = True
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
@@ -1663,7 +1663,7 @@ class DownloadResourceGroupTask(Task):
         if self.num_children_complete == len(self.children) and not self.complete:
             self.finish()
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_did_crash(self, task: Task) -> None:
         if task == self._update_members_task:
             self._download_members_task.group_did_finish_updating()
@@ -1706,7 +1706,7 @@ class RootTask(Task):
     def _get_crash_reason(self) -> Optional[CrashReason]:
         return self._crash_reason
     @override
-    @captures_crashes_to_stderr
+    @capture_crashes_to_stderr
     def _set_crash_reason(self, reason: Optional[CrashReason]) -> None:
         if reason is None:
             self._crash_reason = None
@@ -1811,7 +1811,7 @@ class RootTask(Task):
     # === Public Operations ===
     
     @override
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     @fg_affinity
     @scheduler_affinity
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
@@ -1828,11 +1828,11 @@ class RootTask(Task):
     
     # === Events ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         run_bulkhead_call(task.dispose)
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def did_schedule_all_children(self) -> None:
         # Remove completed children after each scheduling pass
         self.clear_completed_children()
@@ -1886,7 +1886,7 @@ def start_schedule_forever(root_task: RootTask) -> None:
     # NOTE: Don't use @crashes_captured_to(root_task) because a RootTask
     #       crashed in this outer context could not have the crash dismissed
     #       such that the RootTask would actually start running again properly
-    @captures_crashes_to_stderr
+    @capture_crashes_to_stderr
     def bg_daemon_task() -> None:
         setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
         assert _is_scheduler_thread()

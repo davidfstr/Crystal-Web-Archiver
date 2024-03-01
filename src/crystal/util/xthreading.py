@@ -8,7 +8,7 @@ This thread is responsible for:
 """
 
 from collections import deque
-from crystal.util.bulkheads import captures_crashes_to_stderr, ensure_is_bulkhead_call
+from crystal.util.bulkheads import capture_crashes_to_stderr, ensure_is_bulkhead_call
 from crystal.util.profile import create_profiled_callable
 from enum import Enum
 from functools import partial, wraps
@@ -38,10 +38,10 @@ _PROFILE_FG_TASKS = os.environ.get('CRYSTAL_NO_PROFILE_FG_TASKS', 'False') != 'T
 _FG_TASK_RUNTIME_THRESHOLD = 1.0 # sec
 
 # Whether to enforce that callables scheduled with fg_call_later()
-# be decorated with @captures_crashes_to*.
+# be decorated with @capture_crashes_to*.
 _DEFERRED_FG_CALLS_MUST_CAPTURE_CRASHES = True
 # Whether to enforce that callables scheduled with bg_call_later()
-# be decorated with @captures_crashes_to*.
+# be decorated with @capture_crashes_to*.
 _DEFERRED_BG_CALLS_MUST_CAPTURE_CRASHES = True
 
 
@@ -252,7 +252,7 @@ def fg_call_and_wait(
         
         waiting_calling_thread = threading.current_thread()  # capture
         
-        @captures_crashes_to_stderr
+        @capture_crashes_to_stderr
         def fg_task() -> None:
             nonlocal callable_started, callable_result, callable_exc_info
             
