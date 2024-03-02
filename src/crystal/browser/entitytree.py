@@ -23,9 +23,9 @@ from crystal.task import (
 from crystal.ui.tree import *
 from crystal.util.bulkheads import (
     Bulkhead,
-    captures_crashes_to,
-    captures_crashes_to_self,
-    captures_crashes_to_stderr,
+    capture_crashes_to,
+    capture_crashes_to_self,
+    capture_crashes_to_stderr,
     CrashReason,
     run_bulkhead_call,
 )
@@ -172,7 +172,7 @@ class EntityTree(Bulkhead):
     
     # === Updates ===
     
-    # TODO: Should this be marked with: @captures_crashes_to_self
+    # TODO: Should this be marked with: @capture_crashes_to_self
     def update(self):
         """
         Updates the nodes in this tree, usually due to a project change.
@@ -181,7 +181,7 @@ class EntityTree(Bulkhead):
     
     # === Events: Resource Lifecycle ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def resource_did_instantiate(self, resource: Resource) -> None:
         # TODO: Optimize to only refresh those groups that could potentially
         #       be affected by this particular resource being instantiated
@@ -193,7 +193,7 @@ class EntityTree(Bulkhead):
             return
         else:
             self._group_nodes_need_updating = True
-            @captures_crashes_to_stderr
+            @capture_crashes_to_stderr
             def fg_task_later() -> None:
                 try:
                     try:
@@ -210,20 +210,20 @@ class EntityTree(Bulkhead):
     
     # === Events: Resource Revision Lifecycle ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def resource_revision_did_instantiate(self, revision: ResourceRevision) -> None:
-        @captures_crashes_to(self)
+        @capture_crashes_to(self)
         def fg_task() -> None:
             self.root.update_icon_set_of_descendants_with_resource(revision.resource)
         fg_call_later(fg_task)
     
     # === Events: Root Resource Lifecycle ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
         self.update()
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     # TODO: Do not recommend asserting that a listener method will be called
     #       from any particular thread
     @fg_affinity
@@ -232,25 +232,25 @@ class EntityTree(Bulkhead):
     
     # === Events: Resource Group Lifecycle ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def resource_group_did_instantiate(self, group: ResourceGroup) -> None:
         self.update()
         
         # Some badges related to the ResourceGroup.do_not_download status
         # may need to be updated
-        @captures_crashes_to(self)
+        @capture_crashes_to(self)
         def fg_task() -> None:
             self.root.update_icon_set_of_descendants_in_group(group)
         fg_call_later(fg_task)
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     # TODO: Do not recommend asserting that a listener method will be called
     #       from any particular thread
     @fg_affinity
     def resource_group_did_change_do_not_download(self, group: ResourceGroup) -> None:
         self.root.update_icon_set_of_descendants_in_group(group)
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     # TODO: Do not recommend asserting that a listener method will be called
     #       from any particular thread
     @fg_affinity
@@ -263,16 +263,16 @@ class EntityTree(Bulkhead):
     
     # === Event: Min Fetch Date Did Change ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def min_fetch_date_did_change(self) -> None:
-        @captures_crashes_to(self)
+        @capture_crashes_to(self)
         def fg_task() -> None:
             self.root.update_icon_set_of_descendants()
         fg_call_later(fg_task)
     
     # === Event: Right Click ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def on_right_click(self, event: wx.MouseEvent, node_view: NodeView) -> None:
         node = Node.for_node_view(node_view)
         self._right_clicked_node = node
@@ -295,7 +295,7 @@ class EntityTree(Bulkhead):
         self.peer.PopupMenu(menu)
         menu.Destroy()
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
         node = self._right_clicked_node
         assert node is not None
@@ -337,7 +337,7 @@ class EntityTree(Bulkhead):
     # === Event: Mouse Motion, Get Tooltip ===
     
     # Update the tooltip whenever hovering the mouse over a tree node icon
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def _on_mouse_motion(self, event: wx.MouseEvent) -> None:
         (tree_item_id, hit_flags) = self.peer.HitTest(event.Position)
         if (hit_flags & wx.TREE_HITTEST_ONITEMICON) != 0:
@@ -347,7 +347,7 @@ class EntityTree(Bulkhead):
         
         self.peer.SetToolTip(new_tooltip)
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def _on_get_tooltip_event(self, event: wx.Event) -> None:
         event.tooltip_cell[0] = self._icon_tooltip_for_tree_item_id(event.tree_item_id)
     
@@ -468,7 +468,7 @@ class Node(Bulkhead):
         
         Can be called from any thread.
         """
-        @captures_crashes_to_stderr
+        @capture_crashes_to_stderr
         def fg_task() -> None:
             self.children = [_ErrorNode(message, is_crash=is_crash)]
         fg_call_later(fg_task)
@@ -776,7 +776,7 @@ class _ResourceNode(Node):
     
     # === Events ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def on_expanded(self, event: wx.TreeEvent) -> None:
         # If this is the first expansion attempt, start an asynchronous task to fetch
         # the resource and subsequently update the children
@@ -803,7 +803,7 @@ class _ResourceNode(Node):
                             f'Error downloading URL: {error_dict["type"]}: {error_dict["message"]}')
                         return
                     
-                    @captures_crashes_to(self)
+                    @capture_crashes_to(self)
                     def bg_task() -> None:
                         # Link parsing is I/O intensive, so do it on a background thread
                         try:
@@ -826,7 +826,7 @@ class _ResourceNode(Node):
     
     # === Updates ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     @override
     def update_children(self) -> None:
         """
@@ -936,7 +936,7 @@ class _ResourceNode(Node):
     
     # NOTE: If crash while trying to determine which new node to select,
     #       fallback to just clearing the selection
-    @captures_crashes_to_stderr
+    @capture_crashes_to_stderr
     def on_selection_deleted(self,
             old_selected_node_view: NodeView,
             ) -> Optional[NodeView]:
@@ -1239,7 +1239,7 @@ class ResourceGroupNode(_GroupedNode):
         else:
             return True
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     @override
     def update_children(self, force_populate: bool=False) -> None:
         if not force_populate:
@@ -1279,11 +1279,11 @@ class ResourceGroupNode(_GroupedNode):
     
     # === Events ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def on_expanded(self, event: wx.TreeEvent) -> None:
         # If this is the first expansion attempt, populate the children
         if not self._children_loaded:
-            @captures_crashes_to(self)
+            @capture_crashes_to(self)
             def fg_task_later() -> None:
                 # Show progress dialog in advance if will need to load all project URLs
                 try:
@@ -1296,7 +1296,7 @@ class ResourceGroupNode(_GroupedNode):
                     return
                 
                 self.update_children(force_populate=True)
-            @captures_crashes_to(self)
+            @capture_crashes_to(self)
             def bg_task():
                 # Give time for the loading node to display
                 time.sleep(.1)
@@ -1312,7 +1312,7 @@ class ResourceGroupNode(_GroupedNode):
     # NOTE: If the more-node crashes while expanding, replace the entire list
     #       of sibling children with a single error node. A bit of an extreme
     #       response, but is probably the safest thing to do.
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def on_more_expanded(self, more_node: MorePlaceholderNode) -> None:
         # Save selected node
         old_children_len = len(self.children)  # capture
@@ -1434,7 +1434,7 @@ class MorePlaceholderNode(Node):
     
     # === Events ===
     
-    @captures_crashes_to_self
+    @capture_crashes_to_self
     def on_expanded(self, event: wx.TreeEvent) -> None:
         if hasattr(self._delegate, 'on_more_expanded'):
             run_bulkhead_call(self._delegate.on_more_expanded, self)  # type: ignore[attr-defined]

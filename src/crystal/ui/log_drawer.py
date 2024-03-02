@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from crystal.util.bulkheads import captures_crashes_to_stderr
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util import cli
 from crystal.util.wx_bind import bind
 from crystal.util.xos import (
@@ -677,7 +677,7 @@ class _LogDrawerWriter(TextIOBase):
         # 
         # NOTE: Normally would print crashes to LogDrawer, but this IS the
         #       print function for LogDrawer, so fallback to stderr instead.
-        @captures_crashes_to_stderr
+        @capture_crashes_to_stderr
         def fg_task() -> None:
             with self._print_buffer_lock:
                 last_print_buffer = self._print_buffer

@@ -33,20 +33,21 @@ from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.ui.tree import NodeView
 from crystal.util.bulkheads import (
     BulkheadCell,
-    captures_crashes_to,
-    captures_crashes_to_self, captures_crashes_to_stderr,
-    captures_crashes_to_bulkhead_arg as captures_crashes_to_task_arg,
+    capture_crashes_to,
+    capture_crashes_to_self, capture_crashes_to_stderr,
+    capture_crashes_to_bulkhead_arg as capture_crashes_to_task_arg,
     crashes_captured_to,
     run_bulkhead_call,
 )
 from crystal.util import cli
+from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.wx_bind import bind
 from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
 from io import StringIO
 import sys
 import threading
-from typing import Callable, List, Optional, Tuple, TypeVar
+from typing import Callable, cast, List, Optional, Tuple, TypeVar, Union
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -59,29 +60,47 @@ _CRASH = ValueError('Simulated crash')
 
 
 # ------------------------------------------------------------------------------
-# Test: captures_crashes_to*
+# Test: capture_crashes_to*
 
-async def test_captures_crashes_to_self_decorator_works() -> None:
+async def test_capture_crashes_to_self_decorator_works() -> None:
     class MyTask(_DownloadResourcesPlaceholderTask):
         def __init__(self) -> None:
             super().__init__(1)
         
-        @captures_crashes_to_self
-        def protected_method(self) -> None:
+        @capture_crashes_to_self
+        def foo_did_bar(self) -> None:
             raise _CRASH
     my_task = MyTask()
     
     assert my_task.crash_reason is None
-    my_task.protected_method()
+    my_task.foo_did_bar()
     assert my_task.crash_reason is not None
 
 
-async def test_captures_crashes_to_bulkhead_arg_decorator_works() -> None:
+async def test_capture_crashes_to_self_decorator_with_custom_return_value_works() -> None:
     class MyTask(_DownloadResourcesPlaceholderTask):
         def __init__(self) -> None:
             super().__init__(1)
         
-        @captures_crashes_to_task_arg
+        @capture_crashes_to_self(return_if_crashed=Ellipsis)
+        def calculate_foo(self) -> int:
+            if False:
+                return 1
+            else:
+                raise _CRASH
+    my_task = MyTask()
+    
+    assert my_task.crash_reason is None
+    assert Ellipsis == my_task.calculate_foo()
+    assert my_task.crash_reason is not None
+
+
+async def test_capture_crashes_to_bulkhead_arg_decorator_works() -> None:
+    class MyTask(_DownloadResourcesPlaceholderTask):
+        def __init__(self) -> None:
+            super().__init__(1)
+        
+        @capture_crashes_to_task_arg
         def task_foo_did_change(self, task: Task) -> None:
             raise _CRASH
     my_task = MyTask()
@@ -96,13 +115,36 @@ async def test_captures_crashes_to_bulkhead_arg_decorator_works() -> None:
     assert my_task.crash_reason is None
 
 
-async def test_captures_crashes_to_decorator_works() -> None:
+async def test_capture_crashes_to_bulkhead_arg_decorator_with_custom_return_value_works() -> None:
+    class MyTask(_DownloadResourcesPlaceholderTask):
+        def __init__(self) -> None:
+            super().__init__(1)
+        
+        @capture_crashes_to_task_arg(return_if_crashed=Ellipsis)
+        def calculate_foo(self, task: Task) -> int:
+            if False:
+                return 1
+            else:
+                raise _CRASH
+    my_task = MyTask()
+    other_task = _DownloadResourcesPlaceholderTask(1)
+    
+    assert other_task.crash_reason is None
+    assert my_task.crash_reason is None
+    
+    assert Ellipsis == my_task.calculate_foo(other_task)
+    
+    assert other_task.crash_reason is not None
+    assert my_task.crash_reason is None
+
+
+async def test_capture_crashes_to_decorator_works() -> None:
     class MyTask(_DownloadResourcesPlaceholderTask):
         def __init__(self) -> None:
             super().__init__(1)
         
         def foo_did_bar(self) -> None:
-            @captures_crashes_to(self)
+            @capture_crashes_to(self)
             def fg_task() -> None:
                 raise _CRASH
             fg_call_and_wait(fg_task)
@@ -111,6 +153,21 @@ async def test_captures_crashes_to_decorator_works() -> None:
     assert my_task.crash_reason is None
     my_task.foo_did_bar()
     assert my_task.crash_reason is not None
+
+
+async def test_capture_crashes_to_decorator_with_custom_return_value_works() -> None:
+    bulkhead = BulkheadCell()
+    
+    @capture_crashes_to(bulkhead, return_if_crashed=Ellipsis)
+    def calculate_foo() -> int:
+        if False:
+            return 1
+        else:
+            raise _CRASH
+    
+    assert bulkhead.crash_reason is None
+    assert Ellipsis == calculate_foo()
+    assert bulkhead.crash_reason is not None
 
 
 def test_crashes_captured_to_context_manager_works() -> None:
@@ -139,8 +196,8 @@ def test_crashes_captured_to_context_manager_works() -> None:
     assert _CRASH == bulkhead.crash_reason
 
 
-async def test_captures_crashes_to_stderr_decorator_works() -> None:
-    @captures_crashes_to_stderr
+async def test_capture_crashes_to_stderr_decorator_works() -> None:
+    @capture_crashes_to_stderr
     def report_error() -> None:
         raise _CRASH
     
@@ -151,8 +208,23 @@ async def test_captures_crashes_to_stderr_decorator_works() -> None:
     assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
 
 
-async def test_given_callable_decorated_by_captures_crashes_to_star_decorator_when_run_bulkhead_call_used_then_calls_callable() -> None:
-    @captures_crashes_to_stderr
+async def test_capture_crashes_to_stderr_decorator_with_custom_return_value_works() -> None:
+    @capture_crashes_to_stderr(return_if_crashed=Ellipsis)
+    def calculate_foo() -> int:
+        if False:
+            return 1
+        else:
+            raise _CRASH
+    
+    with redirect_stderr(StringIO()) as captured_stderr:
+        assert Ellipsis == calculate_foo()
+    assert 'Exception in bulkhead:' in captured_stderr.getvalue()
+    assert 'Traceback' in captured_stderr.getvalue()
+    assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
+
+
+async def test_given_callable_decorated_by_capture_crashes_to_star_decorator_when_run_bulkhead_call_used_then_calls_callable() -> None:
+    @capture_crashes_to_stderr
     def protected_method():
         protected_method.called = True
     
@@ -169,8 +241,8 @@ async def test_given_callable_decorated_by_captures_crashes_to_star_decorator_wh
     assert False == getattr(unprotected_method, 'called', False)
 
 
-@skip('covered by: test_given_callable_decorated_by_captures_crashes_to_star_decorator_when_run_bulkhead_call_used_then_calls_callable')
-async def test_given_not_callable_decorated_by_captures_crashes_to_star_decorator_when_run_bulkhead_call_used_then_raises() -> None:
+@skip('covered by: test_given_callable_decorated_by_capture_crashes_to_star_decorator_when_run_bulkhead_call_used_then_calls_callable')
+async def test_given_not_callable_decorated_by_capture_crashes_to_star_decorator_when_run_bulkhead_call_used_then_raises() -> None:
     pass
 
 
@@ -190,7 +262,7 @@ async def test_given_inside_bulkhead_when_unhandled_exception_raised_then_traceb
             def __init__(self) -> None:
                 super().__init__(1)
             
-            @captures_crashes_to_self
+            @capture_crashes_to_self
             def protected_method(self) -> None:
                 raise _CRASH
         
@@ -226,7 +298,7 @@ async def test_given_inside_background_thread_when_exception_raised_then_traceba
         #       bg_call_later() rather than creating a Thread directly.
         #       
         #       bg_call_later() already enforces that its callable
-        #       is wrapped with @captures_crashes_to* and reports any
+        #       is wrapped with @capture_crashes_to* and reports any
         #       unhandled exceptions somewhere sensible, but bare
         #       Threads don't.
         thread = threading.Thread(target=bg_task)
@@ -538,8 +610,8 @@ async def test_when_TTN_task_did_set_children_crashes_at_top_level_then_T_displa
                 # crash the assertion: assert self._num_visible_children == visible_child_count
                 if True:
                     super_task_did_set_children = TaskTreeNode.task_did_set_children
-                    # NOTE: Need some kind of @captures_crashes_to* here to pass caller checks
-                    @captures_crashes_to_stderr
+                    # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
+                    @capture_crashes_to_stderr
                     def task_did_set_children(self, task: Task, child_count: int) -> None:
                         # Corrupt the value of self._num_visible_children
                         self._num_visible_children += 100
@@ -622,8 +694,8 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
                 # crash the line: child = task.children[-1]  # lookup child
                 if True:
                     super_task_did_append_child = TaskTreeNode.task_did_append_child
-                    # NOTE: Need some kind of @captures_crashes_to* here to pass caller checks
-                    @captures_crashes_to_stderr
+                    # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
+                    @capture_crashes_to_stderr
                     def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
                         # Corrupt the value of task.children
                         task._children = []
@@ -869,8 +941,8 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
                 
                 super_update_children = ResourceGroupNode.update_children
-                # NOTE: Need some kind of @captures_crashes_to* here to pass caller checks
-                @captures_crashes_to_stderr
+                # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
+                @capture_crashes_to_stderr
                 def update_children(self, *args, **kwargs) -> None:
                     update_children.called = True  # type: ignore[attr-defined]
                     return super_update_children(self, *args, **kwargs)
@@ -1602,7 +1674,7 @@ async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[flo
         timeout = _DEFAULT_WAIT_TIMEOUT_FOR_UNIT
     
     result_cell = Future()  # type: Future[_R]
-    @captures_crashes_to_stderr
+    @capture_crashes_to_stderr
     def bg_task() -> None:
         result_cell.set_running_or_notify_cancel()
         try:

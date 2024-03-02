@@ -3,7 +3,9 @@ from crystal.util import cli
 from functools import wraps
 import sys
 import traceback
-from typing import Callable, Iterator, List, Optional, Protocol, TypeVar
+from typing import (
+    Callable, Iterator, List, Optional, overload, Protocol, TypeVar, Union
+)
 from typing_extensions import Concatenate, ParamSpec
 
 
@@ -11,6 +13,8 @@ _S = TypeVar('_S')
 _B = TypeVar('_B', bound='Bulkhead')
 _P = ParamSpec('_P')
 _R = TypeVar('_R')
+_RT = TypeVar('_RT')
+_RF = TypeVar('_RF')
 
 
 # ------------------------------------------------------------------------------
@@ -37,79 +41,174 @@ class BulkheadCell(Bulkhead):
         self.crash_reason = value
 
 
-def captures_crashes_to_self(
-        bulkhead_method: 'Callable[Concatenate[_B, _P], Optional[_R]]'
-        ) -> 'Callable[Concatenate[_B, _P], Optional[_R]]':
+@overload
+def capture_crashes_to_self(
+        bulkhead_method: Callable[Concatenate[_B, _P], _RT]
+        ) -> Callable[Concatenate[_B, _P], Union[_RT, None]]:
+    ...
+
+@overload
+def capture_crashes_to_self(
+        *, return_if_crashed: _RF
+        ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], Union[_RT, _RF]]]:
+    ...
+
+@overload
+def capture_crashes_to_self(
+        ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], Union[_RT, None]]]:
+    ...
+
+def capture_crashes_to_self(
+        bulkhead_method: Optional[Callable[Concatenate[_B, _P], _RT]]=None,
+        *, return_if_crashed=None  # _RF
+        ):
     """
     A Bulkhead method that captures any raised exceptions to itself,
     as the "crash reason" of the bulkhead.
     
     If the bulkhead was already crashed (with a non-None "crash reason") then
-    this method will immediately abort, returning None.
-    """
-    @wraps(bulkhead_method)
-    @_mark_bulkhead_call
-    def bulkhead_call(self: '_B', *args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-        if self.crash_reason is not None:
-            # Bulkhead has already crashed. Abort.
-            return None
-        try:
-            return bulkhead_method(self, *args, **kwargs)  # cr-traceback: ignore
-        except BaseException as e:
-            # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead_call
-            _print_bulkhead_exception(e)
+    this method will immediately abort, returning `return_if_crashed`.
+    
+    Examples:
+        class MyBulkhead(Bulkhead):
+            @capture_crashes_to_self
+            def foo_did_bar(self) -> None:
+                ...
             
-            # Crash the bulkhead. Abort.
-            self.crash_reason = e
-            return None
-    return bulkhead_call
+            @capture_crashes_to_self(return_if_crashed=Ellipsis)
+            def calculate_foo(self) -> Result:
+                ...
+    """
+    def decorate(
+            bulkhead_method: Callable[Concatenate[_B, _P], _RT]
+            ) -> Callable[Concatenate[_B, _P], Union[_RT, _RF]]:
+        @wraps(bulkhead_method)
+        @_mark_bulkhead_call
+        def bulkhead_call(self: _B, *args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
+            if self.crash_reason is not None:
+                # Bulkhead has already crashed. Abort.
+                return return_if_crashed
+            try:
+                return bulkhead_method(self, *args, **kwargs)  # cr-traceback: ignore
+            except BaseException as e:
+                # Print traceback to assist in debugging in the terminal,
+                # including ancestor callers of bulkhead_call
+                _print_bulkhead_exception(e)
+                
+                # Crash the bulkhead. Abort.
+                self.crash_reason = e
+                return return_if_crashed
+        return bulkhead_call
+    if bulkhead_method is None:
+        return decorate
+    else:
+        return decorate(bulkhead_method)
 
 
-def captures_crashes_to_bulkhead_arg(
-        method: 'Callable[Concatenate[_S, _B, _P], Optional[_R]]'
-        ) -> 'Callable[Concatenate[_S, _B, _P], Optional[_R]]':
+@overload
+def capture_crashes_to_bulkhead_arg(
+        method: Callable[Concatenate[_S, _B, _P], _RT]
+        ) -> Callable[Concatenate[_S, _B, _P], Union[_RT, None]]:
+    ...
+
+@overload
+def capture_crashes_to_bulkhead_arg(
+        *, return_if_crashed: _RF
+        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], Union[_RT, _RF]]]:
+    ...
+
+@overload
+def capture_crashes_to_bulkhead_arg(
+        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], Union[_RT, None]]]:
+    ...
+
+def capture_crashes_to_bulkhead_arg(
+        method: Optional[Callable[Concatenate[_S, _B, _P], _RT]]=None,
+        *, return_if_crashed=None  # _RF
+        ):
     """
     A method that captures any raised exceptions to its first Bulkhead argument,
     as the "crash reason" of the bulkhead.
     
     If the bulkhead was already crashed (with a non-None "crash reason") then
-    this method will immediately abort, returning None.
-    """
-    @wraps(method)
-    @_mark_bulkhead_call
-    def bulkhead_call(self: '_S', bulkhead: _B, *args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-        if bulkhead.crash_reason is not None:
-            # Bulkhead has already crashed. Abort.
-            return None
-        try:
-            return method(self, bulkhead, *args, **kwargs)  # cr-traceback: ignore
-        except BaseException as e:
-            # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead_call
-            _print_bulkhead_exception(e)
+    this method will immediately abort, returning `return_if_crashed`.
+    
+    Examples:
+        class MyClass:
+            @capture_crashes_to_bulkhead_arg
+            def other_foo_did_bar(self, other: Bulkhead) -> None:
+                ...
             
-            # Crash the bulkhead. Abort.
-            bulkhead.crash_reason = e
-            return None
-    return bulkhead_call
+            @capture_crashes_to_bulkhead_arg(return_if_crashed=Ellipsis)
+            def calculate_baz(self, other: Bulkhead) -> Result:
+                ...
+    """
+    def decorate(
+            method: Callable[Concatenate[_S, _B, _P], _RT]
+            ) -> Callable[Concatenate[_S, _B, _P], Union[_RT, _RF]]:
+        @wraps(method)
+        @_mark_bulkhead_call
+        def bulkhead_call(self: _S, bulkhead: _B, *args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
+            if bulkhead.crash_reason is not None:
+                # Bulkhead has already crashed. Abort.
+                return return_if_crashed
+            try:
+                return method(self, bulkhead, *args, **kwargs)  # cr-traceback: ignore
+            except BaseException as e:
+                # Print traceback to assist in debugging in the terminal,
+                # including ancestor callers of bulkhead_call
+                _print_bulkhead_exception(e)
+                
+                # Crash the bulkhead. Abort.
+                bulkhead.crash_reason = e
+                return return_if_crashed
+        return bulkhead_call
+    if method is None:
+        return decorate
+    else:
+        return decorate(method)
 
 
-def captures_crashes_to(bulkhead: Bulkhead) -> Callable[[Callable[_P, Optional[_R]]], Callable[_P, Optional[_R]]]:
+@overload
+def capture_crashes_to(
+        bulkhead: Bulkhead
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, None]]]:
+    ...
+
+@overload
+def capture_crashes_to(
+        bulkhead: Bulkhead,
+        return_if_crashed: _RF
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
+    ...
+
+def capture_crashes_to(
+        bulkhead: Bulkhead,
+        return_if_crashed=None  # _RF
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
     """
     A method that captures any raised exceptions to the specified Bulkhead,
     as the "crash reason" of the bulkhead.
     
     If the bulkhead was already crashed (with a non-None "crash reason") then
-    this method will immediately abort, returning None.
+    this method will immediately abort, returning `return_if_crashed`.
+    
+    Examples:
+        @capture_crashes_to(bulkhead)
+        def foo_did_bar() -> None:
+            ...
+        
+        @capture_crashes_to(bulkhead, return_if_crashed=Ellipsis)
+        def calculate_foo() -> Result:
+            ...
     """
-    def decorate(func: Callable[_P, Optional[_R]]) -> Callable[_P, Optional[_R]]:
+    def decorate(func: Callable[_P, _RT]) -> Callable[_P, Union[_RT, _RF]]:
         @wraps(func)
         @_mark_bulkhead_call
-        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
+        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
             if bulkhead.crash_reason is not None:
                 # Bulkhead has already crashed. Abort.
-                return None
+                return return_if_crashed
             try:
                 return func(*args, **kwargs)  # cr-traceback: ignore
             except BaseException as e:
@@ -119,7 +218,7 @@ def captures_crashes_to(bulkhead: Bulkhead) -> Callable[[Callable[_P, Optional[_
                 
                 # Crash the bulkhead. Abort.
                 bulkhead.crash_reason = e
-                return None
+                return return_if_crashed
         return bulkhead_call
     return decorate
 
@@ -133,6 +232,10 @@ def crashes_captured_to(bulkhead: Bulkhead, *, enter_if_crashed: bool=False) -> 
     If the bulkhead was already crashed (with a non-None "crash reason")
     when entering the context, the contents of the context will be skipped,
     unless enter_if_crashed=True.
+    
+    Example:
+        with crashes_captured_to(bulkhead, enter_if_crashed=True):
+            ...
     """
     if not enter_if_crashed:
         # NOTE: It's probably not actually possible to implement the
@@ -151,23 +254,57 @@ def crashes_captured_to(bulkhead: Bulkhead, *, enter_if_crashed: bool=False) -> 
         return
 
 
-def captures_crashes_to_stderr(func: Callable[_P, Optional[_R]]) -> Callable[_P, Optional[_R]]:
+@overload
+def capture_crashes_to_stderr(
+        func: Callable[_P, _RT]
+        ) -> Callable[_P, Union[_RT, None]]:
+    ...
+
+@overload
+def capture_crashes_to_stderr(
+        *, return_if_crashed: _RF
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
+    ...
+
+@overload
+def capture_crashes_to_stderr(
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, None]]]:
+    ...
+
+def capture_crashes_to_stderr(
+        func: Optional[Callable[_P, _RT]]=None,
+        *, return_if_crashed=None  # _RF
+        ):
     """
     A method that captures any raised exceptions, and prints them to stderr.
+    
+    Examples:
+        @capture_crashes_to_stderr
+        def foo(self) -> None:
+            ...
+        
+        @capture_crashes_to_stderr(return_if_crashed=Ellipsis)
+        def calculate_foo(self) -> Result:
+            ...
     """
-    @wraps(func)
-    @_mark_bulkhead_call
-    def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Optional[_R]:
-        try:
-            return func(*args, **kwargs)  # cr-traceback: ignore
-        except BaseException as e:
-            # Print traceback to assist in debugging in the terminal,
-            # including ancestor callers of bulkhead_call
-            _print_bulkhead_exception(e, is_error=True)
-            
-            # Abort.
-            return None
-    return bulkhead_call
+    def decorate(func: Callable[_P, _RT]) -> Callable[_P, Union[_RT, _RF]]:
+        @wraps(func)
+        @_mark_bulkhead_call
+        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
+            try:
+                return func(*args, **kwargs)  # cr-traceback: ignore
+            except BaseException as e:
+                # Print traceback to assist in debugging in the terminal,
+                # including ancestor callers of bulkhead_call
+                _print_bulkhead_exception(e, is_error=True)
+                
+                # Abort.
+                return return_if_crashed
+        return bulkhead_call
+    if func is None:
+        return decorate
+    else:
+        return decorate(func)
 
 
 def does_not_capture_crashes(func: Callable[_P, _R]) -> Callable[_P, _R]:
@@ -215,19 +352,30 @@ def run_bulkhead_call(
         **kwargs: _P.kwargs
         ) -> '_R':
     """
-    Calls a method marked as @captures_crashes_to*,
+    Calls a function marked as @capture_crashes_to*,
     which does not reraise exceptions from its interior.
     
-    Raises AssertionError if the specified method is not actually
-    marked with @captures_crashes_to*.
+    Raises AssertionError if the specified function is not actually
+    marked with @capture_crashes_to*.
     """
     ensure_is_bulkhead_call(bulkhead_call)
     return bulkhead_call(*args, **kwargs)  # cr-traceback: ignore
 
 
 def ensure_is_bulkhead_call(callable: Callable) -> None:
-    if getattr(callable, '_captures_crashes', False) != True:
-        raise AssertionError(f'Expected callable {callable!r} to be decorated with @captures_crashes_to*')
+    """
+    Raises AssertionError if the specified function is not actually
+    marked with @capture_crashes_to*.
+    """
+    if not is_bulkhead_call(callable):
+        raise AssertionError(f'Expected callable {callable!r} to be decorated with @capture_crashes_to*')
+
+
+def is_bulkhead_call(callable: Callable) -> bool:
+    """
+    Returns whether the specified function is marked with @capture_crashes_to*.
+    """
+    return getattr(callable, '_captures_crashes', False) == True
 
 
 # ------------------------------------------------------------------------------

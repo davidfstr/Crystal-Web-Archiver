@@ -1,5 +1,5 @@
 from crystal.download import HTTP_REQUEST_TIMEOUT
-from crystal.util.bulkheads import captures_crashes_to_stderr
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.xthreading import (
     bg_affinity, fg_affinity, start_thread_switching_coroutine, SwitchToThread,
 )
@@ -34,7 +34,7 @@ class UrlCleaner:
         start_thread_switching_coroutine(
             SwitchToThread.FOREGROUND,
             self._run(url_candidates),
-            captures_crashes_to_stderr,
+            capture_crashes_to_stderr,
         )
     
     @fg_affinity

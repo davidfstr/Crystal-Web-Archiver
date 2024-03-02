@@ -10,7 +10,7 @@ from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
-from crystal.util.bulkheads import captures_crashes_to_stderr
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.xthreading import bg_call_later
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import io
@@ -488,7 +488,7 @@ class MockHttpServer:
         address = ('', self._port)
         self._server = HTTPServer(address, RequestHandler)
         
-        @captures_crashes_to_stderr
+        @capture_crashes_to_stderr
         def bg_task() -> None:
             try:
                 self._server.serve_forever()
