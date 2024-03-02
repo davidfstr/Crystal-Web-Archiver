@@ -78,14 +78,6 @@ class LogDrawer(wx.Frame):
         self._leading_plus_trailing_offset = self._INITIAL_LEADING_PLUS_TRAILING_OFFSET
         self._last_height = None  # type: Optional[int]
         self._height_before_closed = None  # type: Optional[int]
-        # 1. On Linux don't show the drawer in a separate window because
-        #    Linux window managers may ignore requests to set the drawer's
-        #    exact position or size when it's in a separate window
-        # 2. On macOS don't show the drawer in a separate window because
-        #    the drawer window appears detatched when using Mission Control
-        # 3. On Windows don't show the drawer in a separate window for
-        #    consistency with other operating systems
-        self._keep_self_maximized = True
         self._parent_will_be_maximized_after_next_resize = False
         self._parent_maximized_size = None
         self._parent_content_container = None  # non-None iff self maximized
@@ -146,10 +138,7 @@ class LogDrawer(wx.Frame):
             maxH=-1)
         
         # Bind event handlers
-        bind(self, wx.EVT_SHOW, self._on_show_or_hide)
-        bind(self, wx.EVT_ACTIVATE, self._on_activate_or_deactivate)
         bind(self.Parent, wx.EVT_ACTIVATE, self._on_parent_activate_or_deactivate)
-        bind(self, wx.EVT_SIZE, self._on_resize)
         bind(self.Parent, wx.EVT_MOVE, self._on_parent_reshaped)
         bind(self.Parent, wx.EVT_SIZE, self._on_parent_reshaped)
         bind(self._splitter, wx.EVT_LEFT_DOWN, self._on_splitter_mouse_down)
@@ -177,7 +166,7 @@ class LogDrawer(wx.Frame):
                 hasattr(self.Parent, 'IsFullScreen') and self.Parent.IsFullScreen())
             
             # Grow parent height to encompass drawer's initial height
-            if self._keep_self_maximized and not parent_already_maximized:
+            if not parent_already_maximized:
                 self.Parent.SetSize(
                     x=wx.DefaultCoord,
                     y=wx.DefaultCoord,
@@ -185,14 +174,9 @@ class LogDrawer(wx.Frame):
                     height=self.Parent.Size.Height + self.Size.Height,
                     sizeFlags=wx.SIZE_USE_EXISTING)
             
-            # Maximize self initially if parent is already maximized,
-            # or if we're always maximized
-            if self._keep_self_maximized or parent_already_maximized:
-                self._on_parent_did_maximize(force_maximize_self=True)
-                self.Parent.SendSizeEvent()
-            else:
-                # Show (un-maximized) self, now that it is finalized
-                self.Show()
+            # Maximize self initially
+            self._on_parent_did_maximize(force_maximize_self=True)
+            self.Parent.SendSizeEvent()
     
     def close(self) -> None:
         self._resized_recently_timer.Stop()
@@ -348,57 +332,6 @@ class LogDrawer(wx.Frame):
             assert not self.is_open
             self._height_before_closed = old_height_before_closed  # restore
     
-    def _unmaximize(self) -> None:
-        assert self._parent_content_container is not None  # self maximized
-        
-        was_closed = not self.is_open  # capture
-        
-        self._is_unmaximizing = True
-        
-        # Move log from parent to drawer
-        if True:
-            log_drawer_content = self._parent_content_container.Window2
-            log_drawer_content_height = log_drawer_content.Size.Height  # capture
-            
-            self._parent_content_container.Unsplit()
-            log_drawer_content.Reparent(self._splitter)
-            log_drawer_content.Show()
-            self._splitter.SplitHorizontally(
-                log_drawer_content,
-                self._splitter.Window2,
-                -1)
-            self._splitter.SendSizeEvent()
-            
-            # Set height of log drawer such that log_drawer_content
-            # remains at height log_drawer_content_height
-            delta_height = log_drawer_content_height - log_drawer_content.Size.Height
-            self.SetSize(
-                x=wx.DefaultCoord,
-                y=wx.DefaultCoord,
-                width=wx.DefaultCoord,
-                height=self.Size.Height + delta_height,
-                sizeFlags=wx.SIZE_USE_EXISTING)
-            
-            # NOTE: During a "will unfullscreen" event on macOS,
-            #       this Show() may trigger _on_resize() immediately
-            #       during the show.
-            self.Show()
-        
-        # Uninstall wx.SplitterWindow from parent
-        if True:
-            self._parent_content_container.Window1.Reparent(self.Parent)
-            self._parent_content_container.Destroy()
-            self._parent_content_container = None
-            self.Parent.SendSizeEvent()
-        
-        if was_closed and self.is_open:
-            old_height_before_closed = self._height_before_closed  # save
-            self._toggle_open()
-            assert not self.is_open
-            self._height_before_closed = old_height_before_closed  # restore
-        
-        self._is_unmaximizing = False
-    
     @property
     def _is_maximized(self) -> bool:
         return self._parent_content_container is not None
@@ -408,37 +341,6 @@ class LogDrawer(wx.Frame):
         return [c for c in parent.Children if not isinstance(c, wx.TopLevelWindow)]
     
     # === Events ===
-    
-    def _on_show_or_hide(self, event: wx.ShowEvent) -> None:
-        if _WindowPairingStrategy.get() == _WindowPairingStrategy.FLOAT_AND_RAISE_ON_ACTIVATE:
-            if event.Show:  # show
-                # Raise parent window to top of window hierarchy (Z-order)
-                wx.CallAfter(lambda: self.Parent.Raise())
-                
-                # Do NOT raise drawer to top of window hierarchy (Z-order)
-                # in next activate event
-                self._ignore_next_activate = True
-        
-        # Continue processing event in the normal fashion
-        event.Skip()
-    
-    def _on_activate_or_deactivate(self, event: wx.ActivateEvent) -> None:
-        if _WindowPairingStrategy.get() == _WindowPairingStrategy.FLOAT_AND_RAISE_ON_ACTIVATE:
-            if event.Active:  # activate
-                if self._ignore_next_activate:
-                    self._ignore_next_activate = False
-                else:
-                    # Raise parent window to top of window hierarchy (Z-order)
-                    # but keep drawer focused
-                    assert not self.Parent.HasFlag(wx.STAY_ON_TOP)
-                    self.Parent.ToggleWindowStyle(wx.STAY_ON_TOP)
-                    self.Parent.ToggleWindowStyle(wx.STAY_ON_TOP)
-                    
-                    # Raise drawer to top of window hierarchy (Z-order)
-                    self.Raise()
-        
-        # Continue processing event in the normal fashion
-        event.Skip()
     
     def _on_parent_activate_or_deactivate(self, event: wx.ActivateEvent) -> None:
         if _WindowPairingStrategy.get() == _WindowPairingStrategy.FLOAT_AND_RAISE_ON_ACTIVATE:
@@ -451,68 +353,6 @@ class LogDrawer(wx.Frame):
                 
                 # Raise parent window to top of window hierarchy (Z-order)
                 self.Parent.Raise()
-        
-        # Continue processing event in the normal fashion
-        event.Skip()
-    
-    # Called continuously while the user drags the
-    # corner/edge of this drawer to resize it.
-    def _on_resize(self, event: wx.SizeEvent) -> None:
-        if self._is_unmaximizing:
-            return
-        
-        # Track height of drawer before it was closed
-        if True:
-            mouse_state = wx.GetMouseState()
-            if mouse_state.LeftIsDown():
-                if self._height_before_closed is None:
-                    self._height_before_closed = self._last_height  # capture
-            else:
-                if self.is_open:
-                    self._height_before_closed = None
-            self._last_height = event.Size.Height  # capture
-            
-            # Restart timer if not already running
-            self._resized_recently_timer.Start()
-        
-        # Constrain resize request
-        y = self.Position.y  # cache
-        desired_y = self._desired_y  # cache
-        parent_width = self.Parent.Size.Width  # cache
-        if y == desired_y:
-            # Dragging any edge/corner except NW, N, or NE
-            
-            # Reshape drawer such that
-            # - drawer remains centered, and
-            # - drawer remains positioned below parent's bottom edge
-            desired_width = min(parent_width, self.Size.Width)
-            self.SetSize(
-                x=self._desired_x(desired_width),
-                y=self._desired_y,
-                width=desired_width,
-                height=wx.DefaultCoord,
-                sizeFlags=wx.SIZE_USE_EXISTING)
-            self._leading_plus_trailing_offset = parent_width - desired_width  # capture
-        else:
-            # Dragging NW, N, or NE edge/corner
-            
-            # Reshape drawer such that
-            # - height remains fixed,
-            # - drawer remains positioned below parent's bottom edge, and
-            # - drawer remains centered
-            desired_width = min(parent_width, self.Size.Width)
-            desired_height = (y + self.Size.Height) - desired_y
-            self.SetSize(
-                x=self._desired_x(desired_width),
-                y=desired_y,
-                width=desired_width,
-                height=desired_height,
-                sizeFlags=wx.SIZE_USE_EXISTING)
-            self._leading_plus_trailing_offset = parent_width - desired_width  # capture
-        
-        # Maintain scroll to bottom if applicable
-        if self._was_scrolled_to_bottom:
-            self._scroll_to_bottom()
         
         # Continue processing event in the normal fashion
         event.Skip()
@@ -623,13 +463,11 @@ class LogDrawer(wx.Frame):
     
     def _on_parent_did_maximize(self, *, force_maximize_self: bool=False) -> None:
         self._parent_maximized_size = self.Parent.Size
-        if not self._keep_self_maximized or force_maximize_self:
+        if force_maximize_self:
             self._maximize()
     
     def _on_parent_unmaximized(self) -> None:
         self._parent_maximized_size = None
-        if not self._keep_self_maximized:
-            self._unmaximize()
     
     def _on_parent_will_fullscreen_or_unfullscreen(self, event) -> None:
         if event.IsFullScreen():  # fullscreen
