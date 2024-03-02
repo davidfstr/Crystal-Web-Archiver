@@ -352,10 +352,10 @@ def run_bulkhead_call(
         **kwargs: _P.kwargs
         ) -> '_R':
     """
-    Calls a method marked as @capture_crashes_to*,
+    Calls a function marked as @capture_crashes_to*,
     which does not reraise exceptions from its interior.
     
-    Raises AssertionError if the specified method is not actually
+    Raises AssertionError if the specified function is not actually
     marked with @capture_crashes_to*.
     """
     ensure_is_bulkhead_call(bulkhead_call)
@@ -363,8 +363,19 @@ def run_bulkhead_call(
 
 
 def ensure_is_bulkhead_call(callable: Callable) -> None:
-    if getattr(callable, '_captures_crashes', False) != True:
+    """
+    Raises AssertionError if the specified function is not actually
+    marked with @capture_crashes_to*.
+    """
+    if not is_bulkhead_call(callable):
         raise AssertionError(f'Expected callable {callable!r} to be decorated with @capture_crashes_to*')
+
+
+def is_bulkhead_call(callable: Callable) -> bool:
+    """
+    Returns whether the specified function is marked with @capture_crashes_to*.
+    """
+    return getattr(callable, '_captures_crashes', False) == True
 
 
 # ------------------------------------------------------------------------------
