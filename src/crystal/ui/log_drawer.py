@@ -246,35 +246,18 @@ class LogDrawer(wx.Frame):
         """Toggles whether this drawer is open or closed."""
         if self.is_open:
             # Close the drawer
-            if self._parent_content_container is None:  # self unmaximized
-                self._height_before_closed = self.Size.Height  # capture
-                self.SetSize(
-                    x=wx.DefaultCoord,
-                    y=wx.DefaultCoord,
-                    width=wx.DefaultCoord,
-                    height=self._minimum_height,
-                    sizeFlags=wx.SIZE_USE_EXISTING)
-            else:  # self maximized
-                self._height_before_closed = self._parent_content_container.Window2.Size.Height
-                height_after_closed = self._minimum_content_height
-                self._parent_content_container.SashPosition += \
-                    self._height_before_closed - height_after_closed
+            assert self._parent_content_container is not None  # self maximized
+            self._height_before_closed = self._parent_content_container.Window2.Size.Height
+            height_after_closed = self._minimum_content_height
+            self._parent_content_container.SashPosition += \
+                self._height_before_closed - height_after_closed
         else:
             # Open the drawer
-            if self._parent_content_container is None:  # self unmaximized
-                height_before_closed = self._height_before_closed or self._preferred_height
-                self.SetSize(
-                    x=wx.DefaultCoord,
-                    y=wx.DefaultCoord,
-                    width=wx.DefaultCoord,
-                    height=height_before_closed,
-                    sizeFlags=wx.SIZE_USE_EXISTING)
-                self._height_before_closed = None
-            else:  # self maximized
-                height_after_closed = self._minimum_content_height
-                self._parent_content_container.SashPosition -= \
-                    self._height_before_closed - height_after_closed
-                self._height_before_closed = None
+            assert self._parent_content_container is not None  # self maximized
+            height_after_closed = self._minimum_content_height
+            self._parent_content_container.SashPosition -= \
+                self._height_before_closed - height_after_closed
+            self._height_before_closed = None
     
     def _maximize(self) -> None:
         assert self._parent_content_container is None  # self unmaximized
