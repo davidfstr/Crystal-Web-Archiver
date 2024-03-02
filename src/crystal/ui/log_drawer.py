@@ -78,10 +78,14 @@ class LogDrawer(wx.Frame):
         self._leading_plus_trailing_offset = self._INITIAL_LEADING_PLUS_TRAILING_OFFSET
         self._last_height = None  # type: Optional[int]
         self._height_before_closed = None  # type: Optional[int]
-        # On Linux don't show the drawer in a separate window because
-        # Linux window managers may ignore requests to set the drawer's
-        # exact position or size when it's in a separate window
-        self._keep_self_maximized = is_linux()
+        # 1. On Linux don't show the drawer in a separate window because
+        #    Linux window managers may ignore requests to set the drawer's
+        #    exact position or size when it's in a separate window
+        # 2. On macOS don't show the drawer in a separate window because
+        #    the drawer window appears detatched when using Mission Control
+        # 3. On Windows don't show the drawer in a separate window for
+        #    consistency with other operating systems
+        self._keep_self_maximized = True
         self._parent_will_be_maximized_after_next_resize = False
         self._parent_maximized_size = None
         self._parent_content_container = None  # non-None iff self maximized
