@@ -26,6 +26,7 @@ Release Notes ⋮
         * Update the selected node in the Entity Tree intelligently after
           creating or forgetting a root URL or a group.
         * Allow resizing.
+        * Ignore leading and trailing whitespace in URLs and URL patterns.
     * Main Window
         * Prevent resizing the window to be too small.
     * Use ⚓️ and 📁 icons consistently in the UI to refer to 

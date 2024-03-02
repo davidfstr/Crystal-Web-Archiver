@@ -377,7 +377,7 @@ class NewGroupDialog:
     # === Operations ===
     
     def _update_preview_urls(self) -> None:
-        url_pattern = self.pattern_field.GetValue()
+        url_pattern = self.pattern_field.GetValue().strip()
         url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         literal_prefix = ResourceGroup.literal_prefix_for_url_pattern(url_pattern)
         
@@ -421,7 +421,7 @@ class NewGroupDialog:
     
     def _on_ok(self) -> None:
         name = self.name_field.Value
-        url_pattern = self.pattern_field.Value
+        url_pattern = self.pattern_field.Value.strip()
         if len(url_pattern) == 0:
             dialog = wx.MessageDialog(
                 self.dialog,

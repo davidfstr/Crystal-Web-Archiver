@@ -22,7 +22,9 @@ import wx
 
 # === Test: Create & Delete Standalone ===
 
-async def test_can_create_group_with_source(*, with_source: bool=True) -> None:
+async def test_can_create_group_with_source(
+        *, with_source: bool=True,
+        add_surrounding_whitespace: bool=False) -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -68,7 +70,11 @@ async def test_can_create_group_with_source(*, with_source: bool=True) -> None:
                 assert ngd.pattern_field.HasFocus  # default focused field
                 
                 # Input new URL pattern with wildcard, to match comics
-                ngd.pattern_field.Value = comic_pattern
+                ngd.pattern_field.Value = (
+                    (' ' if add_surrounding_whitespace else '') +
+                    comic_pattern +
+                    (' ' if add_surrounding_whitespace else '')
+                )
                 
                 # Ensure preview members show the new matching URLs (i.e. none)
                 member_urls = [
@@ -144,6 +150,10 @@ async def test_can_forget_group() -> None:
 @skip('not yet automated')
 async def test_when_forget_group_then_related_root_urls_and_revisions_are_not_deleted() -> None:
     pass
+
+
+async def test_given_url_pattern_with_surrounding_whitespace_when_create_group_then_surrounding_whitespace_ignored() -> None:
+    await test_can_create_group_with_source(add_surrounding_whitespace=True)
 
 
 # === Test: Create & Delete from Links ===

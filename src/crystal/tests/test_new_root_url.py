@@ -28,7 +28,9 @@ import wx
 
 # === Test: Create & Delete Standalone ===
 
-async def test_can_create_root_url(*, ensure_revisions_not_deleted: bool=False) -> None:
+async def test_can_create_root_url(
+        *, ensure_revisions_not_deleted: bool=False,
+        add_surrounding_whitespace: bool=False) -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -50,8 +52,14 @@ async def test_can_create_root_url(*, ensure_revisions_not_deleted: bool=False) 
                 #assert None == ngd.source
                 assert nud.url_field.HasFocus  # default focused field
                 
+                SetFocus(nud.name_field, None)
                 nud.name_field.Value = 'Home'
-                nud.url_field.Value = home_url
+                SetFocus(nud.url_field, nud.name_field)
+                nud.url_field.Value = (
+                    (' ' if add_surrounding_whitespace else '') +
+                    home_url +
+                    (' ' if add_surrounding_whitespace else '')
+                )
                 await nud.ok()
                 
                 # Ensure appearance is correct
@@ -108,6 +116,10 @@ async def test_can_forget_root_url() -> None:
 
 async def test_when_forget_root_url_then_revisions_of_that_url_are_not_deleted() -> None:
     await test_can_create_root_url(ensure_revisions_not_deleted=True)
+
+
+async def test_given_url_with_surrounding_whitespace_when_create_root_url_then_surrounding_whitespace_ignored() -> None:
+    await test_can_create_root_url(add_surrounding_whitespace=True)
 
 
 # === Test: Create & Delete from Links ===

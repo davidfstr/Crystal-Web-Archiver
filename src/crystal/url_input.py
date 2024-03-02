@@ -94,7 +94,9 @@ def _candidate_urls_from_user_input(url_input: str) -> List[str]:
     * If additionally no www. domain prefix is given,
       try first without the prefix then with the prefix.
     """
-    if url_input.strip() == '':
+    url_input = url_input.strip()  # remove leading and trailing whitespace
+    
+    if url_input == '':
         return [url_input]
     
     url_parts = urlparse(url_input)
