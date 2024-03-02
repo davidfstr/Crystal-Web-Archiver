@@ -128,18 +128,11 @@ class EntityTree(Bulkhead):
     
     @property
     def selected_entity(self) -> Optional[NodeEntity]:
-        return self.selected_entity_pair[0]
-    
-    @property
-    def selected_entity_pair(self) -> Tuple[Optional[NodeEntity], Optional[NodeEntity]]:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
-            return (None, None)
+            return None
         selected_node = Node.for_node_view(selected_node_view)
-        return (
-            selected_node.entity,
-            selected_node.related_entity,
-        )
+        return selected_node.entity
     
     @property
     def source_of_selection(self) -> ResourceGroupSource:
@@ -428,13 +421,6 @@ class Node(Bulkhead):
     def entity(self) -> Optional[NodeEntity]:
         """
         The entity represented by this node, or None if not applicable.
-        """
-        return None
-    
-    @property
-    def related_entity(self) -> Optional[NodeEntity]:
-        """
-        The entity related to this node, or None if not applicable.
         """
         return None
     
@@ -758,6 +744,7 @@ class _ResourceNode(Node):
     def _entity_tooltip(self) -> str:  # abstract
         raise NotImplementedError()
     
+    @override
     @property
     def entity(self) -> NodeEntity:
         return self.resource
@@ -1011,6 +998,7 @@ class RootResourceNode(_ResourceNode):
         else:
             return '%s' % (display_url,)
     
+    @override
     @property
     def entity(self) -> RootResource:
         return self.root_resource
@@ -1050,6 +1038,7 @@ class NormalResourceNode(_ResourceNode):
         project = self.resource.project
         return '%s' % project.get_display_url(self.resource.url)
     
+    @override
     @property
     def entity(self) -> Resource:
         return self.resource
@@ -1098,6 +1087,7 @@ class LinkedResourceNode(_ResourceNode):
         else:
             return '%s' % link.type_title
     
+    @override
     @property
     def entity(self) -> Resource:
         return self.resource
@@ -1226,6 +1216,7 @@ class ResourceGroupNode(_GroupedNode):
         else:
             return '%s' % (display_url,)
     
+    @override
     @property
     def entity(self) -> ResourceGroup:
         return self.resource_group
@@ -1379,15 +1370,9 @@ class GroupedLinkedResourcesNode(_GroupedNode):
                 len(self.children),
                 '' if len(self.children) == 1 else 's')
     
-    #override
+    @override
     @property
     def entity(self) -> Optional[NodeEntity]:
-        # This node does NOT represent a ResourceGroup despite being related to one.
-        return None
-    
-    #override
-    @property
-    def related_entity(self) -> Optional[NodeEntity]:
         # This node groups together various _ResourceNode entities that
         # are in the same ResourceGroup
         return self.resource_group

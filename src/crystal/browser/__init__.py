@@ -378,13 +378,12 @@ class MainWindow:
     
     @property
     def _suggested_url_or_url_pattern_for_selection(self) -> Optional[str]:
-        selected_entity_pair = self.entity_tree.selected_entity_pair
-        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        selected_entity = self.entity_tree.selected_entity
         
-        if isinstance(selected_or_related_entity, (Resource, RootResource)):
-            return selected_or_related_entity.resource.url
-        elif isinstance(selected_or_related_entity, ResourceGroup):
-            return selected_or_related_entity.url_pattern
+        if isinstance(selected_entity, (Resource, RootResource)):
+            return selected_entity.resource.url
+        elif isinstance(selected_entity, ResourceGroup):
+            return selected_entity.url_pattern
         else:
             return self.project.default_url_prefix
     
@@ -543,12 +542,11 @@ class MainWindow:
     # === Entity Pane: Other Commands ===
     
     def _on_edit_entity(self, event) -> None:
-        selected_entity_pair = self.entity_tree.selected_entity_pair
-        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
-        assert selected_or_related_entity is not None
+        selected_entity = self.entity_tree.selected_entity
+        assert selected_entity is not None
         
-        if isinstance(selected_or_related_entity, RootResource):
-            rr = selected_or_related_entity
+        if isinstance(selected_entity, RootResource):
+            rr = selected_entity
             NewRootUrlDialog(
                 self._frame,
                 partial(self._on_edit_root_url_dialog_ok, rr),
@@ -557,8 +555,8 @@ class MainWindow:
                 initial_name=rr.name,
                 is_edit=True,
             )
-        elif isinstance(selected_or_related_entity, ResourceGroup):
-            rg = selected_or_related_entity
+        elif isinstance(selected_entity, ResourceGroup):
+            rg = selected_entity
             try:
                 NewGroupDialog(
                     self._frame,
@@ -577,11 +575,10 @@ class MainWindow:
             raise AssertionError()
     
     def _on_forget_entity(self, event) -> None:
-        selected_entity_pair = self.entity_tree.selected_entity_pair
-        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
-        assert selected_or_related_entity is not None
+        selected_entity = self.entity_tree.selected_entity
+        assert selected_entity is not None
         
-        selected_or_related_entity.delete()
+        selected_entity.delete()
     
     def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
@@ -717,17 +714,15 @@ class MainWindow:
     # === Entity Pane: Events ===
     
     def _on_selected_entity_changed(self, event: wx.TreeEvent) -> None:
-        selected_entity_pair = self.entity_tree.selected_entity_pair  # cache
-        selected_entity = selected_entity_pair[0]
-        selected_or_related_entity = selected_entity_pair[0] or selected_entity_pair[1]
+        selected_entity = self.entity_tree.selected_entity  # cache
         
         readonly = self._readonly  # cache
         self._edit_action.enabled = (
             (not readonly) and
-            isinstance(selected_or_related_entity, (ResourceGroup, RootResource)))
+            isinstance(selected_entity, (ResourceGroup, RootResource)))
         self._forget_action.enabled = (
             (not readonly) and
-            isinstance(selected_or_related_entity, (ResourceGroup, RootResource)))
+            isinstance(selected_entity, (ResourceGroup, RootResource)))
         self._download_action.enabled = (
             (not readonly) and
             selected_entity is not None)

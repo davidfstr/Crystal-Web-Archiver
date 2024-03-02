@@ -247,6 +247,13 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 assert len(grouped_subresources_ti.Children) >= 2  # contains last comic too
                 assert comic1_ti.IsSelected()
             
+            # Download the group to download the links
+            if True:
+                grouped_subresources_ti.SelectItem()
+                assert mw.download_button.IsEnabled()
+                await mw.click_download_button()
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+            
             # Forget the group to unbundle the links
             if True:
                 grouped_subresources_ti.SelectItem()
@@ -257,6 +264,11 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 # 2. Ensure that first unbundled link is selected immediately after forgetting the group
                 comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
                 assert comic1_ti.IsSelected()
+
+
+@skip('covered by: test_given_resource_node_with_multiple_link_children_matching_url_pattern_can_create_new_group_to_bundle_those_links_together')
+async def test_given_resource_node_with_multiple_link_children_bundled_as_a_group_can_easily_download_the_group_to_download_the_links() -> None:
+    pass
 
 
 @skip('covered by: test_given_resource_node_with_multiple_link_children_matching_url_pattern_can_create_new_group_to_bundle_those_links_together')
