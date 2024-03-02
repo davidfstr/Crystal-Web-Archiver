@@ -140,18 +140,10 @@ class LogDrawer(wx.Frame):
         # Bind event handlers
         bind(self.Parent, wx.EVT_MOVE, self._on_parent_reshaped)
         bind(self.Parent, wx.EVT_SIZE, self._on_parent_reshaped)
-        bind(self._splitter, wx.EVT_LEFT_DOWN, self._on_splitter_mouse_down)
-        bind(self._splitter, wx.EVT_MOTION, self._on_splitter_mouse_motion)
-        bind(self._splitter, wx.EVT_LEFT_UP, self._on_splitter_mouse_up)
-        bind(self._splitter, wx.EVT_SPLITTER_SASH_POS_CHANGING, self._on_splitter_sash_position_changing)
-        bind(self._splitter, wx.EVT_SPLITTER_DCLICK, self._on_splitter_double_click)
         bind(self.Parent, wx.EVT_MAXIMIZE, self._on_parent_will_maximize)
         if hasattr(wx, 'EVT_FULLSCREEN'):  # wxPython >=4.2.1
             bind(self.Parent, wx.EVT_FULLSCREEN, self._on_parent_will_fullscreen_or_unfullscreen)
         bind(self._textarea, wx.EVT_SCROLLWIN, self._on_scroll)
-        
-        # Initialize event state
-        self._on_splitter_mouse_up()
         
         # Initialize "resized recently" timer
         self._resized_recently_timer = wx.Timer(self)
@@ -370,42 +362,6 @@ class LogDrawer(wx.Frame):
         
         # Continue processing event in the normal fashion
         event.Skip()
-    
-    def _on_splitter_mouse_down(self, event: wx.MouseEvent) -> None:
-        self._mouse_down_y = event.Y  # capture
-        self._mouse_down_height = self.Size.Height  # capture
-        
-        # Continue processing event in the normal fashion
-        event.Skip()
-    
-    def _on_splitter_mouse_motion(self, event: wx.MouseEvent) -> None:
-        if self._mouse_down_y is not None:
-            new_height = max(
-                self._mouse_down_height + (event.Y - self._mouse_down_y),
-                self._minimum_height)
-            
-            # Alter the drawer height
-            self.SetSize(
-                x=wx.DefaultCoord,
-                y=wx.DefaultCoord,
-                width=wx.DefaultCoord,
-                height=new_height,
-                sizeFlags=wx.SIZE_USE_EXISTING)
-        
-        # Continue processing event in the normal fashion
-        event.Skip()
-    
-    def _on_splitter_mouse_up(self, event: Optional[wx.MouseEvent]=None) -> None:
-        self._mouse_down_y = None
-        self._mouse_down_height = None
-        
-        if event is not None:
-            # Continue processing event in the normal fashion
-            event.Skip()
-    
-    def _on_splitter_sash_position_changing(self, event: wx.SplitterEvent) -> None:
-        # Veto sash position change
-        event.SetSashPosition(-1)
     
     def _on_splitter_double_click(self, event: wx.SplitterEvent) -> None:
         self._toggle_open()
