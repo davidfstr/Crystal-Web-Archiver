@@ -56,6 +56,15 @@ Release Notes ⋮
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,
       without introducing an invalid `<script>` tag.
+    * The log showing HTTP requests made to the served project now always
+      displays inside the main window, rather than attempting to appear as an
+      attached drawer on macOS and Windows.
+        * Drawers are not a concept not natively supported by any OS except
+          macOS, and even there they are deprecated.
+        * Drawers have never worked properly on Linux, due to Wayland not
+          providing APIs to position windows precisely relative to each other.
+        * The old drawer mode didn't stay attached to the main window properly
+          when using Mission Control on macOS.
 
 * Error handling improvements
     * If a task crashes, show it as crashed in the UI and allow it to be dismissed.
