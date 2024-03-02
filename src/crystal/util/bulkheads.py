@@ -76,7 +76,7 @@ def capture_crashes_to_self(
                 ...
             
             @capture_crashes_to_self(return_if_crashed=Ellipsis)
-            def calculate_foo(self) -> Union[Result, EllipsisType]:
+            def calculate_foo(self) -> Result:
                 ...
     """
     def decorate(
@@ -134,13 +134,13 @@ def capture_crashes_to_bulkhead_arg(
     this method will immediately abort, returning `return_if_crashed`.
     
     Examples:
-        class MyBulkhead(Bulkhead):
+        class MyClass:
             @capture_crashes_to_bulkhead_arg
             def other_foo_did_bar(self, other: Bulkhead) -> None:
                 ...
             
             @capture_crashes_to_bulkhead_arg(return_if_crashed=Ellipsis)
-            def calculate_baz(self, other: Bulkhead) -> Union[Result, EllipsisType]:
+            def calculate_baz(self, other: Bulkhead) -> Result:
                 ...
     """
     def decorate(
@@ -199,7 +199,7 @@ def capture_crashes_to(
             ...
         
         @capture_crashes_to(bulkhead, return_if_crashed=Ellipsis)
-        def calculate_foo() -> Union[Result, EllipsisType]:
+        def calculate_foo() -> Result:
             ...
     """
     def decorate(func: Callable[_P, _RT]) -> Callable[_P, Union[_RT, _RF]]:
@@ -284,7 +284,7 @@ def capture_crashes_to_stderr(
             ...
         
         @capture_crashes_to_stderr(return_if_crashed=Ellipsis)
-        def calculate_foo(self) -> Union[Result, EllipsisType]:
+        def calculate_foo(self) -> Result:
             ...
     """
     def decorate(func: Callable[_P, _RT]) -> Callable[_P, Union[_RT, _RF]]:
