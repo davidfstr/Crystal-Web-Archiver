@@ -138,7 +138,6 @@ class LogDrawer(wx.Frame):
             maxH=-1)
         
         # Bind event handlers
-        bind(self.Parent, wx.EVT_ACTIVATE, self._on_parent_activate_or_deactivate)
         bind(self.Parent, wx.EVT_MOVE, self._on_parent_reshaped)
         bind(self.Parent, wx.EVT_SIZE, self._on_parent_reshaped)
         bind(self._splitter, wx.EVT_LEFT_DOWN, self._on_splitter_mouse_down)
@@ -146,7 +145,6 @@ class LogDrawer(wx.Frame):
         bind(self._splitter, wx.EVT_LEFT_UP, self._on_splitter_mouse_up)
         bind(self._splitter, wx.EVT_SPLITTER_SASH_POS_CHANGING, self._on_splitter_sash_position_changing)
         bind(self._splitter, wx.EVT_SPLITTER_DCLICK, self._on_splitter_double_click)
-        bind(self.Parent, wx.EVT_ICONIZE, self._on_parent_minimized_or_unminimized)
         bind(self.Parent, wx.EVT_MAXIMIZE, self._on_parent_will_maximize)
         if hasattr(wx, 'EVT_FULLSCREEN'):  # wxPython >=4.2.1
             bind(self.Parent, wx.EVT_FULLSCREEN, self._on_parent_will_fullscreen_or_unfullscreen)
@@ -342,21 +340,6 @@ class LogDrawer(wx.Frame):
     
     # === Events ===
     
-    def _on_parent_activate_or_deactivate(self, event: wx.ActivateEvent) -> None:
-        if _WindowPairingStrategy.get() == _WindowPairingStrategy.FLOAT_AND_RAISE_ON_ACTIVATE:
-            if event.Active:  # activate
-                # Raise drawer to top of window hierarchy (Z-order)
-                # but keep parent window focused
-                assert not self.HasFlag(wx.STAY_ON_TOP)
-                self.ToggleWindowStyle(wx.STAY_ON_TOP)
-                self.ToggleWindowStyle(wx.STAY_ON_TOP)
-                
-                # Raise parent window to top of window hierarchy (Z-order)
-                self.Parent.Raise()
-        
-        # Continue processing event in the normal fashion
-        event.Skip()
-    
     def _on_resize_when_maximized(self, event: wx.SplitterEvent) -> None:
         # Maintain scroll to bottom if applicable
         if self._was_scrolled_to_bottom:
@@ -374,9 +357,6 @@ class LogDrawer(wx.Frame):
             # Stop waiting for mouse up
             self._resized_recently_timer.Stop()
     
-    # Called continuously while the user either
-    # 1. drags the corner/edge of this drawer's parent to resize it, or
-    # 2. drags the title bar of this drawer's parent to reposition it.
     def _on_parent_reshaped(self, event: Union[wx.MoveEvent, wx.SizeEvent]) -> None:
         if isinstance(event, wx.SizeEvent):
             if self._parent_will_be_maximized_after_next_resize:
@@ -387,18 +367,6 @@ class LogDrawer(wx.Frame):
                     self._parent_maximized_size = self.Parent.Size
             elif self._parent_maximized_size is not None and self._parent_maximized_size != event.Size:
                 self._on_parent_unmaximized()
-        
-        # Reshape drawer such that
-        # - (leading + trailing offset) is maintained,
-        # - drawer remains centered, and
-        # - drawer remains positioned below parent's bottom edge
-        desired_width = self.Parent.Size.Width - self._leading_plus_trailing_offset
-        self.SetSize(
-            x=self._desired_x(desired_width),
-            y=self._desired_y,
-            width=desired_width,
-            height=wx.DefaultCoord,
-            sizeFlags=wx.SIZE_USE_EXISTING)
         
         # Continue processing event in the normal fashion
         event.Skip()
@@ -441,18 +409,6 @@ class LogDrawer(wx.Frame):
     
     def _on_splitter_double_click(self, event: wx.SplitterEvent) -> None:
         self._toggle_open()
-    
-    def _on_parent_minimized_or_unminimized(self, event: wx.IconizeEvent) -> None:
-        if is_mac_os():  # macOS 10.14
-            if event.IsIconized():  # minimized
-                self.Hide()
-            else:  # un-minimized
-                self.Show()
-        else:  # Windows 7, default
-            pass
-        
-        # Continue processing event in the normal fashion
-        event.Skip()
     
     def _on_parent_will_maximize(self, event: Optional[wx.MaximizeEvent]=None) -> None:
         self._parent_will_be_maximized_after_next_resize = True
