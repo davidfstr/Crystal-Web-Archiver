@@ -128,11 +128,18 @@ class EntityTree(Bulkhead):
     
     @property
     def selected_entity(self) -> Optional[NodeEntity]:
+        selected_node = self.selected_node
+        if selected_node is None:
+            return None
+        return selected_node.entity
+    
+    @property
+    def selected_node(self) -> Optional[Node]:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
         selected_node = Node.for_node_view(selected_node_view)
-        return selected_node.entity
+        return selected_node
     
     @property
     def source_of_selection(self) -> ResourceGroupSource:
@@ -272,7 +279,7 @@ class EntityTree(Bulkhead):
         
         # Create popup menu
         menu = wx.Menu()
-        for mi in self._create_change_url_prefix_menuitems_for(node, menu_type='popup'):
+        for mi in self.create_change_url_prefix_menuitems_for(node, menu_type='popup'):
             menu.Append(mi)
         bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
         
@@ -280,8 +287,8 @@ class EntityTree(Bulkhead):
         self.peer.PopupMenu(menu)
         menu.Destroy()
     
-    def _create_change_url_prefix_menuitems_for(self,
-            node: Node,
+    def create_change_url_prefix_menuitems_for(self,
+            node: Optional[Node],
             *, menu_type: Literal['popup', 'top_level']
             ) -> List[wx.MenuItem]:
         menuitems = []  # type: List[wx.MenuItem]
@@ -298,9 +305,9 @@ class EntityTree(Bulkhead):
                 menuitems.append(wx.MenuItem(
                     None,
                     self._ID_SET_DOMAIN,
-                    f'Set As Default URL Domain: {prefix_descriptor}')
+                    f'Set As Default URL Domain: {prefix_descriptor}'
                         if menu_type == 'popup'
-                        else 'Set As Default URL Domain')
+                        else 'Set As Default URL Domain'))
             if selection_dir_prefix != selection_domain_prefix:
                 if self._project.default_url_prefix == selection_dir_prefix:
                     menuitems.append(wx.MenuItem(
@@ -323,10 +330,13 @@ class EntityTree(Bulkhead):
     
     @capture_crashes_to_self
     def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
-        node = self._right_clicked_node
+        self.on_change_url_prefix_menuitem_selected(event, self._right_clicked_node)
+    
+    @capture_crashes_to_self
+    def on_change_url_prefix_menuitem_selected(self, event: wx.MenuEvent, node: Optional[Node]) -> None:
         assert node is not None
         
-        item_id = event.GetId()
+        item_id = event.Id
         if item_id == self._ID_SET_DOMAIN:
             assert isinstance(node, (_ResourceNode, ResourceGroupNode))
             self._project.default_url_prefix = (
@@ -342,6 +352,9 @@ class EntityTree(Bulkhead):
         elif item_id == self._ID_CLEAR_PREFIX:
             self._project.default_url_prefix = None
             self._did_change_default_url_prefix()
+        else:
+            # Some other menuitem
+            pass
     
     def _did_change_default_url_prefix(self) -> None:
         self.root.update_descendants()  # update "Offsite" ClusterNodes

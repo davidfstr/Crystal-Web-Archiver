@@ -35,7 +35,7 @@ from crystal.util.xthreading import (
 from functools import partial
 import os
 import time
-from typing import ContextManager, Iterator, Optional
+from typing import ContextManager, Iterator, Optional, Union
 import webbrowser
 import wx
 
@@ -285,7 +285,7 @@ class MainWindow:
             #       on macOS. In particular cannot intercept on the Edit wx.Menu.
             bind(raw_frame, wx.EVT_MENU, self._on_preferences)
         
-        entity_menu = wx.Menu()
+        self._entity_menu = entity_menu = wx.Menu()
         self._new_root_url_action.append_menuitem_to(entity_menu)
         self._new_group_action.append_menuitem_to(entity_menu)
         self._edit_action.append_menuitem_to(entity_menu)
@@ -294,12 +294,48 @@ class MainWindow:
         self._download_action.append_menuitem_to(entity_menu)
         self._update_members_action.append_menuitem_to(entity_menu)
         self._view_action.append_menuitem_to(entity_menu)
+        entity_menu.AppendSeparator()
+        if True:
+            self._change_url_prefix_menuitems = \
+                self.entity_tree.create_change_url_prefix_menuitems_for(
+                    node=None, menu_type='top_level')
+            for mi in self._change_url_prefix_menuitems:
+                entity_menu.Append(mi)
+            bind(entity_menu, wx.EVT_MENU_OPEN, self._on_entity_menu_open)
+            bind(entity_menu, wx.EVT_MENU, self._on_change_url_prefix_menuitem_selected)
         
         menubar = wx.MenuBar()
         menubar.Append(file_menu, 'File')
         menubar.Append(edit_menu, 'Edit')
         menubar.Append(entity_menu, 'Entity')
         return menubar
+    
+    def _on_entity_menu_open(self, event: wx.MenuEvent) -> None:
+        menu = self._entity_menu  # cache
+        
+        # Locate old _change_url_prefix_menuitems
+        assert len(self._change_url_prefix_menuitems) >= 1
+        first_old_mi = self._change_url_prefix_menuitems[0]
+        (first_old_mi2, first_old_mi_offset) = \
+            menu.FindChildItem(first_old_mi.Id)
+        assert first_old_mi2 == first_old_mi
+        
+        # Remove/dispose old _change_url_prefix_menuitems
+        for mi in reversed(self._change_url_prefix_menuitems):
+            menu.Remove(mi.Id)
+        self._change_url_prefix_menuitems.clear()
+        
+        # Create new _change_url_prefix_menuitems
+        self._change_url_prefix_menuitems = \
+            self.entity_tree.create_change_url_prefix_menuitems_for(
+                node=self.entity_tree.selected_node,
+                menu_type='top_level')
+        for (mi_offset, mi) in enumerate(self._change_url_prefix_menuitems, start=first_old_mi_offset):
+            menu.Insert(mi_offset, mi)
+    
+    def _on_change_url_prefix_menuitem_selected(self, event: wx.MenuEvent) -> None:
+        self.entity_tree.on_change_url_prefix_menuitem_selected(
+            event, self.entity_tree.selected_node)
     
     # === Entity Pane: Init ===
     
@@ -800,7 +836,7 @@ class MainWindow:
     
     # === Status Bar: Events ===
     
-    def _on_preferences(self, event: wx.CommandEvent) -> None:
+    def _on_preferences(self, event: Union[wx.MenuEvent, wx.CommandEvent]) -> None:
         if event.Id == wx.ID_PREFERENCES or isinstance(event.EventObject, wx.Button):
             PreferencesDialog(self._frame, self.project)
         else:

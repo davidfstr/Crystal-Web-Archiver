@@ -199,6 +199,16 @@ class MainWindow:
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use MainWindow.wait_for()?'
     
+    # === Menubar ===
+    
+    @property
+    def entity_menu(self) -> wx.Menu:
+        mb = self.main_window.MenuBar
+        entity_menu_index = mb.FindMenu('Entity')
+        assert entity_menu_index != wx.NOT_FOUND
+        entity_menu = mb.GetMenu(entity_menu_index)
+        return entity_menu
+    
     # === Properties ===
     
     @property

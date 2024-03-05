@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.server import served_project
@@ -9,15 +10,18 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
-from crystal.tests.util.windows import MenuitemMissingError, OpenOrCreateDialog
+from crystal.tests.util.windows import (
+    MainWindow, MenuitemMissingError, OpenOrCreateDialog
+)
 from crystal.model import (
     DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
 )
 import locale
 import os
 import tempfile
-from typing import Iterator, Optional
+from typing import Iterator, List, Optional
 from unittest import skip
+import wx
 
 
 # ------------------------------------------------------------------------------
@@ -135,6 +139,134 @@ async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_a
 @skip('not yet automated')
 async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_and_default_url_prefix_matches_it_when_clear_default_url_prefix_then_node_displays_full_url_pattern() -> None:
     pass
+
+
+async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_then_appropriate_change_url_prefix_actions_shown() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
+        rr2 = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        rrn2 = root_ti.find_child(rr2.resource.url, project.default_url_prefix)
+        
+        # Case: No entities selected
+        assert not rrn.IsSelected()
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default URL Domain', False),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path / selected
+        rrn.SelectItem()
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default URL Domain', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path / selected; matches domain
+        _select_change_url_prefix_action(mw, cup_actions[0])
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Clear Default URL Domain', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Clear Default URL Domain/Prefix
+        _select_change_url_prefix_action(mw, cup_actions[0])
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default URL Domain', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path more than / selected
+        rrn2.SelectItem()
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default URL Domain', True),
+                ('Set As Default URL Prefix', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path more than / selected; matches domain
+        _select_change_url_prefix_action(mw, cup_actions[0])
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Clear Default URL Domain', True),
+                ('Set As Default URL Prefix', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path more than / selected; matches prefix
+        _select_change_url_prefix_action(mw, cup_actions[1])
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default URL Domain', True),
+                ('Clear Default URL Prefix', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+
+
+def _change_url_prefix_actions_in_top_level_menu(mw: MainWindow) -> List[wx.MenuItem]:
+    entity_menu = mw.entity_menu  # cache
+    entity_menu.ProcessEvent(wx.MenuEvent(type=wx.EVT_MENU_OPEN.typeId))
+    entity_menu.ProcessEvent(wx.MenuEvent(type=wx.EVT_MENU_CLOSE.typeId))
+    cup_actions = [
+        mi for mi in entity_menu.MenuItems
+        if mi.ItemLabelText in [
+            'Set As Default URL Domain',
+            'Set As Default URL Prefix',
+            'Clear Default URL Domain',
+            'Clear Default URL Prefix',
+        ]
+    ]
+    return cup_actions
+
+
+def _select_change_url_prefix_action(mw: MainWindow, mi: wx.MenuItem) -> None:
+    entity_menu = mw.entity_menu  # cache
+    entity_menu.ProcessEvent(wx.MenuEvent(type=wx.EVT_MENU.typeId, id=mi.Id, menu=None))
 
 
 # ------------------------------------------------------------------------------
