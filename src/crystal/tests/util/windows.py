@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-
 from crystal.browser.new_root_url import NewRootUrlDialog as RealNewRootUrlDialog
 from crystal.model import Project
 from crystal.tests.util.controls import (
@@ -523,25 +522,70 @@ class EntityTree:
         assert tooltip is not None and value in tooltip, \
             f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
     
-    async def set_default_url_prefix_to_resource_at_tree_item(self, tree_item: TreeItem) -> None:
-        from crystal.browser.entitytree import _ID_SET_PREFIX
-        
-        if tree_item.tree != self.window:
-            raise ValueError()
-        
+    async def set_default_url_domain_to_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Set As Default URL Domain')
+    
+    async def set_default_url_prefix_to_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Set As Default URL Prefix')
+    
+    # Deprecated
+    set_default_url_prefix_to_resource_at_tree_item = \
+        set_default_url_prefix_to_entity_at_tree_item
+    
+    async def clear_default_url_domain_from_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Clear Default URL Domain')
+    
+    async def clear_default_url_prefix_from_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Clear Default URL Prefix')
+    
+    async def _choose_action_for_entity_at_tree_item(self,
+            tree_item: TreeItem,
+            action_prefix: str) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
         def show_popup(menu: wx.Menu) -> None:
-            (set_prefix_menuitem,) = [
-                mi for mi in menu.MenuItems
-                # TODO: Search for menuitem by title rather than by internal ID
-                if mi.Id == _ID_SET_PREFIX
-            ]
-            assert set_prefix_menuitem.Enabled
-            
+            try:
+                (set_prefix_menuitem,) = [
+                    mi for mi in menu.MenuItems
+                    if mi.ItemLabelText.startswith(action_prefix)
+                ]
+            except ValueError:  # not enough values to unpack
+                raise MenuitemMissingError()
+            if not set_prefix_menuitem.Enabled:
+                raise MenuitemDisabledError()
             select_menuitem_now(menu, set_prefix_menuitem.Id)
-            
         await tree_item.right_click_showing_popup_menu(show_popup)
-        # TODO: Is this unused? If so, remove. If not, comment.
-        await pump_wx_events()
+
+
+class MenuitemMissingError(ValueError):
+    pass
+
+
+class MenuitemDisabledError(ValueError):
+    pass
 
 
 # ------------------------------------------------------------------------------

@@ -9,7 +9,7 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
-from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util.windows import MenuitemMissingError, OpenOrCreateDialog
 from crystal.model import (
     DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
 )
@@ -19,6 +19,122 @@ import tempfile
 from typing import Iterator, Optional
 from unittest import skip
 
+
+# ------------------------------------------------------------------------------
+# Test: EntityTree: Default URL Domain/Prefix
+
+async def test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        
+        assert rrn.Text != '/'
+        await mw.entity_tree.set_default_url_domain_to_entity_at_tree_item(rrn)
+        assert rrn.Text == '/'
+        
+        # test_given_resource_node_whose_path_is_slash_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url
+        await mw.entity_tree.clear_default_url_domain_from_entity_at_tree_item(rrn)
+        assert rrn.Text.startswith('https://neocities.org/')
+        
+        # test_given_resource_node_whose_path_is_slash_then_cannot_set_default_url_prefix_to_it
+        try:
+            await mw.entity_tree.set_default_url_prefix_to_entity_at_tree_item(rrn)
+        except MenuitemMissingError:
+            pass
+        else:
+            raise AssertionError('Did not expect resource to offer option to: set_default_url_prefix')
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_slash_then_cannot_set_default_url_prefix_to_it() -> None:
+    pass
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_slash_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url() -> None:
+    pass
+
+
+async def test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        
+        assert rrn.Text != '/~distantskies/'
+        await mw.entity_tree.set_default_url_domain_to_entity_at_tree_item(rrn)
+        assert rrn.Text == '/~distantskies/'
+        
+        # test_given_resource_node_whose_path_is_more_than_slash_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url
+        await mw.entity_tree.clear_default_url_domain_from_entity_at_tree_item(rrn)
+        assert rrn.Text.startswith('https://neocities.org/~distantskies/')
+        
+        # test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_prefix_to_it_then_node_displays_only_slash
+        await mw.entity_tree.set_default_url_prefix_to_entity_at_tree_item(rrn)
+        assert rrn.Text == '/'
+        
+        # test_given_resource_node_whose_path_is_more_than_slash_and_default_url_prefix_matches_it_when_clear_default_url_prefix_then_node_displays_full_url
+        await mw.entity_tree.clear_default_url_prefix_from_entity_at_tree_item(rrn)
+        assert rrn.Text.startswith('https://neocities.org/~distantskies/')
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_prefix_to_it_then_node_displays_only_slash() -> None:
+    pass
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_more_than_slash_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url() -> None:
+    pass
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_more_than_slash_and_default_url_prefix_matches_it_when_clear_default_url_prefix_then_node_displays_full_url() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_slash_wildcard_when_set_default_url_domain_to_it_then_node_displays_only_path_pattern() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_slash_wildcard_then_cannot_set_default_url_prefix_to_it() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_slash_wildcard_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url_pattern() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_when_set_default_url_domain_to_it_then_node_displays_only_path_pattern() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_when_set_default_url_prefix_to_it_then_node_displays_only_slash() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url_pattern() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_and_default_url_prefix_matches_it_when_clear_default_url_prefix_then_node_displays_full_url_pattern() -> None:
+    pass
 
 
 # ------------------------------------------------------------------------------

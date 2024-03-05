@@ -38,7 +38,7 @@ from crystal.util.xthreading import bg_call_later, fg_call_later
 import os
 import threading
 import time
-from typing import cast, final, List, Optional, Union
+from typing import cast, final, List, Literal, Optional, Union
 from typing_extensions import override
 from urllib.parse import urljoin, urlparse, urlunparse
 import wx
@@ -50,14 +50,14 @@ DeferrableResourceGroupSource = Union[
 ]
 
 
-_ID_SET_PREFIX = 101
-_ID_CLEAR_PREFIX = 102
-
-
 class EntityTree(Bulkhead):
     """
     Displays a tree of top-level project entities.
     """
+    _ID_SET_DOMAIN = 101
+    _ID_SET_PREFIX = 102
+    _ID_CLEAR_PREFIX = 103
+    
     def __init__(self,
             parent_peer: wx.Window,
             project: Project,
@@ -272,21 +272,54 @@ class EntityTree(Bulkhead):
         
         # Create popup menu
         menu = wx.Menu()
+        for mi in self._create_change_url_prefix_menuitems_for(node, menu_type='popup'):
+            menu.Append(mi)
         bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
-        if isinstance(node, _ResourceNode):
-            if self._project.default_url_prefix == (
-                    EntityTree._get_url_prefix_for_resource(node.resource)):
-                menu.Append(_ID_CLEAR_PREFIX, 'Clear Default URL Prefix')
-            else:
-                menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
-        else:
-            menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
-            menu.Enable(_ID_SET_PREFIX, False)
-        assert menu.GetMenuItemCount() > 0
         
         # Show popup menu
         self.peer.PopupMenu(menu)
         menu.Destroy()
+    
+    def _create_change_url_prefix_menuitems_for(self,
+            node: Node,
+            *, menu_type: Literal['popup', 'top_level']
+            ) -> List[wx.MenuItem]:
+        menuitems = []  # type: List[wx.MenuItem]
+        
+        if isinstance(node, (_ResourceNode, ResourceGroupNode)):
+            selection_urllike = self._url_or_url_prefix_for(node)
+            selection_domain_prefix = EntityTree._get_url_domain_prefix_for(selection_urllike)
+            selection_dir_prefix = EntityTree._get_url_directory_prefix_for(selection_urllike)
+            if self._project.default_url_prefix == selection_domain_prefix:
+                menuitems.append(wx.MenuItem(
+                    None, self._ID_CLEAR_PREFIX, 'Clear Default URL Domain'))
+            else:
+                prefix_descriptor = self._try_remove_http_scheme(selection_domain_prefix)
+                menuitems.append(wx.MenuItem(
+                    None,
+                    self._ID_SET_DOMAIN,
+                    f'Set As Default URL Domain: {prefix_descriptor}')
+                        if menu_type == 'popup'
+                        else 'Set As Default URL Domain')
+            if selection_dir_prefix != selection_domain_prefix:
+                if self._project.default_url_prefix == selection_dir_prefix:
+                    menuitems.append(wx.MenuItem(
+                        None, self._ID_CLEAR_PREFIX, 'Clear Default URL Prefix'))
+                else:
+                    prefix_descriptor = self._try_remove_http_scheme(selection_dir_prefix)
+                    menuitems.append(wx.MenuItem(
+                        None,
+                        self._ID_SET_PREFIX,
+                        f'Set As Default URL Prefix: {prefix_descriptor}'
+                            if menu_type == 'popup'
+                            else 'Set As Default URL Prefix'))
+        else:
+            mi = wx.MenuItem(None, self._ID_SET_DOMAIN, 'Set As Default URL Domain')
+            mi.Enabled = False
+            menuitems.append(mi)
+        
+        assert len(menuitems) > 0
+        return menuitems
     
     @capture_crashes_to_self
     def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
@@ -294,12 +327,19 @@ class EntityTree(Bulkhead):
         assert node is not None
         
         item_id = event.GetId()
-        if item_id == _ID_SET_PREFIX:
-            assert isinstance(node, _ResourceNode)
+        if item_id == self._ID_SET_DOMAIN:
+            assert isinstance(node, (_ResourceNode, ResourceGroupNode))
             self._project.default_url_prefix = (
-                EntityTree._get_url_prefix_for_resource(node.resource))
+                EntityTree._get_url_domain_prefix_for(
+                    self._url_or_url_prefix_for(node)))
             self._did_change_default_url_prefix()
-        elif item_id == _ID_CLEAR_PREFIX:
+        elif item_id == self._ID_SET_PREFIX:
+            assert isinstance(node, (_ResourceNode, ResourceGroupNode))
+            self._project.default_url_prefix = (
+                EntityTree._get_url_directory_prefix_for(
+                    self._url_or_url_prefix_for(node)))
+            self._did_change_default_url_prefix()
+        elif item_id == self._ID_CLEAR_PREFIX:
             self._project.default_url_prefix = None
             self._did_change_default_url_prefix()
     
@@ -308,13 +348,37 @@ class EntityTree(Bulkhead):
         self.root.update_title_of_descendants()  # update URLs in titles
     
     @staticmethod
-    def _get_url_prefix_for_resource(resource):
+    def _url_or_url_prefix_for(node: Union[_ResourceNode, ResourceGroupNode]) -> str:
+        if isinstance(node, _ResourceNode):
+            return node.resource.url
+        elif isinstance(node, ResourceGroupNode):
+            return ResourceGroup.literal_prefix_for_url_pattern(
+                node.resource_group.url_pattern)
+        else:
+            raise ValueError()
+    
+    @staticmethod
+    def _get_url_domain_prefix_for(url_or_url_prefix: str) -> str:
         """
-        Given a resource, returns the URL prefix that will chop off everything
-        before the resource's enclosing directory.
+        Given a URL or URL prefix, returns the URL for its enclosing domain,
+        with no trailing slash.
         """
-        url = resource.url
-        url_components = urlparse(url)
+        url_components = urlparse(url_or_url_prefix)
+        
+        return urlunparse(url_components._replace(
+            path='',
+            params='',
+            query='',
+            fragment='',
+        ))
+    
+    @staticmethod
+    def _get_url_directory_prefix_for(url_or_url_prefix: str) -> str:
+        """
+        Given a URL or URL prefix, returns the URL for its enclosing directory,
+        with no trailing slash.
+        """
+        url_components = urlparse(url_or_url_prefix)
         
         # If URL path contains slash, chop last slash and everything following it
         path = url_components.path
@@ -323,9 +387,15 @@ class EntityTree(Bulkhead):
         else:
             new_path = path
         
-        new_url_components = list(url_components)
-        new_url_components[2] = new_path
-        return urlunparse(new_url_components)
+        return urlunparse(url_components._replace(path=new_path))
+    
+    @staticmethod
+    def _try_remove_http_scheme(url_or_url_prefix: str) -> str:
+        if url_or_url_prefix.lower().startswith('https://'):
+            return url_or_url_prefix[len('https://'):]
+        if url_or_url_prefix.lower().startswith('http://'):
+            return url_or_url_prefix[len('http://'):]
+        return url_or_url_prefix
     
     # === Event: Mouse Motion, Get Tooltip ===
     
