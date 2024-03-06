@@ -532,41 +532,37 @@ class EntityTree:
         assert tooltip is not None and value in tooltip, \
             f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
     
-    async def set_default_url_domain_to_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+    async def set_default_domain_to_entity_at_tree_item(self, tree_item: TreeItem) -> None:
         """
         Raises:
         * MenuitemMissingError
         * MenuitemDisabledError
         """
-        await self._choose_action_for_entity_at_tree_item(tree_item, 'Set As Default URL Domain')
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Set As Default Domain')
     
-    async def set_default_url_prefix_to_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+    async def set_default_directory_to_entity_at_tree_item(self, tree_item: TreeItem) -> None:
         """
         Raises:
         * MenuitemMissingError
         * MenuitemDisabledError
         """
-        await self._choose_action_for_entity_at_tree_item(tree_item, 'Set As Default URL Prefix')
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Set As Default Directory')
     
-    # Deprecated
-    set_default_url_prefix_to_resource_at_tree_item = \
-        set_default_url_prefix_to_entity_at_tree_item
-    
-    async def clear_default_url_domain_from_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+    async def clear_default_domain_from_entity_at_tree_item(self, tree_item: TreeItem) -> None:
         """
         Raises:
         * MenuitemMissingError
         * MenuitemDisabledError
         """
-        await self._choose_action_for_entity_at_tree_item(tree_item, 'Clear Default URL Domain')
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Clear Default Domain')
     
-    async def clear_default_url_prefix_from_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+    async def clear_default_directory_from_entity_at_tree_item(self, tree_item: TreeItem) -> None:
         """
         Raises:
         * MenuitemMissingError
         * MenuitemDisabledError
         """
-        await self._choose_action_for_entity_at_tree_item(tree_item, 'Clear Default URL Prefix')
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Clear Default Directory')
     
     async def _choose_action_for_entity_at_tree_item(self,
             tree_item: TreeItem,

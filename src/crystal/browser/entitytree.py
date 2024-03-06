@@ -54,8 +54,8 @@ class EntityTree(Bulkhead):
     """
     Displays a tree of top-level project entities.
     """
-    _ID_SET_DOMAIN = 101
-    _ID_SET_PREFIX = 102
+    _ID_SET_DOMAIN_PREFIX = 101
+    _ID_SET_DIRECTORY_PREFIX = 102
     _ID_CLEAR_PREFIX = 103
     
     def __init__(self,
@@ -299,29 +299,29 @@ class EntityTree(Bulkhead):
             selection_dir_prefix = EntityTree._get_url_directory_prefix_for(selection_urllike)
             if self._project.default_url_prefix == selection_domain_prefix:
                 menuitems.append(wx.MenuItem(
-                    None, self._ID_CLEAR_PREFIX, 'Clear Default URL Domain'))
+                    None, self._ID_CLEAR_PREFIX, 'Clear Default Domain'))
             else:
                 prefix_descriptor = self._try_remove_http_scheme(selection_domain_prefix)
                 menuitems.append(wx.MenuItem(
                     None,
-                    self._ID_SET_DOMAIN,
-                    f'Set As Default URL Domain: {prefix_descriptor}'
+                    self._ID_SET_DOMAIN_PREFIX,
+                    f'Set As Default Domain: {prefix_descriptor}'
                         if menu_type == 'popup'
-                        else 'Set As Default URL Domain'))
+                        else 'Set As Default Domain'))
             if selection_dir_prefix != selection_domain_prefix:
                 if self._project.default_url_prefix == selection_dir_prefix:
                     menuitems.append(wx.MenuItem(
-                        None, self._ID_CLEAR_PREFIX, 'Clear Default URL Prefix'))
+                        None, self._ID_CLEAR_PREFIX, 'Clear Default Directory'))
                 else:
                     prefix_descriptor = self._try_remove_http_scheme(selection_dir_prefix)
                     menuitems.append(wx.MenuItem(
                         None,
-                        self._ID_SET_PREFIX,
-                        f'Set As Default URL Prefix: {prefix_descriptor}'
+                        self._ID_SET_DIRECTORY_PREFIX,
+                        f'Set As Default Directory: {prefix_descriptor}'
                             if menu_type == 'popup'
-                            else 'Set As Default URL Prefix'))
+                            else 'Set As Default Directory'))
         else:
-            mi = wx.MenuItem(None, self._ID_SET_DOMAIN, 'Set As Default URL Domain')
+            mi = wx.MenuItem(None, self._ID_SET_DOMAIN_PREFIX, 'Set As Default Domain')
             mi.Enabled = False
             menuitems.append(mi)
         
@@ -337,13 +337,13 @@ class EntityTree(Bulkhead):
         assert node is not None
         
         item_id = event.Id
-        if item_id == self._ID_SET_DOMAIN:
+        if item_id == self._ID_SET_DOMAIN_PREFIX:
             assert isinstance(node, (_ResourceNode, ResourceGroupNode))
             self._project.default_url_prefix = (
                 EntityTree._get_url_domain_prefix_for(
                     self._url_or_url_prefix_for(node)))
             self._did_change_default_url_prefix()
-        elif item_id == self._ID_SET_PREFIX:
+        elif item_id == self._ID_SET_DIRECTORY_PREFIX:
             assert isinstance(node, (_ResourceNode, ResourceGroupNode))
             self._project.default_url_prefix = (
                 EntityTree._get_url_directory_prefix_for(

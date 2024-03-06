@@ -25,7 +25,7 @@ import wx
 
 
 # ------------------------------------------------------------------------------
-# Test: EntityTree: Default URL Domain/Prefix
+# Test: EntityTree: Default Domain/Directory
 
 async def test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
@@ -158,7 +158,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
         assertEqual(
             [
-                ('Set As Default URL Domain', False),
+                ('Set As Default Domain', False),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -171,7 +171,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
         assertEqual(
             [
-                ('Set As Default URL Domain', True),
+                ('Set As Default Domain', True),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -184,7 +184,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
         assertEqual(
             [
-                ('Clear Default URL Domain', True),
+                ('Clear Default Domain', True),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -197,7 +197,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
         assertEqual(
             [
-                ('Set As Default URL Domain', True),
+                ('Set As Default Domain', True),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -210,8 +210,8 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
         assertEqual(
             [
-                ('Set As Default URL Domain', True),
-                ('Set As Default URL Prefix', True),
+                ('Set As Default Domain', True),
+                ('Set As Default Directory', True),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -224,8 +224,8 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
         assertEqual(
             [
-                ('Clear Default URL Domain', True),
-                ('Set As Default URL Prefix', True),
+                ('Clear Default Domain', True),
+                ('Set As Default Directory', True),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -238,8 +238,8 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
         assertEqual(
             [
-                ('Set As Default URL Domain', True),
-                ('Clear Default URL Prefix', True),
+                ('Set As Default Domain', True),
+                ('Clear Default Directory', True),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -255,10 +255,10 @@ def _change_url_prefix_actions_in_top_level_menu(mw: MainWindow) -> List[wx.Menu
     cup_actions = [
         mi for mi in entity_menu.MenuItems
         if mi.ItemLabelText in [
-            'Set As Default URL Domain',
-            'Set As Default URL Prefix',
-            'Clear Default URL Domain',
-            'Clear Default URL Prefix',
+            'Set As Default Domain',
+            'Set As Default Directory',
+            'Clear Default Domain',
+            'Clear Default Directory',
         ]
     ]
     return cup_actions

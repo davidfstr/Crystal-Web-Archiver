@@ -634,7 +634,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
             # so that dynamic requests to *site-relative* sound URLs by JavaScript
             # can be dynamically rewritten to use the correct domain
             home_ti.SelectItem()
-            await mw.entity_tree.set_default_url_prefix_to_resource_at_tree_item(home_ti)
+            await mw.entity_tree.set_default_directory_to_entity_at_tree_item(home_ti)
             new_default_url_prefix = home_url[:-1]  # without trailing /
             
             # Start server
