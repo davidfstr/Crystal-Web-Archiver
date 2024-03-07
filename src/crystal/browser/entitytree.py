@@ -423,20 +423,27 @@ class EntityTree(Bulkhead):
     def _on_mouse_motion(self, event: wx.MouseEvent) -> None:
         (tree_item_id, hit_flags) = self.peer.HitTest(event.Position)
         if (hit_flags & wx.TREE_HITTEST_ONITEMICON) != 0:
-            new_tooltip = self._icon_tooltip_for_tree_item_id(tree_item_id)
+            new_tooltip = self._tooltip_for_tree_item_id(tree_item_id, 'icon')
+        elif (hit_flags & wx.TREE_HITTEST_ONITEMLABEL) != 0:
+            new_tooltip = self._tooltip_for_tree_item_id(tree_item_id, 'label')
         else:
             new_tooltip = None
         
         self.peer.SetToolTip(new_tooltip)
     
     @capture_crashes_to_self
-    def _on_get_tooltip_event(self, event: wx.Event) -> None:
-        event.tooltip_cell[0] = self._icon_tooltip_for_tree_item_id(event.tree_item_id)
+    def _on_get_tooltip_event(self, event: GetTooltipEvent) -> None:
+        event.tooltip_cell[0] = self._tooltip_for_tree_item_id(event.tree_item_id, event.tooltip_type)
     
-    def _icon_tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId) -> Optional[str]:
+    def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId, tooltip_type: Literal['icon', 'label']) -> Optional[str]:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
         node = Node.for_node_view(node_view)
-        return node.icon_tooltip
+        if tooltip_type == 'icon':
+            return node.icon_tooltip
+        elif tooltip_type == 'label':
+            return node.label_tooltip
+        else:
+            raise ValueError()
     
     # === Dispose ===
     
@@ -503,6 +510,13 @@ class Node(Bulkhead):
     def icon_tooltip(self) -> Optional[str]:
         """
         The tooltip to display when the mouse hovers over this node's icon.
+        """
+        return None
+    
+    @property
+    def label_tooltip(self) -> Optional[str]:
+        """
+        The tooltip to display when the mouse hovers over this node's label.
         """
         return None
     
@@ -809,6 +823,7 @@ class _ResourceNode(Node):
                     # Error
                     return 'warning'
     
+    @override
     @property
     def icon_tooltip(self) -> Optional[str]:
         return '%s %s' % (self._status_badge_tooltip, self._entity_tooltip)
@@ -832,6 +847,11 @@ class _ResourceNode(Node):
     @property
     def _entity_tooltip(self) -> str:  # abstract
         raise NotImplementedError()
+    
+    @override
+    @property
+    def label_tooltip(self) -> str:
+        return f'URL: {self.resource.url}'
     
     @override
     @property
@@ -1089,6 +1109,19 @@ class RootResourceNode(_ResourceNode):
     
     @override
     @property
+    def label_tooltip(self) -> str:
+        if self.root_resource.name != '':
+            return (
+                f'URL: {self.resource.url}\n'
+                f'Name: {self.root_resource.name}'
+            )
+        else:
+            return (
+                f'URL: {self.resource.url}'
+            )
+    
+    @override
+    @property
     def entity(self) -> RootResource:
         return self.root_resource
     
@@ -1195,12 +1228,12 @@ class ClusterNode(Node):
             title: str,
             children,
             icon_set: IconSet,
-            icon_tooltip: str,
+            tooltip: str,
             *, source: ResourceGroupSource,
             ) -> None:
         super().__init__(source=source)
         
-        self._icon_tooltip = icon_tooltip
+        self._tooltip = tooltip
         
         self.view = NodeView()
         self.view.icon_set = icon_set
@@ -1212,9 +1245,15 @@ class ClusterNode(Node):
     
     # === Properties ===
     
+    @override
     @property
-    def icon_tooltip(self) -> Optional[str]:
-        return self._icon_tooltip
+    def icon_tooltip(self) -> str:
+        return self._tooltip
+    
+    @override
+    @property
+    def label_tooltip(self) -> str:
+        return self._tooltip
     
     # === Comparison ===
     
@@ -1259,6 +1298,7 @@ class _GroupedNode(Node):  # abstract
         else:
             return None
     
+    @override
     @property
     def icon_tooltip(self) -> Optional[str]:
         status_badge_name = self._status_badge_name()
@@ -1268,6 +1308,19 @@ class _GroupedNode(Node):  # abstract
             return f'Ignored {self.entity_tooltip}'
         else:
             raise AssertionError()
+        
+    @override
+    @property
+    def label_tooltip(self) -> str:
+        if self.resource_group.name != '':
+            return (
+                f'URL Pattern: {self.resource_group.url_pattern}\n'
+                f'Name: {self.resource_group.name}'
+            )
+        else:
+            return (
+                f'URL Pattern: {self.resource_group.url_pattern}'
+            )
 
 
 class ResourceGroupNode(_GroupedNode):

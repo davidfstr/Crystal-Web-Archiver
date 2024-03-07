@@ -524,7 +524,7 @@ class EntityTree:
     async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> Optional[str]:
         if tree_item.tree != self.window:
             raise ValueError()
-        return tree_item.Tooltip
+        return tree_item.Tooltip('icon')
     
     @staticmethod
     async def assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:

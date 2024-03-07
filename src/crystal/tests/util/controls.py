@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, contextmanager
 from crystal.tests.util.runner import pump_wx_events
 from crystal.util.wx_treeitem_gettooltip import GetTooltipEvent
 from crystal.util.xos import is_windows
-from typing import AsyncIterator, Callable, Iterator, List, Optional
+from typing import AsyncIterator, Callable, Iterator, List, Literal, Optional
 from unittest.mock import patch
 import wx
 
@@ -108,9 +108,8 @@ class TreeItem:
     def Bold(self) -> bool:
         return self.tree.IsBold(self.id)
     
-    @property
-    def Tooltip(self) -> Optional[str]:
-        event = GetTooltipEvent(tree_item_id=self.id, tooltip_cell=[Ellipsis])
+    def Tooltip(self, tooltip_type: Literal['icon', 'label', None]=None) -> Optional[str]:
+        event = GetTooltipEvent(tree_item_id=self.id, tooltip_cell=[Ellipsis], tooltip_type=tooltip_type)
         self.tree.ProcessEvent(event)  # callee should set: event.tooltip_cell[0]
         assert event.tooltip_cell[0] is not Ellipsis
         return event.tooltip_cell[0]

@@ -1120,7 +1120,7 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 (download_r_ti,) = root_ti.Children
                 
                 # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-                tooltip = download_r_ti.Tooltip
+                tooltip = download_r_ti.Tooltip()
                 assert tooltip is not None
                 assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
                 assert (
@@ -1269,7 +1269,7 @@ async def test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
                 (download_rg_ti,) = root_ti.Children
                 
                 # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-                tooltip = download_rg_ti.Tooltip
+                tooltip = download_rg_ti.Tooltip()
                 assert tooltip is not None
                 assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
                 assert (
@@ -1400,7 +1400,7 @@ async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
                 (download_rg_ti,) = root_ti.Children
                 
                 # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-                tooltip = download_rg_ti.Tooltip
+                tooltip = download_rg_ti.Tooltip()
                 assert tooltip is not None
                 assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
                 assert (
@@ -1479,7 +1479,7 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 (download_r_ti, scheduler_crashed_ti) = root_ti.Children
                 
                 # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-                tooltip = scheduler_crashed_ti.Tooltip
+                tooltip = scheduler_crashed_ti.Tooltip()
                 assert tooltip is not None
                 assert 'ValueError: Simulated crash' in tooltip, f'Tooltip was: {tooltip}'
                 assert (
@@ -1587,7 +1587,7 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
             (*_, scheduler_crashed_ti) = root_ti.Children
             
             # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-            tooltip = scheduler_crashed_ti.Tooltip
+            tooltip = scheduler_crashed_ti.Tooltip()
             assert tooltip is not None
             assert 'ValueError: Simulated crash' in tooltip, f'Tooltip was: {tooltip}'
             assert (
