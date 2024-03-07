@@ -296,11 +296,14 @@ class MainWindow:
         self._view_action.append_menuitem_to(entity_menu)
         entity_menu.AppendSeparator()
         if True:
-            self._change_url_prefix_menuitems = \
+            (cup_mis, on_attach_menuitems) = \
                 self.entity_tree.create_change_url_prefix_menuitems_for(
                     node=None, menu_type='top_level')
-            for mi in self._change_url_prefix_menuitems:
+            for mi in cup_mis:
                 entity_menu.Append(mi)
+            on_attach_menuitems()
+            self._change_url_prefix_menuitems = cup_mis
+            
             bind(entity_menu, wx.EVT_MENU_OPEN, self._on_entity_menu_open)
             bind(entity_menu, wx.EVT_MENU, self._on_change_url_prefix_menuitem_selected)
         
@@ -326,12 +329,14 @@ class MainWindow:
         self._change_url_prefix_menuitems.clear()
         
         # Create new _change_url_prefix_menuitems
-        self._change_url_prefix_menuitems = \
+        (cup_mis, on_attach_menuitems) = \
             self.entity_tree.create_change_url_prefix_menuitems_for(
                 node=self.entity_tree.selected_node,
                 menu_type='top_level')
-        for (mi_offset, mi) in enumerate(self._change_url_prefix_menuitems, start=first_old_mi_offset):
+        for (mi_offset, mi) in enumerate(cup_mis, start=first_old_mi_offset):
             menu.Insert(mi_offset, mi)
+        on_attach_menuitems()
+        self._change_url_prefix_menuitems = cup_mis
     
     def _on_change_url_prefix_menuitem_selected(self, event: wx.MenuEvent) -> None:
         self.entity_tree.on_change_url_prefix_menuitem_selected(

@@ -279,8 +279,11 @@ class EntityTree(Bulkhead):
         
         # Create popup menu
         menu = wx.Menu()
-        for mi in self.create_change_url_prefix_menuitems_for(node, menu_type='popup'):
+        (cup_mis, on_attach_menuitems) = \
+            self.create_change_url_prefix_menuitems_for(node, menu_type='popup')
+        for mi in cup_mis:
             menu.Append(mi)
+        on_attach_menuitems()
         bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
         
         # Show popup menu
@@ -290,9 +293,9 @@ class EntityTree(Bulkhead):
     def create_change_url_prefix_menuitems_for(self,
             node: Optional[Node],
             *, menu_type: Literal['popup', 'top_level']
-            ) -> List[wx.MenuItem]:
-        menuitems = []  # type: List[wx.MenuItem]
+            ) -> Tuple[List[wx.MenuItem], Callable[[], None]]:
         
+        menuitems = []  # type: List[wx.MenuItem]
         if isinstance(node, (_ResourceNode, ResourceGroupNode)):
             selection_urllike = self._url_or_url_prefix_for(node)
             selection_domain_prefix = EntityTree._get_url_domain_prefix_for(selection_urllike)
@@ -320,13 +323,16 @@ class EntityTree(Bulkhead):
                         f'Set As Default Directory: {prefix_descriptor}'
                             if menu_type == 'popup'
                             else 'Set As Default Directory'))
+            on_attach_menuitems = lambda: None
         else:
             mi = wx.MenuItem(None, self._ID_SET_DOMAIN_PREFIX, 'Set As Default Domain')
-            mi.Enabled = False
+            # NOTE: wxGTK does not allow altering a wx.MenuItem's Enabled
+            #       state until it is attached to a wx.Menu
+            on_attach_menuitems = lambda: mi.Enable(False)
             menuitems.append(mi)
-        
         assert len(menuitems) > 0
-        return menuitems
+        
+        return (menuitems, on_attach_menuitems)
     
     @capture_crashes_to_self
     def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
