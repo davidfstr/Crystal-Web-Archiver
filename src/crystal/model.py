@@ -110,6 +110,7 @@ if TYPE_CHECKING:
 _PROFILE_MIGRATE_REVISIONS = False
 
 
+_OptionalStr = TypeVar('_OptionalStr', bound=Optional[str])
 _TK = TypeVar('_TK', bound='Task')
 
 
@@ -225,7 +226,7 @@ class Project(ListenableMixin):
         
         self.path = path
         
-        self._properties = dict()               # type: Dict[str, str]
+        self._properties = dict()               # type: Dict[str, Optional[str]]
         self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
         self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
         self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
@@ -878,9 +879,9 @@ class Project(ListenableMixin):
         """
         return self._readonly
     
-    def _get_property(self, name: str, default: str) -> str:
-        return self._properties.get(name, default)
-    def _set_property(self, name: str, value: str) -> None:
+    def _get_property(self, name: str, default: _OptionalStr) -> Union[str, _OptionalStr]:
+        return self._properties.get(name) or default
+    def _set_property(self, name: str, value: Optional[str]) -> None:
         if not self._loading:
             if self._properties.get(name) == value:
                 return
@@ -906,15 +907,15 @@ class Project(ListenableMixin):
         """
         return int(self._get_property('major_version', '1'))
     
-    def _get_default_url_prefix(self):
+    def _get_default_url_prefix(self) -> Optional[str]:
         """
         URL prefix for the majority of this project's resource URLs.
         The UI will display resources under this prefix as relative URLs.
         """
         return self._get_property('default_url_prefix', None)
-    def _set_default_url_prefix(self, value):
+    def _set_default_url_prefix(self, value: Optional[str]) -> None:
         self._set_property('default_url_prefix', value)
-    default_url_prefix = property(_get_default_url_prefix, _set_default_url_prefix)
+    default_url_prefix = cast(Optional[str], property(_get_default_url_prefix, _set_default_url_prefix))
     
     def get_display_url(self, url):
         """

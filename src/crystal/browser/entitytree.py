@@ -30,6 +30,10 @@ from crystal.util.bulkheads import (
     run_bulkhead_call,
 )
 from crystal.util.notimplemented import NotImplemented, NotImplementedType
+from crystal.util.url_prefix import (
+    get_url_directory_prefix_for,
+    get_url_domain_prefix_for,
+)
 from crystal.util.wx_bind import bind
 from crystal.util.wx_treeitem_gettooltip import EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent
 from crystal.util.xcollections.ordereddict import defaultordereddict
@@ -294,44 +298,49 @@ class EntityTree(Bulkhead):
             node: Optional[Node],
             *, menu_type: Literal['popup', 'top_level']
             ) -> Tuple[List[wx.MenuItem], Callable[[], None]]:
-        
         menuitems = []  # type: List[wx.MenuItem]
-        if isinstance(node, (_ResourceNode, ResourceGroupNode)):
-            selection_urllike = self._url_or_url_prefix_for(node)
-            selection_domain_prefix = EntityTree._get_url_domain_prefix_for(selection_urllike)
-            selection_dir_prefix = EntityTree._get_url_directory_prefix_for(selection_urllike)
-            if self._project.default_url_prefix == selection_domain_prefix:
-                menuitems.append(wx.MenuItem(
-                    None, self._ID_CLEAR_PREFIX, 'Clear Default Domain'))
-            else:
-                prefix_descriptor = self._try_remove_http_scheme(selection_domain_prefix)
-                menuitems.append(wx.MenuItem(
-                    None,
-                    self._ID_SET_DOMAIN_PREFIX,
-                    f'Set As Default Domain: {prefix_descriptor}'
-                        if menu_type == 'popup'
-                        else 'Set As Default Domain'))
-            if selection_dir_prefix != selection_domain_prefix:
-                if self._project.default_url_prefix == selection_dir_prefix:
-                    menuitems.append(wx.MenuItem(
-                        None, self._ID_CLEAR_PREFIX, 'Clear Default Directory'))
-                else:
-                    prefix_descriptor = self._try_remove_http_scheme(selection_dir_prefix)
-                    menuitems.append(wx.MenuItem(
-                        None,
-                        self._ID_SET_DIRECTORY_PREFIX,
-                        f'Set As Default Directory: {prefix_descriptor}'
-                            if menu_type == 'popup'
-                            else 'Set As Default Directory'))
-            on_attach_menuitems = lambda: None
-        else:
+        on_attach_menuitems = lambda: None
+        def append_disabled_menuitem() -> None:
+            nonlocal on_attach_menuitems
             mi = wx.MenuItem(None, self._ID_SET_DOMAIN_PREFIX, 'Set As Default Domain')
             # NOTE: wxGTK does not allow altering a wx.MenuItem's Enabled
             #       state until it is attached to a wx.Menu
             on_attach_menuitems = lambda: mi.Enable(False)
             menuitems.append(mi)
+        if isinstance(node, (_ResourceNode, ResourceGroupNode)):
+            selection_urllike = self._url_or_url_prefix_for(node)
+            selection_domain_prefix = get_url_domain_prefix_for(selection_urllike)
+            selection_dir_prefix = get_url_directory_prefix_for(selection_urllike)
+            if selection_domain_prefix is None:
+                append_disabled_menuitem()
+            else:
+                if self._project.default_url_prefix == selection_domain_prefix:
+                    menuitems.append(wx.MenuItem(
+                        None, self._ID_CLEAR_PREFIX, 'Clear Default Domain'))
+                else:
+                    prefix_descriptor = self._try_remove_http_scheme(selection_domain_prefix)
+                    menuitems.append(wx.MenuItem(
+                        None,
+                        self._ID_SET_DOMAIN_PREFIX,
+                        f'Set As Default Domain: {prefix_descriptor}'
+                            if menu_type == 'popup'
+                            else 'Set As Default Domain'))
+                assert selection_dir_prefix is not None
+                if selection_dir_prefix != selection_domain_prefix:
+                    if self._project.default_url_prefix == selection_dir_prefix:
+                        menuitems.append(wx.MenuItem(
+                            None, self._ID_CLEAR_PREFIX, 'Clear Default Directory'))
+                    else:
+                        prefix_descriptor = self._try_remove_http_scheme(selection_dir_prefix)
+                        menuitems.append(wx.MenuItem(
+                            None,
+                            self._ID_SET_DIRECTORY_PREFIX,
+                            f'Set As Default Directory: {prefix_descriptor}'
+                                if menu_type == 'popup'
+                                else 'Set As Default Directory'))
+        else:
+            append_disabled_menuitem()
         assert len(menuitems) > 0
-        
         return (menuitems, on_attach_menuitems)
     
     @capture_crashes_to_self
@@ -345,22 +354,35 @@ class EntityTree(Bulkhead):
         item_id = event.Id
         if item_id == self._ID_SET_DOMAIN_PREFIX:
             assert isinstance(node, (_ResourceNode, ResourceGroupNode))
-            self._project.default_url_prefix = (
-                EntityTree._get_url_domain_prefix_for(
-                    self._url_or_url_prefix_for(node)))
-            self._did_change_default_url_prefix()
+            self.set_default_url_prefix('domain', self._url_or_url_prefix_for(node))
         elif item_id == self._ID_SET_DIRECTORY_PREFIX:
             assert isinstance(node, (_ResourceNode, ResourceGroupNode))
-            self._project.default_url_prefix = (
-                EntityTree._get_url_directory_prefix_for(
-                    self._url_or_url_prefix_for(node)))
-            self._did_change_default_url_prefix()
+            self.set_default_url_prefix('directory', self._url_or_url_prefix_for(node))
         elif item_id == self._ID_CLEAR_PREFIX:
-            self._project.default_url_prefix = None
-            self._did_change_default_url_prefix()
+            self.clear_default_url_prefix()
         else:
             # Some other menuitem
             pass
+    
+    def set_default_url_prefix(self,
+            prefix_type: Literal['domain', 'directory'],
+            url_or_url_prefix: str
+            ) -> None:
+        if prefix_type == 'domain':
+            new_default_url_prefix = (
+                get_url_domain_prefix_for(url_or_url_prefix))
+        elif prefix_type == 'directory':
+            new_default_url_prefix = (
+                get_url_directory_prefix_for(url_or_url_prefix))
+        else:
+            raise ValueError()
+        if new_default_url_prefix is not None:
+            self._project.default_url_prefix = new_default_url_prefix
+            self._did_change_default_url_prefix()
+    
+    def clear_default_url_prefix(self) -> None:
+        self._project.default_url_prefix = None
+        self._did_change_default_url_prefix()
     
     def _did_change_default_url_prefix(self) -> None:
         self.root.update_descendants()  # update "Offsite" ClusterNodes
@@ -375,38 +397,6 @@ class EntityTree(Bulkhead):
                 node.resource_group.url_pattern)
         else:
             raise ValueError()
-    
-    @staticmethod
-    def _get_url_domain_prefix_for(url_or_url_prefix: str) -> str:
-        """
-        Given a URL or URL prefix, returns the URL for its enclosing domain,
-        with no trailing slash.
-        """
-        url_components = urlparse(url_or_url_prefix)
-        
-        return urlunparse(url_components._replace(
-            path='',
-            params='',
-            query='',
-            fragment='',
-        ))
-    
-    @staticmethod
-    def _get_url_directory_prefix_for(url_or_url_prefix: str) -> str:
-        """
-        Given a URL or URL prefix, returns the URL for its enclosing directory,
-        with no trailing slash.
-        """
-        url_components = urlparse(url_or_url_prefix)
-        
-        # If URL path contains slash, chop last slash and everything following it
-        path = url_components.path
-        if '/' in path:
-            new_path = path[:path.rindex('/')]
-        else:
-            new_path = path
-        
-        return urlunparse(url_components._replace(path=new_path))
     
     @staticmethod
     def _try_remove_http_scheme(url_or_url_prefix: str) -> str:

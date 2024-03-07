@@ -2,7 +2,7 @@ from contextlib import contextmanager, nullcontext
 from crystal import APP_NAME
 from crystal import __version__ as crystal_version
 from crystal.browser.new_group import NewGroupDialog
-from crystal.browser.new_root_url import NewRootUrlDialog
+from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
 from crystal.browser.entitytree import EntityTree, ResourceGroupNode, RootResourceNode
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.browser.preferences import PreferencesDialog
@@ -22,8 +22,13 @@ from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
 from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
 from crystal.util.bulkheads import capture_crashes_to_stderr, capture_crashes_to
+from crystal.util.ellipsis import EllipsisType
 from crystal.util.finderinfo import get_hide_file_extension
 from crystal.util.unicode_labels import decorate_label
+from crystal.util.url_prefix import (
+    get_url_directory_prefix_for,
+    get_url_domain_prefix_for,
+)
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import set_dialog_or_frame_icon_if_appropriate
 from crystal.util.xos import (
@@ -496,6 +501,8 @@ class MainWindow:
             url_exists_func=self._root_url_exists,
             initial_url=self._suggested_url_or_url_pattern_for_selection or '',
             initial_name=self._suggested_name_for_selection or '',
+            initial_set_as_default_domain=(self.project.default_url_prefix is None),
+            initial_set_as_default_directory=False,
         )
     
     def _root_url_exists(self, url: str) -> bool:
@@ -506,23 +513,49 @@ class MainWindow:
         return rr is not None
     
     @fg_affinity
-    def _on_new_root_url_dialog_ok(self, name: str, url: str) -> None:
+    def _on_new_root_url_dialog_ok(self,
+            name: str,
+            url: str,
+            change_prefix_command: ChangePrefixCommand,
+            ) -> None:
         if url == '':
             raise ValueError('Invalid blank URL')
+        
         try:
             RootResource(self.project, name, Resource(self.project, url))
         except RootResource.AlreadyExists:
             raise ValueError('Invalid duplicate URL')
+        
+        if isinstance(change_prefix_command, EllipsisType):
+            pass
+        elif change_prefix_command is None:
+            self.entity_tree.clear_default_url_prefix()
+        else:
+            self.entity_tree.set_default_url_prefix(*change_prefix_command)
     
     @fg_affinity
-    def _on_edit_root_url_dialog_ok(self, rr: RootResource, name: str, url: str) -> None:
+    def _on_edit_root_url_dialog_ok(self,
+            rr: RootResource,
+            name: str,
+            url: str,
+            change_prefix_command: ChangePrefixCommand,
+            ) -> None:
         if url != rr.url:
             raise ValueError()
-        rr.name = name
         
-        # TODO: This update should happen in response to an event
-        #       fired by the entity itself.
-        self.entity_tree.root.update_title_of_descendants()  # update names in titles
+        if name != rr.name:
+            rr.name = name
+            
+            # TODO: This update should happen in response to an event
+            #       fired by the entity itself.
+            self.entity_tree.root.update_title_of_descendants()  # update names in titles
+        
+        if isinstance(change_prefix_command, EllipsisType):
+            pass
+        elif change_prefix_command is None:
+            self.entity_tree.clear_default_url_prefix()
+        else:
+            self.entity_tree.set_default_url_prefix(*change_prefix_command)
     
     # === Entity Pane: New/Edit Group ===
     
@@ -588,12 +621,28 @@ class MainWindow:
         
         if isinstance(selected_entity, RootResource):
             rr = selected_entity
+            selection_urllike = rr.resource.url
+            selection_domain_prefix = get_url_domain_prefix_for(selection_urllike)
+            selection_dir_prefix = get_url_directory_prefix_for(selection_urllike)
             NewRootUrlDialog(
                 self._frame,
                 partial(self._on_edit_root_url_dialog_ok, rr),
                 url_exists_func=self._root_url_exists,
                 initial_url=rr.url,
                 initial_name=rr.name,
+                initial_set_as_default_domain=(
+                    selection_domain_prefix is not None and
+                    self.project.default_url_prefix == selection_domain_prefix
+                ),
+                initial_set_as_default_directory=(
+                    selection_dir_prefix is not None and
+                    selection_dir_prefix != selection_domain_prefix and
+                    self.project.default_url_prefix == selection_dir_prefix
+                ),
+                allow_set_as_default_domain_or_directory=(
+                    selection_domain_prefix is not None or
+                    selection_dir_prefix is not None
+                ),
                 is_edit=True,
             )
         elif isinstance(selected_entity, ResourceGroup):

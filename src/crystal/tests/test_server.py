@@ -68,7 +68,7 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
             expected_port = _DEFAULT_SERVER_PORT + 1
             home_ti.SelectItem()
             try:
-                with assert_does_open_webbrowser_to(get_request_url(home_url, expected_port)):
+                with assert_does_open_webbrowser_to(get_request_url(home_url, expected_port, project_default_url_prefix=project.default_url_prefix)):
                     click_button(mw.view_button)
             finally:
                 assert is_port_in_use(expected_port)

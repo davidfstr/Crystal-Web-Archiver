@@ -29,6 +29,7 @@ import re
 import tempfile
 from typing import List, Union
 from unittest import skip
+from urllib.parse import urlparse
 
 
 # ------------------------------------------------------------------------------
@@ -73,6 +74,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     
                     nud.name_field.Value = 'Home'
                     nud.url_field.Value = home_url
+                    nud.do_not_set_default_url_prefix()
                     await nud.ok()
                     home_ti = root_ti.GetFirstChild()
                     assert home_ti is not None  # entity was created
@@ -388,6 +390,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_set_default_url_prefix()
                 await nud.ok()
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None  # entity was created
@@ -528,6 +531,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = target_root_resource_name
                 nud.url_field.Value = target_url
+                nud.do_not_set_default_url_prefix()
                 await nud.ok()
                 
                 # Refresh the home page.
@@ -590,7 +594,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                 await nud.ok()
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None  # entity was created
-                assert f'{home_url} - Home' == home_ti.Text
+                assert f'{urlparse(home_url).path} - Home' == home_ti.Text
                 
                 home_ti.SelectItem()
                 await mw.click_download_button()
@@ -701,6 +705,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                     nud = await NewRootUrlDialog.wait_for()
                     nud.name_field.Value = 'Home'
                     nud.url_field.Value = home_url
+                    nud.do_not_set_default_url_prefix()
                     await nud.ok()
                     home_ti = root_ti.GetFirstChild()
                     assert home_ti is not None  # entity was created
@@ -839,7 +844,7 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 
                 # Start server
                 home_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
                     click_button(mw.view_button)
                 
                 # Verify etag is v1 for both
@@ -976,6 +981,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 nud = await NewRootUrlDialog.wait_for()
                 
                 nud.url_field.Value = home_url
+                nud.do_not_set_default_url_prefix()
                 await nud.ok()
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None  # entity was created

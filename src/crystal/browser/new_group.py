@@ -10,6 +10,7 @@ from crystal.util.wx_dialog import (
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_mac_os, is_windows
+from crystal.util.xthreading import fg_affinity
 import sys
 from typing import Callable, Optional, Tuple, Union
 import wx
@@ -407,6 +408,7 @@ class NewGroupDialog:
     def _on_pattern_field_changed(self, event) -> None:
         self._update_preview_urls()
     
+    @fg_affinity
     def _on_button(self, event: wx.CommandEvent) -> None:
         btn_id = event.GetEventObject().GetId()
         if btn_id in (wx.ID_NEW, wx.ID_SAVE):
@@ -416,9 +418,11 @@ class NewGroupDialog:
         elif btn_id == wx.ID_MORE:
             self._on_options_toggle()
     
+    @fg_affinity
     def _on_close(self, event: wx.CloseEvent) -> None:
         self._on_cancel()
     
+    @fg_affinity
     def _on_ok(self) -> None:
         name = self.name_field.Value
         url_pattern = self.pattern_field.Value.strip()
@@ -453,9 +457,11 @@ class NewGroupDialog:
         
         self.dialog.Destroy()
     
+    @fg_affinity
     def _on_cancel(self) -> None:
         self.dialog.Destroy()
     
+    @fg_affinity
     def _on_options_toggle(self) -> None:
         options = self._options_sizer.GetStaticBox()
         if options.Shown:
