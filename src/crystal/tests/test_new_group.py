@@ -12,6 +12,7 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import (
     NewGroupDialog, NewRootUrlDialog, EntityTree, MainWindow, OpenOrCreateDialog,
 )
+from crystal.tests.util.xurlparse import urlpatternparse
 from crystal.util.xos import is_windows
 import re
 from typing import Optional
@@ -43,6 +44,7 @@ async def test_can_create_group_with_source(
                 
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_set_default_url_prefix()
                 await nud.ok()
             
             # Create a group
@@ -169,6 +171,9 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
             # Create home URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -190,8 +195,8 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
             
             # Select a comic link from the home URL
-            comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
-            assert f'{comic1_url} - Link: |<, Link: |<' == comic1_ti.Text  # ensure expected links grouped
+            comic1_ti = home_ti.find_child(comic1_url, project.default_url_prefix)  # ensure did find sub-resource for Comic #1
+            assert f'{urlpatternparse(comic1_url).path} - Link: |<, Link: |<' == comic1_ti.Text  # ensure expected links grouped
             comic1_ti.SelectItem()
             
             # Create a group to bundle the comic links together
@@ -236,14 +241,14 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             # 1. Ensure the new resource group does now bundle the comic links together
             # 2. Ensure the bundled link is selected immediately after closing the add group dialog
             if True:
-                grouped_subresources_ti = home_ti.find_child(comic_pattern)  # ensure did find grouped sub-resources
+                grouped_subresources_ti = home_ti.find_child(comic_pattern, project.default_url_prefix)  # ensure did find grouped sub-resources
                 assert re.fullmatch(
-                    rf'{re.escape(comic_pattern)} - \d+ of Comic',  # title format of grouped sub-resources
+                    rf'{re.escape(urlpatternparse(comic_pattern).path)} - \d+ of Comic',  # title format of grouped sub-resources
                     grouped_subresources_ti.Text)
                 
                 # Ensure the bundled link is selected immediately after closing the add group dialog
                 assert grouped_subresources_ti.IsExpanded()
-                comic1_ti = grouped_subresources_ti.find_child(comic1_url)  # contains first comic
+                comic1_ti = grouped_subresources_ti.find_child(comic1_url, project.default_url_prefix)  # contains first comic
                 assert len(grouped_subresources_ti.Children) >= 2  # contains last comic too
                 assert comic1_ti.IsSelected()
             
@@ -262,7 +267,7 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 
                 # 1. Ensure can find the first unbundled link
                 # 2. Ensure that first unbundled link is selected immediately after forgetting the group
-                comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
+                comic1_ti = home_ti.find_child(comic1_url, project.default_url_prefix)  # ensure did find sub-resource for Comic #1
                 assert comic1_ti.IsSelected()
 
 
@@ -312,7 +317,7 @@ async def test_given_node_is_selected_in_entity_tree_when_press_new_group_button
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             
             # Set Default URL Prefix so that Offsite clusters appear
-            await mw.entity_tree.set_default_url_prefix_to_resource_at_tree_item(
+            await mw.entity_tree.set_default_directory_to_entity_at_tree_item(
                 _find_child(root_ti, home_url))
             url_prefix = project.default_url_prefix
             

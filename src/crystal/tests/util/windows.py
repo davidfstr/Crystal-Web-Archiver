@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-
 from crystal.browser.new_root_url import NewRootUrlDialog as RealNewRootUrlDialog
 from crystal.model import Project
 from crystal.tests.util.controls import (
@@ -200,6 +199,16 @@ class MainWindow:
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use MainWindow.wait_for()?'
     
+    # === Menubar ===
+    
+    @property
+    def entity_menu(self) -> wx.Menu:
+        mb = self.main_window.MenuBar
+        entity_menu_index = mb.FindMenu('Entity')
+        assert entity_menu_index != wx.NOT_FOUND
+        entity_menu = mb.GetMenu(entity_menu_index)
+        return entity_menu
+    
     # === Properties ===
     
     @property
@@ -321,6 +330,10 @@ class NewRootUrlDialog:
     ok_button: wx.Button
     cancel_button: wx.Button
     
+    options_button: wx.Button
+    set_as_default_domain_checkbox: wx.CheckBox
+    set_as_default_directory_checkbox: wx.CheckBox
+    
     @staticmethod
     async def wait_for() -> NewRootUrlDialog:
         self = NewRootUrlDialog(ready=True)
@@ -340,6 +353,12 @@ class NewRootUrlDialog:
         assert isinstance(self.ok_button, wx.Button)
         self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
         assert isinstance(self.cancel_button, wx.Button)
+        self.options_button = self._dialog.FindWindow(id=wx.ID_MORE)
+        assert isinstance(self.options_button, wx.Button)
+        self.set_as_default_domain_checkbox = self._dialog.FindWindow(name='cr-new-root-url-dialog__set-as-default-domain-checkbox')
+        assert isinstance(self.set_as_default_domain_checkbox, wx.CheckBox)
+        self.set_as_default_directory_checkbox = self._dialog.FindWindow(name='cr-new-root-url-dialog__set-as-default-directory-checkbox')
+        assert isinstance(self.set_as_default_directory_checkbox, wx.CheckBox)
         return self
     
     def __init__(self, *, ready: bool=False) -> None:
@@ -362,6 +381,21 @@ class NewRootUrlDialog:
     async def cancel(self) -> None:
         click_button(self.cancel_button)
         await wait_for(not_condition(window_condition('cr-new-root-url-dialog')), stacklevel_extra=1)
+    
+    def do_not_set_default_url_prefix(self) -> None:
+        """
+        Configures the URL being created to NOT also set it as the default domain.
+        
+        Several test infrastructure methods (like TreeItem.find_child) are easier
+        to use when there is no Default URL Prefix set, so some tests intentionally
+        avoid setting a Default URL Prefix.
+        """
+        click_button(self.options_button)
+        if self.set_as_default_domain_checkbox.Value:
+            self.set_as_default_domain_checkbox.Value = False
+        
+        assert False == self.set_as_default_domain_checkbox.Value
+        assert False == self.set_as_default_directory_checkbox.Value
 
 
 class NewGroupDialog:
@@ -515,7 +549,7 @@ class EntityTree:
     async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> Optional[str]:
         if tree_item.tree != self.window:
             raise ValueError()
-        return tree_item.Tooltip
+        return tree_item.Tooltip('icon')
     
     @staticmethod
     async def assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
@@ -523,25 +557,66 @@ class EntityTree:
         assert tooltip is not None and value in tooltip, \
             f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
     
-    async def set_default_url_prefix_to_resource_at_tree_item(self, tree_item: TreeItem) -> None:
-        from crystal.browser.entitytree import _ID_SET_PREFIX
-        
-        if tree_item.tree != self.window:
-            raise ValueError()
-        
+    async def set_default_domain_to_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Set As Default Domain')
+    
+    async def set_default_directory_to_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Set As Default Directory')
+    
+    async def clear_default_domain_from_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Clear Default Domain')
+    
+    async def clear_default_directory_from_entity_at_tree_item(self, tree_item: TreeItem) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
+        await self._choose_action_for_entity_at_tree_item(tree_item, 'Clear Default Directory')
+    
+    async def _choose_action_for_entity_at_tree_item(self,
+            tree_item: TreeItem,
+            action_prefix: str) -> None:
+        """
+        Raises:
+        * MenuitemMissingError
+        * MenuitemDisabledError
+        """
         def show_popup(menu: wx.Menu) -> None:
-            (set_prefix_menuitem,) = [
-                mi for mi in menu.MenuItems
-                # TODO: Search for menuitem by title rather than by internal ID
-                if mi.Id == _ID_SET_PREFIX
-            ]
-            assert set_prefix_menuitem.Enabled
-            
+            try:
+                (set_prefix_menuitem,) = [
+                    mi for mi in menu.MenuItems
+                    if mi.ItemLabelText.startswith(action_prefix)
+                ]
+            except ValueError:  # not enough values to unpack
+                raise MenuitemMissingError()
+            if not set_prefix_menuitem.Enabled:
+                raise MenuitemDisabledError()
             select_menuitem_now(menu, set_prefix_menuitem.Id)
-            
         await tree_item.right_click_showing_popup_menu(show_popup)
-        # TODO: Is this unused? If so, remove. If not, comment.
-        await pump_wx_events()
+
+
+class MenuitemMissingError(ValueError):
+    pass
+
+
+class MenuitemDisabledError(ValueError):
+    pass
 
 
 # ------------------------------------------------------------------------------

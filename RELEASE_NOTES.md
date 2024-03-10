@@ -36,6 +36,21 @@ Release Notes ⋮
     * Can now edit the name and source of Root URLs and Groups after creation.
     * Can mark resource group as "do not download" to prevent their members
       from being downloaded when in an embedded context.
+    * By default the Default Domain will be set to match the first Root URL
+      created, enabling reliable serving of more-modern websites with
+      client-side URL routing.
+
+* Improved support for Default URL Prefixes
+    * Can now set a Default Domain when serving a downloaded project.
+      Previously only a Default Directory could be set.
+    * The Default Domain/Directory can be set to match a Root URL that
+      is being created or edited.
+    * A top-level menuitem can now be used to set the Default Domain/Directory
+      to match an existing Root URL. Previously it was necessary to use a
+      right-click menuitem instead.
+    * Hovering over a URL or Group in the Entity Tree always shows the
+      full URL or URL Pattern for the entity, even if a Default Domain
+      or Default Directory is set.
 
 * Downloading improvements
     * Remaining time is now reported while downloading groups whose members

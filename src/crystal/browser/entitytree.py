@@ -30,6 +30,10 @@ from crystal.util.bulkheads import (
     run_bulkhead_call,
 )
 from crystal.util.notimplemented import NotImplemented, NotImplementedType
+from crystal.util.url_prefix import (
+    get_url_directory_prefix_for,
+    get_url_domain_prefix_for,
+)
 from crystal.util.wx_bind import bind
 from crystal.util.wx_treeitem_gettooltip import EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent
 from crystal.util.xcollections.ordereddict import defaultordereddict
@@ -38,7 +42,7 @@ from crystal.util.xthreading import bg_call_later, fg_call_later
 import os
 import threading
 import time
-from typing import cast, final, List, Optional, Union
+from typing import cast, final, List, Literal, Optional, Union
 from typing_extensions import override
 from urllib.parse import urljoin, urlparse, urlunparse
 import wx
@@ -50,14 +54,14 @@ DeferrableResourceGroupSource = Union[
 ]
 
 
-_ID_SET_PREFIX = 101
-_ID_CLEAR_PREFIX = 102
-
-
 class EntityTree(Bulkhead):
     """
     Displays a tree of top-level project entities.
     """
+    _ID_SET_DOMAIN_PREFIX = 101
+    _ID_SET_DIRECTORY_PREFIX = 102
+    _ID_CLEAR_PREFIX = 103
+    
     def __init__(self,
             parent_peer: wx.Window,
             project: Project,
@@ -128,11 +132,18 @@ class EntityTree(Bulkhead):
     
     @property
     def selected_entity(self) -> Optional[NodeEntity]:
+        selected_node = self.selected_node
+        if selected_node is None:
+            return None
+        return selected_node.entity
+    
+    @property
+    def selected_node(self) -> Optional[Node]:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
         selected_node = Node.for_node_view(selected_node_view)
-        return selected_node.entity
+        return selected_node
     
     @property
     def source_of_selection(self) -> ResourceGroupSource:
@@ -272,60 +283,128 @@ class EntityTree(Bulkhead):
         
         # Create popup menu
         menu = wx.Menu()
+        (cup_mis, on_attach_menuitems) = \
+            self.create_change_url_prefix_menuitems_for(node, menu_type='popup')
+        for mi in cup_mis:
+            menu.Append(mi)
+        on_attach_menuitems()
         bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
-        if isinstance(node, _ResourceNode):
-            if self._project.default_url_prefix == (
-                    EntityTree._get_url_prefix_for_resource(node.resource)):
-                menu.Append(_ID_CLEAR_PREFIX, 'Clear Default URL Prefix')
-            else:
-                menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
-        else:
-            menu.Append(_ID_SET_PREFIX, 'Set As Default URL Prefix')
-            menu.Enable(_ID_SET_PREFIX, False)
-        assert menu.GetMenuItemCount() > 0
         
         # Show popup menu
         self.peer.PopupMenu(menu)
         menu.Destroy()
     
+    def create_change_url_prefix_menuitems_for(self,
+            node: Optional[Node],
+            *, menu_type: Literal['popup', 'top_level']
+            ) -> Tuple[List[wx.MenuItem], Callable[[], None]]:
+        menuitems = []  # type: List[wx.MenuItem]
+        on_attach_menuitems = lambda: None
+        def append_disabled_menuitem() -> None:
+            nonlocal on_attach_menuitems
+            mi = wx.MenuItem(None, self._ID_SET_DOMAIN_PREFIX, 'Set As Default Domain')
+            # NOTE: wxGTK does not allow altering a wx.MenuItem's Enabled
+            #       state until it is attached to a wx.Menu
+            on_attach_menuitems = lambda: mi.Enable(False)
+            menuitems.append(mi)
+        if isinstance(node, (_ResourceNode, ResourceGroupNode)):
+            selection_urllike = self._url_or_url_prefix_for(node)
+            selection_domain_prefix = get_url_domain_prefix_for(selection_urllike)
+            selection_dir_prefix = get_url_directory_prefix_for(selection_urllike)
+            if selection_domain_prefix is None:
+                append_disabled_menuitem()
+            else:
+                if self._project.default_url_prefix == selection_domain_prefix:
+                    menuitems.append(wx.MenuItem(
+                        None, self._ID_CLEAR_PREFIX, 'Clear Default Domain'))
+                else:
+                    prefix_descriptor = self._try_remove_http_scheme(selection_domain_prefix)
+                    menuitems.append(wx.MenuItem(
+                        None,
+                        self._ID_SET_DOMAIN_PREFIX,
+                        f'Set As Default Domain: {prefix_descriptor}'
+                            if menu_type == 'popup'
+                            else 'Set As Default Domain'))
+                assert selection_dir_prefix is not None
+                if selection_dir_prefix != selection_domain_prefix:
+                    if self._project.default_url_prefix == selection_dir_prefix:
+                        menuitems.append(wx.MenuItem(
+                            None, self._ID_CLEAR_PREFIX, 'Clear Default Directory'))
+                    else:
+                        prefix_descriptor = self._try_remove_http_scheme(selection_dir_prefix)
+                        menuitems.append(wx.MenuItem(
+                            None,
+                            self._ID_SET_DIRECTORY_PREFIX,
+                            f'Set As Default Directory: {prefix_descriptor}'
+                                if menu_type == 'popup'
+                                else 'Set As Default Directory'))
+        else:
+            append_disabled_menuitem()
+        assert len(menuitems) > 0
+        return (menuitems, on_attach_menuitems)
+    
     @capture_crashes_to_self
     def _on_popup_menuitem_selected(self, event: wx.MenuEvent) -> None:
-        node = self._right_clicked_node
+        self.on_change_url_prefix_menuitem_selected(event, self._right_clicked_node)
+    
+    @capture_crashes_to_self
+    def on_change_url_prefix_menuitem_selected(self, event: wx.MenuEvent, node: Optional[Node]) -> None:
         assert node is not None
         
-        item_id = event.GetId()
-        if item_id == _ID_SET_PREFIX:
-            assert isinstance(node, _ResourceNode)
-            self._project.default_url_prefix = (
-                EntityTree._get_url_prefix_for_resource(node.resource))
+        item_id = event.Id
+        if item_id == self._ID_SET_DOMAIN_PREFIX:
+            assert isinstance(node, (_ResourceNode, ResourceGroupNode))
+            self.set_default_url_prefix('domain', self._url_or_url_prefix_for(node))
+        elif item_id == self._ID_SET_DIRECTORY_PREFIX:
+            assert isinstance(node, (_ResourceNode, ResourceGroupNode))
+            self.set_default_url_prefix('directory', self._url_or_url_prefix_for(node))
+        elif item_id == self._ID_CLEAR_PREFIX:
+            self.clear_default_url_prefix()
+        else:
+            # Some other menuitem
+            pass
+    
+    def set_default_url_prefix(self,
+            prefix_type: Literal['domain', 'directory'],
+            url_or_url_prefix: str
+            ) -> None:
+        if prefix_type == 'domain':
+            new_default_url_prefix = (
+                get_url_domain_prefix_for(url_or_url_prefix))
+        elif prefix_type == 'directory':
+            new_default_url_prefix = (
+                get_url_directory_prefix_for(url_or_url_prefix))
+        else:
+            raise ValueError()
+        if new_default_url_prefix is not None:
+            self._project.default_url_prefix = new_default_url_prefix
             self._did_change_default_url_prefix()
-        elif item_id == _ID_CLEAR_PREFIX:
-            self._project.default_url_prefix = None
-            self._did_change_default_url_prefix()
+    
+    def clear_default_url_prefix(self) -> None:
+        self._project.default_url_prefix = None
+        self._did_change_default_url_prefix()
     
     def _did_change_default_url_prefix(self) -> None:
         self.root.update_descendants()  # update "Offsite" ClusterNodes
         self.root.update_title_of_descendants()  # update URLs in titles
     
     @staticmethod
-    def _get_url_prefix_for_resource(resource):
-        """
-        Given a resource, returns the URL prefix that will chop off everything
-        before the resource's enclosing directory.
-        """
-        url = resource.url
-        url_components = urlparse(url)
-        
-        # If URL path contains slash, chop last slash and everything following it
-        path = url_components.path
-        if '/' in path:
-            new_path = path[:path.rindex('/')]
+    def _url_or_url_prefix_for(node: Union[_ResourceNode, ResourceGroupNode]) -> str:
+        if isinstance(node, _ResourceNode):
+            return node.resource.url
+        elif isinstance(node, ResourceGroupNode):
+            return ResourceGroup.literal_prefix_for_url_pattern(
+                node.resource_group.url_pattern)
         else:
-            new_path = path
-        
-        new_url_components = list(url_components)
-        new_url_components[2] = new_path
-        return urlunparse(new_url_components)
+            raise ValueError()
+    
+    @staticmethod
+    def _try_remove_http_scheme(url_or_url_prefix: str) -> str:
+        if url_or_url_prefix.lower().startswith('https://'):
+            return url_or_url_prefix[len('https://'):]
+        if url_or_url_prefix.lower().startswith('http://'):
+            return url_or_url_prefix[len('http://'):]
+        return url_or_url_prefix
     
     # === Event: Mouse Motion, Get Tooltip ===
     
@@ -334,20 +413,27 @@ class EntityTree(Bulkhead):
     def _on_mouse_motion(self, event: wx.MouseEvent) -> None:
         (tree_item_id, hit_flags) = self.peer.HitTest(event.Position)
         if (hit_flags & wx.TREE_HITTEST_ONITEMICON) != 0:
-            new_tooltip = self._icon_tooltip_for_tree_item_id(tree_item_id)
+            new_tooltip = self._tooltip_for_tree_item_id(tree_item_id, 'icon')
+        elif (hit_flags & wx.TREE_HITTEST_ONITEMLABEL) != 0:
+            new_tooltip = self._tooltip_for_tree_item_id(tree_item_id, 'label')
         else:
             new_tooltip = None
         
         self.peer.SetToolTip(new_tooltip)
     
     @capture_crashes_to_self
-    def _on_get_tooltip_event(self, event: wx.Event) -> None:
-        event.tooltip_cell[0] = self._icon_tooltip_for_tree_item_id(event.tree_item_id)
+    def _on_get_tooltip_event(self, event: GetTooltipEvent) -> None:
+        event.tooltip_cell[0] = self._tooltip_for_tree_item_id(event.tree_item_id, event.tooltip_type)
     
-    def _icon_tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId) -> Optional[str]:
+    def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId, tooltip_type: Literal['icon', 'label']) -> Optional[str]:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
         node = Node.for_node_view(node_view)
-        return node.icon_tooltip
+        if tooltip_type == 'icon':
+            return node.icon_tooltip
+        elif tooltip_type == 'label':
+            return node.label_tooltip
+        else:
+            raise ValueError()
     
     # === Dispose ===
     
@@ -414,6 +500,13 @@ class Node(Bulkhead):
     def icon_tooltip(self) -> Optional[str]:
         """
         The tooltip to display when the mouse hovers over this node's icon.
+        """
+        return None
+    
+    @property
+    def label_tooltip(self) -> Optional[str]:
+        """
+        The tooltip to display when the mouse hovers over this node's label.
         """
         return None
     
@@ -720,6 +813,7 @@ class _ResourceNode(Node):
                     # Error
                     return 'warning'
     
+    @override
     @property
     def icon_tooltip(self) -> Optional[str]:
         return '%s %s' % (self._status_badge_tooltip, self._entity_tooltip)
@@ -743,6 +837,11 @@ class _ResourceNode(Node):
     @property
     def _entity_tooltip(self) -> str:  # abstract
         raise NotImplementedError()
+    
+    @override
+    @property
+    def label_tooltip(self) -> str:
+        return f'URL: {self.resource.url}'
     
     @override
     @property
@@ -1000,6 +1099,19 @@ class RootResourceNode(_ResourceNode):
     
     @override
     @property
+    def label_tooltip(self) -> str:
+        if self.root_resource.name != '':
+            return (
+                f'URL: {self.resource.url}\n'
+                f'Name: {self.root_resource.name}'
+            )
+        else:
+            return (
+                f'URL: {self.resource.url}'
+            )
+    
+    @override
+    @property
     def entity(self) -> RootResource:
         return self.root_resource
     
@@ -1106,12 +1218,12 @@ class ClusterNode(Node):
             title: str,
             children,
             icon_set: IconSet,
-            icon_tooltip: str,
+            tooltip: str,
             *, source: ResourceGroupSource,
             ) -> None:
         super().__init__(source=source)
         
-        self._icon_tooltip = icon_tooltip
+        self._tooltip = tooltip
         
         self.view = NodeView()
         self.view.icon_set = icon_set
@@ -1123,9 +1235,15 @@ class ClusterNode(Node):
     
     # === Properties ===
     
+    @override
     @property
-    def icon_tooltip(self) -> Optional[str]:
-        return self._icon_tooltip
+    def icon_tooltip(self) -> str:
+        return self._tooltip
+    
+    @override
+    @property
+    def label_tooltip(self) -> str:
+        return self._tooltip
     
     # === Comparison ===
     
@@ -1170,6 +1288,7 @@ class _GroupedNode(Node):  # abstract
         else:
             return None
     
+    @override
     @property
     def icon_tooltip(self) -> Optional[str]:
         status_badge_name = self._status_badge_name()
@@ -1179,6 +1298,19 @@ class _GroupedNode(Node):  # abstract
             return f'Ignored {self.entity_tooltip}'
         else:
             raise AssertionError()
+        
+    @override
+    @property
+    def label_tooltip(self) -> str:
+        if self.resource_group.name != '':
+            return (
+                f'URL Pattern: {self.resource_group.url_pattern}\n'
+                f'Name: {self.resource_group.name}'
+            )
+        else:
+            return (
+                f'URL Pattern: {self.resource_group.url_pattern}'
+            )
 
 
 class ResourceGroupNode(_GroupedNode):

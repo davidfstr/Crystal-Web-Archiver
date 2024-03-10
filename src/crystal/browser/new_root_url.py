@@ -1,49 +1,82 @@
 from crystal.url_input import UrlCleaner
+from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
     CreateButtonSizer, position_dialog_initially, ShowModal,
 )
+from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
 import os
-from typing import Callable, Optional
+from typing import Callable, Literal, Optional, Tuple, Union
 import wx
+
+
+ChangePrefixCommand = Union[
+    # Set prefix
+    Tuple[Literal['domain', 'directory'], str],
+    # Clear prefix
+    None,
+    # Leave prefix unchanged
+    EllipsisType,
+]
 
 
 _WINDOW_INNER_PADDING = 10
 _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
+_ABOVE_OPTIONS_PADDING = 10
+
+_OPTIONS_SHOWN_LABEL = 'Basic Options'
+_OPTIONS_NOT_SHOWN_LABEL = 'Advanced Options'
 
 
 class NewRootUrlDialog:
+    _ID_SET_DOMAIN_PREFIX = 101
+    _ID_SET_DIRECTORY_PREFIX = 102
+    
     _INITIAL_URL_WIDTH = 400  # in pixels
     _FIELD_TO_SPINNER_MARGIN = 5
     
     # NOTE: Only changed when tests are running
     _last_opened: 'Optional[NewRootUrlDialog]'=None
     
+    # TODO: Privatize these fields
     url_field: wx.TextCtrl
     name_field: wx.TextCtrl
+    ok_button: wx.Button
+    cancel_button: wx.Button
+    _options_button: wx.Button
+    
+    _set_as_default_domain_checkbox: wx.CheckBox
+    _set_as_default_directory_checkbox: wx.CheckBox
     
     # === Init ===
     
     def __init__(self,
             parent: wx.Window,
-            on_finish: Callable[[str, str], None],
+            on_finish: Callable[[str, str, ChangePrefixCommand], None],
             url_exists_func: Callable[[str], bool],
             initial_url: str='',
             initial_name: str='',
+            initial_set_as_default_domain: bool=False,
+            initial_set_as_default_directory: bool=False,
+            allow_set_as_default_domain_or_directory: bool=True,
             is_edit: bool=False,
             ) -> None:
         """
         Arguments:
         * parent -- parent wx.Window that this dialog is attached to.
-        * on_finish -- called when OK pressed on dialog. Is a callable(name, url).
+        * on_finish -- called when OK pressed on dialog.
         * initial_url -- overrides the initial URL displayed.
         """
         self._on_finish = on_finish
         self._url_exists_func = url_exists_func
+        self._did_own_prefix = (
+            is_edit and
+            (initial_set_as_default_domain or initial_set_as_default_directory)
+        )
         self._is_edit = is_edit
         
         self._url_field_focused = False
@@ -63,13 +96,27 @@ class NewRootUrlDialog:
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         bind(dialog, wx.EVT_WINDOW_DESTROY, self._on_destroyed)
         
-        ok_button_id = (wx.ID_NEW if not is_edit else wx.ID_SAVE)
-        dialog_sizer.Add(self._create_fields(dialog, initial_url, initial_name, is_edit), flag=wx.EXPAND|wx.ALL,
+        dialog_sizer.Add(
+            self._create_fields(dialog, initial_url, initial_name, is_edit),
+            flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
-        dialog_sizer.Add(CreateButtonSizer(dialog, ok_button_id, wx.ID_CANCEL), flag=wx.EXPAND|wx.BOTTOM,
+        
+        self._options_sizer = self._create_advanced_options(
+            dialog,
+            initial_set_as_default_domain, initial_set_as_default_directory,
+            allow_set_as_default_domain_or_directory)
+        dialog_sizer.Add(
+            self._options_sizer,
+            flag=wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT|wx.BOTTOM,
+            border=self._assert_same(
+                _ABOVE_OPTIONS_PADDING,  # wx.TOP
+                _WINDOW_INNER_PADDING,  # wx.LEFT|wx.RIGHT|wx.BOTTOM
+            ))
+    
+        dialog_sizer.Add(
+            self._create_buttons(dialog, is_edit),
+            flag=wx.EXPAND|wx.BOTTOM,
             border=_WINDOW_INNER_PADDING)
-        self.ok_button = dialog.FindWindow(id=ok_button_id)
-        self.cancel_button = dialog.FindWindow(id=wx.ID_CANCEL)
         
         self._update_ok_enabled()
         
@@ -81,8 +128,15 @@ class NewRootUrlDialog:
                 self.name_field.SetFocus()
         
         position_dialog_initially(dialog)
-        dialog.Show(True)
-        dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
+        # TODO: Verify that the wxGTK-specific logic here is actually necessary
+        if not is_wx_gtk():
+            dialog.Fit()
+            self._on_options_toggle()  # collapse options initially
+            dialog.Show(True)
+        else:
+            dialog.Show(True)
+            dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
+            self._on_options_toggle()  # collapse options initially
         
         dialog.MinSize = dialog.Size
         dialog.MaxSize = wx.Size(wx.DefaultCoord, dialog.Size.Height)
@@ -90,6 +144,11 @@ class NewRootUrlDialog:
         # Export reference to self, if running tests
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
             NewRootUrlDialog._last_opened = self
+    
+    @staticmethod
+    def _assert_same(v1: int, v2: int) -> int:
+        assert v1 == v2
+        return v1
     
     def _create_fields(self, parent: wx.Window, initial_url: str, initial_name: str, is_edit: bool) -> wx.Sizer:
         fields_sizer = wx.FlexGridSizer(rows=2, cols=2,
@@ -145,6 +204,63 @@ class NewRootUrlDialog:
             fields_sizer.Add(name_field_and_space, flag=wx.EXPAND)
         
         return fields_sizer
+    
+    def _create_advanced_options(self, parent: wx.Window, *args, **kwargs) -> wx.StaticBoxSizer:
+        options_sizer = wx.StaticBoxSizer(wx.VERTICAL, parent, label='Advanced Options')
+        options_sizer.Add(
+            wrap_static_box_sizer_child(
+                self._create_advanced_options_content(
+                    options_sizer.GetStaticBox(),
+                    *args, **kwargs)),
+            flag=wx.EXPAND)
+        return options_sizer
+    
+    def _create_advanced_options_content(self,
+            parent: wx.Window,
+            initial_set_as_default_domain: bool,
+            initial_set_as_default_directory: bool,
+            allow_set_as_default_domain_or_directory: bool,
+            ) -> wx.Sizer:
+        options_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        self._set_as_default_domain_checkbox = wx.CheckBox(parent,
+            id=self._ID_SET_DOMAIN_PREFIX,
+            label='Set As Default Domain',
+            name='cr-new-root-url-dialog__set-as-default-domain-checkbox')
+        self._set_as_default_domain_checkbox.Value = initial_set_as_default_domain
+        self._set_as_default_domain_checkbox.Enabled = allow_set_as_default_domain_or_directory
+        options_sizer.Add(self._set_as_default_domain_checkbox)
+        
+        self._set_as_default_directory_checkbox = wx.CheckBox(parent,
+            id=self._ID_SET_DIRECTORY_PREFIX,
+            label='Set As Default Directory',
+            name='cr-new-root-url-dialog__set-as-default-directory-checkbox')
+        self._set_as_default_directory_checkbox.Value = initial_set_as_default_directory
+        self._set_as_default_directory_checkbox.Enabled = allow_set_as_default_domain_or_directory
+        options_sizer.Add(self._set_as_default_directory_checkbox)
+        
+        bind(parent, wx.EVT_CHECKBOX, self._on_checkbox)
+        
+        return options_sizer
+    
+    def _create_buttons(self, parent: wx.Window, is_edit: bool) -> wx.Sizer:
+        ok_button_id = (wx.ID_NEW if not is_edit else wx.ID_SAVE)
+        
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        self._options_button = wx.Button(parent, wx.ID_MORE, _OPTIONS_SHOWN_LABEL)
+        button_sizer.Add(
+            self._options_button,
+            flag=wx.CENTER|wx.LEFT,
+            border=_WINDOW_INNER_PADDING)
+        
+        button_sizer.AddStretchSpacer()
+        button_sizer.Add(CreateButtonSizer(parent, ok_button_id, wx.ID_CANCEL), flag=wx.CENTER)
+        
+        self.ok_button = parent.FindWindow(id=ok_button_id)
+        self.cancel_button = parent.FindWindow(id=wx.ID_CANCEL)
+        
+        return button_sizer
     
     # === URL Cleaning ===
     
@@ -237,13 +353,27 @@ class NewRootUrlDialog:
         if event is not None:
             event.Skip()
     
+    @fg_affinity
     def _on_button(self, event: wx.CommandEvent) -> None:
         btn_id = event.GetEventObject().GetId()
         if btn_id in (wx.ID_NEW, wx.ID_SAVE):
             self._on_ok(event)
         elif btn_id == wx.ID_CANCEL:
             self._on_cancel(event)
+        elif btn_id == wx.ID_MORE:
+            self._on_options_toggle()
     
+    @fg_affinity
+    def _on_checkbox(self, event: wx.CommandEvent) -> None:
+        checkbox_id = event.GetEventObject().GetId()
+        if checkbox_id == self._ID_SET_DOMAIN_PREFIX:
+            if self._set_as_default_domain_checkbox.Value:
+                self._set_as_default_directory_checkbox.Value = False
+        elif checkbox_id == self._ID_SET_DIRECTORY_PREFIX:
+            if self._set_as_default_directory_checkbox.Value:
+                self._set_as_default_domain_checkbox.Value = False
+    
+    @fg_affinity
     def _on_close(self, event: wx.CloseEvent) -> None:
         self._on_cancel(event)
     
@@ -281,7 +411,13 @@ class NewRootUrlDialog:
             self.ok_button.Enabled = True
             assert self.cancel_button.Enabled == True
             return
-        self._on_finish(name, url)
+        if self._set_as_default_domain_checkbox.IsChecked():
+            change_prefix_command = ('domain', url)  # type: ChangePrefixCommand
+        elif self._set_as_default_directory_checkbox.IsChecked():
+            change_prefix_command = ('directory', url)
+        else:
+            change_prefix_command = None if self._did_own_prefix else Ellipsis
+        self._on_finish(name, url, change_prefix_command)
         
         self._destroy()
     
@@ -293,6 +429,34 @@ class NewRootUrlDialog:
             self._url_cleaner = None
         
         self._destroy()
+    
+    @fg_affinity
+    def _on_options_toggle(self) -> None:
+        options = self._options_sizer.GetStaticBox()
+        if options.Shown:
+            # Hide
+            self._options_button.Label = _OPTIONS_NOT_SHOWN_LABEL
+            
+            options_height = options.Size.Height + _ABOVE_OPTIONS_PADDING
+            options.Shown = False
+            self.dialog.SetSize(
+                x=wx.DefaultCoord,
+                y=wx.DefaultCoord,
+                width=wx.DefaultCoord,
+                height=self.dialog.Size.Height - options_height,
+                sizeFlags=wx.SIZE_USE_EXISTING)
+        else:
+            # Show
+            self._options_button.Label = _OPTIONS_SHOWN_LABEL
+            
+            options.Shown = True
+            options_height = options.Size.Height + _ABOVE_OPTIONS_PADDING
+            self.dialog.SetSize(
+                x=wx.DefaultCoord,
+                y=wx.DefaultCoord,
+                width=wx.DefaultCoord,
+                height=self.dialog.Size.Height + options_height,
+                sizeFlags=wx.SIZE_USE_EXISTING)
     
     @fg_affinity
     def _destroy(self) -> None:

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.server import served_project
@@ -9,16 +10,300 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
-from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util.windows import (
+    MainWindow, MenuitemMissingError, OpenOrCreateDialog
+)
 from crystal.model import (
     DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
 )
 import locale
 import os
 import tempfile
-from typing import Iterator, Optional
+from typing import Iterator, List, Optional
 from unittest import skip
+import wx
 
+
+# ------------------------------------------------------------------------------
+# Test: EntityTree: Default Domain/Directory
+
+async def test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        
+        assert rrn.Text != '/'
+        await mw.entity_tree.set_default_domain_to_entity_at_tree_item(rrn)
+        assert rrn.Text == '/'
+        
+        # test_given_resource_node_whose_path_is_slash_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url
+        await mw.entity_tree.clear_default_domain_from_entity_at_tree_item(rrn)
+        assert rrn.Text.startswith('https://neocities.org/')
+        
+        # test_given_resource_node_whose_path_is_slash_then_cannot_set_default_url_prefix_to_it
+        try:
+            await mw.entity_tree.set_default_directory_to_entity_at_tree_item(rrn)
+        except MenuitemMissingError:
+            pass
+        else:
+            raise AssertionError('Did not expect resource to offer option to: set_default_url_prefix')
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_slash_then_cannot_set_default_url_prefix_to_it() -> None:
+    pass
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_slash_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url() -> None:
+    pass
+
+
+async def test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        
+        assert rrn.Text != '/~distantskies/'
+        await mw.entity_tree.set_default_domain_to_entity_at_tree_item(rrn)
+        assert rrn.Text == '/~distantskies/'
+        
+        # test_given_resource_node_whose_path_is_more_than_slash_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url
+        await mw.entity_tree.clear_default_domain_from_entity_at_tree_item(rrn)
+        assert rrn.Text.startswith('https://neocities.org/~distantskies/')
+        
+        # test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_prefix_to_it_then_node_displays_only_slash
+        await mw.entity_tree.set_default_directory_to_entity_at_tree_item(rrn)
+        assert rrn.Text == '/'
+        
+        # test_given_resource_node_whose_path_is_more_than_slash_and_default_url_prefix_matches_it_when_clear_default_url_prefix_then_node_displays_full_url
+        await mw.entity_tree.clear_default_directory_from_entity_at_tree_item(rrn)
+        assert rrn.Text.startswith('https://neocities.org/~distantskies/')
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_prefix_to_it_then_node_displays_only_slash() -> None:
+    pass
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_more_than_slash_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url() -> None:
+    pass
+
+
+@skip('covered by: test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
+async def test_given_resource_node_whose_path_is_more_than_slash_and_default_url_prefix_matches_it_when_clear_default_url_prefix_then_node_displays_full_url() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_slash_wildcard_when_set_default_url_domain_to_it_then_node_displays_only_path_pattern() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_slash_wildcard_then_cannot_set_default_url_prefix_to_it() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_slash_wildcard_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url_pattern() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_when_set_default_url_domain_to_it_then_node_displays_only_path_pattern() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_when_set_default_url_prefix_to_it_then_node_displays_only_slash() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_and_default_url_domain_matches_it_when_clear_default_url_domain_then_node_displays_full_url_pattern() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_and_default_url_prefix_matches_it_when_clear_default_url_prefix_then_node_displays_full_url_pattern() -> None:
+    pass
+
+
+async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_then_appropriate_change_url_prefix_actions_shown() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
+        rr2 = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        rrn2 = root_ti.find_child(rr2.resource.url, project.default_url_prefix)
+        
+        # Case: No entities selected
+        assert not rrn.IsSelected()
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default Domain', False),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path / selected
+        rrn.SelectItem()
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default Domain', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path / selected; matches domain
+        _select_change_url_prefix_action(mw, cup_actions[0])
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Clear Default Domain', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Clear Default URL Domain/Prefix
+        _select_change_url_prefix_action(mw, cup_actions[0])
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default Domain', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path more than / selected
+        rrn2.SelectItem()
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default Domain', True),
+                ('Set As Default Directory', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path more than / selected; matches domain
+        _select_change_url_prefix_action(mw, cup_actions[0])
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Clear Default Domain', True),
+                ('Set As Default Directory', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+        
+        # Case: URL with path more than / selected; matches prefix
+        _select_change_url_prefix_action(mw, cup_actions[1])
+        cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
+        assertEqual(
+            [
+                ('Set As Default Domain', True),
+                ('Clear Default Directory', True),
+            ],
+            [
+                (mi.ItemLabelText, mi.Enabled) for mi in 
+                cup_actions
+            ]
+        )
+
+
+def _change_url_prefix_actions_in_top_level_menu(mw: MainWindow) -> List[wx.MenuItem]:
+    entity_menu = mw.entity_menu  # cache
+    entity_menu.ProcessEvent(wx.MenuEvent(type=wx.EVT_MENU_OPEN.typeId))
+    entity_menu.ProcessEvent(wx.MenuEvent(type=wx.EVT_MENU_CLOSE.typeId))
+    cup_actions = [
+        mi for mi in entity_menu.MenuItems
+        if mi.ItemLabelText in [
+            'Set As Default Domain',
+            'Set As Default Directory',
+            'Clear Default Domain',
+            'Clear Default Directory',
+        ]
+    ]
+    return cup_actions
+
+
+def _select_change_url_prefix_action(mw: MainWindow, mi: wx.MenuItem) -> None:
+    entity_menu = mw.entity_menu  # cache
+    entity_menu.ProcessEvent(wx.MenuEvent(type=wx.EVT_MENU.typeId, id=mi.Id, menu=None))
+
+
+# ------------------------------------------------------------------------------
+# Test: EntityTree: Label Tooltips
+
+async def test_when_hover_over_resource_node_label_then_tooltip_always_contains_full_url() -> None:
+    # ...even if Default URL Prefix is set
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        
+        assertIn('URL: https://neocities.org/', rrn.Tooltip('label') or '')
+        await mw.entity_tree.set_default_domain_to_entity_at_tree_item(rrn)
+        assertIn('URL: https://neocities.org/', rrn.Tooltip('label') or '')
+
+
+async def test_when_hover_over_resource_group_node_label_then_tooltip_always_contains_full_url_pattern() -> None:
+    # ...even if Default URL Prefix is set
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        Resource(project, 'https://xkcd.com/atom.xml')
+        Resource(project, 'https://xkcd.com/rss.xml')
+        rg = ResourceGroup(project, 'Feed', 'https://xkcd.com/*.xml')
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rgn = root_ti.find_child(rg.url_pattern, project.default_url_prefix)
+        
+        assertIn('URL Pattern: https://xkcd.com/*.xml', rgn.Tooltip('label') or '')
+        await mw.entity_tree.set_default_domain_to_entity_at_tree_item(rgn)
+        assertIn('URL Pattern: https://xkcd.com/*.xml', rgn.Tooltip('label') or '')
 
 
 # ------------------------------------------------------------------------------

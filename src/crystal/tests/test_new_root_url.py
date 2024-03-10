@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager, contextmanager
 from crystal.browser.new_root_url import fields_hide_hint_when_focused
 from crystal.model import Project, Resource, RootResource
 from crystal.tests.util.asserts import *
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
@@ -23,6 +23,7 @@ from typing import AsyncIterator, Dict, Iterator, List, Optional, Union
 from typing_extensions import Self
 from unittest import skip
 from unittest.mock import ANY, patch
+from urllib.parse import urlparse
 import wx
 
 
@@ -36,6 +37,9 @@ async def test_can_create_root_url(
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
             # Create root URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -63,10 +67,11 @@ async def test_can_create_root_url(
                 await nud.ok()
                 
                 # Ensure appearance is correct
-                home_ti = root_ti.find_child(home_url)
-                assert f'{home_url} - Home' == home_ti.Text
+                home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+                assert f'{urlparse(home_url).path} - Home' == home_ti.Text
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'root URL')
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'Undownloaded')
+                assert f'URL: {home_url}' in (home_ti.Tooltip('label') or '')
                 
                 # Currently, an entirely new root URL is NOT selected automatically.
                 # This behavior might be changed in the future.
@@ -88,7 +93,7 @@ async def test_can_create_root_url(
                 click_button(mw.forget_button)
                 
                 # Ensure cannot find root URL
-                assert None == root_ti.try_find_child(home_url)
+                assert None == root_ti.try_find_child(home_url, project.default_url_prefix)
                 if not is_windows():
                     selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
                     assert (selected_ti is None) or (selected_ti == root_ti)
@@ -103,10 +108,11 @@ async def test_can_create_root_url(
                 
                 # 1. Ensure appearance is correct
                 # 2. Ensure previously downloaded revisions still exist
-                home_ti = root_ti.find_child(home_url)
-                assert f'{home_url} - Home' == home_ti.Text
+                home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+                assert f'{urlparse(home_url).path} - Home' == home_ti.Text
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'root URL')
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
+                assert f'URL: {home_url}' in (home_ti.Tooltip('label') or '')
 
 
 @skip('covered by: test_can_create_root_url')
@@ -131,6 +137,9 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
             # Create home URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -152,7 +161,7 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
             assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
             
             # Select the Atom Feed link from the home URL
-            atom_feed_ti = home_ti.find_child(atom_feed_url)  # ensure did find sub-resource
+            atom_feed_ti = home_ti.find_child(atom_feed_url, project.default_url_prefix)  # ensure did find sub-resource
             atom_feed_ti.SelectItem()
             
             # Create a root resource to label the link
@@ -174,10 +183,10 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
             
             # 1. Ensure the new root resource does now label the link
             # 2. Ensure the labeled link is selected immediately after closing the add URL dialog
-            atom_feed_ti = home_ti.find_child(atom_feed_url)  # ensure did find sub-resource
+            atom_feed_ti = home_ti.find_child(atom_feed_url, project.default_url_prefix)  # ensure did find sub-resource
             assert (
                 # title format of labeled sub-resource
-                f'{atom_feed_url} - Atom Feed' ==
+                f'{urlparse(atom_feed_url).path} - Atom Feed' ==
                 atom_feed_ti.Text)
             assert atom_feed_ti.IsSelected()
             
@@ -189,10 +198,10 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
                 
                 # 1. Ensure can find the unlabeled link
                 # 2. Ensure that unlabeled link is selected immediately after forgetting the root resource
-                atom_feed_ti = home_ti.find_child(atom_feed_url)  # ensure did find sub-resource
+                atom_feed_ti = home_ti.find_child(atom_feed_url, project.default_url_prefix)  # ensure did find sub-resource
                 assert (
                     # title format of unlabeled sub-resource
-                    f'{atom_feed_url} - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed' ==
+                    f'{urlparse(atom_feed_url).path} - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed' ==
                     atom_feed_ti.Text)
                 assert atom_feed_ti.IsSelected()
 
@@ -200,6 +209,310 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
 @skip('covered by: test_given_resource_node_with_links_can_create_new_root_url_to_label_link')
 async def test_given_resource_node_with_link_labeled_as_root_url_can_easily_forget_the_root_url_to_unlabel_the_link() -> None:
     pass
+
+
+# === Test: Default URL Prefix: Load/Save ===
+
+async def test_when_new_url_and_save_given_project_prefix_is_unset_then_sets_prefix_to_domain() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        # Case 1: HTTP URL
+        assert None == project.default_url_prefix
+        if True:
+            assert mw.add_url_button.Enabled
+            click_button(mw.add_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = 'https://xkcd.com/'
+            await nud.ok()
+        assert 'https://xkcd.com' == project.default_url_prefix
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child('https://xkcd.com/', project.default_url_prefix)
+        await mw.entity_tree.clear_default_domain_from_entity_at_tree_item(rrn)
+        
+        # Case 2: Non-HTTP URL
+        assert None == project.default_url_prefix
+        if True:
+            assert mw.add_url_button.Enabled
+            click_button(mw.add_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = 'mailto:me@example.com'
+            await nud.ok()
+        assert None == project.default_url_prefix
+
+
+async def test_when_new_url_and_save_given_project_prefix_is_set_then_maintains_prefix() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr1 = RootResource(project, '', Resource(project, 'https://neocities.org/'))
+        rr2 = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn1 = root_ti.find_child(rr1.resource.url, project.default_url_prefix)
+        rrn2 = root_ti.find_child(rr2.resource.url, project.default_url_prefix)
+        
+        await mw.entity_tree.set_default_domain_to_entity_at_tree_item(rrn1)
+        
+        assert 'https://neocities.org' == project.default_url_prefix
+        if True:
+            assert mw.add_url_button.Enabled
+            click_button(mw.add_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = 'https://xkcd.com/'
+            await nud.ok()
+        assert 'https://neocities.org' == project.default_url_prefix
+
+
+async def test_when_edit_url_and_save_then_maintains_prefix() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr1 = RootResource(project, '', Resource(project, 'https://neocities.org/'))
+        rr2 = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
+        rr3 = RootResource(project, '', Resource(project, 'https://xkcd.com/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn1 = root_ti.find_child(rr1.resource.url, project.default_url_prefix)
+        rrn2 = root_ti.find_child(rr2.resource.url, project.default_url_prefix)
+        rrn3 = root_ti.find_child(rr3.resource.url, project.default_url_prefix)
+        
+        assert None == project.default_url_prefix
+        for rrn in [rrn1, rrn2, rrn3]:
+            if True:
+                rrn.SelectItem()
+                assert mw.edit_button.Enabled
+                click_button(mw.edit_button)
+                nud = await NewRootUrlDialog.wait_for()
+                
+                await nud.ok()
+            assert None == project.default_url_prefix
+        
+        await mw.entity_tree.set_default_domain_to_entity_at_tree_item(rrn1)
+        assert 'https://neocities.org' == project.default_url_prefix
+        for rrn in [rrn1, rrn2, rrn3]:
+            if True:
+                rrn.SelectItem()
+                assert mw.edit_button.Enabled
+                click_button(mw.edit_button)
+                nud = await NewRootUrlDialog.wait_for()
+                
+                await nud.ok()
+            assert 'https://neocities.org' == project.default_url_prefix
+        
+        await mw.entity_tree.set_default_directory_to_entity_at_tree_item(rrn2)
+        assert 'https://neocities.org/~distantskies' == project.default_url_prefix
+        for rrn in [rrn1, rrn2, rrn3]:
+            if True:
+                rrn.SelectItem()
+                assert mw.edit_button.Enabled
+                click_button(mw.edit_button)
+                nud = await NewRootUrlDialog.wait_for()
+                
+                await nud.ok()
+            assert 'https://neocities.org/~distantskies' == project.default_url_prefix
+
+
+async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        
+        # Case 1.1: given_project_prefix_is_unset, set_prefix_to_domain
+        assert None == project.default_url_prefix
+        if True:
+            assert mw.add_url_button.Enabled
+            click_button(mw.add_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = 'https://neocities.org/'
+            
+            click_button(nud.options_button)
+            assert (True, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            await nud.ok()
+        assert 'https://neocities.org' == project.default_url_prefix
+        
+        rrn = root_ti.find_child('https://neocities.org/', project.default_url_prefix)
+        await mw.entity_tree.clear_default_domain_from_entity_at_tree_item(rrn)
+        rrn.SelectItem()
+        click_button(mw.forget_button)
+        
+        # Case 1.2: given_project_prefix_is_unset, set_prefix_to_directory
+        assert None == project.default_url_prefix
+        if True:
+            assert mw.add_url_button.Enabled
+            click_button(mw.add_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = 'https://neocities.org/~distantskies/'
+            
+            click_button(nud.options_button)
+            assert (True, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            click_checkbox(nud.set_as_default_directory_checkbox)
+            assert (False, True) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            await nud.ok()
+        assert 'https://neocities.org/~distantskies' == project.default_url_prefix
+        
+        rrn = root_ti.find_child('https://neocities.org/~distantskies/', project.default_url_prefix)
+        await mw.entity_tree.clear_default_directory_from_entity_at_tree_item(rrn)
+        rrn.SelectItem()
+        click_button(mw.forget_button)
+        
+        project.default_url_prefix = 'https://xkcd.com'
+        
+        # Case 2.1: given_project_prefix_is_set, set_prefix_to_domain
+        assert 'https://xkcd.com' == project.default_url_prefix
+        if True:
+            assert mw.add_url_button.Enabled
+            click_button(mw.add_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = 'https://neocities.org/'
+            
+            click_button(nud.options_button)
+            assert (False, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            click_checkbox(nud.set_as_default_domain_checkbox)
+            assert (True, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            await nud.ok()
+        assert 'https://neocities.org' == project.default_url_prefix
+        
+        # Case 2.2: given_project_prefix_is_set, set_prefix_to_directory
+        assert 'https://neocities.org' == project.default_url_prefix
+        if True:
+            assert mw.add_url_button.Enabled
+            click_button(mw.add_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = 'https://neocities.org/~distantskies/'
+            
+            click_button(nud.options_button)
+            assert (False, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            click_checkbox(nud.set_as_default_directory_checkbox)
+            assert (False, True) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            await nud.ok()
+        assert 'https://neocities.org/~distantskies' == project.default_url_prefix
+
+
+async def test_when_edit_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        project = Project._last_opened_project
+        assert project is not None
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        
+        # Case 1: set_prefix_to_domain
+        rrn.SelectItem()
+        if True:
+            assert mw.edit_button.Enabled
+            click_button(mw.edit_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            click_button(nud.options_button)
+            assert (False, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            click_checkbox(nud.set_as_default_domain_checkbox)
+            assert (True, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            await nud.ok()
+        assert 'https://neocities.org' == project.default_url_prefix
+        
+        # Case 2: set_prefix_to_directory
+        rrn.SelectItem()
+        if True:
+            assert mw.edit_button.Enabled
+            click_button(mw.edit_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            click_button(nud.options_button)
+            assert (True, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            click_checkbox(nud.set_as_default_directory_checkbox)
+            assert (False, True) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            await nud.ok()
+        assert 'https://neocities.org/~distantskies' == project.default_url_prefix
+        
+        # Case 3: unset_prefix
+        rrn.SelectItem()
+        if True:
+            assert mw.edit_button.Enabled
+            click_button(mw.edit_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            click_button(nud.options_button)
+            assert (False, True) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            click_checkbox(nud.set_as_default_directory_checkbox)
+            assert (False, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            await nud.ok()
+        assert None == project.default_url_prefix
+        
+        # Case 4: Non-HTTP URL
+        rr2 = RootResource(project, '', Resource(project, 'mailto:me@example.com'))
+        rrn2 = root_ti.find_child(rr2.resource.url, project.default_url_prefix)
+        rrn2.SelectItem()
+        if True:
+            assert mw.edit_button.Enabled
+            click_button(mw.edit_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            click_button(nud.options_button)
+            assert (False, False) == (
+                nud.set_as_default_domain_checkbox.Enabled,
+                nud.set_as_default_directory_checkbox.Enabled
+            )
+            assert (False, False) == (
+                nud.set_as_default_domain_checkbox.Value,
+                nud.set_as_default_directory_checkbox.Value
+            )
+            await nud.ok()
+        assert None == project.default_url_prefix
 
 
 # === Test: URL Input -> Candidate URLs ===
