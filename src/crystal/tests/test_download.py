@@ -416,8 +416,8 @@ async def test_can_download_empty_group() -> None:
         comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
-            assert mw.add_group_button.Enabled
-            click_button(mw.add_group_button)
+            assert mw.new_group_button.Enabled
+            click_button(mw.new_group_button)
             ngd = await NewGroupDialog.wait_for()
             
             ngd.pattern_field.Value = comic_pattern

@@ -69,7 +69,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     assert root_ti is not None
                     assert root_ti.GetFirstChild() is None  # no entities
                     
-                    click_button(mw.add_url_button)
+                    click_button(mw.new_root_url_button)
                     nud = await NewRootUrlDialog.wait_for()
                     
                     nud.name_field.Value = 'Home'
@@ -120,7 +120,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 if True:
                     comic1_ti.SelectItem()
                     
-                    click_button(mw.add_group_button)
+                    click_button(mw.new_group_button)
                     ngd = await NewGroupDialog.wait_for()
                     
                     assert '|<' == ngd.name_field.Value  # default name = (from first text link)
@@ -196,7 +196,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         
                         atom_feed_ti.SelectItem()
                         
-                        click_button(mw.add_group_button)
+                        click_button(mw.new_group_button)
                         ngd = await NewGroupDialog.wait_for()
                         
                         ngd.name_field.Value = 'Feed'
@@ -241,7 +241,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     
                     # Create feed item group, with feed group as source
                     if True:
-                        click_button(mw.add_group_button)
+                        click_button(mw.new_group_button)
                         ngd = await NewGroupDialog.wait_for()
                         
                         ngd.name_field.Value = 'Feed Item'
@@ -322,8 +322,8 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 if not is_windows():
                     selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
                     assert (selected_ti is None) or (selected_ti == root_ti)
-                assert False == mw.add_url_button.IsEnabled()
-                assert False == mw.add_group_button.IsEnabled()
+                assert False == mw.new_root_url_button.IsEnabled()
+                assert False == mw.new_group_button.IsEnabled()
                 
                 # Test cannot download/forget existing resource in read-only project
                 if True:
@@ -386,7 +386,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
             
             # Download home page
             if True:
-                click_button(mw.add_url_button)
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
@@ -457,7 +457,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 start_server_again()
                 
                 # Add resource group matching target
-                click_button(mw.add_group_button)
+                click_button(mw.new_group_button)
                 ngd = await NewGroupDialog.wait_for()
                 ngd.name_field.Value = target_group_name
                 ngd.pattern_field.Value = target_group_pattern
@@ -527,7 +527,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 assert True == (await is_url_not_in_archive(target_url))
                 
                 # Add root resource: https://c.xkcd.com/xkcd/news
-                click_button(mw.add_url_button)
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = target_root_resource_name
                 nud.url_field.Value = target_url
@@ -587,7 +587,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
             
             # Download home page
             if True:
-                click_button(mw.add_url_button)
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
@@ -627,7 +627,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
             # so that dynamic requests to sound resources within the group
             # by JavaScript will be downloaded automatically
             if True:
-                click_button(mw.add_group_button)
+                click_button(mw.new_group_button)
                 ngd = await NewGroupDialog.wait_for()
                 
                 ngd.name_field.Value = sound_group_name
@@ -701,7 +701,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 
                 # Download home page
                 if True:
-                    click_button(mw.add_url_button)
+                    click_button(mw.new_root_url_button)
                     nud = await NewRootUrlDialog.wait_for()
                     nud.name_field.Value = 'Home'
                     nud.url_field.Value = home_url
@@ -722,7 +722,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 
                 # Create group Comic
                 if True:
-                    click_button(mw.add_group_button)
+                    click_button(mw.new_group_button)
                     ngd = await NewGroupDialog.wait_for()
                     
                     ngd.name_field.Value = 'Comic'
@@ -739,8 +739,8 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 assert True == mw.readonly, 'Expected read-only icon to be visible'
                 
                 # Ensure "Add URL" and "Add Group" are disabled
-                assert False == mw.add_url_button.Enabled
-                assert False == mw.add_group_button.Enabled
+                assert False == mw.new_root_url_button.Enabled
+                assert False == mw.new_group_button.Enabled
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti is not None
@@ -810,13 +810,13 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 
                 # Download: Home, Comic #1
                 if True:
-                    click_button(mw.add_url_button)
+                    click_button(mw.new_root_url_button)
                     nud = await NewRootUrlDialog.wait_for()
                     nud.name_field.Value = 'Home'
                     nud.url_field.Value = home_url
                     await nud.ok()
                     
-                    click_button(mw.add_url_button)
+                    click_button(mw.new_root_url_button)
                     nud = await NewRootUrlDialog.wait_for()
                     nud.name_field.Value = 'Comic #1'
                     nud.url_field.Value = comic1_url
@@ -977,7 +977,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 assert root_ti is not None
                 assert root_ti.GetFirstChild() is None  # no entities
                 
-                click_button(mw.add_url_button)
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 
                 nud.url_field.Value = home_url
@@ -997,7 +997,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
             if True:
                 comic1_ti.SelectItem()
                 
-                click_button(mw.add_group_button)
+                click_button(mw.new_group_button)
                 ngd = await NewGroupDialog.wait_for()
                 
                 ngd.pattern_field.Value = comic_pattern
@@ -1043,7 +1043,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 comic_group_ti.Collapse()
             
             # Ensure unnamed resource group shows as source with OK title
-            click_button(mw.add_group_button)
+            click_button(mw.new_group_button)
             ngd = await NewGroupDialog.wait_for()
             ngd.source = comic_pattern
             click_button(ngd.cancel_button)

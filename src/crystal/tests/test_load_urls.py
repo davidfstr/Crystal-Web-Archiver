@@ -105,7 +105,7 @@ async def test_given_project_database_not_on_ssd_given_resource_group_node_selec
     pass
 
 
-async def test_given_project_database_not_on_ssd_when_press_add_group_button_then_loading_urls_progress_dialog_becomes_visible() -> None:
+async def test_given_project_database_not_on_ssd_when_press_new_group_button_then_loading_urls_progress_dialog_becomes_visible() -> None:
     with database_on_ssd(False):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
@@ -117,7 +117,7 @@ async def test_given_project_database_not_on_ssd_when_press_add_group_button_the
                         project._load_urls_progress_listener,
                         'loading_resource',
                         side_effect=CancelLoadUrls) as progress_listener_method:
-                    click_button(mw.add_group_button)
+                    click_button(mw.new_group_button)
                     
                     # Wait for progress dialog to show and for cancel to be pressed
                     await wait_for(lambda: (progress_listener_method.call_count >= 1) or None)
@@ -126,8 +126,8 @@ async def test_given_project_database_not_on_ssd_when_press_add_group_button_the
                     assert NewGroupDialog.window_condition()() is None
 
 
-@skip('covered by: test_given_project_database_not_on_ssd_when_press_add_group_button_then_loading_urls_progress_dialog_becomes_visible')
-async def test_given_project_database_not_on_ssd_given_did_press_add_group_button_and_loading_urls_progress_dialog_is_visible_when_press_cancel_then_hides_dialog_and_add_group_dialog_does_not_appear() -> None:
+@skip('covered by: test_given_project_database_not_on_ssd_when_press_new_group_button_then_loading_urls_progress_dialog_becomes_visible')
+async def test_given_project_database_not_on_ssd_given_did_press_new_group_button_and_loading_urls_progress_dialog_is_visible_when_press_cancel_then_hides_dialog_and_add_group_dialog_does_not_appear() -> None:
     pass
 
 
@@ -210,7 +210,7 @@ async def test_given_project_database_on_ssd_given_resource_group_node_selected_
                     assert 0 == progress_listener_method.call_count
 
 
-async def test_given_project_database_on_ssd_when_press_add_group_button_then_add_group_dialog_does_appear() -> None:
+async def test_given_project_database_on_ssd_when_press_new_group_button_then_add_group_dialog_does_appear() -> None:
     with database_on_ssd(True):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
@@ -222,7 +222,7 @@ async def test_given_project_database_on_ssd_when_press_add_group_button_then_ad
                         project._load_urls_progress_listener,
                         'loading_resource',
                         wraps=project._load_urls_progress_listener.loading_resource) as progress_listener_method:
-                    click_button(mw.add_group_button)
+                    click_button(mw.new_group_button)
                     
                     # Wait for NewGroupDialog to appear
                     ngd = await NewGroupDialog.wait_for()

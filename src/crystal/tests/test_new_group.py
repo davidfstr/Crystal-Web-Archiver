@@ -38,8 +38,8 @@ async def test_can_create_group_with_source(
             
             # If will need a source later, create one now
             if with_source:
-                assert mw.add_url_button.Enabled
-                click_button(mw.add_url_button)
+                assert mw.new_root_url_button.Enabled
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 
                 nud.name_field.Value = 'Home'
@@ -54,8 +54,8 @@ async def test_can_create_group_with_source(
                     selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
                     assert (selected_ti is None) or (selected_ti == root_ti)
                 
-                assert mw.add_group_button.Enabled
-                click_button(mw.add_group_button)
+                assert mw.new_group_button.Enabled
+                click_button(mw.new_group_button)
                 ngd = await NewGroupDialog.wait_for()
                 
                 # Ensure prepopulates reasonable information
@@ -121,8 +121,8 @@ async def test_can_create_group_with_no_source() -> None:
 async def test_cannot_create_group_with_empty_url_pattern() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            assert mw.add_group_button.Enabled
-            click_button(mw.add_group_button)
+            assert mw.new_group_button.Enabled
+            click_button(mw.new_group_button)
             ngd = await NewGroupDialog.wait_for()
             
             did_respond_to_empty_url_pattern_modal = False
@@ -180,8 +180,8 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 assert root_ti is not None
                 () = root_ti.Children
                 
-                assert mw.add_url_button.Enabled
-                click_button(mw.add_url_button)
+                assert mw.new_root_url_button.Enabled
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 
                 nud.name_field.Value = 'Home'
@@ -201,8 +201,8 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             
             # Create a group to bundle the comic links together
             if True:
-                assert mw.add_group_button.Enabled
-                click_button(mw.add_group_button)
+                assert mw.new_group_button.Enabled
+                click_button(mw.new_group_button)
                 ngd = await NewGroupDialog.wait_for()
                 
                 # Ensure prepopulates reasonable information
@@ -450,7 +450,7 @@ async def _expand_node(node_ti: TreeItem, mw: Optional[MainWindow]=None, *, will
 async def _source_name_for_node(node_ti: TreeItem, mw: MainWindow) -> Optional[str]:
     node_ti.SelectItem()
     
-    click_button(mw.add_group_button)
+    click_button(mw.new_group_button)
     ngd = await NewGroupDialog.wait_for()
     source_name = ngd.source  # capture
     await ngd.cancel()
@@ -513,8 +513,8 @@ async def test_given_urls_loaded_and_new_url_created_when_show_new_group_dialog_
             
             # Start creating a duplicate Comic group
             if True:
-                assert mw.add_group_button.Enabled
-                click_button(mw.add_group_button)
+                assert mw.new_group_button.Enabled
+                click_button(mw.new_group_button)
                 ngd = await NewGroupDialog.wait_for()
                 
                 # Input new URL pattern with wildcard, to match comics

@@ -46,8 +46,8 @@ async def test_can_create_root_url(
                 assert root_ti is not None
                 () = root_ti.Children
                 
-                assert mw.add_url_button.Enabled
-                click_button(mw.add_url_button)
+                assert mw.new_root_url_button.Enabled
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 
                 # Ensure prepopulates reasonable information
@@ -100,7 +100,7 @@ async def test_can_create_root_url(
             
             if ensure_revisions_not_deleted:
                 # Recreate the root URL
-                click_button(mw.add_url_button)
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
@@ -146,8 +146,8 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
                 assert root_ti is not None
                 () = root_ti.Children
                 
-                assert mw.add_url_button.Enabled
-                click_button(mw.add_url_button)
+                assert mw.new_root_url_button.Enabled
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 
                 nud.name_field.Value = 'Home'
@@ -166,8 +166,8 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
             
             # Create a root resource to label the link
             if True:
-                assert mw.add_url_button.Enabled
-                click_button(mw.add_url_button)
+                assert mw.new_root_url_button.Enabled
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 
                 # Ensure prepopulates reasonable information
@@ -221,8 +221,8 @@ async def test_when_new_url_and_save_given_project_prefix_is_unset_then_sets_pre
         # Case 1: HTTP URL
         assert None == project.default_url_prefix
         if True:
-            assert mw.add_url_button.Enabled
-            click_button(mw.add_url_button)
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             
             nud.url_field.Value = 'https://xkcd.com/'
@@ -236,8 +236,8 @@ async def test_when_new_url_and_save_given_project_prefix_is_unset_then_sets_pre
         # Case 2: Non-HTTP URL
         assert None == project.default_url_prefix
         if True:
-            assert mw.add_url_button.Enabled
-            click_button(mw.add_url_button)
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             
             nud.url_field.Value = 'mailto:me@example.com'
@@ -261,8 +261,8 @@ async def test_when_new_url_and_save_given_project_prefix_is_set_then_maintains_
         
         assert 'https://neocities.org' == project.default_url_prefix
         if True:
-            assert mw.add_url_button.Enabled
-            click_button(mw.add_url_button)
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             
             nud.url_field.Value = 'https://xkcd.com/'
@@ -330,8 +330,8 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
         # Case 1.1: given_project_prefix_is_unset, set_prefix_to_domain
         assert None == project.default_url_prefix
         if True:
-            assert mw.add_url_button.Enabled
-            click_button(mw.add_url_button)
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             
             nud.url_field.Value = 'https://neocities.org/'
@@ -352,8 +352,8 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
         # Case 1.2: given_project_prefix_is_unset, set_prefix_to_directory
         assert None == project.default_url_prefix
         if True:
-            assert mw.add_url_button.Enabled
-            click_button(mw.add_url_button)
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             
             nud.url_field.Value = 'https://neocities.org/~distantskies/'
@@ -381,8 +381,8 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
         # Case 2.1: given_project_prefix_is_set, set_prefix_to_domain
         assert 'https://xkcd.com' == project.default_url_prefix
         if True:
-            assert mw.add_url_button.Enabled
-            click_button(mw.add_url_button)
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             
             nud.url_field.Value = 'https://neocities.org/'
@@ -403,8 +403,8 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
         # Case 2.2: given_project_prefix_is_set, set_prefix_to_directory
         assert 'https://neocities.org' == project.default_url_prefix
         if True:
-            assert mw.add_url_button.Enabled
-            click_button(mw.add_url_button)
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             
             nud.url_field.Value = 'https://neocities.org/~distantskies/'
@@ -610,7 +610,7 @@ def test_given_schemaless_url_with_www_prefix_then_returns_ellipsis() -> None:
 # === Test: Validate URL upon Blur ===
 
 async def test_given_url_input_is_empty_and_focused_when_tab_pressed_then_url_input_unfocused_and_url_input_empty_and_no_spinner_visible() -> None:
-    async with _add_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as nud:
         if fields_hide_hint_when_focused():
             SetFocus(nud.url_field, None)
         else:
@@ -630,7 +630,7 @@ async def test_given_url_input_is_nonempty_and_focused_when_tab_pressed_then_url
         'xkcd.com',
         'www.apple.com',
     ]
-    async with _add_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as nud:
         with _urlopen_responding_with(_UrlOpenHttpResponse(code=404, url=ANY)):
             for url in URLS:
                 with subtests.test(url=url):
@@ -655,7 +655,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
         ('xkcd.com', 'https://xkcd.com/'),
         ('www.apple.com', 'https://www.apple.com/'),
     ]
-    async with _add_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as nud:
         last_focused = None  # type: Optional[wx.Window]
         for (url, normalized_url) in CASES:
             with subtests.test(url=url):
@@ -678,7 +678,7 @@ async def test_given_url_input_is_nonempty_without_www_and_did_press_tab_and_spi
         ('apple.com/', 'https://apple.com/', 'https://www.apple.com/'),
         ('apple.com', 'https://apple.com/', 'https://www.apple.com/'),
     ]
-    async with _add_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as nud:
         last_focused = None  # type: Optional[wx.Window]
         for (url_input, without_www_url, with_www_url) in CASES:
             with subtests.test(url_input=url_input):
@@ -701,7 +701,7 @@ async def test_given_url_input_is_nonempty_with_www_and_did_press_tab_and_spinne
         ('www.xkcd.com/', 'https://www.xkcd.com/', 'https://xkcd.com/'),
         ('www.xkcd.com', 'https://www.xkcd.com/', 'https://xkcd.com/'),
     ]
-    async with _add_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as nud:
         last_focused = None  # type: Optional[wx.Window]
         for (url_input, with_www_url, without_www_url) in CASES:
             with subtests.test(url_input=url_input):
@@ -722,7 +722,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
     CASES = [
         ('contoso.com/', 'https://contoso.com/', 'https://www.microsoft.com/'),
     ]
-    async with _add_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as nud:
         last_focused = None  # type: Optional[wx.Window]
         for (start_url, normalized_start_url, target_url) in CASES:
             with subtests.test(url_input=start_url):
@@ -744,7 +744,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_ur
     # TODO: Respond with "unreachable error" to be more realistic
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=500, url=ANY)):
         with _urlopen_paused():
-            async with _add_url_dialog_open() as nud:
+            async with _new_root_url_dialog_open() as nud:
                 last_focused = None  # type: Optional[wx.Window]
                 
                 last_focused = SetFocus(nud.url_field, last_focused)
@@ -767,7 +767,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_ur
 
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_press_ok_then_disables_all_controls_except_cancel() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _add_url_dialog_open() as nud:
+        async with _new_root_url_dialog_open() as nud:
             project = Project._last_opened_project
             assert project is not None
             
@@ -805,7 +805,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
 
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_and_did_press_ok_when_press_cancel_then_dialog_disappears() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _add_url_dialog_open() as nud:
+        async with _new_root_url_dialog_open() as nud:
             project = Project._last_opened_project
             assert project is not None
             
@@ -835,7 +835,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
 
 async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_press_ok_then_dialog_disappears_and_root_url_is_created() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _add_url_dialog_open() as nud:
+        async with _new_root_url_dialog_open() as nud:
             project = Project._last_opened_project
             assert project is not None
             
@@ -864,7 +864,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_pres
 
 async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_ok_then_dialog_disappears_and_root_url_is_created() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _add_url_dialog_open() as nud:
+        async with _new_root_url_dialog_open() as nud:
             project = Project._last_opened_project
             assert project is not None
             
@@ -884,7 +884,7 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
 
 async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_cancel_then_dialog_disappears() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _add_url_dialog_open() as nud:
+        async with _new_root_url_dialog_open() as nud:
             project = Project._last_opened_project
             assert project is not None
             
@@ -902,7 +902,7 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
 
 async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_then_spinner_does_not_appear() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _add_url_dialog_open() as nud:
+        async with _new_root_url_dialog_open() as nud:
             project = Project._last_opened_project
             assert project is not None
             
@@ -930,7 +930,7 @@ async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_the
 # === Test: Disallow Create Empty Root URL ===
 
 async def test_given_url_input_is_empty_then_ok_button_is_disabled() -> None:
-    async with _add_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as nud:
         assertEqual('', nud.url_field.Value)
         assertEqual(False, nud.ok_button.Enabled)
         
@@ -966,7 +966,7 @@ async def test_given_url_input_is_nonempty_when_url_input_becomes_empty_then_ok_
 async def test_given_url_input_matches_existing_root_url_when_press_ok_then_displays_error_dialog_and_enables_all_controls(subtests: SubtestsContext) -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
         with subtests.test(case='given url input is focused'):
-            async with _add_url_dialog_open() as nud:
+            async with _new_root_url_dialog_open() as nud:
                 project = Project._last_opened_project
                 assert project is not None
                 
@@ -988,7 +988,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 assertEqual(True, nud.cancel_button.Enabled)
         
         with subtests.test(case='given url input is unfocused and spinner is visible'):
-            async with _add_url_dialog_open() as nud:
+            async with _new_root_url_dialog_open() as nud:
                 project = Project._last_opened_project
                 assert project is not None
                 
@@ -1014,7 +1014,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 assertEqual(True, nud.cancel_button.Enabled)
         
         with subtests.test(case='given url input is unfocused and spinner is not visible'):
-            async with _add_url_dialog_open() as nud:
+            async with _new_root_url_dialog_open() as nud:
                 project = Project._last_opened_project
                 assert project is not None
                 
@@ -1055,11 +1055,11 @@ def _EXPAND_enabled() -> Iterator[None]:
 
 
 @asynccontextmanager
-async def _add_url_dialog_open(*, autoclose: bool=True) -> AsyncIterator[NewRootUrlDialog]:
+async def _new_root_url_dialog_open(*, autoclose: bool=True) -> AsyncIterator[NewRootUrlDialog]:
     # Never allow automated tests to make real internet requests
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=590, url=ANY)):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            click_button(mw.add_url_button)
+            click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             
             try:

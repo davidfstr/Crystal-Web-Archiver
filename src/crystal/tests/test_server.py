@@ -50,7 +50,7 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
                 assert root_ti is not None
                 assert root_ti.GetFirstChild() is None  # no entities
                 
-                click_button(mw.add_url_button)
+                click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
                 
                 nud.name_field.Value = 'Home'

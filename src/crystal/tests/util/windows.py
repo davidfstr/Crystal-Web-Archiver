@@ -148,8 +148,8 @@ class MainWindow:
     
     main_window: wx.Frame
     entity_tree: 'EntityTree'
-    add_url_button: wx.Button
-    add_group_button: wx.Button
+    new_root_url_button: wx.Button
+    new_group_button: wx.Button
     edit_button: wx.Button
     forget_button: wx.Button
     download_button: wx.Button
@@ -175,10 +175,10 @@ class MainWindow:
         entity_tree_window = self.main_window.FindWindow(name='cr-entity-tree')
         assert isinstance(entity_tree_window, wx.TreeCtrl)
         self.entity_tree = EntityTree(entity_tree_window)
-        self.add_url_button = self.main_window.FindWindow(name='cr-add-url-button')
-        assert isinstance(self.add_url_button, wx.Button)
-        self.add_group_button = self.main_window.FindWindow(name='cr-add-group-button')
-        assert isinstance(self.add_group_button, wx.Button)
+        self.new_root_url_button = self.main_window.FindWindow(name='cr-add-url-button')
+        assert isinstance(self.new_root_url_button, wx.Button)
+        self.new_group_button = self.main_window.FindWindow(name='cr-add-group-button')
+        assert isinstance(self.new_group_button, wx.Button)
         self.edit_button = self.main_window.FindWindow(name='cr-edit-button')
         assert isinstance(self.edit_button, wx.Button)
         self.forget_button = self.main_window.FindWindow(name='cr-forget-button')
