@@ -362,7 +362,7 @@ class EntityTree(Bulkhead):
             self.clear_default_url_prefix()
         else:
             # Some other menuitem
-            pass
+            event.Skip()
     
     def set_default_url_prefix(self,
             prefix_type: Literal['domain', 'directory'],
