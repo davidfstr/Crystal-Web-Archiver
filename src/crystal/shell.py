@@ -13,6 +13,7 @@ import os
 import sys
 import threading
 from typing import Optional
+from typing_extensions import override
 
 
 class Shell:
@@ -182,8 +183,9 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         super().__init__(*args, **kwargs)
         self._first_input = True
     
+    @override
     @bg_affinity
-    def raw_input(self, *args, **kwargs) -> str:  # override
+    def raw_input(self, *args, **kwargs) -> str:
         if self._first_input:
             # Try to execute startup file specified in $PYTHONSTARTUP
             startup_filepath = os.environ.get('PYTHONSTARTUP')
@@ -196,7 +198,8 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             self._first_input = False
         return super().raw_input(*args, **kwargs)
     
-    def runcode(self, code) -> None:  # override
+    @override
+    def runcode(self, code) -> None:
         def fg_runcode():
             super(_FgInteractiveConsole, self).runcode(code)
         
@@ -211,6 +214,17 @@ class _FgInteractiveConsole(code.InteractiveConsole):
                     profile=False)
             except NoForegroundThreadError:
                 fg_runcode()
+    
+    @override
+    def showtraceback(self) -> None:
+        # Force default behavior of printing the most recent traceback to
+        # the console, even if sys.excepthook has been overridden
+        old_excepthook = sys.excepthook  # capture
+        sys.excepthook = sys.__excepthook__
+        try:
+            super().showtraceback()
+        finally:
+            sys.excepthook = old_excepthook
 
 
 def _main_loop_has_exited() -> bool:

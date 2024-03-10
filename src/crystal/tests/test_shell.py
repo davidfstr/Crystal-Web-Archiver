@@ -148,7 +148,7 @@ def test_can_use_pythonstartup_file() -> None:
 @skip_on_windows
 @with_subtests
 def test_builtin_globals_have_stable_public_api(subtests: SubtestsContext) -> None:
-    with crystal_shell() as (crystal, banner):
+    with crystal_shell() as (crystal, _):
         # Open MainWindow by creating new empty project
         _create_new_empty_project(crystal)
         
@@ -294,6 +294,17 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                     crystal.wait(timeout=.5 + DEFAULT_WAIT_TIMEOUT)
                 except subprocess.TimeoutExpired:
                     raise AssertionError('Timed out waiting for Crystal to exit')
+
+
+@skip_on_windows
+def test_when_typed_code_raises_exception_then_print_traceback() -> None:
+    with crystal_shell() as (crystal, _):
+        expected_traceback = (
+            'Traceback (most recent call last):\n'
+            '  File "<console>", line 1, in <module>\n'
+            'NameError: name \'Resource\' is not defined\n'
+        )
+        assertEqual(expected_traceback, _py_eval(crystal, 'Resource'))
 
 
 @skip_on_windows
