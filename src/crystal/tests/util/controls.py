@@ -36,11 +36,14 @@ def set_checkbox_value(checkbox: wx.CheckBox, value: bool) -> None:
 def click_checkbox(checkbox: wx.CheckBox) -> None:
     old_value = checkbox.Value  # capture
     
+    # Toggle value
+    checkbox.Value = not checkbox.Value
+    
     # Dispatch wx.EVT_CHECKBOX event
     event = wx.PyCommandEvent(wx.EVT_CHECKBOX.typeId, checkbox.GetId())
     event.SetEventObject(checkbox)
     assert event.GetEventObject().GetId() == checkbox.GetId()
-    checkbox.Command(event)
+    checkbox.ProcessEvent(event)
     
     new_value = checkbox.Value  # capture
     assert new_value != old_value, 'Expected checkbox to toggle value'

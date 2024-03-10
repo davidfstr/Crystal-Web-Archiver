@@ -503,11 +503,6 @@ def _prompt_for_project(
     import wx
     
     def on_checkbox_clicked(event: wx.CommandEvent) -> None:
-        # HACK: Simulate toggle of value during dispatch of wx.CHECKBOX event
-        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
-            assert dialog._checkbox is not None
-            dialog._checkbox.Value = not dialog._checkbox.Value
-        
         readonly_checkbox_checked = dialog.IsCheckBoxChecked()
         create_button = dialog.FindWindow(id=wx.ID_YES)
         create_button.Enabled = not readonly_checkbox_checked
