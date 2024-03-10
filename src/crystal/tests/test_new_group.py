@@ -314,7 +314,7 @@ async def test_given_node_is_selected_in_entity_tree_when_press_new_group_button
             # Set Default URL Prefix so that Offsite clusters appear
             await mw.entity_tree.set_default_url_prefix_to_resource_at_tree_item(
                 _find_child(root_ti, home_url))
-            url_prefix = home_url
+            url_prefix = project.default_url_prefix
             
             # Locate related entity tree nodes
             if True:

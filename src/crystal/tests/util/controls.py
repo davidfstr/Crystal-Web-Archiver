@@ -160,17 +160,20 @@ class TreeItem:
     
     # === Entity Tree: Find Child ===
     
-    def find_child(parent_ti: TreeItem, url_or_url_pattern: str, url_prefix: Optional[str]=None) -> TreeItem:
+    def find_child(
+            parent_ti: TreeItem,
+            url_or_url_pattern: str,
+            default_url_prefix: Optional[str]=None
+            ) -> TreeItem:
         """
         Returns the first child of the specified parent tree item with the
         specified URL or URL pattern.
         
         Raises TreeItem.ChildNotFound if such a child is not found.
         """
-        if url_prefix is not None:
-            assert url_prefix.endswith('/')
-            if url_or_url_pattern.startswith(url_prefix):
-                url_or_url_pattern = '/' + url_or_url_pattern[len(url_prefix):]  # reinterpret
+        if default_url_prefix is not None:
+            if url_or_url_pattern.startswith(default_url_prefix):
+                url_or_url_pattern = url_or_url_pattern[len(default_url_prefix):]  # reinterpret
         try:
             (matching_child_ti,) = [
                 child for child in parent_ti.Children
