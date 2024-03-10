@@ -699,6 +699,7 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
                     def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
                         # Corrupt the value of task.children
                         task._children = []
+                        child = None  # force access of task.children
                         return super_task_did_append_child(self, task, child)
                     
                     # Load children of DownloadResourceGroupMembersTask
