@@ -2857,7 +2857,16 @@ class ResourceRevision:
     @property
     def is_xml(self) -> bool:
         """Returns whether this resource is XML."""
-        return self.content_type == 'text/xml'
+        return self.content_type in (
+            # https://www.rfc-editor.org/rfc/rfc3023#section-3.1
+            'text/xml',
+            # https://www.rfc-editor.org/rfc/rfc3023#section-3.2
+            'application/xml',
+            # https://www.rssboard.org/rss-mime-type-application.txt
+            'application/rss+xml',
+            # https://www.rfc-editor.org/rfc/rfc4287
+            'application/atom+xml',
+        )
     
     @property
     def is_recognized_binary_type(self) -> bool:

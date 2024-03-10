@@ -68,6 +68,8 @@ Release Notes ⋮
 * Parsing improvements
     * Gracefully handle references to invalid URLs like `"//*[@id='"`
       rather than crashing.
+    * Parse links from RSS and Atom feeds advertised with a specialized XML MIME type
+      like `application/rss+xml` or `application/atom+xml`.
 
 * Serving improvements
     * XML files like Atom feeds and RSS feeds are now served correctly,
