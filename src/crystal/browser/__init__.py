@@ -865,7 +865,7 @@ class MainWindow:
         
         if readonly:
             rwi_label = '🔒' if not is_windows() else 'Read only'
-            rwi_tooltip = 'Read only project'
+            rwi_tooltip = 'Read only project'  # type: str
         else:
             rwi_label = '✏️' if not is_windows() else 'Writable'
             rwi_tooltip = 'Writable project'

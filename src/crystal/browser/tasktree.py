@@ -116,7 +116,10 @@ class TaskTree:
         else:
             new_tooltip = None
         
-        self.peer.SetToolTip(new_tooltip)
+        if new_tooltip is None:
+            self.peer.UnsetToolTip()
+        else:
+            self.peer.SetToolTip(new_tooltip)
     
     @capture_crashes_to_stderr
     def _on_get_tooltip_event(self, event: wx.Event) -> None:
