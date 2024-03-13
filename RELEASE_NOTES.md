@@ -66,6 +66,7 @@ Release Notes ⋮
     * Download implicit favicon referenced by root page of any domain.
 
 * Parsing improvements
+    * Can identify URL references inside `<source srcset="...">`.
     * Gracefully handle references to invalid URLs like `"//*[@id='"`
       rather than crashing.
     * Parse links from RSS and Atom feeds advertised with a specialized XML MIME type

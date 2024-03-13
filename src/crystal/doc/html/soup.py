@@ -5,7 +5,8 @@ HTML parser implementation that uses BeautifulSoup.
 from crystal.doc.generic import Document, Link
 from crystal.doc.html import HtmlParserType
 from crystal.util.fastsoup import (
-    BeautifulFastSoup, FastSoup, FindFunc, LxmlFastSoup, parse_html, Tag
+    BeautifulFastSoup, FastSoup, FindFunc, LxmlFastSoup, name_of_tag,
+    parse_html, Tag
 )
 from dataclasses import dataclass
 import json
@@ -35,6 +36,7 @@ class _XPaths:
     BACKGROUND_EQ_STAR_XP: FindFunc
     SRC_EQ_STAR_XP: FindFunc
     IMG_SRCSET_EQ_STAR_XP: FindFunc
+    SOURCE_SRCSET_EQ_STAR_XP: FindFunc
     HREF_EQ_STAR_XP: FindFunc
     INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP: FindFunc
     SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP: FindFunc
@@ -47,6 +49,8 @@ _XPS_FOR_PARSER_LIBRARY_T = {T: _XPaths(
         src=True),
     IMG_SRCSET_EQ_STAR_XP = T.find_all_compile(
         'img', srcset=True),
+    SOURCE_SRCSET_EQ_STAR_XP = T.find_all_compile(
+        'source', srcset=True),
     HREF_EQ_STAR_XP = T.find_all_compile(
         href=True),
     INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP = T.find_all_compile(
@@ -85,6 +89,10 @@ def parse_html_and_links(
         title = None
         type_title = 'Background Image'
         links.append(HtmlLink.create_from_tag(tag, html, 'background', type_title, title, embedded))
+    
+    # <source srcset=*>, before <img src=*>
+    for tag in XPS.SOURCE_SRCSET_EQ_STAR_XP(html):
+        links.extend(_process_srcset_attr(html, tag))
     
     # <* src=*>
     for tag in XPS.SRC_EQ_STAR_XP(html):
@@ -267,8 +275,8 @@ def _get_image_tag_title(html: FastSoup, tag: Tag) -> Optional[str]:
         return None
 
 
-def _process_srcset_attr(html: FastSoup, img_tag: Tag) -> 'List[HtmlLink]':
-    srcset = _parse_srcset_str(_assert_str(html.tag_attrs(img_tag)['srcset']))
+def _process_srcset_attr(html: FastSoup, img_or_source_tag: Tag) -> 'List[HtmlLink]':
+    srcset = _parse_srcset_str(_assert_str(html.tag_attrs(img_or_source_tag)['srcset']))
     if srcset is None:
         return []
     
@@ -284,11 +292,18 @@ def _process_srcset_attr(html: FastSoup, img_tag: Tag) -> 'List[HtmlLink]':
             return _format_srcset_str(srcset)
         
         relative_url = parts[0]
-        title = _get_image_tag_title(html, img_tag)
-        type_title = 'Image'
+        tag_name = name_of_tag(img_or_source_tag)  # cache
+        if tag_name == 'img':
+            title = _get_image_tag_title(html, img_or_source_tag)
+            type_title = 'Image'
+        elif tag_name == 'source':
+            title = None
+            type_title = 'Image Source'
+        else:
+            raise ValueError()
         embedded = True
         links.append(HtmlLink.create_from_complex_tag(
-            img_tag, html, 'srcset', type_title, title, embedded,
+            img_or_source_tag, html, 'srcset', type_title, title, embedded,
             relative_url, replace_url_in_old_attr_value))
     
     candidates = srcset

@@ -216,6 +216,36 @@ def test_recognizes_img_srcset() -> None:
                 assert True == link2.embedded
 
 
+def test_recognizes_source_srcset() -> None:
+    with SubtestsContext('test_recognizes_source_srcset').run() as subtests:
+        for html_parser_type in HTML_PARSER_TYPE_CHOICES:
+            with subtests.test(html_parser_type=html_parser_type):
+                (_, (link1, link2, link3)) = _parse_html_and_links(dedent(
+                    """
+                    <picture>
+                        <source srcset="clock-demo-1000px.png 1x" media="(min-width: 1000)" />
+                        <source srcset="clock-demo-700px.png 1x" media="(min-width: 700)" />
+                        <img src="clock-demo-200px.png" alt="Clock" />
+                    </picture>
+                    """).lstrip('\n').encode('utf-8'),
+                    html_parser_type=html_parser_type)
+                
+                assert 'clock-demo-1000px.png' == link1.relative_url
+                assert 'Image Source' == link1.type_title
+                assert None == link1.title
+                assert True == link1.embedded
+                
+                assert 'clock-demo-700px.png' == link2.relative_url
+                assert 'Image Source' == link2.type_title
+                assert None == link2.title
+                assert True == link2.embedded
+                
+                assert 'clock-demo-200px.png' == link3.relative_url
+                assert 'Image' == link3.type_title
+                assert 'Clock' == link3.title
+                assert True == link3.embedded
+
+
 def test_recognizes_href_attribute() -> None:
     with SubtestsContext('test_recognizes_href_attribute').run() as subtests:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:

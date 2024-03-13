@@ -264,3 +264,12 @@ class LxmlFastSoup(FastSoup):
         assert isinstance(tag, lxml.html.HtmlElement)
         assert isinstance(tag2, lxml.html.HtmlElement)
         tag.addprevious(tag2)
+
+
+def name_of_tag(tag: Tag) -> str:
+    if isinstance(tag, lxml.html.HtmlElement):
+        return tag.tag
+    elif isinstance(tag, bs4.Tag):
+        return tag.name
+    else:
+        raise ValueError()
