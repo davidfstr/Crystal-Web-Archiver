@@ -61,9 +61,9 @@ class TaskTree:
         # Create popup menu
         menu = wx.Menu()
         bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
-        if isinstance(node.task, CrashedTask):
+        if node is not None and isinstance(node.task, CrashedTask):
             menu.Append(_ID_DISMISS, node.task.dismiss_action_title)
-        elif self._is_dismissable_top_level_task(node.task):
+        elif node is not None and self._is_dismissable_top_level_task(node.task):
             menu.Append(_ID_DISMISS, 'Dismiss')
         else:
             menu.Append(_ID_DISMISS, 'Dismiss')
@@ -128,6 +128,8 @@ class TaskTree:
     def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId) -> Optional[str]:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
         node = TaskTreeNode.for_node_view(node_view)
+        if node is None:
+            return None
         return node.tooltip
     
     # === Dispose ===
@@ -232,10 +234,15 @@ class TaskTreeNode:
         fg_call_and_wait(fg_task)
     
     @staticmethod
-    def for_node_view(node_view: NodeView) -> 'TaskTreeNode':
+    def for_node_view(node_view: NodeView) -> 'Optional[TaskTreeNode]':
         node = node_view.delegate
-        assert isinstance(node, TaskTreeNode)
-        return node
+        if node is None:
+            return None
+        elif isinstance(node, TaskTreeNode):
+            return node
+        else:
+            raise AssertionError(
+                f'Expected delegate of NodeView to be TaskTreeNode or None but found: {node}')
     
     # === Properties ===
     
