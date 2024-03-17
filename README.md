@@ -16,33 +16,33 @@ Additional documentation will be available once Crystal is no longer **in beta**
 Download ⬇︎
 --------
 
-Either install a binary:
+Either install a binary version of Crystal:
 
 * [macOS 12 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.7.0b/crystal-mac-1.7.0b.dmg)
     * You will need to [right-click or Control-click on the application and select "Open" to open it for the first time](https://github.com/davidfstr/Crystal-Web-Archiver/issues/20).
 * [Windows 7 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.7.0b/crystal-win-1.7.0b.exe)
-* Linux
-    * Install Python >=3.8,<3.12 and pip from your package manager
-        * Ubuntu/Kubuntu 22.04+: `apt-get update; apt-get install -y python3 python3-pip python3-venv`
-        * Fedora 37+: `yum update -y; yum install -y python3 python3-pip`
-    * Install dependencies of wxPython from your package manager
-        * Ubuntu/Kubuntu 22.04+: `apt-get install -y libgtk-3-dev`
-        * Fedora 37+: `yum install -y wxGTK-devel gcc gcc-c++ which python3-devel`
-    * Install pipx
-        * `python3 -m pip install pipx`
-    * Install Crystal with pipx
-        * NOTE: The following step will take a long time (10+ minutes)
-          because wxPython, a dependency of Crystal, will need to be built 
-          from source, since it does not offer precompiled wheels for Linux.
-        * `pipx install crystal-web`
-    * (Optional) Install Crystal icon to GNOME/KDE applications and desktop:
-        * `crystal --install-to-desktop`
-    * Run Crystal:
-        * `crystal`
 
-Or install from source using [pipx](https://pipx.pypa.io/stable/):
+Or install from source, using pipx:
 
-* `pipx install crystal-web`
+* Install [Python] >=3.8,<3.12 and pip:
+    * Ubuntu/Kubuntu 22.04+: `apt-get update; apt-get install -y python3 python3-pip python3-venv`
+    * Fedora 37+: `yum update -y; yum install -y python3 python3-pip`
+* On Linux, install dependencies of wxPython from your package manager:
+    * Ubuntu/Kubuntu 22.04+: `apt-get install -y libgtk-3-dev`
+    * Fedora 37+: `yum install -y wxGTK-devel gcc gcc-c++ which python3-devel`
+* Install pipx
+    * `python3 -m pip install pipx`
+* Install Crystal with pipx
+    * `pipx install crystal-web`
+    * ⏳ On Linux the above step will take a long time (10+ minutes)
+      because wxPython, a dependency of Crystal, will need to be built
+      from source, since it does not offer precompiled wheels for Linux.
+* On Linux, install a shortcut to Crystal inside GNOME/KDE applications and on the desktop:
+    * `crystal --install-to-desktop`
+* Run Crystal:
+    * `crystal`
+
+[Python]: https://www.python.org/
 
 
 Tutorial ⭐
