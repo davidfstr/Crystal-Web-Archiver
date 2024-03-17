@@ -50,16 +50,16 @@ Tutorial ⭐
 
 ### To download a static website (ex: [xkcd]):
 
-* Download Crystal for your operating system. See the Download section above.
+* Download Crystal. See the Download section above.
 * Open Crystal and create a new project, call it "xkcd".
-* Click the "+ URL" button to add the "https://xkcd.com/1/" URL, named "First Comic".
+* Click the "New Root URL" button to add the "https://xkcd.com/1/" URL, named "First Comic".
 * Expand the new "First Comic" node to download the page and display its links.
-* Click the "+ Group" button to add a new group called "Comics" with the pattern
+* Click the "New Group" button to add a new group named "Comics" with the pattern
   "https://xkcd.com/#/". The "#" is a wildcard that matches any number.
   Make sure it also has "First Comic" selected as the Source.
-    * If you click the "Preview Members" button in the dialog, you should see a list of
+    * In the "Preview Members" section of the dialog, you should see a list of
       several URLs, including "https://xkcd.com/1/" and "https://xkcd.com/2/".
-* Close the "First Comic" node so that you can see the new "Comics" node at the root level.
+* Close the "First Comic" node so that you can see the new "Comics" node.
 * Select the "Comics" node and press the "Download" button.
   This will download all xkcd comics.
 * Expand the "Comics" node to see a list of all comic pages.
@@ -69,8 +69,8 @@ Tutorial ⭐
 
 ### To download a dynamic website (ex: [The Pragmatic Engineer]):
 
-* Open Crystal and create a new project.
-* Press the "+ URL" button and add: `https://newsletter.pragmaticengineer.com/` -- Home
+* Open Crystal and create a new project, call it "Pragmatic Engineer".
+* Press the "New Root URL" button and add the `https://newsletter.pragmaticengineer.com/` URL, named "Home".
 * Select the added "Home" and press the "Download" button. Wait for it to finish downloading.
 * With "Home" still selected, press the "View" button.
   A web browser should open and display the downloaded home page.
@@ -86,61 +86,39 @@ Tutorial ⭐
       they must be a kind of resource that is "embedded" into the page.
       When Crystal downloads a page it also downloads all embedded
       resources it can find statically, but these embedded resources 
-      must have been fetched *dynamically* by JavaScript code running on the page.
+      must have been fetched *dynamically* by JavaScript code running on the page,
+      which Crystal cannot see.
 * We want to eliminate those red lines that appear when viewing the home page.
 
 Eliminate red lines:
 
 * Let's start by eliminating the "Requested resource not in archive" red lines
-  related to URLs like `https://bucketeer-*/**.png`
-* Press the "+ Group" button and add: `https://bucketeer-*/**.png` -- Bucketeer PNG
+  related to URLs like `https://substackcdn.com/bundle/assets/entry-f6e60c95.js​`
+* Press the "New Group" button and add `https://substackcdn.com/**`, named "Substack CDN Asset".
 * Reload the home page in the web browser.
 * Notice in the server log that many green lines did appear saying
-  "*** Dynamically downloading existing resource in group 'Bucketeer PNG':"
-  and that there are no more red lines related to `https://bucketeer-*/**.png`.
+  "*** Dynamically downloading existing resource in group 'Substack CDN Asset':"
+  and that there are no more red lines related to `https://substackcdn.com/**`.
+* All red lines related to `https://substackcdn.com/**` should be gone.
 
-Eliminate more red lines:
+Eliminate the last red lines:
 
-* However there are still "Requested resource not in archive" red lines 
-  related to URLs like `https://substackcdn.com/**.png`. Let's eliminate them too.
-* Press the "+ Group" button and add: `https://substackcdn.com/**.png` -- Substack CDN PNG
-* Reload the home page in the web browser.
-* Again, all red lines related to `https://substackcdn.com/**.png` should be gone.
-
-Eliminate last two red lines:
-
-* There should be only two red lines left:
-    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/archive?sort=new&search=&offset=12&limit=12`
+* There should be only a few red lines left:
     * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/firehose?`...
-* Eliminate the first one by creating a group: `https://newsletter.pragmaticengineer.com/api/v1/archive?**` -- Archive API
-* Eliminate the second one by creating a group: `https://newsletter.pragmaticengineer.com/api/v1/firehose?**` -- Firehose API
+    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/archive?`...
+    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/homepage_links`
+    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/recommendations/`...
+    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/homepage_data`
+    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/service-worker.js`
+* Eliminate these red lines by creating:
+    * a group `https://newsletter.pragmaticengineer.com/api/v1/firehose?**`, named "Firehose API"
+    * a group `https://newsletter.pragmaticengineer.com/api/v1/archive?**`, named "Archive API"
+    * a root URL `https://newsletter.pragmaticengineer.com/api/v1/homepage_links`, named "Homepage Links"
+    * a group `https://newsletter.pragmaticengineer.com/api/v1/recommendations/**`, named "Recommendations API"
+    * a root URL `https://newsletter.pragmaticengineer.com/api/v1/homepage_data`, named "Homepage Data"
+    * a root URL `https://newsletter.pragmaticengineer.com/service-worker.js`, named "Service Worker"
 * Reload the home page in the web browser.
 * There should be no red lines left.
-
-Eliminate "Page not found" message:
-
-* However there's a strange "Page not found" message displayed at the top of
-  the home page.
-    * The Pragmatic Engineer is a [Single Page Application] (SPA), 
-      a particularly advanced kind of dynamic website.
-    * SPAs can get confused when the URL in the browser has a path component
-      that isn't what they expected:
-        * When loading the real <https://newsletter.pragmaticengineer.com/>,
-          the path component of the URL is: `/`
-        * When loading the archived version at <http://localhost:2797/_/https/newsletter.pragmaticengineer.com/>,
-          the path component of the URL is: `/_/https/newsletter.pragmaticengineer.com/`
-* The "Page not found" message is probably caused by the SPA's routing code
-  getting confused by the path component of the archived URL not matching
-  the path component of the real URL.
-* We can alter the path component of the archived URL to be more realistic
-  and match the path component of the real URL by setting the
-  Default URL Prefix of the project to `https://newsletter.pragmaticengineer.com`.
-* Right-click (or Control-Click) on the "Home" URL and select
-  "Set as Default URL Prefix" from the contextual menu.
-* With the "Home" URL selected, press the "View" button to open it again in the web browser.
-* It should have opened in the web browser at URL <http://localhost:2797/>,
-  with a path component of `/` just like the real URL.
-* There also should be no further "Page not found" messages.
 
 Final testing:
 
@@ -167,10 +145,6 @@ Final testing:
 
 [xkcd]: https://xkcd.com
 [The Pragmatic Engineer]: https://newsletter.pragmaticengineer.com/
-
-[command-line]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Command-Line-Interface
-[access the server log from the regular UI]: https://github.com/davidfstr/Crystal-Web-Archiver/issues/44
-[Single Page Application]: https://developer.mozilla.org/en-US/docs/Glossary/SPA
 
 
 History 📖
