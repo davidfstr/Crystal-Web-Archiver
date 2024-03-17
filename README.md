@@ -1,16 +1,15 @@
-Crystal Web Archiver
-====================
+Crystal: A Website Downloader
+=============================
 
-<img src="https://github.com/davidfstr/Crystal-Web-Archiver/blob/main/README/logo.png" title="Crystal Web Archiver icon" align="right" />
+<img src="https://raw.githubusercontent.com/davidfstr/Crystal-Web-Archiver/main/README/logo.png" title="Crystal Website Downloader icon" align="right" />
 
-Crystal is a tool that downloads high fidelity copies of websites for long-term archival.
+Crystal is a tool that downloads high-fidelity copies of websites for long-term archival.
 
-It works best on traditional websites made of distinct pages which make limited
-use of JavaScript (such as blogs, wikis, and other static websites)
+It works best on traditional websites made of distinct pages using limited JavaScript (such as blogs, wikis, and other static websites)
 although it can also download more dynamic sites which have infinitely 
 scrolling feeds of content (such as social media sites).
 
-If you are an early adopter and want to get started creating your first project
+If you are an early adopter and want to get started downloading your first website
 with Crystal, please see the Tutorial below.
 Additional documentation will be available once Crystal is no longer **in beta**.
 
