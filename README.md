@@ -155,8 +155,7 @@ I tried didn't work well for me and because I wanted to write a large
 Python program, as Python was a new language for me at the time.
 
 Every few years I revisit Crystal to add features allowing me to archive 
-more sites that I care about, and to bring Crystal up-to-date for the latest
-operating systems.
+more sites that I care about and to streamline the downloading process.
 
 
 Design 📐
