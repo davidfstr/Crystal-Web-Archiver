@@ -10,7 +10,14 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main (v2.0.0?)
+### v1.8.0b (March 17, 2024)
+
+This release contains many workflow improvements, error-handling improvements,
+and bug fixes in preparation for Crystal to exit beta status.
+
+It is faster than ever before to define the structure of a site using the UI,
+with support for loose browser-style URL entry, better guesses for names and
+sources of entities, and the ability to rename entities after creation.
 
 * First-time-run experience improvements
     * New Root URL Dialog:
@@ -59,14 +66,14 @@ Release Notes ⋮
       URLs that were already downloaded.
         * This crash bug was introduced in v1.7.0b with the new strategy of
           creating member download tasks on demand rather than upfront.
-    * Don't crash when use UI to try to download a URL that is already downloading.
+    * Don't crash when try to download a URL that is already downloading.
     * Don't crash when try to download a group that has no member URLs.
 
 * Crawling improvements
-    * Download implicit favicon referenced by root page of any domain.
+    * Download the implicit favicon referenced by the root page of any domain.
 
 * Parsing improvements
-    * Can identify URL references inside `<source srcset="...">`.
+    * Can identify URL references to images inside `<source srcset="...">`.
     * Gracefully handle references to invalid URLs like `"//*[@id='"`
       rather than crashing.
     * Parse links from RSS and Atom feeds advertised with a specialized XML MIME type
