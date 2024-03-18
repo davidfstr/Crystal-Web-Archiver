@@ -1,13 +1,13 @@
 [Setup]
 AppName=Crystal Web Archiver
-AppVersion=1.7.0b
+AppVersion=1.8.0b
 AppCopyright=Copyright (C) 2011-2024 David Foster. All Rights Reserved
 DefaultDirName={pf}\Crystal Web Archiver
 DefaultGroupName=Crystal Web Archiver
 UninstallDisplayIcon={app}\Crystal Web Archiver.exe
 Compression=lzma2
 SolidCompression=yes
-OutputBaseFilename=crystal-win-1.7.0b
+OutputBaseFilename=crystal-win-1.8.0b
 OutputDir=dist-win
 DisableProgramGroupPage=yes
 ; Tell Explorer to refresh file extension information after (un)install,
