@@ -116,6 +116,8 @@ class NewGroupDialog:
         dialog.Show(True)
         
         dialog.MinSize = dialog.Size
+        # TODO: Clamp height to fixed value, but still allow
+        #       dialog to change height when options shown/hidden
         dialog.MaxSize = wx.Size(wx.DefaultCoord, wx.DefaultCoord)
     
     def _create_fields(self,

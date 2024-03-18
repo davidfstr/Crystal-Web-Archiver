@@ -139,7 +139,9 @@ class NewRootUrlDialog:
             self._on_options_toggle()  # collapse options initially
         
         dialog.MinSize = dialog.Size
-        dialog.MaxSize = wx.Size(wx.DefaultCoord, dialog.Size.Height)
+        # TODO: Clamp height to fixed value, but still allow
+        #       dialog to change height when options shown/hidden
+        dialog.MaxSize = wx.Size(wx.DefaultCoord, wx.DefaultCoord)
         
         # Export reference to self, if running tests
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
@@ -229,7 +231,9 @@ class NewRootUrlDialog:
             name='cr-new-root-url-dialog__set-as-default-domain-checkbox')
         self._set_as_default_domain_checkbox.Value = initial_set_as_default_domain
         self._set_as_default_domain_checkbox.Enabled = allow_set_as_default_domain_or_directory
-        options_sizer.Add(self._set_as_default_domain_checkbox)
+        options_sizer.Add(self._set_as_default_domain_checkbox,
+            flag=wx.BOTTOM,
+            border=_FORM_LABEL_INPUT_SPACING)
         
         self._set_as_default_directory_checkbox = wx.CheckBox(parent,
             id=self._ID_SET_DIRECTORY_PREFIX,
