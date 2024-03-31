@@ -25,7 +25,12 @@ _PARSER_LIBRARY_T_CHOICES = (
 
 _ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z]*\.(?:href|location)) *= *(['"])([^'"]*)['"] *;?$''')
 _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
-_QUOTED_HTTP_LINK_RE = re.compile(r'''(?i)(?:(")((?:https?:)?\\?/\\?/[^/][^"]+)"|(')((?:https?:)?\\?/\\?/[^/][^']+)')''')
+_QUOTED_HTTP_LINK_RE = re.compile(
+    r'(?i)(?:'
+        r'''(")((?:https?:)?\\?/\\?/[^/][^"]+)"|'''
+        r"""(')((?:https?:)?\\?/\\?/[^/][^']+)'"""
+    r')'
+)
 ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
 PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)(?:\?[^/?]*)?$')
