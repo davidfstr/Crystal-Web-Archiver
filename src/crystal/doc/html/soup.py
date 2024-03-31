@@ -27,8 +27,14 @@ _ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z]*\.(?:href|location)) *= *(['"])([^'"
 _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
 _QUOTED_HTTP_LINK_RE = re.compile(
     r'(?i)(?:'
-        r'''(")((?:https?:)?\\?/\\?/[^/][^"]+)"|'''
-        r"""(')((?:https?:)?\\?/\\?/[^/][^']+)'"""
+        r'(")((?:'                          # "..."
+                   r'\\?/\\?/[^/"][^"]*|'       # //...
+            r'https?:\\?/\\?/(?:[^/"][^"]*)?'   # https://...
+        r'))"|'
+        r"(')("                             # '...'
+                   r"\\?/\\?/[^/'][^']*|"       # //...
+            r"https?:\\?/\\?/(?:[^/'][^']*)?"   # https://...
+        r")'"
     r')'
 )
 ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
