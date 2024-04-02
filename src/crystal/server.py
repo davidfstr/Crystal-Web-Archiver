@@ -29,7 +29,7 @@ import os
 import re
 import shutil
 from textwrap import dedent
-from typing import Dict, Generator, Iterator, List, Literal, Optional
+from typing import Callable, Dict, Generator, Iterator, List, Literal, Optional
 from typing_extensions import override
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 
@@ -293,6 +293,8 @@ _IGNORE_UNKNOWN_X_HEADERS = True
 # datetime to a consistent value, the generated URLs will also have a
 # consistent value, allowing those generated URLs to be cached effectively.
 _ENABLE_PIN_DATE_MITIGATION = True
+
+_HTTP_COLON_SLASH_SLASH_RE = re.compile(r'(?i)https?://')
 
 
 class _HttpServer(HTTPServer):
@@ -836,17 +838,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         else:
             # Rewrite links in document
             base_url = revision.resource.url
-            for link in links:
-                relative_url = link.relative_url
-                if relative_url.startswith('#'):
-                    # Don't rewrite links to anchors on the same page,
-                    # because some pages use JavaScript libraries
-                    # that treat such "local anchor links" specially
-                    pass
-                else:
-                    absolute_url = urljoin(base_url, relative_url)
-                    request_url = self.get_request_url(absolute_url)
-                    link.relative_url = request_url
+            self._rewrite_links(links, base_url, self.get_request_url)
             
             if _ENABLE_PIN_DATE_MITIGATION:
                 # TODO: Add try_insert_script() to Document interface
@@ -861,6 +853,27 @@ class _RequestHandler(BaseHTTPRequestHandler):
             except BrokenPipeError:
                 # Browser did disconnect early
                 return
+    
+    @staticmethod
+    def _rewrite_links(
+            links: List[Link],
+            base_url: str,
+            get_request_url: Callable[[str], str]
+            ) -> None:
+        for link in links:
+            relative_url = link.relative_url
+            if relative_url.startswith('#'):
+                # Don't rewrite links to anchors on the same page,
+                # because some pages use JavaScript libraries
+                # that treat such "local anchor links" specially
+                pass
+            else:
+                if _HTTP_COLON_SLASH_SLASH_RE.fullmatch(relative_url):
+                    absolute_url = relative_url
+                else:
+                    absolute_url = urljoin(base_url, relative_url)
+                request_url = get_request_url(absolute_url)
+                link.relative_url = request_url
     
     # === Send Response ===
     
@@ -894,7 +907,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             return None
     
     def get_request_url(self, archive_url: str) -> str:
-        return _RequestHandler.get_request_url_with_host(
+        return self.get_request_url_with_host(
             archive_url, self.request_host, self.project.default_url_prefix)
     
     @staticmethod

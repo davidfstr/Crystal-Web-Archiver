@@ -10,6 +10,12 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Parsing improvements
+    * Can identify `'https://'` inside JavaScript as a URL reference,
+      which helps download/serve sites using Disqus.
+
 ### v1.8.0b (March 17, 2024)
 
 This release contains many workflow improvements, error-handling improvements,

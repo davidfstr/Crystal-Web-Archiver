@@ -2,6 +2,7 @@ from crystal.doc.generic import Document, Link
 from crystal.doc.html import HtmlParserType, HTML_PARSER_TYPE_CHOICES
 from crystal.doc.html import parse_html_and_links as try_parse_html_and_links
 from crystal.doc.html.soup import HtmlDocument
+from crystal.server import _RequestHandler
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from textwrap import dedent
 from typing import List, Optional, Tuple
@@ -362,6 +363,28 @@ def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
                     (_, ()) = _parse_html_and_links(
                         """<script type="x-json">["http://example.com/"]</script>""".encode('utf-8'),
                         html_parser_type=html_parser_type)
+                
+                # <script [type="text/javascript"]>..."http(s)://"...</script>
+                if True:
+                    (_, (link,)) = _parse_html_and_links(
+                        """<script>const url = 'http://' + disqus_shortname + '.disqus.com/embed.js'; window.location = url;</script>""".encode('utf-8'),
+                        html_parser_type=html_parser_type)
+                    assert 'http://' == link.relative_url
+                    assert 'Script Reference' == link.type_title
+                    assert None == link.title
+                    assert False == link.embedded
+                    
+                    # Ensure rewrites link 'http://' properly
+                    def get_request_url(absolute_url: str) -> str:
+                        if absolute_url == 'http://':
+                            return 'http://localhost:2797/_/http/'
+                        else:
+                            raise NotImplementedError()
+                    _RequestHandler._rewrite_links(
+                        links=[link],
+                        base_url='http://strangecandy.net/',
+                        get_request_url=get_request_url)
+                    assert 'http://localhost:2797/_/http/' == link.relative_url
                 
                 # <script [type="text/javascript"]>..."//**"...</script>
                 if True:
