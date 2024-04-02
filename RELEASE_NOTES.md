@@ -15,6 +15,7 @@ Release Notes ⋮
 * Parsing improvements
     * Can identify `'https://'` inside JavaScript as a URL reference,
       which helps download/serve sites using Disqus.
+    * Can identify references inside `<style>` elements.
 
 ### v1.8.0b (March 17, 2024)
 

@@ -2,6 +2,7 @@
 HTML parser implementation that uses BeautifulSoup.
 """
 
+from crystal.doc.css import CssDocument, parse_css_and_links_from_style_tag
 from crystal.doc.generic import Document, Link
 from crystal.doc.html import HtmlParserType
 from crystal.util.fastsoup import (
@@ -44,6 +45,7 @@ PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)(?:\?[^/
 
 @dataclass
 class _XPaths:
+    STYLE_XP: FindFunc
     BACKGROUND_EQ_STAR_XP: FindFunc
     SRC_EQ_STAR_XP: FindFunc
     IMG_SRCSET_EQ_STAR_XP: FindFunc
@@ -54,6 +56,8 @@ class _XPaths:
     STAR_XP: FindFunc
 
 _XPS_FOR_PARSER_LIBRARY_T = {T: _XPaths(
+    STYLE_XP = T.find_all_compile(
+        'style'),
     BACKGROUND_EQ_STAR_XP = T.find_all_compile(
         background=True),
     SRC_EQ_STAR_XP = T.find_all_compile(
@@ -92,7 +96,17 @@ def parse_html_and_links(
     
     XPS = _XPS_FOR_PARSER_LIBRARY_T[type(html)]
     
-    links = []
+    links = []  # type: List[Link]
+    pre_stringify_actions = []  # type: List[Callable[[], None]]
+    
+    # <style>...</style>
+    for tag in XPS.STYLE_XP(html):
+        style_body = html.tag_string(tag)
+        if style_body is None:
+            continue
+        (css_doc, css_links) = parse_css_and_links_from_style_tag(style_body)
+        links.extend(css_links)
+        pre_stringify_actions.append(_stringify_css_func(html, tag, css_doc))
     
     # <* background=*>
     for tag in XPS.BACKGROUND_EQ_STAR_XP(html):
@@ -250,6 +264,7 @@ def parse_html_and_links(
     # where the attribute name is "data-url".
     seen_tags_and_attr_names = set([
         (_IdentityKey(link.tag), link.attr_name) for link in links
+        if isinstance(link, HtmlLink)
     ])  # capture
     for tag in XPS.STAR_XP(html):
         tag_ident = _IdentityKey(tag)  # cache
@@ -271,8 +286,12 @@ def parse_html_and_links(
             links.append(HtmlLink.create_from_tag(
                 tag, html, attr_name, type_title, title, embedded))
     
-    links_ = links  # type: List[Link]  # type: ignore[assignment]  # allow List[HtmlLink] to be converted
-    return (HtmlDocument(html), links_)
+    doc = HtmlDocument(html, pre_stringify_actions=pre_stringify_actions)
+    return (doc, links)
+
+
+def _stringify_css_func(html: FastSoup, tag: Tag, css_doc: CssDocument) -> Callable[[], None]:
+    return lambda: html.set_tag_string(tag, str(css_doc))
 
 
 def _get_image_tag_title(html: FastSoup, tag: Tag) -> Optional[str]:
@@ -342,9 +361,14 @@ def _format_srcset_str(srcset: List[List[str]]) -> str:
 
 
 class HtmlDocument(Document):
-    def __init__(self, html: FastSoup, *, is_html: bool=True) -> None:
+    def __init__(self,
+            html: FastSoup,
+            *, is_html: bool=True,
+            pre_stringify_actions: Optional[List[Callable[[], None]]]=None,
+            ) -> None:
         self._html = html
         self._is_html = is_html
+        self._pre_stringify_actions = pre_stringify_actions or []
     
     def try_insert_script(self, script_url: str) -> bool:
         def create_script(html: FastSoup) -> Tag:
@@ -381,6 +405,8 @@ class HtmlDocument(Document):
             return None
     
     def __str__(self) -> str:
+        for action in self._pre_stringify_actions:
+            action()
         return str(self._html)
 
 

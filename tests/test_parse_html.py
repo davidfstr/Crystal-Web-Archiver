@@ -116,6 +116,18 @@ def test_can_insert_script_reference_in_html_document() -> None:
                 assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
 
 
+def test_recognizes_links_inside_style_tags() -> None:
+    with SubtestsContext('test_recognizes_links_inside_style_tags').run() as subtests:
+        for html_parser_type in HTML_PARSER_TYPE_CHOICES:
+            with subtests.test(html_parser_type=html_parser_type):
+                (_, (link,)) = _parse_html_and_links(
+                    """<style>@import "oo.css";</style>""".encode('utf-8'),
+                    html_parser_type=html_parser_type)
+                assert 'oo.css' == link.relative_url
+                assert 'CSS @import' == link.type_title
+                assert True == link.embedded
+
+
 def test_recognizes_body_background_link() -> None:
     with SubtestsContext('test_recognizes_body_background_link').run() as subtests:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:

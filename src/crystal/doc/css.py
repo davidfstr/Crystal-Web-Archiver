@@ -13,10 +13,20 @@ def parse_css_and_links(
         body_bytes: bytes, 
         declared_charset: Optional[str]=None
         ) -> 'Tuple[CssDocument, List[Link]]':
-    (rules, encoding) = tinycss2.parse_stylesheet_bytes(
+    (rules, _) = tinycss2.parse_stylesheet_bytes(
         body_bytes,
         protocol_encoding=declared_charset)
-    
+    return _parse_css_and_links(rules)
+
+
+def parse_css_and_links_from_style_tag(
+        body: str
+        ) -> 'Tuple[CssDocument, List[Link]]':
+    rules = tinycss2.parse_stylesheet(body)
+    return _parse_css_and_links(rules)
+
+
+def _parse_css_and_links(rules) -> 'Tuple[CssDocument, List[Link]]':
     links = []  # type: List[Link]
     for rule in rules:
         if isinstance(rule, ast.QualifiedRule) or isinstance(rule, ast.AtRule):
