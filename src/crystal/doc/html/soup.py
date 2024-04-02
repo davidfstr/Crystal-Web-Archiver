@@ -2,7 +2,11 @@
 HTML parser implementation that uses BeautifulSoup.
 """
 
-from crystal.doc.css import CssDocument, parse_css_and_links_from_style_tag
+from crystal.doc.css import (
+    CssDocument,
+    parse_css_and_links_from_style_attribute,
+    parse_css_and_links_from_style_tag,
+)
 from crystal.doc.generic import Document, Link
 from crystal.doc.html import HtmlParserType
 from crystal.util.fastsoup import (
@@ -46,6 +50,7 @@ PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)(?:\?[^/
 @dataclass
 class _XPaths:
     STYLE_XP: FindFunc
+    STYLE_EQ_STAR_XP: FindFunc
     BACKGROUND_EQ_STAR_XP: FindFunc
     SRC_EQ_STAR_XP: FindFunc
     IMG_SRCSET_EQ_STAR_XP: FindFunc
@@ -58,6 +63,8 @@ class _XPaths:
 _XPS_FOR_PARSER_LIBRARY_T = {T: _XPaths(
     STYLE_XP = T.find_all_compile(
         'style'),
+    STYLE_EQ_STAR_XP = T.find_all_compile(
+        style=True),
     BACKGROUND_EQ_STAR_XP = T.find_all_compile(
         background=True),
     SRC_EQ_STAR_XP = T.find_all_compile(
@@ -106,7 +113,16 @@ def parse_html_and_links(
             continue
         (css_doc, css_links) = parse_css_and_links_from_style_tag(style_body)
         links.extend(css_links)
-        pre_stringify_actions.append(_stringify_css_func(html, tag, css_doc))
+        pre_stringify_actions.append(_update_style_tag_string_func(html, tag, css_doc))
+    
+    # <* style=*>
+    for tag in XPS.STYLE_EQ_STAR_XP(html):
+        style_value = html.tag_attrs(tag)['style']
+        if not isinstance(style_value, str):
+            continue
+        (css_doc, css_links) = parse_css_and_links_from_style_attribute(style_value)
+        links.extend(css_links)
+        pre_stringify_actions.append(_update_style_attr_value_func(html, tag, css_doc))
     
     # <* background=*>
     for tag in XPS.BACKGROUND_EQ_STAR_XP(html):
@@ -290,8 +306,14 @@ def parse_html_and_links(
     return (doc, links)
 
 
-def _stringify_css_func(html: FastSoup, tag: Tag, css_doc: CssDocument) -> Callable[[], None]:
+def _update_style_tag_string_func(html: FastSoup, tag: Tag, css_doc: CssDocument) -> Callable[[], None]:
     return lambda: html.set_tag_string(tag, str(css_doc))
+
+
+def _update_style_attr_value_func(html: FastSoup, tag: Tag, css_doc: CssDocument) -> Callable[[], None]:
+    def update_style_attr_value() -> None:
+        html.tag_attrs(tag)['style'] = str(css_doc)
+    return update_style_attr_value
 
 
 def _get_image_tag_title(html: FastSoup, tag: Tag) -> Optional[str]:

@@ -6,7 +6,7 @@ from crystal.doc.generic import Document, Link
 import tinycss2
 from tinycss2 import ast
 from tinycss2.serializer import serialize_string_value, serialize_url
-from typing import List, Optional, Tuple
+from typing import List, Iterable, Optional, Tuple
 
 
 def parse_css_and_links(
@@ -20,10 +20,24 @@ def parse_css_and_links(
 
 
 def parse_css_and_links_from_style_tag(
-        body: str
+        tag_str: str
         ) -> 'Tuple[CssDocument, List[Link]]':
-    rules = tinycss2.parse_stylesheet(body)
+    rules = tinycss2.parse_stylesheet(tag_str)
     return _parse_css_and_links(rules)
+
+
+def parse_css_and_links_from_style_attribute(
+        attr_value: str
+        ) -> 'Tuple[CssDocument, List[Link]]':
+    decls = tinycss2.parse_declaration_list(attr_value)
+    
+    links = []  # type: List[Link]
+    for decl in decls:
+        if not isinstance(decl, ast.Declaration):
+            continue
+        _parse_links_from_component_values(decl.value, links)
+    
+    return (CssDocument(decls), links)
 
 
 def _parse_css_and_links(rules) -> 'Tuple[CssDocument, List[Link]]':
@@ -31,17 +45,7 @@ def _parse_css_and_links(rules) -> 'Tuple[CssDocument, List[Link]]':
     for rule in rules:
         if isinstance(rule, ast.QualifiedRule) or isinstance(rule, ast.AtRule):
             if rule.content is not None:  # has been observed as None in the wild sometimes
-                for token in rule.content:
-                    # url(**)
-                    if isinstance(token, ast.URLToken):
-                        links.append(UrlTokenLink(token))
-                    
-                    # url("**")
-                    elif isinstance(token, ast.FunctionBlock):
-                        if (token.lower_name == 'url' and 
-                                len(token.arguments) == 1 and 
-                                isinstance(token.arguments[0], ast.StringToken)):
-                            links.append(UrlFunctionLink(token.arguments[0]))
+                _parse_links_from_component_values(rule.content, links)
         
         # @import "**";
         if isinstance(rule, ast.AtRule) and rule.at_keyword == 'import':
@@ -52,12 +56,27 @@ def _parse_css_and_links(rules) -> 'Tuple[CssDocument, List[Link]]':
     return (CssDocument(rules), links)
 
 
+# https://doc.courtbouillon.org/tinycss2/stable/api_reference.html#term-component-values
+def _parse_links_from_component_values(tokens, links: List[Link]) -> None:
+    for token in tokens:
+        # url(**)
+        if isinstance(token, ast.URLToken):
+            links.append(UrlTokenLink(token))
+        
+        # url("**")
+        elif isinstance(token, ast.FunctionBlock):
+            if (token.lower_name == 'url' and 
+                    len(token.arguments) == 1 and 
+                    isinstance(token.arguments[0], ast.StringToken)):
+                links.append(UrlFunctionLink(token.arguments[0]))
+
+
 class CssDocument(Document):
-    def __init__(self, rules) -> None:
-        self._rules = rules
+    def __init__(self, nodes: Iterable[ast.Node]) -> None:
+        self._nodes = nodes
     
     def __str__(self) -> str:
-        return tinycss2.serialize(self._rules)
+        return tinycss2.serialize(self._nodes)
 
 
 class UrlTokenLink(Link):

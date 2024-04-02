@@ -15,7 +15,9 @@ Release Notes ⋮
 * Parsing improvements
     * Can identify `'https://'` inside JavaScript as a URL reference,
       which helps download/serve sites using Disqus.
-    * Can identify references inside `<style>` elements.
+    * Can identify URL references inside `<style>` elements.
+    * Can identify URL references inside `<* style="...">`,
+      which helps download/serve sites based on phpBB.
 
 ### v1.8.0b (March 17, 2024)
 

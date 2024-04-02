@@ -128,6 +128,18 @@ def test_recognizes_links_inside_style_tags() -> None:
                 assert True == link.embedded
 
 
+def test_recognizes_links_inside_style_attributes() -> None:
+    with SubtestsContext('test_recognizes_links_inside_style_attributes').run() as subtests:
+        for html_parser_type in HTML_PARSER_TYPE_CHOICES:
+            with subtests.test(html_parser_type=html_parser_type):
+                (_, (link,)) = _parse_html_and_links(
+                    """<dl style="background-image: url('./Forum_read.png')"></dl>""".encode('utf-8'),
+                    html_parser_type=html_parser_type)
+                assert './Forum_read.png' == link.relative_url
+                assert 'CSS URL Reference' == link.type_title
+                assert True == link.embedded
+
+
 def test_recognizes_body_background_link() -> None:
     with SubtestsContext('test_recognizes_body_background_link').run() as subtests:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:
