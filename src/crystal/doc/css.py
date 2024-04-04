@@ -76,7 +76,10 @@ class CssDocument(Document):
         self._nodes = nodes
     
     def __str__(self) -> str:
-        return tinycss2.serialize(self._nodes)
+        return tinycss2.serialize([
+            n for n in self._nodes
+            if not isinstance(n, ast.ParseError)
+        ])
 
 
 class UrlTokenLink(Link):
