@@ -28,7 +28,7 @@ _PARSER_LIBRARY_T_CHOICES = (
 )  # type: Tuple[Type[FastSoup], ...]
 
 
-_ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z]*\.(?:href|location)) *= *(['"])([^'"]*)['"] *;?$''')
+_ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z.]*\.(?:href|location)) *= *(['"])([^'"]*)['"] *;?$''')
 _TEXT_JAVASCRIPT_RE = re.compile(r'(?i)^text/javascript$')
 _QUOTED_HTTP_LINK_RE = re.compile(
     r'(?i)(?:'
@@ -56,7 +56,7 @@ class _XPaths:
     IMG_SRCSET_EQ_STAR_XP: FindFunc
     SOURCE_SRCSET_EQ_STAR_XP: FindFunc
     HREF_EQ_STAR_XP: FindFunc
-    INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP: FindFunc
+    ONCLICK_EQ_ELLIPSIS_XP: FindFunc
     SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP: FindFunc
     STAR_XP: FindFunc
 
@@ -75,8 +75,8 @@ _XPS_FOR_PARSER_LIBRARY_T = {T: _XPaths(
         'source', srcset=True),
     HREF_EQ_STAR_XP = T.find_all_compile(
         href=True),
-    INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP = T.find_all_compile(
-        'input', type='button', onclick=_ON_CLICK_RE),
+    ONCLICK_EQ_ELLIPSIS_XP = T.find_all_compile(
+        onclick=_ON_CLICK_RE),
     SCRIPT_STRING_EQ_QUOTED_HTTP_LINK_XP = T.find_all_compile(
         'script', string=_QUOTED_HTTP_LINK_RE),
     STAR_XP = T.find_all_compile(),
@@ -212,9 +212,11 @@ def parse_html_and_links(
             type_title = 'Unknown Href (%s)' % tag_name
         links.append(HtmlLink.create_from_tag(tag, html, 'href', type_title, title, embedded))
     
-    # <input type='button' onclick='*.location = "*";'>
-    # This type of link is used on: fanfiction.net
-    for tag in XPS.INPUT_TYPE_BUTTON_ONCLICK_EQ_ELLIPSIS_XP(html):
+    # <* onclick='*.location = "*";'>
+    # This type of link is used on:
+    # - fanfiction.net
+    # - http://niko-niko.net/mg/shows.html
+    for tag in XPS.ONCLICK_EQ_ELLIPSIS_XP(html):
         tag_attrs = html.tag_attrs(tag)  # cache
         
         matcher = _ON_CLICK_RE.search(_assert_str(tag_attrs['onclick']))
@@ -226,7 +228,7 @@ def parse_html_and_links(
             
             relative_url = matcher.group(3)
             title = _assert_str(tag_attrs['value']) if 'value' in tag_attrs else None
-            type_title = 'Button'
+            type_title = 'Clickable'
             embedded = False
             links.append(HtmlLink.create_from_complex_tag(
                 tag, html, 'onclick', type_title, title, embedded,

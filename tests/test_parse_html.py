@@ -352,14 +352,29 @@ def test_recognizes_input_button_onclick() -> None:
     with SubtestsContext('test_recognizes_input_button_onclick').run() as subtests:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:
             with subtests.test(html_parser_type=html_parser_type):
-                # <input type='button' onclick='*.location = "*";'>
+                # <* onclick='*.location = "*";'>
                 (_, (link,)) = _parse_html_and_links(
                     """<input type='button' onclick='window.location = "http://example.com/";' value='Example'>""".encode('utf-8'),
                     html_parser_type=html_parser_type)
-                assert 'http://example.com/' == link.relative_url
-                assert 'Button' == link.type_title
-                assert 'Example' == link.title
-                assert False == link.embedded
+                assert ('http://example.com/', 'Clickable', 'Example', False) == (
+                    link.relative_url, link.type_title, link.title, link.embedded,
+                )
+
+
+def test_recognizes_a_onclick() -> None:
+    with SubtestsContext('test_recognizes_a_onclick').run() as subtests:
+        for html_parser_type in HTML_PARSER_TYPE_CHOICES:
+            with subtests.test(html_parser_type=html_parser_type):
+                # <* onclick='*.location = "*";'>
+                (_, (link1, link2)) = _parse_html_and_links(
+                    """<a href="moon-img.html" onclick="window.self.location='moon.html'" target="main">Sailor Moon</a>""".encode('utf-8'),
+                    html_parser_type=html_parser_type)
+                assert ('moon-img.html', 'Link', 'Sailor Moon', False) == (
+                    link1.relative_url, link1.type_title, link1.title, link1.embedded,
+                )
+                assert ('moon.html', 'Clickable', None, False) == (
+                    link2.relative_url, link2.type_title, link2.title, link2.embedded,
+                )
 
 
 def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
