@@ -265,6 +265,7 @@ _HEADER_DENYLIST = set([
     'referrer-policy',  # don't omit referer because used to dynamically rewrite links
     
     # Protocol Upgrades
+    'upgrade',          # we don't support HTTP/2, QUIC, or any alternate protocol advertised by this
     'alt-svc',          # we don't support HTTP/2, QUIC, or any alternate protocol advertised by this
     
     # X-RateLimit
