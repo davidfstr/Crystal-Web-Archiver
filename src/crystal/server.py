@@ -220,6 +220,7 @@ _HEADER_ALLOWLIST = set([
     'fastly-restarts',
     'normalized-user-agent',
     'request_came_from_shield',
+    'surrogate-control',
     'x-served-by',
     
     # Infrastructure-specific: Envoy
@@ -239,15 +240,14 @@ _HEADER_DENYLIST = set([
     'content-length',   # overridden by this web server
     'accept-ranges',    # partial content ranges not supported by this server
     'connection',       # usually: keep-alive
+    'keep-alive',
     'via',              # this web server is not a proxy
     
     # Cache
     'cache-control',
     'age',
     'expires',
-    
-    # Content-Security-Policy
-    'content-security-policy-report-only',
+    'pragma',           # usually: no-cache
     
     # Cookie
     'set-cookie',       # don't allow cookies to be set by archived site
@@ -257,7 +257,17 @@ _HEADER_DENYLIST = set([
     'expect-ct',        # don't require Certificate Transparency
     'strict-transport-security',  # don't require HTTPS
     
+    # Links (uninteresting)
+    # NOTE: Details at: https://github.com/davidfstr/Crystal-Web-Archiver/issues/75
+    'link',
+    
     # Logging
+    'content-security-policy-report-only',
+                        # don't enable CSP logging
+    'cross-origin-embedder-policy-report-only',
+                        # don't enable COEP logging
+    'cross-origin-opener-policy-report-only',
+                        # don't enable COOP logging
     'nel',              # don't enable network request logging
     'report-to',        # don't enable Content Security Policy logging
     
