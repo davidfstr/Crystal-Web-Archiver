@@ -18,6 +18,7 @@ Release Notes ⋮
     * Can identify URL references inside `<style>` elements.
     * Can identify URL references inside `<* style="...">`,
       which helps download/serve sites based on phpBB.
+    * Can identify data: URL references inside `<* srcset="...">`.
 
 ### v1.8.0b (March 17, 2024)
 

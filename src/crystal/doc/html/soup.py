@@ -368,15 +368,17 @@ def _process_srcset_attr(html: FastSoup, img_or_source_tag: Tag) -> 'List[HtmlLi
     return links
 
 
+# NOTE: Each URL in a srcset may itself contain a comma
+#       (due to data: URLs) so cannot just split on comma
+_SRCSET_PART_RE = re.compile(r' *(data:[^ ]+|[^ ,]+)(?: +([^ ,]+))? *,')
+
 def _parse_srcset_str(srcset_str: str) -> Optional[List[List[str]]]:
     candidates = []
-    candidate_strs = [c.strip() for c in srcset_str.split(',')]
-    for c_str in candidate_strs:
-        parts = [p for p in c_str.split(' ') if len(p) != 0]
-        if not (1 <= len(parts) <= 2):
-            # Failed to parse srcset
-            return None
-        candidates.append(parts)
+    for parts in _SRCSET_PART_RE.findall(srcset_str + ','):
+        if parts[1] == '':
+            candidates.append([parts[0]])
+        else:
+            candidates.append([parts[0], parts[1]])
     return candidates
 
 

@@ -221,6 +221,7 @@ def test_recognizes_img_srcset() -> None:
     with SubtestsContext('test_recognizes_img_srcset').run() as subtests:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:
             with subtests.test(html_parser_type=html_parser_type):
+                # Case 1: Normal
                 (_, (link1, link2)) = _parse_html_and_links(dedent(
                     """
                     <img
@@ -229,16 +230,47 @@ def test_recognizes_img_srcset() -> None:
                         srcset="clock-demo-400px.png 2x" />
                     """).lstrip('\n').encode('utf-8'),
                     html_parser_type=html_parser_type)
+                assert ('clock-demo-200px.png', 'Image', 'Clock', True) == (
+                    link1.relative_url, link1.type_title, link1.title, link1.embedded,
+                )
+                assert ('clock-demo-400px.png', 'Image', 'Clock', True) == (
+                    link2.relative_url, link2.type_title, link2.title, link2.embedded,
+                )
                 
-                assert 'clock-demo-200px.png' == link1.relative_url
-                assert 'Image' == link1.type_title
-                assert 'Clock' == link1.title
-                assert True == link1.embedded
+                # Case 2: srcset with missing condition descriptor
+                (_, (link1, link2)) = _parse_html_and_links(dedent(
+                    """
+                    <img
+                        srcset="images/team-photo.jpg, images/team-photo-retina.jpg 2x" />
+                    """).lstrip('\n').encode('utf-8'),
+                    html_parser_type=html_parser_type)
+                assert ('images/team-photo.jpg', 'Image', None, True) == (
+                    link1.relative_url, link1.type_title, link1.title, link1.embedded,
+                )
+                assert ('images/team-photo-retina.jpg', 'Image', None, True) == (
+                    link2.relative_url, link2.type_title, link2.title, link2.embedded,
+                )
                 
-                assert 'clock-demo-400px.png' == link2.relative_url
-                assert 'Image' == link2.type_title
-                assert 'Clock' == link2.title
-                assert True == link2.embedded
+                # Case 3: srcset with a data: URL containing a comma
+                (_, (link1, link2)) = _parse_html_and_links(dedent(
+                    """
+                    <img
+                        src="https://i1.wp.com/shoujo-manga.land/wp-content/uploads/2020/02/small-logo2.png?fit=300%2C60&amp;ssl=1" 
+                        srcset="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+                    """).lstrip('\n').encode('utf-8'),
+                    html_parser_type=html_parser_type)
+                assert (
+                    'https://i1.wp.com/shoujo-manga.land/wp-content/uploads/2020/02/small-logo2.png?fit=300%2C60&ssl=1',
+                    'Image', None, True
+                ) == (
+                    link1.relative_url, link1.type_title, link1.title, link1.embedded,
+                )
+                assert (
+                    'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+                    'Image', None, True
+                ) == (
+                    link2.relative_url, link2.type_title, link2.title, link2.embedded,
+                )
 
 
 def test_recognizes_source_srcset() -> None:
