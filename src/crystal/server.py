@@ -305,6 +305,9 @@ _IGNORE_UNKNOWN_X_HEADERS = True
 # consistent value, allowing those generated URLs to be cached effectively.
 _ENABLE_PIN_DATE_MITIGATION = True
 
+# By default, browsers may cache Crystal-served assets for 1 hour
+_CACHE_CONTROL_POLICY = 'max-age=3600'  # type: Optional[str]
+
 _HTTP_COLON_SLASH_SLASH_RE = re.compile(r'(?i)https?://')
 
 
@@ -800,6 +803,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
                         self._print_warning(
                             '*** Ignoring unknown header in archive: %s: %s' % (name, value))
                 continue
+        if _CACHE_CONTROL_POLICY is not None:
+            self.send_header('Cache-Control', _CACHE_CONTROL_POLICY)
         self.end_headers()
         
         # Send body

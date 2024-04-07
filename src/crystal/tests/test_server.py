@@ -97,7 +97,7 @@ async def test_when_serve_page_then_safe_headers_included() -> None:
 
 
 async def test_when_serve_page_then_unsafe_headers_excluded() -> None:
-    UNSAFE_HEADER_NAME = 'Cache-Control'
+    UNSAFE_HEADER_NAME = 'Connection'
     assert UNSAFE_HEADER_NAME.lower() in server._HEADER_DENYLIST
     
     async with _xkcd_home_page_served() as (revision, server_page, _):
@@ -107,7 +107,10 @@ async def test_when_serve_page_then_unsafe_headers_excluded() -> None:
         
         # Ensure header has expected value in served page
         served_header_value = server_page.headers[UNSAFE_HEADER_NAME]
-        assert served_header_value is None
+        assert served_header_value is None, (
+            f'Header {UNSAFE_HEADER_NAME!r} has '
+            f'unexpected value {served_header_value!r}'
+        )
 
 
 async def test_when_serve_page_with_unknown_non_x_header_then_excludes_header_and_prints_warning() -> None:
