@@ -7,11 +7,7 @@ from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from textwrap import dedent
 from typing import List, Optional, Tuple
 
-# === Tests ===
-
-# TODO: Extend each "test_recognizes_*" to also test WRITING
-#       to the relative_url of the output link to ensure it
-#       gets saves in a reasonable way.
+# === Tests: Parse/Format Document ===
 
 def test_can_parse_and_format_basic_html_document() -> None:
     with SubtestsContext('test_can_parse_and_format_basic_html_document').run() as subtests:
@@ -115,6 +111,12 @@ def test_can_insert_script_reference_in_html_document() -> None:
                 assert success
                 assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
 
+
+# === Tests: Recognize Links ===
+
+# TODO: Extend each "test_recognizes_*" to also test WRITING
+#       to the relative_url of the output link to ensure it
+#       gets saves in a reasonable way.
 
 def test_recognizes_links_inside_style_tags() -> None:
     with SubtestsContext('test_recognizes_links_inside_style_tags').run() as subtests:
@@ -501,6 +503,57 @@ def test_recognizes_unknown_attribute_with_absolute_url() -> None:
                     assert 'Attribute Reference' == link.type_title
                     assert None == link.title
                     assert True == link.embedded
+
+
+# === Tests: Rewrite Links ===
+
+# https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity
+def test_when_rewrite_link_using_integrity_then_removes_integrity_attribute() -> None:
+    with SubtestsContext('test_recognizes_links_inside_style_tags').run() as subtests:
+        for html_parser_type in HTML_PARSER_TYPE_CHOICES:
+            with subtests.test(tag='script', html_parser_type=html_parser_type):
+                (doc, (link,)) = _parse_html_and_links(
+                    '<script src="https://example.com/script.js" integrity="sha384-v8BU367qNbs/aIZIxuivaU55N5GPF89WBerHoGA4QTcbUjYiLQtKdrfXnqAcXyTv"></script>'.encode('utf-8'),
+                    html_parser_type=html_parser_type)
+                assert (
+                    'https://example.com/script.js',
+                    'Unknown Embedded (script)', None, True
+                ) == (
+                    link.relative_url, link.type_title, link.title, link.embedded,
+                )
+                
+                link.relative_url = 'http://localhost:2797/_/https/example.com/script.js'
+                
+                EXPECTED_OUTPUT_HTML_STR_CHOICES = [
+                    # html.parser
+                                '''<script src="http://localhost:2797/_/https/example.com/script.js"></script>''',
+                    # lxml
+                    '''<html><head><script src="http://localhost:2797/_/https/example.com/script.js"></script></head></html>''',
+                ]
+                assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
+                assert 'integrity' not in str(doc)
+            
+            with subtests.test(tag='link', html_parser_type=html_parser_type):
+                (doc, (link,)) = _parse_html_and_links(
+                    '<link crossorigin="anonymous" href="https://use.fontawesome.com/releases/v5.12.1/css/all.css" integrity="sha384-v8BU367qNbs/aIZIxuivaU55N5GPF89WBerHoGA4QTcbUjYiLQtKdrfXnqAcXyTv" media="all" rel="stylesheet" type="text/css"/>'.encode('utf-8'),
+                    html_parser_type=html_parser_type)
+                assert (
+                    'https://use.fontawesome.com/releases/v5.12.1/css/all.css',
+                    'Stylesheet', None, True
+                ) == (
+                    link.relative_url, link.type_title, link.title, link.embedded,
+                )
+                
+                link.relative_url = 'http://localhost:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css'
+                
+                EXPECTED_OUTPUT_HTML_STR_CHOICES = [
+                    # html.parser
+                                '''<link crossorigin="anonymous" href="http://localhost:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css" media="all" rel="stylesheet" type="text/css"/>''',
+                    # lxml
+                    '''<html><head><link crossorigin="anonymous" href="http://localhost:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css" media="all" rel="stylesheet" type="text/css"></head></html>''',
+                ]
+                assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
+                assert 'integrity' not in str(doc)
 
 
 # === Utility ===

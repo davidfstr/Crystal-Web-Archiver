@@ -156,7 +156,13 @@ def parse_html_and_links(
         else:
             title = None
             type_title = 'Unknown Embedded (%s)' % tag_name
-        links.append(HtmlLink.create_from_tag(tag, html, 'src', type_title, title, embedded))
+        if tag_name == 'script' and 'integrity' in tag_attrs:
+            rewrite_side_effect = _remove_integrity_attr_func(html, tag)
+        else:
+            rewrite_side_effect = None
+        links.append(HtmlLink.create_from_tag(
+            tag, html, 'src', type_title, title, embedded,
+            rewrite_side_effect=rewrite_side_effect))
     
     # <img srcset=*>
     for tag in XPS.IMG_SRCSET_EQ_STAR_XP(html):
@@ -210,7 +216,13 @@ def parse_html_and_links(
         else:
             title = None
             type_title = 'Unknown Href (%s)' % tag_name
-        links.append(HtmlLink.create_from_tag(tag, html, 'href', type_title, title, embedded))
+        if tag_name == 'link' and 'integrity' in tag_attrs:
+            rewrite_side_effect = _remove_integrity_attr_func(html, tag)
+        else:
+            rewrite_side_effect = None
+        links.append(HtmlLink.create_from_tag(
+            tag, html, 'href', type_title, title, embedded,
+            rewrite_side_effect=rewrite_side_effect))
     
     # <* onclick='*.location = "*";'>
     # This type of link is used on:
@@ -316,6 +328,12 @@ def _update_style_attr_value_func(html: FastSoup, tag: Tag, css_doc: CssDocument
     def update_style_attr_value() -> None:
         html.tag_attrs(tag)['style'] = str(css_doc)
     return update_style_attr_value
+
+
+def _remove_integrity_attr_func(html: FastSoup, tag: Tag) -> Callable[[], None]:
+    def remove_integrity_attr() -> None:
+        del html.tag_attrs(tag)['integrity']
+    return remove_integrity_attr
 
 
 def _get_image_tag_title(html: FastSoup, tag: Tag) -> Optional[str]:
@@ -448,7 +466,8 @@ class HtmlLink(Link):
             attr_name: str,
             type_title: str,
             title: Optional[str],
-            embedded: bool
+            embedded: bool,
+            *, rewrite_side_effect: Optional[Callable[[], None]]=None,
             ) -> 'HtmlLink':
         """
         Creates a link that is derived from the attribute of an HTML element.
@@ -462,7 +481,9 @@ class HtmlLink(Link):
         if (tag is None or attr_name is None or type_title is None or
                 embedded not in (True, False)):
             raise ValueError()
-        return HtmlLink(None, tag, tag_doc, attr_name, type_title, title, embedded)
+        return HtmlLink(
+            None, tag, tag_doc, attr_name, type_title, title, embedded,
+            rewrite_side_effect=rewrite_side_effect)
     
     @staticmethod
     def create_from_complex_tag(
@@ -486,7 +507,9 @@ class HtmlLink(Link):
         if (tag is None or attr_name is None or not callable(replace_url_in_old_attr_value) or 
                 type_title is None or embedded not in (True, False)):
             raise ValueError()
-        return HtmlLink(relative_url, tag, tag_doc, attr_name, type_title, title, embedded, replace_url_in_old_attr_value)
+        return HtmlLink(
+            relative_url, tag, tag_doc, attr_name, type_title, title, embedded,
+            replace_url_in_old_attr_value=replace_url_in_old_attr_value)
     
     @staticmethod
     def create_external(
@@ -516,13 +539,15 @@ class HtmlLink(Link):
             type_title: str,
             title: Optional[str],
             embedded: bool,
-            replace_url_in_old_attr_value: Optional[Callable[[str, str], str]]=None
+            *, replace_url_in_old_attr_value: Optional[Callable[[str, str], str]]=None,
+            rewrite_side_effect: Optional[Callable[[], None]]=None,
             ) -> None:
         self._relative_url = relative_url
         self._tag = tag
         self._tag_doc = tag_doc
         self._attr_name = attr_name
         self._replace_url_in_old_attr_value = replace_url_in_old_attr_value
+        self._rewrite_side_effect = rewrite_side_effect
         
         self.title = title
         self.type_title = type_title
@@ -546,6 +571,8 @@ class HtmlLink(Link):
                 attr_value = url
             self._attr_value = attr_value
             self._relative_url = url
+        if self._rewrite_side_effect is not None:
+            self._rewrite_side_effect()
     relative_url = property(_get_relative_url, _set_relative_url)
     
     @property

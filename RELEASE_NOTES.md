@@ -19,6 +19,9 @@ Release Notes ⋮
     * Can identify URL references inside `<* style="...">`,
       which helps download/serve sites based on phpBB.
     * Can identify data: URL references inside `<* srcset="...">`.
+    * Can rewrite URL references that use [Subresource Integrity].
+
+[Subresource Integrity]: https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity
 
 ### v1.8.0b (March 17, 2024)
 
