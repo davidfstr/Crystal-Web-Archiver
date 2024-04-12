@@ -318,7 +318,7 @@ class Task(ListenableMixin, Bulkhead):
     
     # === Protected Operations: Lazy Children ===
     
-    def initialize_children(self, children: Sequence[Task]) -> None:
+    def initialize_children(self, children: Sequence[Task]) -> Callable[[], None]:
         """
         Initializes this task's children to the specified sequence.
         
@@ -333,9 +333,11 @@ class Task(ListenableMixin, Bulkhead):
         )
         self._children = children
         
-        for lis in self.listeners:
-            if hasattr(lis, 'task_did_set_children'):
-                run_bulkhead_call(lis.task_did_set_children, self, len(children))  # type: ignore[attr-defined]
+        def notify_task_did_set_children():
+            for lis in self.listeners:
+                if hasattr(lis, 'task_did_set_children'):
+                    run_bulkhead_call(lis.task_did_set_children, self, len(children))  # type: ignore[attr-defined]
+        return notify_task_did_set_children
     
     def materialize_child(self, child: Task, *, already_complete_ok: bool=False) -> None:
         """
@@ -1445,21 +1447,33 @@ class DownloadResourceGroupMembersTask(Task):
         super().__init__(
             title='Downloading members of group: %s' % group.display_name)
         self.group = group
+        self._deferred_events = []  # type: List[Callable[[], None]]
+        self._done_updating_group = False
+        
+        # Loaded later by _load_children
+        self._pbc = None  # type: Optional[ProgressBarCalculator]
+        self._children_loaded = False
         
         if self._use_extra_listener_assertions:
             assert self not in self.group.listeners
-        self.group.listeners.append(self)
-        
-        self._done_updating_group = False
-        
-        self._pbc = None  # type: Optional[ProgressBarCalculator]
-        self._children_loaded = False
+        self.group.listeners.append(self)  # publicize self (to other threads)
     
     @override
     @capture_crashes_to_self
     def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
+        # Load children, if not already done
         if not self._children_loaded:
             return self._load_children_and_update_completed_status
+        
+        # Process deferred events, if any
+        assert is_foreground_thread()  # to access self._deferred_events
+        if len(self._deferred_events) > 0:
+            deferred_events = self._deferred_events  # capture
+            self._deferred_events = []
+            
+            assert is_synced_with_scheduler_thread()
+            for event in deferred_events:
+                event()
         
         return super().try_get_next_task_unit()
     
@@ -1488,16 +1502,18 @@ class DownloadResourceGroupMembersTask(Task):
             def unmaterializeitem(t: DownloadResourceTask) -> None:
                 t.dispose()
             
-            lazy_children = AppendableLazySequence[DownloadResourceTask](
-                createitem_func=createitem,
-                materializeitem_func=materializeitem,
-                unmaterializeitem_func=unmaterializeitem,
-                len_func=lambda: len(group.members)
+            notify_task_did_set_children = self.initialize_children(
+                AppendableLazySequence[DownloadResourceTask](
+                    createitem_func=createitem,
+                    materializeitem_func=materializeitem,
+                    unmaterializeitem_func=unmaterializeitem,
+                    len_func=lambda: len(group.members)
+                )
             )
             
             self._pbc = ProgressBarCalculator(
                 initial=0,
-                total=len(lazy_children),
+                total=len(self.children),
             )
             self._children_loaded = True  # after self._pbc = ...; before self._update_subtitle()
             self._update_subtitle()
@@ -1505,7 +1521,7 @@ class DownloadResourceGroupMembersTask(Task):
             # NOTE: The children list may be accessed immediately by "task_did_set_children"
             #       listeners and therefore may immediately materialize children
             #       and may immediately call child-complete actions
-            self.initialize_children(lazy_children)
+            notify_task_did_set_children()
             # (NOTE: self.complete might be True now)
         else:
             with gc_disabled():  # don't garbage collect while allocating many objects
@@ -1533,10 +1549,17 @@ class DownloadResourceGroupMembersTask(Task):
     
     @capture_crashes_to_self
     def group_did_add_member(self, group: ResourceGroup, member: Resource) -> None:
-        # NOTE: Unfortunately self._children_loaded may be unset here due to a race condition:
-        #       https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
-        if not self._children_loaded:
-            fg_call_and_wait(self._load_children)
+        if not is_synced_with_scheduler_thread():
+            assert is_foreground_thread()  # to access: self._children_loaded, self._deferred_events
+            if self._children_loaded:
+                # Defer
+                self._deferred_events.append(lambda: self.group_did_add_member(group, member))
+            else:
+                # Ignore
+                pass
+            return
+        
+        assert self._children_loaded
         assert self._pbc is not None
         
         if self._LAZY_LOAD_CHILDREN:

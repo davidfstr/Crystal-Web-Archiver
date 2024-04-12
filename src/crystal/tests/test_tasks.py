@@ -1,5 +1,8 @@
+from crystal.model import ResourceRevision, RootResource
+from crystal.server import ProjectServer
 from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
+    DownloadResourceGroupMembersTask,
     ProjectFreeSpaceTooLowError, Task,
 )
 from crystal.tests.util.asserts import *
@@ -8,15 +11,24 @@ from crystal.tests.util.data import (
     MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
 )
 from crystal.tests.util.downloads import load_children_of_drg_task
-from crystal.tests.util.server import served_project
+from crystal.tests.util.server import fetch_archive_url, served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
-from crystal.tests.util.tasks import scheduler_thread_context
+from crystal.tests.util.tasks import (
+    append_deferred_top_level_tasks,
+    clear_top_level_tasks_on_exit,
+    scheduler_disabled,
+    scheduler_thread_context,
+)
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util.xthreading import bg_call_and_wait
 from crystal.model import Project, Resource, ResourceGroup
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xcollections.lazy import AppendableLazySequence
+from crystal.util.xfutures import Future
+from crystal.util.xthreading import is_foreground_thread
+import re
 from typing import NamedTuple
 from unittest import skip
 from unittest.mock import patch, Mock, PropertyMock
@@ -261,6 +273,80 @@ class _DiskUsage(NamedTuple):
 @skip('not yet automated')
 async def test_when_download_resource_group_members_then_displays_estimated_time_remaining() -> None:
     pass
+
+
+@awith_subtests
+async def test_given_download_resource_group_members_when_add_group_member_via_dynamic_browsing_then_new_member_is_queued_for_download(subtests) -> None:
+    for children_loaded_before_member_added in [True, False]:
+        with subtests.test(children_loaded_before_member_added=children_loaded_before_member_added):
+            # NOTE: NOT using the xkcd test data, because I want all xkcd URLs to give HTTP 404
+            with scheduler_disabled(), \
+                    served_project('testdata_bongo.cat.crystalproj.zip') as sp:
+                # Define URLs
+                comic1_url = sp.get_request_url('https://xkcd.com/1/')
+                comic2_url = sp.get_request_url('https://xkcd.com/2/')
+                comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+                
+                async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+                    project = Project._last_opened_project
+                    assert project is not None
+                    
+                    with clear_top_level_tasks_on_exit(project):
+                        comic1_rr = RootResource(project, '', Resource(project, comic1_url))
+                        comic_g = ResourceGroup(project, '', comic_pattern)
+                        
+                        server = ProjectServer(project)
+                        try:
+                            drg_task = comic_g.create_download_task()
+                            project.add_task(drg_task); append_deferred_top_level_tasks(project)
+                            
+                            drgm_task = drg_task._download_members_task
+                            if children_loaded_before_member_added:
+                                load_children_of_drg_task(drg_task, scheduler_thread_enabled=False)
+                                assertEqual(1, _group_size_in_subtitle(drgm_task))
+                            else:
+                                assertEqual('Queued', drgm_task.subtitle)
+                            
+                            # Trigger start of dynamic download of new group member
+                            # 
+                            # Meanwhile:
+                            # - Patch Resource.download() to start download and return an
+                            #   already-completed Future with an arbitrary result,
+                            #   rather than blocking on the foreground thread
+                            # - Prevent foreground thread from being detected as the scheduler thread
+                            super_resource_download = Resource.download
+                            def resource_download(self: Resource, *args, **kwargs) -> 'Future[ResourceRevision]':
+                                _ = super_resource_download(self, *args, **kwargs)
+                                result = Future()  # type: Future[ResourceRevision]
+                                result.set_result(ResourceRevision.create_from_error(self, Exception('Simulated error')))
+                                return result
+                            with patch.object(Resource, 'download', resource_download):
+                                assert is_foreground_thread()
+                                with scheduler_thread_context(enabled=False):
+                                    _ = await fetch_archive_url(comic2_url)
+                            
+                            # Process deferred event: DRGMT.group_did_add_member
+                            unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                            assert unit is not None
+                            await bg_call_and_wait(scheduler_thread_context()(unit))
+                            
+                            # Ensure newly discovered group member is queued for download
+                            assertEqual(2, _group_size_in_subtitle(drgm_task))
+                        finally:
+                            server.close()
+                        
+                        # Drain tasks explicitly, to avoid subtitle-related warning
+                        while True:
+                            unit = project.root_task.try_get_next_task_unit()  # step scheduler
+                            if unit is None:
+                                break
+                            await bg_call_and_wait(scheduler_thread_context()(unit))
+
+
+def _group_size_in_subtitle(t: DownloadResourceGroupMembersTask) -> int:
+    m = re.search(r'(\d+) item\(s\)', t.subtitle)
+    assert m is not None
+    return int(m.group(1))
 
 
 # ------------------------------------------------------------------------------

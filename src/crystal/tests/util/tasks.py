@@ -175,16 +175,16 @@ def scheduler_disabled() -> Iterator[None]:
 
 
 @contextmanager
-def scheduler_thread_context() -> Iterator[None]:
+def scheduler_thread_context(enabled: bool=True) -> Iterator[None]:
     """
     Context which executes its contents as if it was on a scheduler thread.
     
     For testing use only.
     """
     old_is_scheduler_thread = _is_scheduler_thread()  # capture
-    setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
+    setattr(threading.current_thread(), '_cr_is_scheduler_thread', enabled)
     try:
-        assert _is_scheduler_thread()
+        assert enabled == _is_scheduler_thread()
         yield
     finally:
         setattr(threading.current_thread(), '_cr_is_scheduler_thread', old_is_scheduler_thread)
@@ -206,6 +206,7 @@ def clear_top_level_tasks_on_exit(project: Project) -> Iterator[None]:
         project.root_task.crash_reason = None
         
         # Force root task children to complete
+        project.root_task.append_deferred_top_level_tasks()
         for c in project.root_task.children:
             if not c.complete:
                 mark_as_complete(c)

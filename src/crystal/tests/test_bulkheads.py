@@ -29,6 +29,7 @@ from crystal.tests.util.wait import (
     wait_for, wait_while,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util.xthreading import bg_call_and_wait as _bg_call_and_wait
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.ui.tree import NodeView
 from crystal.util.bulkheads import (
@@ -51,9 +52,6 @@ from typing import Callable, cast, List, Optional, Tuple, TypeVar, Union
 from unittest import skip
 from unittest.mock import patch
 import wx
-
-
-_R = TypeVar('_R')
 
 
 _CRASH = ValueError('Simulated crash')
@@ -1660,36 +1658,6 @@ async def test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_
 
 # ------------------------------------------------------------------------------
 # Utility
-
-_DEFAULT_WAIT_TIMEOUT_FOR_UNIT = 4.0
-
-async def _bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[float]=None) -> _R:
-    """
-    Start the specified callable on a background thread and
-    waits for it to finish running.
-    
-    The foreground thread IS released while waiting, so the callable can safely
-    make calls to fg_call_later() and fg_call_and_wait() without deadlocking.
-    """
-    if timeout is None:
-        timeout = _DEFAULT_WAIT_TIMEOUT_FOR_UNIT
-    
-    result_cell = Future()  # type: Future[_R]
-    @capture_crashes_to_stderr
-    def bg_task() -> None:
-        result_cell.set_running_or_notify_cancel()
-        try:
-            result_cell.set_result(callable())
-        except BaseException as e:
-            result_cell.set_exception(e)
-    bg_call_later(bg_task)
-    # NOTE: Releases foreground thread while waiting
-    await wait_for(
-        lambda: result_cell.done() or None, timeout,
-        message=lambda: f'Timed out waiting for {callable}',
-        stacklevel_extra=1)
-    return result_cell.result()
-
 
 async def _run_unit_from_PRRL_and_crash_task(prrl_task: Task, unit, home_r: Resource) -> None:
     assert isinstance(prrl_task, ParseResourceRevisionLinks)

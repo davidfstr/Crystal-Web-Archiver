@@ -21,6 +21,10 @@ Release Notes ⋮
     * Can identify data: URL references inside `<* srcset="...">`.
     * Can rewrite URL references that use [Subresource Integrity].
 
+* Major fixes
+    * Fix crash when dynamically downloading a served URL which is a member of
+      a group being actively downloaded.
+
 [Subresource Integrity]: https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity
 
 ### v1.8.0b (March 17, 2024)
