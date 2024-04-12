@@ -120,7 +120,7 @@ def create_profiled_callable(title: str, max_duration: float, callable: Callable
             )
             
         with warn_if_slow(title, max_duration, message_func):
-            return callable(*args)
+            return callable(*args)  # cr-traceback: ignore
     return profiled_callable
 
 

@@ -91,6 +91,8 @@ def capture_crashes_to_self(
             try:
                 return bulkhead_method(self, *args, **kwargs)  # cr-traceback: ignore
             except BaseException as e:
+                e.__full_traceback__ = _extract_bulkhead_traceback(e)  # type: ignore[attr-defined]
+                
                 # Print traceback to assist in debugging in the terminal,
                 # including ancestor callers of bulkhead_call
                 _print_bulkhead_exception(e)
@@ -155,6 +157,8 @@ def capture_crashes_to_bulkhead_arg(
             try:
                 return method(self, bulkhead, *args, **kwargs)  # cr-traceback: ignore
             except BaseException as e:
+                e.__full_traceback__ = _extract_bulkhead_traceback(e)  # type: ignore[attr-defined]
+                
                 # Print traceback to assist in debugging in the terminal,
                 # including ancestor callers of bulkhead_call
                 _print_bulkhead_exception(e)
@@ -212,6 +216,8 @@ def capture_crashes_to(
             try:
                 return func(*args, **kwargs)  # cr-traceback: ignore
             except BaseException as e:
+                e.__full_traceback__ = _extract_bulkhead_traceback(e)  # type: ignore[attr-defined]
+                
                 # Print traceback to assist in debugging in the terminal,
                 # including ancestor callers of bulkhead_call
                 _print_bulkhead_exception(e)
@@ -246,8 +252,11 @@ def crashes_captured_to(bulkhead: Bulkhead, *, enter_if_crashed: bool=False) -> 
     try:
         yield  # cr-traceback: ignore
     except BaseException as e:
+        e.__full_traceback__ = _extract_bulkhead_traceback(  # type: ignore[attr-defined]
+            e, fix_tb=lambda here_tb, exc_tb: here_tb[:-3] + exc_tb[1:])
+        
         # Print traceback to assist in debugging in the terminal
-        _print_bulkhead_exception(e, fix_tb=lambda here_tb, exc_tb: here_tb[:-3] + exc_tb[1:])
+        _print_bulkhead_exception(e)
         
         # Crash the bulkhead. Abort.
         bulkhead.crash_reason = e
@@ -294,6 +303,8 @@ def capture_crashes_to_stderr(
             try:
                 return func(*args, **kwargs)  # cr-traceback: ignore
             except BaseException as e:
+                e.__full_traceback__ = _extract_bulkhead_traceback(e)  # type: ignore[attr-defined]
+                
                 # Print traceback to assist in debugging in the terminal,
                 # including ancestor callers of bulkhead_call
                 _print_bulkhead_exception(e, is_error=True)
@@ -323,6 +334,21 @@ def _mark_bulkhead_call(bulkhead_call: Callable[_P, _R]) -> Callable[_P, _R]:
 _ExtractedTraceback = List[traceback.FrameSummary]
 _FixTbFunc = Callable[[_ExtractedTraceback, _ExtractedTraceback], _ExtractedTraceback]
 
+def _extract_bulkhead_traceback(
+        e: BaseException,
+        *, fix_tb: Optional[_FixTbFunc]=None,
+        extra_stacklevel: int=0
+        ) -> Optional[_ExtractedTraceback]:
+    if e.__traceback__ is None:
+        return None
+    here_tb = traceback.extract_stack(sys._getframe(1 + extra_stacklevel))
+    exc_tb = traceback.extract_tb(e.__traceback__)
+    if fix_tb is None:
+        fix_tb = lambda here_tb, exc_tb: here_tb[:-1] + exc_tb
+    full_tb_summary = fix_tb(here_tb, exc_tb)  # type: _ExtractedTraceback
+    return full_tb_summary
+
+
 def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False, fix_tb: Optional[_FixTbFunc]=None) -> None:
     # Print traceback to assist in debugging in the terminal,
     # including ancestor callers of bulkhead_call
@@ -330,12 +356,11 @@ def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False, fix_tb:
     print(
         cli.TERMINAL_FG_RED if is_error else cli.TERMINAL_FG_YELLOW,
         end='', file=err_file)
-    if e.__traceback__ is not None:
-        here_tb = traceback.extract_stack(sys._getframe(1))
-        exc_tb = traceback.extract_tb(e.__traceback__)
-        if fix_tb is None:
-            fix_tb = lambda here_tb, exc_tb: here_tb[:-1] + exc_tb
-        full_tb_summary = fix_tb(here_tb, exc_tb)  # type: _ExtractedTraceback
+    full_tb_summary = getattr(e, '__full_traceback__', Ellipsis)
+    if full_tb_summary is Ellipsis:
+        full_tb_summary = _extract_bulkhead_traceback(
+            e, fix_tb=fix_tb, extra_stacklevel=1)
+    if full_tb_summary is not None:
         print('Exception in bulkhead:', file=err_file)
         print('Traceback (most recent call last):', file=err_file)
         for x in traceback.format_list(full_tb_summary):

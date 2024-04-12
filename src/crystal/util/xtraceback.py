@@ -8,11 +8,14 @@ _PYTHON_STDLIB_PARENT_DIRPATH = os.path.abspath(os.path.dirname(os.__file__))
 
 
 def format_exception_for_user(exc: BaseException) -> str:
-    tb = exc.__traceback__
+    # Try to extract traceback saved by _extract_bulkhead_traceback()
+    full_traceback = getattr(exc, '__full_traceback__', Ellipsis)
+    if full_traceback is Ellipsis:
+        full_traceback = traceback.extract_tb(exc.__traceback__)
     
     exception_str = io.StringIO()
     print(f'{type(exc).__name__}: {str(exc)}', file=exception_str)
-    for fs in reversed(traceback.extract_tb(tb)):
+    for fs in reversed(full_traceback):
         if '# cr-traceback: ignore' in (fs.line or ''):
             # Don't print frames marked as uninteresting
             continue

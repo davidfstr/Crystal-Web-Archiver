@@ -21,6 +21,10 @@ Release Notes ⋮
     * Can identify data: URL references inside `<* srcset="...">`.
     * Can rewrite URL references that use [Subresource Integrity].
 
+* Error handling improvements
+    * Crashes now provide tracebacks with more context,
+      back to the start of the thread in which the crash occurred.
+
 * Major fixes
     * Fix crash when dynamically downloading a served URL which is a member of
       a group being actively downloaded.

@@ -243,7 +243,7 @@ def fg_call_and_wait(
         raise NoForegroundThreadError()
     
     if is_foreground_thread():
-        return callable(*args)
+        return callable(*args)  # cr-traceback: ignore
     else:
         event = threading.Event()
         callable_started = False
@@ -416,7 +416,7 @@ def run_thread_switching_coroutine(
         else:
             raise AssertionError()
         try:
-            command = run_next(lambda: next(coro))
+            command = run_next(lambda: next(coro))  # cr-traceback: ignore
         except StopIteration as e:
             return e.value
 
