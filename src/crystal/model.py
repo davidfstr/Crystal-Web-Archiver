@@ -1014,7 +1014,7 @@ class Project(ListenableMixin):
     
     # === Load URLs ===
     
-    def load_urls(self) -> None:
+    def load_urls(self, *, force: bool=False) -> None:
         """
         Loads all URLs and Resources in the project, if needed, to speed up calls to 
         Project.{resources_matching_pattern, urls_matching_pattern}.
@@ -1022,8 +1022,9 @@ class Project(ListenableMixin):
         Raises:
         * CancelLoadUrls
         """
-        if self._database_is_on_ssd:
-            return
+        if not force:
+            if self._database_is_on_ssd:
+                return
         
         if self._did_load_urls:
             return
