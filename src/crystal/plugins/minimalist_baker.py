@@ -14,11 +14,13 @@ def normalize_url(old_url: str, **kwargs) -> str:
     if not old_url.startswith('https://minimalistbaker.com/'):
         return old_url
     
+    # https://minimalistbaker.com/...?tp_image_id=#
     m = _URL_WITH_TP_IMAGE_ID.fullmatch(old_url)
     if m is not None:
         # Chop off tp_image_id=... part
         return m.group(1)
     
+    # https://minimalistbaker.com/...?omhide=...
     m = _URL_WITH_OM_HIDE.fullmatch(old_url)
     if m is not None:
         # Chop off omhide=... part

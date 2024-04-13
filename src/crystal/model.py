@@ -21,6 +21,7 @@ from crystal.plugins import (
     phpbb as plugins_phpbb,
     substack as plugins_substack,
     minimalist_baker as plugins_minbaker,
+    wordpress as plugins_wordpress,
 )   
 from crystal.progress import (
     CancelOpenProject,
@@ -1836,6 +1837,7 @@ class Resource:
                 plugins_minbaker.normalize_url,
                 plugins_phpbb.normalize_url,
                 plugins_substack.normalize_url,
+                plugins_wordpress.normalize_url,
                 ):
             try:
                 new_url = normalize_url(old_url)
