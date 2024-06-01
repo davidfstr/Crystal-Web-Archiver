@@ -18,7 +18,7 @@ Release Notes ⋮
     * Can identify URL references inside `<style>` elements.
     * Can identify URL references inside `<* style="...">`,
       which helps download/serve sites based on phpBB.
-    * Can identify data: URL references inside `<* srcset="...">`.
+    * Can identify `data:` URL references inside `<* srcset="...">`.
     * Can rewrite URL references that use [Subresource Integrity].
 
 * Error handling improvements
