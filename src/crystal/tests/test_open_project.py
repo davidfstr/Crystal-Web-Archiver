@@ -47,6 +47,15 @@ async def test_when_create_project_then_shows_dialog_saying_opening_project_but_
         )
 
 
+async def test_can_create_project_with_url_unsafe_characters() -> None:
+    with tempfile.TemporaryDirectory(prefix='original#2', suffix='.crystalproj') as project_dirpath:
+        assert '#' in project_dirpath
+        
+        ocd = await OpenOrCreateDialog.wait_for()
+        async with ocd.create(project_dirpath) as (mw, _):
+            assert os.path.exists(os.path.join(project_dirpath, Project._DB_FILENAME))
+
+
 # === Test: Start Open Project ===
 
 @skip('not yet automated: hard to automate')

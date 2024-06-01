@@ -90,7 +90,7 @@ from typing import (
     Tuple, TypedDict, TypeVar, Union
 )
 from typing_extensions import deprecated, override, Self
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, quote as url_quote
 from weakref import WeakValueDictionary
 
 if TYPE_CHECKING:
@@ -290,7 +290,9 @@ class Project(ListenableMixin):
                     else ''
                 )
             )
-            db = sqlite3.connect('file:' + db_filepath + db_connect_query, uri=True)
+            db = sqlite3.connect(
+                'file:' + url_quote(db_filepath) + db_connect_query,
+                uri=True)
             
             try:
                 self._database_is_on_ssd = is_ssd(db_filepath)
