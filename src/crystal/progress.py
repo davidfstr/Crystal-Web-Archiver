@@ -1,8 +1,12 @@
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 import sys
-from typing import Optional, Type
+import time
+from typing import Dict, List, Optional, overload, Tuple, Type, TypeVar, Union
 from typing_extensions import override, Self
 import wx
+
+
+_DELAY_UNTIL_PROGRESS_DIALOG_SHOWS = 100 / 1000  # sec
 
 
 # ------------------------------------------------------------------------------
@@ -13,7 +17,7 @@ class _AbstractProgressDialog:
     _CancelException: Type[Exception]  # abstract
     
     _dialog_style: Optional[int]
-    _dialog: Optional[wx.ProgressDialog]
+    _dialog: 'Optional[DeferredProgressDialog]'
     
     def __init__(self) -> None:
         self._dialog_style = None
@@ -59,7 +63,7 @@ class _AbstractProgressDialog:
                 self._dialog = None  # very important; avoids segfaults
             
             self._dialog_style = new_style
-            self._dialog = wx.ProgressDialog(
+            self._dialog = DeferredProgressDialog(
                 self._dialog_title,
                 # NOTE: Message must be non-empty to size dialog correctly on Windows
                 new_message,
@@ -68,10 +72,11 @@ class _AbstractProgressDialog:
                 # TODO: Shouldn't the maximum of the previous dialog version,
                 #       if any, be preserved here?
                 maximum=1,
-                style=new_style
+                style=new_style,
+                # Show dialog soon, only if it didn't complete in the meantime
+                show_after=_DELAY_UNTIL_PROGRESS_DIALOG_SHOWS,
             )
             self._dialog.Name = new_name
-            self._dialog.Show()
         else:
             assert self._dialog is not None
             try:
@@ -483,6 +488,125 @@ class LoadUrlsProgressDialog(_AbstractProgressDialog, LoadUrlsProgressListener):
         assert self._resource_count is not None
         message = f'Indexing {self._resource_count:n} resources(s)...'
         self._update(self._dialog.GetRange(), message)
+
+
+# ------------------------------------------------------------------------------
+# DeferredProgressDialog
+
+_R = TypeVar('_R')
+
+_Call = Tuple[str, Tuple[object, ...], Dict[str, object]]
+
+class DeferredProgressDialog:
+    """
+    Similar to wx.ProgressDialog but is hidden by default
+    and auto-shows itself only after a delay.
+    
+    If the related operation completes quickly then no progress dialog
+    will be shown at all.
+    """
+    def __init__(self,
+            # wx.ProgressDialog parameters
+            title,
+            message,
+            maximum=100,
+            parent=None,
+            style=wx.PD_APP_MODAL|wx.PD_AUTO_HIDE,
+            
+            # DeferredProgressDialog parameters
+            show_after: Optional[float]=None,
+            
+            # Unknown parameters
+            *args,
+            **kwargs) -> None:
+        if show_after is None:
+            raise ValueError('Expected show_after=... keyword argument')
+        
+        self._dialog = None  # type: Optional[wx.ProgressDialog]
+        self._calls = [(
+            '__init__',
+            (title, message, maximum, parent, style) + args,
+            kwargs
+        )]  # type: List[_Call]
+        self._show_at = time.time() + show_after
+        
+        self._shown = False
+        self._name = None  # type: Optional[str]
+        self._value = 0
+        self._maximum = maximum
+    
+    @overload
+    def _call(self, call: _Call) -> None: ...
+    @overload
+    def _call(self, call: _Call, default_result: _R) -> _R: ...
+    def _call(self, call, default_result=None):
+        if not self._shown:
+            # Defer operation
+            self._calls.append(call)
+            return default_result
+        else:
+            # Apply operation
+            return getattr(self._dialog, call[0])(*call[1], **call[2])
+    
+    # === Properties ===
+    
+    def _get_name(self) -> Optional[str]:
+        return self._name
+    def _set_name(self, name: str) -> None:
+        self._name = name
+        self._call(('SetName', (name,), {}))
+    Name = property(_get_name, _set_name)
+    
+    @property
+    def Value(self) -> int:
+        return self._value
+    
+    def SetRange(self, maximum: int) -> None:
+        self._maximum = maximum
+        self._call(('SetRange', (maximum,), {}))
+    
+    def GetRange(self) -> int:
+        return self._maximum
+    
+    # === Operations ===
+    
+    def Show(self) -> None:
+        if self._shown:
+            return
+        
+        # Show now. Apply deferred operations.
+        assert len(self._calls) >= 1
+        assert self._calls[0][0] == '__init__'
+        self._dialog = wx.ProgressDialog(*self._calls[0][1], **self._calls[0][2])
+        self._shown = True
+        for call in self._calls[1:]:
+            self._call(call)
+        self._calls.clear()
+    
+    def Destroy(self) -> None:
+        # Defer/apply operation
+        self._call(('Destroy', (), {}))
+        
+        if self._dialog is not None:
+            self._dialog = None
+        self._shown = False
+    
+    def Update(self, value: int, newmsg: str='') -> Tuple[bool, bool]:
+        # Show self if show_at time has passed
+        if not self._shown and time.time() >= self._show_at:
+            self.Show()
+        
+        # Defer/apply operation
+        self._value = value
+        return self._call(('Update', (value, newmsg), {}), (True, False))
+    
+    def Pulse(self, newmsg: str) -> Tuple[bool, bool]:
+        # Show self if show_at time has passed
+        if not self._shown and time.time() >= self._show_at:
+            self.Show()
+        
+        # Defer/apply operation
+        return self._call(('Pulse', (newmsg,), {}), (True, False))
 
 
 # ------------------------------------------------------------------------------

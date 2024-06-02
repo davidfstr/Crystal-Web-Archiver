@@ -30,6 +30,8 @@ Release Notes ⋮
       a group being actively downloaded.
 
 * Minor fixes
+    * Do not show progress dialog if related operation completes quickly,
+      fixing a flickering effect especially noticeable on Windows.
     * Can now save projects named with url-unsafe characters like `#`.
 
 [Subresource Integrity]: https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity

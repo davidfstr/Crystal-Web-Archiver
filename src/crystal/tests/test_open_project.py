@@ -30,7 +30,8 @@ async def test_when_create_project_then_shows_dialog_saying_opening_project_but_
     progress_listener = progress._active_progress_listener
     assert progress_listener is not None
     
-    with patch('crystal.progress.wx.ProgressDialog', autospec=True) as MockProgressDialog:
+    with patch('crystal.progress._DELAY_UNTIL_PROGRESS_DIALOG_SHOWS', 0), \
+            patch('crystal.progress.wx.ProgressDialog', autospec=True) as MockProgressDialog:
         pd = MockProgressDialog.return_value
         pd.Pulse.return_value = (True, False)
         pd.Update.return_value = (True, False)
