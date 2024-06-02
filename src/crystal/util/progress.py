@@ -22,7 +22,9 @@ class ProgressBarCalculator:
     # - 0.15 seems "too high"
     _MINIMUM_GROWTH_RATE_TO_REPORT = 0.13
     
-    _MAXIMUM_DELAY_BETWEEN_GROWTH_UPDATES = 10.0  # seconds
+    # Calibration notes:
+    # - 10.0 seems "too high"
+    _MAXIMUM_DELAY_BETWEEN_GROWTH_UPDATES = 5.0  # seconds
     
     # HACK: Avoid printing characters outside the Windows-1252 encoding (cp1252)
     #       when running on Windows because Windows seems to generally expect
