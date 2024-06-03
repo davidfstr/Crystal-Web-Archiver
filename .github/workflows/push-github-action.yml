@@ -13,6 +13,10 @@ on:
   # Allow CI to be run manually in GitHub Actions UI
   workflow_dispatch: null
 
+env:
+  # Enables capturing and uploading core dumps on macOS
+  ENABLE_CORE_DUMPS: 'false'
+
 jobs:
 
   build-macos:
@@ -64,20 +68,57 @@ jobs:
         # --app-only: Don't build disk image because it intermittently fails
         #             with "hdiutil create failed - Resource busy" in CI
         run: "CRYSTAL_SUPPORT_SCREENSHOTS=True poetry run ./make-mac.sh --app-only"
-
+      
+      - name: Enable core dumps
+        if: env.ENABLE_CORE_DUMPS == 'true'
+        run: |
+          sudo chmod 1777 /cores
+      
       - name: Run UI tests
+        id: run_ui_tests
         # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
         #       rather than sending them to log files
         run: |
+          ulimit -c unlimited  # allow core dumps of unlimited size
           CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ CRYSTAL_FAULTHANDLER=True "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
 
       - name: Upload screenshot if test failure
-        if: failure()
+        if: failure() && steps.run_ui_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: ${{ github.workspace }}/screenshots/**/*
           if-no-files-found: ignore
+      
+      # If test failure then upload a core dump and the related Python binaries
+      # inside GitHub Action's "hosted tool cache"
+      - name: "Core dump: Upload if test failure"
+        id: upload_core_dump
+        if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.run_ui_tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coredump-${{ matrix.os }}-${{ matrix.python-version }}
+          path: /cores
+          if-no-files-found: error
+        continue-on-error: true
+      - name: "Core dump: Archive tool cache"
+        if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
+        run: |
+          cd "${{ runner.tool_cache }}/Python"
+          tar -czvf "${{ runner.temp }}/tool_cache_python.tar.gz" *
+      - name: "Core dump: Upload tool cache artifact"
+        if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tool_cache-python-${{ matrix.os }}-${{ matrix.python-version }}
+          path: ${{runner.temp}}/tool_cache_python.tar.gz
+          compression-level: 0  # no compression
+      - name: "Core dump: Upload app artifact"
+        if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-dist-${{ matrix.os }}-${{ matrix.python-version }}
+          path: setup/dist
       
       # NOTE: Must remove the --app-only option from make-mac.sh above to
       #       reinstate build of *.dmg disk image
@@ -137,13 +178,13 @@ jobs:
       # 
       # NOTE: To recompile the .wgn, see instructions in: doc/how_to_make_wxpython_wagon.md
       - name: Install dependency wxPython from wagon (Python 3.8)
-        if: ${{ matrix.python-version == 3.8 }}
+        if: matrix.python-version == 3.8
         run: |
           poetry run pip3 install wagon
           wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py38-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.1-py38-none-linux_x86_64.wgn
       - name: Install dependency wxPython from wagon (Python 3.9)
-        if: ${{ matrix.python-version == 3.9 }}
+        if: matrix.python-version == 3.9
         run: |
           poetry run pip3 install wagon
           wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py39-none-linux_x86_64.wgn
