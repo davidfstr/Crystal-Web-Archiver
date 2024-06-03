@@ -22,9 +22,10 @@ jobs:
           # NOTE: Earliest macOS supported by Crystal is macOS 10.14
           #- macos-10.14  # no longer supported by GitHub Actions
           #- macos-10.15  # no longer supported by GitHub Actions
-          #- macos-11
-          #- macos-12  # same as macos-latest as of 2023-03-22
-          - macos-latest
+          #- macos-11  # no longer supported by GitHub Actions after 6/28/2024
+          #- macos-12
+          - macos-13
+          #- macos-14  # ARM-based; forces earlier incompatible Python version
         python-version: ["3.8", "3.9"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
