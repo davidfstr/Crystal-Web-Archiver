@@ -32,6 +32,7 @@ from crystal.tests import (
 from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
+from crystal.util.xcollections.dedup import dedup_list
 from crystal.util.xthreading import bg_affinity
 from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
 from crystal.util.xtime import sleep_profiled
@@ -230,12 +231,15 @@ def _run_tests(test_names: List[str]) -> bool:
     if len(warning_list) >= 1:
         print()
         print('Warnings:')
+        warning_strs = []
         for w in warning_list:
             if w.filename.startswith(_CRYSTAL_PACKAGE_PARENT_DIRPATH):
                 short_filepath = os.path.relpath(w.filename, start=_CRYSTAL_PACKAGE_PARENT_DIRPATH)
             else:
                 short_filepath = w.filename
             w_str = warnings.formatwarning(w.message, w.category, short_filepath, w.lineno, w.line)
+            warning_strs.append(w_str)
+        for w_str in sorted(dedup_list(warning_strs)):
             print('- ' + w_str, end='')
     
     # Print command to rerun failed tests
