@@ -15,9 +15,72 @@ on:
 
 env:
   # Enables capturing and uploading core dumps on macOS
+  # TODO: Move this variable to "build-macos" job, its only current reader
   ENABLE_CORE_DUMPS: 'false'
 
 jobs:
+  
+  build-macos-asan:
+    strategy:
+      fail-fast: false
+    runs-on: macos-12
+    env:
+      # Suppress warning "malloc: nano zone abandoned due to inability to preallocate reserved vm space"
+      # from macOS being confused by Address Sanitizer's changes to malloc.
+      # https://stackoverflow.com/questions/64126942/malloc-nano-zone-abandoned-due-to-inability-to-preallocate-reserved-vm-space
+      MallocNanoZone: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Restore cached Python and virtual environment
+        id: restore-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cpython-3.11.9
+            venv_asan
+          key: build-macos-asan-python
+      
+      - name: Compile Python with Address Sanitizer
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        run: |
+          wget https://github.com/python/cpython/archive/refs/tags/v3.11.9.zip
+          unzip v3.11.9.zip
+          cd cpython-3.11.9
+          ./configure --with-pydebug --with-address-sanitizer
+          make -s -j3
+          ./python.exe -c 'print("OK")'
+      
+      - name: Create virtual environment
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        run: |
+          cpython-3.11.9/python.exe -m venv venv_asan
+      
+      - name: Install Poetry
+        # NOTE: Poetry 1.5.0 cannot use "poetry run" to run make-mac.sh
+        run: pipx install "poetry>=1.4.0,<1.5.0"
+      
+      - name: Activate virtual environment
+        run: |
+          source venv_asan/bin/activate
+          echo PATH=$PATH >> $GITHUB_ENV
+          echo VIRTUAL_ENV=$VIRTUAL_ENV >> $GITHUB_ENV
+      
+      - name: Install dependencies with Poetry
+        # If build takes a very long time, then it's likely that the version
+        # of wxPython installed does not offer a precompiled wheel for this
+        # version of Python. Check the wxPython PyPI page to confirm.
+        timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
+        run: poetry install
+      
+      - name: Run non-UI tests
+        run: poetry run python -m pytest
+      
+      - name: Run UI tests
+        id: run_ui_tests
+        run: |
+          CRYSTAL_FAULTHANDLER=True crystal --test
 
   build-macos:
     strategy:
