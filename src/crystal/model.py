@@ -54,6 +54,7 @@ from crystal.util.ssd import is_ssd
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
+from crystal.util import xcgi
 from crystal.util.xcollections.ordereddict import as_ordereddict
 from crystal.util.xcollections.sortedlist import BLACK_HOLE_SORTED_LIST
 from crystal.util.xdatetime import datetime_is_aware
@@ -66,7 +67,6 @@ from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
     is_foreground_thread,
 )
-import cgi
 import datetime
 import json
 import math
@@ -2824,7 +2824,7 @@ class ResourceRevision:
         if content_type_with_options is None:
             return None
         else:
-            (content_type, content_type_options) = cgi.parse_header(content_type_with_options)
+            (content_type, content_type_options) = xcgi.parse_header(content_type_with_options)
             return content_type
     
     @property
@@ -2834,7 +2834,7 @@ class ResourceRevision:
         if content_type_with_options is None:
             return None
         else:
-            (content_type, content_type_options) = cgi.parse_header(content_type_with_options)
+            (content_type, content_type_options) = xcgi.parse_header(content_type_with_options)
             return content_type_options.get('charset')
     
     @property
