@@ -20,7 +20,10 @@ def open_binary(filename: str) -> BinaryIO:
     if is_windows():
         return open(get_filepath(filename), 'rb')
     else:
-        return importlib.resources.open_binary(resources, filename)
+        if sys.version_info >= (3, 11):
+            return importlib.resources.files(resources).joinpath(filename).open('rb')
+        else:
+            return importlib.resources.open_binary(resources, filename)
 
 
 def open_text(filename: str, *, encoding: str='utf-8', errors='strict') -> TextIO:
