@@ -1,4 +1,5 @@
 import math
+import os
 import platform
 import subprocess
 from typing import List, Optional
@@ -79,3 +80,9 @@ def is_kde_or_non_gnome() -> bool:
 
 def is_wx_gtk() -> bool:
     return is_linux()
+
+
+# === Continuous Integration Detection ===
+
+def is_ci() -> bool:
+    return os.environ.get('CI') == 'true'
