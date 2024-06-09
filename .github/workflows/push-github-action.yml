@@ -95,6 +95,7 @@ jobs:
         id: run_ui_tests
         env:
           CRYSTAL_FAULTHANDLER: 'True'
+          CRYSTAL_ADDRESS_SANITIZER: 'True'
           # Multiply timeouts because ASan builds of Python are slower than regular builds
           CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER: '2.0'
         run: |

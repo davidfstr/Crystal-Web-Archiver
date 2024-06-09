@@ -86,3 +86,7 @@ def is_wx_gtk() -> bool:
 
 def is_ci() -> bool:
     return os.environ.get('CI') == 'true'
+
+
+def is_asan() -> bool:
+    return os.environ.get('CRYSTAL_ADDRESS_SANITIZER') == 'True'

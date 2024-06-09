@@ -43,7 +43,7 @@ from crystal.util.bulkheads import (
 from crystal.util import cli
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.wx_bind import bind
-from crystal.util.xos import is_ci, is_mac_os
+from crystal.util.xos import is_asan, is_ci, is_mac_os
 from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
 from io import StringIO
@@ -56,6 +56,19 @@ import wx
 
 
 _CRASH = ValueError('Simulated crash')
+
+
+# Marks tests that frequently trigger use-after-free errors by closing
+# a project that is still in the middle of running tasks.
+# 
+# When CRYSTAL_IGNORE_USE_AFTER_FREE=False has been made the default
+# and marked tests have been fixed to not trigger use-after-free errors,
+# this decorator can be retired.
+frequently_corrupts_memory = (
+    skip('frequently corrupts memory')
+    if is_mac_os() and is_ci() and not is_asan()
+    else (lambda f: f)
+)
 
 
 # ------------------------------------------------------------------------------
@@ -344,6 +357,7 @@ async def test_given_inside_unraisable_context_when_exception_raised_then_traceb
 # - DRT = DownloadResourceTask
 # - T = Task
 
+@frequently_corrupts_memory
 async def test_when_T_try_get_next_task_unit_crashes_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -377,6 +391,7 @@ async def test_when_T_try_get_next_task_unit_crashes_then_T_displays_as_crashed(
                 assert download_r_task.crash_reason is not None
 
 
+@frequently_corrupts_memory
 async def test_when_DRT_child_task_did_complete_event_crashes_then_DRT_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -421,6 +436,7 @@ async def test_when_DRT_child_task_did_complete_event_crashes_then_DRT_displays_
                 assert download_r_task.crash_reason is not None
 
 
+@frequently_corrupts_memory
 async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -471,6 +487,7 @@ async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() 
                 assert download_rg_members_task.crash_reason is not None
 
 
+@frequently_corrupts_memory
 async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -533,6 +550,7 @@ async def test_when_TTN_task_crash_reason_did_change_crashes_at_top_level_then_c
     pass
 
 
+@frequently_corrupts_memory
 async def test_when_TTN_task_crash_reason_did_change_crashes_in_deferred_fg_task_then_crash_reason_printed_to_stderr() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -577,6 +595,7 @@ async def test_when_TTN_task_crash_reason_did_change_crashes_in_deferred_fg_task
                     assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
 
 
+@frequently_corrupts_memory
 async def test_when_TTN_task_did_set_children_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -626,6 +645,7 @@ async def test_when_TTN_task_did_set_children_crashes_at_top_level_then_T_displa
                 assert download_rg_members_task.crash_reason is not None
 
 
+@frequently_corrupts_memory
 async def test_when_TTN_task_did_set_children_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -668,6 +688,7 @@ async def test_when_TTN_task_did_set_children_crashes_in_deferred_fg_task_then_T
                 assert download_rg_members_task.crash_reason is not None
 
 
+@frequently_corrupts_memory
 async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -711,6 +732,7 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
                 assert download_r_task.crash_reason is not None
 
 
+@frequently_corrupts_memory
 async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -745,6 +767,7 @@ async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T
                 assert download_r_task.crash_reason is not None
 
 
+@frequently_corrupts_memory
 async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -779,6 +802,7 @@ async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_disp
                 assert download_r_task.crash_reason is not None
 
 
+@frequently_corrupts_memory
 async def test_when_TTN_task_child_did_complete_crashes_in_deferred_fg_task_then_T_displays_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -848,6 +872,7 @@ async def test_when_RN_on_expanded_crashes_while_updating_children_then_children
     pass
 
 
+@frequently_corrupts_memory
 async def test_when_RGN_on_expanded_crashes_while_loading_urls_then_children_replaced_with_error_node() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -882,6 +907,7 @@ async def test_when_RGN_on_expanded_crashes_while_loading_urls_then_children_rep
                 assert True == error_ti.Bold
 
 
+@frequently_corrupts_memory
 async def test_when_RGN_on_expanded_crashes_while_updating_children_then_children_replaced_with_error_node() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -916,6 +942,7 @@ async def test_when_RGN_on_expanded_crashes_while_updating_children_then_childre
                 assert True == error_ti.Bold
 
 
+@frequently_corrupts_memory
 async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantiate_then_RGN_children_replaced_with_error_node() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -969,6 +996,7 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
 #       It is, however, the only test currently covering what happens what
 #       a crash happens at the level of the EntityTree itself (as opposed
 #       to inside one of its nodes).
+@frequently_corrupts_memory
 async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entity_tree_crashed_task_appears() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -1049,6 +1077,7 @@ async def test_when_PRRL_child_of_DRT_crashes_then_DRT_displays_as_crashed() -> 
     pass
 
 
+@frequently_corrupts_memory
 async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed() -> None:
     assert (
         task.SCHEDULING_STYLE_SEQUENTIAL == 
@@ -1161,6 +1190,7 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 await download_r_ti.right_click_showing_popup_menu(show_popup)
 
 
+@frequently_corrupts_memory
 async def test_when_DRT_child_of_DRGMT_crashes_then_DRGMT_displays_as_crashed() -> None:
     assert (
         task.SCHEDULING_STYLE_SEQUENTIAL == 
@@ -1169,6 +1199,7 @@ async def test_when_DRT_child_of_DRGMT_crashes_then_DRGMT_displays_as_crashed() 
     skipTest('covered by: test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed')
 
 
+@frequently_corrupts_memory
 async def test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_DRGMT_child_completes() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -1279,6 +1310,7 @@ async def test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
                 ), f'Tooltip was: {tooltip}'
 
 
+@frequently_corrupts_memory
 async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_after_URGMT_child_completes() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -1418,6 +1450,7 @@ async def test_when_child_of_RT_crashes_then_RT_does_NOT_display_as_crashed() ->
     pass
 
 
+@frequently_corrupts_memory
 async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -1524,6 +1557,7 @@ async def test_when_RT_marked_as_crashed_then_scheduler_crashed_task_appears_and
     pass
 
 
+@frequently_corrupts_memory
 async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashed_and_scheduler_crashed_task_appears() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
