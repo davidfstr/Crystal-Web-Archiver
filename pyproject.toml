@@ -65,7 +65,7 @@ colorama = "^0.4.4"
 # Bundle latest version of HTTPS & SSL certificates
 certifi = "*"
 tzlocal = "^4.2"
-lxml = "^4.9.2"
+lxml = "^5.2.2"
 tqdm = "^4.65.0"
 sortedcontainers = "^2.4.0"
 # For manual memory leak profiling with "guppy" module
