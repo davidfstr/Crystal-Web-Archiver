@@ -751,7 +751,8 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
         )
         yield (crystal, banner)
     finally:
-        crystal.kill()        
+        crystal.kill()
+        crystal.wait()
 
 
 def _py_eval(
