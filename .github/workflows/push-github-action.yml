@@ -13,11 +13,6 @@ on:
   # Allow CI to be run manually in GitHub Actions UI
   workflow_dispatch: null
 
-env:
-  # Enables capturing and uploading core dumps on macOS
-  # TODO: Move this variable to "build-macos" job, its only current reader
-  ENABLE_CORE_DUMPS: 'false'
-
 jobs:
   
   build-macos-asan:
@@ -97,6 +92,9 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 23  # 150% of normal time: 15 min, as of 2024-02-16
+    env:
+      # Enables capturing and uploading core dumps on macOS
+      ENABLE_CORE_DUMPS: 'false'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
