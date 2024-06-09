@@ -1933,7 +1933,8 @@ class Resource:
                 self.project.add_task(task)
         return task.future
     
-    @deprecated('Use get_or_create_download_body_task() instead.')
+    # Soft Deprecated: Use get_or_create_download_body_task() instead,
+    # which clarifies that an existing task may be returned.
     def create_download_body_task(self) -> 'DownloadResourceBodyTask':
         (task, _) = self.get_or_create_download_body_task()
         return task
@@ -1992,7 +1993,8 @@ class Resource:
                 self.project.add_task(task)
         return task.get_future(wait_for_embedded)
     
-    @deprecated('Use get_or_create_download_task() instead.')
+    # Soft Deprecated: Use get_or_create_download_task() instead,
+    # which clarifies that an existing task may be returned.
     def create_download_task(self, *args, **kwargs) -> 'DownloadResourceTask':
         (task, _) = self.get_or_create_download_task(*args, **kwargs)
         return task
