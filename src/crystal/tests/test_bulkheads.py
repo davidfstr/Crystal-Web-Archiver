@@ -65,7 +65,8 @@ _CRASH = ValueError('Simulated crash')
 # and marked tests have been fixed to not trigger use-after-free errors,
 # this decorator can be retired.
 frequently_corrupts_memory = (
-    skip('frequently corrupts memory')
+    #skip('frequently corrupts memory')
+    (lambda f: f)  # FIXME
     if is_mac_os() and is_ci()
     else (lambda f: f)
 )
