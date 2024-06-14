@@ -135,7 +135,7 @@ def _run_tests(test_names: List[str]) -> bool:
             os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
             
             print('=' * 70)
-            print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]})')
+            print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]}.{test_func_id[1]})')
             print('-' * 70)
             try:
                 try:
