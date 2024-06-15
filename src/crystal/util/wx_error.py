@@ -11,7 +11,7 @@ from typing import Callable, Iterator, NoReturn, Optional
 # normally have happened and either crashed the process immediately
 # or corrupted memory, crashing the process later.
 _IGNORE_USE_AFTER_FREE = (
-    os.environ.get('CRYSTAL_IGNORE_USE_AFTER_FREE', 'True') == 'True'
+    os.environ.get('CRYSTAL_IGNORE_USE_AFTER_FREE', 'False') == 'True'
 )
 
 
