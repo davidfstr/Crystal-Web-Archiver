@@ -32,10 +32,10 @@ class TaskTree:
     View controller for the task tree
     """
     def __init__(self, parent_peer: wx.Window, root_task: Task) -> None:
-        self.root = TaskTreeNode(root_task)
-        
         self.tree = TreeView(parent_peer, name='cr-task-tree')
         self.tree.delegate = self
+        
+        self.root = TaskTreeNode(root_task)
         self.tree.root = self.root.tree_node
         
         self._right_clicked_node = None  # type: Optional[TaskTreeNode]
@@ -164,6 +164,9 @@ class TaskTreeNode:
     def __init__(self, task: Task) -> None:
         self.task = task
         
+        # TODO: Export a listener reference to TaskTreeNode later in this function,
+        #       after the inner NodeView is created.
+        #       It seems risky to export a reference to an incomplete TaskTreeNode.
         if task._use_extra_listener_assertions:
             assert self not in self.task.listeners
         if not task.complete:

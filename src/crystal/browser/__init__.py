@@ -461,15 +461,6 @@ class MainWindow:
     # === File Menu: Events ===
     
     def _on_close_project(self, event: wx.CommandEvent) -> None:
-        # TODO: Move these dispose operations inside _on_close_frame().
-        #       But be careful! The last time this movement was attempted,
-        #       various shutdown-related race conditions were triggered.
-        #       
-        #       Wait to perform movement until enough time to formalize
-        #       a deterministic shutdown procedure.
-        self.entity_tree.dispose()
-        self.task_tree.dispose()
-        
         self._frame.Close()  # will trigger call to _on_close_frame()
     
     def _on_quit(self, event: wx.CommandEvent) -> None:
@@ -479,16 +470,27 @@ class MainWindow:
         else:
             event.Skip()
     
+    @fg_affinity
     def _on_close_frame(self, event: wx.CloseEvent) -> None:
-        # Dispose actions early so that they don't try to interact with
-        # wx.Objects in the frame while the frame is being deleted
-        for a in self._actions:
-            a.dispose()
+        """
+        Closes this window, disposing any related resources.
+        """
         
-        if self._log_drawer is not None:
-            self._log_drawer.close()
+        # Dispose resources created in MainWindow.start_server(), in reverse order
         if self._project_server is not None:
             self._project_server.close()
+        if self._log_drawer is not None:
+            self._log_drawer.close()
+        
+        # Dispose resources created in MainWindow.__init__(), in reverse order
+        if True:
+            self.task_tree.dispose()
+            self.entity_tree.dispose()
+            
+            # Dispose actions so that they don't try to interact with
+            # wx.Objects in the frame while the frame is being deleted
+            for a in self._actions:
+                a.dispose()
         
         event.Skip()  # continue dispose of frame
     
