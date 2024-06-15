@@ -26,6 +26,7 @@ class SubtestsContext:
             raised_exc = False
         finally:
             subtest_report = self._report.getvalue()
+            self._report.close()
             if len(subtest_report) != 0:
                 print(subtest_report, end='')
                 print('-' * 70)
