@@ -754,6 +754,10 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
         )
         yield (crystal, banner)
     finally:
+        assert crystal.stdin is not None
+        crystal.stdin.close()
+        assert crystal.stdout is not None
+        crystal.stdout.close()
         crystal.kill()
         crystal.wait()
 
