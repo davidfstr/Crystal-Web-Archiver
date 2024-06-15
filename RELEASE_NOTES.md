@@ -33,6 +33,9 @@ Release Notes ⋮
     * Do not show progress dialog if related operation completes quickly,
       fixing a flickering effect especially noticeable on Windows.
     * Can now save projects named with url-unsafe characters like `#`.
+    * Fix closing a project to no longer have a race condition that
+      could cause use-after-free of wxPython objects and corrupt memory,
+      potentially crashing Crystal later.
 
 [Subresource Integrity]: https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity
 

@@ -445,6 +445,7 @@ class EntityTree(Bulkhead):
         self.root.dispose()
         self.view.dispose()
 
+
 def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     """
     Returns copy of `new_seq`, replacing each element with an equivalent member of
