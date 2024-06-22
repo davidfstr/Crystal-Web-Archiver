@@ -10,7 +10,10 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### v1.9.0b (June 22, 2024)
+
+This release contains error-handling improvements and bug fixes
+in preparation for Crystal to exit beta status.
 
 * Parsing improvements
     * Can identify `'https://'` inside JavaScript as a URL reference,
@@ -30,7 +33,7 @@ Release Notes ⋮
       a group being actively downloaded.
 
 * Minor fixes
-    * Do not show progress dialog if related operation completes quickly,
+    * Do not show a progress dialog if the related operation completes quickly,
       fixing a flickering effect especially noticeable on Windows.
     * Can now save projects named with url-unsafe characters like `#`.
     * Fix closing a project to no longer have a race condition that
