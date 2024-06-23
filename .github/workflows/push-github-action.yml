@@ -269,8 +269,10 @@ jobs:
         run: poetry run python -m pytest
 
       - name: Run UI tests
+        # NOTE: MALLOC_CHECK_=2 enables a version of malloc() that looks for
+        #       heap corruption specially: https://stackoverflow.com/a/3718867/604063
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots CRYSTAL_FAULTHANDLER=True poetry run xvfb-run crystal --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots CRYSTAL_FAULTHANDLER=True MALLOC_CHECK_=2 poetry run xvfb-run crystal --test
 
       - name: Upload screenshot if test failure
         if: failure()
