@@ -17,6 +17,8 @@ jobs:
   
   build-macos-asan:
     strategy:
+      matrix:
+        python-version: ["3.8.18", "3.9.19", "3.10.14", "3.11.9"]
       fail-fast: false
     runs-on: macos-12
     env:
@@ -33,16 +35,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            cpython-3.11.9
+            cpython
             venv_asan
-          key: build-macos-asan-python
+          key: build-macos-asan-python-${{ matrix.python-version }}
       
-      - name: Compile Python with Address Sanitizer
+      - name: Compile Python ${{ matrix.python-version }} with Address Sanitizer
         if: steps.restore-cache.outputs.cache-hit != 'true'
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
-          wget --no-verbose https://github.com/python/cpython/archive/refs/tags/v3.11.9.zip
-          unzip -q v3.11.9.zip
-          cd cpython-3.11.9
+          wget --no-verbose https://github.com/python/cpython/archive/refs/tags/v$PYTHON_VERSION.zip
+          unzip -q v3.*.zip
+          mv cpython-3.* cpython
+          cd cpython
           ./configure --with-pydebug --with-address-sanitizer
           make -s -j3
           ./python.exe -c 'print("OK")'
@@ -50,7 +55,7 @@ jobs:
       - name: Create virtual environment
         if: steps.restore-cache.outputs.cache-hit != 'true'
         run: |
-          cpython-3.11.9/python.exe -m venv venv_asan
+          cpython/python.exe -m venv venv_asan
       
       - name: Install Poetry
         # NOTE: setuptools>=40.8.0 avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
