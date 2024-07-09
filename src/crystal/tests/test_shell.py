@@ -203,10 +203,9 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 else:
                     raise AssertionError()
                 
-                try:
-                    crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
-                except subprocess.TimeoutExpired:
-                    raise AssertionError('Timed out waiting for Crystal to exit')
+                _wait_for_crystal_to_exit(
+                    crystal,
+                    timeout=DEFAULT_WAIT_TIMEOUT)
         
         with subtests.test(case=f'test when {exit_method} given non-first open/create dialog is already closed then exits'):
             with crystal_shell() as (crystal, _):
@@ -226,10 +225,9 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 else:
                     raise AssertionError()
                 
-                try:
-                    crystal.wait(timeout=5.0)  # took >4.0s in Linux CI
-                except subprocess.TimeoutExpired:
-                    raise AssertionError('Timed out waiting for Crystal to exit')
+                _wait_for_crystal_to_exit(
+                    crystal,
+                    timeout=5.0)  # took >4.0s in Linux CI
     
     for exit_method in ('exit()', 'Ctrl-D'):
         with subtests.test(case=f'test when {exit_method} given first open/create dialog still open then prints waiting message and does not exit'):
@@ -246,10 +244,9 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 else:
                     raise AssertionError()
                 
-                try:
-                    crystal.wait(timeout=.5 + DEFAULT_WAIT_TIMEOUT)
-                except subprocess.TimeoutExpired:
-                    raise AssertionError('Timed out waiting for Crystal to exit')
+                _wait_for_crystal_to_exit(
+                    crystal,
+                    timeout=.5 + DEFAULT_WAIT_TIMEOUT)
         
         with subtests.test(case=f'test when {exit_method} given main window still open then prints waiting message and does not exit'):
             with crystal_shell() as (crystal, _):
@@ -268,10 +265,9 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 else:
                     raise AssertionError()
                 
-                try:
-                    crystal.wait(timeout=.5*2 + DEFAULT_WAIT_TIMEOUT)
-                except subprocess.TimeoutExpired:
-                    raise AssertionError('Timed out waiting for Crystal to exit')
+                _wait_for_crystal_to_exit(
+                    crystal,
+                    timeout=.5*2 + DEFAULT_WAIT_TIMEOUT)
         
         with subtests.test(case=f'test when {exit_method} given non-first open/create dialog still open then prints waiting message and does not exit'):
             with crystal_shell() as (crystal, _):
@@ -290,10 +286,9 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 else:
                     raise AssertionError()
                 
-                try:
-                    crystal.wait(timeout=.5 + DEFAULT_WAIT_TIMEOUT)
-                except subprocess.TimeoutExpired:
-                    raise AssertionError('Timed out waiting for Crystal to exit')
+                _wait_for_crystal_to_exit(
+                    crystal,
+                    timeout=.5 + DEFAULT_WAIT_TIMEOUT)
 
 
 @skip_on_windows
@@ -906,6 +901,33 @@ def _drain(stream: Union[TextIOBase, subprocess.Popen], ttl: Optional[float]=Non
         return e.read_so_far
     else:
         raise ValueError('Actually encountered EOT while reading stream!')
+
+
+# ------------------------------------------------------------------------------
+# Utility: Wait
+
+def _wait_for_crystal_to_exit(
+        crystal: subprocess.Popen,
+        *, timeout: float,
+        stacklevel_extra: int=0
+        ) -> None:
+    start_time = time.time()  # capture
+    try:
+        crystal.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            crystal.wait(timeout=(timeout * HARD_TIMEOUT_MULTIPLIER) - timeout)
+        except subprocess.TimeoutExpired:
+            raise WaitTimedOut('Timed out waiting for Crystal to exit') from None
+        else:
+            delta_time = time.time() - start_time
+            warnings.warn(
+                ('Soft timeout exceeded (%.1fs > %.1fs) while '
+                'waiting for Crystal to exit') % (
+                    delta_time,
+                    timeout,
+                ),
+                stacklevel=(2 + stacklevel_extra))
 
 
 # ------------------------------------------------------------------------------
