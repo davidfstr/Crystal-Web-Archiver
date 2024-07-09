@@ -13,6 +13,7 @@ from crystal.progress import OpenProjectProgressListener
 from crystal.util.bulkheads import run_bulkhead_call
 from crystal.util.wx_bind import bind
 from crystal.util.wx_error import (
+    IGNORE_USE_AFTER_FREE,
     is_wrapped_object_deleted_error,
     WindowDeletedError,
     wrapped_object_deleted_error_ignored,
@@ -369,7 +370,10 @@ class NodeView:
                             new_selection.peer.SelectItem()
                     
             except WindowDeletedError:
-                pass
+                if IGNORE_USE_AFTER_FREE:
+                    pass
+                else:
+                    raise
     
     def append_child(self, child: NodeView) -> None:
         # NOTE: The following is equivalent to:
@@ -379,7 +383,10 @@ class NodeView:
             try:
                 child._attach(NodeViewPeer(self.peer._tree, self.peer.AppendItem('')))
             except WindowDeletedError:
-                pass
+                if IGNORE_USE_AFTER_FREE:
+                    pass
+                else:
+                    raise
     
     @property
     def parent(self) -> Optional[NodeView]:
@@ -482,6 +489,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemData(node_id, obj)
+        else:
+            self._did_access_not_ok_wx_object()
     
     @fg_affinity
     def SetItemText(self, text: str) -> None:
@@ -489,6 +498,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemText(node_id, text)
+        else:
+            self._did_access_not_ok_wx_object()
     
     @fg_affinity
     def SetItemTextColour(self, colour: wx.Colour) -> None:
@@ -496,6 +507,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemTextColour(node_id, colour)
+        else:
+            self._did_access_not_ok_wx_object()
     
     @fg_affinity
     def SetItemBold(self, bold: bool) -> None:
@@ -503,6 +516,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemBold(node_id, bold)
+        else:
+            self._did_access_not_ok_wx_object()
     
     @fg_affinity
     def SetItemHasChildren(self, has: bool) -> None:
@@ -510,6 +525,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemHasChildren(node_id, has)
+        else:
+            self._did_access_not_ok_wx_object()
     
     # TODO: Delete unused method
     @fg_affinity
@@ -545,6 +562,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SetItemImage(node_id, image, which)
+        else:
+            self._did_access_not_ok_wx_object()
     
     @fg_affinity
     def Delete(self) -> None:
@@ -552,6 +571,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.Delete(node_id)
+        else:
+            self._did_access_not_ok_wx_object()
     
     @fg_affinity
     def SortChildren(self) -> None:
@@ -559,6 +580,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SortChildren(node_id)
+        else:
+            self._did_access_not_ok_wx_object()
     
     @fg_affinity
     def SelectItem(self, select: bool=True) -> None:
@@ -566,6 +589,8 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.SelectItem(node_id, select)
+        else:
+            self._did_access_not_ok_wx_object()
     
     @fg_affinity
     def IsSelected(self) -> bool:
@@ -575,6 +600,7 @@ class NodeViewPeer(tuple):
                 return self.tree_peer.IsSelected(node_id)
             return False
         else:
+            self._did_access_not_ok_wx_object()
             return False
     
     @fg_affinity
@@ -583,6 +609,14 @@ class NodeViewPeer(tuple):
         if node_id.IsOk():
             with wrapped_object_deleted_error_ignored():
                 self.tree_peer.Collapse(node_id)
+        else:
+            self._did_access_not_ok_wx_object()
     
     def _raise_no_longer_exists(self) -> NoReturn:
         raise WindowDeletedError('Tree item no longer exists')
+    
+    def _did_access_not_ok_wx_object(self) -> None:
+        if IGNORE_USE_AFTER_FREE:
+            pass
+        else:
+            self._raise_no_longer_exists()

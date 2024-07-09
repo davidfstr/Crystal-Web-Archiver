@@ -10,7 +10,7 @@ from typing import Callable, Iterator, NoReturn, Optional
 # on only a best effort basis when a use-after-free error in C/C++ would
 # normally have happened and either crashed the process immediately
 # or corrupted memory, crashing the process later.
-_IGNORE_USE_AFTER_FREE = (
+IGNORE_USE_AFTER_FREE = (
     os.environ.get('CRYSTAL_IGNORE_USE_AFTER_FREE', 'False') == 'True'
 )
 
@@ -26,7 +26,7 @@ def is_wrapped_object_deleted_error(e: Exception) -> bool:
 
 @contextmanager
 def wrapped_object_deleted_error_ignored() -> Iterator[None]:
-    if _IGNORE_USE_AFTER_FREE:
+    if IGNORE_USE_AFTER_FREE:
         try:
             yield
         except Exception as e:
@@ -43,7 +43,7 @@ def wrapped_object_deleted_error_ignored() -> Iterator[None]:
 def wrapped_object_deleted_error_raising(
         raiser: Optional[Callable[[], NoReturn]]=None
         ) -> Iterator[None]:
-    if _IGNORE_USE_AFTER_FREE:
+    if IGNORE_USE_AFTER_FREE:
         if raiser is None:
             def default_raiser() -> NoReturn:
                 raise WindowDeletedError()
