@@ -40,8 +40,8 @@ jobs:
       - name: Compile Python with Address Sanitizer
         if: steps.restore-cache.outputs.cache-hit != 'true'
         run: |
-          wget https://github.com/python/cpython/archive/refs/tags/v3.11.9.zip
-          unzip v3.11.9.zip
+          wget --no-verbose https://github.com/python/cpython/archive/refs/tags/v3.11.9.zip
+          unzip -q v3.11.9.zip
           cd cpython-3.11.9
           ./configure --with-pydebug --with-address-sanitizer
           make -s -j3
@@ -251,13 +251,13 @@ jobs:
         if: startsWith(matrix.python-version, '3.8.')
         run: |
           poetry run pip3 install wagon
-          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py38-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py38-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.1-py38-none-linux_x86_64.wgn
       - name: Install dependency wxPython from wagon (Python 3.9)
         if: startsWith(matrix.python-version, '3.9.')
         run: |
           poetry run pip3 install wagon
-          wget https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py39-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py39-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.1-py39-none-linux_x86_64.wgn
 
       - name: Install remaining dependencies with Poetry
