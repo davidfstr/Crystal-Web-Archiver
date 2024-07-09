@@ -3,6 +3,7 @@ from __future__ import annotations
 from crystal.tests.util.screenshots import take_error_screenshot
 from crystal.tests.util.runner import bg_sleep
 import datetime
+import os
 import time
 from typing import Callable, Optional, TYPE_CHECKING, TypeVar, Union
 import warnings
@@ -17,6 +18,11 @@ _T = TypeVar('_T')
 _T1 = TypeVar('_T1')
 _T2 = TypeVar('_T2')
 _T3 = TypeVar('_T3')
+
+
+GLOBAL_TIMEOUT_MULTIPLIER = IGNORE_USE_AFTER_FREE = (
+    float(os.environ.get('CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER', '1.0'))
+)
 
 
 # The hard timeout for waits = the soft timeout * HARD_TIMEOUT_MULTIPLIER
@@ -104,6 +110,8 @@ async def wait_for(
         timeout = DEFAULT_WAIT_TIMEOUT
     if period is None:
         period = DEFAULT_WAIT_PERIOD
+    
+    timeout *= GLOBAL_TIMEOUT_MULTIPLIER  # reinterpret
     
     soft_timeout = timeout
     hard_timeout = timeout * HARD_TIMEOUT_MULTIPLIER

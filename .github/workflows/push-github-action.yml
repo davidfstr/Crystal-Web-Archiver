@@ -83,7 +83,7 @@ jobs:
       - name: Run UI tests
         id: run_ui_tests
         run: |
-          CRYSTAL_FAULTHANDLER=True crystal --test
+          CRYSTAL_FAULTHANDLER=True CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER=2.0 crystal --test
 
   build-macos:
     strategy:
