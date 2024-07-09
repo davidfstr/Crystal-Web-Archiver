@@ -98,7 +98,9 @@ def fg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
     if __debug__:  # no -O passed on command line?
         @wraps(func)
         def wrapper(*args, **kwargs):
-            assert is_foreground_thread()
+            if not is_foreground_thread() and has_foreground_thread():
+                raise AssertionError(
+                    f'fg_affinity: Expected call on foreground thread: {func}')
             return func(*args, **kwargs)  # cr-traceback: ignore
         return wrapper
     else:
