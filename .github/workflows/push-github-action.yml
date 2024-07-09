@@ -18,7 +18,14 @@ jobs:
   build-macos-asan:
     strategy:
       matrix:
-        python-version: ["3.8.18", "3.9.19", "3.10.14", "3.11.9"]
+        python-version:
+          - "3.8.18"
+          - "3.9.19"
+          # NOTE: Disable runs on some Python versions so that total number
+          #       of macOS CI runners is low enough to not need to wait for
+          #       available runners for very long
+          #- "3.10.14"
+          - "3.11.9"
       fail-fast: false
     runs-on: macos-12
     env:
