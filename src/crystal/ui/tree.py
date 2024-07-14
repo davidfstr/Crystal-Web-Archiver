@@ -348,6 +348,7 @@ class NodeView:
                         for child in children_to_delete:
                             if child.peer is not None:
                                 child.peer.Delete()
+                                child.peer = None
                     
                     # Add some children
                     children_to_add = [new_child for new_child in new_children if new_child not in old_children_set]
