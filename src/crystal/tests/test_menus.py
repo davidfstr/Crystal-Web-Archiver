@@ -22,22 +22,26 @@ async def test_can_quit_with_menuitem() -> None:
     with crystal_shell() as (crystal, _):
         _create_new_empty_project(crystal)
         
-        _py_eval(crystal, textwrap.dedent(f'''\
-            from crystal.tests.util.runner import run_test
-            from crystal.tests.util.windows import MainWindow
-            from threading import Thread
-            import wx
+        _py_eval(crystal,
+            textwrap.dedent(f'''\
+                from crystal.tests.util.runner import run_test
+                from crystal.tests.util.windows import MainWindow
+                from threading import Thread
+                import wx
 
-            async def quit_with_menuitem():
-                mw = await MainWindow.wait_for()
-                #
-                await mw.quit_with_menuitem()
-                #
-                print('OK')
+                async def quit_with_menuitem():
+                    mw = await MainWindow.wait_for()
+                    #
+                    await mw.quit_with_menuitem()
+                    #
+                    print('OK')
 
-            t = Thread(target=lambda: run_test(quit_with_menuitem))
-            t.start()
-            '''), stop_suffix=('crystal.util.xthreading.NoForegroundThreadError\n',))
+                t = Thread(target=lambda: run_test(quit_with_menuitem))
+                t.start()
+                '''
+            ),
+            stop_suffix=('crystal.util.xthreading.NoForegroundThreadError\n',),
+            timeout=3.0)  # took 4.4s on macOS ASAN CI (after 2x multiplier)
 
 
 async def test_can_open_preferences_with_menuitem() -> None:
