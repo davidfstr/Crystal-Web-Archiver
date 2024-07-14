@@ -93,8 +93,12 @@ jobs:
       
       - name: Run UI tests
         id: run_ui_tests
+        env:
+          CRYSTAL_FAULTHANDLER: 'True'
+          # Multiply timeouts because ASan builds of Python are slower than regular builds
+          CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER: '2.0'
         run: |
-          CRYSTAL_FAULTHANDLER=True CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER=2.0 crystal --test
+          crystal --test
 
   build-macos:
     strategy:
@@ -162,11 +166,13 @@ jobs:
       
       - name: Run UI tests
         id: run_ui_tests
-        # NOTE: Use `TERM=__interactive__` to force Crystal to print stdout and stderr
-        #       rather than sending them to log files
+        env:
+          CRYSTAL_FAULTHANDLER: 'True'
+          # Force Crystal to print stdout and stderr rather than sending them to log files
+          TERM: __interactive__
         run: |
           ulimit -c unlimited  # allow core dumps of unlimited size
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots TERM=__interactive__ CRYSTAL_FAULTHANDLER=True "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
@@ -300,10 +306,13 @@ jobs:
         run: poetry run python -m pytest
 
       - name: Run UI tests
-        # NOTE: MALLOC_CHECK_=2 enables a version of malloc() that looks for
-        #       heap corruption specially: https://stackoverflow.com/a/3718867/604063
+        env:
+          CRYSTAL_FAULTHANDLER: 'True'
+          # Enable a version of malloc() that looks for heap corruption specially:
+          # https://stackoverflow.com/a/3718867/604063
+          MALLOC_CHECK_: '2'
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots CRYSTAL_FAULTHANDLER=True MALLOC_CHECK_=2 poetry run xvfb-run crystal --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test
 
       - name: Upload screenshot if test failure
         if: failure()
