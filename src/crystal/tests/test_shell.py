@@ -4,7 +4,7 @@ from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER,
-    WaitTimedOut,
+    wait_for_sync, WaitTimedOut,
 )
 from crystal.tests.util.windows import MainWindow
 from crystal.tests.util.screenshots import take_error_screenshot
@@ -443,6 +443,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download ResourceRevision
                 with _delay_between_downloads_minimized(crystal):
                     assertEqual('', _py_eval(crystal, 'rr_future = r.download()'))
+                    # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (literal_eval(_py_eval(crystal, 'rr_future.done()')) == True)
                         if is_done:
@@ -457,9 +458,11 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                     "ResourceGroup('Comic','http://localhost:2798/_/https/xkcd.com/#/')\n",
                     _py_eval(crystal, f'rg = ResourceGroup(p, "Comic", {comic_pattern!r}); rg'))
                 # Ensure ResourceGroup includes some members discovered by downloading resource Home
-                assertEqual(
-                    '9\n',
-                    _py_eval(crystal, f'len(rg.members)'))
+                def rg_member_count() -> int:
+                    count = literal_eval(_py_eval(crystal, f'len(rg.members)'))
+                    assert isinstance(count, int)
+                    return count
+                wait_for_sync(lambda: 9 == rg_member_count())
             
             with subtests.test(case='test can delete project entities', return_if_failure=True):
                 # Test can delete ResourceGroup
@@ -503,6 +506,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download RootResource
                 with _delay_between_downloads_minimized(crystal):
                     assertEqual('', _py_eval(crystal, 'rr_future = root_r.download()'))
+                    # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (literal_eval(_py_eval(crystal, 'rr_future.done()')) == True)
                         if is_done:
@@ -525,6 +529,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download ResourceGroup
                 with _delay_between_downloads_minimized(crystal):
                     assertEqual('', _py_eval(crystal, 'drgt = rg.download()'))
+                    # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (literal_eval(_py_eval(crystal, 'drgt.complete')) == True)
                         if is_done:

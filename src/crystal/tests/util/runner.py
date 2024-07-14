@@ -129,11 +129,11 @@ class Command(Generic[_T]):  # abstract
 
 class SleepCommand(Command[None]):
     def __init__(self, delay: float) -> None:
-        self._delay = delay  # in seconds
+        self.delay = delay  # in seconds
     
     @bg_affinity
     def run(self) -> None:
-        time.sleep(self._delay)
+        time.sleep(self.delay)
 
 
 class FetchUrlCommand(Command['WebPage']):
