@@ -1,3 +1,25 @@
+"""
+Test runner for Crystal, similar to unittest or pytest.
+
+Related code also exists in: crystal/tests/util/runner.py
+
+Crystal has a custom test runner to support the following unusual features:
+- A custom async event loop
+    - Test code should run directly on the foreground UI thread by default while
+      allowing certain Commands like bg_sleep() to be run on a background thread.
+    - See Command subclasses in crystal/tests/util/runner.py for a complete
+      list of commands that can be run in this way.
+- Explict imports for all test modules, without relying on automatic discovery
+    - Explicit imports are necessary for py2app and py2exe to reliably discover
+      test modules so that they are properly bundled into the built .app/.exe,
+      so that tests can be run inside a built binary, for maximum realism
+- Segfault tolerance
+    - Bugs in Crystal's use of wxPython have caused segfaults during test
+      runs in the past. Therefore it is important that output from individual
+      tests is immediately printed, just in case a segfault kills the
+      entire test runner.
+"""
+
 from contextlib import contextmanager
 from crystal.tests import (
     test_bulkheads,
