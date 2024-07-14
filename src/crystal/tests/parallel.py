@@ -2,7 +2,7 @@ from crystal.util.xthreading import fg_affinity
 import os
 import subprocess
 import sys
-from typing import Union
+from typing import List, Union
 from typing_extensions import Literal
 
 
@@ -15,12 +15,20 @@ def run_tests_in_parallel(job_count: Union[int, Literal[0]]) -> None:
     if not (job_count >= 1):
         raise ValueError('Expected job_count >= 1')
     
+    # Determine how to run Crystal on command line
+    # TODO: Deduplicate with same logic in test_shell.py
+    crystal_command: List[str]
+    python = sys.executable
+    if getattr(sys, 'frozen', None) == 'macosx_app':
+        python_neighbors = os.listdir(os.path.dirname(python))
+        (crystal_binary_name,) = [n for n in python_neighbors if 'crystal' in n.lower()]
+        crystal_binary = os.path.join(os.path.dirname(python), crystal_binary_name)
+        crystal_command = [crystal_binary]
+    else:
+        crystal_command = [python, '-m', 'crystal']
+    
     # TODO: Run # of jobs requested, rather than just one
     # TODO: Run all tests, rather than just one
-    # TODO: Determine appropriate {python, crystal_command} using
-    #       similar/same logic as test_shell.py
-    python = sys.executable
-    crystal_command = [python, '-m', 'crystal']
     crystal = subprocess.Popen(
         [*crystal_command, '--test', 'crystal.tests.test_download_body.test_download_does_save_resource_metadata_and_content_accurately'],
         stdin=subprocess.DEVNULL,
