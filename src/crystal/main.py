@@ -198,8 +198,16 @@ def _main(args: List[str]) -> None:
         default=None,
     )
     parser.add_argument(
+        '--test-parallel',
+        help=argparse.SUPPRESS,  # Run automated tests in parallel
+        action='store',
+        nargs='?',
+        default=None,
+        const=0,  # job count defaults to number of CPU cores
+    )
+    parser.add_argument(
         '--test',
-        help='Run automated tests.',
+        help=argparse.SUPPRESS,  # Run automated tests
         action='store',
         nargs='*',
     )
@@ -236,6 +244,12 @@ def _main(args: List[str]) -> None:
     if is_linux() and parsed_args.install_to_desktop:
         from crystal.install import install_to_linux_desktop_environment
         install_to_linux_desktop_environment()
+        sys.exit()
+    
+    # Run tests in parallel, if requested
+    if parsed_args.test_parallel is not None:
+        from crystal.tests.parallel import run_tests_in_parallel
+        run_tests_in_parallel(parsed_args.test_parallel)
         sys.exit()
     
     # Start GUI subsystem
