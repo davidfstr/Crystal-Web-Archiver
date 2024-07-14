@@ -69,11 +69,12 @@ jobs:
           cpython/python.exe -m venv venv_asan
       
       - name: Install Poetry
-        # NOTE: setuptools>=40.8.0 avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
-        # NOTE: Poetry 1.5.0 cannot use "poetry run" to run make-mac.sh
+        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
+        #       https://github.com/pypa/pip/issues/6264
+        # NOTE: Poetry >=1.5.0 on macOS cannot use "poetry run" to run make-mac.sh
         run: |
-          pip install "setuptools>=40.8.0"
-          pipx install "poetry>=1.4.0,<1.5.0" --pip-args "setuptools>=40.8.0"
+          python -m pip install -U pip setuptools
+          python -m pip install -U "poetry>=1.4.0,<1.5.0"
       
       - name: Activate virtual environment
         run: |
@@ -127,11 +128,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Poetry
-        # NOTE: setuptools>=40.8.0 avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
-        # NOTE: Poetry 1.5.0 cannot use "poetry run" to run make-mac.sh
+        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
+        #       https://github.com/pypa/pip/issues/6264
+        # NOTE: Poetry >=1.5.0 on macOS cannot use "poetry run" to run make-mac.sh
         run: |
-          pip install "setuptools>=40.8.0"
-          pipx install "poetry>=1.4.0,<1.5.0" --pip-args "setuptools>=40.8.0"
+          python -m pip install -U pip setuptools
+          python -m pip install -U "poetry>=1.4.0,<1.5.0"
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -244,10 +246,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Poetry
-        # NOTE: setuptools>=40.8.0 avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
+        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
+        #       https://github.com/pypa/pip/issues/6264
         run: |
-          pip install "setuptools>=40.8.0"
-          pipx install "poetry>=1.4.0,<1.5.0" --pip-args "setuptools>=40.8.0"
+          python -m pip install -U pip setuptools
+          python -m pip install -U "poetry>=1.4.0,<2.0.0"
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -345,16 +348,24 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Poetry
-        # NOTE: setuptools>=40.8.0 avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
+        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
+        #       https://github.com/pypa/pip/issues/6264
         run: |
-          pip install "setuptools>=40.8.0"
-          pipx install "poetry>=1.4.0,<1.5.0" --pip-args "setuptools>=40.8.0"
+          python -m pip install -U pip setuptools
+          python -m pip install -U "poetry>=1.4.0,<2.0.0"
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: poetry
+      
+      - name: Install Poetry (again)
+        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
+        #       https://github.com/pypa/pip/issues/6264
+        run: |
+          python -m pip install -U pip setuptools
+          python -m pip install -U "poetry>=1.4.0,<2.0.0"
 
       - name: Install dependencies with Poetry
         # If build takes a very long time, then it's likely that the version
