@@ -312,7 +312,7 @@ jobs:
           #- windows-2012-r2  # based on Windows 7  # no longer supported by GitHub Actions
           #- windows-2016  # based on Windows 8.1  # no longer supported by GitHub Actions
           - windows-2019  # based on Windows 10
-          - windows-latest
+          #- windows-latest
         python-version: ["3.8.10", "3.9.13"]
       fail-fast: false
     runs-on: ${{ matrix.os }}
