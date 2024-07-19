@@ -18,7 +18,7 @@ from crystal.tests.test_server import serve_and_fetch_xkcd_home_page
 from crystal.tests.util.controls import click_button
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project
-from crystal.tests.util.wait import wait_for, window_condition
+from crystal.tests.util.wait import wait_for, wait_while, window_condition
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
 import os.path
@@ -168,7 +168,8 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
         
         with _upgrade_required_modal_always_shown(), \
                 patch('crystal.progress.ShowModal', click_continue_in_upgrade_required_modal):
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(
+                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as mw:
                 assert did_respond_to_upgrade_required_modal
                 
                 maybe_project = Project._last_opened_project
@@ -328,7 +329,8 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
         
         # Upgrade the project to major version >= 2.
         # Ensure revisions appear to be migrated correctly.
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(
+                project_dirpath, wait_func=_wait_for_project_to_upgrade) as mw:
             maybe_project = Project._last_opened_project
             assert maybe_project is not None
             project = maybe_project
@@ -402,7 +404,8 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
         
         # Resume upgrading the project to major version >= 2. Allow to finish.
         if True:
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(
+                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as mw:
                 maybe_project = Project._last_opened_project
                 assert maybe_project is not None
                 project = maybe_project
@@ -491,3 +494,12 @@ def _count_files_in(dirpath: str) -> int:
     for (_, _, filenames) in os.walk(dirpath):
         file_count += len(filenames)
     return file_count
+
+
+async def _wait_for_project_to_upgrade() -> None:
+    if OpenProjectProgressDialog._upgrading_revision_progress is None:
+        OpenProjectProgressDialog._upgrading_revision_progress = 0
+    
+    def progression_func() -> Optional[int]:
+        return OpenProjectProgressDialog._upgrading_revision_progress
+    await wait_while(progression_func)

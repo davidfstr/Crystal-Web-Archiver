@@ -6,7 +6,6 @@ from crystal.tests.test_shell import (
     crystal_shell,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.tests.util.xos import skip_on_windows
 import tempfile
 import textwrap
 
@@ -17,8 +16,6 @@ async def test_can_close_project_with_menuitem() -> None:
 
 
 async def test_can_quit_with_menuitem() -> None:
-    skip_on_windows()()  # crystal_shell doesn't support Windows
-    
     with crystal_shell() as (crystal, _):
         _create_new_empty_project(crystal)
         

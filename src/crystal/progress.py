@@ -181,6 +181,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
     
     # NOTE: Only changed when tests are running
     _always_show_upgrade_required_modal = False
+    _upgrading_revision_progress = 0  # type: Optional[int]
     
     def __init__(self) -> None:
         super().__init__()
@@ -300,6 +301,8 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
                 raise CancelOpenProject()
             else:
                 raise AssertionError()
+        
+        OpenProjectProgressDialog._upgrading_revision_progress = 0
     
     @override
     def upgrading_revision(self, index: int, revisions_per_second: float) -> None:
@@ -312,6 +315,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         """
         print(f'Upgrading revisions: {index:n} / {self._approx_revision_count:n} ({int(revisions_per_second):n} rev/sec)')
         self._update(index)
+        OpenProjectProgressDialog._upgrading_revision_progress = index
     
     @override
     def did_upgrade_revisions(self, revision_count: int) -> None:
@@ -320,6 +324,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         """
         assert self._dialog is not None
         self._dialog.SetRange(max(revision_count, 1))
+        OpenProjectProgressDialog._upgrading_revision_progress = None  # done
     
     # === Phase 2: Load ===
     

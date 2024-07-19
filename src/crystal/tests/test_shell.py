@@ -4,14 +4,14 @@ from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER,
-    WaitTimedOut,
+    wait_for_sync, WaitTimedOut,
 )
 from crystal.tests.util.windows import MainWindow
 from crystal.tests.util.screenshots import take_error_screenshot
 from crystal.tests.util.server import served_project
+from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
-from crystal.tests.util.xos import skip_on_windows
-from crystal.util.xos import is_windows
+from crystal.util.xos import is_asan, is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from functools import wraps
 from io import StringIO, TextIOBase
@@ -74,7 +74,6 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
 # ------------------------------------------------------------------------------
 # Tests
 
-@skip_on_windows
 @with_subtests
 def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
     with crystal_shell() as (crystal, banner):
@@ -124,7 +123,6 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
             assertIn('Help on MainWindow in module crystal.browser object:', _py_eval(crystal, 'help(window)'))
 
 
-@skip_on_windows
 def test_can_use_pythonstartup_file() -> None:
     with tempfile.NamedTemporaryFile(suffix='.py') as startup_file:
         startup_file.write(textwrap.dedent('''\
@@ -145,7 +143,6 @@ def test_can_use_pythonstartup_file() -> None:
 # NOTE: This test code was split out of the test_can_launch_with_shell() test above
 #       because it is particularly easy to break and having a separate test function
 #       makes the break type quicker to identify.
-@skip_on_windows
 @with_subtests
 def test_builtin_globals_have_stable_public_api(subtests: SubtestsContext) -> None:
     with crystal_shell() as (crystal, _):
@@ -163,9 +160,10 @@ def test_builtin_globals_have_stable_public_api(subtests: SubtestsContext) -> No
                 'Public API of MainWindow class has changed')
 
 
-@skip_on_windows
 @with_subtests
 def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
+    _ensure_can_use_crystal_shell()
+    
     with subtests.test(case='test when first open/create dialog is closed given shell is running then shell remains running'):
         with crystal_shell() as (crystal, _):
             _close_open_or_create_dialog(crystal)
@@ -291,7 +289,6 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                     timeout=.5 + DEFAULT_WAIT_TIMEOUT)
 
 
-@skip_on_windows
 def test_when_typed_code_raises_exception_then_print_traceback() -> None:
     with crystal_shell() as (crystal, _):
         expected_traceback = (
@@ -302,7 +299,6 @@ def test_when_typed_code_raises_exception_then_print_traceback() -> None:
         assertEqual(expected_traceback, _py_eval(crystal, 'Resource'))
 
 
-@skip_on_windows
 @with_subtests
 def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -394,7 +390,6 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                 assertIn(b'<title>xkcd: Air Gap</title>', response_bytes)
 
 
-@skip_on_windows
 @with_subtests
 def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -443,6 +438,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download ResourceRevision
                 with _delay_between_downloads_minimized(crystal):
                     assertEqual('', _py_eval(crystal, 'rr_future = r.download()'))
+                    # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (literal_eval(_py_eval(crystal, 'rr_future.done()')) == True)
                         if is_done:
@@ -457,9 +453,11 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                     "ResourceGroup('Comic','http://localhost:2798/_/https/xkcd.com/#/')\n",
                     _py_eval(crystal, f'rg = ResourceGroup(p, "Comic", {comic_pattern!r}); rg'))
                 # Ensure ResourceGroup includes some members discovered by downloading resource Home
-                assertEqual(
-                    '9\n',
-                    _py_eval(crystal, f'len(rg.members)'))
+                def rg_member_count() -> int:
+                    count = literal_eval(_py_eval(crystal, f'len(rg.members)'))
+                    assert isinstance(count, int)
+                    return count
+                wait_for_sync(lambda: 9 == rg_member_count())
             
             with subtests.test(case='test can delete project entities', return_if_failure=True):
                 # Test can delete ResourceGroup
@@ -503,6 +501,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download RootResource
                 with _delay_between_downloads_minimized(crystal):
                     assertEqual('', _py_eval(crystal, 'rr_future = root_r.download()'))
+                    # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (literal_eval(_py_eval(crystal, 'rr_future.done()')) == True)
                         if is_done:
@@ -525,6 +524,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download ResourceGroup
                 with _delay_between_downloads_minimized(crystal):
                     assertEqual('', _py_eval(crystal, 'drgt = rg.download()'))
+                    # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (literal_eval(_py_eval(crystal, 'drgt.complete')) == True)
                         if is_done:
@@ -560,7 +560,6 @@ def test_can_delete_project_entities() -> None:
     pass
 
 
-@skip_on_windows
 def test_can_import_guppy_in_shell() -> None:
     with crystal_shell() as (crystal, _):
         # Ensure can import guppy
@@ -702,10 +701,7 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
     Context which starts "crystal --shell" upon enter
     and cleans up the associated process upon exit.
     """
-    if platform.system() == 'Windows':
-        # Windows doesn't provide stdout for graphical processes,
-        # which is needed by the current implementation
-        raise AssertionError('not supported on Windows')
+    _ensure_can_use_crystal_shell()
     
     # Determine how to run Crystal on command line
     crystal_command: List[str]
@@ -755,6 +751,19 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
         crystal.stdout.close()
         crystal.kill()
         crystal.wait()
+
+
+def _ensure_can_use_crystal_shell() -> None:
+    if is_windows():
+        # NOTE: Windows doesn't provide stdout for graphical processes,
+        #       which is needed by the current implementation.
+        #       Workaround is possible with run_exe.py but time-consuming to implement.
+        skipTest('not supported on Windows; graphical subprocesses are mute')
+    if is_asan():
+        # NOTE: ASan slows down many operations, causing shell operations to
+        #       spuriously fail timeout checks, even when
+        #       CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER is used
+        skipTest('too slow when run with Address Sanitizer')
 
 
 def _py_eval(

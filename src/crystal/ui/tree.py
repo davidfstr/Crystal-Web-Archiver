@@ -346,9 +346,7 @@ class NodeView:
                                 old_selection_to_retarget = old_selection  # capture
                         
                         for child in children_to_delete:
-                            if child.peer is not None:
-                                child.peer.Delete()
-                                child.peer = None
+                            child._delete_peer_and_descendants()
                     
                     # Add some children
                     children_to_add = [new_child for new_child in new_children if new_child not in old_children_set]
@@ -434,6 +432,14 @@ class NodeView:
         self.expandable = self.expandable
         self.icon_set = self.icon_set
         self.set_children(self.children, _initial=True)
+    
+    def _delete_peer_and_descendants(self) -> None:
+        if self.peer is None:
+            return
+        for child in self._children:
+            child._delete_peer_and_descendants()
+        self.peer.Delete()
+        self.peer = None
     
     # Called when a wx.EVT_TREE_ITEM_* event occurs on this node
     def _dispatch_event(self, event) -> None:

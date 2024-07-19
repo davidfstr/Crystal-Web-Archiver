@@ -20,7 +20,7 @@ _T2 = TypeVar('_T2')
 _T3 = TypeVar('_T3')
 
 
-GLOBAL_TIMEOUT_MULTIPLIER = IGNORE_USE_AFTER_FREE = (
+GLOBAL_TIMEOUT_MULTIPLIER = (
     float(os.environ.get('CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER', '1.0'))
 )
 
@@ -103,6 +103,9 @@ async def wait_for(
     Waits up to `timeout` seconds for the specified condition to become non-None,
     returning the result of the condition, checking every `period` seconds.
     
+    The condition is always checked on the foreground thread.
+    The foreground thread is released while waiting between checks.
+    
     Raises:
     * WaitTimedOut -- if the timeout expires before the condition becomes non-None
     """
@@ -166,6 +169,21 @@ async def wait_for(
                         message_suffix_str
                     ),
                     stacklevel=(2 + stacklevel_extra))
+
+
+def wait_for_sync(condition: Callable[[], Optional[_T]], *args, **kwargs) -> _T:
+    """
+    Similar to wait_for() but does not release the current thread between waits.
+    """
+    from crystal.tests.util.runner import SleepCommand
+    coro = wait_for(condition, *args, **kwargs)
+    while True:
+        try:
+            command = coro.send(None)
+        except StopIteration as e:
+            return e.value
+        assert isinstance(command, SleepCommand)
+        time.sleep(command.delay)
 
 
 class WaitTimedOut(Exception):

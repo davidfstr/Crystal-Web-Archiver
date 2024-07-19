@@ -10,6 +10,17 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Minor fixes
+    * Fix closing a project to no longer have a couple of heap-use-after-free
+      issues which could corrupt memory, potentially crashing Crystal later.
+
+* Testing improvements
+    * Automated tests are now regularly run with Address Sanitizer,
+      which helps to identify heap-use-after-free bugs related to
+      interacting with wxPython that corrupt memory.
+
 ### v1.9.0b (June 22, 2024)
 
 This release contains error-handling improvements and bug fixes

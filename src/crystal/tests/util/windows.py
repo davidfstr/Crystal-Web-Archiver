@@ -19,7 +19,7 @@ import re
 import sys
 import tempfile
 import traceback
-from typing import AsyncIterator, Callable, Optional, Tuple, TYPE_CHECKING
+from typing import AsyncIterator, Awaitable, Callable, Optional, Tuple, TYPE_CHECKING
 import wx
 
 if TYPE_CHECKING:
@@ -107,6 +107,7 @@ class OpenOrCreateDialog:
             *, readonly: Optional[bool]=None,
             autoclose: bool=True,
             using_crystalopen: bool=False,
+            wait_func: Optional[Callable[[], Awaitable[None]]]=None,
             ) -> AsyncIterator[MainWindow]:
         if readonly is not None:
             self.open_as_readonly.Value = readonly
@@ -119,6 +120,8 @@ class OpenOrCreateDialog:
         with file_dialog_returning(itempath_to_open):
             click_button(self.open_button)
             
+            if wait_func is not None:
+                await wait_func()
             mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
         exc_info_while_close = None
