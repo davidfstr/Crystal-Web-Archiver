@@ -519,12 +519,14 @@ class MainWindow:
             name: str,
             url: str,
             change_prefix_command: ChangePrefixCommand,
+            download_immediately: bool,
+            create_group: bool,
             ) -> None:
         if url == '':
             raise ValueError('Invalid blank URL')
         
         try:
-            RootResource(self.project, name, Resource(self.project, url))
+            rr = RootResource(self.project, name, Resource(self.project, url))
         except RootResource.AlreadyExists:
             raise ValueError('Invalid duplicate URL')
         
@@ -534,6 +536,16 @@ class MainWindow:
             self.entity_tree.clear_default_url_prefix()
         else:
             self.entity_tree.set_default_url_prefix(*change_prefix_command)
+        
+        if create_group:
+            assert url.endswith('/')
+            rg = ResourceGroup(self.project, '', url + '**', source=rr)
+            
+            if download_immediately:
+                rg.download(needs_result=False)
+        else:
+            if download_immediately:
+                rr.download(needs_result=False)
     
     @fg_affinity
     def _on_edit_root_url_dialog_ok(self,
@@ -541,6 +553,8 @@ class MainWindow:
             name: str,
             url: str,
             change_prefix_command: ChangePrefixCommand,
+            download_immediately: bool,
+            create_group: bool,
             ) -> None:
         if url != rr.url:
             raise ValueError()
@@ -558,6 +572,9 @@ class MainWindow:
             self.entity_tree.clear_default_url_prefix()
         else:
             self.entity_tree.set_default_url_prefix(*change_prefix_command)
+        
+        assert download_immediately == False
+        assert create_group == False
     
     # === Entity Pane: New/Edit Group ===
     

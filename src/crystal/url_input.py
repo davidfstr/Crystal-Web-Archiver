@@ -80,6 +80,13 @@ class UrlCleaner:
         self._finish(None)
 
 
+def cleaned_url_is_at_site_root(url_input: str) -> bool:
+    candidates = _candidate_urls_from_user_input(url_input)
+    assert len(candidates) >= 1
+    candidate = candidates[0]
+    return urlparse(candidate).path == '/'
+
+
 def _candidate_urls_from_user_input(url_input: str) -> List[str]:
     """
     Given a potentially messy URL typed manually by the user,
