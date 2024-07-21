@@ -42,11 +42,10 @@ class NewRootUrlDialog:
     # NOTE: Only changed when tests are running
     _last_opened: 'Optional[NewRootUrlDialog]'=None
     
-    # TODO: Privatize these fields
-    url_field: wx.TextCtrl
-    name_field: wx.TextCtrl
-    ok_button: wx.Button
-    cancel_button: wx.Button
+    _url_field: wx.TextCtrl
+    _name_field: wx.TextCtrl
+    _ok_button: wx.Button
+    _cancel_button: wx.Button
     _options_button: wx.Button
     
     _set_as_default_domain_checkbox: wx.CheckBox
@@ -123,9 +122,9 @@ class NewRootUrlDialog:
         if not fields_hide_hint_when_focused():
             # Initialize focus
             if not is_edit:
-                self.url_field.SetFocus()
+                self._url_field.SetFocus()
             else:
-                self.name_field.SetFocus()
+                self._name_field.SetFocus()
         
         position_dialog_initially(dialog)
         # TODO: Verify that the wxGTK-specific logic here is actually necessary
@@ -164,19 +163,19 @@ class NewRootUrlDialog:
             url_field_and_spinner = wx.BoxSizer(wx.HORIZONTAL)
             spinner_diameter: int
             if True:
-                self.url_field = wx.TextCtrl(
+                self._url_field = wx.TextCtrl(
                     parent, value=initial_url,
                     size=(self._INITIAL_URL_WIDTH, wx.DefaultCoord),
                     name='cr-new-root-url-dialog__url-field')
-                self.url_field.Hint = 'https://example.com/'
-                self.url_field.SetSelection(-1, -1)  # select all upon focus
-                self.url_field.Enabled = not is_edit
-                bind(self.url_field, wx.EVT_TEXT, self._update_ok_enabled)
-                bind(self.url_field, wx.EVT_SET_FOCUS, self._on_url_field_focus)
-                bind(self.url_field, wx.EVT_KILL_FOCUS, self._on_url_field_blur)
-                url_field_and_spinner.Add(self.url_field, proportion=1, flag=wx.EXPAND)
+                self._url_field.Hint = 'https://example.com/'
+                self._url_field.SetSelection(-1, -1)  # select all upon focus
+                self._url_field.Enabled = not is_edit
+                bind(self._url_field, wx.EVT_TEXT, self._update_ok_enabled)
+                bind(self._url_field, wx.EVT_SET_FOCUS, self._on_url_field_focus)
+                bind(self._url_field, wx.EVT_KILL_FOCUS, self._on_url_field_blur)
+                url_field_and_spinner.Add(self._url_field, proportion=1, flag=wx.EXPAND)
                 
-                spinner_diameter = self.url_field.Size.Height
+                spinner_diameter = self._url_field.Size.Height
                 self.url_cleaner_spinner = wx.ActivityIndicator(
                     parent,
                     size=wx.Size(spinner_diameter, spinner_diameter),
@@ -192,12 +191,12 @@ class NewRootUrlDialog:
             
             name_field_and_space = wx.BoxSizer(wx.HORIZONTAL)
             if True:
-                self.name_field = wx.TextCtrl(
+                self._name_field = wx.TextCtrl(
                     parent, value=initial_name,
                     name='cr-new-root-url-dialog__name-field')
-                self.name_field.Hint = 'Home'
-                self.name_field.SetSelection(-1, -1)  # select all upon focus
-                name_field_and_space.Add(self.name_field, proportion=1, flag=wx.EXPAND)
+                self._name_field.Hint = 'Home'
+                self._name_field.SetSelection(-1, -1)  # select all upon focus
+                name_field_and_space.Add(self._name_field, proportion=1, flag=wx.EXPAND)
                 
                 #name_field_and_space.Add(
                 #    wx.Size(spinner_diameter, spinner_diameter),
@@ -261,8 +260,8 @@ class NewRootUrlDialog:
         button_sizer.AddStretchSpacer()
         button_sizer.Add(CreateButtonSizer(parent, ok_button_id, wx.ID_CANCEL), flag=wx.CENTER)
         
-        self.ok_button = parent.FindWindow(id=ok_button_id)
-        self.cancel_button = parent.FindWindow(id=wx.ID_CANCEL)
+        self._ok_button = parent.FindWindow(id=ok_button_id)
+        self._cancel_button = parent.FindWindow(id=wx.ID_CANCEL)
         
         return button_sizer
     
@@ -292,15 +291,15 @@ class NewRootUrlDialog:
             return
         
         self._last_cleaned_url = cleaned_url
-        if self.url_field.Value != cleaned_url:
-            self.url_field.Value = cleaned_url
+        if self._url_field.Value != cleaned_url:
+            self._url_field.Value = cleaned_url
     
     # === Events ===
     
     # NOTE: Focus event can be called multiple times without an intermediate blur event
     @fg_affinity
     def _on_url_field_focus(self, event: wx.FocusEvent) -> None:
-        # NOTE: Cannot use url_field.HasFocus() because doesn't work in automated tests
+        # NOTE: Cannot use _url_field.HasFocus() because doesn't work in automated tests
         if self._url_field_focused:
             # Already did focus action
             return
@@ -310,7 +309,7 @@ class NewRootUrlDialog:
         # stop cleaning any old URL input
         @capture_crashes_to_stderr  # no good location in UI to route crashes too
         def fg_task() -> None:
-            # NOTE: Cannot use url_field.HasFocus() because doesn't work in automated tests
+            # NOTE: Cannot use _url_field.HasFocus() because doesn't work in automated tests
             if not self._url_field_focused:
                 return
             
@@ -336,7 +335,7 @@ class NewRootUrlDialog:
             return
         
         # Start cleaning the new URL input
-        url_input = self.url_field.Value
+        url_input = self._url_field.Value
         if url_input == self._last_cleaned_url:
             # URL is already clean
             pass
@@ -388,16 +387,16 @@ class NewRootUrlDialog:
         
         # If URL input is being cleaned, wait for it to finish before continuing
         if self._url_cleaner is not None:
-            self.url_field.Enabled = False
-            self.name_field.Enabled = False
-            self.ok_button.Enabled = False
-            assert self.cancel_button.Enabled == True
+            self._url_field.Enabled = False
+            self._name_field.Enabled = False
+            self._ok_button.Enabled = False
+            assert self._cancel_button.Enabled == True
             
             self._was_ok_pressed = True
             return
         
-        name = self.name_field.Value
-        url = self.url_field.Value
+        name = self._name_field.Value
+        url = self._url_field.Value
         if not self._is_edit and self._url_exists_func(url):
             dialog = wx.MessageDialog(
                 self.dialog,
@@ -410,10 +409,10 @@ class NewRootUrlDialog:
             choice = ShowModal(dialog)
             assert wx.ID_OK == choice
             
-            self.url_field.Enabled = True
-            self.name_field.Enabled = True
-            self.ok_button.Enabled = True
-            assert self.cancel_button.Enabled == True
+            self._url_field.Enabled = True
+            self._name_field.Enabled = True
+            self._ok_button.Enabled = True
+            assert self._cancel_button.Enabled == True
             return
         if self._set_as_default_domain_checkbox.IsChecked():
             change_prefix_command = ('domain', url)  # type: ChangePrefixCommand
@@ -474,7 +473,7 @@ class NewRootUrlDialog:
     # === Updates ===
     
     def _update_ok_enabled(self, event=None) -> None:
-        self.ok_button.Enabled = (self.url_field.Value != '')
+        self._ok_button.Enabled = (self._url_field.Value != '')
 
 
 def fields_hide_hint_when_focused() -> bool:
