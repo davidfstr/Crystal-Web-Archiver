@@ -495,6 +495,10 @@ class TaskTreeNode:
         def fg_task() -> None:
             # Find (first_more_node, intermediate_nodes, last_more_node)
             intermediate_nodes = list(self.tree_node.children)
+            if len(intermediate_nodes) == 0:
+                # Node is disposed. Abort.
+                assert self.tree_node.peer is None
+                return
             if isinstance(intermediate_nodes[0], _MoreNodeView):
                 first_more_node = intermediate_nodes[0]
                 del intermediate_nodes[0]
