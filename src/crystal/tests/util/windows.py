@@ -333,6 +333,9 @@ class NewRootUrlDialog:
     ok_button: wx.Button
     cancel_button: wx.Button
     
+    download_immediately_checkbox: wx.CheckBox  # or None
+    create_group_checkbox: wx.CheckBox  # or None
+    
     options_button: wx.Button
     set_as_default_domain_checkbox: wx.CheckBox
     set_as_default_directory_checkbox: wx.CheckBox
@@ -356,12 +359,25 @@ class NewRootUrlDialog:
         assert isinstance(self.ok_button, wx.Button)
         self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
         assert isinstance(self.cancel_button, wx.Button)
+        
+        self.download_immediately_checkbox = self._dialog.FindWindow(name='cr-new-root-url-dialog__download-immediately-checkbox')
+        assert (
+            self.download_immediately_checkbox is None or
+            isinstance(self.download_immediately_checkbox, wx.CheckBox)
+        )
+        self.create_group_checkbox = self._dialog.FindWindow(name='cr-new-root-url-dialog__create-group-checkbox')
+        assert (
+            self.create_group_checkbox is None or
+            isinstance(self.create_group_checkbox, wx.CheckBox)
+        )
+        
         self.options_button = self._dialog.FindWindow(id=wx.ID_MORE)
         assert isinstance(self.options_button, wx.Button)
         self.set_as_default_domain_checkbox = self._dialog.FindWindow(name='cr-new-root-url-dialog__set-as-default-domain-checkbox')
         assert isinstance(self.set_as_default_domain_checkbox, wx.CheckBox)
         self.set_as_default_directory_checkbox = self._dialog.FindWindow(name='cr-new-root-url-dialog__set-as-default-directory-checkbox')
         assert isinstance(self.set_as_default_directory_checkbox, wx.CheckBox)
+        
         return self
     
     def __init__(self, *, ready: bool=False) -> None:
@@ -377,6 +393,13 @@ class NewRootUrlDialog:
     def url_field_focused(self) -> bool:
         return self._controller._url_field_focused
     
+    @property
+    def new_options_shown(self) -> bool:
+        return (
+            self.download_immediately_checkbox is not None and
+            self.create_group_checkbox is not None
+        )
+    
     async def ok(self) -> None:
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-new-root-url-dialog')), stacklevel_extra=1)
@@ -384,6 +407,8 @@ class NewRootUrlDialog:
     async def cancel(self) -> None:
         click_button(self.cancel_button)
         await wait_for(not_condition(window_condition('cr-new-root-url-dialog')), stacklevel_extra=1)
+    
+    # === Utility ===
     
     def do_not_set_default_url_prefix(self) -> None:
         """

@@ -1,14 +1,22 @@
 from contextlib import asynccontextmanager, contextmanager
 from crystal.browser.new_root_url import fields_hide_hint_when_focused
 from crystal.model import Project, Resource, RootResource
+from crystal.task import DownloadResourceGroupTask
+from crystal.tests.test_download import MockHttpServer  # TODO: extract to shared module
 from crystal.tests.util.asserts import *
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import (
+    append_deferred_top_level_tasks,
+    clear_top_level_tasks_on_exit,
+    scheduler_disabled,
+    wait_for_download_to_start_and_finish,
+)
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD,
     first_child_of_tree_item_is_not_loading_condition,
+    tree_has_no_children_condition,
     wait_for,
 )
 from crystal.tests.util.windows import NewRootUrlDialog, EntityTree, OpenOrCreateDialog
@@ -19,7 +27,7 @@ from crystal.url_input import _candidate_urls_from_user_input as EXPAND
 import os
 import tempfile
 import time
-from typing import AsyncIterator, Dict, Iterator, List, Optional, Union
+from typing import AsyncIterator, Dict, Iterator, List, Optional, Tuple, Union
 from typing_extensions import Self
 from unittest import skip
 from unittest.mock import ANY, patch
@@ -209,6 +217,160 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
 @skip('covered by: test_given_resource_node_with_links_can_create_new_root_url_to_label_link')
 async def test_given_resource_node_with_link_labeled_as_root_url_can_easily_forget_the_root_url_to_unlabel_the_link() -> None:
     pass
+
+
+# === Test: New URL Options ===
+
+async def test_when_add_url_then_downloads_url_immediately_by_default() -> None:
+    with _served_simple_site() as (home_url, _):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            assert nud.download_immediately_checkbox.Value
+            
+            nud.url_field.Value = home_url
+            await nud.ok()
+            
+            # Ensure started downloading
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+            await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
+
+
+async def test_when_add_url_then_can_avoid_downloading_url_with_1_extra_click() -> None:
+    with _served_simple_site() as (home_url, _):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = home_url
+            click_checkbox(nud.download_immediately_checkbox)  # extra click #1
+            assert not nud.download_immediately_checkbox.Value
+            await nud.ok()
+            
+            # Ensure did NOT start downloading
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+            assert tree_has_no_children_condition(mw.task_tree)()
+            await _assert_tree_item_icon_tooltip_contains(home_ti, 'Undownloaded')
+
+
+async def test_when_add_url_at_site_root_then_can_download_site_with_1_extra_click() -> None:
+    with _served_simple_site() as (home_url, _), scheduler_disabled():
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                assert mw.new_root_url_button.Enabled
+                click_button(mw.new_root_url_button)
+                nud = await NewRootUrlDialog.wait_for()
+                
+                nud.url_field.Value = home_url  # at site root
+                assert nud.download_immediately_checkbox.Value
+                assert nud.create_group_checkbox.Enabled
+                click_checkbox(nud.create_group_checkbox)  # extra click #1
+                assert nud.create_group_checkbox.Value
+                await nud.ok()
+                append_deferred_top_level_tasks(project)
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+                site_g = root_ti.find_child(home_url + '**', project.default_url_prefix)
+                (download_rg_task,) = project.root_task.children
+                assert isinstance(download_rg_task, DownloadResourceGroupTask)
+                # (Do NOT wait for group to finish downloading)
+
+
+async def test_when_add_url_not_at_site_root_then_cannot_download_site_or_create_group_for_site() -> None:
+    with _served_simple_site() as (home_url, image_url):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = image_url  # NOT at site root
+            assert not nud.create_group_checkbox.Enabled
+            await nud.cancel()
+
+
+async def test_when_add_url_at_site_root_then_can_create_group_for_site_but_not_download_it_with_extra_clicks() -> None:
+    with _served_simple_site() as (home_url, _), scheduler_disabled():
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            with clear_top_level_tasks_on_exit(project):
+                assert mw.new_root_url_button.Enabled
+                click_button(mw.new_root_url_button)
+                nud = await NewRootUrlDialog.wait_for()
+                
+                nud.url_field.Value = home_url  # at site root
+                assert nud.create_group_checkbox.Enabled
+                click_checkbox(nud.create_group_checkbox)  # extra click #1
+                assert nud.create_group_checkbox.Value
+                click_checkbox(nud.download_immediately_checkbox)  # extra click #2
+                assert not nud.download_immediately_checkbox.Value
+                await nud.ok()
+                append_deferred_top_level_tasks(project)
+                
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+                site_g = root_ti.find_child(home_url + '**', project.default_url_prefix)
+                () = project.root_task.children
+
+
+async def test_when_edit_url_then_new_url_options_not_shown() -> None:
+    with _served_simple_site() as (home_url, _):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            rr = RootResource(project, 'Home', Resource(project, home_url))
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+            home_ti.SelectItem()
+            
+            assert mw.edit_button.Enabled
+            click_button(mw.edit_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            assert not nud.new_options_shown
+            await nud.cancel()
+
+
+@contextmanager
+def _served_simple_site() -> Iterator[Tuple[str, str]]:
+    server = MockHttpServer({
+        '/': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content='<img src="/assets/image.png" />'.encode('utf-8')
+        ),
+        '/assets/image.png': dict(
+            status_code=200,
+            headers=[('Content-Type', 'image/png')],
+            content=b''
+        )
+    })
+    with server:
+        home_url = server.get_url('/')
+        image_url = server.get_url('/assets/image.png')
+        
+        yield (home_url, image_url)
 
 
 # === Test: Default URL Prefix: Load/Save ===

@@ -51,6 +51,9 @@ class NewRootUrlDialog:
     _cancel_button: wx.Button
     _options_button: wx.Button
     
+    _download_immediately_checkbox: wx.CheckBox
+    _create_group_checkbox: wx.CheckBox
+    
     _set_as_default_domain_checkbox: wx.CheckBox
     _set_as_default_directory_checkbox: wx.CheckBox
     
