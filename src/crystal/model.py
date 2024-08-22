@@ -2241,6 +2241,12 @@ class RootResource:
             if there is already a `RootResource` associated with the specified resource.
         * ProjectReadOnlyError
         """
+        if not isinstance(project, Project):
+            raise TypeError()
+        if not isinstance(name, str):
+            raise TypeError()
+        if not isinstance(resource, Resource):
+            raise TypeError()
         
         if resource.project != project:
             raise CrossProjectReferenceError('Cannot have a RootResource refer to a Resource from a different Project.')
@@ -3306,6 +3312,13 @@ class ResourceGroup(ListenableMixin):
         * source -- source of this group, or Ellipsis if init_source() will be called later.
         """
         super().__init__()
+        
+        if not isinstance(project, Project):
+            raise TypeError()
+        if not isinstance(name, str):
+            raise TypeError()
+        if not isinstance(url_pattern, str):
+            raise TypeError()
         
         if len(url_pattern) == 0:
             raise ValueError('Cannot create group with empty pattern')
