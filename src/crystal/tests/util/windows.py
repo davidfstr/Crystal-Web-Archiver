@@ -410,6 +410,21 @@ class NewRootUrlDialog:
     
     # === Utility ===
     
+    def do_not_download_immediately(self) -> None:
+        """
+        Configures the URL being created so that it is NOT immediately downloaded
+        after creation.
+        
+        Several tests that create a URL are not interested in the default
+        "download immediately" behavior and are simpler to write when there
+        is no need to worry about or clean up after a URL is downloaded as
+        a side effect of creating it.
+        """
+        if self.download_immediately_checkbox is None:
+            return
+        if self.download_immediately_checkbox.Value:
+            self.download_immediately_checkbox.Value = False
+    
     def do_not_set_default_url_prefix(self) -> None:
         """
         Configures the URL being created to NOT also set it as the default domain.

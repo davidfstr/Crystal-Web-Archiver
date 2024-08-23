@@ -44,6 +44,7 @@ async def test_can_create_group_with_source(
                 
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_download_immediately()
                 nud.do_not_set_default_url_prefix()
                 await nud.ok()
             
@@ -186,6 +187,7 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_download_immediately()
                 await nud.ok()
                 (home_ti,) = root_ti.Children
             

@@ -57,6 +57,7 @@ async def test_can_create_root_url(
                 assert mw.new_root_url_button.Enabled
                 click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
+                nud.do_not_download_immediately()
                 
                 # Ensure prepopulates reasonable information
                 assert '' == nud.url_field.Value
@@ -110,6 +111,7 @@ async def test_can_create_root_url(
                 # Recreate the root URL
                 click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
+                nud.do_not_download_immediately()
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
                 await nud.ok()
@@ -157,6 +159,7 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
                 assert mw.new_root_url_button.Enabled
                 click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
+                nud.do_not_download_immediately()
                 
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
@@ -177,6 +180,7 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
                 assert mw.new_root_url_button.Enabled
                 click_button(mw.new_root_url_button)
                 nud = await NewRootUrlDialog.wait_for()
+                nud.do_not_download_immediately()
                 
                 # Ensure prepopulates reasonable information
                 assert atom_feed_url == nud.url_field.Value  # default pattern = (from resource)
@@ -386,6 +390,7 @@ async def test_when_new_url_and_save_given_project_prefix_is_unset_then_sets_pre
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
+            nud.do_not_download_immediately()
             
             nud.url_field.Value = 'https://xkcd.com/'
             await nud.ok()
@@ -401,6 +406,7 @@ async def test_when_new_url_and_save_given_project_prefix_is_unset_then_sets_pre
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
+            nud.do_not_download_immediately()
             
             nud.url_field.Value = 'mailto:me@example.com'
             await nud.ok()
@@ -426,6 +432,7 @@ async def test_when_new_url_and_save_given_project_prefix_is_set_then_maintains_
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
+            nud.do_not_download_immediately()
             
             nud.url_field.Value = 'https://xkcd.com/'
             await nud.ok()
@@ -495,6 +502,7 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
+            nud.do_not_download_immediately()
             
             nud.url_field.Value = 'https://neocities.org/'
             
@@ -517,6 +525,7 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
+            nud.do_not_download_immediately()
             
             nud.url_field.Value = 'https://neocities.org/~distantskies/'
             
@@ -546,6 +555,7 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
+            nud.do_not_download_immediately()
             
             nud.url_field.Value = 'https://neocities.org/'
             
@@ -568,6 +578,7 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
+            nud.do_not_download_immediately()
             
             nud.url_field.Value = 'https://neocities.org/~distantskies/'
             
@@ -1223,6 +1234,7 @@ async def _new_root_url_dialog_open(*, autoclose: bool=True) -> AsyncIterator[Ne
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
+            nud.do_not_download_immediately()
             
             try:
                 yield nud
