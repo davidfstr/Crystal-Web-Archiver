@@ -3,7 +3,7 @@ from crystal.browser.new_root_url import fields_hide_hint_when_focused
 from crystal.model import Project, Resource, RootResource
 from crystal.tests.util.asserts import *
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
-from crystal.tests.util.server import served_project
+from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (

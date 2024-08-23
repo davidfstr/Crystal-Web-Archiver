@@ -7,16 +7,17 @@ from crystal import resources
 from crystal.server import get_request_url, ProjectServer
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util import http_date
 from crystal.util.xdatetime import datetime_is_aware
-from crystal.util.xthreading import fg_call_and_wait
+from crystal.util.xthreading import bg_call_later, fg_call_and_wait
 import datetime
 from email.message import EmailMessage
-import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 import re
 import tempfile
-from typing import Dict, Iterator, Optional
+from typing import Dict, Iterator, List, Optional
 import unittest.mock
 from zipfile import ZipFile
 
@@ -89,6 +90,74 @@ def served_project_from_filepath(
         fg_call_and_wait(close_project)
 
 
+class MockHttpServer:
+    def __init__(self, routes) -> None:
+        self.requested_paths = []  # type: List[str]
+        
+        mock_server = self  # capture
+        class RequestHandler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # override
+                mock_server.requested_paths.append(self.path)
+                
+                # Look for static route
+                route = routes.get(self.path)
+                if route is not None:
+                    self._send_route_response(route)
+                    return
+                
+                # Look for dynamic route
+                for (path_pattern, route) in routes.items():
+                    if not callable(path_pattern):
+                        continue
+                    if not path_pattern(self.path):
+                        continue
+                    self._send_route_response(route)
+                    return
+                
+                self.send_response(404)
+                self.end_headers()
+                return
+            
+            def _send_route_response(self, route) -> None:
+                self.send_response(route['status_code'])
+                for (k, v) in route['headers']:
+                    self.send_header(k, v)
+                self.end_headers()
+                
+                content = route['content']
+                if callable(content):
+                    content = content(self.path)
+                assert isinstance(content, bytes)
+                self.wfile.write(content)
+        
+        self._port = 2798  # CRYT on telephone keypad
+        address = ('', self._port)
+        self._server = HTTPServer(address, RequestHandler)
+        
+        @capture_crashes_to_stderr
+        def bg_task() -> None:
+            try:
+                self._server.serve_forever()
+            finally:
+                self._server.server_close()
+        bg_call_later(bg_task, daemon=True)
+    
+    def get_url(self, path: str) -> str:
+        return f'http://localhost:{self._port}' + path
+    
+    def close(self) -> None:
+        self._server.shutdown()
+    
+    def __enter__(self) -> 'MockHttpServer':
+        return self
+    
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+        self.close()
+
+
+# ------------------------------------------------------------------------------
+# Utility: Extracted Project
+
 @contextmanager
 def extracted_project(
         zipped_project_filename: str
@@ -107,6 +176,9 @@ def extracted_project(
         project_dirpath = os.path.join(project_parent_dirpath, project_filename)
         yield project_dirpath
 
+
+# ------------------------------------------------------------------------------
+# Utility: Server Requests
 
 @contextmanager
 def assert_does_open_webbrowser_to(request_url: str) -> Iterator[None]:
