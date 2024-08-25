@@ -597,6 +597,7 @@ class MainWindow:
             url_pattern: str,
             source: ResourceGroupSource,
             do_not_download: bool,
+            download_immediately: bool,
             ) -> None:
         # TODO: Validate user input:
         #       * Is url_pattern empty?
@@ -604,6 +605,9 @@ class MainWindow:
         rg = ResourceGroup(
             self.project, name, url_pattern, source,
             do_not_download=do_not_download)
+        
+        if download_immediately:
+            rg.download(needs_result=False)
     
     @fg_affinity
     def _on_edit_group_dialog_ok(self,
@@ -612,6 +616,7 @@ class MainWindow:
             url_pattern: str,
             source: ResourceGroupSource,
             do_not_download: bool,
+            download_immediately: bool,
             ) -> None:
         if url_pattern != rg.url_pattern:
             raise ValueError()
@@ -620,6 +625,8 @@ class MainWindow:
         # TODO: This update should happen in response to an event
         #       fired by the entity itself.
         self.entity_tree.root.update_title_of_descendants()  # update names in titles
+        
+        assert download_immediately == False
     
     def _saving_source_would_create_cycle(self, rg: ResourceGroup, source: ResourceGroupSource) -> bool:
         ancestor_source = source  # type: ResourceGroupSource
