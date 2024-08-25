@@ -12,6 +12,11 @@ Release Notes ⋮
 
 ### main
 
+* Workflow improvements
+    * New URLs are downloaded immediately by default.
+    * Can immediately download the site for a newly created URL
+      with 1 extra click.
+
 * Minor fixes
     * Fix closing a project to no longer have a couple of heap-use-after-free
       issues which could corrupt memory, potentially crashing Crystal later.
