@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager, contextmanager
 from crystal.browser.new_root_url import fields_hide_hint_when_focused
 from crystal.model import Project, Resource, RootResource
 from crystal.task import DownloadResourceGroupTask
-from crystal.tests.test_download import MockHttpServer  # TODO: extract to shared module
 from crystal.tests.util.asserts import *
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
@@ -226,7 +225,7 @@ async def test_given_resource_node_with_link_labeled_as_root_url_can_easily_forg
 # === Test: New URL Options ===
 
 async def test_when_add_url_then_downloads_url_immediately_by_default() -> None:
-    with _served_simple_site() as (home_url, _):
+    with _served_simple_site_with_2_urls() as (home_url, _):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             project = Project._last_opened_project
             assert project is not None
@@ -248,7 +247,7 @@ async def test_when_add_url_then_downloads_url_immediately_by_default() -> None:
 
 
 async def test_when_add_url_then_can_avoid_downloading_url_with_1_extra_click() -> None:
-    with _served_simple_site() as (home_url, _):
+    with _served_simple_site_with_2_urls() as (home_url, _):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             project = Project._last_opened_project
             assert project is not None
@@ -270,7 +269,7 @@ async def test_when_add_url_then_can_avoid_downloading_url_with_1_extra_click() 
 
 
 async def test_when_add_url_at_site_root_then_can_download_site_with_1_extra_click() -> None:
-    with _served_simple_site() as (home_url, _), scheduler_disabled():
+    with _served_simple_site_with_2_urls() as (home_url, _), scheduler_disabled():
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             project = Project._last_opened_project
             assert project is not None
@@ -297,7 +296,7 @@ async def test_when_add_url_at_site_root_then_can_download_site_with_1_extra_cli
 
 
 async def test_when_add_url_not_at_site_root_then_cannot_download_site_or_create_group_for_site() -> None:
-    with _served_simple_site() as (home_url, image_url):
+    with _served_simple_site_with_2_urls() as (home_url, image_url):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             project = Project._last_opened_project
             assert project is not None
@@ -312,7 +311,7 @@ async def test_when_add_url_not_at_site_root_then_cannot_download_site_or_create
 
 
 async def test_when_add_url_at_site_root_then_can_create_group_for_site_but_not_download_it_with_extra_clicks() -> None:
-    with _served_simple_site() as (home_url, _), scheduler_disabled():
+    with _served_simple_site_with_2_urls() as (home_url, _), scheduler_disabled():
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             project = Project._last_opened_project
             assert project is not None
@@ -338,7 +337,7 @@ async def test_when_add_url_at_site_root_then_can_create_group_for_site_but_not_
 
 
 async def test_when_edit_url_then_new_url_options_not_shown() -> None:
-    with _served_simple_site() as (home_url, _):
+    with _served_simple_site_with_2_urls() as (home_url, _):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             project = Project._last_opened_project
             assert project is not None
@@ -357,7 +356,7 @@ async def test_when_edit_url_then_new_url_options_not_shown() -> None:
 
 
 @contextmanager
-def _served_simple_site() -> Iterator[Tuple[str, str]]:
+def _served_simple_site_with_2_urls() -> Iterator[Tuple[str, str]]:
     server = MockHttpServer({
         '/': dict(
             status_code=200,

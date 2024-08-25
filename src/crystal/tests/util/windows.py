@@ -453,6 +453,8 @@ class NewGroupDialog:
     cancel_button: wx.Button
     ok_button: wx.Button
     
+    download_immediately_checkbox: wx.CheckBox  # or None
+    
     @staticmethod
     async def wait_for() -> NewGroupDialog:
         self = NewGroupDialog(ready=True)
@@ -480,6 +482,13 @@ class NewGroupDialog:
         if self.ok_button is None:
             self.ok_button = add_group_dialog.FindWindow(id=wx.ID_SAVE)
         assert isinstance(self.ok_button, wx.Button)
+        
+        self.download_immediately_checkbox = add_group_dialog.FindWindow(name='cr-new-group-dialog__download-immediately-checkbox')
+        assert (
+            self.download_immediately_checkbox is None or
+            isinstance(self.download_immediately_checkbox, wx.CheckBox)
+        )
+        
         return self
     
     @staticmethod
@@ -531,6 +540,12 @@ class NewGroupDialog:
                 raise ValueError(f'Source not found: {source_name}')
         self.source_field.SetSelection(selection_ci)
     source = property(_get_source, _set_source)
+    
+    @property
+    def new_options_shown(self) -> bool:
+        return (
+            self.download_immediately_checkbox is not None
+        )
     
     async def ok(self) -> None:
         click_button(self.ok_button)
