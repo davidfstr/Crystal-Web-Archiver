@@ -35,7 +35,7 @@ class NewGroupDialog:
     
     def __init__(self,
             parent: wx.Window,
-            on_finish: Callable[[str, str, ResourceGroupSource, bool], None],
+            on_finish: Callable[[str, str, ResourceGroupSource, bool, bool], None],
             project: Project,
             saving_source_would_create_cycle_func: Callable[[ResourceGroupSource], bool],
             initial_url_pattern: str='',
@@ -59,6 +59,7 @@ class NewGroupDialog:
         self._project = project
         self._on_finish = on_finish
         self._saving_source_would_create_cycle_func = saving_source_would_create_cycle_func
+        self._is_edit = is_edit
         
         # Show progress dialog in advance if will need to load all project URLs
         try:
@@ -91,9 +92,16 @@ class NewGroupDialog:
             flag=wx.EXPAND|preview_box_flags,
             border=preview_box_border)
         
-        self._options_sizer = self._create_advanced_options(dialog, initial_do_not_download)
+        if not is_edit:
+            new_options_sizer = self._create_new_options(dialog)
+            content_sizer.Add(
+                new_options_sizer,
+                flag=wx.EXPAND|wx.TOP,
+                border=_ABOVE_OPTIONS_PADDING)
+        
+        self._advanced_options_sizer = self._create_advanced_options(dialog, initial_do_not_download)
         content_sizer.Add(
-            self._options_sizer,
+            self._advanced_options_sizer,
             flag=wx.EXPAND|wx.TOP,
             border=_ABOVE_OPTIONS_PADDING)
         
@@ -237,6 +245,28 @@ class NewGroupDialog:
         content_sizer.Add(self.url_list, proportion=1, flag=wx.EXPAND)
         
         return content_sizer
+    
+    def _create_new_options(self, parent: wx.Window) -> wx.StaticBoxSizer:
+        options_sizer = wx.StaticBoxSizer(wx.VERTICAL, parent, label='New Group Options')
+        options_sizer.Add(
+            wrap_static_box_sizer_child(
+                self._create_new_options_content(
+                    options_sizer.GetStaticBox())),
+            flag=wx.EXPAND)
+        return options_sizer
+    
+    def _create_new_options_content(self, parent: wx.Window) -> wx.Sizer:
+        options_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        self._download_immediately_checkbox = wx.CheckBox(parent,
+            label='Download Group Immediately',
+            name='cr-new-group-dialog__download-immediately-checkbox')
+        self._download_immediately_checkbox.Value = False
+        options_sizer.Add(self._download_immediately_checkbox,
+            flag=wx.BOTTOM,
+            border=_FORM_LABEL_INPUT_SPACING)
+        
+        return options_sizer
     
     def _create_advanced_options(self, parent: wx.Window, *args, **kwargs) -> wx.StaticBoxSizer:
         options_sizer = wx.StaticBoxSizer(wx.VERTICAL, parent, label='Advanced Options')
@@ -455,7 +485,13 @@ class NewGroupDialog:
             assert wx.ID_OK == choice
             return
         do_not_download = self.do_not_download_checkbox.Value
-        self._on_finish(name, url_pattern, source, do_not_download)
+        if self._is_edit:
+            download_immediately = False
+        else:
+            download_immediately = self._download_immediately_checkbox.Value
+        self._on_finish(
+            name, url_pattern, source, do_not_download,
+            download_immediately)
         
         self.dialog.Destroy()
     
@@ -465,7 +501,7 @@ class NewGroupDialog:
     
     @fg_affinity
     def _on_options_toggle(self) -> None:
-        options = self._options_sizer.GetStaticBox()
+        options = self._advanced_options_sizer.GetStaticBox()
         if options.Shown:
             # Hide
             self._options_button.Label = _OPTIONS_NOT_SHOWN_LABEL

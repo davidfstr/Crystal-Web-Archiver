@@ -1,4 +1,4 @@
-from crystal.url_input import UrlCleaner
+from crystal.url_input import cleaned_url_is_at_site_root, UrlCleaner
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.wx_bind import bind
@@ -6,7 +6,7 @@ from crystal.util.wx_dialog import (
     CreateButtonSizer, position_dialog_initially, ShowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
-from crystal.util.xos import is_wx_gtk
+from crystal.util.xos import is_linux, is_wx_gtk, is_windows
 from crystal.util.xthreading import fg_affinity, fg_call_later
 import os
 from typing import Callable, Literal, Optional, Tuple, Union
@@ -26,7 +26,7 @@ ChangePrefixCommand = Union[
 _WINDOW_INNER_PADDING = 10
 _FORM_LABEL_INPUT_SPACING = 5
 _FORM_ROW_SPACING = 10
-_ABOVE_OPTIONS_PADDING = 10
+_BESIDE_OPTIONS_PADDING = 10
 
 _OPTIONS_SHOWN_LABEL = 'Basic Options'
 _OPTIONS_NOT_SHOWN_LABEL = 'Advanced Options'
@@ -36,18 +36,23 @@ class NewRootUrlDialog:
     _ID_SET_DOMAIN_PREFIX = 101
     _ID_SET_DIRECTORY_PREFIX = 102
     
+    _ID_DOWNLOAD_IMMEDIATELY = 111
+    _ID_CREATE_GROUP = 112
+    
     _INITIAL_URL_WIDTH = 400  # in pixels
     _FIELD_TO_SPINNER_MARGIN = 5
     
     # NOTE: Only changed when tests are running
     _last_opened: 'Optional[NewRootUrlDialog]'=None
     
-    # TODO: Privatize these fields
-    url_field: wx.TextCtrl
-    name_field: wx.TextCtrl
-    ok_button: wx.Button
-    cancel_button: wx.Button
+    _url_field: wx.TextCtrl
+    _name_field: wx.TextCtrl
+    _ok_button: wx.Button
+    _cancel_button: wx.Button
     _options_button: wx.Button
+    
+    _download_immediately_checkbox: wx.CheckBox
+    _create_group_checkbox: wx.CheckBox
     
     _set_as_default_domain_checkbox: wx.CheckBox
     _set_as_default_directory_checkbox: wx.CheckBox
@@ -56,7 +61,7 @@ class NewRootUrlDialog:
     
     def __init__(self,
             parent: wx.Window,
-            on_finish: Callable[[str, str, ChangePrefixCommand], None],
+            on_finish: Callable[[str, str, ChangePrefixCommand, bool, bool], None],
             url_exists_func: Callable[[str], bool],
             initial_url: str='',
             initial_name: str='',
@@ -101,16 +106,26 @@ class NewRootUrlDialog:
             flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         
-        self._options_sizer = self._create_advanced_options(
+        if not is_edit:
+            new_options_sizer = self._create_new_options(dialog)
+            dialog_sizer.Add(
+                new_options_sizer,
+                flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM,
+                border=self._assert_same(
+                    _WINDOW_INNER_PADDING,  # wx.LEFT|wx.RIGHT
+                    _BESIDE_OPTIONS_PADDING,  # wx.BOTTOM
+                ))
+        
+        self._advanced_options_sizer = self._create_advanced_options(
             dialog,
             initial_set_as_default_domain, initial_set_as_default_directory,
             allow_set_as_default_domain_or_directory)
         dialog_sizer.Add(
-            self._options_sizer,
-            flag=wx.EXPAND|wx.TOP|wx.LEFT|wx.RIGHT|wx.BOTTOM,
+            self._advanced_options_sizer,
+            flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM,
             border=self._assert_same(
-                _ABOVE_OPTIONS_PADDING,  # wx.TOP
-                _WINDOW_INNER_PADDING,  # wx.LEFT|wx.RIGHT|wx.BOTTOM
+                _WINDOW_INNER_PADDING,  # wx.LEFT|wx.RIGHT
+                _BESIDE_OPTIONS_PADDING,  # wx.BOTTOM
             ))
     
         dialog_sizer.Add(
@@ -123,20 +138,20 @@ class NewRootUrlDialog:
         if not fields_hide_hint_when_focused():
             # Initialize focus
             if not is_edit:
-                self.url_field.SetFocus()
+                self._url_field.SetFocus()
             else:
-                self.name_field.SetFocus()
+                self._name_field.SetFocus()
         
         position_dialog_initially(dialog)
         # TODO: Verify that the wxGTK-specific logic here is actually necessary
         if not is_wx_gtk():
             dialog.Fit()
-            self._on_options_toggle()  # collapse options initially
+            self._on_advanced_options_toggle()  # collapse options initially
             dialog.Show(True)
         else:
             dialog.Show(True)
             dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
-            self._on_options_toggle()  # collapse options initially
+            self._on_advanced_options_toggle()  # collapse options initially
         
         dialog.MinSize = dialog.Size
         # TODO: Clamp height to fixed value, but still allow
@@ -164,19 +179,19 @@ class NewRootUrlDialog:
             url_field_and_spinner = wx.BoxSizer(wx.HORIZONTAL)
             spinner_diameter: int
             if True:
-                self.url_field = wx.TextCtrl(
+                self._url_field = wx.TextCtrl(
                     parent, value=initial_url,
                     size=(self._INITIAL_URL_WIDTH, wx.DefaultCoord),
                     name='cr-new-root-url-dialog__url-field')
-                self.url_field.Hint = 'https://example.com/'
-                self.url_field.SetSelection(-1, -1)  # select all upon focus
-                self.url_field.Enabled = not is_edit
-                bind(self.url_field, wx.EVT_TEXT, self._update_ok_enabled)
-                bind(self.url_field, wx.EVT_SET_FOCUS, self._on_url_field_focus)
-                bind(self.url_field, wx.EVT_KILL_FOCUS, self._on_url_field_blur)
-                url_field_and_spinner.Add(self.url_field, proportion=1, flag=wx.EXPAND)
+                self._url_field.Hint = 'https://example.com/'
+                self._url_field.SetSelection(-1, -1)  # select all upon focus
+                self._url_field.Enabled = not is_edit
+                bind(self._url_field, wx.EVT_TEXT, self._on_url_field_changed)
+                bind(self._url_field, wx.EVT_SET_FOCUS, self._on_url_field_focus)
+                bind(self._url_field, wx.EVT_KILL_FOCUS, self._on_url_field_blur)
+                url_field_and_spinner.Add(self._url_field, proportion=1, flag=wx.EXPAND)
                 
-                spinner_diameter = self.url_field.Size.Height
+                spinner_diameter = self._url_field.Size.Height
                 self.url_cleaner_spinner = wx.ActivityIndicator(
                     parent,
                     size=wx.Size(spinner_diameter, spinner_diameter),
@@ -192,12 +207,12 @@ class NewRootUrlDialog:
             
             name_field_and_space = wx.BoxSizer(wx.HORIZONTAL)
             if True:
-                self.name_field = wx.TextCtrl(
+                self._name_field = wx.TextCtrl(
                     parent, value=initial_name,
                     name='cr-new-root-url-dialog__name-field')
-                self.name_field.Hint = 'Home'
-                self.name_field.SetSelection(-1, -1)  # select all upon focus
-                name_field_and_space.Add(self.name_field, proportion=1, flag=wx.EXPAND)
+                self._name_field.Hint = 'Home'
+                self._name_field.SetSelection(-1, -1)  # select all upon focus
+                name_field_and_space.Add(self._name_field, proportion=1, flag=wx.EXPAND)
                 
                 #name_field_and_space.Add(
                 #    wx.Size(spinner_diameter, spinner_diameter),
@@ -206,6 +221,69 @@ class NewRootUrlDialog:
             fields_sizer.Add(name_field_and_space, flag=wx.EXPAND)
         
         return fields_sizer
+    
+    def _create_new_options(self, parent: wx.Window) -> wx.StaticBoxSizer:
+        options_sizer = wx.StaticBoxSizer(wx.VERTICAL, parent, label='New URL Options')
+        options_sizer.Add(
+            wrap_static_box_sizer_child(
+                self._create_new_options_content(
+                    options_sizer.GetStaticBox())),
+            flag=wx.EXPAND)
+        return options_sizer
+    
+    def _create_new_options_content(self, parent: wx.Window) -> wx.Sizer:
+        options_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        self._download_immediately_checkbox = wx.CheckBox(parent,
+            id=self._ID_DOWNLOAD_IMMEDIATELY,
+            label='Download Immediately',
+            name='cr-new-root-url-dialog__download-immediately-checkbox')
+        self._download_immediately_checkbox.Value = True
+        options_sizer.Add(self._download_immediately_checkbox,
+            flag=wx.BOTTOM,
+            border=_FORM_LABEL_INPUT_SPACING)
+        
+        self._create_group_checkbox = wx.CheckBox(parent,
+            id=self._ID_CREATE_GROUP,
+            label='Create Group to Download Entire Site',
+            name='cr-new-root-url-dialog__create-group-checkbox')
+        self._create_group_checkbox.Value = False
+        options_sizer.Add(self._create_group_checkbox,
+            flag=wx.BOTTOM,
+            border=5)
+        
+        only_simple_sites_label = wx.StaticText(parent, label='')
+        only_simple_sites_label.ForegroundColour = \
+            wx.Colour(102, 102, 102)  # gray
+        only_simple_sites_label.Font = only_simple_sites_label.Font.MakeSmaller()
+        # NOTE: Underline formatting is not supported on Windows,
+        #       even when using GenStaticText as an alternative to wx.StaticText
+        only_simple_sites_label.SetLabelMarkup(
+            'Only recommended for downloading <u>simple sites</u>')
+        # NOTE: Altering the label's cursor on wxGTK also seems to set
+        #       the cursor of its enclosing Sizer as a side effect,
+        #       which is confusing. So don't set any cursor on wxGTK.
+        if not is_wx_gtk():
+            only_simple_sites_label.Cursor = wx.Cursor(wx.CURSOR_QUESTION_ARROW)
+        only_simple_sites_label.ToolTip = (
+            'A simple website is created by a single person only, '
+            'may contain text and images but not video, '
+            'and does not requiring logging in to view its content.'
+        )
+        options_sizer.Add(only_simple_sites_label,
+            flag=wx.LEFT,
+            border=(
+                17 if is_windows() else
+                24 if is_linux() else
+                20  # macOS
+            ))
+        
+        bind(parent, wx.EVT_CHECKBOX, self._on_checkbox)
+        
+        self._update_create_group_enabled()
+        self._update_download_immediately_label()
+        
+        return options_sizer
     
     def _create_advanced_options(self, parent: wx.Window, *args, **kwargs) -> wx.StaticBoxSizer:
         options_sizer = wx.StaticBoxSizer(wx.VERTICAL, parent, label='Advanced Options')
@@ -261,8 +339,8 @@ class NewRootUrlDialog:
         button_sizer.AddStretchSpacer()
         button_sizer.Add(CreateButtonSizer(parent, ok_button_id, wx.ID_CANCEL), flag=wx.CENTER)
         
-        self.ok_button = parent.FindWindow(id=ok_button_id)
-        self.cancel_button = parent.FindWindow(id=wx.ID_CANCEL)
+        self._ok_button = parent.FindWindow(id=ok_button_id)
+        self._cancel_button = parent.FindWindow(id=wx.ID_CANCEL)
         
         return button_sizer
     
@@ -292,15 +370,20 @@ class NewRootUrlDialog:
             return
         
         self._last_cleaned_url = cleaned_url
-        if self.url_field.Value != cleaned_url:
-            self.url_field.Value = cleaned_url
+        if self._url_field.Value != cleaned_url:
+            self._url_field.Value = cleaned_url
     
     # === Events ===
+    
+    @fg_affinity
+    def _on_url_field_changed(self, event=None) -> None:
+        self._update_create_group_enabled()
+        self._update_ok_enabled()
     
     # NOTE: Focus event can be called multiple times without an intermediate blur event
     @fg_affinity
     def _on_url_field_focus(self, event: wx.FocusEvent) -> None:
-        # NOTE: Cannot use url_field.HasFocus() because doesn't work in automated tests
+        # NOTE: Cannot use _url_field.HasFocus() because doesn't work in automated tests
         if self._url_field_focused:
             # Already did focus action
             return
@@ -310,7 +393,7 @@ class NewRootUrlDialog:
         # stop cleaning any old URL input
         @capture_crashes_to_stderr  # no good location in UI to route crashes too
         def fg_task() -> None:
-            # NOTE: Cannot use url_field.HasFocus() because doesn't work in automated tests
+            # NOTE: Cannot use _url_field.HasFocus() because doesn't work in automated tests
             if not self._url_field_focused:
                 return
             
@@ -336,7 +419,7 @@ class NewRootUrlDialog:
             return
         
         # Start cleaning the new URL input
-        url_input = self.url_field.Value
+        url_input = self._url_field.Value
         if url_input == self._last_cleaned_url:
             # URL is already clean
             pass
@@ -365,12 +448,14 @@ class NewRootUrlDialog:
         elif btn_id == wx.ID_CANCEL:
             self._on_cancel(event)
         elif btn_id == wx.ID_MORE:
-            self._on_options_toggle()
+            self._on_advanced_options_toggle()
     
     @fg_affinity
     def _on_checkbox(self, event: wx.CommandEvent) -> None:
         checkbox_id = event.GetEventObject().GetId()
-        if checkbox_id == self._ID_SET_DOMAIN_PREFIX:
+        if checkbox_id == self._ID_CREATE_GROUP:
+            self._update_download_immediately_label()
+        elif checkbox_id == self._ID_SET_DOMAIN_PREFIX:
             if self._set_as_default_domain_checkbox.Value:
                 self._set_as_default_directory_checkbox.Value = False
         elif checkbox_id == self._ID_SET_DIRECTORY_PREFIX:
@@ -388,16 +473,16 @@ class NewRootUrlDialog:
         
         # If URL input is being cleaned, wait for it to finish before continuing
         if self._url_cleaner is not None:
-            self.url_field.Enabled = False
-            self.name_field.Enabled = False
-            self.ok_button.Enabled = False
-            assert self.cancel_button.Enabled == True
+            self._url_field.Enabled = False
+            self._name_field.Enabled = False
+            self._ok_button.Enabled = False
+            assert self._cancel_button.Enabled == True
             
             self._was_ok_pressed = True
             return
         
-        name = self.name_field.Value
-        url = self.url_field.Value
+        name = self._name_field.Value
+        url = self._url_field.Value
         if not self._is_edit and self._url_exists_func(url):
             dialog = wx.MessageDialog(
                 self.dialog,
@@ -410,18 +495,26 @@ class NewRootUrlDialog:
             choice = ShowModal(dialog)
             assert wx.ID_OK == choice
             
-            self.url_field.Enabled = True
-            self.name_field.Enabled = True
-            self.ok_button.Enabled = True
-            assert self.cancel_button.Enabled == True
+            self._url_field.Enabled = True
+            self._name_field.Enabled = True
+            self._ok_button.Enabled = True
+            assert self._cancel_button.Enabled == True
             return
-        if self._set_as_default_domain_checkbox.IsChecked():
+        if self._set_as_default_domain_checkbox.Value:
             change_prefix_command = ('domain', url)  # type: ChangePrefixCommand
-        elif self._set_as_default_directory_checkbox.IsChecked():
+        elif self._set_as_default_directory_checkbox.Value:
             change_prefix_command = ('directory', url)
         else:
             change_prefix_command = None if self._did_own_prefix else Ellipsis
-        self._on_finish(name, url, change_prefix_command)
+        if self._is_edit:
+            download_immediately = False
+            create_group = False
+        else:
+            download_immediately = self._download_immediately_checkbox.Value
+            create_group = self._create_group_checkbox.Value
+        self._on_finish(
+            name, url, change_prefix_command,
+            download_immediately, create_group)
         
         self._destroy()
     
@@ -435,13 +528,13 @@ class NewRootUrlDialog:
         self._destroy()
     
     @fg_affinity
-    def _on_options_toggle(self) -> None:
-        options = self._options_sizer.GetStaticBox()
+    def _on_advanced_options_toggle(self) -> None:
+        options = self._advanced_options_sizer.GetStaticBox()
         if options.Shown:
             # Hide
             self._options_button.Label = _OPTIONS_NOT_SHOWN_LABEL
             
-            options_height = options.Size.Height + _ABOVE_OPTIONS_PADDING
+            options_height = options.Size.Height + _BESIDE_OPTIONS_PADDING
             options.Shown = False
             self.dialog.SetSize(
                 x=wx.DefaultCoord,
@@ -454,7 +547,7 @@ class NewRootUrlDialog:
             self._options_button.Label = _OPTIONS_SHOWN_LABEL
             
             options.Shown = True
-            options_height = options.Size.Height + _ABOVE_OPTIONS_PADDING
+            options_height = options.Size.Height + _BESIDE_OPTIONS_PADDING
             self.dialog.SetSize(
                 x=wx.DefaultCoord,
                 y=wx.DefaultCoord,
@@ -473,8 +566,24 @@ class NewRootUrlDialog:
     
     # === Updates ===
     
-    def _update_ok_enabled(self, event=None) -> None:
-        self.ok_button.Enabled = (self.url_field.Value != '')
+    def _update_create_group_enabled(self) -> None:
+        url = self._url_field.Value
+        self._create_group_checkbox.Enabled = (
+            url == '' or cleaned_url_is_at_site_root(url)
+        )
+        
+        self._update_download_immediately_label()
+    
+    def _update_download_immediately_label(self) -> None:
+        self._download_immediately_checkbox.Label = (
+            'Download Site Immediately' if (
+                self._create_group_checkbox.Enabled and
+                self._create_group_checkbox.Value
+            ) else 'Download URL Immediately'
+        )
+    
+    def _update_ok_enabled(self) -> None:
+        self._ok_button.Enabled = (self._url_field.Value != '')
 
 
 def fields_hide_hint_when_focused() -> bool:

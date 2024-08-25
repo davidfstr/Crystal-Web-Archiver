@@ -6,18 +6,14 @@ import crystal.task
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_sleep
-from crystal.tests.util.server import served_project
+from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
-from crystal.util.bulkheads import capture_crashes_to_stderr
-from crystal.util.xthreading import bg_call_later
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import io
 import os
 import tempfile
 from textwrap import dedent
-from typing import List
 from unittest import skip
 from unittest.mock import patch
 
@@ -439,74 +435,6 @@ async def test_can_download_empty_group() -> None:
                 click_button(mw.download_button)
                 await wait_for(lambda: DownloadResourceGroupTaskSpy.finish_call_count >= 1 or None)
                 assert 1 == DownloadResourceGroupTaskSpy.finish_call_count
-
-
-# ------------------------------------------------------------------------------
-# Utility
-
-class MockHttpServer:
-    def __init__(self, routes) -> None:
-        self.requested_paths = []  # type: List[str]
-        
-        mock_server = self  # capture
-        class RequestHandler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # override
-                mock_server.requested_paths.append(self.path)
-                
-                # Look for static route
-                route = routes.get(self.path)
-                if route is not None:
-                    self._send_route_response(route)
-                    return
-                
-                # Look for dynamic route
-                for (path_pattern, route) in routes.items():
-                    if not callable(path_pattern):
-                        continue
-                    if not path_pattern(self.path):
-                        continue
-                    self._send_route_response(route)
-                    return
-                
-                self.send_response(404)
-                self.end_headers()
-                return
-            
-            def _send_route_response(self, route) -> None:
-                self.send_response(route['status_code'])
-                for (k, v) in route['headers']:
-                    self.send_header(k, v)
-                self.end_headers()
-                
-                content = route['content']
-                if callable(content):
-                    content = content(self.path)
-                assert isinstance(content, bytes)
-                self.wfile.write(content)
-        
-        self._port = 2798  # CRYT on telephone keypad
-        address = ('', self._port)
-        self._server = HTTPServer(address, RequestHandler)
-        
-        @capture_crashes_to_stderr
-        def bg_task() -> None:
-            try:
-                self._server.serve_forever()
-            finally:
-                self._server.server_close()
-        bg_call_later(bg_task, daemon=True)
-    
-    def get_url(self, path: str) -> str:
-        return f'http://localhost:{self._port}' + path
-    
-    def close(self) -> None:
-        self._server.shutdown()
-    
-    def __enter__(self) -> 'MockHttpServer':
-        return self
-    
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
-        self.close()
 
 
 # ------------------------------------------------------------------------------

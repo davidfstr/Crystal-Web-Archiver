@@ -74,6 +74,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     
                     nud.name_field.Value = 'Home'
                     nud.url_field.Value = home_url
+                    nud.do_not_download_immediately()
                     nud.do_not_set_default_url_prefix()
                     await nud.ok()
                     home_ti = root_ti.GetFirstChild()
@@ -390,6 +391,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_download_immediately()
                 nud.do_not_set_default_url_prefix()
                 await nud.ok()
                 home_ti = root_ti.GetFirstChild()
@@ -531,6 +533,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = target_root_resource_name
                 nud.url_field.Value = target_url
+                nud.do_not_download_immediately()
                 nud.do_not_set_default_url_prefix()
                 await nud.ok()
                 
@@ -591,6 +594,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                 nud = await NewRootUrlDialog.wait_for()
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_download_immediately()
                 await nud.ok()
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None  # entity was created
@@ -705,6 +709,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                     nud = await NewRootUrlDialog.wait_for()
                     nud.name_field.Value = 'Home'
                     nud.url_field.Value = home_url
+                    nud.do_not_download_immediately()
                     nud.do_not_set_default_url_prefix()
                     await nud.ok()
                     home_ti = root_ti.GetFirstChild()
@@ -814,12 +819,14 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                     nud = await NewRootUrlDialog.wait_for()
                     nud.name_field.Value = 'Home'
                     nud.url_field.Value = home_url
+                    nud.do_not_download_immediately()
                     await nud.ok()
                     
                     click_button(mw.new_root_url_button)
                     nud = await NewRootUrlDialog.wait_for()
                     nud.name_field.Value = 'Comic #1'
                     nud.url_field.Value = comic1_url
+                    nud.do_not_download_immediately()
                     await nud.ok()
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -981,6 +988,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 nud = await NewRootUrlDialog.wait_for()
                 
                 nud.url_field.Value = home_url
+                nud.do_not_download_immediately()
                 nud.do_not_set_default_url_prefix()
                 await nud.ok()
                 home_ti = root_ti.GetFirstChild()

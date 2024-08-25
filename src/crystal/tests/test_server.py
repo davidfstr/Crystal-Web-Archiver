@@ -55,6 +55,7 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
                 
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_download_immediately()
                 await nud.ok()
                 (home_ti,) = root_ti.Children
             

@@ -1,12 +1,14 @@
+from contextlib import contextmanager
 from crystal.model import Project, Resource, RootResource, ResourceGroup
 from crystal.tests.util.asserts import assertEqual
-from crystal.tests.util.controls import click_button, TreeItem
-from crystal.tests.util.server import served_project
+from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
+from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
     tree_item_has_no_children_condition,
+    tree_has_no_children_condition,
     wait_for,
 )
 from crystal.tests.util.windows import (
@@ -15,7 +17,7 @@ from crystal.tests.util.windows import (
 from crystal.tests.util.xurlparse import urlpatternparse
 from crystal.util.xos import is_windows
 import re
-from typing import Optional
+from typing import Iterator, Optional, Tuple
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -44,6 +46,7 @@ async def test_can_create_group_with_source(
                 
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_download_immediately()
                 nud.do_not_set_default_url_prefix()
                 await nud.ok()
             
@@ -186,6 +189,7 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 
                 nud.name_field.Value = 'Home'
                 nud.url_field.Value = home_url
+                nud.do_not_download_immediately()
                 await nud.ok()
                 (home_ti,) = root_ti.Children
             
@@ -529,6 +533,97 @@ async def test_given_urls_loaded_and_new_url_created_when_show_new_group_dialog_
                 assert len(member_urls) >= 2  # contains last comic too
                 
                 await ngd.cancel()
+
+
+# === Test: New Group Options ===
+
+async def test_when_add_group_then_does_not_download_immediately_by_default() -> None:
+    with _served_simple_site_with_group() as (home_url, comic_pattern):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            rr = RootResource(project, 'Home', Resource(project, home_url))
+            rr.download()
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            assert mw.new_group_button.Enabled
+            click_button(mw.new_group_button)
+            ngd = await NewGroupDialog.wait_for()
+            
+            ngd.pattern_field.Value = comic_pattern
+            ngd.name_field.Value = 'Comic'
+            await ngd.ok()
+            
+            # Ensure did NOT start downloading
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            comic_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)
+            assert tree_has_no_children_condition(mw.task_tree)()
+
+
+async def test_when_add_group_can_download_group_immediately_with_1_extra_click() -> None:
+    with _served_simple_site_with_group() as (home_url, comic_pattern):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            rr = RootResource(project, 'Home', Resource(project, home_url))
+            rr.download()
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            assert mw.new_group_button.Enabled
+            click_button(mw.new_group_button)
+            ngd = await NewGroupDialog.wait_for()
+            
+            ngd.pattern_field.Value = comic_pattern
+            ngd.name_field.Value = 'Comic'
+            click_checkbox(ngd.download_immediately_checkbox)  # extra click #1
+            await ngd.ok()
+            
+            # Ensure started downloading
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            comic_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+
+
+async def test_when_edit_group_then_new_group_options_not_shown() -> None:
+    with _served_simple_site_with_group() as (_, comic_pattern):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+            project = Project._last_opened_project
+            assert project is not None
+            
+            rg = ResourceGroup(project, 'Comic', comic_pattern)
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            comic_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)
+            comic_ti.SelectItem()
+            
+            assert mw.edit_button.Enabled
+            click_button(mw.edit_button)
+            ngd = await NewGroupDialog.wait_for()
+            
+            assert not ngd.new_options_shown
+            await ngd.cancel()
+
+
+@contextmanager
+def _served_simple_site_with_group() -> Iterator[Tuple[str, str]]:
+    server = MockHttpServer({
+        '/': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content='<a href="/assets/image.png">Comic 1</a>'.encode('utf-8')
+        ),
+        '/assets/image.png': dict(
+            status_code=200,
+            headers=[('Content-Type', 'image/png')],
+            content=b''
+        )
+    })
+    with server:
+        home_url = server.get_url('/')
+        comic_pattern = server.get_url('/**')
+        
+        yield (home_url, comic_pattern)
 
 
 # === Utility ===
