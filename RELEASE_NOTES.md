@@ -16,6 +16,8 @@ Release Notes ⋮
     * New URLs are downloaded immediately by default.
     * Can immediately download the site for a newly created URL
       with 1 extra click.
+    * Simpler language is used to explain the symbols used in patterns
+      for creating new groups.
 
 * Minor fixes
     * Fix closing a project to no longer have a couple of heap-use-after-free

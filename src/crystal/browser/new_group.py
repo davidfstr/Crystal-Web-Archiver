@@ -149,7 +149,7 @@ class NewGroupDialog:
         self.pattern_field.SetSelection(-1, -1)  # select all upon focus
         self.pattern_field.Enabled = not is_edit
         pattern_field_sizer.Add(self.pattern_field, flag=wx.EXPAND)
-        pattern_field_sizer.Add(wx.StaticText(parent, label='# = digit, @ = alpha, * = any nonslash, ** = any'), flag=wx.EXPAND)
+        pattern_field_sizer.Add(wx.StaticText(parent, label='# = numbers, @ = letters, * = anything but /, ** = anything'), flag=wx.EXPAND)
         
         pattern_label = wx.StaticText(parent, label='URL Pattern:', style=wx.ALIGN_RIGHT|wx.ALIGN_TOP)
         pattern_label.Font = pattern_label.Font.Bold()  # mark as required
