@@ -92,7 +92,7 @@ class Action:
                 # Decrease bitmap-to-text spacing on Windows to be reasonable
                 button.SetBitmapMargins((-6, 0))
         # (NOTE: Do NOT set accelerator for the button because it does not
-        #        work on consistently on macOS. Any action added as a button
+        #        work consistently on macOS. Any action added as a button
         #        should also be added as a menuitem too, and we CAN set an
         #        accelerator reliably there.)
         if self._action_func is not None:
