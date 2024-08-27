@@ -225,7 +225,16 @@ class EntityTree(Bulkhead):
     
     @capture_crashes_to_self
     def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
+        selection_was_empty = self.view.selected_node in [None, self.view.root]  # capture
+        
         self.update()
+        
+        if selection_was_empty:
+            # Select the newly-created entity
+            for child in self.root.children:
+                if child.entity == root_resource:
+                    child.view.peer.SelectItem()
+                    break
     
     @capture_crashes_to_self
     # TODO: Do not recommend asserting that a listener method will be called
@@ -238,7 +247,16 @@ class EntityTree(Bulkhead):
     
     @capture_crashes_to_self
     def resource_group_did_instantiate(self, group: ResourceGroup) -> None:
+        selection_was_empty = self.view.selected_node in [None, self.view.root]  # capture
+        
         self.update()
+        
+        if selection_was_empty:
+            # Select the newly-created entity
+            for child in self.root.children:
+                if child.entity == group:
+                    child.view.peer.SelectItem()
+                    break
         
         # Some badges related to the ResourceGroup.do_not_download status
         # may need to be updated

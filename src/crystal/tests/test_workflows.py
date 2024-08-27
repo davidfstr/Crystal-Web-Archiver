@@ -318,18 +318,21 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti is not None
                 
+                feed_group_ti = root_ti.find_child(feed_pattern)
+                
                 # 1. Test cannot add new root resource in read-only project
                 # 2. Test cannot add new resource group in read-only project
-                if not is_windows():
-                    selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                if is_windows():
+                    # Windows will initialize the selection to the first child of the root
+                    assert selected_ti == feed_group_ti
+                else:
                     assert (selected_ti is None) or (selected_ti == root_ti)
                 assert False == mw.new_root_url_button.IsEnabled()
                 assert False == mw.new_group_button.IsEnabled()
                 
                 # Test cannot download/forget existing resource in read-only project
                 if True:
-                    feed_group_ti = root_ti.find_child(feed_pattern)
-                    
                     feed_group_ti.Expand()
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_group_ti))
                     

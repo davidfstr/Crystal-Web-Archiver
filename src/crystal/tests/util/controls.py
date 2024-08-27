@@ -87,6 +87,8 @@ def get_children_of_tree_item(tree: wx.TreeCtrl, tii: wx.TreeItemId) -> List[Tre
 class TreeItem:
     __slots__ = ['tree', 'id']
     
+    _USE_FAST_ID_COMPARISONS = True
+    
     def __init__(self, tree: wx.TreeCtrl, id: wx.TreeItemId) -> None:
         if not id.IsOk():
             raise ValueError('TreeItemId is invalid')
@@ -156,6 +158,10 @@ class TreeItem:
     @property
     def Children(self) -> List[TreeItem]:
         return get_children_of_tree_item(self.tree, self.id)
+    
+    @property
+    def _ItemData(self) -> object:
+        return self.tree.GetItemData(self.id)
     
     # === Entity Tree: Find Child ===
     
@@ -246,15 +252,23 @@ class TreeItem:
     # === Comparison ===
     
     def __eq__(self, other: object) -> bool:
-        if is_windows():
-            # wx.TreeItemId does not support equality comparison on Windows
-            raise ValueError('Cannot compare TreeItems on Windows')
+        if not isinstance(other, TreeItem):
+            return False
+        if not (self.tree == other.tree):
+            return False
+        if TreeItem._USE_FAST_ID_COMPARISONS and not is_windows():
+            # NOTE: wx.TreeItemId does not support equality comparison on Windows
+            return self.id == other.id
         else:
-            return (
-                isinstance(other, TreeItem) and
-                self.tree == other.tree and
-                self.id == other.id
-            )
+            id_data = self._ItemData
+            other_id_data = other._ItemData
+            if id_data is None or other_id_data is None:
+                raise TreeItemsIncomparableError('Cannot compare TreeItems lacking item data')
+            return id_data is other_id_data
+
+
+class TreeItemsIncomparableError(ValueError):
+    pass
 
 
 # ------------------------------------------------------------------------------

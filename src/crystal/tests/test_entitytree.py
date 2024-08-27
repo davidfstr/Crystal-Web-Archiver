@@ -146,15 +146,11 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         project = Project._last_opened_project
         assert project is not None
         
-        rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
-        rr2 = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
-        
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
-        rrn2 = root_ti.find_child(rr2.resource.url, project.default_url_prefix)
         
         # Case: No entities selected
-        assert not rrn.IsSelected()
+        selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+        assert (selected_ti is None) or (selected_ti == root_ti)
         cup_actions = _change_url_prefix_actions_in_top_level_menu(mw)
         assertEqual(
             [
@@ -165,6 +161,12 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
                 cup_actions
             ]
         )
+        
+        rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
+        rr2 = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
+        
+        rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+        rrn2 = root_ti.find_child(rr2.resource.url, project.default_url_prefix)
         
         # Case: URL with path / selected
         rrn.SelectItem()

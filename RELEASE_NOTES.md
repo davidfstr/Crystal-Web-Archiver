@@ -16,6 +16,8 @@ Release Notes ⋮
     * New URLs are downloaded immediately by default.
     * Can immediately download the site for a newly created URL
       with 1 extra click.
+    * Can immediately download a newly created group with 1 extra click.
+    * New URLs and groups in an empty project are selected by default.
     * Simpler language is used to explain the symbols used in patterns
       for creating new groups.
 

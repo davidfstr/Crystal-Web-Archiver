@@ -20,7 +20,6 @@ from crystal.tests.util.wait import (
 )
 from crystal.tests.util.windows import NewRootUrlDialog, EntityTree, OpenOrCreateDialog
 from crystal.util.wx_window import SetFocus
-from crystal.util.xos import is_windows
 import crystal.url_input
 from crystal.url_input import _candidate_urls_from_user_input as EXPAND
 import os
@@ -81,11 +80,10 @@ async def test_can_create_root_url(
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'Undownloaded')
                 assert f'URL: {home_url}' in (home_ti.Tooltip('label') or '')
                 
-                # Currently, an entirely new root URL is NOT selected automatically.
-                # This behavior might be changed in the future.
-                if not is_windows():
-                    selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
-                    assert (selected_ti is None) or (selected_ti == root_ti)
+                # Ensure new root URL is selected automatically,
+                # given that nothing was previously selected
+                selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                assert selected_ti == home_ti
             
             if ensure_revisions_not_deleted:
                 # Download a revision of the root URL
@@ -102,9 +100,8 @@ async def test_can_create_root_url(
                 
                 # Ensure cannot find root URL
                 assert None == root_ti.try_find_child(home_url, project.default_url_prefix)
-                if not is_windows():
-                    selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
-                    assert (selected_ti is None) or (selected_ti == root_ti)
+                selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                assert (selected_ti is None) or (selected_ti == root_ti)
             
             if ensure_revisions_not_deleted:
                 # Recreate the root URL

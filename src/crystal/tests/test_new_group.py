@@ -49,12 +49,17 @@ async def test_can_create_group_with_source(
                 nud.do_not_download_immediately()
                 nud.do_not_set_default_url_prefix()
                 await nud.ok()
+                
+                home_ti = root_ti.find_child(home_url)
             
             # Create a group
             if True:
-                # Ensure nothing selected
-                if not is_windows():
-                    selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                if with_source:
+                    # Ensure source selected
+                    assert selected_ti == home_ti
+                else:
+                    # Ensure nothing selected
                     assert (selected_ti is None) or (selected_ti == root_ti)
                 
                 assert mw.new_group_button.Enabled
@@ -62,15 +67,13 @@ async def test_can_create_group_with_source(
                 ngd = await NewGroupDialog.wait_for()
                 
                 # Ensure prepopulates reasonable information
-                if not is_windows():
-                    assert '' == ngd.pattern_field.Value
-                    assert '' == ngd.name_field.Value
+                if with_source:
+                    assert home_url == ngd.pattern_field.Value
+                    assert 'Home' == ngd.name_field.Value
                     assert None == ngd.source
                 else:
-                    # Windows appears to have some kind of race condition that
-                    # sometimes causes the Home tree item to be selected initially
-                    assert ngd.pattern_field.Value in ['', home_url]
-                    assert ngd.name_field.Value in ['', 'Home']
+                    assert '' == ngd.pattern_field.Value
+                    assert '' == ngd.name_field.Value
                     assert None == ngd.source
                 assert ngd.pattern_field.HasFocus  # default focused field
                 
@@ -98,11 +101,11 @@ async def test_can_create_group_with_source(
                 assert f'{comic_pattern} - Comic' == comic_ti.Text
                 await _assert_tree_item_icon_tooltip_contains(comic_ti, 'Group')
                 
-                # Currently, an entirely new group is NOT selected automatically.
-                # This behavior might be changed in the future.
-                if not is_windows():
+                if not with_source:
+                    # Ensure new group is selected automatically,
+                    # given that nothing was previously selected
                     selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
-                    assert (selected_ti is None) or (selected_ti == root_ti)
+                    assert selected_ti == comic_ti
             
             # Forget group
             if True:
@@ -112,8 +115,12 @@ async def test_can_create_group_with_source(
                 
                 # Ensure cannot find group
                 assert None == root_ti.try_find_child(comic_pattern)
-                if not is_windows():
-                    selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                if with_source and is_windows():
+                    # Windows will retarget the selection to the remaining node at the root
+                    assert selected_ti == home_ti
+                else:
+                    # Other platforms will retarget the selection to nothing
                     assert (selected_ti is None) or (selected_ti == root_ti)
 
 
