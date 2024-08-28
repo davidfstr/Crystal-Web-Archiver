@@ -220,7 +220,7 @@ def first_child_of_tree_item_is_not_loading_condition(
 
 
 def tree_has_children_condition(
-        tree: wx.TreeCtrl, 
+        tree: wx.TreeCtrl,
         ) -> Callable[[], Optional[bool]]:
     return not_condition(tree_has_no_children_condition(tree))
 

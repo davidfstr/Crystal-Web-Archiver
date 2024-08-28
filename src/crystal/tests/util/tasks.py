@@ -45,6 +45,7 @@ async def wait_for_download_to_start_and_finish(
         await wait_for(
             tree_has_children_condition(task_tree),
             timeout=4.0,  # 2.0s isn't long enough for Windows test runners on GitHub Actions
+            message=lambda: f'Timed out waiting for download task to appear',
             stacklevel_extra=(1 + stacklevel_extra),
             screenshot_on_error=not immediate_finish_ok)
     except WaitTimedOut:
