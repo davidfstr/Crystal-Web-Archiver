@@ -126,7 +126,9 @@ async def test_given_embedded_resource_selected_in_entity_tree_when_press_downlo
         assert not comic_image_r.has_any_revisions()
         
         comic_image_r_ti.SelectItem()
-        await mw.click_download_button()
+        await mw.click_download_button(
+            # NOTE: May "finish immediately" because has no embedded subresources
+            immediate_finish_ok=True)
         await wait_for_download_to_start_and_finish(
             mw.task_tree,
             # NOTE: May "finish immediately" because has no embedded subresources
