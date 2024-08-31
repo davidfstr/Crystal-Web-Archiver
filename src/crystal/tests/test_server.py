@@ -47,7 +47,6 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
             # Create a URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 assert root_ti.GetFirstChild() is None  # no entities
                 
                 click_button(mw.new_root_url_button)
@@ -204,7 +203,6 @@ async def serve_and_fetch_xkcd_home_page(mw: MainWindow) -> Tuple[WebPage, str]:
     with redirect_stdout(StringIO()) as captured_stdout:
         # Start server
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-        assert root_ti is not None
         home_ti = root_ti.GetFirstChild()
         assert home_ti is not None
         assert f'{home_url} - Home' == home_ti.Text

@@ -49,7 +49,6 @@ async def test_can_create_root_url(
             # Create root URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 () = root_ti.Children
                 
                 assert mw.new_root_url_button.Enabled
@@ -149,7 +148,6 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
             # Create home URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 () = root_ti.Children
                 
                 assert mw.new_root_url_button.Enabled

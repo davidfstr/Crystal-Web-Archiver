@@ -35,7 +35,6 @@ async def test_can_create_group_with_source(
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            assert root_ti is not None
             () = root_ti.Children
             
             # If will need a source later, create one now
@@ -187,7 +186,6 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             # Create home URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 () = root_ti.Children
                 
                 assert mw.new_root_url_button.Enabled

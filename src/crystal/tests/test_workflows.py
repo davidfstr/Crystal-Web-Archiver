@@ -66,7 +66,6 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 # Test can create root resource
                 if True:
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
                     assert root_ti.GetFirstChild() is None  # no entities
                     
                     click_button(mw.new_root_url_button)
@@ -238,7 +237,6 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     await _undownload_url([atom_feed_url, rss_feed_url], mw, project_dirpath)
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
                     
                     # Create feed item group, with feed group as source
                     if True:
@@ -271,7 +269,6 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 assert False == mw.readonly
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 
                 # Start server
                 home_ti = root_ti.find_child(home_url)
@@ -316,7 +313,6 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 assert True == mw.readonly
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 
                 feed_group_ti = root_ti.find_child(feed_pattern)
                 
@@ -381,7 +377,6 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            assert root_ti is not None
             assert root_ti.GetFirstChild() is None  # no entities
             
             # Download home page
@@ -422,7 +417,6 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 nonlocal home_ti
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None
                 home_ti.SelectItem()
@@ -584,7 +578,6 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            assert root_ti is not None
             assert root_ti.GetFirstChild() is None  # no entities
             
             # Download home page
@@ -699,7 +692,6 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
         with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 assert root_ti.GetFirstChild() is None  # no entities
                 
                 # Download home page
@@ -747,7 +739,6 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 assert False == mw.new_group_button.Enabled
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 
                 # Ensure "Forget" and "Download" are disabled when resource is selected
                 home_ti = root_ti.find_child(home_url)
@@ -829,7 +820,6 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                     await nud.ok()
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
                     (home_ti, comic1_ti) = root_ti.Children
                     
                     # Ensure resource status badge says URL is undownloaded
@@ -980,7 +970,6 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
             # 2. Ensure unnamed root resource at root of Entity Tree has OK title
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 assert root_ti.GetFirstChild() is None  # no entities
                 
                 click_button(mw.new_root_url_button)

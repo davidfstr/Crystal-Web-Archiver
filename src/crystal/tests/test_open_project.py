@@ -254,7 +254,6 @@ async def test_given_on_ssd_when_resource_group_node_expanded_then_only_new_reso
                     assert comic_group is not None
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
                     
                     (comic_group_ti,) = [
                         child for child in root_ti.Children
@@ -287,7 +286,6 @@ async def test_given_not_on_ssd_when_resource_group_node_expanded_then_all_proje
                     assert comic_group is not None
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
                     
                     (comic_group_ti,) = [
                         child for child in root_ti.Children

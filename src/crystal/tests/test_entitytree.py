@@ -327,7 +327,6 @@ async def test_rn_with_error_child_retains_child_when_new_entity_added() -> None
             assert project is not None
             
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            assert root_ti is not None
             
             RootResource(project, 'Domain 1', Resource(project, 'https://nosuchdomain1.com/'))
             (rrn1_ti,) = root_ti.Children
@@ -401,7 +400,6 @@ async def test_given_rr_is_not_downloaded_and_project_is_read_only_when_expand_r
             # Reopen project as read-only
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 (home_ti,) = root_ti.Children
                 
                 # Expand RootResourceNode and ensure it has an _ErrorNode child
@@ -449,7 +447,6 @@ async def test_given_rr_is_downloaded_and_is_error_when_expand_rrn_then_shows_er
                 ) == rr.error_dict
             
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            assert root_ti is not None
             (home_ti,) = root_ti.Children
             
             # Expand RootResourceNode and ensure it has an _ErrorNode child
@@ -491,7 +488,6 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
                 assert project is not None
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 (home_ti,) = root_ti.Children
                 
                 # Expand RootResourceNode and ensure it has an _ErrorNode child
@@ -526,7 +522,6 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
                 assert project is not None
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 (home_ti,) = root_ti.Children
                 
                 # Expand RootResourceNode and ensure it now lists the links in
@@ -607,7 +602,6 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
             ResourceGroup(project, 'Comic', comic_pattern)
             
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            assert root_ti is not None
             
             comic_group_ti = root_ti.GetFirstChild()
             assert comic_group_ti is not None
@@ -689,7 +683,6 @@ async def test_given_more_node_with_large_item_count_then_displays_count_with_co
                 ResourceGroup(project, 'Comic', comic_pattern)
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 
                 comic_group_ti = root_ti.GetFirstChild()
                 assert comic_group_ti is not None

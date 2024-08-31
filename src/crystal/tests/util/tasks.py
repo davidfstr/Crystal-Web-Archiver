@@ -121,7 +121,6 @@ async def wait_for_download_to_start_and_finish(
 def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], Optional[str]]:
     def first_task_title():
         root_ti = TreeItem.GetRootItem(task_tree)
-        assert root_ti is not None
         first_task_ti = root_ti.GetFirstChild()
         if first_task_ti is None:
             return None  # done

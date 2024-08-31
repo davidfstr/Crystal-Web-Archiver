@@ -31,7 +31,6 @@ async def test_given_project_database_not_on_ssd_when_expanding_first_resource_g
                 assert comic_group is not None
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 
                 (comic_group_ti,) = [
                     child for child in root_ti.Children
@@ -78,7 +77,6 @@ async def test_given_project_database_not_on_ssd_given_resource_group_node_selec
                 feed_group = ResourceGroup(project, 'Feed', feed_pattern)
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 
                 (feed_group_ti,) = [
                     child for child in root_ti.Children
@@ -144,7 +142,6 @@ async def test_given_project_database_on_ssd_when_expanding_any_resource_group_n
                 assert comic_group is not None
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 
                 (comic_group_ti,) = [
                     child for child in root_ti.Children
@@ -188,7 +185,6 @@ async def test_given_project_database_on_ssd_given_resource_group_node_selected_
                 feed_group = ResourceGroup(project, 'Feed', feed_pattern)
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                assert root_ti is not None
                 
                 (feed_group_ti,) = [
                     child for child in root_ti.Children
@@ -248,7 +244,6 @@ async def test_serve_url_never_requires_loading_urls(subtests: SubtestsContext) 
                     assert project is not None
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    assert root_ti is not None
                     
                     (home_ti,) = [
                         child for child in root_ti.Children
