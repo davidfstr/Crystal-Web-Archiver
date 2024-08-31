@@ -387,6 +387,7 @@ class MainWindow:
         """
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
         bind(self.entity_tree.peer, wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
+        self._on_selected_entity_changed()
         
         return self.entity_tree.peer
     
@@ -829,7 +830,7 @@ class MainWindow:
     
     # === Entity Pane: Events ===
     
-    def _on_selected_entity_changed(self, event: wx.TreeEvent) -> None:
+    def _on_selected_entity_changed(self, event: Optional[wx.TreeEvent]=None) -> None:
         selected_entity = self.entity_tree.selected_entity  # cache
         
         readonly = self._readonly  # cache

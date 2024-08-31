@@ -323,11 +323,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 # 1. Test cannot add new root resource in read-only project
                 # 2. Test cannot add new resource group in read-only project
                 selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
-                if is_windows():
-                    # Windows will initialize the selection to the first child of the root
-                    assert selected_ti == feed_group_ti
-                else:
-                    assert (selected_ti is None) or (selected_ti == root_ti)
+                assert selected_ti == feed_group_ti
                 assert False == mw.new_root_url_button.IsEnabled()
                 assert False == mw.new_group_button.IsEnabled()
                 

@@ -86,6 +86,11 @@ class EntityTree(Bulkhead):
         bind(self.peer, wx.EVT_MOTION, self._on_mouse_motion)
         # For tests only
         bind(self.peer, EVT_TREE_ITEM_GETTOOLTIP, self._on_get_tooltip_event)
+        
+        # Select first top-level entity initially, if available
+        root_children = self.root.children
+        if len(root_children) >= 1:
+            root_children[0].view.peer.SelectItem()
     
     # === Bulkhead ===
     

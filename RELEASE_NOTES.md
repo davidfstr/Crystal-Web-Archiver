@@ -18,6 +18,7 @@ Release Notes ⋮
       with 1 extra click.
     * Can immediately download a newly created group with 1 extra click.
     * New URLs and groups in an empty project are selected by default.
+    * When opening a project the first URL or group is selected by default.
     * Simpler language is used to explain the symbols used in patterns
       for creating new groups.
 

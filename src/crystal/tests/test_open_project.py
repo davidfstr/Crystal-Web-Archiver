@@ -210,6 +210,19 @@ async def test_given_project_is_corrupt_when_open_project_then_displays_error_di
 
 # === Test: After Opening Project ===
 
+async def test_given_project_was_just_opened_then_first_entity_selected() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        home_url = 'https://xkcd.com/'
+        
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.find_child(home_url)
+            assert home_ti.IsSelected()
+            
+            # Ensure can view the downloaded site with 1 click
+            assert mw.view_button.Enabled
+
+
 @awith_subtests
 async def test_given_project_was_just_opened_then_no_resources_loaded_except_root_resources(subtests: SubtestsContext) -> None:
     for is_ssd in [False, True]:
