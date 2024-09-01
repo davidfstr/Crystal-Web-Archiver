@@ -476,6 +476,8 @@ class MainWindow:
         """
         Closes this window, disposing any related resources.
         """
+        if not self.project.readonly:
+            self.project.hibernate_tasks()
         
         # Dispose resources created in MainWindow.start_server(), in reverse order
         if self._project_server is not None:

@@ -487,6 +487,31 @@ def _did_launch(
     if parsed_args.serve:
         window.start_server()
     
+    if not project.readonly:
+        def confirm_unhibernate_tasks():
+            from crystal.util.wx_dialog import position_dialog_initially, ShowModal
+            import wx
+            
+            dialog = wx.MessageDialog(
+                # HACK: Uses private field
+                window._frame,
+                message=(
+                    'Downloads were running when this project was last closed. '
+                    'Resume them?'
+                ),
+                caption='Resume Downloads?',
+                style=wx.OK|wx.CANCEL,
+            )
+            dialog.Name = 'cr-resume-downloads'
+            with dialog:
+                dialog.SetOKCancelLabels('Resume', wx.ID_CANCEL)
+                dialog.SetEscapeId(wx.ID_CANCEL)
+                position_dialog_initially(dialog)
+                choice = ShowModal(dialog)
+            should_resume = choice == wx.ID_OK
+            return should_resume
+        project.unhibernate_tasks(confirm_unhibernate_tasks)
+    
     return project
 
 
