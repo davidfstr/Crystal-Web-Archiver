@@ -422,7 +422,7 @@ def _children_marked_as_complete_upon_creation(ordinals: List[int]) -> Iterator[
         (task, created) = super_goc_download_task(*args, **kwargs)
         
         for n in ordinals:
-            if task._resource.url.endswith(f'/https/xkcd.com/{n}/'):
+            if task.resource.url.endswith(f'/https/xkcd.com/{n}/'):
                 _mark_as_complete(task)
                 break
         

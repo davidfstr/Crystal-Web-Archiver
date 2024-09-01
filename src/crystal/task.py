@@ -904,9 +904,6 @@ class DownloadResourceTask(Task):
     # DownloadResourceTask objects
     __slots__ = (
         '_abstract_resource',
-        # TODO: Calculate this property from self._abstract_resource rather
-        #       than storing redundantly in memory.
-        '_resource',
         '_is_embedded',
         '_pbc',
         '_download_body_task',
@@ -927,19 +924,20 @@ class DownloadResourceTask(Task):
         super().__init__(
             title='Downloading: ' + _get_abstract_resource_title(abstract_resource))
         self._abstract_resource = abstract_resource
-        self._resource = resource = abstract_resource.resource
         self._is_embedded = is_embedded
         self._pbc = None  # type: Optional[ProgressBarCalculator]
         
+        resource = abstract_resource.resource  # cache
+        
         self._download_body_task = (
             None
-            if self._resource.already_downloaded_this_session and not needs_result
+            if resource.already_downloaded_this_session and not needs_result
             else resource.create_download_body_task()
         )  # type: Optional[DownloadResourceBodyTask]
         self._parse_links_task = None  # type: Optional[ParseResourceRevisionLinks]
         self._already_downloaded_task = (
             _ALREADY_DOWNLOADED_PLACEHOLDER_TASK
-            if self._resource.already_downloaded_this_session
+            if resource.already_downloaded_this_session
             else None
         )
         
@@ -954,7 +952,7 @@ class DownloadResourceTask(Task):
         # attempting to redownload this resource since they would duplicate
         # the same actions and waste time
         if ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH:
-            self._resource.already_downloaded_this_session = True
+            resource.already_downloaded_this_session = True
         
         # Apply deferred child-complete actions
         t = self._already_downloaded_task
@@ -987,6 +985,12 @@ class DownloadResourceTask(Task):
             self._download_body_task.dispose()
         self._download_body_with_embedded_future = \
             _FUTURE_WITH_TASK_DISPOSED_EXCEPTION  # garbage collect old value
+    
+    # === Properties ===
+    
+    @property
+    def resource(self) -> Resource:
+        return self._abstract_resource.resource
     
     # === Events ===
     
@@ -1023,7 +1027,7 @@ class DownloadResourceTask(Task):
                         pass
                     else:
                         print(
-                            f'*** Unexpected error while downloading: {self._resource.url}',
+                            f'*** Unexpected error while downloading: {self.resource.url}',
                             file=sys.stderr)
                         traceback.print_exc(file=sys.stderr)
                     
@@ -1062,7 +1066,7 @@ class DownloadResourceTask(Task):
                 fg_call_and_wait(lambda: body_revision.delete())
                 
                 # Retry download of the revision
-                redownload_body_task = self._resource.create_download_body_task()
+                redownload_body_task = self.resource.create_download_body_task()
                 self.append_child(redownload_body_task)
                 
                 self._download_body_task = redownload_body_task  # reinterpret
@@ -1073,8 +1077,8 @@ class DownloadResourceTask(Task):
                 def fg_task() -> List[Resource]:
                     embedded_resources = []
                     link_urls_seen = set()
-                    base_url = self._resource.url  # cache
-                    project = self._resource.project  # cache
+                    base_url = self.resource.url  # cache
+                    project = self.resource.project  # cache
                     dnd_groups = [g for g in project.resource_groups if g.do_not_download]  # cache
                     for link in links:
                         if not link.embedded:
@@ -1214,7 +1218,7 @@ class DownloadResourceTask(Task):
         cur_task = self  # type: Optional[Task]
         while cur_task is not None:
             if isinstance(cur_task, DownloadResourceTask):
-                ancestors.append(cur_task._resource)
+                ancestors.append(cur_task.resource)
             cur_task = cur_task.parent
         return ancestors
     
@@ -1225,7 +1229,7 @@ class DownloadResourceTask(Task):
         super().finish()
     
     def __repr__(self) -> str:
-        return f'<DownloadResourceTask for {self._resource.url!r}>'
+        return f'<DownloadResourceTask for {self.resource.url!r}>'
 
 
 class ParseResourceRevisionLinks(Task):
