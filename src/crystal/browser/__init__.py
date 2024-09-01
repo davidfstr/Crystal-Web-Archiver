@@ -467,7 +467,7 @@ class MainWindow:
     def _on_quit(self, event: wx.CommandEvent) -> None:
         if event.Id == wx.ID_EXIT:
             set_is_quitting()
-            self._frame.Close()
+            self._frame.Close()  # will trigger call to _on_close_frame()
         else:
             event.Skip()
     
