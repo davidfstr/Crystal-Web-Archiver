@@ -3516,6 +3516,9 @@ class ResourceGroup(ListenableMixin):
         (__getitem__) for convenience for callers that think in terms of indexes,
         but is only guaranteed to support the interface efficiently for callers
         that access members in a sequential fashion.
+        
+        Raises:
+        * CancelLoadUrls
         """
         if self._members is None:
             if not is_foreground_thread():
