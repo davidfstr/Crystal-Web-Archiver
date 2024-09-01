@@ -9,6 +9,7 @@ from crystal.tests import (
     test_edit_root_url,
     test_entitytree,
     test_file_extension_visibility,
+    test_hibernate,
     test_icons,
     test_install_to_desktop,
     test_load_urls,
@@ -71,6 +72,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_edit_root_url) +
     _test_functions_in_module(test_entitytree) +
     _test_functions_in_module(test_file_extension_visibility) +
+    _test_functions_in_module(test_hibernate) +
     _test_functions_in_module(test_icons) +
     _test_functions_in_module(test_install_to_desktop) +
     _test_functions_in_module(test_load_urls) +

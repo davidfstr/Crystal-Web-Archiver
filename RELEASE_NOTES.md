@@ -13,6 +13,8 @@ Release Notes ⋮
 ### main
 
 * Workflow improvements
+    * Reopening a project resumes any downloads that were in progress
+      when the project was previously closed.
     * New URLs are downloaded immediately by default.
     * Can immediately download the site for a newly created URL
       with 1 extra click.

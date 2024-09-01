@@ -31,7 +31,10 @@ from crystal.util.url_prefix import (
     get_url_domain_prefix_for,
 )
 from crystal.util.wx_bind import bind
-from crystal.util.wx_dialog import set_dialog_or_frame_icon_if_appropriate
+from crystal.util.wx_dialog import (
+    position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
+    ShowModal,
+)
 from crystal.util.xos import (
     is_kde_or_non_gnome, is_linux, is_mac_os, is_windows, mac_version,
 )
@@ -40,6 +43,7 @@ from crystal.util.xthreading import (
 )
 from functools import partial
 import os
+import sqlite3
 import time
 from typing import ContextManager, Iterator, Optional, Union
 import webbrowser
@@ -140,6 +144,8 @@ class MainWindow:
         except:
             raw_frame.Destroy()
             raise
+        
+        self._unhibernate()
         
         # Export reference to self, if running tests
         if tests_are_running():
@@ -477,6 +483,7 @@ class MainWindow:
         """
         Closes this window, disposing any related resources.
         """
+        self._hibernate()
         
         # Dispose resources created in MainWindow.start_server(), in reverse order
         if self._project_server is not None:
@@ -877,6 +884,60 @@ class MainWindow:
                 wx.Colour(254, 254, 254))  # pure white
         
         return self.task_tree.peer
+    
+    # === Task Pane: Other Commands ===
+    
+    @capture_crashes_to_stderr
+    def _hibernate(self) -> None:
+        if self.project.readonly:
+            return
+        
+        try:
+            self.project.hibernate_tasks()
+        except (sqlite3.DatabaseError, sqlite3.ProgrammingError) as e:
+            # Ignore certain types of I/O errors while closing
+            str_e = str(e)
+            io_error = (
+                # Disk containing the database may have unmounted expectedly
+                (
+                    isinstance(e, sqlite3.DatabaseError) and
+                    str_e == 'database disk image is malformed'
+                ) or
+                # Automated tests are simulating unmount of the disk
+                # containing the database, using _close_project_abruptly()
+                (
+                    os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True' and
+                    isinstance(e, sqlite3.ProgrammingError) and
+                    str_e == 'Cannot operate on a closed database.'
+                )
+            )
+            if not io_error:
+                raise
+    
+    @capture_crashes_to_stderr
+    def _unhibernate(self) -> None:
+        if self.project.readonly:
+            return
+        
+        def confirm_unhibernate_tasks() -> bool:
+            dialog = wx.MessageDialog(
+                self._frame,
+                message=(
+                    'Downloads were running when this project was last closed. '
+                    'Resume them?'
+                ),
+                caption='Resume Downloads?',
+                style=wx.OK|wx.CANCEL,
+            )
+            dialog.Name = 'cr-resume-downloads'
+            with dialog:
+                dialog.SetOKCancelLabels('Resume', wx.ID_CANCEL)
+                dialog.SetEscapeId(wx.ID_CANCEL)
+                position_dialog_initially(dialog)
+                choice = ShowModal(dialog)
+            should_resume = (choice == wx.ID_OK)
+            return should_resume
+        self.project.unhibernate_tasks(confirm_unhibernate_tasks)
     
     # === Status Bar: Init ===
     

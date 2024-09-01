@@ -142,7 +142,7 @@ def ttn_for_task(task: Task) -> TaskTreeNode:
 # Utility: Append Deferred Top-Level Tasks
 
 @fg_affinity
-@scheduler_affinity
+@scheduler_affinity  # manual control of scheduler thread is assumed
 def append_deferred_top_level_tasks(project: Project) -> None:
     """
     For any children whose appending to a project's RootTask was deferred by
@@ -189,13 +189,16 @@ def scheduler_thread_context(enabled: bool=True) -> Iterator[None]:
         setattr(threading.current_thread(), '_cr_is_scheduler_thread', old_is_scheduler_thread)
 
 
+@scheduler_affinity  # manual control of scheduler thread is assumed
 async def step_scheduler(
         project: Project,
         *, expect_done: bool=False,
         after_get: Optional[Callable[[], None]]=None,
-        ) -> None:
+        ) -> bool:
     """
     Performs one unit of work from the scheduler.
+    
+    Returns whether the scheduler is done and no work is left.
     
     Arguments:
     * expect_done -- Whether it's expected that no work is left.
@@ -203,13 +206,18 @@ async def step_scheduler(
     unit = project.root_task.try_get_next_task_unit()
     if after_get is not None:
         after_get()
-    if expect_done:
-        assert unit is None
+    if unit is None:
+        if not expect_done:
+            raise AssertionError('Expected there to be no more tasks')
+        return True
     else:
-        assert unit is not None
+        if expect_done:
+            raise AssertionError('Expected there to be at least one task remaining')
         await bg_call_and_wait(scheduler_thread_context()(unit))
+        return False
 
 
+@scheduler_affinity  # manual control of scheduler thread is assumed
 def step_scheduler_now(
         project: Project,
         *, expect_done: bool=False,
@@ -227,6 +235,7 @@ def step_scheduler_now(
     assert unit is None
 
 
+@scheduler_affinity  # manual control of scheduler thread is assumed
 async def step_scheduler_until_done(project: Project) -> None:
     while True:
         unit = project.root_task.try_get_next_task_unit()  # step scheduler

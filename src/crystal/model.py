@@ -24,6 +24,7 @@ from crystal.plugins import (
     wordpress as plugins_wordpress,
 )   
 from crystal.progress import (
+    CancelLoadUrls,
     CancelOpenProject,
     DummyLoadUrlsProgressListener,
     DummyOpenProjectProgressListener,
@@ -787,7 +788,7 @@ class Project(ListenableMixin):
             group_2_source[group] = (source_type, source_id)
         for (group, (source_type, source_id)) in group_2_source.items():
             if source_type is None:
-                source_obj = None
+                source_obj = None  # type: ResourceGroupSource
             elif source_type == 'root_resource':
                 source_obj = self._get_root_resource_with_id(source_id)
             elif source_type == 'resource_group':
@@ -906,6 +907,16 @@ class Project(ListenableMixin):
             c.execute('insert or replace into project_property (name, value) values (?, ?)', (name, value))
             self._db.commit()
         self._properties[name] = value
+    def _delete_property(self, name: str) -> None:
+        if not self._loading:
+            if name not in self._properties:
+                return
+            if self.readonly:
+                raise ProjectReadOnlyError()
+            c = self._db.cursor()
+            c.execute('delete from project_property where name=?', (name,))
+            self._db.commit()
+        del self._properties[name]
     
     @property
     def major_version(self) -> int:
@@ -1345,12 +1356,12 @@ class Project(ListenableMixin):
         """Returns the `RootResource` with the specified `Resource` or None if none exists."""
         return self._root_resources.get(resource, None)
     
-    def _get_root_resource_with_id(self, root_resource_id):
+    def _get_root_resource_with_id(self, root_resource_id) -> Optional[RootResource]:
         """Returns the `RootResource` with the specified ID or None if no such root resource exists."""
         # PERF: O(n) when it could be O(1), where n = # of RootResources
         return next((rr for rr in self._root_resources.values() if rr._id == root_resource_id), None)
     
-    def _get_root_resource_with_name(self, name):
+    def _get_root_resource_with_name(self, name) -> Optional[RootResource]:
         """Returns the `RootResource` with the specified name or None if no such root resource exists."""
         # PERF: O(n) when it could be O(1), where n = # of RootResources
         return next((rr for rr in self._root_resources.values() if rr.name == name), None)
@@ -1365,7 +1376,7 @@ class Project(ListenableMixin):
         # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
         return next((rg for rg in self._resource_groups if rg.name == name), None)
     
-    def _get_resource_group_with_id(self, resource_group_id):
+    def _get_resource_group_with_id(self, resource_group_id) -> Optional[ResourceGroup]:
         """Returns the `ResourceGroup` with the specified ID or None if no such resource exists."""
         # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
         return next((rg for rg in self._resource_groups if rg._id == resource_group_id), None)
@@ -1391,6 +1402,155 @@ class Project(ListenableMixin):
         self.root_task.append_child(task, already_complete_ok=True)
         if task_was_complete:
             self.root_task.child_task_did_complete(task)
+    
+    @fg_affinity
+    def hibernate_tasks(self) -> None:
+        """
+        Saves the state of any running tasks.
+        
+        Raises:
+        * ProjectReadOnlyError
+        """
+        from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
+        
+        if self.readonly:
+            raise ProjectReadOnlyError()
+        
+        hibernated_tasks = []
+        for task in self.root_task.children:
+            if task.complete:
+                # Do not attempt to preserve completed tasks
+                continue
+            if isinstance(task, DownloadResourceTask):
+                hibernated_tasks.append({
+                    'type': 'DownloadResourceTask',
+                    'resource_id': str(task.resource._id),
+                })
+            elif isinstance(task, DownloadResourceGroupTask):
+                hibernated_tasks.append({
+                    'type': 'DownloadResourceGroupTask',
+                    'group_id': str(task.group._id),
+                })
+            else:
+                # Do not attempt to preserve other kinds of tasks
+                pass
+        
+        # Save the last_downloaded_member of all ResourceGroups
+        # because enables DownloadResourceGroupTasks to be resumed
+        # precisely after last member that was downloaded
+        hibernated_groups = {
+            str(rg._id): {
+                'last_downloaded_member_id':
+                    str(rg.last_downloaded_member._id)
+                    if rg.last_downloaded_member is not None
+                    else None
+            }
+            for rg in self.resource_groups
+        }
+        
+        hibernated_project = {
+            'tasks': hibernated_tasks,
+            'groups': hibernated_groups,
+        }
+        
+        hibernated_project_str = json.dumps(hibernated_project)
+        
+        if len(hibernated_tasks) == 0:
+            # Keep no property in the database if no tasks
+            # to minimize the number of persisted database IDs
+            self._delete_property('hibernated_state')
+        else:
+            self._set_property('hibernated_state', hibernated_project_str)
+    
+    @fg_affinity
+    def unhibernate_tasks(self, confirm_func: Optional[Callable[[], bool]]=None) -> None:
+        """
+        Restores the state of any running tasks.
+        
+        `confirm_func` (if provided) will be called if there are any
+        running tasks to restore, to confirm they should be restored
+        (which may involve loading the project URLs).
+        
+        Raises:
+        * ProjectReadOnlyError
+        """
+        from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
+        
+        if self.readonly:
+            raise ProjectReadOnlyError()
+        if len(self.root_task.children) != 0:
+            raise ValueError('Expected no running tasks in project')
+        
+        hibernated_project_str = self._get_property('hibernated_state', default=None)
+        if hibernated_project_str is None:
+            return
+        
+        hibernated_project = json.loads(hibernated_project_str)
+        
+        hibernated_tasks = hibernated_project['tasks']
+        if len(hibernated_tasks) == 0:
+            return
+        if confirm_func is not None and not confirm_func():
+            return
+        
+        # Show progress dialog in advance if may need to load many project URLs
+        try:
+            self.load_urls()
+        except CancelLoadUrls:
+            return
+        
+        # Restore the last_downloaded_member of all ResourceGroups,
+        # before restoring DownloadResourceGroupTasks
+        for (rg_id_str, hibernated_group) in hibernated_project['groups'].items():
+            rg = self._get_resource_group_with_id(int(rg_id_str))
+            if rg is None:
+                # ResourceGroup no longer exists. Ignore restoring this group.
+                continue
+            
+            last_downloaded_member_id_str = hibernated_group['last_downloaded_member_id']
+            if last_downloaded_member_id_str is None:
+                last_downloaded_member = None
+            else:
+                last_downloaded_member_id = int(last_downloaded_member_id_str)
+                last_downloaded_member = self._get_resource_with_id(last_downloaded_member_id)
+                if last_downloaded_member is None:
+                    # Resource no longer exists. Ignore restoring this group.
+                    continue
+            
+            # Restore last_downloaded_member
+            if last_downloaded_member is not None:
+                members_already_downloaded = []
+                for m in rg.members:
+                    members_already_downloaded.append(m)
+                    if m == last_downloaded_member:
+                        break
+                else:
+                    # Member not found. Ignore restoring this group.
+                    continue
+                
+                for m in members_already_downloaded:
+                    m.already_downloaded_this_session = True
+            rg.last_downloaded_member = last_downloaded_member
+        
+        # Restore tasks
+        tasks = []  # type: List[Task]
+        for hibernated_task in hibernated_tasks:
+            if hibernated_task['type'] == 'DownloadResourceTask':
+                r = self._get_resource_with_id(int(hibernated_task['resource_id']))
+                if r is None:
+                    # Resource no longer exists. Ignore related download.
+                    continue
+                tasks.append(DownloadResourceTask(r, needs_result=False))
+            elif hibernated_task['type'] == 'DownloadResourceGroupTask':
+                rg = self._get_resource_group_with_id(int(hibernated_task['group_id']))
+                if rg is None:
+                    # ResourceGroup no longer exists. Ignore related download.
+                    continue
+                tasks.append(DownloadResourceGroupTask(rg))
+            else:
+                raise ValueError('Unknown task type: ' + hibernated_task['type'])
+        for t in tasks:
+            self.add_task(t)
     
     # === Events: Resource Lifecycle ===
     
@@ -3343,6 +3503,7 @@ class ResourceGroup(ListenableMixin):
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
         self._source = None  # type: Union[ResourceGroupSource, EllipsisType]
         self._do_not_download = do_not_download
+        self.last_downloaded_member = None  # type: Optional[Resource]
         
         # Calculate members on demand rather than up front
         self._members = None  # type: Optional[List[Resource]]

@@ -1622,6 +1622,9 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
     def child_task_did_complete(self, task: Task) -> None:
         task.dispose()
         
+        assert isinstance(task, DownloadResourceTask)
+        self.group.last_downloaded_member = task.resource
+        
         assert self._children_loaded
         assert self._pbc is not None
         self._pbc.update(1)  # self._pbc.n += 1

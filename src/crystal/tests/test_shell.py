@@ -44,6 +44,7 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'get_resource',
     'get_resource_group',
     'get_root_resource',
+    'hibernate_tasks',
     'html_parser_type',
     'is_valid',
     'listeners',
@@ -60,6 +61,7 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'resources_matching_pattern',
     'root_resources',
     'root_task',
+    'unhibernate_tasks',
     'urls_matching_pattern',
 ]
 

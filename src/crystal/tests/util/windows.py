@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from crystal.browser.new_root_url import NewRootUrlDialog as RealNewRootUrlDialog
 from crystal.model import Project
+from crystal.task import is_synced_with_scheduler_thread
 from crystal.tests.util.controls import (
     click_button, file_dialog_returning,
     select_menuitem_now, TreeItem
@@ -19,7 +20,7 @@ import re
 import sys
 import tempfile
 import traceback
-from typing import AsyncIterator, Awaitable, Callable, Optional, Tuple, TYPE_CHECKING
+from typing import AsyncIterator, Awaitable, Callable, Optional, Tuple, TYPE_CHECKING, ContextManager
 import wx
 
 if TYPE_CHECKING:
@@ -64,6 +65,7 @@ class OpenOrCreateDialog:
     async def create(self, 
             project_dirpath: Optional[str]=None,
             *, autoclose: bool=True,
+            delete: Optional[bool]=None,
             ) -> AsyncIterator[Tuple[MainWindow, Project]]:
         """
         Creates a new project.
@@ -81,11 +83,26 @@ class OpenOrCreateDialog:
         MainWindow open.
         """
         if project_dirpath is None:
-            with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+            if delete is None:
+                delete = True
+            
+            # TODO: After upgrading to Python 3.12+, just use the
+            #       "delete" parameter of TemporaryDirectory
+            tmpdir_context = (
+                tempfile.TemporaryDirectory(suffix='.crystalproj') if delete  # type: ignore[assignment]
+                else nullcontext(tempfile.mkdtemp(suffix='.crystalproj'))
+            )  # type: ContextManager[str]
+            
+            with tmpdir_context as project_dirpath:
                 assert project_dirpath is not None
                 async with self.create(project_dirpath, autoclose=autoclose) as (mw, project2):
                     yield (mw, project2)
             return
+        else:
+            if delete is not None:
+                raise ValueError(
+                    'When creating a project in an existing directory, '
+                    'the "delete" option should not be used.')
         
         mw = await self.create_and_leave_open(project_dirpath)
         
@@ -291,27 +308,31 @@ class MainWindow:
     CLOSE_TIMEOUT = 4.0
     
     async def close(self, exc_info=None) -> None:
-        # Try wait for any lingering tasks to complete.
-        # 
-        # Does workaround: https://github.com/davidfstr/Crystal-Web-Archiver/issues/74
-        try:
-            await wait_for(
-                tree_has_no_children_condition(self.task_tree),
-                timeout=self.CLOSE_TIMEOUT,  # wait only briefly
-                stacklevel_extra=1)
-        except WaitTimedOut:
-            first_task_title = first_task_title_progression(self.task_tree)()
-            print(f'*** MainWindow: Closing while tasks are still running. May deadlock! Current task: {first_task_title}')
-            
-            # Print traceback or current exception that is being handled immediately
-            # because impending deadlock may prevent traceback from being printed
-            # in the usual manner
-            if exc_info is None:
-                traceback.print_stack()
-            else:
-                traceback.print_exception(*exc_info)
-            
-            # (continue)
+        if is_synced_with_scheduler_thread():
+            # Immediately close project
+            pass
+        else:
+            # Try wait for any lingering tasks to complete.
+            # 
+            # Does workaround: https://github.com/davidfstr/Crystal-Web-Archiver/issues/74
+            try:
+                await wait_for(
+                    tree_has_no_children_condition(self.task_tree),
+                    timeout=self.CLOSE_TIMEOUT,  # wait only briefly
+                    stacklevel_extra=1)
+            except WaitTimedOut:
+                first_task_title = first_task_title_progression(self.task_tree)()
+                print(f'*** MainWindow: Closing while tasks are still running. May deadlock! Current task: {first_task_title}')
+                
+                # Print traceback or current exception that is being handled immediately
+                # because impending deadlock may prevent traceback from being printed
+                # in the usual manner
+                if exc_info is None:
+                    traceback.print_stack()
+                else:
+                    traceback.print_exception(*exc_info)
+                
+                # (continue)
         
         self.main_window.Close()
         await self.wait_for_close()
