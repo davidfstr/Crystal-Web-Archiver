@@ -35,6 +35,7 @@ from crystal.util.wx_dialog import (
     position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
     ShowModal,
 )
+from crystal.util.wx_timer import Timer, TimerError
 from crystal.util.xos import (
     is_kde_or_non_gnome, is_linux, is_mac_os, is_windows, mac_version,
 )
@@ -53,6 +54,8 @@ _WINDOW_INNER_PADDING = 10
 
 
 class MainWindow:
+    _AUTOHIBERNATE_PERIOD = 1000 * 60 * 5  # 5 min, in milliseconds
+    
     project: Project
     _frame: wx.Frame
     entity_tree: EntityTree
@@ -146,6 +149,13 @@ class MainWindow:
             raise
         
         self._unhibernate()
+        
+        # Auto-hibernate every few minutes, in case Crystal crashes
+        self._autohibernate_timer = None
+        try:
+            self._autohibernate_timer = Timer(self._hibernate, self._AUTOHIBERNATE_PERIOD)
+        except TimerError:
+            pass
         
         # Export reference to self, if running tests
         if tests_are_running():
@@ -483,6 +493,9 @@ class MainWindow:
         """
         Closes this window, disposing any related resources.
         """
+        if self._autohibernate_timer is not None:
+            self._autohibernate_timer.stop()
+        
         self._hibernate()
         
         # Dispose resources created in MainWindow.start_server(), in reverse order

@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from crystal.model import Project, RootResource, Resource, ResourceGroup
 from crystal.task import DownloadResourceGroupTask, DownloadResourceGroupMembersTask, DownloadResourceTask
 from crystal.tests.util.downloads import load_children_of_drg_task
@@ -8,7 +8,7 @@ from crystal.tests.util.tasks import scheduler_disabled, step_scheduler, clear_t
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal
-from typing import AsyncIterator
+from typing import AsyncIterator, Iterator
 from unittest.mock import patch
 import wx
 
@@ -325,6 +325,49 @@ async def test_when_close_project_normally_and_no_tasks_running_then_resume_data
             assert not _project_has_resume_data(project)
 
 
+async def test_while_project_open_then_periodically_saves_resume_data_so_that_can_resume_after_abrupt_project_close() -> None:
+    with scheduler_disabled(), served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        comic1_url = sp.get_request_url('https://xkcd.com/1/')
+
+        with _frequent_autohibernates_enabled():
+            # Create new project, with a partially downloaded list of resources
+            async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+                project_dirpath = project.path
+                
+                atom_feed_rr = RootResource(project, '', Resource(project, atom_feed_url))
+                comic1_rr = RootResource(project, '', Resource(project, comic1_url))
+                
+                atom_feed_rr.download()
+                comic1_rr.download()
+                
+                append_deferred_top_level_tasks(project)
+                (atom_feed_dr_task, comic1_dr_task) = project.root_task.children
+                assert isinstance(atom_feed_dr_task, DownloadResourceTask)
+                assert isinstance(comic1_dr_task, DownloadResourceTask)
+                
+                # Step scheduler until resource #1 downloaded
+                while not atom_feed_dr_task.complete:
+                    await step_scheduler(project)
+                assert not comic1_dr_task.complete
+                
+                # Wait for autohibernate to save resume data
+                _clear_project_resume_data(project)
+                assert not _project_has_resume_data(project)
+                await wait_for(lambda: _project_has_resume_data(project) or None, timeout=2)
+                
+                _close_project_abruptly(project)
+            
+            # Reopen the project
+            async with _open_project_with_resume_data(project_dirpath, resume=True) as project:
+                with clear_top_level_tasks_on_exit(project):
+                    # Ensure that the download is resumed
+                    append_deferred_top_level_tasks(project)
+                    (comic1_dr_task,) = project.root_task.children
+                    assert isinstance(comic1_dr_task, DownloadResourceTask)
+
+
 # === Utility ===
 
 @asynccontextmanager
@@ -358,6 +401,18 @@ def _autohibernate_now(project: Project) -> None:
     project.hibernate_tasks()
 
 
+@contextmanager
+def _frequent_autohibernates_enabled() -> Iterator[None]:
+    """
+    Enables frequent automatic hibernation for projects that become opened.
+    """
+    with patch(
+            'crystal.browser.MainWindow._AUTOHIBERNATE_PERIOD',
+            20  # milliseconds
+            ):
+        yield
+
+
 def _close_project_abruptly(project: Project) -> None:
     """
     Simulates an abrupt close of a project, similar to unmounting the disk
@@ -377,3 +432,10 @@ def _project_has_resume_data(project: Project) -> bool:
     """
     hibernated_project_str = project._get_property('hibernated_state', default=None)
     return hibernated_project_str is not None
+
+
+def _clear_project_resume_data(project: Project) -> None:
+    """
+    Clears the resume data from the project database.
+    """
+    project._delete_property('hibernated_state')
