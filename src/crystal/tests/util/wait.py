@@ -6,6 +6,7 @@ import datetime
 import os
 import time
 from typing import Callable, Optional, TYPE_CHECKING, TypeVar, Union
+from typing_extensions import Literal
 import warnings
 import wx
 
@@ -190,7 +191,13 @@ class WaitTimedOut(Exception):
     pass
 
 
-def window_condition(name: str, *, hidden_ok: bool=False) -> Callable[[], Optional[wx.Window]]:
+def window_condition(
+        name: str, *, hidden_ok: bool=False
+        ) -> Callable[[], Optional[wx.Window]]:
+    """
+    Whether the named window exists and is visible.
+    Truthy return value is the window.
+    """
     def window() -> Optional[wx.Window]:
         window = wx.FindWindowByName(name)  # type: Optional[wx.Window]
         if window is None:
@@ -209,6 +216,10 @@ def window_condition(name: str, *, hidden_ok: bool=False) -> Callable[[], Option
 def first_child_of_tree_item_is_not_loading_condition(
         ti: TreeItem
         ) -> Callable[[], Optional[wx.TreeItemId]]:
+    """
+    Whether the specified tree item's children is done loading.
+    Truthy return value is the first loaded child.
+    """
     def first_child_of_tree_item_is_not_loading() -> Optional[TreeItem]:
         first_child_ti = ti.GetFirstChild()
         if first_child_ti is None:
@@ -221,21 +232,24 @@ def first_child_of_tree_item_is_not_loading_condition(
 
 def tree_has_children_condition(
         tree: wx.TreeCtrl,
-        ) -> Callable[[], Optional[bool]]:
+        ) -> Callable[[], Optional[Literal[True]]]:
+    """Whether the specified tree has children."""
     return not_condition(tree_has_no_children_condition(tree))
 
 
 def tree_has_no_children_condition(
         tree: wx.TreeCtrl, 
-        ) -> Callable[[], Optional[bool]]:
+        ) -> Callable[[], Optional[Literal[True]]]:
+    """Whether the specified tree has no children."""
     from crystal.tests.util.controls import TreeItem
     return tree_item_has_no_children_condition(TreeItem(tree, tree.GetRootItem()))
 
 
 def tree_item_has_no_children_condition(
         ti: TreeItem
-        ) -> Callable[[], Optional[bool]]:
-    def tree_item_has_no_children() -> Optional[bool]:
+        ) -> Callable[[], Optional[Literal[True]]]:
+    """Whether the specified tree item has no children."""
+    def tree_item_has_no_children() -> Optional[Literal[True]]:
         first_child_tii = ti.tree.GetFirstChild(ti.id)[0]
         if not first_child_tii.IsOk():
             return True
@@ -244,14 +258,18 @@ def tree_item_has_no_children_condition(
     return tree_item_has_no_children
 
 
-def is_enabled_condition(window: wx.Window) -> Callable[[], Optional[bool]]:
-    def is_enabled() -> Optional[bool]:
+def is_enabled_condition(window: wx.Window) -> Callable[[], Optional[Literal[True]]]:
+    """Whether the specified window is enabled."""
+    def is_enabled() -> Optional[Literal[True]]:
         return window.Enabled or None
     return is_enabled
 
 
-def not_condition(condition: Callable[[], Optional[_T]]) -> Callable[[], Optional[bool]]:
-    def not_() -> Optional[bool]:
+def not_condition(
+        condition: Callable[[], Optional[_T]]
+        ) -> Callable[[], Optional[Literal[True]]]:
+    """Whether the specified condition is falsy."""
+    def not_() -> Optional[Literal[True]]:
         if condition():
             return None
         else:
@@ -262,6 +280,10 @@ def not_condition(condition: Callable[[], Optional[_T]]) -> Callable[[], Optiona
 def or_condition(
         *conditions: Callable[[], Optional[_T]]
         ) -> Callable[[], Optional[_T]]:
+    """
+    Whether any of the specified conditions are true.
+    Truthy return value is the return value of the first truthy condition.
+    """
     def or_() -> Optional[_T]:
         for condition in conditions:
             result = condition()
