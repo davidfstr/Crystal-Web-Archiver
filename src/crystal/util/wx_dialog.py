@@ -1,6 +1,7 @@
 from crystal import resources
 from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows
 import os
+from typing import Callable, Protocol, Union
 import wx
 
 
@@ -37,6 +38,31 @@ def ShowModal(dialog: wx.Dialog) -> int:
         return dialog.GetReturnCode()
     else:
         return dialog.ShowModal()
+
+
+class ShowModalFunc(Protocol):
+    call_count: int
+    def __call__(self, dialog: wx.Dialog) -> int: ...
+
+
+def mocked_show_modal(
+        dialog_name: str,
+        return_code: Union[int, Callable[[wx.Dialog], int]],
+        ) -> ShowModalFunc:
+    """
+    Creates a mocked version of ShowModal which verifies that the expected
+    dialog was opened and returns the provided return code.
+    """
+    ShowModal: ShowModalFunc
+    def ShowModal(dialog: wx.Dialog) -> int:  # type: ignore[no-redef]
+        assert dialog_name == dialog.Name
+        ShowModal.call_count += 1
+        if callable(return_code):
+            return return_code(dialog)
+        else:
+            return return_code
+    ShowModal.call_count = 0
+    return ShowModal
 
 
 def position_dialog_initially(dialog: wx.Dialog) -> None:

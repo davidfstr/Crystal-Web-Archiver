@@ -19,6 +19,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import NewRootUrlDialog, EntityTree, OpenOrCreateDialog
+from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.wx_window import SetFocus
 import crystal.url_input
 from crystal.url_input import _candidate_urls_from_user_input as EXPAND
@@ -1145,7 +1146,10 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 last_focused = SetFocus(nud.url_field, last_focused)
                 nud.url_field.Value = 'xkcd.com/'
                 
-                with patch('crystal.browser.new_root_url.ShowModal', return_value=wx.ID_OK) as show_modal_method:
+                with patch(
+                        'crystal.browser.new_root_url.ShowModal',
+                        mocked_show_modal('cr-root-url-exists', wx.ID_OK)
+                        ) as show_modal_method:
                     click_button(nud.ok_button)
                     await wait_for(lambda: (1 == show_modal_method.call_count) or None)
                     await wait_for(lambda: (True == nud.url_field.Enabled) or None)
@@ -1171,7 +1175,10 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 assertEqual(False, nud.url_field_focused)
                 assertEqual(True, nud.url_cleaner_spinner.IsShown())
                 
-                with patch('crystal.browser.new_root_url.ShowModal', return_value=wx.ID_OK) as show_modal_method:
+                with patch(
+                        'crystal.browser.new_root_url.ShowModal',
+                        mocked_show_modal('cr-root-url-exists', wx.ID_OK)
+                        ) as show_modal_method:
                     click_button(nud.ok_button)
                     await wait_for(lambda: (1 == show_modal_method.call_count) or None)
                     await wait_for(lambda: (True == nud.url_field.Enabled) or None)
@@ -1199,7 +1206,10 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 
                 await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
                 
-                with patch('crystal.browser.new_root_url.ShowModal', return_value=wx.ID_OK) as show_modal_method:
+                with patch(
+                        'crystal.browser.new_root_url.ShowModal',
+                        mocked_show_modal('cr-root-url-exists', wx.ID_OK)
+                        ) as show_modal_method:
                     click_button(nud.ok_button)
                     await wait_for(lambda: (1 == show_modal_method.call_count) or None)
                     await wait_for(lambda: (True == nud.url_field.Enabled) or None)

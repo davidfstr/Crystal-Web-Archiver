@@ -15,6 +15,7 @@ from crystal.tests.util.windows import (
     NewGroupDialog, NewRootUrlDialog, EntityTree, MainWindow, OpenOrCreateDialog,
 )
 from crystal.tests.util.xurlparse import urlpatternparse
+from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_windows
 import re
 from typing import Iterator, Optional, Tuple
@@ -134,21 +135,14 @@ async def test_cannot_create_group_with_empty_url_pattern() -> None:
             click_button(mw.new_group_button)
             ngd = await NewGroupDialog.wait_for()
             
-            did_respond_to_empty_url_pattern_modal = False
-            def click_ok_in_empty_url_pattern_modal(dialog: wx.Dialog) -> int:
-                assert 'cr-empty-url-pattern' == dialog.Name
-                
-                nonlocal did_respond_to_empty_url_pattern_modal
-                did_respond_to_empty_url_pattern_modal = True
-                
-                return wx.ID_OK
-            
             ngd.pattern_field.Value = ''
             ngd.name_field.Value = 'Comic'
-            with patch('crystal.browser.new_group.ShowModal', click_ok_in_empty_url_pattern_modal):
+            with patch(
+                    'crystal.browser.new_group.ShowModal',
+                    mocked_show_modal('cr-empty-url-pattern', wx.ID_OK)
+                    ) as show_modal_method:
                 click_button(ngd.ok_button)
-                assert did_respond_to_empty_url_pattern_modal
-                did_respond_to_empty_url_pattern_modal = False  # reset
+                assert 1 == show_modal_method.call_count
             
             await ngd.cancel()
 

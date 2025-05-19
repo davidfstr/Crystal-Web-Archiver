@@ -21,6 +21,7 @@ from crystal.tests.util.server import extracted_project
 from crystal.tests.util.wait import wait_for, wait_while, window_condition
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
+from crystal.util.wx_dialog import mocked_show_modal
 import os.path
 from typing import AsyncIterator, cast, Iterator, Optional, Tuple
 from typing_extensions import override
@@ -150,14 +151,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                 'Expected project to not be upgraded'
             )  # not > 1
         
-        # Prepare to: Accept upgrade
-        did_respond_to_upgrade_required_modal = False
-        def click_continue_in_upgrade_required_modal(dialog: wx.Dialog) -> int:
-            assert 'cr-upgrade-required' == dialog.Name
-            
-            nonlocal did_respond_to_upgrade_required_modal
-            did_respond_to_upgrade_required_modal = True
-            
+        def continue_button_id(dialog: wx.Dialog) -> int:
             style = dialog.GetMessageDialogStyle()
             if style & wx.YES_NO != 0:
                 return wx.ID_YES  # Continue
@@ -167,10 +161,14 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                 raise AssertionError()
         
         with _upgrade_required_modal_always_shown(), \
-                patch('crystal.progress.ShowModal', click_continue_in_upgrade_required_modal):
+                patch(
+                    'crystal.progress.ShowModal',
+                    # Prepare to: Accept upgrade
+                    mocked_show_modal('cr-upgrade-required', continue_button_id)
+                    ) as show_modal_method:
             async with (await OpenOrCreateDialog.wait_for()).open(
                     project_dirpath, wait_func=_wait_for_project_to_upgrade) as mw:
-                assert did_respond_to_upgrade_required_modal
+                assert 1 == show_modal_method.call_count
                 
                 maybe_project = Project._last_opened_project
                 assert maybe_project is not None
@@ -188,14 +186,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                 'Expected project to not be upgraded'
             )  # not > 1
         
-        # Prepare to: Defer upgrade
-        did_respond_to_upgrade_required_modal = False
-        def click_later_in_upgrade_required_modal(dialog: wx.Dialog) -> int:
-            assert 'cr-upgrade-required' == dialog.Name
-            
-            nonlocal did_respond_to_upgrade_required_modal
-            did_respond_to_upgrade_required_modal = True
-            
+        def later_button_id(dialog: wx.Dialog) -> int:
             style = dialog.GetMessageDialogStyle()
             if style & wx.YES_NO != 0:
                 return wx.ID_NO  # Later
@@ -205,9 +196,13 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                 raise AssertionError()
         
         with _upgrade_required_modal_always_shown(), \
-                patch('crystal.progress.ShowModal', click_later_in_upgrade_required_modal):
+                patch(
+                    'crystal.progress.ShowModal',
+                    # Prepare to: Defer upgrade
+                    mocked_show_modal('cr-upgrade-required', later_button_id)
+                    ) as show_modal_method:
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-                assert did_respond_to_upgrade_required_modal
+                assert 1 == show_modal_method.call_count
                 
                 maybe_project = Project._last_opened_project
                 assert maybe_project is not None
@@ -225,18 +220,12 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                 'Expected project to not be upgraded'
             )  # not > 1
         
-        # Prepare to: Cancel
-        did_respond_to_upgrade_required_modal = False
-        def click_cancel_in_upgrade_required_modal(dialog: wx.Dialog) -> int:
-            assert 'cr-upgrade-required' == dialog.Name
-            
-            nonlocal did_respond_to_upgrade_required_modal
-            did_respond_to_upgrade_required_modal = True
-            
-            return wx.ID_CANCEL
-        
         with _upgrade_required_modal_always_shown(), \
-                patch('crystal.progress.ShowModal', click_cancel_in_upgrade_required_modal):
+                patch(
+                    'crystal.progress.ShowModal',
+                    # Prepare to: Cancel
+                    mocked_show_modal('cr-upgrade-required', wx.ID_CANCEL)
+                    ) as show_modal_method:
             ocd = await OpenOrCreateDialog.wait_for()
             await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
             
@@ -245,6 +234,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
             
             # Wait for cancel and return to initial dialog
             ocd = await OpenOrCreateDialog.wait_for()
+            assert 1 == show_modal_method.call_count
 
 
 async def test_given_project_is_major_version_1_and_has_more_than_MAX_REVISION_ID_revisions_when_open_project_then_defers_upgrade_to_later() -> None:

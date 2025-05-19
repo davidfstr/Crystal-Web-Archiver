@@ -7,6 +7,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
+from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_windows
 from unittest import skip
 from unittest.mock import patch
@@ -141,15 +142,6 @@ async def test_can_edit_source_of_group() -> None:
                 assert 'First Comic' == ngd.source
                 await ngd.ok()
             
-            did_respond_to_source_cycle_created_modal = False
-            def click_ok_in_source_cycle_created_modal(dialog: wx.Dialog) -> int:
-                assert 'cr-source-cycle-created' == dialog.Name
-                
-                nonlocal did_respond_to_source_cycle_created_modal
-                did_respond_to_source_cycle_created_modal = True
-                
-                return wx.ID_OK
-            
             # Ensure cannot edit source to be self
             if True:
                 assert comic_ti.IsSelected()
@@ -161,10 +153,12 @@ async def test_can_edit_source_of_group() -> None:
                 
                 ngd.source = 'Comics'
                 
-                with patch('crystal.browser.new_group.ShowModal', click_ok_in_source_cycle_created_modal):
+                with patch(
+                        'crystal.browser.new_group.ShowModal',
+                        mocked_show_modal('cr-source-cycle-created', wx.ID_OK)
+                        ) as show_modal_method:
                     click_button(ngd.ok_button)
-                    assert did_respond_to_source_cycle_created_modal
-                    did_respond_to_source_cycle_created_modal = False  # reset
+                    assert 1 == show_modal_method.call_count
                 
                 await ngd.cancel()
             
@@ -179,10 +173,12 @@ async def test_can_edit_source_of_group() -> None:
                 
                 ngd.source = 'Comics'
                 
-                with patch('crystal.browser.new_group.ShowModal', click_ok_in_source_cycle_created_modal):
+                with patch(
+                        'crystal.browser.new_group.ShowModal',
+                        mocked_show_modal('cr-source-cycle-created', wx.ID_OK)
+                        ) as show_modal_method:
                     click_button(ngd.ok_button)
-                    assert did_respond_to_source_cycle_created_modal
-                    did_respond_to_source_cycle_created_modal = False  # reset
+                    assert 1 == show_modal_method.call_count
                 
                 await ngd.cancel()
 
