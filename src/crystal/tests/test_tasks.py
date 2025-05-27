@@ -19,6 +19,8 @@ from crystal.tests.util.tasks import (
     clear_top_level_tasks_on_exit,
     scheduler_disabled,
     scheduler_thread_context,
+    step_scheduler,
+    step_scheduler_until_done,
 )
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
@@ -129,8 +131,7 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
                     #       scheduler_thread_context() assertion.
                     project.add_task(drg_task)
                     with scheduler_thread_context():
-                        task_unit = project.root_task.try_get_next_task_unit()
-                        assert task_unit is None
+                        await step_scheduler(project, expect_done=True)
                     
                     # Postcondition
                     # NOTE: Adding the DownloadResourceGroupTask to the project's
@@ -326,9 +327,7 @@ async def test_given_download_resource_group_members_when_add_group_member_via_d
                                     _ = await fetch_archive_url(comic2_url)
                             
                             # Process deferred event: DRGMT.group_did_add_member
-                            unit = project.root_task.try_get_next_task_unit()  # step scheduler
-                            assert unit is not None
-                            await bg_call_and_wait(scheduler_thread_context()(unit))
+                            await step_scheduler(project)
                             
                             # Ensure newly discovered group member is queued for download
                             assertEqual(2, _group_size_in_subtitle(drgm_task))
@@ -336,11 +335,7 @@ async def test_given_download_resource_group_members_when_add_group_member_via_d
                             server.close()
                         
                         # Drain tasks explicitly, to avoid subtitle-related warning
-                        while True:
-                            unit = project.root_task.try_get_next_task_unit()  # step scheduler
-                            if unit is None:
-                                break
-                            await bg_call_and_wait(scheduler_thread_context()(unit))
+                        await step_scheduler_until_done(project)
 
 
 def _group_size_in_subtitle(t: DownloadResourceGroupMembersTask) -> int:

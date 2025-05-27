@@ -11,6 +11,7 @@ from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, tree_has_children_condition, 
     tree_has_no_children_condition, wait_for, wait_while, WaitTimedOut
 )
+from crystal.tests.util.xthreading import bg_call_and_wait
 from crystal.util.xthreading import fg_affinity
 import math
 import re
@@ -186,6 +187,52 @@ def scheduler_thread_context(enabled: bool=True) -> Iterator[None]:
         yield
     finally:
         setattr(threading.current_thread(), '_cr_is_scheduler_thread', old_is_scheduler_thread)
+
+
+async def step_scheduler(
+        project: Project,
+        *, expect_done: bool=False,
+        after_get: Optional[Callable[[], None]]=None,
+        ) -> None:
+    """
+    Performs one unit of work from the scheduler.
+    
+    Arguments:
+    * expect_done -- Whether it's expected that no work is left.
+    """
+    unit = project.root_task.try_get_next_task_unit()
+    if after_get is not None:
+        after_get()
+    if expect_done:
+        assert unit is None
+    else:
+        assert unit is not None
+        await bg_call_and_wait(scheduler_thread_context()(unit))
+
+
+def step_scheduler_now(
+        project: Project,
+        *, expect_done: bool=False,
+        ) -> None:
+    """
+    Performs one unit of work from the scheduler.
+    
+    Arguments:
+    * expect_done -- Whether it's expected that no work is left. Must be True.
+    """
+    if expect_done != True:
+        raise ValueError('step_scheduler_now() only supports expect_done=True')
+    unit = project.root_task.try_get_next_task_unit()
+    assert expect_done
+    assert unit is None
+
+
+async def step_scheduler_until_done(project: Project) -> None:
+    while True:
+        unit = project.root_task.try_get_next_task_unit()  # step scheduler
+        if unit is None:
+            break
+        await bg_call_and_wait(scheduler_thread_context()(unit))
 
 
 def mark_as_complete(task: Task) -> None:
