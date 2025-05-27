@@ -141,6 +141,7 @@ def ttn_for_task(task: Task) -> TaskTreeNode:
 # Utility: Append Deferred Top-Level Tasks
 
 @fg_affinity
+@scheduler_affinity
 def append_deferred_top_level_tasks(project: Project) -> None:
     """
     For any children whose appending to a project's RootTask was deferred by
@@ -149,13 +150,10 @@ def append_deferred_top_level_tasks(project: Project) -> None:
     Listeners that respond to the append of a child may take other actions
     directly after the append, such as completing the just-appended child.
     """
-    # TODO: Shouldn't this method be marked as @scheduler_affinity,
-    #       rather than asserting an interior scheduler_thread_context()?
-    with scheduler_thread_context():
-        project.root_task.append_deferred_top_level_tasks()
-        
-        # Postcondition
-        assert len(project.root_task._children_to_add_soon) == 0
+    project.root_task.append_deferred_top_level_tasks()
+    
+    # Postcondition
+    assert len(project.root_task._children_to_add_soon) == 0
 
 
 # ------------------------------------------------------------------------------
