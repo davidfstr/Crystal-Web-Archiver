@@ -41,9 +41,10 @@ from time import (
 from types import TracebackType
 import traceback
 from typing import (
-    Any, Callable, cast, final, List, Literal, Iterator, Optional,
+    Any, Callable, cast, final, Generic, List, Literal, Iterator, Optional,
     Sequence, Tuple, TYPE_CHECKING, TypeVar, Union
 )
+from typing import NoReturn as Never
 from typing_extensions import Concatenate, override, ParamSpec
 from weakref import WeakSet
 
@@ -102,7 +103,7 @@ SCHEDULING_STYLE_ROUND_ROBIN = 2
 """One task unit will be executed from each child during a scheduler pass."""
 
 
-class Task(ListenableMixin, Bulkhead):
+class Task(ListenableMixin, Bulkhead, Generic[_R]):
     """
     Encapsulates a long-running process that reports its status occasionally.
     A task may depend on the results of a child task during its execution.
@@ -192,7 +193,7 @@ class Task(ListenableMixin, Bulkhead):
         self._complete = False
         
         self._did_yield_self = False            # used by leaf tasks
-        self._future = None  # type: Optional[Future]  # used by leaf tasks
+        self._future = None  # type: Optional[Future[_R]]  # used by leaf tasks
         self._next_child_index = 0
     
     # === Bulkhead ===
@@ -292,7 +293,7 @@ class Task(ListenableMixin, Bulkhead):
         return self._complete
     
     @property
-    def future(self):
+    def future(self) -> Future[_R]:
         """
         Returns a Future that receives the result of this task.
         
@@ -624,7 +625,10 @@ class Task(ListenableMixin, Bulkhead):
     
     @bg_affinity
     @capture_crashes_to_self
-    def _call_self_and_record_result(self):
+    def _call_self_and_record_result(self) -> None:
+        if TYPE_CHECKING:
+            assert isinstance(self, _LeafTask[_R])  # type: ignore[misc]
+        
         # (Ignore client requests to cancel)
         if self._future is None:
             self._future = Future()
@@ -701,9 +705,34 @@ _FUTURE_WITH_TASK_DISPOSED_EXCEPTION.set_exception(_TASK_DISPOSED_EXCEPTION)
 
 
 # ------------------------------------------------------------------------------
+# _LeafTask, _PureContainerTask
+
+class _LeafTask(Generic[_R], Task[_R]):  # abstract
+    """
+    A leaf task is a callable that returns a result.
+    That result can be accessed through the .future attribute.
+    """
+    # Optimize per-instance memory use, since there may be very many Task objects
+    __slots__ = ()
+    
+    def __call__(self) -> _R:  # abstract
+        raise NotImplementedError()
+
+
+class _PureContainerTask(Task[Never]):  # abstract
+    """
+    A pure container task is a container task that has no result of its own.
+    
+    Non-pure container tasks should inherit directly from Task[ResultType].
+    """
+    # Optimize per-instance memory use, since there may be very many Task objects
+    __slots__ = ()
+
+
+# ------------------------------------------------------------------------------
 # CrashedTask
 
-class CrashedTask(Task):
+class CrashedTask(_LeafTask[Never]):
     """
     Crashed task that presents a fixed title.
     """
@@ -722,7 +751,7 @@ class CrashedTask(Task):
         self.dismiss_action_title = dismiss_action_title
     
     @bg_affinity
-    def __call__(self):
+    def __call__(self) -> Never:
         raise AssertionError('Cannot run a crashed task')
     
     def dismiss(self) -> None:
@@ -792,7 +821,7 @@ _PROFILE_READ_REVISION = False
 
 PROFILE_RECORD_LINKS = os.environ.get('CRYSTAL_NO_PROFILE_RECORD_LINKS', 'False') != 'True'
 
-class DownloadResourceBodyTask(Task):
+class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
     """
     Downloads a single resource's body.
     This is the most basic task, located at the leaves of the task tree.
@@ -887,7 +916,7 @@ class ProjectFreeSpaceTooLowError(Exception):
     pass
 
 
-class DownloadResourceTask(Task):
+class DownloadResourceTask(Task['ResourceRevision']):
     """
     Downloads a resource and all of its embedded resources recursively.
     
@@ -946,7 +975,7 @@ class DownloadResourceTask(Task):
         if self._already_downloaded_task is not None:
             self.append_child(self._already_downloaded_task, already_complete_ok=True)
         
-        self._download_body_with_embedded_future = None  # type: Optional[Future]
+        self._download_body_with_embedded_future = None  # type: Optional[Future[ResourceRevision]]
         
         # Prevent other DownloadResourceTasks created during this session from
         # attempting to redownload this resource since they would duplicate
@@ -962,10 +991,10 @@ class DownloadResourceTask(Task):
         # (NOTE: self.complete might be True now)
     
     @property
-    def future(self) -> Future:
+    def future(self) -> Future[ResourceRevision]:
         return self.get_future(wait_for_embedded=False)
     
-    def get_future(self, wait_for_embedded: bool=False) -> Future:
+    def get_future(self, wait_for_embedded: bool=False) -> Future[ResourceRevision]:
         if self._download_body_task is None:
             assert self._already_downloaded_task is not None
             return self._already_downloaded_task.future
@@ -1232,7 +1261,7 @@ class DownloadResourceTask(Task):
         return f'<DownloadResourceTask for {self.resource.url!r}>'
 
 
-class ParseResourceRevisionLinks(Task):
+class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]']):
     """
     Parses the list of linked resources from the specified ResourceRevision.
     
@@ -1290,7 +1319,8 @@ class ParseResourceRevisionLinks(Task):
 
 _NO_VALUE = object()
 
-class _PlaceholderTask(Task):  # abstract
+# TODO: Annotate: is a _LeafTask[_R]; value is _R; __call__ returns _R
+class _PlaceholderTask(_LeafTask):  # abstract
     """
     Leaf task that presents a fixed title and starts as completed.
     
@@ -1386,7 +1416,7 @@ class _DownloadResourcesPlaceholderTask(_PlaceholderTask):
 from crystal.model import Resource, ResourceGroup, RootResource
 
 
-class UpdateResourceGroupMembersTask(Task):
+class UpdateResourceGroupMembersTask(_PureContainerTask):
     """
     Given a ResourceGroup, runs a single child task that downloads the group's
     configured "source". This child task can be either a DownloadResourceTask or
@@ -1432,7 +1462,7 @@ class UpdateResourceGroupMembersTask(Task):
         return f'UpdateResourceGroupMembersTask({self.group!r})'
 
 
-class DownloadResourceGroupMembersTask(Task):
+class DownloadResourceGroupMembersTask(_PureContainerTask):
     """
     Downloads the members of a specified ResourceGroup.
     If the group's members change during the task execution,
@@ -1640,7 +1670,7 @@ class DownloadResourceGroupMembersTask(Task):
         return f'DownloadResourceGroupMembersTask({self.group!r})'
 
 
-class DownloadResourceGroupTask(Task):
+class DownloadResourceGroupTask(_PureContainerTask):
     """
     Downloads a resource group. This involves updating the groups set of
     members and downloading them, in parallel.
@@ -1709,7 +1739,7 @@ class DownloadResourceGroupTask(Task):
 # ------------------------------------------------------------------------------
 # RootTask
 
-class RootTask(Task):
+class RootTask(_PureContainerTask):
     """
     Task whose primary purpose is to serve as the root task.
     External code must create and add its child tasks.
