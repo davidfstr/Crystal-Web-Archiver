@@ -3074,7 +3074,9 @@ class ResourceRevision:
         """
         
         # Extract links from HTML, if applicable
-        (doc, links) = (None, [])  # type: tuple[Optional[Document], list[Link]]
+        doc: Optional[Document]
+        links: list[Link]
+        (doc, links) = (None, [])
         content_type_with_options = None  # type: Optional[str]
         if self.is_html and self.has_body:
             with self.open() as body:
