@@ -1,4 +1,5 @@
 from crystal import resources
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows
 import os
 from typing import Callable, Protocol, Union
@@ -10,7 +11,7 @@ def ShowModal(dialog: wx.Dialog) -> int:
     Replacement for wx.Dialog.ShowModel() that works properly even when
     running automated tests.
     """
-    is_running_tests = os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
+    is_running_tests = tests_are_running()  # cache
     
     if is_running_tests and isinstance(dialog, wx.MessageDialog):
         # A wx.MessageDialog opened with ShowModal cannot be interacted

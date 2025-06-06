@@ -355,7 +355,8 @@ def _main(args: List[str]) -> None:
             )
             
             # Immediately enter testing mode
-            os.environ['CRYSTAL_RUNNING_TESTS'] = 'True'
+            from crystal.util.test_mode import set_tests_are_running
+            set_tests_are_running()
             
             from crystal.util.tqdm_debug import patch_tqdm_to_debug_deadlocks
             patch_tqdm_to_debug_deadlocks(on_deadlock='keep_trying')
@@ -435,6 +436,7 @@ def _did_launch(
     * SystemExit -- if the user quits
     """
     from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
+    from crystal.util.test_mode import tests_are_running
     
     # If project to open was passed on the command-line, use it
     if parsed_args.filepath is not None:
@@ -446,7 +448,7 @@ def _did_launch(
     try:
         with OpenProjectProgressDialog() as progress_listener:
             # Export reference to progress_listener, if running tests
-            if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+            if tests_are_running():
                 from crystal import progress
                 progress._active_progress_listener = progress_listener
             

@@ -16,6 +16,7 @@ from crystal.util.cli import (
     print_warning,
 )
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_call_and_wait, 
     run_thread_switching_coroutine, SwitchToThread,
@@ -107,7 +108,7 @@ class ProjectServer:
         bg_call_later(bg_task, daemon=True)
         
         # Export reference to self, if running tests
-        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+        if tests_are_running():
             ProjectServer._last_created = self
     
     def close(self) -> None:

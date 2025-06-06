@@ -24,6 +24,7 @@ from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
 from crystal.util.bulkheads import capture_crashes_to_stderr, capture_crashes_to
 from crystal.util.ellipsis import EllipsisType
 from crystal.util.finderinfo import get_hide_file_extension
+from crystal.util.test_mode import tests_are_running
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.url_prefix import (
     get_url_directory_prefix_for,
@@ -141,7 +142,7 @@ class MainWindow:
             raise
         
         # Export reference to self, if running tests
-        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+        if tests_are_running():
             MainWindow._last_created = self
     
     @property

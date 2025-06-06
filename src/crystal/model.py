@@ -51,6 +51,7 @@ from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import create_profiling_context, warn_if_slow
 from crystal.util.progress import DevNullFile
 from crystal.util.ssd import is_ssd
+from crystal.util.test_mode import tests_are_running
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
@@ -343,7 +344,7 @@ class Project(ListenableMixin):
         self._check_url_collection_invariants()
         
         # Export reference to self, if running tests
-        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+        if tests_are_running():
             Project._last_opened_project = self
     
     # --- Load: Validity ---
@@ -1498,7 +1499,7 @@ class Project(ListenableMixin):
         self._db.close()
         
         # Unexport reference to self, if running tests
-        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+        if tests_are_running():
             if Project._last_opened_project is self:
                 Project._last_opened_project = None
     

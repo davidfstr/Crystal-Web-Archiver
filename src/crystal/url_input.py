@@ -1,5 +1,6 @@
 from crystal.download import HTTP_REQUEST_TIMEOUT
 from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import (
     bg_affinity, fg_affinity, start_thread_switching_coroutine, SwitchToThread,
 )
@@ -183,7 +184,7 @@ def _resolve_url_from_candidates(
     
     # Disallow network requests while running tests,
     # unless CRYSTAL_URLOPEN_MOCKED=True
-    if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+    if tests_are_running():
         if os.environ.get('CRYSTAL_URLOPEN_MOCKED', 'False') == 'True':
             # OK
             pass

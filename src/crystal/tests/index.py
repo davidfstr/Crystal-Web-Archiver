@@ -32,6 +32,7 @@ from crystal.tests import (
 from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
 from crystal.util.xthreading import bg_affinity
 from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
@@ -112,7 +113,8 @@ def run_tests(test_names: List[str]) -> bool:
 
 
 def _run_tests(test_names: List[str]) -> bool:
-    assert os.environ.get('CRYSTAL_RUNNING_TESTS') == 'True'
+    # Ensure ancestor caller did already call set_tests_are_running()
+    assert tests_are_running()
     
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.time()  # capture

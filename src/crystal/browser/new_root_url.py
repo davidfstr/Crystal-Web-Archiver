@@ -1,6 +1,7 @@
 from crystal.url_input import cleaned_url_is_at_site_root, UrlCleaner
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.test_mode import tests_are_running
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
     CreateButtonSizer, position_dialog_initially, ShowModal,
@@ -159,7 +160,7 @@ class NewRootUrlDialog:
         dialog.MaxSize = wx.Size(wx.DefaultCoord, wx.DefaultCoord)
         
         # Export reference to self, if running tests
-        if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True':
+        if tests_are_running():
             NewRootUrlDialog._last_opened = self
     
     @staticmethod

@@ -19,6 +19,7 @@ from crystal.util.profile import (
     warn_if_slow,
 )
 from crystal.util.progress import ProgressBarCalculator
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
 from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItemError
 from crystal.util.xfutures import Future
@@ -157,7 +158,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
     """For a container task, whether all of its incomplete children being crashed implies that the container should crash as well."""
     
     _USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS = (
-        os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True'
+        tests_are_running()
     )
     _USE_EXTRA_LISTENER_ASSERTIONS_WHEN_CHILD_COUNT_BELOW = 50
     _REPORTED_TASKS_WITH_MANY_LISTENERS = WeakSet()  # type: WeakSet[Task]
