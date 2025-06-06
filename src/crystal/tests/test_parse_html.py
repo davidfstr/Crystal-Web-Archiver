@@ -36,10 +36,7 @@ async def test_uses_html_parser_specified_in_preferences() -> None:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             rr = RootResource(project, 'Home', Resource(project, home_url))
             r = Resource(project, home_url)
             

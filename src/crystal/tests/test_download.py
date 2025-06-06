@@ -34,10 +34,7 @@ async def test_given_downloading_resource_when_start_download_resource_then_exis
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, home_url)
             
             rr_future = r.download()
@@ -69,10 +66,7 @@ async def test_downloads_embedded_resources() -> None:
         )
     })
     with server:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
             while not revision_future.done():
@@ -113,10 +107,7 @@ async def test_does_not_download_embedded_resources_of_http_4xx_and_5xx_pages() 
         )
     })
     with server:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
             while not revision_future.done():
@@ -138,10 +129,7 @@ async def test_does_not_download_embedded_resources_of_recognized_binary_resourc
         )
     })
     with server:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
             while not revision_future.done():
@@ -182,10 +170,7 @@ async def test_does_not_download_forever_given_embedded_resources_form_a_cycle()
         )
     })
     with server:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
             while not revision_future.done():
@@ -226,10 +211,7 @@ async def test_does_not_download_forever_given_embedded_resources_nest_infinitel
         )
     })
     with server:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
             while not revision_future.done():
@@ -264,10 +246,7 @@ async def test_when_download_resource_given_revision_body_missing_then_redownloa
     })
     with server:
         with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 r = Resource(project, server.get_url('/'))
                 revision_future = r.download(wait_for_embedded=True)
                 while not revision_future.done():
@@ -284,10 +263,7 @@ async def test_when_download_resource_given_revision_body_missing_then_redownloa
             # (perhaps because of bad blocks in the revision body file)
             os.remove(rr_body_filepath)
             
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 with redirect_stderr(io.StringIO()) as captured_stderr:
                     r = Resource(project, server.get_url('/'))
                     revision_future = r.download(wait_for_embedded=True)
@@ -333,10 +309,7 @@ async def test_when_download_resource_given_all_embedded_resources_already_downl
         )
     })
     with server:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
             while not revision_future.done():
@@ -373,10 +346,7 @@ async def test_given_same_resource_embedded_multiple_times_then_downloads_it_onl
         )
     })
     with server:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
             while not revision_future.done():

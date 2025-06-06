@@ -40,10 +40,7 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Create a URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -179,10 +176,7 @@ async def _xkcd_home_page_served(
         # Define URLs
         home_url = 'https://xkcd.com/'
         
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             r = Resource(project, home_url)
             
             revision = r.default_revision()

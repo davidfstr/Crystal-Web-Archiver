@@ -155,16 +155,8 @@ Most tests want to populate a project from scratch. To create a new project:
 ```
         # Create a new project using the UI,
         # returning a MainWindow (`mw`) that can be used to control the UI, and
-        # returning a `project_dirpath` that can be used to reopen the project later
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
-            ...
-```
-
-Lots of tests open a project once and never plan to reopen it, so ignore the
-returned `project_dirpath` entirely:
-
-```
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        # returning a `project` that can be used to manipulate the project directly
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             ...
 ```
 
@@ -172,11 +164,13 @@ Tests may want to create a project and reopen it several times:
 
 ```
         # Create project
-        async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project_dirpath):
+        async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+            project_dirpath = project.path
+            
             ...
         
         # Reopen project
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             ...
         
         # Reopen project without UI
@@ -193,11 +187,11 @@ new tests:
     with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         
         # Create project
-        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
             ...
         
         # Reopen project
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             ...
         
         # Reopen project without UI
@@ -218,7 +212,7 @@ To create a copy of a [project fixture](#project_fixtures):
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         
         # Open the project fixture copy
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             ...
 ```
 
@@ -232,36 +226,6 @@ such as `Resource`s, `RootResource`s, or `ResourceGroup`s directly:
             home_rr = RootResource(project, 'Home', home_r)
             comic_g = ResourceGroup(project, '', comic_pattern, source=home_rr)
 ```
-
-A `project` reference is required to create any project entity directly.
-One can be obtained immediately after creating or opening a project using the
-following pattern:
-
-```
-        # Create project
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
-            project = Project._last_opened_project
-            assert project is not None
-            
-            ...
-```
-
-```
-        # Open project
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-            project = Project._last_opened_project
-            assert project is not None
-            
-            ...
-```
-
-In the future the `create` and `open` methods will be extended to directly
-return the `project` reference, rather than requiring tests to manually fish
-it out of `Project._last_opened_project`.
-
-> TODO: Alter `OpenOrCreateDialog.{create,open}` to return a `Project` reference
-> directly, and eliminate all direct use of `Project._last_opened_project`
-> inside test functions.
 
 ## Create project entities with the UI
 
@@ -422,11 +386,13 @@ projects, using the `@scheduler_disabled` context manager:
     with scheduler_disabled():
         
         # Create a project, with the scheduler disabled
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            project_dirpath = project.path
+            
             ...
         
         # Open a project, with the scheduler disabled
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             ...
 ```
 
@@ -438,9 +404,7 @@ The `clear_top_level_tasks_on_exit` context manager makes this cleanup easy:
 ```
     with scheduler_disabled():
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
-            project = Project._last_opened_project
-            assert project is not None
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             
             # Cleanup any tasks still running before closing the project,
             # even if an exception was raised

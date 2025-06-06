@@ -41,10 +41,7 @@ async def test_download_does_save_resource_metadata_and_content_accurately() -> 
     assert len(content_bytes) > 1000  # ensure is a reasonably sized file
     
     with _file_served(HEADERS, content_bytes) as server_port:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, f'http://localhost:{server_port}/')
             revision_future = r.download_body()
             while not revision_future.done():
@@ -89,10 +86,7 @@ async def test_download_does_autopopulate_date_header_if_not_received_from_origi
         content_bytes = content_file.read()
     
     with _file_served(HEADERS, content_bytes) as server_port:
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, f'http://localhost:{server_port}/')
             revision_future = r.download_body()
             while not revision_future.done():
@@ -154,10 +148,7 @@ async def test_when_no_errors_then_database_row_and_body_file_is_created_and_ret
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, home_url)
             revision_future = r.download_body()
             while not revision_future.done():
@@ -180,10 +171,7 @@ async def test_when_network_io_error_then_tries_to_delete_partial_body_file_but_
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with _downloads_mocked_to_raise_network_io_error() as is_connection_reset:
                 r = Resource(project, home_url)
                 revision_future = r.download_body()
@@ -206,10 +194,7 @@ async def test_when_database_error_then_tries_to_delete_partial_body_file_and_ra
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                 r = Resource(project, home_url)
                 revision_future = r.download_body()
@@ -236,10 +221,7 @@ async def test_when_network_io_error_and_database_error_then_tries_to_delete_par
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with _downloads_mocked_to_raise_network_io_error() as is_connection_reset:
                 with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                     r = Resource(project, home_url)
@@ -279,7 +261,7 @@ async def test_when_open_project_given_partial_body_files_exist_then_deletes_all
             project_dirpath, Project._TEMPORARY_DIRNAME))
         
         # Reopen project
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             # Ensure partial body file is deleted
             assert [] == os.listdir(os.path.join(
                 project_dirpath, Project._TEMPORARY_DIRNAME))
@@ -297,10 +279,7 @@ async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_t
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
                 r = Resource(project, home_url)
                 revision_future = r.download_body()
@@ -323,10 +302,7 @@ async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_a
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
                 with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                     r = Resource(project, home_url)
@@ -360,10 +336,7 @@ async def test_given_project_has_revision_with_maximum_id_when_download_revision
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
     
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             old_revision_count = project._revision_count()  # capture
             
             resource = Resource(project, home_url)

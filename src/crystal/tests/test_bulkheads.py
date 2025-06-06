@@ -366,10 +366,7 @@ async def test_when_T_try_get_next_task_unit_crashes_then_T_displays_as_crashed(
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 # Create DownloadResourceTask
                 home_r = Resource(project, home_url)
@@ -399,10 +396,7 @@ async def test_when_DRT_child_task_did_complete_event_crashes_then_DRT_displays_
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 # Create DownloadResourceTask
                 home_r = Resource(project, home_url)
@@ -443,10 +437,7 @@ async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() 
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 atom_feed_r = Resource(project, atom_feed_url)
                 rss_feed_r = Resource(project, rss_feed_url)
@@ -493,10 +484,7 @@ async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 atom_feed_r = Resource(project, atom_feed_url)
                 
@@ -554,10 +542,7 @@ async def test_when_TTN_task_crash_reason_did_change_crashes_in_deferred_fg_task
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 # Create DownloadResourceTask and TaskTreeNode
                 home_r = Resource(project, home_url)
@@ -600,10 +585,7 @@ async def test_when_TTN_task_did_set_children_crashes_at_top_level_then_T_displa
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 atom_feed_r = Resource(project, atom_feed_url)
                 rss_feed_r = Resource(project, rss_feed_url)
@@ -648,10 +630,7 @@ async def test_when_TTN_task_did_set_children_crashes_in_deferred_fg_task_then_T
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 atom_feed_r = Resource(project, atom_feed_url)
                 rss_feed_r = Resource(project, rss_feed_url)
@@ -688,10 +667,7 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 # Create DownloadResourceTask and TaskTreeNode
                 home_r = Resource(project, home_url)
@@ -730,10 +706,7 @@ async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 # Create DownloadResourceTask and TaskTreeNode
                 home_r = Resource(project, home_url)
@@ -763,10 +736,7 @@ async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_disp
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 # Create DownloadResourceTask and TaskTreeNode
                 home_r = Resource(project, home_url)
@@ -796,10 +766,7 @@ async def test_when_TTN_task_child_did_complete_crashes_in_deferred_fg_task_then
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 # Create DownloadResourceTask and TaskTreeNode
                 home_r = Resource(project, home_url)
@@ -866,10 +833,7 @@ async def test_when_RGN_on_expanded_crashes_while_loading_urls_then_children_rep
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 atom_feed_r = Resource(project, atom_feed_url)
                 rss_feed_r = Resource(project, rss_feed_url)
@@ -901,10 +865,7 @@ async def test_when_RGN_on_expanded_crashes_while_updating_children_then_childre
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 atom_feed_r = Resource(project, atom_feed_url)
                 rss_feed_r = Resource(project, rss_feed_url)
@@ -936,10 +897,7 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 atom_feed_r = Resource(project, atom_feed_url)
                 
@@ -988,10 +946,7 @@ async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entit
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             rmw = RealMainWindow._last_created
             assert rmw is not None
             
@@ -1073,10 +1028,7 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 # Create DownloadResourceTask
                 home_r = Resource(project, home_url)
@@ -1186,10 +1138,7 @@ async def test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 home_r = Resource(project, home_url)
                 atom_feed_r = Resource(project, atom_feed_url)
@@ -1286,10 +1235,7 @@ async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 home_r = Resource(project, home_url)
                 atom_feed_r = Resource(project, atom_feed_url)
@@ -1411,10 +1357,7 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 root_task = project.root_task
                 
@@ -1513,10 +1456,7 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
         home_url = sp.get_request_url('https://xkcd.com/')
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             root_task = project.root_task
             
             # Crash the scheduler event loop, for project

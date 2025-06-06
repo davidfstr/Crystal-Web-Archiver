@@ -26,10 +26,7 @@ async def test_given_default_revision_with_missing_body_when_download_related_re
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Download revision
             r = Resource(project, home_url)
             revision_future = r.download_body()

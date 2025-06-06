@@ -245,10 +245,7 @@ async def _project_with_do_not_download_group_open() -> AsyncIterator[Tuple[Main
             comic_image_rg_pattern = sp.get_request_url('https://imgs.xkcd.com/comics/*')
             comic_image_r_url = sp.get_request_url('https://imgs.xkcd.com/comics/air_gap_2x.png')
             
-            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                 # Define entities
                 RootResource(project, 'Home', Resource(project, home_url))
                 comic_image_rg = ResourceGroup(

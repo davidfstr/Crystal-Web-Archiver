@@ -173,10 +173,7 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             comic2_url = sp.get_request_url('https://xkcd.com/2/')
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Create home URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -304,10 +301,7 @@ async def test_given_node_is_selected_in_entity_tree_when_press_new_group_button
             rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
             feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Create entities, which will appear in Entity Tree
             if True:
                 home_rr = RootResource(project, 'Home', Resource(project, home_url))
@@ -483,10 +477,7 @@ async def test_given_urls_loaded_and_new_url_created_when_show_new_group_dialog_
             comic2_url = sp.get_request_url('https://xkcd.com/2/')
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Create initial entities
             home_rr = RootResource(project, 'Home', Resource(project, home_url))
             ResourceGroup(project, 'Comic', comic_pattern, source=home_rr)
@@ -538,10 +529,7 @@ async def test_given_urls_loaded_and_new_url_created_when_show_new_group_dialog_
 
 async def test_when_add_group_then_does_not_download_immediately_by_default() -> None:
     with _served_simple_site_with_group() as (home_url, comic_pattern):
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             rr = RootResource(project, 'Home', Resource(project, home_url))
             rr.download()
             await wait_for_download_to_start_and_finish(mw.task_tree)
@@ -562,10 +550,7 @@ async def test_when_add_group_then_does_not_download_immediately_by_default() ->
 
 async def test_when_add_group_can_download_group_immediately_with_1_extra_click() -> None:
     with _served_simple_site_with_group() as (home_url, comic_pattern):
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             rr = RootResource(project, 'Home', Resource(project, home_url))
             rr.download()
             await wait_for_download_to_start_and_finish(mw.task_tree)
@@ -587,10 +572,7 @@ async def test_when_add_group_can_download_group_immediately_with_1_extra_click(
 
 async def test_when_edit_group_then_new_group_options_not_shown() -> None:
     with _served_simple_site_with_group() as (_, comic_pattern):
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             rg = ResourceGroup(project, 'Comic', comic_pattern)
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             comic_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)

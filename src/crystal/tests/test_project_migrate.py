@@ -97,10 +97,7 @@ async def test_refuses_to_open_project_with_unknown_high_major_version() -> None
     
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Create project with unknown high major version
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             project._set_property('major_version', str(UNKNOWN_HIGH_MAJOR_VERSION))
             assert UNKNOWN_HIGH_MAJOR_VERSION == project.major_version
         
@@ -167,7 +164,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                     mocked_show_modal('cr-upgrade-required', continue_button_id)
                     ) as show_modal_method:
             async with (await OpenOrCreateDialog.wait_for()).open(
-                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as mw:
+                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
                 assert 1 == show_modal_method.call_count
                 
                 maybe_project = Project._last_opened_project
@@ -201,7 +198,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                     # Prepare to: Defer upgrade
                     mocked_show_modal('cr-upgrade-required', later_button_id)
                     ) as show_modal_method:
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 assert 1 == show_modal_method.call_count
                 
                 maybe_project = Project._last_opened_project
@@ -262,7 +259,7 @@ async def test_given_project_is_major_version_1_and_has_more_than_MAX_REVISION_I
                     *args, **kwargs)
         
         with patch.object(Project, '_process_table_rows', process_table_rows):
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 maybe_project = Project._last_opened_project
                 assert maybe_project is not None
                 project = maybe_project
@@ -320,7 +317,7 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
         # Upgrade the project to major version >= 2.
         # Ensure revisions appear to be migrated correctly.
         async with (await OpenOrCreateDialog.wait_for()).open(
-                project_dirpath, wait_func=_wait_for_project_to_upgrade) as mw:
+                project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
             maybe_project = Project._last_opened_project
             assert maybe_project is not None
             project = maybe_project
@@ -395,7 +392,7 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
         # Resume upgrading the project to major version >= 2. Allow to finish.
         if True:
             async with (await OpenOrCreateDialog.wait_for()).open(
-                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as mw:
+                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
                 maybe_project = Project._last_opened_project
                 assert maybe_project is not None
                 project = maybe_project
@@ -426,7 +423,7 @@ async def test_can_serve_revisions_from_project_with_major_version_1() -> None:
 
 async def test_can_serve_revisions_from_project_with_major_version_2() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             maybe_project = Project._last_opened_project
             assert maybe_project is not None
             project = maybe_project
@@ -448,14 +445,10 @@ async def _project_opened_without_migrating(
         def _apply_migrations(self, *args, **kwargs) -> None:
             pass
     
-    with patch(
-            # Project imported inside by _prompt_to_open_project()
-            'crystal.model.Project',
-            NonUpgradingProject):
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-            project = NonUpgradingProject._last_opened_project
-            assert project is not None
-            
+    # Project imported inside by _prompt_to_open_project()
+    with patch('crystal.model.Project', NonUpgradingProject), \
+            patch('crystal.tests.util.windows.Project', NonUpgradingProject):
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             yield (mw, project)
 
 

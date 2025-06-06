@@ -43,10 +43,7 @@ async def test_can_create_root_url(
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Create root URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -142,10 +139,7 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
         home_url = sp.get_request_url('https://xkcd.com/')
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Create home URL
             if True:
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -222,10 +216,7 @@ async def test_given_resource_node_with_link_labeled_as_root_url_can_easily_forg
 
 async def test_when_add_url_then_downloads_url_immediately_by_default() -> None:
     with _served_simple_site_with_2_urls() as (home_url, _):
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
@@ -244,10 +235,7 @@ async def test_when_add_url_then_downloads_url_immediately_by_default() -> None:
 
 async def test_when_add_url_then_can_avoid_downloading_url_with_1_extra_click() -> None:
     with _served_simple_site_with_2_urls() as (home_url, _):
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
@@ -266,10 +254,7 @@ async def test_when_add_url_then_can_avoid_downloading_url_with_1_extra_click() 
 
 async def test_when_add_url_at_site_root_then_can_download_site_with_1_extra_click() -> None:
     with _served_simple_site_with_2_urls() as (home_url, _), scheduler_disabled():
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 assert mw.new_root_url_button.Enabled
                 click_button(mw.new_root_url_button)
@@ -293,10 +278,7 @@ async def test_when_add_url_at_site_root_then_can_download_site_with_1_extra_cli
 
 async def test_when_add_url_not_at_site_root_then_cannot_download_site_or_create_group_for_site() -> None:
     with _served_simple_site_with_2_urls() as (home_url, image_url):
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             assert mw.new_root_url_button.Enabled
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
@@ -308,10 +290,7 @@ async def test_when_add_url_not_at_site_root_then_cannot_download_site_or_create
 
 async def test_when_add_url_at_site_root_then_can_create_group_for_site_but_not_download_it_with_extra_clicks() -> None:
     with _served_simple_site_with_2_urls() as (home_url, _), scheduler_disabled():
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 assert mw.new_root_url_button.Enabled
                 click_button(mw.new_root_url_button)
@@ -334,10 +313,7 @@ async def test_when_add_url_at_site_root_then_can_create_group_for_site_but_not_
 
 async def test_when_edit_url_then_new_url_options_not_shown() -> None:
     with _served_simple_site_with_2_urls() as (home_url, _):
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             rr = RootResource(project, 'Home', Resource(project, home_url))
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             home_ti = root_ti.find_child(home_url, project.default_url_prefix)
@@ -375,10 +351,7 @@ def _served_simple_site_with_2_urls() -> Iterator[Tuple[str, str]]:
 # === Test: Default URL Prefix: Load/Save ===
 
 async def test_when_new_url_and_save_given_project_prefix_is_unset_then_sets_prefix_to_domain() -> None:
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         # Case 1: HTTP URL
         assert None == project.default_url_prefix
         if True:
@@ -409,10 +382,7 @@ async def test_when_new_url_and_save_given_project_prefix_is_unset_then_sets_pre
 
 
 async def test_when_new_url_and_save_given_project_prefix_is_set_then_maintains_prefix() -> None:
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         rr1 = RootResource(project, '', Resource(project, 'https://neocities.org/'))
         rr2 = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
         
@@ -435,10 +405,7 @@ async def test_when_new_url_and_save_given_project_prefix_is_set_then_maintains_
 
 
 async def test_when_edit_url_and_save_then_maintains_prefix() -> None:
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         rr1 = RootResource(project, '', Resource(project, 'https://neocities.org/'))
         rr2 = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
         rr3 = RootResource(project, '', Resource(project, 'https://xkcd.com/'))
@@ -485,10 +452,7 @@ async def test_when_edit_url_and_save_then_maintains_prefix() -> None:
 
 
 async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x() -> None:
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         
         # Case 1.1: given_project_prefix_is_unset, set_prefix_to_domain
@@ -592,10 +556,7 @@ async def test_when_new_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x()
 
 
 async def test_when_edit_url_and_set_prefix_to_x_and_save_then_sets_prefix_to_x() -> None:
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         rr = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
         
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)

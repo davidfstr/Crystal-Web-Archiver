@@ -28,10 +28,7 @@ import wx
 # Test: EntityTree: Default Domain/Directory
 
 async def test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path() -> None:
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
         
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -65,10 +62,7 @@ async def test_given_resource_node_whose_path_is_slash_and_default_url_domain_ma
 
 
 async def test_given_resource_node_whose_path_is_more_than_slash_when_set_default_url_domain_to_it_then_node_displays_only_path() -> None:
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         rr = RootResource(project, '', Resource(project, 'https://neocities.org/~distantskies/'))
         
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -142,10 +136,7 @@ async def test_given_resource_group_node_whose_path_is_more_than_slash_literal_a
 
 
 async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_then_appropriate_change_url_prefix_actions_shown() -> None:
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         
         # Case: No entities selected
@@ -276,10 +267,7 @@ def _select_change_url_prefix_action(mw: MainWindow, mi: wx.MenuItem) -> None:
 
 async def test_when_hover_over_resource_node_label_then_tooltip_always_contains_full_url() -> None:
     # ...even if Default URL Prefix is set
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         rr = RootResource(project, '', Resource(project, 'https://neocities.org/'))
         
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -292,10 +280,7 @@ async def test_when_hover_over_resource_node_label_then_tooltip_always_contains_
 
 async def test_when_hover_over_resource_group_node_label_then_tooltip_always_contains_full_url_pattern() -> None:
     # ...even if Default URL Prefix is set
-    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         Resource(project, 'https://xkcd.com/atom.xml')
         Resource(project, 'https://xkcd.com/rss.xml')
         rg = ResourceGroup(project, 'Feed', 'https://xkcd.com/*.xml')
@@ -322,10 +307,7 @@ async def test_when_hover_over_resource_group_node_label_then_tooltip_always_con
 
 async def test_rn_with_error_child_retains_child_when_new_entity_added() -> None:
     with network_down():
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             
             RootResource(project, 'Domain 1', Resource(project, 'https://nosuchdomain1.com/'))
@@ -389,16 +371,13 @@ async def test_given_rr_is_not_downloaded_and_project_is_read_only_when_expand_r
         
         with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             # Create project
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 # Create RootResource but don't download it
                 r = Resource(project, home_url)
                 home_rr = RootResource(project, 'Home', r)
             
             # Reopen project as read-only
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 (home_ti,) = root_ti.Children
                 
@@ -426,10 +405,7 @@ async def test_given_rr_is_downloaded_and_is_error_when_expand_rrn_then_shows_er
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Download revision
             with network_down():
                 r = Resource(project, home_url)
@@ -465,10 +441,7 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
         
         with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             # Download revision
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 r = Resource(project, home_url)
                 home_rr = RootResource(project, 'Home', r)
                 revision_future = home_rr.download()
@@ -483,10 +456,7 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
             # (perhaps because of bad blocks in the revision body file)
             os.remove(rr_body_filepath)
             
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 (home_ti,) = root_ti.Children
                 
@@ -517,10 +487,7 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
                 )
             
             # Reopen same project
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 (home_ti,) = root_ti.Children
                 
@@ -590,10 +557,7 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
         if True:
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # Create future group members
             for i in range(1, 1000+1):
                 Resource(project, comic_pattern.replace('#', str(i)))
@@ -671,10 +635,7 @@ async def test_given_more_node_with_large_item_count_then_displays_count_with_co
             if True:
                 comic_pattern = sp.get_request_url('https://xkcd.com/#/')
             
-            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                 # Create future group members
                 for i in range(1, 1200+1):
                     Resource(project, comic_pattern.replace('#', str(i)))

@@ -18,7 +18,7 @@ async def test_can_edit_name_of_group() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         comic_pattern = 'https://xkcd.com/#/'
         
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             
             home_ti = root_ti.GetFirstChild()
@@ -97,10 +97,7 @@ async def test_can_edit_source_of_group() -> None:
         comic_pattern = 'https://xkcd.com/#/'
         first_comic_pattern = 'https://xkcd.com/1/'
         
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             comic_ti = root_ti.find_child(comic_pattern)
             comic_ti.SelectItem()

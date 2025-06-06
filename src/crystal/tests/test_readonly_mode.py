@@ -23,11 +23,11 @@ async def test_project_opens_as_readonly_when_user_requests_it_in_ui() -> None:
             pass
         
         # Ensure project opens as writable by default
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             assert False == mw.readonly
         
         # Ensure project opens as readonly when requested
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
             assert True == mw.readonly
 
 
@@ -69,7 +69,7 @@ async def test_project_opens_as_readonly_when_project_is_on_readonly_filesystem(
         assert os.path.exists(volume_dirpath)
         try:
             mounted_project_dirpath = os.path.join(volume_dirpath, 'Project.crystalproj')
-            async with (await OpenOrCreateDialog.wait_for()).open(mounted_project_dirpath) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(mounted_project_dirpath) as (mw, project):
                 assert True == mw.readonly
         finally:
             subprocess.run([
@@ -87,7 +87,7 @@ async def test_project_opens_as_readonly_when_project_directory_or_database_is_l
         
         # Ensure project opens as writable by default, when no files are locked
         with subtests.test(locked='nothing'):
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 assert False == mw.readonly
         
         # Ensure project opens as readonly when project directory is locked
@@ -97,13 +97,13 @@ async def test_project_opens_as_readonly_when_project_directory_or_database_is_l
         else:
             with subtests.test(locked='project_directory'):
                 with _file_set_to_readonly(project_dirpath):
-                    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+                    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                         assert True == mw.readonly
         
         # Ensure project opens as readonly when project database is locked
         with subtests.test(locked='project_database'):
             with _file_set_to_readonly(os.path.join(project_dirpath, Project._DB_FILENAME)):
-                async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+                async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                     assert True == mw.readonly
 
 

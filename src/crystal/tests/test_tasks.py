@@ -54,10 +54,7 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
             
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             missing_r = Resource(project, missing_url)
             
             with subtests.test(task_type='DownloadResourceTask'):
@@ -228,10 +225,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
             # Define URLs
             home_url = sp.get_request_url('https://xkcd.com/')
             
-            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                 await try_download_with_disk_usage(
                     _DiskUsage(total=100*1024*1024, used=(100-6)*1024*1024, free=6*1024*1024),
                     expect_failure=False)
@@ -245,10 +239,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
             # Define URLs
             home_url = sp.get_request_url('https://xkcd.com/')
             
-            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                 await try_download_with_disk_usage(
                     _DiskUsage(total=1000*1024*1024*1024, used=(1000-6)*1024*1024*1024, free=6*1024*1024*1024),
                     expect_failure=False)
@@ -288,10 +279,7 @@ async def test_given_download_resource_group_members_when_add_group_member_via_d
                 comic2_url = sp.get_request_url('https://xkcd.com/2/')
                 comic_pattern = sp.get_request_url('https://xkcd.com/#/')
                 
-                async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-                    project = Project._last_opened_project
-                    assert project is not None
-                    
+                async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                     with clear_top_level_tasks_on_exit(project):
                         comic1_rr = RootResource(project, '', Resource(project, comic1_url))
                         comic_g = ResourceGroup(project, '', comic_pattern)

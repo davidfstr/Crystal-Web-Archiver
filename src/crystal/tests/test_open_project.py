@@ -70,7 +70,7 @@ async def test_given_macos_when_open_crystalproj_package_in_open_dialog_then_ope
     
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         ocd = await OpenOrCreateDialog.wait_for()
-        async with ocd.open(project_dirpath, using_crystalopen=False) as mw:
+        async with ocd.open(project_dirpath, using_crystalopen=False) as (mw, project):
             pass
 
 
@@ -94,7 +94,7 @@ async def test_given_windows_when_open_crystalproj_directory_and_double_click_cr
         assert os.path.exists(os.path.join(project_dirpath, Project._OPENER_DEFAULT_FILENAME))
         
         ocd = await OpenOrCreateDialog.wait_for()
-        async with ocd.open(project_dirpath, using_crystalopen=True) as mw:
+        async with ocd.open(project_dirpath, using_crystalopen=True) as (mw, project):
             pass
 
 
@@ -115,7 +115,7 @@ async def test_given_linux_when_open_crystalproj_directory_in_open_dialog_then_o
         # 2. Select a .crystalproj directory. "Open Directory" button undims.
         # 3. Press "Open Directory" button
         ocd = await OpenOrCreateDialog.wait_for()
-        async with ocd.open(project_dirpath, using_crystalopen=False) as mw:
+        async with ocd.open(project_dirpath, using_crystalopen=False) as (mw, project):
             pass
 
 
@@ -129,7 +129,7 @@ async def test_given_linux_when_open_crystalproj_directory_and_double_click_crys
         assert os.path.exists(os.path.join(project_dirpath, Project._OPENER_DEFAULT_FILENAME))
         
         ocd = await OpenOrCreateDialog.wait_for()
-        async with ocd.open(project_dirpath, using_crystalopen=True) as mw:
+        async with ocd.open(project_dirpath, using_crystalopen=True) as (mw, project):
             pass
 
 
@@ -163,10 +163,7 @@ async def test_given_project_opening_when_click_cancel_then_returns_to_prompt_di
 async def test_given_project_is_corrupt_when_open_project_then_displays_error_dialog() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Introduce corruption to the project
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             group = list(project.resource_groups)[0]  # arbitrary
             
             c = project._db.cursor()
@@ -214,7 +211,7 @@ async def test_given_project_was_just_opened_then_first_entity_selected() -> Non
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         home_url = 'https://xkcd.com/'
         
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             home_ti = root_ti.find_child(home_url)
             assert home_ti.IsSelected()
@@ -228,10 +225,7 @@ async def test_given_project_was_just_opened_then_no_resources_loaded_except_roo
     for is_ssd in [False, True]:
         with subtests.test(is_ssd=is_ssd), database_on_ssd(is_ssd):
             with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-                async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-                    project = Project._last_opened_project
-                    assert project is not None
-                    
+                async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                     # Ensure project opens with only root resources loaded
                     assert len(list(project.root_resources)) >= 1
                     resources_that_are_loaded = _sort_resources(
@@ -244,10 +238,7 @@ async def test_given_project_was_just_opened_then_no_resources_loaded_except_roo
 async def test_given_on_ssd_when_resource_group_node_expanded_then_only_new_resources_loaded_are_group_members() -> None:
     with database_on_ssd(True):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 # Ensure when group expanded, only that group's members become loaded
                 if True:
                     comic_group = project.get_resource_group('Comics')
@@ -276,10 +267,7 @@ async def test_given_on_ssd_when_resource_group_node_expanded_then_only_new_reso
 async def test_given_not_on_ssd_when_resource_group_node_expanded_then_all_project_resources_are_loaded() -> None:
     with database_on_ssd(False):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 # Ensure when group expanded, all project resources become loaded
                 if True:
                     comic_group = project.get_resource_group('Comics')

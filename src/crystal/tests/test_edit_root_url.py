@@ -15,10 +15,7 @@ async def test_can_edit_name_of_root_url() -> None:
         home_g_pattern = 'https://xkcd.*/'
         assert home_g_pattern != home_url
         
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             ResourceGroup(project, 'Home Group', home_g_pattern)
             
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)

@@ -567,10 +567,7 @@ async def _project_with_resource_group_starting_to_download(
         with patch.object(TaskTreeNode, '_MAX_VISIBLE_CHILDREN', small_max_visible_children), \
                 patch.object(TaskTreeNode, '_MAX_LEADING_COMPLETE_CHILDREN', small_max_leading_complete_children):
             
-            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                 # Create group
                 g = ResourceGroup(project, 'Comic', comic_pattern)
                 

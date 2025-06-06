@@ -265,7 +265,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         assert feed_resource.default_revision() is not None
             
             # Test can open project (as writable)
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 assert False == mw.readonly
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -309,7 +309,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     assert False == (await is_url_not_in_archive(home_url))
             
             # Test can open project (as read only)
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as mw:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
                 assert True == mw.readonly
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
@@ -375,7 +375,9 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
             
             target_root_resource_name = 'Target'
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project_dirpath):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            project_dirpath = project.path
+            
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             assert root_ti.GetFirstChild() is None  # no entities
             
@@ -730,7 +732,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
             set_checkbox_value(ocd.open_as_readonly, True)
             assert False == ocd.create_button.Enabled
             
-            async with ocd.open(project_dirpath) as mw:
+            async with ocd.open(project_dirpath) as (mw, project):
                 # Ensure icon shows that project is read-only
                 assert True == mw.readonly, 'Expected read-only icon to be visible'
                 
@@ -793,10 +795,7 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
     comic1_v1_etag = '"62e1f036-1f21"'
     
     with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
-        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
             # Start xkcd v1
             with served_project('testdata_xkcd.crystalproj.zip') as sp1:
                 # Define URLs

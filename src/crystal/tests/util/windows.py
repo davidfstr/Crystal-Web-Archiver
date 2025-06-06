@@ -64,19 +64,37 @@ class OpenOrCreateDialog:
     async def create(self, 
             project_dirpath: Optional[str]=None,
             *, autoclose: bool=True,
-            ) -> AsyncIterator[Tuple[MainWindow, str]]:
+            ) -> AsyncIterator[Tuple[MainWindow, Project]]:
+        """
+        Creates a new project.
+        
+        If no project_dirpath is provided (i.e. the default) then a project
+        will be created in a new temporary directory. That temporary directory
+        will be deleted when the project is closed unless delete=False.
+        
+        If a project_dirpath is provided to an existing empty directory,
+        a project will be created in that directory. That directory will
+        not be deleted when the project is closed.
+        
+        The project will be automatically closed when exiting the
+        returned context, unless autoclose=False, which leaves the
+        MainWindow open.
+        """
         if project_dirpath is None:
             with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
                 assert project_dirpath is not None
-                async with self.create(project_dirpath, autoclose=autoclose) as (mw, project_dirpath):
-                    yield (mw, project_dirpath)
+                async with self.create(project_dirpath, autoclose=autoclose) as (mw, project2):
+                    yield (mw, project2)
             return
         
         mw = await self.create_and_leave_open(project_dirpath)
         
+        project = Project._last_opened_project
+        assert project is not None
+        
         exc_info_while_close = None
         try:
-            yield (mw, project_dirpath)
+            yield (mw, project)
         except:
             exc_info_while_close = sys.exc_info()
             raise
@@ -108,7 +126,17 @@ class OpenOrCreateDialog:
             autoclose: bool=True,
             using_crystalopen: bool=False,
             wait_func: Optional[Callable[[], Awaitable[None]]]=None,
-            ) -> AsyncIterator[MainWindow]:
+            ) -> AsyncIterator[Tuple[MainWindow, Project]]:
+        """
+        Opens an existing project.
+        
+        The project will be automatically closed when exiting the
+        returned context, unless autoclose=False, which leaves the
+        MainWindow open.
+        """
+        if not os.path.exists(project_dirpath):
+            raise ValueError('Project does not exist: ' + project_dirpath)
+        
         if readonly is not None:
             self.open_as_readonly.Value = readonly
         
@@ -124,9 +152,12 @@ class OpenOrCreateDialog:
                 await wait_func()
             mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
         
+        project = Project._last_opened_project
+        assert project is not None
+        
         exc_info_while_close = None
         try:
-            yield mw
+            yield (mw, project)
         except:
             exc_info_while_close = sys.exc_info()
             raise
