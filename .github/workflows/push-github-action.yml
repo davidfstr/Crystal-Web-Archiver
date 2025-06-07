@@ -23,12 +23,6 @@ jobs:
       matrix:
         # NOTE: Test lots of Python versions to look for segfaults
         python-version:
-          - "3.8.18"
-          - "3.9.19"
-          # NOTE: Disable runs on some Python versions so that total number
-          #       of macOS CI runners is low enough to not need to wait for
-          #       available runners for very long
-          #- "3.10.14"
           - "3.11.9"
       fail-fast: false
     # NOTE: macos-13 is the last macOS runner to run on Intel rather than arm64
@@ -114,8 +108,7 @@ jobs:
           #- macos-15  # ARM-based
         # Test the earliest supported Python version only
         python-version:
-          - "3.8.18"
-          #- "3.9.19"
+          - "3.11.9"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 23  # 150% of normal time: 15 min, as of 2024-02-16
