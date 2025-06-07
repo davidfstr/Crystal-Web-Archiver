@@ -129,6 +129,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # NOTE: Step must be after "Set up Python" so that Poetry installs
+      #       itself into that Python
       - name: Install Poetry
         # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
         #       https://github.com/pypa/pip/issues/6264
@@ -136,12 +143,6 @@ jobs:
         run: |
           python -m pip install -U pip setuptools
           python -m pip install -U "poetry>=1.4.0,<1.5.0"
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: poetry
 
       - name: Install dependencies with Poetry
         # If build takes a very long time, then it's likely that the version
@@ -247,18 +248,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      # NOTE: Step must be after "Set up Python" so that Poetry installs
+      #       itself into that Python
       - name: Install Poetry
         # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
         #       https://github.com/pypa/pip/issues/6264
         run: |
           python -m pip install -U pip setuptools
           python -m pip install -U "poetry>=1.4.0,<2.0.0"
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: poetry
 
       - name: Update APT packages
         run: sudo apt-get update
@@ -362,6 +364,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: poetry
       
+      # NOTE: Step must be after "Set up Python" so that Poetry installs
+      #       itself into that Python
       - name: Install Poetry (again)
         # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
         #       https://github.com/pypa/pip/issues/6264
