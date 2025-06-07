@@ -89,7 +89,13 @@ class OpenOrCreateDialog:
             # TODO: After upgrading to Python 3.12+, just use the
             #       "delete" parameter of TemporaryDirectory
             tmpdir_context = (
-                tempfile.TemporaryDirectory(suffix='.crystalproj') if delete  # type: ignore[assignment]
+                tempfile.TemporaryDirectory(  # type: ignore[assignment]
+                    suffix='.crystalproj',
+                    # NOTE: If a file inside the temporary directory is still open,
+                    #       ignore_cleanup_errors=True will prevent Windows from raising,
+                    #       at the cost of leaving the temporary directory around
+                    ignore_cleanup_errors=True
+                ) if delete
                 else nullcontext(tempfile.mkdtemp(suffix='.crystalproj'))
             )  # type: ContextManager[str]
             

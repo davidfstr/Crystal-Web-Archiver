@@ -162,7 +162,10 @@ class MockHttpServer:
 def extracted_project(
         zipped_project_filename: str
         ) -> Iterator[str]:
-    with tempfile.TemporaryDirectory() as project_parent_dirpath:
+    # NOTE: If a file inside the temporary directory is still open,
+    #       ignore_cleanup_errors=True will prevent Windows from raising,
+    #       at the cost of leaving the temporary directory around
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as project_parent_dirpath:
         # Extract project
         with resources.open_binary(zipped_project_filename) as zipped_project_file:
             with ZipFile(zipped_project_file, 'r') as project_zipfile:
