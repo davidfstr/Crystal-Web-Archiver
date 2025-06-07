@@ -915,10 +915,7 @@ class MainWindow:
                 is_database_gone_error(e) or
                 # Automated tests are simulating unmount of the disk
                 # containing the database, using _close_project_abruptly()
-                (
-                    os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True' and
-                    is_database_closed_error(e)
-                )
+                (tests_are_running() and is_database_closed_error(e))
             )
             if not io_error:
                 raise
