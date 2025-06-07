@@ -351,22 +351,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Poetry
-        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
-        #       https://github.com/pypa/pip/issues/6264
-        run: |
-          python -m pip install -U pip setuptools
-          python -m pip install -U "poetry>=1.4.0,<2.0.0"
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: poetry
       
       # NOTE: Step must be after "Set up Python" so that Poetry installs
       #       itself into that Python
-      - name: Install Poetry (again)
+      - name: Install Poetry
         # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
         #       https://github.com/pypa/pip/issues/6264
         run: |
