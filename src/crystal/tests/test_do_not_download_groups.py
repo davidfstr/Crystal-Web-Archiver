@@ -19,6 +19,8 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import (
     EntityTree, MainWindow, OpenOrCreateDialog,
 )
+import os
+import tempfile
 from typing import AsyncIterator, Tuple
 from unittest import skip
 from unittest.mock import ANY
@@ -206,9 +208,46 @@ async def test_given_embedded_resource_also_in_a_non_do_not_download_group_then_
     pass
 
 
-@skip('fails: not yet implemented')
 async def test_when_reopen_project_then_group_that_was_marked_as_do_not_download_is_still_marked_as_do_not_download() -> None:
-    pass
+    # Define URLs
+    comic_image_rg_pattern = 'https://imgs.xkcd.com/comics/*'
+    
+    # Case 1: New group marked as do_not_download
+    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        os.rmdir(project_dirpath)
+        
+        # Create project with do_not_download group
+        with Project(project_dirpath) as project:
+            comic_image_rg1 = ResourceGroup(
+                project, 'Comic Image', comic_image_rg_pattern,
+                do_not_download=True)
+            assert True == comic_image_rg1.do_not_download
+        
+        # Reopen project. Ensure group is still marked as do_not_download
+        with Project(project_dirpath) as project:
+            comic_image_rg2 = project.get_resource_group(name='Comic Image')
+            assert comic_image_rg2 is not None
+            assert True == comic_image_rg2.do_not_download
+    
+    # Case 2: Edited group marked as do_not_download
+    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        os.rmdir(project_dirpath)
+        
+        # Create project with group. Edit to mark as do_not_download.
+        with Project(project_dirpath) as project:
+            comic_image_rg1 = ResourceGroup(
+                project, 'Comic Image', comic_image_rg_pattern,
+                do_not_download=False)
+            assert False == comic_image_rg1.do_not_download
+            
+            comic_image_rg1.do_not_download = True
+            assert True == comic_image_rg1.do_not_download
+        
+        # Reopen project. Ensure group is still marked as do_not_download
+        with Project(project_dirpath) as project:
+            comic_image_rg2 = project.get_resource_group(name='Comic Image')
+            assert comic_image_rg2 is not None
+            assert True == comic_image_rg2.do_not_download
 
 
 # ------------------------------------------------------------------------------

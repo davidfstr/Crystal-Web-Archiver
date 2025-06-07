@@ -418,6 +418,11 @@ class Project(ListenableMixin):
         if True:
             index_names = get_index_names(c)  # cache
             
+            # Add resource_group.do_not_download column if missing
+            if 'do_not_download' not in get_column_names_of_table(c, 'resource_group'):
+                progress_listener.upgrading_project('Adding do-not-download status to resource groups...')
+                c.execute('alter table resource_group add column do_not_download integer not null default 0')
+            
             # Add resource_revision.request_cookie column if missing
             if 'request_cookie' not in get_column_names_of_table(c, 'resource_revision'):
                 progress_listener.upgrading_project('Adding cookies to revisions...')
@@ -710,11 +715,13 @@ class Project(ListenableMixin):
         
         # (Define indexes later in _apply_migrations())
         
-        # Define major version for new projects, for Crystal >1.6.0
-        self._set_major_version(2, c, db.commit)
-        
-        # Define default HTML parser for new projects, for Crystal >1.5.0
-        self.html_parser_type = 'lxml'
+        # Set property values
+        if True:
+            # Define major version for new projects, for Crystal >1.6.0
+            self._set_major_version(2, c, db.commit)
+            
+            # Define default HTML parser for new projects, for Crystal >1.5.0
+            self.html_parser_type = 'lxml'
     
     def _load(self,
             c: DatabaseCursor,
@@ -770,9 +777,13 @@ class Project(ListenableMixin):
         [(resource_group_count,)] = c.execute('select count(1) from resource_group')
         progress_listener.loading_resource_groups(resource_group_count)
         group_2_source = {}
-        for (index, (name, url_pattern, source_type, source_id, id)) in enumerate(c.execute(
-                'select name, url_pattern, source_type, source_id, id from resource_group')):
-            group = ResourceGroup(self, name, url_pattern, source=Ellipsis, _id=id)
+        do_not_download_column = (
+            'do_not_download' if 'do_not_download' in get_column_names_of_table(c, 'resource_group')
+            else '0'  # default value for do_not_download column
+        )
+        for (index, (name, url_pattern, source_type, source_id, do_not_download, id)) in enumerate(c.execute(
+                f'select name, url_pattern, source_type, source_id, {do_not_download_column}, id from resource_group')):
+            group = ResourceGroup(self, name, url_pattern, source=Ellipsis, do_not_download=do_not_download, _id=id)
             group_2_source[group] = (source_type, source_id)
         for (group, (source_type, source_id)) in group_2_source.items():
             if source_type is None:
@@ -3344,7 +3355,7 @@ class ResourceGroup(ListenableMixin):
             if project.readonly:
                 raise ProjectReadOnlyError()
             c = project._db.cursor()
-            c.execute('insert into resource_group (name, url_pattern) values (?, ?)', (name, url_pattern))
+            c.execute('insert into resource_group (name, url_pattern, do_not_download) values (?, ?, ?)', (name, url_pattern, do_not_download))
             project._db.commit()
             self._id = c.lastrowid
             
@@ -3452,12 +3463,18 @@ class ResourceGroup(ListenableMixin):
     
     def _get_do_not_download(self) -> bool:
         return self._do_not_download
-    # NOTE: The "save" parameter will be used to control whether the new value
-    #       will be persisted, once persistence support for this option is added
-    def _set_do_not_download(self, value: bool, *, save: bool=True) -> None:
+    def _set_do_not_download(self, value: bool) -> None:
         if self._do_not_download == value:
             return
+        
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        c = self.project._db.cursor()
+        c.execute('update resource_group set do_not_download=? where id=?', (value, self._id))
+        self.project._db.commit()
+        
         self._do_not_download = value
+        
         self.project._resource_group_did_change_do_not_download(self)
     do_not_download = cast(bool, property(_get_do_not_download, _set_do_not_download))
     

@@ -21,6 +21,8 @@ Release Notes ⋮
     * When opening a project the first URL or group is selected by default.
     * Simpler language is used to explain the symbols used in patterns
       for creating new groups.
+    * The "do not download" status of resource groups is saved,
+      and is no longer forgotten when a project is closed.
 
 * Minor fixes
     * Fix closing a project to no longer have a couple of heap-use-after-free

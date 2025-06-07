@@ -284,19 +284,14 @@ class NewGroupDialog:
             ) -> wx.Sizer:
         options_sizer = wx.BoxSizer(wx.VERTICAL)
         
-        options_sizer.Add(
-            wx.StaticText(parent, label='These options reset when Crystal quits.'),
-        )
-        
         self.do_not_download_checkbox = wx.CheckBox(
             parent, label='Do not download members when embedded',
             name='cr-new-group-dialog__do-not-download-checkbox')
         self.do_not_download_checkbox.Value = initial_do_not_download
-        options_sizer.Add(
-            self.do_not_download_checkbox,
-            flag=wx.TOP,
-            border=8,
-        )
+        options_sizer.Add(self.do_not_download_checkbox,
+            flag=wx.BOTTOM,
+            border=_FORM_LABEL_INPUT_SPACING)
+        
         if self._SHOW_SEQUENTIAL_OPTION:
             options_sizer.AddSpacer(_FORM_ROW_SPACING)
             
