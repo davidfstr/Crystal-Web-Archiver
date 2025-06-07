@@ -44,9 +44,9 @@ include = [
 crystal = 'crystal.__main__:main'
 
 [tool.poetry.dependencies]
-# NOTE: Python 3.8 is the last Python to support Windows 7
+# NOTE: Python 3.11 is the minimum supported version
 # NOTE: Python 3.11 is the latest Python supported by py2exe 0.13.0.0
-python = ">=3.8,<3.12"
+python = ">=3.11,<3.12"
 # NOTE: When changing the version of wxPython to Y, you'll need to make sure
 #       there is a precompiled wheel for {Python 3.X, wxPython Y, OS}
 #       for every {Python 3.X, OS} in continuous integration (CI) jobs
