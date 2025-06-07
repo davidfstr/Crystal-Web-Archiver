@@ -8,6 +8,15 @@ def is_database_closed_error(e: object) -> bool:
     )
 
 
+# Empirically, this error was observed to occur on macOS 15.3 when the disk
+# containing the database was unmounted forcefully while the database was open.
+def is_database_gone_error(e: object) -> bool:
+    return (
+        isinstance(e, sqlite3.DatabaseError) and
+        str(e) == 'database disk image is malformed'
+    )
+
+
 # HACK: Some Windows runners in GitHub Actions don't have a version of SQLite
 #       compiled with JSON for some reason. So some behavior must be altered
 #       in that case.

@@ -39,6 +39,7 @@ from crystal.util.wx_timer import Timer, TimerError
 from crystal.util.xos import (
     is_kde_or_non_gnome, is_linux, is_mac_os, is_windows, mac_version,
 )
+from crystal.util.xsqlite3 import is_database_closed_error, is_database_gone_error
 from crystal.util.xthreading import (
     bg_call_later, fg_affinity, fg_call_later, fg_call_and_wait, set_is_quitting
 )
@@ -909,19 +910,14 @@ class MainWindow:
             self.project.hibernate_tasks()
         except (sqlite3.DatabaseError, sqlite3.ProgrammingError) as e:
             # Ignore certain types of I/O errors while closing
-            str_e = str(e)
             io_error = (
                 # Disk containing the database may have unmounted expectedly
-                (
-                    isinstance(e, sqlite3.DatabaseError) and
-                    str_e == 'database disk image is malformed'
-                ) or
+                is_database_gone_error(e) or
                 # Automated tests are simulating unmount of the disk
                 # containing the database, using _close_project_abruptly()
                 (
                     os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'True' and
-                    isinstance(e, sqlite3.ProgrammingError) and
-                    str_e == 'Cannot operate on a closed database.'
+                    is_database_closed_error(e)
                 )
             )
             if not io_error:
