@@ -30,10 +30,7 @@ from unittest.mock import ANY
 
 async def test_when_download_html_page_then_does_not_download_embedded_resource_automatically() -> None:
     async with _project_with_do_not_download_group_open() as (
-            mw, home_url, comic_image_rg_pattern, comic_image_r_url):
-        project = Project._last_opened_project
-        assert project is not None
-        
+            mw, project, home_url, comic_image_rg_pattern, comic_image_r_url):
         # Download HTML page
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
@@ -59,7 +56,7 @@ async def test_when_download_html_page_then_does_not_download_embedded_resource_
 
 async def test_then_embedded_resource_does_not_appear_in_a_hidden_embedded_cluster_in_entity_tree() -> None:
     async with _project_with_do_not_download_group_open() as (
-            mw, home_url, comic_image_rg_pattern, comic_image_r_url):
+            mw, project, home_url, comic_image_rg_pattern, comic_image_r_url):
         # Download HTML page
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
@@ -81,7 +78,7 @@ async def test_then_embedded_resource_does_not_appear_in_a_hidden_embedded_clust
 
 async def test_when_browse_to_html_page_and_browser_requests_embedded_resource_then_do_not_dynamically_download_embedded_resource_and_instead_return_http_404() -> None:
     async with _project_with_do_not_download_group_open() as (
-            mw, home_url, comic_image_rg_pattern, comic_image_r_url):
+            mw, project, home_url, comic_image_rg_pattern, comic_image_r_url):
         # Download HTML page
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
@@ -103,10 +100,7 @@ async def test_when_browse_to_html_page_and_browser_requests_embedded_resource_t
 
 async def test_given_embedded_resource_selected_in_entity_tree_when_press_download_button_explicitly_then_downloads_embedded_resource() -> None:
     async with _project_with_do_not_download_group_open() as (
-            mw, home_url, comic_image_rg_pattern, comic_image_r_url):
-        project = Project._last_opened_project
-        assert project is not None
-        
+            mw, project, home_url, comic_image_rg_pattern, comic_image_r_url):
         # Download HTML page
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
@@ -138,10 +132,7 @@ async def test_given_embedded_resource_selected_in_entity_tree_when_press_downlo
 
 async def test_given_do_not_download_group_selected_in_entity_tree_when_press_download_button_explicitly_then_downloads_group() -> None:
     async with _project_with_do_not_download_group_open() as (
-            mw, home_url, comic_image_rg_pattern, comic_image_r_url):
-        project = Project._last_opened_project
-        assert project is not None
-        
+            mw, project, home_url, comic_image_rg_pattern, comic_image_r_url):
         # Download HTML page
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
@@ -168,10 +159,7 @@ async def test_given_do_not_download_group_selected_in_entity_tree_when_press_do
 
 async def test_then_embedded_resource_in_entity_tree_appears_with_do_not_download_badge() -> None:
     async with _project_with_do_not_download_group_open() as (
-            mw, home_url, comic_image_rg_pattern, comic_image_r_url):
-        project = Project._last_opened_project
-        assert project is not None
-        
+            mw, project, home_url, comic_image_rg_pattern, comic_image_r_url):
         # Download HTML page
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
@@ -227,7 +215,8 @@ async def test_when_reopen_project_then_group_that_was_marked_as_do_not_download
 # Utility
 
 @asynccontextmanager
-async def _project_with_do_not_download_group_open() -> AsyncIterator[Tuple[MainWindow, str, str, str]]:
+async def _project_with_do_not_download_group_open(
+        ) -> AsyncIterator[Tuple[MainWindow, Project, str, str, str]]:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Add comic image to project,
         # since it's not part of the default project test data
@@ -252,7 +241,7 @@ async def _project_with_do_not_download_group_open() -> AsyncIterator[Tuple[Main
                     project, 'Comic Image', comic_image_rg_pattern,
                     do_not_download=True)
                 
-                yield (mw, home_url, comic_image_rg_pattern, comic_image_r_url)
+                yield (mw, project, home_url, comic_image_rg_pattern, comic_image_r_url)
 
 
 # NOTE: Only for use with tree items in EntityTree

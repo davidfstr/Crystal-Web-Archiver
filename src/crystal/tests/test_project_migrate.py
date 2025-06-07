@@ -167,9 +167,6 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                     project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
                 assert 1 == show_modal_method.call_count
                 
-                maybe_project = Project._last_opened_project
-                assert maybe_project is not None
-                project = maybe_project
                 assert project.major_version >= 2, (
                     'Expected project to be upgraded'
                 )  # not == 1
@@ -201,9 +198,6 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
                 assert 1 == show_modal_method.call_count
                 
-                maybe_project = Project._last_opened_project
-                assert maybe_project is not None
-                project = maybe_project
                 assert 1 == project.major_version, (
                     'Expected project to not be upgraded'
                 )  # not > 1
@@ -260,10 +254,6 @@ async def test_given_project_is_major_version_1_and_has_more_than_MAX_REVISION_I
         
         with patch.object(Project, '_process_table_rows', process_table_rows):
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
-                maybe_project = Project._last_opened_project
-                assert maybe_project is not None
-                project = maybe_project
-                
                 assert 1 == project.major_version, (
                     'Expected project to not be upgraded'
                 )  # not > 1
@@ -318,10 +308,6 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
         # Ensure revisions appear to be migrated correctly.
         async with (await OpenOrCreateDialog.wait_for()).open(
                 project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
-            maybe_project = Project._last_opened_project
-            assert maybe_project is not None
-            project = maybe_project
-            
             assert project.major_version >= 2, (
                 'Expected project to be upgraded'
             )  # not == 1
@@ -393,10 +379,6 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
         if True:
             async with (await OpenOrCreateDialog.wait_for()).open(
                     project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
-                maybe_project = Project._last_opened_project
-                assert maybe_project is not None
-                project = maybe_project
-                
                 assert project.major_version >= 2, (
                     'Expected project to be upgraded'
                 )  # not == 1
@@ -424,10 +406,6 @@ async def test_can_serve_revisions_from_project_with_major_version_1() -> None:
 async def test_can_serve_revisions_from_project_with_major_version_2() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
-            maybe_project = Project._last_opened_project
-            assert maybe_project is not None
-            project = maybe_project
-            
             assert 2 == project.major_version
             
             (server_page, _) = await serve_and_fetch_xkcd_home_page(mw)

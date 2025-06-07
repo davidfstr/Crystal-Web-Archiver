@@ -739,7 +739,7 @@ def test_given_schemaless_url_with_www_prefix_then_returns_ellipsis() -> None:
 # === Test: Validate URL upon Blur ===
 
 async def test_given_url_input_is_empty_and_focused_when_tab_pressed_then_url_input_unfocused_and_url_input_empty_and_no_spinner_visible() -> None:
-    async with _new_root_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as (nud, project):
         if fields_hide_hint_when_focused():
             SetFocus(nud.url_field, None)
         else:
@@ -759,7 +759,7 @@ async def test_given_url_input_is_nonempty_and_focused_when_tab_pressed_then_url
         'xkcd.com',
         'www.apple.com',
     ]
-    async with _new_root_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as (nud, project):
         with _urlopen_responding_with(_UrlOpenHttpResponse(code=404, url=ANY)):
             for url in URLS:
                 with subtests.test(url=url):
@@ -784,7 +784,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
         ('xkcd.com', 'https://xkcd.com/'),
         ('www.apple.com', 'https://www.apple.com/'),
     ]
-    async with _new_root_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as (nud, project):
         last_focused = None  # type: Optional[wx.Window]
         for (url, normalized_url) in CASES:
             with subtests.test(url=url):
@@ -807,7 +807,7 @@ async def test_given_url_input_is_nonempty_without_www_and_did_press_tab_and_spi
         ('apple.com/', 'https://apple.com/', 'https://www.apple.com/'),
         ('apple.com', 'https://apple.com/', 'https://www.apple.com/'),
     ]
-    async with _new_root_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as (nud, project):
         last_focused = None  # type: Optional[wx.Window]
         for (url_input, without_www_url, with_www_url) in CASES:
             with subtests.test(url_input=url_input):
@@ -830,7 +830,7 @@ async def test_given_url_input_is_nonempty_with_www_and_did_press_tab_and_spinne
         ('www.xkcd.com/', 'https://www.xkcd.com/', 'https://xkcd.com/'),
         ('www.xkcd.com', 'https://www.xkcd.com/', 'https://xkcd.com/'),
     ]
-    async with _new_root_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as (nud, project):
         last_focused = None  # type: Optional[wx.Window]
         for (url_input, with_www_url, without_www_url) in CASES:
             with subtests.test(url_input=url_input):
@@ -851,7 +851,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
     CASES = [
         ('contoso.com/', 'https://contoso.com/', 'https://www.microsoft.com/'),
     ]
-    async with _new_root_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as (nud, project):
         last_focused = None  # type: Optional[wx.Window]
         for (start_url, normalized_start_url, target_url) in CASES:
             with subtests.test(url_input=start_url):
@@ -873,7 +873,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_ur
     # TODO: Respond with "unreachable error" to be more realistic
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=500, url=ANY)):
         with _urlopen_paused():
-            async with _new_root_url_dialog_open() as nud:
+            async with _new_root_url_dialog_open() as (nud, project):
                 last_focused = None  # type: Optional[wx.Window]
                 
                 last_focused = SetFocus(nud.url_field, last_focused)
@@ -896,10 +896,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_ur
 
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_press_ok_then_disables_all_controls_except_cancel() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _new_root_url_dialog_open() as nud:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
             with _urlopen_paused():
@@ -934,10 +931,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
 
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_and_did_press_ok_when_press_cancel_then_dialog_disappears() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _new_root_url_dialog_open() as nud:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
             with _urlopen_paused():
@@ -964,10 +958,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
 
 async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_press_ok_then_dialog_disappears_and_root_url_is_created() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _new_root_url_dialog_open() as nud:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
             last_focused = SetFocus(nud.url_field, last_focused)
@@ -993,10 +984,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_pres
 
 async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_ok_then_dialog_disappears_and_root_url_is_created() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _new_root_url_dialog_open() as nud:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
             last_focused = SetFocus(nud.url_field, last_focused)
@@ -1013,10 +1001,7 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
 
 async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_cancel_then_dialog_disappears() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _new_root_url_dialog_open() as nud:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
             last_focused = SetFocus(nud.url_field, last_focused)
@@ -1031,10 +1016,7 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
 
 async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_then_spinner_does_not_appear() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
-        async with _new_root_url_dialog_open() as nud:
-            project = Project._last_opened_project
-            assert project is not None
-            
+        async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
             last_focused = SetFocus(nud.url_field, last_focused)
@@ -1059,7 +1041,7 @@ async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_the
 # === Test: Disallow Create Empty Root URL ===
 
 async def test_given_url_input_is_empty_then_ok_button_is_disabled() -> None:
-    async with _new_root_url_dialog_open() as nud:
+    async with _new_root_url_dialog_open() as (nud, project):
         assertEqual('', nud.url_field.Value)
         assertEqual(False, nud.ok_button.Enabled)
         
@@ -1095,10 +1077,7 @@ async def test_given_url_input_is_nonempty_when_url_input_becomes_empty_then_ok_
 async def test_given_url_input_matches_existing_root_url_when_press_ok_then_displays_error_dialog_and_enables_all_controls(subtests: SubtestsContext) -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
         with subtests.test(case='given url input is focused'):
-            async with _new_root_url_dialog_open() as nud:
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with _new_root_url_dialog_open() as (nud, project):
                 r = Resource(project, 'https://xkcd.com/')
                 RootResource(project, '', r)
                 
@@ -1120,10 +1099,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 assertEqual(True, nud.cancel_button.Enabled)
         
         with subtests.test(case='given url input is unfocused and spinner is visible'):
-            async with _new_root_url_dialog_open() as nud:
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with _new_root_url_dialog_open() as (nud, project):
                 r = Resource(project, 'https://xkcd.com/')
                 RootResource(project, '', r)
                 
@@ -1149,10 +1125,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 assertEqual(True, nud.cancel_button.Enabled)
         
         with subtests.test(case='given url input is unfocused and spinner is not visible'):
-            async with _new_root_url_dialog_open() as nud:
-                project = Project._last_opened_project
-                assert project is not None
-                
+            async with _new_root_url_dialog_open() as (nud, project):
                 r = Resource(project, 'https://xkcd.com/')
                 RootResource(project, '', r)
                 
@@ -1193,16 +1166,18 @@ def _EXPAND_enabled() -> Iterator[None]:
 
 
 @asynccontextmanager
-async def _new_root_url_dialog_open(*, autoclose: bool=True) -> AsyncIterator[NewRootUrlDialog]:
+async def _new_root_url_dialog_open(*,
+        autoclose: bool=True
+        ) -> AsyncIterator[Tuple[NewRootUrlDialog, Project]]:
     # Never allow automated tests to make real internet requests
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=590, url=ANY)):
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
             nud.do_not_download_immediately()
             
             try:
-                yield nud
+                yield (nud, project)
             finally:
                 if autoclose and nud.shown:
                     await nud.cancel()

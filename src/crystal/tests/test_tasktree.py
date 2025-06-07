@@ -46,10 +46,7 @@ async def test_when_start_downloading_large_group_then_show_100_children_plus_tr
                 small_max_visible_children=N,
                 small_max_leading_complete_children=M,
                 scheduler_thread_enabled=False,
-            ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+            ) as (mw, project, download_rg_ttn, download_rg_members_ttn, _):
         parent_ttn = download_rg_members_ttn
         
         # Ensure only first 100 member download tasks are visible,
@@ -166,7 +163,7 @@ async def test_given_group_has_leading_completed_children_when_start_downloading
                     small_max_visible_children=N,
                     small_max_leading_complete_children=M,
                     scheduler_thread_enabled=False,
-                ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
+                ) as (mw, project, download_rg_ttn, download_rg_members_ttn, _):
             parent_ttn = download_rg_members_ttn
             
             assertEqual(1, _viewport_offset(parent_ttn))
@@ -183,7 +180,7 @@ async def test_given_group_has_more_leading_completed_children_than_visible_chil
                     small_max_visible_children=N,
                     small_max_leading_complete_children=M,
                     scheduler_thread_enabled=False,
-                ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
+                ) as (mw, project, download_rg_ttn, download_rg_members_ttn, _):
             parent_ttn = download_rg_members_ttn
             
             assertEqual(3, _viewport_offset(parent_ttn))
@@ -202,7 +199,7 @@ async def test_given_group_has_more_leading_completed_children_than_visible_chil
                     small_max_visible_children=N,
                     small_max_leading_complete_children=M,
                     scheduler_thread_enabled=False,
-                ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
+                ) as (mw, project, download_rg_ttn, download_rg_members_ttn, _):
             parent_ttn = download_rg_members_ttn
             
             assertEqual(6, _viewport_offset(parent_ttn))
@@ -227,10 +224,7 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
                 small_max_visible_children=N,
                 small_max_leading_complete_children=M,
                 scheduler_thread_enabled=False,
-            ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
-        project = Project._last_opened_project
-        assert project is not None
-        
+            ) as (mw, project, download_rg_ttn, download_rg_members_ttn, _):
         parent_ttn = download_rg_members_ttn
         
         # Ensure starts with no leading completed children
@@ -376,10 +370,7 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
                     small_max_visible_children=N,
                     small_max_leading_complete_children=M,
                     scheduler_thread_enabled=False,
-                ) as (mw, download_rg_ttn, download_rg_members_ttn, _):
-            project = Project._last_opened_project
-            assert project is not None
-            
+                ) as (mw, project, download_rg_ttn, download_rg_members_ttn, _):
             parent_ttn = download_rg_members_ttn
             
             (children_tns, children_tasks) = \
@@ -442,10 +433,7 @@ async def test_given_downloading_group_and_many_uncompleted_children_remaining_w
                 small_max_visible_children=N,
                 small_max_leading_complete_children=M,
                 scheduler_thread_enabled=False,
-            ) as (mw, download_rg_ttn, download_rg_members_ttn, create_resource):
-        project = Project._last_opened_project
-        assert project is not None
-        
+            ) as (mw, project, download_rg_ttn, download_rg_members_ttn, create_resource):
         parent_ttn = download_rg_members_ttn
         
         # Ensure initially has trailing more node
@@ -542,7 +530,7 @@ async def _project_with_resource_group_starting_to_download(
         small_max_visible_children: int,
         small_max_leading_complete_children: int,
         scheduler_thread_enabled: bool=True,
-        ) -> AsyncIterator[Tuple[MainWindow, TaskTreeNode, TaskTreeNode, Callable[[], Resource]]]:
+        ) -> AsyncIterator[Tuple[MainWindow, Project, TaskTreeNode, TaskTreeNode, Callable[[], Resource]]]:
     if not (small_max_leading_complete_children <= small_max_visible_children):
         raise ValueError()
     
@@ -598,6 +586,7 @@ async def _project_with_resource_group_starting_to_download(
                 try:
                     yield (
                         mw,
+                        project,
                         download_rg_ttn,
                         download_rg_members_ttn,
                         create_resource,
