@@ -8,6 +8,7 @@ To compile a new wagon containing wxPython:
 * Start a Linux container
 
 ```bash
+export DOCKER_DEFAULT_PLATFORM=linux/amd64  # create x86_64 wheel
 docker run -it --rm -v $(pwd):/usr/src ubuntu:22.04
 ```
 
@@ -54,7 +55,7 @@ TODO: Add instructions, probably based on the Python 3.11 instructions below
 ```bash
 # Install Python 3.11 and pip
 apt-get update
-apt-get install -y python3.11 build-essential wget
+apt-get install -y python3.11 python3.11-dev build-essential wget
 wget https://bootstrap.pypa.io/get-pip.py
 python3.11 get-pip.py
 ```
@@ -66,10 +67,10 @@ python3.11 get-pip.py
 time apt-get install -y libgtk-3-dev
 
 # Upgrade pip
-python3 -m pip install --upgrade pip
+python3 -m pip install --upgrade pip  # or: python3.x -m pip install --upgrade pip
 
 # Install wagon
-pip3 install wagon[dist]  # or: python3.x -m pip install wagon[dist]
+python3 -m pip install wagon[dist]  # or: python3.x -m pip install wagon[dist]
 ```
 
 * Compile wagon
@@ -78,7 +79,7 @@ pip3 install wagon[dist]  # or: python3.x -m pip install wagon[dist]
 # Compile wagon
 cd /usr/src  # shared folder with Docker host
 time wagon create wxPython==4.2.1  # use version from pyproject.toml
-    # real  34m52.754s
+    # real  81m6.382s
 ```
 
 * Upload the .wgn file as a release artifact to a release tag on GitHub,

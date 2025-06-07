@@ -35,6 +35,14 @@ Release Notes ⋮
       which helps to identify heap-use-after-free bugs related to
       interacting with wxPython that corrupt memory.
 
+* Support changes
+    * Drop support for Windows 7, 8, 8.1, and 10.
+      Windows 11+ remain supported.
+    * Drop support for macOS 12.
+      macOS 13+ remain supported.
+    * Drop support for Python 3.8, 3.9, and 3.10.
+      Python 3.11+ remains supported.
+
 ### v1.9.0b (June 22, 2024)
 
 This release contains error-handling improvements and bug fixes

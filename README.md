@@ -18,13 +18,13 @@ Download ⬇︎
 
 Either install a binary version of Crystal:
 
-* [macOS 12 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.9.0b/crystal-mac-1.9.0b.dmg)
+* [macOS 13 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.9.0b/crystal-mac-1.9.0b.dmg)
     * You will need to [right-click or Control-click on the application and select "Open" to open it for the first time](https://github.com/davidfstr/Crystal-Web-Archiver/issues/20).
-* [Windows 7 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.9.0b/crystal-win-1.9.0b.exe)
+* [Windows 11 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.9.0b/crystal-win-1.9.0b.exe)
 
 Or install from source, using pipx:
 
-* Install [Python] >=3.8,<3.12 and pip:
+* Install [Python] >=3.11,<3.12 and pip:
     * Ubuntu/Kubuntu 22.04+: `apt-get update; apt-get install -y python3 python3-pip python3-venv`
     * Fedora 37+: `yum update -y; yum install -y python3 python3-pip`
 * On Linux, install dependencies of wxPython from your package manager:

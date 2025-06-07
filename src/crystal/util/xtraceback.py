@@ -3,8 +3,19 @@ import os.path
 import traceback
 
 
-_CRYSTAL_PACKAGE_PARENT_DIRPATH = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-_PYTHON_STDLIB_PARENT_DIRPATH = os.path.abspath(os.path.dirname(os.__file__))
+_CRYSTAL_PACKAGE_PARENT_DIRPATH = os.path.abspath(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+# TODO: Locate the stdlib with a more-reliable method,
+#       such as `sysconfig.get_paths().get('stdlib')`.
+#       
+#       The `os.__file__` method below does not work when Python is running
+#       inside a frozen Windows .exe file.
+_PYTHON_STDLIB_PARENT_DIRPATH = (
+    os.path.abspath(os.path.dirname(os.__file__))
+    if hasattr(os, '__file__')
+    else None
+)
 
 
 def format_exception_for_user(exc: BaseException) -> str:
@@ -21,7 +32,8 @@ def format_exception_for_user(exc: BaseException) -> str:
             continue
         if fs.filename.startswith(_CRYSTAL_PACKAGE_PARENT_DIRPATH):
             short_filepath = os.path.relpath(fs.filename, start=_CRYSTAL_PACKAGE_PARENT_DIRPATH)
-        elif fs.filename.startswith(_PYTHON_STDLIB_PARENT_DIRPATH):
+        elif (_PYTHON_STDLIB_PARENT_DIRPATH is not None and 
+                fs.filename.startswith(_PYTHON_STDLIB_PARENT_DIRPATH)):
             short_filepath = os.path.relpath(fs.filename, start=_PYTHON_STDLIB_PARENT_DIRPATH)
         else:
             short_filepath = fs.filename
