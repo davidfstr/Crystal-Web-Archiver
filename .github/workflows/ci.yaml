@@ -1,7 +1,7 @@
 # Useful documentation for GitHub Actions workflows:
 # https://docs.github.com/en/actions/using-workflows/about-workflows
 
-name: push-github-action
+name: ci
 
 # Useful documentation for `on`:
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#on
