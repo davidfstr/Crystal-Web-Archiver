@@ -1,36 +1,34 @@
 Building a Package for Distribution
 ===================================
 
-macOS 10.14+:
+macOS 13 and later:
 1. Install the prerequisites:
-    * Python 3.8.x, from Mac installer on python.org
-    * Poetry: https://python-poetry.org/
-        $ curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+    * Python >=3.11,<3.12, from Mac installer on python.org
+    * Poetry 2.1.1: https://python-poetry.org/
+        $ python -m pip install poetry==2.1.1
 2. Run the following commands in a Terminal window from this directory:
     $ poetry install
     $ cd setup
     $ ./make-mac.sh
 3. The output disk image will be in the setup/dist-mac directory.
 
-Windows 7, 8, 10:
+Windows 11 and later:
 1. Install the prerequisites:
-    * Python 3.8.x, from Windows installer on python.org
+    * Python >=3.11,<3.12, from Windows installer on python.org
         - Do select the option to alter the system PATH.
         - Ensure Python works in Command Prompt:
             $ python -V
-    * Poetry: https://python-poetry.org/
-        - NOTE: Neither of the following official instructions work on Windows 7:
-            1. (Invoke-WebRequest -Uri https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py -UseBasicParsing).Content | python -
-            2. $ python -m pip install --user poetry
-        - Manually download the get-poetry.py script
+    * Poetry 2.1.1: https://python-poetry.org/
+        - Manually download the get-poetry.py script if needed
         - Run the get-poetry.py script in Command Prompt:
             $ python get-poetry.py
-                - NOTE: It claims to alter the system PATH but does not actually do it.
+        - Or install directly:
+            $ python -m pip install poetry==2.1.1
         - Add to the end of your ';'-separated system PATH:
             C:\Users\__YOUR_USERNAME__\.poetry\bin
         - Ensure Poetry works in Command Prompt:
             $ poetry --version
-    * Inno Setup 6.2.1+, from https://jrsoftware.org/isdl.php
+    * Inno Setup 6.4.3, from https://jrsoftware.org/isdl.php
 2. Run the following commands in a Command Prompt window from this directory:
     $ poetry install
     $ cd setup
