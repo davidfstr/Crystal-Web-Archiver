@@ -77,12 +77,15 @@ wmi = { version = "*", markers = "sys_platform == 'win32'" }
 typing-extensions = "^4.8.0"
 types-tqdm = "^4.66.0.20240106"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 pytest = ">=7.0,<8.0"
 mypy = "==1.6.1"
 types-tzlocal = "^4.2.0"
 PyScreeze = "^0.1.28"
 flameprof = "^0.4"
+# Declare setuptools explicitly for setup.py and py2exe.
+# Version >=70,<71 is necessary for make-mac.sh and py2app to build successfully.
+setuptools = ">=70,<71"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

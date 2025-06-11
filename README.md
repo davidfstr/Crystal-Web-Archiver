@@ -205,6 +205,11 @@ please see the [maintainer workflow].
 
 ### Code Contributors
 
+Poetry is required for dependency management and development.
+To install the correct version:
+
+    python -m pip install poetry==2.1.1
+
 To **run the code locally**,
 run `poetry install` once in Terminal (Mac) or in Command Prompt (Windows), and
 `poetry run python -m crystal` thereafter.

@@ -75,12 +75,9 @@ jobs:
           cpython/python.exe -m venv venv_asan
       
       - name: Install Poetry
-        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
-        #       https://github.com/pypa/pip/issues/6264
-        # NOTE: Poetry >=1.5.0 on macOS cannot use "poetry run" to run make-mac.sh
         run: |
           python -m pip install -U pip setuptools
-          python -m pip install -U "poetry>=1.4.0,<1.5.0"
+          python -m pip install -U "poetry==2.1.1"
       
       - name: Activate virtual environment
         run: |
@@ -138,12 +135,9 @@ jobs:
       # NOTE: Step must be after "Set up Python" so that Poetry installs
       #       itself into that Python
       - name: Install Poetry
-        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
-        #       https://github.com/pypa/pip/issues/6264
-        # NOTE: Poetry >=1.5.0 on macOS cannot use "poetry run" to run make-mac.sh
         run: |
           python -m pip install -U pip setuptools
-          python -m pip install -U "poetry>=1.4.0,<1.5.0"
+          python -m pip install -U "poetry==2.1.1"
 
       - name: Install dependencies with Poetry
         # If build takes a very long time, then it's likely that the version
@@ -267,11 +261,9 @@ jobs:
       # NOTE: Step must be after "Set up Python" so that Poetry installs
       #       itself into that Python
       - name: Install Poetry
-        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
-        #       https://github.com/pypa/pip/issues/6264
         run: |
           python -m pip install -U pip setuptools
-          python -m pip install -U "poetry>=1.4.0,<2.0.0"
+          python -m pip install -U "poetry==2.1.1"
 
       - name: Update APT packages
         run: sudo apt-get update
@@ -379,11 +371,9 @@ jobs:
       # NOTE: Step must be after "Set up Python" so that Poetry installs
       #       itself into that Python
       - name: Install Poetry
-        # NOTE: Keeping pip and setuptools updated avoids error: Backend 'setuptools.build_meta:__legacy__' is not available
-        #       https://github.com/pypa/pip/issues/6264
         run: |
           python -m pip install -U pip setuptools
-          python -m pip install -U "poetry>=1.4.0,<2.0.0"
+          python -m pip install -U "poetry==2.1.1"
 
       - name: Install dependencies with Poetry
         # If build takes a very long time, then it's likely that the version

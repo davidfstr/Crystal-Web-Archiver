@@ -13,6 +13,10 @@ else
     GRAPH_OPT="--graph"
 fi
 poetry run python setup.py py2app $GRAPH_OPT
+if [ $? -ne 0 ]; then
+    echo "ERROR: py2app build failed. Aborting."
+    exit 1
+fi
 
 # Slim .app
 zip dist/Crystal\ Web\ Archiver.app/Contents/Resources/lib/python3*.zip \
