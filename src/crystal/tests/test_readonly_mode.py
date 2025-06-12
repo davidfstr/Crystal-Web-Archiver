@@ -9,7 +9,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
-from typing import Iterator
+from collections.abc import Iterator
 from unittest import skip
 
 

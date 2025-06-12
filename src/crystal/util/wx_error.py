@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 import os
-from typing import Callable, Iterator, NoReturn, Optional
+from typing import NoReturn, Optional
+from collections.abc import Callable, Iterator
 
 
 # Whether RuntimeError('wrapped C/C++ object of type ... has been deleted')
@@ -41,7 +42,7 @@ def wrapped_object_deleted_error_ignored() -> Iterator[None]:
 
 @contextmanager
 def wrapped_object_deleted_error_raising(
-        raiser: Optional[Callable[[], NoReturn]]=None
+        raiser: Callable[[], NoReturn] | None=None
         ) -> Iterator[None]:
     if IGNORE_USE_AFTER_FREE:
         if raiser is None:

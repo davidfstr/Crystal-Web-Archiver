@@ -29,10 +29,10 @@ async def test_given_project_database_not_on_ssd_when_expanding_first_resource_g
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 
-                (comic_group_ti,) = [
+                (comic_group_ti,) = (
                     child for child in root_ti.Children
                     if child.Text.endswith(f'- {comic_group.name}')
-                ]
+                )
                 
                 # Prepare to press Cancel when LoadUrlsProgressDialog appears
                 with patch.object(
@@ -72,10 +72,10 @@ async def test_given_project_database_not_on_ssd_given_resource_group_node_selec
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 
-                (feed_group_ti,) = [
+                (feed_group_ti,) = (
                     child for child in root_ti.Children
                     if child.Text.endswith(f'- {feed_group.name}')
-                ]
+                )
                 
                 # Prepare to press Cancel when LoadUrlsProgressDialog appears
                 with patch.object(
@@ -131,10 +131,10 @@ async def test_given_project_database_on_ssd_when_expanding_any_resource_group_n
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 
-                (comic_group_ti,) = [
+                (comic_group_ti,) = (
                     child for child in root_ti.Children
                     if child.Text.endswith(f'- {comic_group.name}')
-                ]
+                )
                 
                 # Prepare to spy on whether LoadUrlsProgressDialog appears
                 with patch.object(
@@ -171,10 +171,10 @@ async def test_given_project_database_on_ssd_given_resource_group_node_selected_
                 
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 
-                (feed_group_ti,) = [
+                (feed_group_ti,) = (
                     child for child in root_ti.Children
                     if child.Text.endswith(f'- {feed_group.name}')
-                ]
+                )
                 
                 # Prepare to spy on whether LoadUrlsProgressDialog appears
                 with patch.object(
@@ -224,10 +224,10 @@ async def test_serve_url_never_requires_loading_urls(subtests: SubtestsContext) 
                 async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     
-                    (home_ti,) = [
+                    (home_ti,) = (
                         child for child in root_ti.Children
                         if child.Text.endswith(f'- Home')
-                    ]
+                    )
                     
                     # Prepare to spy on whether LoadUrlsProgressDialog appears
                     with patch.object(

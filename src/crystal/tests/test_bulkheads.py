@@ -51,7 +51,8 @@ from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foregrou
 from io import StringIO
 import sys
 import threading
-from typing import Callable, cast, List, Optional, Tuple, TypeVar, Union
+from typing import cast, List, Optional, Tuple, TypeVar, Union
+from collections.abc import Callable
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -685,7 +686,7 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
                     super_task_did_append_child = TaskTreeNode.task_did_append_child
                     # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
                     @capture_crashes_to_stderr
-                    def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
+                    def task_did_append_child(self, task: Task, child: Task | None) -> None:
                         # Corrupt the value of task.children
                         task._children = []
                         child = None  # force access of task.children
@@ -973,10 +974,10 @@ async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entit
                 root_ti = TreeItem.GetRootItem(mw.task_tree)
                 (scheduler_crashed_ti,) = root_ti.Children
                 def show_popup(menu: wx.Menu) -> None:
-                    (refresh_menuitem,) = [
+                    (refresh_menuitem,) = (
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'Refresh'
-                    ]
+                    )
                     assert refresh_menuitem.Enabled
                     
                     # test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed
@@ -1093,19 +1094,19 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 (download_rb_ti, prrl_ti, download_r1_ti, *_) = download_r_ti.Children
                 assert download_r1_ti.Text.endswith(TaskTreeNode._CRASH_SUBTITLE)
                 def show_popup(menu: wx.Menu) -> None:
-                    (dismiss_menuitem,) = [
+                    (dismiss_menuitem,) = (
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'Dismiss'
-                    ]
+                    )
                     assert not dismiss_menuitem.Enabled
                 await download_r1_ti.right_click_showing_popup_menu(show_popup)
                 
                 # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
                 def show_popup(menu: wx.Menu) -> None:
-                    (dismiss_menuitem,) = [
+                    (dismiss_menuitem,) = (
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'Dismiss'
-                    ]
+                    )
                     assert dismiss_menuitem.Enabled
                     
                     # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
@@ -1418,10 +1419,10 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 
                 # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
                 def show_popup(menu: wx.Menu) -> None:
-                    (dismiss_all_menuitem,) = [
+                    (dismiss_all_menuitem,) = (
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'Dismiss All'
-                    ]
+                    )
                     assert dismiss_all_menuitem.Enabled
                     
                     # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed

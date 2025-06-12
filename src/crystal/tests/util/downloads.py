@@ -2,7 +2,8 @@ from contextlib import contextmanager
 import crystal.task
 from crystal.tests.util.tasks import scheduler_thread_context
 import socket
-from typing import Iterator, NoReturn, TYPE_CHECKING
+from typing import NoReturn, TYPE_CHECKING
+from collections.abc import Iterator
 from unittest.mock import patch
 
 if TYPE_CHECKING:

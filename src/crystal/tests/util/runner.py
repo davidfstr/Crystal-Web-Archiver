@@ -7,8 +7,9 @@ import time
 import traceback
 from types import coroutine, FrameType
 from typing import (
-    Awaitable, Callable, Dict, Generic, Optional, TYPE_CHECKING, TypeVar, Union
+    Dict, Generic, Optional, TYPE_CHECKING, TypeVar, Union
 )
+from collections.abc import Awaitable, Callable
 import urllib.request
 import urllib.error
 
@@ -23,7 +24,7 @@ _T = TypeVar('_T')
 # Test Runner
 
 @bg_affinity
-def run_test(test_func: Union[Callable[[], Awaitable[_T]], Callable[[], _T]]) -> _T:
+def run_test(test_func: Callable[[], Awaitable[_T]] | Callable[[], _T]) -> _T:
     """
     Runs the specified test function.
     
@@ -75,8 +76,8 @@ def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
 @fg_affinity
 def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
         url: str,
-        *, headers: Optional[Dict[str, str]]=None,
-        timeout: Optional[float]=None,
+        *, headers: dict[str, str] | None=None,
+        timeout: float | None=None,
         ) -> Awaitable[WebPage]:  # or Generator[Command, object, WebPage]
     """
     Switch to a background thread, fetch the specified URL, and
@@ -137,7 +138,7 @@ class SleepCommand(Command[None]):
 
 
 class FetchUrlCommand(Command['WebPage']):
-    def __init__(self, url: str, headers: Optional[Dict[str, str]], timeout: float) -> None:
+    def __init__(self, url: str, headers: dict[str, str] | None, timeout: float) -> None:
         self._url = url
         self._headers = headers
         self._timeout = timeout

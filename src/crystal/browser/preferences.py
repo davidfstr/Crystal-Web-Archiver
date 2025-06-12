@@ -161,7 +161,7 @@ class PreferencesDialog:
     
     # === Events ===
     
-    def _update_stale_before_date_picker_enabled(self, event: Optional[wx.CommandEvent]=None) -> None:
+    def _update_stale_before_date_picker_enabled(self, event: wx.CommandEvent | None=None) -> None:
         self.stale_before_date_picker.Enabled = self.stale_before_checkbox.Value
     
     def _on_button(self, event: wx.CommandEvent) -> None:

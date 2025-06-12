@@ -9,7 +9,7 @@ import wx
 # Images
 
 @cache
-def TREE_NODE_ICONS() -> Dict[str, wx.Bitmap]:
+def TREE_NODE_ICONS() -> dict[str, wx.Bitmap]:
     return OrderedDict([
         (icon_name, _load_png_resource(f'treenodeicon_{icon_name}.png'))
         for icon_name in [
@@ -35,7 +35,7 @@ def TREE_NODE_ICONS() -> Dict[str, wx.Bitmap]:
 
 
 @cache
-def ART_PROVIDER_TREE_NODE_ICONS() -> Dict[int, wx.Bitmap]:
+def ART_PROVIDER_TREE_NODE_ICONS() -> dict[int, wx.Bitmap]:
     # HACK: Uses private API
     from crystal.ui.tree import _DEFAULT_TREE_ICON_SIZE
     
@@ -49,7 +49,7 @@ def ART_PROVIDER_TREE_NODE_ICONS() -> Dict[int, wx.Bitmap]:
 
 
 @cache
-def BADGES() -> Dict[str, wx.Bitmap]:
+def BADGES() -> dict[str, wx.Bitmap]:
     return OrderedDict([
         (icon_name, _load_png_resource(f'badge_{icon_name}.png'))
         for icon_name in [
@@ -73,7 +73,7 @@ def _load_png_resource(resource_name: str) -> wx.Bitmap:
 # Derived Images
 
 @cache
-def BADGED_TREE_NODE_ICON(tree_node_icon_name: str, badge_name: Optional[str]) -> wx.Bitmap:
+def BADGED_TREE_NODE_ICON(tree_node_icon_name: str, badge_name: str | None) -> wx.Bitmap:
     if badge_name is None:
         return TREE_NODE_ICONS()[tree_node_icon_name]
     return _add_badge_to_background(
@@ -82,7 +82,7 @@ def BADGED_TREE_NODE_ICON(tree_node_icon_name: str, badge_name: Optional[str]) -
 
 
 @cache
-def BADGED_ART_PROVIDER_TREE_NODE_ICON(art_id: int, badge_name: Optional[str]) -> wx.Bitmap:
+def BADGED_ART_PROVIDER_TREE_NODE_ICON(art_id: int, badge_name: str | None) -> wx.Bitmap:
     if badge_name is None:
         return ART_PROVIDER_TREE_NODE_ICONS()[art_id]
     return _add_badge_to_background(

@@ -35,7 +35,8 @@ if TYPE_CHECKING:
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
     from crystal.shell import Shell
-    from typing import Callable, List, Optional
+    from typing import List, Optional
+    from collections.abc import Callable
     import wx
 
 
@@ -46,7 +47,7 @@ def main() -> None:
     _main(sys.argv[1:])
 
 
-def _main(args: List[str]) -> None:
+def _main(args: list[str]) -> None:
     # If running as Mac app or as Windows executable, redirect stdout and 
     # stderr to file, since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
@@ -129,7 +130,7 @@ def _main(args: List[str]) -> None:
     # in a text file in the current directory
     if getattr(sys, 'frozen', None) == 'windows_exe':
         if os.path.exists('arguments.txt'):
-            with open('arguments.txt', 'r', encoding='utf-8') as f:
+            with open('arguments.txt', encoding='utf-8') as f:
                 args_line = f.read()
             # TODO: Consider using shlex.split() here to support quoted arguments
             args = args_line.strip().split(' ')  # reinterpret
@@ -311,7 +312,7 @@ def _main(args: List[str]) -> None:
             else:
                 self._finish_launch(filepath)
         
-        def _finish_launch(self, filepath: Optional[str]=None) -> None:
+        def _finish_launch(self, filepath: str | None=None) -> None:
             self._did_finish_launch = True
             
             try:
@@ -428,8 +429,8 @@ def _main(args: List[str]) -> None:
 
 def _did_launch(
         parsed_args,
-        shell: Optional[Shell],
-        filepath: Optional[str]=None
+        shell: Shell | None,
+        filepath: str | None=None
         ) -> Project:
     """
     Raises:
@@ -443,7 +444,7 @@ def _did_launch(
         filepath = parsed_args.filepath  # reinterpret
     
     # Open/create a project
-    project: Optional[Project] = None
+    project: Project | None = None
     window: MainWindow
     try:
         with OpenProjectProgressDialog() as progress_listener:
@@ -636,12 +637,12 @@ def _prompt_to_open_project(
     file_dialog_customize_hook = OpenAsDirectoryHook()
     file_dialog = wx.FileDialog(parent,
         message='Choose a project',
-        wildcard='Projects (%(wc)s;%(wc2)s)|%(wc)s;%(wc2)s' % {
+        wildcard='Projects ({wc};{wc2})|{wc};{wc2}'.format(
             # If projects appear as files, then can open directly
-            'wc': '*' + Project.FILE_EXTENSION,
+            wc='*' + Project.FILE_EXTENSION,
             # If projects appear as directories, then must open contained opener file
-            'wc2': '*' + Project.OPENER_FILE_EXTENSION,
-        },
+            wc2='*' + Project.OPENER_FILE_EXTENSION,
+        ),
         style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
     # Offer ability to open .crystalproj directories on Linux,
     # where they were historically created without a .crystalopen file.
@@ -677,7 +678,7 @@ def _load_project(
         project_path: str,
         progress_listener: OpenProjectProgressListener,
         # NOTE: Used by automated tests
-        *, _show_modal_func: 'Optional[Callable[[wx.Dialog], int]]'=None,
+        *, _show_modal_func: Optional[Callable[[wx.Dialog], int]]=None,
         **project_kwargs: object
         ) -> Project:
     """
@@ -724,7 +725,7 @@ def _load_project(
 def _show_invalid_project_dialog(
         *, project_is_likely_corrupted: bool=False,
         # NOTE: Used by automated tests
-        _show_modal_func: 'Optional[Callable[[wx.Dialog], int]]'=None,
+        _show_modal_func: Optional[Callable[[wx.Dialog], int]]=None,
         ) -> None:
     from crystal.util.wx_dialog import (
         position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,

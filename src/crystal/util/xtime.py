@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 import sys
 import time
-from typing import Iterator
+from collections.abc import Iterator
 
 
 _MAX_SLEEP_IMPRECISION_MULTIPLIER = 15
@@ -19,7 +19,7 @@ def sleep_profiled() -> Iterator[None]:
             if secs > 0:
                 delta_time = time.time() - start_time
                 if delta_time > secs * _MAX_SLEEP_IMPRECISION_MULTIPLIER:
-                    print('*** %s took %.02fs to execute' % (
+                    print('*** {} took {:.02f}s to execute'.format(
                         f'sleep({secs})',
                         delta_time,
                     ), file=sys.stderr)

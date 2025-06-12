@@ -16,7 +16,8 @@ from crystal.util.xthreading import fg_affinity
 import math
 import re
 import threading
-from typing import Callable, List, Iterator, Optional
+from typing import List, Optional
+from collections.abc import Callable, Iterator
 from unittest.mock import patch
 import wx
 
@@ -58,7 +59,7 @@ async def wait_for_download_to_start_and_finish(
     # TODO: Eliminate fancy logic to determine `item_count` because it's no longer being used
     # 
     # Wait until download task is observed that says how many items are being downloaded
-    item_count: Optional[int]
+    item_count: int | None
     first_task_title_func = first_task_title_progression(task_tree)
     observed_titles = []  # type: List[str]
     did_start_download = False
@@ -119,7 +120,7 @@ async def wait_for_download_to_start_and_finish(
     assert tree_has_no_children_condition(task_tree)()
 
 
-def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], Optional[str]]:
+def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], str | None]:
     def first_task_title():
         root_ti = TreeItem.GetRootItem(task_tree)
         first_task_ti = root_ti.GetFirstChild()
@@ -193,7 +194,7 @@ def scheduler_thread_context(enabled: bool=True) -> Iterator[None]:
 async def step_scheduler(
         project: Project,
         *, expect_done: bool=False,
-        after_get: Optional[Callable[[], None]]=None,
+        after_get: Callable[[], None] | None=None,
         ) -> bool:
     """
     Performs one unit of work from the scheduler.

@@ -17,7 +17,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 import re
 import tempfile
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, List, Optional
+from collections.abc import Iterator
 import unittest.mock
 from zipfile import ZipFile
 
@@ -38,8 +39,8 @@ def served_project(
 @contextmanager
 def served_project_from_filepath(
         project_dirpath: str,
-        *, fetch_date_of_resources_set_to: Optional[datetime.datetime]=None,
-        port: Optional[int]=None,
+        *, fetch_date_of_resources_set_to: datetime.datetime | None=None,
+        port: int | None=None,
         ) -> Iterator[ProjectServer]:
     if fetch_date_of_resources_set_to is not None:
         if not datetime_is_aware(fetch_date_of_resources_set_to):
@@ -148,7 +149,7 @@ class MockHttpServer:
     def close(self) -> None:
         self._server.shutdown()
     
-    def __enter__(self) -> 'MockHttpServer':
+    def __enter__(self) -> MockHttpServer:
         return self
     
     def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
@@ -172,10 +173,10 @@ def extracted_project(
                 project_zipfile.extractall(project_parent_dirpath)
         
         # Open project
-        (project_filename,) = [
+        (project_filename,) = (
             fn for fn in os.listdir(project_parent_dirpath)
             if fn.endswith('.crystalproj')
-        ]
+        )
         project_dirpath = os.path.join(project_parent_dirpath, project_filename)
         yield project_dirpath
 
@@ -199,9 +200,9 @@ async def is_url_not_in_archive(archive_url: str) -> bool:
 
 async def fetch_archive_url(
         archive_url: str,
-        port: Optional[int]=None,
-        *, headers: Optional[Dict[str, str]]=None,
-        timeout: Optional[float]=None,
+        port: int | None=None,
+        *, headers: dict[str, str] | None=None,
+        timeout: float | None=None,
         ) -> WebPage:
     if timeout is None:
         timeout = DEFAULT_WAIT_TIMEOUT
@@ -226,11 +227,11 @@ class WebPage:
         )
     
     @property
-    def etag(self) -> Optional[str]:
+    def etag(self) -> str | None:
         return self._headers.get('ETag')
     
     @property
-    def title(self) -> Optional[str]:
+    def title(self) -> str | None:
         # TODO: Use an HTML parser to improve robustness
         m = re.search(r'<title>([^<]*)</title>', self.content)
         if m is None:

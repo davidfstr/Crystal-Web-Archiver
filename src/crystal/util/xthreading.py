@@ -16,7 +16,8 @@ import os
 import sys
 import threading
 import traceback
-from typing import Callable, cast, Deque, Generator, Iterator, Optional, overload, TypeVar
+from typing import cast, Deque, Optional, overload, TypeVar
+from collections.abc import Callable, Generator, Iterator
 from typing_extensions import ParamSpec
 import wx
 
@@ -55,7 +56,7 @@ _R = TypeVar('_R')
 _fg_thread = None  # type: Optional[threading.Thread]
 
 
-def set_foreground_thread(fg_thread: Optional[threading.Thread]) -> None:
+def set_foreground_thread(fg_thread: threading.Thread | None) -> None:
     global _fg_thread
     _fg_thread = fg_thread
 
@@ -303,7 +304,7 @@ class NoForegroundThreadError(ValueError):
 
 
 @fg_affinity
-def fg_waiting_calling_thread() -> Optional[threading.Thread]:
+def fg_waiting_calling_thread() -> threading.Thread | None:
     """
     If the current task running on the foreground thread was scheduled
     by a call to fg_call_and_wait(), returns the thread that made that call.

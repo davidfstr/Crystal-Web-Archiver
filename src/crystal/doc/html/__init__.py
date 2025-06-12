@@ -18,10 +18,10 @@ HTML_PARSER_TYPE_CHOICES = (
 
 
 def parse_html_and_links(
-        html_bytes: Union[bytes, BinaryIO],
-        declared_charset: Optional[str],
+        html_bytes: bytes | BinaryIO,
+        declared_charset: str | None,
         parser_type: HtmlParserType,
-        ) -> Optional[tuple[Document, list[Link]]]:
+        ) -> tuple[Document, list[Link]] | None:
     """
     Parses the specified HTML bytestring, returning a 2-tuple containing
     (1) the HTML document and

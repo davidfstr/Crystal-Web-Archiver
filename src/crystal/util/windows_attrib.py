@@ -3,7 +3,7 @@ import subprocess
 from typing import List, Literal
 
 
-def set_windows_file_attrib(itempath: str, attribs: List[Literal['+h', '+s']]) -> None:
+def set_windows_file_attrib(itempath: str, attribs: list[Literal['+h', '+s']]) -> None:
     assert is_windows()
     subprocess.check_call(
         ['attrib', *attribs, itempath],

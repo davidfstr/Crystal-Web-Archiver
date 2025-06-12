@@ -87,11 +87,14 @@ import time
 import traceback
 from tqdm import tqdm
 from typing import (
-    Any, BinaryIO, Callable, cast, Dict, Generic, Iterable, Iterator,
-    List, Literal, Optional, overload, Pattern, Sequence, TYPE_CHECKING,
+    Any, BinaryIO, cast, Dict, Generic,
+    List, Literal, Optional, overload, TYPE_CHECKING,
     Tuple, TypedDict, TypeVar, Union
 )
-from typing_extensions import deprecated, override, Self
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from re import Pattern
+from typing_extensions import deprecated, override
+from typing import Self
 from urllib.parse import urlparse, urlunparse, quote as url_quote
 from weakref import WeakValueDictionary
 
@@ -181,7 +184,7 @@ class Project(ListenableMixin):
     _MAX_REVISION_ID = (2 ** 60) - 1  # for projects with major version >= 2
     
     # NOTE: Only changed when tests are running
-    _last_opened_project: Optional[Project]=None
+    _last_opened_project: Project | None=None
     _report_progress_at_maximum_resolution: bool=False
     
     # === Load ===
@@ -189,8 +192,8 @@ class Project(ListenableMixin):
     @fg_affinity
     def __init__(self,
             path: str,
-            progress_listener: Optional[OpenProjectProgressListener]=None,
-            load_urls_progress_listener: Optional[LoadUrlsProgressListener]=None,
+            progress_listener: OpenProjectProgressListener | None=None,
+            load_urls_progress_listener: LoadUrlsProgressListener | None=None,
             *, readonly: bool=False) -> None:
         """
         Loads a project from the specified itempath, or creates a new one if none is found.
@@ -367,7 +370,7 @@ class Project(ListenableMixin):
             return True
     
     @classmethod
-    def _normalize_project_path(cls, path: str) -> Optional[str]:
+    def _normalize_project_path(cls, path: str) -> str | None:
         if os.path.exists(path):
             # Try to alter existing path to point to item ending with FILE_EXTENSION
             if path.endswith(cls.FILE_EXTENSION):
@@ -598,7 +601,7 @@ class Project(ListenableMixin):
                 # Move revisions to appropriate locations in new revisions directory
                 os_path_sep = os.path.sep  # cache
                 last_new_revision_parent_relpath = None  # type: Optional[str]
-                def migrate_revision(row: Tuple) -> None:
+                def migrate_revision(row: tuple) -> None:
                     (id,) = row
                     old_revision_filepath = (
                         revisions_dirpath + os_path_sep +
@@ -794,7 +797,7 @@ class Project(ListenableMixin):
             elif source_type == 'resource_group':
                 source_obj = self._get_resource_group_with_id(source_id)
             else:
-                raise ProjectFormatError('Resource group %s has invalid source type "%s".' % (group._id, source_type))
+                raise ProjectFormatError('Resource group {} has invalid source type "{}".'.format(group._id, source_type))
             group.init_source(source_obj)
         
         # (ResourceRevisions are loaded on demand)
@@ -806,7 +809,7 @@ class Project(ListenableMixin):
             c: DatabaseCursor,
             approx_row_count_query: str,
             rows_query: str,
-            process_row_func: Callable[[Tuple], None],
+            process_row_func: Callable[[tuple], None],
             report_approx_row_count_func: Callable[[int], None],
             report_processing_row_func: Callable[[int, float], None],
             report_did_process_rows_func: Callable[[int], None],
@@ -895,9 +898,9 @@ class Project(ListenableMixin):
         """
         return self._readonly
     
-    def _get_property(self, name: str, default: _OptionalStr) -> Union[str, _OptionalStr]:
+    def _get_property(self, name: str, default: _OptionalStr) -> str | _OptionalStr:
         return self._properties.get(name) or default
-    def _set_property(self, name: str, value: Optional[str]) -> None:
+    def _set_property(self, name: str, value: str | None) -> None:
         if not self._loading:
             if self._properties.get(name) == value:
                 return
@@ -933,13 +936,13 @@ class Project(ListenableMixin):
         """
         return int(self._get_property('major_version', '1'))
     
-    def _get_default_url_prefix(self) -> Optional[str]:
+    def _get_default_url_prefix(self) -> str | None:
         """
         URL prefix for the majority of this project's resource URLs.
         The UI will display resources under this prefix as relative URLs.
         """
         return self._get_property('default_url_prefix', None)
-    def _set_default_url_prefix(self, value: Optional[str]) -> None:
+    def _set_default_url_prefix(self, value: str | None) -> None:
         self._set_property('default_url_prefix', value)
     default_url_prefix = cast(Optional[str], property(_get_default_url_prefix, _set_default_url_prefix))
     
@@ -956,7 +959,7 @@ class Project(ListenableMixin):
         else:
             return url
     
-    def _get_html_parser_type(self) -> 'HtmlParserType':
+    def _get_html_parser_type(self) -> HtmlParserType:
         value = self._get_property(
             'html_parser_type',
             # Default HTML parser for classic projects from Crystal <=1.5.0
@@ -965,7 +968,7 @@ class Project(ListenableMixin):
         if value not in HTML_PARSER_TYPE_CHOICES:
             raise ValueError(f'Project requests HTML parser of unknown type: {value}')
         return cast('HtmlParserType', value)
-    def _set_html_parser_type(self, value: 'HtmlParserType') -> None:
+    def _set_html_parser_type(self, value: HtmlParserType) -> None:
         from crystal.doc.html import HTML_PARSER_TYPE_CHOICES
         if value not in HTML_PARSER_TYPE_CHOICES:
             raise ValueError(f'Unknown type of HTML parser: {value}')
@@ -975,9 +978,9 @@ class Project(ListenableMixin):
         The type of parser used for parsing links from HTML documents.
         """)
     
-    def _get_request_cookie(self) -> Optional[str]:
+    def _get_request_cookie(self) -> str | None:
         return self._request_cookie
-    def _set_request_cookie(self, request_cookie: Optional[str]) -> None:
+    def _set_request_cookie(self, request_cookie: str | None) -> None:
         self._request_cookie = request_cookie
     request_cookie = property(_get_request_cookie, _set_request_cookie, doc=
         """
@@ -1001,7 +1004,7 @@ class Project(ListenableMixin):
             url.startswith(default_url_prefix + '/')
         )
     
-    def request_cookies_in_use(self, *, most_recent_first: bool=True) -> List[str]:
+    def request_cookies_in_use(self, *, most_recent_first: bool=True) -> list[str]:
         """
         Returns all distinct Cookie HTTP header values used by revisions in this project.
         """
@@ -1013,9 +1016,9 @@ class Project(ListenableMixin):
             c.execute(f'select distinct request_cookie from resource_revision where request_cookie is not null order by id {ordering}')
         ]
     
-    def _get_min_fetch_date(self) -> Optional[datetime.datetime]:
+    def _get_min_fetch_date(self) -> datetime.datetime | None:
         return self._min_fetch_date
-    def _set_min_fetch_date(self, min_fetch_date: Optional[datetime.datetime]) -> None:
+    def _set_min_fetch_date(self, min_fetch_date: datetime.datetime | None) -> None:
         if min_fetch_date is not None:
             if not datetime_is_aware(min_fetch_date):
                 raise ValueError('Expected an aware datetime (with a UTC offset)')
@@ -1062,7 +1065,7 @@ class Project(ListenableMixin):
             def loading_resource(index: int, resources_per_second: float) -> None:
                 assert progress_listener is not None
                 progress_listener.loading_resource(index)
-            def load_resource(row: Tuple) -> None:
+            def load_resource(row: tuple) -> None:
                 (url, id) = row
                 # NOTE: Reuse existing Resource object if available
                 resource = old_resource_for_url.get(url)
@@ -1127,7 +1130,7 @@ class Project(ListenableMixin):
     def resources_matching_pattern(self,
             url_pattern_re: re.Pattern,
             literal_prefix: str,
-            ) -> List[Resource]:
+            ) -> list[Resource]:
         """
         Returns all Resources in the project whose URL matches the specified
         regular expression and literal prefix, in the order they were created.
@@ -1172,7 +1175,7 @@ class Project(ListenableMixin):
             )
             return self._materialize_resources(member_data)
     
-    def _materialize_resources(self, resources_data: Iterator[Tuple[int, str]]) -> List[Resource]:
+    def _materialize_resources(self, resources_data: Iterator[tuple[int, str]]) -> list[Resource]:
         resources = []
         resource_for_id = self._resource_for_id  # cache
         resource_for_url = self._resource_for_url  # cache
@@ -1194,8 +1197,8 @@ class Project(ListenableMixin):
     def urls_matching_pattern(self,
             url_pattern_re: re.Pattern,
             literal_prefix: str,
-            limit: Optional[int]=None,
-            ) -> Tuple[List[str], int]:
+            limit: int | None=None,
+            ) -> tuple[list[str], int]:
         """
         Returns all resource URLs in the project which match the specified
         regular expression and literal prefix, ordered by URL value.
@@ -1293,7 +1296,7 @@ class Project(ListenableMixin):
         return self._resource_for_id.values()
     
     @fg_affinity
-    def get_resource(self, url: str) -> Optional[Resource]:
+    def get_resource(self, url: str) -> Resource | None:
         """Returns the `Resource` with the specified URL or None if no such resource exists."""
         
         if self._did_load_urls:
@@ -1321,7 +1324,7 @@ class Project(ListenableMixin):
     
     # Private to crystal.model classes
     @fg_affinity
-    def _get_resource_with_id(self, id: int) -> Optional[Resource]:
+    def _get_resource_with_id(self, id: int) -> Resource | None:
         """Returns the `Resource` with the specified ID or None if no such resource exists."""
         
         if self._did_load_urls:
@@ -1352,16 +1355,16 @@ class Project(ListenableMixin):
         """Returns all RootResources in the project in the order they were created."""
         return self._root_resources.values()
     
-    def get_root_resource(self, resource: Resource) -> Optional[RootResource]:
+    def get_root_resource(self, resource: Resource) -> RootResource | None:
         """Returns the `RootResource` with the specified `Resource` or None if none exists."""
         return self._root_resources.get(resource, None)
     
-    def _get_root_resource_with_id(self, root_resource_id) -> Optional[RootResource]:
+    def _get_root_resource_with_id(self, root_resource_id) -> RootResource | None:
         """Returns the `RootResource` with the specified ID or None if no such root resource exists."""
         # PERF: O(n) when it could be O(1), where n = # of RootResources
         return next((rr for rr in self._root_resources.values() if rr._id == root_resource_id), None)
     
-    def _get_root_resource_with_name(self, name) -> Optional[RootResource]:
+    def _get_root_resource_with_name(self, name) -> RootResource | None:
         """Returns the `RootResource` with the specified name or None if no such root resource exists."""
         # PERF: O(n) when it could be O(1), where n = # of RootResources
         return next((rr for rr in self._root_resources.values() if rr.name == name), None)
@@ -1371,12 +1374,12 @@ class Project(ListenableMixin):
         """Returns all ResourceGroups in the project in the order they were created."""
         return self._resource_groups
     
-    def get_resource_group(self, name: str) -> Optional[ResourceGroup]:
+    def get_resource_group(self, name: str) -> ResourceGroup | None:
         """Returns the `ResourceGroup` with the specified name or None if no such resource exists."""
         # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
         return next((rg for rg in self._resource_groups if rg.name == name), None)
     
-    def _get_resource_group_with_id(self, resource_group_id) -> Optional[ResourceGroup]:
+    def _get_resource_group_with_id(self, resource_group_id) -> ResourceGroup | None:
         """Returns the `ResourceGroup` with the specified ID or None if no such resource exists."""
         # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
         return next((rg for rg in self._resource_groups if rg._id == resource_group_id), None)
@@ -1463,7 +1466,7 @@ class Project(ListenableMixin):
             self._set_property('hibernated_state', hibernated_project_str)
     
     @fg_affinity
-    def unhibernate_tasks(self, confirm_func: Optional[Callable[[], bool]]=None) -> None:
+    def unhibernate_tasks(self, confirm_func: Callable[[], bool] | None=None) -> None:
         """
         Restores the state of any running tasks.
         
@@ -1717,13 +1720,13 @@ class _WeakTaskRef(Generic[_TK]):
     # which each contain _WeakTaskRef instances
     __slots__ = ('_task',)
     
-    def __init__(self, task: Optional[_TK]=None) -> None:
+    def __init__(self, task: _TK | None=None) -> None:
         self._task = None
         self.task = task
     
-    def _get_task(self) -> Optional[_TK]:
+    def _get_task(self) -> _TK | None:
         return self._task
-    def _set_task(self, value: Optional[_TK]) -> None:
+    def _set_task(self, value: _TK | None) -> None:
         if self._task:
             self._task.listeners.remove(self)
         self._task = value
@@ -1764,9 +1767,9 @@ class Resource:
     
     project: Project
     _url: str
-    _download_body_task_ref: 'Optional[_WeakTaskRef[DownloadResourceBodyTask]]'
-    _download_task_ref: 'Optional[_WeakTaskRef[DownloadResourceTask]]'
-    _download_task_noresult_ref: 'Optional[_WeakTaskRef[DownloadResourceTask]]'
+    _download_body_task_ref: Optional[_WeakTaskRef[DownloadResourceBodyTask]]
+    _download_task_ref: Optional[_WeakTaskRef[DownloadResourceTask]]
+    _download_task_noresult_ref: Optional[_WeakTaskRef[DownloadResourceTask]]
     _already_downloaded_this_session: bool
     _definitely_has_no_revisions: bool
     _id: int  # or None if not finished initializing or deleted
@@ -1777,7 +1780,7 @@ class Resource:
     def __new__(cls, 
             project: Project,
             url: str,
-            _id: 'Union[None, int, Literal["__defer__"]]'=None,
+            _id: Union[None, int, Literal["__defer__"]]=None,
             ) -> Resource:
         """
         Looks up an existing resource with the specified URL or creates a new
@@ -1883,9 +1886,9 @@ class Resource:
     @fg_affinity
     def bulk_create(
             project: Project,
-            urls: List[str],
+            urls: list[str],
             origin_url: str,
-            ) -> List[Resource]:
+            ) -> list[Resource]:
         """
         Creates several Resources for the specified list of URLs, in bulk.
         Returns the set of Resources created.
@@ -1945,7 +1948,7 @@ class Resource:
     # === Properties ===
     
     @staticmethod
-    def resource_url_alternatives(project: Project, url: str) -> List[str]:
+    def resource_url_alternatives(project: Project, url: str) -> list[str]:
         """
         Given an original URL, perhaps computed from a link or directly input
         by the user, return a list of alternative URLs that become progressively
@@ -2078,7 +2081,7 @@ class Resource:
     
     # === Operations: Download ===
     
-    def download_body(self) -> 'Future[ResourceRevision]':
+    def download_body(self) -> Future[ResourceRevision]:
         """
         Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
         up-to-date version of this resource's body.
@@ -2107,11 +2110,11 @@ class Resource:
     
     # Soft Deprecated: Use get_or_create_download_body_task() instead,
     # which clarifies that an existing task may be returned.
-    def create_download_body_task(self) -> 'DownloadResourceBodyTask':
+    def create_download_body_task(self) -> DownloadResourceBodyTask:
         (task, _) = self.get_or_create_download_body_task()
         return task
     
-    def get_or_create_download_body_task(self) -> 'Tuple[DownloadResourceBodyTask, bool]':
+    def get_or_create_download_body_task(self) -> Tuple[DownloadResourceBodyTask, bool]:
         """
         Gets/creates a Task to download this resource's body.
         
@@ -2120,14 +2123,14 @@ class Resource:
         
         This task is never complete immediately after initialization.
         """
-        def task_factory() -> 'DownloadResourceBodyTask':
+        def task_factory() -> DownloadResourceBodyTask:
             from crystal.task import DownloadResourceBodyTask
             return DownloadResourceBodyTask(self)
         if self._download_body_task_ref is None:
             self._download_body_task_ref = _WeakTaskRef()
         return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
-    def download(self, *, wait_for_embedded: bool=False, needs_result: bool=True, is_embedded: bool=False) -> 'Future[ResourceRevision]':
+    def download(self, *, wait_for_embedded: bool=False, needs_result: bool=True, is_embedded: bool=False) -> Future[ResourceRevision]:
         """
         Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
         up-to-date version of this resource's body. If a download is performed, all
@@ -2167,11 +2170,11 @@ class Resource:
     
     # Soft Deprecated: Use get_or_create_download_task() instead,
     # which clarifies that an existing task may be returned.
-    def create_download_task(self, *args, **kwargs) -> 'DownloadResourceTask':
+    def create_download_task(self, *args, **kwargs) -> DownloadResourceTask:
         (task, _) = self.get_or_create_download_task(*args, **kwargs)
         return task
     
-    def get_or_create_download_task(self, *, needs_result: bool=True, is_embedded: bool=False) -> 'Tuple[DownloadResourceTask, bool]':
+    def get_or_create_download_task(self, *, needs_result: bool=True, is_embedded: bool=False) -> Tuple[DownloadResourceTask, bool]:
         """
         Gets/creates a Task to download this resource and all its embedded resources.
         Returns the task and whether it was created.
@@ -2181,7 +2184,7 @@ class Resource:
         
         This task may be complete immediately after initialization.
         """
-        def task_factory() -> 'DownloadResourceTask':
+        def task_factory() -> DownloadResourceTask:
             from crystal.task import DownloadResourceTask
             return DownloadResourceTask(self, needs_result=needs_result, is_embedded=is_embedded)
         if needs_result:
@@ -2197,7 +2200,7 @@ class Resource:
     def _get_task_or_create(self,
             task_ref: _WeakTaskRef,
             task_factory: Callable[[], _TK]
-            ) -> Tuple[_TK, bool]:
+            ) -> tuple[_TK, bool]:
         """
         Gets/creates a task.
         Returns the task and whether it was created.
@@ -2224,7 +2227,7 @@ class Resource:
         return c.fetchone() is not None
     
     @fg_affinity
-    def default_revision(self, *, stale_ok: bool=True) -> Optional[ResourceRevision]:
+    def default_revision(self, *, stale_ok: bool=True) -> ResourceRevision | None:
         """
         Loads and returns the "default" revision of this resource, which is the revision
         that will be displayed when this resource is served or exported.
@@ -2298,7 +2301,7 @@ class Resource:
             self._definitely_has_no_revisions = True
     
     @fg_affinity
-    def revision_for_etag(self) -> Dict[str, ResourceRevision]:
+    def revision_for_etag(self) -> dict[str, ResourceRevision]:
         """
         Returns a map of each known ETag to a matching ResourceRevision that is NOT an HTTP 304.
         """
@@ -2382,7 +2385,7 @@ class Resource:
     # === Utility ===
     
     def __repr__(self):
-        return "Resource(%s)" % (repr(self.url),)
+        return "Resource({})".format(repr(self.url))
 
 
 class RootResource:
@@ -2398,7 +2401,7 @@ class RootResource:
     # === Init ===
     
     @fg_affinity
-    def __new__(cls, project: Project, name: str, resource: Resource, _id: Optional[int]=None) -> RootResource:
+    def __new__(cls, project: Project, name: str, resource: Resource, _id: int | None=None) -> RootResource:
         """
         Creates a new root resource.
         
@@ -2525,7 +2528,7 @@ class RootResource:
     # === Utility ===
     
     def __repr__(self):
-        return "RootResource(%s,%s)" % (repr(self.name), repr(self.resource.url))
+        return "RootResource({},{})".format(repr(self.name), repr(self.resource.url))
     
     class AlreadyExists(Exception):
         """
@@ -2541,10 +2544,10 @@ class ResourceRevision:
     Persisted. Loaded on demand.
     """
     resource: Resource
-    request_cookie: Optional[str]
-    error: Optional[Exception]
-    metadata: Optional[ResourceRevisionMetadata]
-    _id: Optional[int]  # None if deleted
+    request_cookie: str | None
+    error: Exception | None
+    metadata: ResourceRevisionMetadata | None
+    _id: int | None  # None if deleted
     has_body: bool
     
     # === Init ===
@@ -2578,7 +2581,7 @@ class ResourceRevision:
     def create_from_error(
             resource: Resource,
             error: Exception,
-            request_cookie: Optional[str]=None
+            request_cookie: str | None=None
             ) -> ResourceRevision:
         """
         Creates a new revision that encapsulates the error encountered when fetching the revision.
@@ -2595,9 +2598,9 @@ class ResourceRevision:
     @staticmethod
     def create_from_response(
             resource: Resource,
-            metadata: Optional[ResourceRevisionMetadata],
+            metadata: ResourceRevisionMetadata | None,
             body_stream: BinaryIO,
-            request_cookie: Optional[str]=None
+            request_cookie: str | None=None
             ) -> ResourceRevision:
         """
         Creates a new revision with the specified metadata and body.
@@ -2628,7 +2631,7 @@ class ResourceRevision:
                 if date_str is None:
                     metadata['headers'].append([
                         'Date',
-                        http_date.format(datetime.datetime.now(datetime.timezone.utc))
+                        http_date.format(datetime.datetime.now(datetime.UTC))
                     ])
             
             return ResourceRevision._create_from_stream(
@@ -2644,10 +2647,10 @@ class ResourceRevision:
     @staticmethod
     def _create_from_stream(
             resource: Resource,
-            *, request_cookie: Optional[str]=None,
-            error: Optional[Exception]=None,
-            metadata: Optional[ResourceRevisionMetadata]=None,
-            body_stream: Optional[BinaryIO]=None
+            *, request_cookie: str | None=None,
+            error: Exception | None=None,
+            metadata: ResourceRevisionMetadata | None=None,
+            body_stream: BinaryIO | None=None
             ) -> ResourceRevision:
         """
         Creates a new revision.
@@ -2786,9 +2789,9 @@ class ResourceRevision:
     @staticmethod
     def _load_from_data(
             resource: Resource,
-            request_cookie: Optional[str],
-            error: Optional[Exception],
-            metadata: Optional[ResourceRevisionMetadata],
+            request_cookie: str | None,
+            error: Exception | None,
+            metadata: ResourceRevisionMetadata | None,
             id: int) -> ResourceRevision:
         """
         Loads an existing revision with data that has already been fetched
@@ -2807,7 +2810,7 @@ class ResourceRevision:
     #       sibling revisions of the requested revision.
     @staticmethod
     @fg_affinity
-    def load(project: Project, id: int) -> Optional[ResourceRevision]:
+    def load(project: Project, id: int) -> ResourceRevision | None:
         """
         Loads the existing revision with the specified ID,
         or returns None if no such revision exists.
@@ -2838,11 +2841,11 @@ class ResourceRevision:
         raise AssertionError()
     
     @classmethod
-    def _encode_error(cls, error: Optional[Exception]) -> str:
+    def _encode_error(cls, error: Exception | None) -> str:
         return json.dumps(cls._encode_error_dict(error))
     
     @staticmethod
-    def _encode_error_dict(error: Optional[Exception]) -> 'Optional[DownloadErrorDict]':
+    def _encode_error_dict(error: Exception | None) -> Optional[DownloadErrorDict]:
         if error is None:
             error_dict = None
         elif isinstance(error, _PersistedError):
@@ -2858,11 +2861,11 @@ class ResourceRevision:
         return error_dict
     
     @staticmethod
-    def _encode_metadata(metadata: Optional[ResourceRevisionMetadata]) -> str:
+    def _encode_metadata(metadata: ResourceRevisionMetadata | None) -> str:
         return json.dumps(metadata)
     
     @staticmethod
-    def _decode_error(db_error: str) -> Optional[Exception]:
+    def _decode_error(db_error: str) -> Exception | None:
         error_dict = json.loads(db_error)
         if error_dict is None:
             return None
@@ -2870,7 +2873,7 @@ class ResourceRevision:
             return _PersistedError(error_dict['message'], error_dict['type'])
     
     @staticmethod
-    def _decode_metadata(db_metadata: str) -> Optional[ResourceRevisionMetadata]:
+    def _decode_metadata(db_metadata: str) -> ResourceRevisionMetadata | None:
         return json.loads(db_metadata)
     
     # === Properties ===
@@ -2884,7 +2887,7 @@ class ResourceRevision:
         return self.resource.url
     
     @property
-    def error_dict(self) -> 'Optional[DownloadErrorDict]':
+    def error_dict(self) -> Optional[DownloadErrorDict]:
         return self._encode_error_dict(self.error)
     
     def _ensure_has_body(self) -> None:
@@ -2940,7 +2943,7 @@ class ResourceRevision:
         return self.metadata is not None
     
     @property
-    def status_code(self) -> Optional[int]:
+    def status_code(self) -> int | None:
         if self.metadata is None:
             return None
         else:
@@ -2951,14 +2954,14 @@ class ResourceRevision:
         """Returns whether this resource is a redirect."""
         return self.metadata is not None and (self.metadata['status_code'] // 100) == 3
     
-    def _get_first_value_of_http_header(self, name: str) -> Optional[str]:
+    def _get_first_value_of_http_header(self, name: str) -> str | None:
         return self._get_first_value_of_http_header_in_metadata(name, self.metadata)
     
     @staticmethod
     def _get_first_value_of_http_header_in_metadata(
             name: str,
-            metadata: Optional[ResourceRevisionMetadata],
-            ) -> Optional[str]:
+            metadata: ResourceRevisionMetadata | None,
+            ) -> str | None:
         name = name.lower()  # reinterpret
         if metadata is None:
             return None
@@ -2968,7 +2971,7 @@ class ResourceRevision:
         return None
     
     @property
-    def redirect_url(self) -> Optional[str]:
+    def redirect_url(self) -> str | None:
         """
         Returns the resource to which this resource redirects,
         or None if it cannot be determined or this is not a redirect.
@@ -2979,24 +2982,24 @@ class ResourceRevision:
             return None
     
     @property
-    def _redirect_title(self) -> Optional[str]:
+    def _redirect_title(self) -> str | None:
         if self.is_redirect:
             metadata = self.metadata  # cache
             if metadata is None:
                 return None
-            return '%s %s' % (metadata['status_code'], metadata['reason_phrase'])
+            return '{} {}'.format(metadata['status_code'], metadata['reason_phrase'])
         else:
             return None
     
     @property
-    def declared_content_type_with_options(self) -> Optional[str]:  # ex: 'text/html; charset=utf-8'
+    def declared_content_type_with_options(self) -> str | None:  # ex: 'text/html; charset=utf-8'
         if self.is_http:
             return self._get_first_value_of_http_header('content-type')
         else:
             return None
     
     @property
-    def declared_content_type(self) -> Optional[str]:  # ex: 'text/html'
+    def declared_content_type(self) -> str | None:  # ex: 'text/html'
         """Returns the MIME content type declared for this resource, or None if not declared."""
         content_type_with_options = self.declared_content_type_with_options
         if content_type_with_options is None:
@@ -3006,7 +3009,7 @@ class ResourceRevision:
             return content_type
     
     @property
-    def declared_charset(self) -> Optional[str]:  # ex: 'utf-8'
+    def declared_charset(self) -> str | None:  # ex: 'utf-8'
         """Returns the charset declared for this resource, or None if not declared."""
         content_type_with_options = self.declared_content_type_with_options
         if content_type_with_options is None:
@@ -3016,7 +3019,7 @@ class ResourceRevision:
             return content_type_options.get('charset')
     
     @property
-    def content_type(self) -> Optional[str]:  # ex: 'utf-8'
+    def content_type(self) -> str | None:  # ex: 'utf-8'
         """Returns the MIME content type declared or guessed for this resource, or None if unknown."""
         declared = self.declared_content_type
         if declared is not None:
@@ -3104,7 +3107,7 @@ class ResourceRevision:
         ]
     
     @property
-    def date(self) -> Optional[datetime.datetime]:
+    def date(self) -> datetime.datetime | None:
         """
         The datetime this revision was generated by the original origin server,
         or None if unknown.
@@ -3119,10 +3122,10 @@ class ResourceRevision:
             # Invalid Date HTTP header
             return None
         else:
-            return date.replace(tzinfo=datetime.timezone.utc)
+            return date.replace(tzinfo=datetime.UTC)
     
     @property
-    def age(self) -> Optional[int]:
+    def age(self) -> int | None:
         """
         The time in seconds this revision was in a proxy cache,
         or None if unknown.
@@ -3141,7 +3144,7 @@ class ResourceRevision:
             return None
     
     @property
-    def date_plus_age(self) -> Optional[datetime.datetime]:
+    def date_plus_age(self) -> datetime.datetime | None:
         """
         The datetime this revision was generated by the intermediate
         server it was fetched from, in server time, or None if unknown.
@@ -3159,7 +3162,7 @@ class ResourceRevision:
             return date + datetime.timedelta(seconds=age)
     
     @property
-    def etag(self) -> Optional[str]:
+    def etag(self) -> str | None:
         return self._get_first_value_of_http_header('etag')
     
     # === Staleness ===
@@ -3226,7 +3229,7 @@ class ResourceRevision:
         """
         return self.document_and_links()[1]
     
-    def document_and_links(self) -> tuple[Optional[Document], list[Link], Optional[str]]:
+    def document_and_links(self) -> tuple[Document | None, list[Link], str | None]:
         """
         Returns a 3-tuple containing:
         (1) if this revision is a document, the document, otherwise None;
@@ -3246,7 +3249,7 @@ class ResourceRevision:
         """
         
         # Extract links from HTML, if applicable
-        doc: Optional[Document]
+        doc: Document | None
         links: list[Link]
         (doc, links) = (None, [])
         content_type_with_options = None  # type: Optional[str]
@@ -3406,7 +3409,7 @@ class ResourceRevision:
         self.resource.already_downloaded_this_session = False
     
     def __repr__(self) -> str:
-        return "<ResourceRevision %s for '%s'>" % (self._id, self.resource.url)
+        return "<ResourceRevision {} for '{}'>".format(self._id, self.resource.url)
     
     def __str__(self) -> str:
         return f'Revision {self._id} for URL {self.resource.url}'
@@ -3475,9 +3478,9 @@ class ResourceGroup(ListenableMixin):
             project: Project, 
             name: str,  # possibly ''
             url_pattern: str,
-            source: Union[ResourceGroupSource, EllipsisType]=None,
+            source: ResourceGroupSource | EllipsisType=None,
             *, do_not_download: bool=False,
-            _id: Optional[int]=None) -> None:
+            _id: int | None=None) -> None:
         """
         Arguments:
         * project -- associated `Project`.
@@ -3686,7 +3689,7 @@ class ResourceGroup(ListenableMixin):
     # NOTE: First access of members must be on foreground thread
     #       but subsequent accesses can be on any thread
     @property
-    def members(self) -> 'Sequence[Resource]':
+    def members(self) -> Sequence[Resource]:
         """
         Returns the members of this group, in the order they were discovered.
         
@@ -3784,7 +3787,7 @@ class ResourceGroup(ListenableMixin):
     # === Utility ===
 
     def __repr__(self):
-        return 'ResourceGroup(%s,%s)' % (repr(self.name), repr(self.url_pattern))
+        return 'ResourceGroup({},{})'.format(repr(self.name), repr(self.url_pattern))
 
 
 def _is_ascii(s: str) -> bool:

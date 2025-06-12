@@ -8,7 +8,7 @@ from crystal.tests.util.tasks import scheduler_disabled, step_scheduler, clear_t
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal
-from typing import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator
 from unittest.mock import patch
 import wx
 

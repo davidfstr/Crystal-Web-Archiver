@@ -4,9 +4,11 @@ from functools import wraps
 import sys
 import traceback
 from typing import (
-    Callable, Iterator, List, Optional, overload, Protocol, TypeVar, Union
+    List, Optional, overload, Protocol, TypeVar, Union
 )
-from typing_extensions import Concatenate, ParamSpec
+from collections.abc import Callable, Iterator
+from typing_extensions import ParamSpec
+from typing import Concatenate
 
 
 _S = TypeVar('_S')
@@ -27,7 +29,7 @@ class Bulkhead(Protocol):  # abstract
     """
     A sink for unhandled exceptions (i.e. crashes).
     """
-    crash_reason: Optional[CrashReason]
+    crash_reason: CrashReason | None
 
 
 class BulkheadCell(Bulkhead):
@@ -35,31 +37,31 @@ class BulkheadCell(Bulkhead):
     A concrete Bulkhead which stores any crash that occurs,
     but takes no special action to report such crashes.
     """
-    crash_reason: Optional[CrashReason]
+    crash_reason: CrashReason | None
     
-    def __init__(self, value: Optional[CrashReason]=None) -> None:
+    def __init__(self, value: CrashReason | None=None) -> None:
         self.crash_reason = value
 
 
 @overload
 def capture_crashes_to_self(
         bulkhead_method: Callable[Concatenate[_B, _P], _RT]
-        ) -> Callable[Concatenate[_B, _P], Union[_RT, None]]:
+        ) -> Callable[Concatenate[_B, _P], _RT | None]:
     ...
 
 @overload
 def capture_crashes_to_self(
         *, return_if_crashed: _RF
-        ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], Union[_RT, _RF]]]:
+        ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], _RT | _RF]]:
     ...
 
 @overload
 def capture_crashes_to_self(
-        ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], Union[_RT, None]]]:
+        ) -> Callable[[Callable[Concatenate[_B, _P], _RT]], Callable[Concatenate[_B, _P], _RT | None]]:
     ...
 
 def capture_crashes_to_self(
-        bulkhead_method: Optional[Callable[Concatenate[_B, _P], _RT]]=None,
+        bulkhead_method: Callable[Concatenate[_B, _P], _RT] | None=None,
         *, return_if_crashed=None  # _RF
         ):
     """
@@ -81,10 +83,10 @@ def capture_crashes_to_self(
     """
     def decorate(
             bulkhead_method: Callable[Concatenate[_B, _P], _RT]
-            ) -> Callable[Concatenate[_B, _P], Union[_RT, _RF]]:
+            ) -> Callable[Concatenate[_B, _P], _RT | _RF]:
         @wraps(bulkhead_method)
         @_mark_bulkhead_call
-        def bulkhead_call(self: _B, *args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
+        def bulkhead_call(self: _B, *args: _P.args, **kwargs: _P.kwargs) -> _RT | _RF:
             if self.crash_reason is not None:
                 # Bulkhead has already crashed. Abort.
                 return return_if_crashed
@@ -110,22 +112,22 @@ def capture_crashes_to_self(
 @overload
 def capture_crashes_to_bulkhead_arg(
         method: Callable[Concatenate[_S, _B, _P], _RT]
-        ) -> Callable[Concatenate[_S, _B, _P], Union[_RT, None]]:
+        ) -> Callable[Concatenate[_S, _B, _P], _RT | None]:
     ...
 
 @overload
 def capture_crashes_to_bulkhead_arg(
         *, return_if_crashed: _RF
-        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], Union[_RT, _RF]]]:
+        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], _RT | _RF]]:
     ...
 
 @overload
 def capture_crashes_to_bulkhead_arg(
-        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], Union[_RT, None]]]:
+        ) -> Callable[[Callable[Concatenate[_S, _B, _P], _RT]], Callable[Concatenate[_S, _B, _P], _RT | None]]:
     ...
 
 def capture_crashes_to_bulkhead_arg(
-        method: Optional[Callable[Concatenate[_S, _B, _P], _RT]]=None,
+        method: Callable[Concatenate[_S, _B, _P], _RT] | None=None,
         *, return_if_crashed=None  # _RF
         ):
     """
@@ -147,10 +149,10 @@ def capture_crashes_to_bulkhead_arg(
     """
     def decorate(
             method: Callable[Concatenate[_S, _B, _P], _RT]
-            ) -> Callable[Concatenate[_S, _B, _P], Union[_RT, _RF]]:
+            ) -> Callable[Concatenate[_S, _B, _P], _RT | _RF]:
         @wraps(method)
         @_mark_bulkhead_call
-        def bulkhead_call(self: _S, bulkhead: _B, *args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
+        def bulkhead_call(self: _S, bulkhead: _B, *args: _P.args, **kwargs: _P.kwargs) -> _RT | _RF:
             if bulkhead.crash_reason is not None:
                 # Bulkhead has already crashed. Abort.
                 return return_if_crashed
@@ -176,20 +178,20 @@ def capture_crashes_to_bulkhead_arg(
 @overload
 def capture_crashes_to(
         bulkhead: Bulkhead
-        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, None]]]:
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, _RT | None]]:
     ...
 
 @overload
 def capture_crashes_to(
         bulkhead: Bulkhead,
         return_if_crashed: _RF
-        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, _RT | _RF]]:
     ...
 
 def capture_crashes_to(
         bulkhead: Bulkhead,
         return_if_crashed=None  # _RF
-        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, _RT | _RF]]:
     """
     A method that captures any raised exceptions to the specified Bulkhead,
     as the "crash reason" of the bulkhead.
@@ -206,10 +208,10 @@ def capture_crashes_to(
         def calculate_foo() -> Result:
             ...
     """
-    def decorate(func: Callable[_P, _RT]) -> Callable[_P, Union[_RT, _RF]]:
+    def decorate(func: Callable[_P, _RT]) -> Callable[_P, _RT | _RF]:
         @wraps(func)
         @_mark_bulkhead_call
-        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
+        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> _RT | _RF:
             if bulkhead.crash_reason is not None:
                 # Bulkhead has already crashed. Abort.
                 return return_if_crashed
@@ -266,22 +268,22 @@ def crashes_captured_to(bulkhead: Bulkhead, *, enter_if_crashed: bool=False) -> 
 @overload
 def capture_crashes_to_stderr(
         func: Callable[_P, _RT]
-        ) -> Callable[_P, Union[_RT, None]]:
+        ) -> Callable[_P, _RT | None]:
     ...
 
 @overload
 def capture_crashes_to_stderr(
         *, return_if_crashed: _RF
-        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, _RF]]]:
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, _RT | _RF]]:
     ...
 
 @overload
 def capture_crashes_to_stderr(
-        ) -> Callable[[Callable[_P, _RT]], Callable[_P, Union[_RT, None]]]:
+        ) -> Callable[[Callable[_P, _RT]], Callable[_P, _RT | None]]:
     ...
 
 def capture_crashes_to_stderr(
-        func: Optional[Callable[_P, _RT]]=None,
+        func: Callable[_P, _RT] | None=None,
         *, return_if_crashed=None  # _RF
         ):
     """
@@ -296,10 +298,10 @@ def capture_crashes_to_stderr(
         def calculate_foo(self) -> Result:
             ...
     """
-    def decorate(func: Callable[_P, _RT]) -> Callable[_P, Union[_RT, _RF]]:
+    def decorate(func: Callable[_P, _RT]) -> Callable[_P, _RT | _RF]:
         @wraps(func)
         @_mark_bulkhead_call
-        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> Union[_RT, _RF]:
+        def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> _RT | _RF:
             try:
                 return func(*args, **kwargs)  # cr-traceback: ignore
             except BaseException as e:
@@ -331,14 +333,14 @@ def _mark_bulkhead_call(bulkhead_call: Callable[_P, _R]) -> Callable[_P, _R]:
     return bulkhead_call
 
 
-_ExtractedTraceback = List[traceback.FrameSummary]
+_ExtractedTraceback = list[traceback.FrameSummary]
 _FixTbFunc = Callable[[_ExtractedTraceback, _ExtractedTraceback], _ExtractedTraceback]
 
 def _extract_bulkhead_traceback(
         e: BaseException,
-        *, fix_tb: Optional[_FixTbFunc]=None,
+        *, fix_tb: _FixTbFunc | None=None,
         extra_stacklevel: int=0
-        ) -> Optional[_ExtractedTraceback]:
+        ) -> _ExtractedTraceback | None:
     if e.__traceback__ is None:
         return None
     here_tb = traceback.extract_stack(sys._getframe(1 + extra_stacklevel))
@@ -349,7 +351,7 @@ def _extract_bulkhead_traceback(
     return full_tb_summary
 
 
-def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False, fix_tb: Optional[_FixTbFunc]=None) -> None:
+def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False, fix_tb: _FixTbFunc | None=None) -> None:
     # Print traceback to assist in debugging in the terminal,
     # including ancestor callers of bulkhead_call
     err_file = sys.stderr

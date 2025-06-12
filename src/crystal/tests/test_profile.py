@@ -7,7 +7,7 @@ from crystal.util.profile import (
 import gc
 import io
 import time
-from typing import Iterator
+from collections.abc import Iterator
 from unittest.mock import patch
 
 

@@ -25,7 +25,8 @@ import tempfile
 import textwrap
 import time
 import traceback
-from typing import Callable, Iterator, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
+from collections.abc import Callable, Iterator
 from unittest import skip, SkipTest, TestCase
 from unittest.mock import ANY
 import urllib
@@ -637,7 +638,7 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
         _py_eval(crystal, 'type(result_cell[0])'))
 
 
-def _close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: Optional[float]=None) -> None:
+def _close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: float | None=None) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     _py_eval(crystal, textwrap.dedent(f'''\
         if True:
@@ -658,7 +659,7 @@ def _close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: Opti
         '''), stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '')
 
 
-def _close_main_window(crystal: subprocess.Popen, *, after_delay: Optional[float]=None) -> None:
+def _close_main_window(crystal: subprocess.Popen, *, after_delay: float | None=None) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     _py_eval(crystal, textwrap.dedent(f'''\
         if True:
@@ -698,7 +699,7 @@ def _delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[No
 # Utility: Shell
 
 @contextmanager
-def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
+def crystal_shell(*, env_extra={}) -> Iterator[tuple[subprocess.Popen, str]]:
     """
     Context which starts "crystal --shell" upon enter
     and cleans up the associated process upon exit.
@@ -706,11 +707,11 @@ def crystal_shell(*, env_extra={}) -> Iterator[Tuple[subprocess.Popen, str]]:
     _ensure_can_use_crystal_shell()
     
     # Determine how to run Crystal on command line
-    crystal_command: List[str]
+    crystal_command: list[str]
     python = sys.executable
     if getattr(sys, 'frozen', None) == 'macosx_app':
         python_neighbors = os.listdir(os.path.dirname(python))
-        (crystal_binary_name,) = [n for n in python_neighbors if 'crystal' in n.lower()]
+        (crystal_binary_name,) = (n for n in python_neighbors if 'crystal' in n.lower())
         crystal_binary = os.path.join(os.path.dirname(python), crystal_binary_name)
         crystal_command = [crystal_binary]
     else:
@@ -771,8 +772,8 @@ def _ensure_can_use_crystal_shell() -> None:
 def _py_eval(
         python: subprocess.Popen,
         py_code: str,
-        stop_suffix: Optional[Union[str, Tuple[str, ...]]]=None,
-        *, timeout: Optional[float]=None) -> str:
+        stop_suffix: str | tuple[str, ...] | None=None,
+        *, timeout: float | None=None) -> str:
     if '\n' in py_code and stop_suffix is None:
         raise ValueError(
             'Unsafe to use _py_eval() on multi-line py_code '
@@ -790,11 +791,11 @@ def _py_eval(
 
 def _read_until(
         stream: TextIOBase,
-        stop_suffix: Union[str, Tuple[str, ...]],
-        timeout: Optional[float]=None,
-        *, period: Optional[float]=None,
+        stop_suffix: str | tuple[str, ...],
+        timeout: float | None=None,
+        *, period: float | None=None,
         stacklevel_extra: int=0
-        ) -> Tuple[str, str]:
+        ) -> tuple[str, str]:
     """
     Reads from the specified stream until the provided `stop_suffix`
     is read at the end of the stream or the timeout expires.
@@ -890,7 +891,7 @@ class ReadUntilTimedOut(WaitTimedOut):
 
 _DEFAULT_DRAIN_TTL = min(DEFAULT_WAIT_TIMEOUT, 2.0)
 
-def _drain(stream: Union[TextIOBase, subprocess.Popen], ttl: Optional[float]=None) -> str:
+def _drain(stream: TextIOBase | subprocess.Popen, ttl: float | None=None) -> str:
     """
     Reads as much as possible from the specified stream for the specified
     TTL duration and returns it.

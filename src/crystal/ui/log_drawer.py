@@ -310,7 +310,7 @@ class LogDrawer(wx.Frame):
         return self._parent_content_container is not None
     
     @staticmethod
-    def _content_children_of(parent: wx.Window) -> List[wx.Window]:
+    def _content_children_of(parent: wx.Window) -> list[wx.Window]:
         return [c for c in parent.Children if not isinstance(c, wx.TopLevelWindow)]
     
     # === Events ===
@@ -332,7 +332,7 @@ class LogDrawer(wx.Frame):
             # Stop waiting for mouse up
             self._resized_recently_timer.Stop()
     
-    def _on_parent_reshaped(self, event: Union[wx.MoveEvent, wx.SizeEvent]) -> None:
+    def _on_parent_reshaped(self, event: wx.MoveEvent | wx.SizeEvent) -> None:
         if isinstance(event, wx.SizeEvent):
             if self._parent_will_be_maximized_after_next_resize:
                 self._parent_will_be_maximized_after_next_resize = False
@@ -349,7 +349,7 @@ class LogDrawer(wx.Frame):
     def _on_splitter_double_click(self, event: wx.SplitterEvent) -> None:
         self._toggle_open()
     
-    def _on_parent_will_maximize(self, event: Optional[wx.MaximizeEvent]=None) -> None:
+    def _on_parent_will_maximize(self, event: wx.MaximizeEvent | None=None) -> None:
         self._parent_will_be_maximized_after_next_resize = True
         
         if event is not None:
@@ -431,7 +431,7 @@ class _LogDrawerWriter(TextIOBase):
                 # Append text to text area
                 if True:
                     # Try parse coloring codes around text
-                    color: Optional[wx.Colour] = None  # default
+                    color: wx.Colour | None = None  # default
                     plain_text: str = text  # default
                     if _CODE_PREFIX in text:
                         if text.endswith(_RESET_CODE):

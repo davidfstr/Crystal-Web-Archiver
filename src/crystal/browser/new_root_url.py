@@ -10,13 +10,14 @@ from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_wx_gtk, is_windows
 from crystal.util.xthreading import fg_affinity, fg_call_later
 import os
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
+from collections.abc import Callable
 import wx
 
 
 ChangePrefixCommand = Union[
     # Set prefix
-    Tuple[Literal['domain', 'directory'], str],
+    tuple[Literal['domain', 'directory'], str],
     # Clear prefix
     None,
     # Leave prefix unchanged
@@ -410,7 +411,7 @@ class NewRootUrlDialog:
     # NOTE: Blur event can be called multiple times without an intermediate focus event
     # NOTE: Blur event can be called while dialog is being destroyed
     @fg_affinity
-    def _on_url_field_blur(self, event: Optional[wx.FocusEvent]=None) -> None:
+    def _on_url_field_blur(self, event: wx.FocusEvent | None=None) -> None:
         if not self._url_field_focused:
             # Already did blur action
             return
@@ -468,7 +469,7 @@ class NewRootUrlDialog:
         self._on_cancel(event)
     
     @fg_affinity
-    def _on_ok(self, event: Optional[wx.CommandEvent]=None) -> None:
+    def _on_ok(self, event: wx.CommandEvent | None=None) -> None:
         # Blur text fields so that they save their contents
         self._on_url_field_blur()
         

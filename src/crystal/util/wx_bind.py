@@ -2,7 +2,8 @@ from contextlib import contextmanager
 from crystal.util import cli
 import sys
 import traceback
-from typing import Callable, Iterator, TYPE_CHECKING
+from typing import TYPE_CHECKING
+from collections.abc import Callable, Iterator
 
 if TYPE_CHECKING:
     import wx

@@ -1,7 +1,8 @@
 from crystal.browser.icons import add_transparent_left_border
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_mac_os, is_windows
-from typing import Callable, List, Optional
+from typing import List, Optional
+from collections.abc import Callable
 import wx
 
 
@@ -19,10 +20,10 @@ class Action:
             # and make it triggerable with Alt-<Letter> on Windows.
             # Linux and macOS will ignore & prefixes.
             label: str='',
-            accel: Optional[wx.AcceleratorEntry]=None,
-            action_func: Optional[Callable[[wx.CommandEvent], None]]=None,
+            accel: wx.AcceleratorEntry | None=None,
+            action_func: Callable[[wx.CommandEvent], None] | None=None,
             enabled: bool=True,
-            button_bitmap: Optional[wx.Bitmap]=None,
+            button_bitmap: wx.Bitmap | None=None,
             button_label: str=''):
         self._menuitem_id = menuitem_id
         self._label = label

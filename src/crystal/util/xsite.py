@@ -31,12 +31,12 @@ def sethelper():
 # ------------------------------------------------------------------------------
 # _sitebuiltins.py
 
-class Quitter(object):
+class Quitter:
     def __init__(self, name, eof):
         self.name = name
         self.eof = eof
     def __repr__(self):
-        return 'Use %s() or %s to exit' % (self.name, self.eof)
+        return 'Use {}() or {} to exit'.format(self.name, self.eof)
     def __call__(self, code=None):
         # Shells like IDLE catch the SystemExit, but listen when their
         # stdin wrapper is closed.
@@ -47,7 +47,7 @@ class Quitter(object):
         raise SystemExit(code)
 
 
-class _Helper(object):
+class _Helper:
     """Define the builtin 'help'.
 
     This is a wrapper around pydoc.help that provides a helpful message

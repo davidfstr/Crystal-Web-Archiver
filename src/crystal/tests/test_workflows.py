@@ -176,10 +176,10 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
                     
                     # Ensure the new resource group does contain the expected members
-                    (comic1_ti,) = [
+                    (comic1_ti,) = (
                         child for child in comic_group_ti.Children
                         if child.Text == f'{comic1_url}'
-                    ]  # contains first comic
+                    )  # contains first comic
                     assert len(comic_group_ti.Children) >= 2  # contains last comic too
                     
                     comic_group_ti.Collapse()
@@ -209,14 +209,14 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         
                         feed_group_ti.Expand()
                         await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_group_ti))
-                        (atom_feed_ti,) = [
+                        (atom_feed_ti,) = (
                             child for child in feed_group_ti.Children
                             if child.Text == f'{atom_feed_url}'
-                        ]
-                        (rss_feed_ti,) = [
+                        )
+                        (rss_feed_ti,) = (
                             child for child in feed_group_ti.Children
                             if child.Text == f'{rss_feed_url}'
-                        ]
+                        )
                         assert 2 == len(feed_group_ti.Children)  # == [atom feed, rss feed]
                         
                         feed_group_ti.Collapse()
@@ -328,10 +328,10 @@ async def test_can_download_and_serve_a_static_site() -> None:
                     feed_group_ti.Expand()
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_group_ti))
                     
-                    (atom_feed_ti,) = [
+                    (atom_feed_ti,) = (
                         child for child in feed_group_ti.Children
                         if child.Text == f'{atom_feed_url}'
-                    ]
+                    )
                     
                     atom_feed_ti.SelectItem()
                     assert False == mw.download_button.IsEnabled()
@@ -611,10 +611,10 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
                 assert None == home_ti.try_find_child(sound1_url)
                 
                 # Ensure home page has no embedded link to Sound #1
-                (embedded_cluster_ti,) = [
+                (embedded_cluster_ti,) = (
                     child for child in home_ti.Children
                     if child.Text == '(Hidden: Embedded)'
-                ]
+                )
                 embedded_cluster_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
                 assert None == embedded_cluster_ti.try_find_child(sound1_url)
@@ -849,7 +849,7 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
             # Start xkcd v2
             with served_project(
                     'testdata_xkcd-v2.crystalproj.zip',
-                    fetch_date_of_resources_set_to=datetime.datetime.now(datetime.timezone.utc)) as sp2:
+                    fetch_date_of_resources_set_to=datetime.datetime.now(datetime.UTC)) as sp2:
                 # Define URLs
                 assert home_url == sp2.get_request_url(home_original_url)
                 assert comic1_url == sp2.get_request_url(comic1_original_url)
@@ -1020,19 +1020,19 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 
                 # 1. Ensure the new resource group appears at the root of the entity tree
                 # 2. Ensure unnamed resource group at root of Entity Tree has OK title
-                (comic_group_ti,) = [
+                (comic_group_ti,) = (
                     child for child in root_ti.Children
                     if child.Text == f'{comic_pattern}'
-                ]  # ensure did find resource group at root of entity tree
+                )  # ensure did find resource group at root of entity tree
                 
                 comic_group_ti.Expand()
                 await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
                 
                 # Ensure the new resource group does contain the expected members
-                (comic1_ti,) = [
+                (comic1_ti,) = (
                     child for child in comic_group_ti.Children
                     if child.Text == f'{comic1_url}'
-                ]  # contains first comic
+                )  # contains first comic
                 assert len(comic_group_ti.Children) >= 2  # contains last comic too
                 
                 comic_group_ti.Collapse()
@@ -1048,7 +1048,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
 # Utility
 
 async def _undownload_url(
-        url_or_urls: Union[str, List[str]],
+        url_or_urls: str | list[str],
         mw: MainWindow,
         project_dirpath: str
         ) -> None:
@@ -1075,7 +1075,7 @@ async def _undownload_url(
 
 
 async def _undiscover_url(
-        url_or_urls: Union[str, List[str]],
+        url_or_urls: str | list[str],
         mw: MainWindow,
         project_dirpath: str
         ) -> None:

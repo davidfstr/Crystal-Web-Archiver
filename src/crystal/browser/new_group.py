@@ -12,7 +12,8 @@ from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xthreading import fg_affinity
 import sys
-from typing import Callable, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
+from collections.abc import Callable
 import wx
 
 
@@ -194,12 +195,12 @@ class NewGroupDialog:
         
         return fields_sizer
     
-    def _create_preview_box(self, parent: wx.Window) -> Tuple[Union[wx.Window, wx.Sizer], int, int]:
+    def _create_preview_box(self, parent: wx.Window) -> tuple[wx.Window | wx.Sizer, int, int]:
         # NOTE: Don't use wx.CollapsiblePane on wxGTK/Linux because
         #       it doesn't resize its parent window properly on
         #       expand and unexpand events
         preview_box_collapsible = not is_linux()
-        preview_box: Union[wx.Window, wx.Sizer]
+        preview_box: wx.Window | wx.Sizer
         preview_box_root: wx.Window
         preview_box_root_sizer: wx.BoxSizer
         preview_box_flags: int

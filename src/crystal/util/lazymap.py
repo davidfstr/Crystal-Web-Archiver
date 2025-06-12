@@ -1,4 +1,5 @@
-from typing import Callable, Generic, List, Sequence, TypeVar
+from typing import Generic, List, TypeVar
+from collections.abc import Callable, Sequence
 
 
 _E1 = TypeVar('_E1')
@@ -10,7 +11,7 @@ class lazymap(Generic[_E2], Sequence[_E2]):
     Lazily-computed read-only list where each element is equal to an element
     of a base list after being passed through a key transformation function.
     """
-    def __init__(self, base: List[_E1], key: Callable[[_E1], _E2]) -> None:
+    def __init__(self, base: list[_E1], key: Callable[[_E1], _E2]) -> None:
         self._base = base
         self._key = key
     

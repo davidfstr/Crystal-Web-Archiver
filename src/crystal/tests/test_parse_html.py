@@ -22,7 +22,8 @@ import lxml.html
 import os
 import tempfile
 from textwrap import dedent
-from typing import Iterator, List, Tuple
+from typing import List, Tuple
+from collections.abc import Iterator
 from unittest import skip
 from unittest.mock import Mock, patch
 from urllib.parse import ParseResult, urlparse, urljoin
@@ -91,7 +92,7 @@ async def test_uses_html_parser_parser_for_classic_projects() -> None:
 
 
 @contextmanager
-def _watch_html_parser_usage() -> Iterator[Tuple[Mock, Mock]]:
+def _watch_html_parser_usage() -> Iterator[tuple[Mock, Mock]]:
     with patch('lxml.html.document_fromstring', wraps=lxml.html.document_fromstring) as lxml_parse_func:
         with patch('crystal.util.fastsoup.BeautifulSoup', wraps=bs4.BeautifulSoup) as bs4_parse_func:
             yield (lxml_parse_func, bs4_parse_func)
@@ -197,11 +198,11 @@ async def test_recognizes_explicit_link_to_favicon(subtests: SubtestsContext) ->
                 
                 # 1. Ensure detects explicit favicon link
                 # 2. Ensure does not insert implicit favicon link
-                (favicon_link,) = [
+                (favicon_link,) = (
                     link for link in links if
                     link.type_title == FAVICON_TYPE_TITLE and
                     link.relative_url == '/s/919f27.ico'
-                ]
+                )
                 
                 # Ensure can rewrite explicit favicon link
                 favicon_link.relative_url = '/favicon2.ico'
@@ -210,47 +211,47 @@ async def test_recognizes_explicit_link_to_favicon(subtests: SubtestsContext) ->
     with subtests.test(using='rel shortcut icon'):  # for old IE
         HTML_TEXT = '''<link rel="shortcut icon" href="/s/919f27.ico" type="image/x-icon"/>'''
         (_, links) = _parse_html_and_links(HTML_TEXT)
-        (favicon_link,) = [
+        (favicon_link,) = (
             link for link in links if
             link.type_title == FAVICON_TYPE_TITLE and
             link.relative_url == '/s/919f27.ico'
-        ]
+        )
     
     with subtests.test(using='rel icon'):
         HTML_TEXT = '''<link rel="icon" href="/s/919f27.ico" type="image/x-icon"/>'''
         (_, links) = _parse_html_and_links(HTML_TEXT)
-        (favicon_link,) = [
+        (favicon_link,) = (
             link for link in links if
             link.type_title == FAVICON_TYPE_TITLE and
             link.relative_url == '/s/919f27.ico'
-        ]
+        )
     
     with subtests.test(using='rel apple-touch-icon'):
         HTML_TEXT = '''<link rel="apple-touch-icon" href="/custom_icon.png">'''
         (_, links) = _parse_html_and_links(HTML_TEXT)
-        (favicon_link,) = [
+        (favicon_link,) = (
             link for link in links if
             link.type_title == FAVICON_TYPE_TITLE and
             link.relative_url == '/custom_icon.png'
-        ]
+        )
     
     with subtests.test(using='ico file extension'):
         HTML_TEXT = '''<link href="/myicon.ico" />'''
         (_, links) = _parse_html_and_links(HTML_TEXT)
-        (favicon_link,) = [
+        (favicon_link,) = (
             link for link in links if
             link.type_title == FAVICON_TYPE_TITLE and
             link.relative_url == '/myicon.ico'
-        ]
+        )
     
     with subtests.test(using='png file extension'):
         HTML_TEXT = '''<link href="/myicon.png" />'''
         (_, links) = _parse_html_and_links(HTML_TEXT)
-        (favicon_link,) = [
+        (favicon_link,) = (
             link for link in links if
             link.type_title == FAVICON_TYPE_TITLE and
             link.relative_url == '/myicon.png'
-        ]
+        )
 
 
 # NOTE: Logic for recognizing this kind of link currently lives in
@@ -297,11 +298,11 @@ async def test_recognizes_implicit_link_to_favicon_from_site_root(subtests: Subt
                 assert isinstance(doc, HtmlDocument)  # ensure using soup parser
                 
                 # Ensure inserts implicit favicon link
-                (favicon_link,) = [
+                (favicon_link,) = (
                     link for link in links if
                     link.type_title == FAVICON_TYPE_TITLE and
                     link.relative_url == '/favicon.ico'
-                ]
+                )
                 
                 # Ensure can rewrite implicit favicon link
                 # (in document from soup parser)
@@ -327,11 +328,11 @@ async def test_recognizes_implicit_link_to_favicon_from_site_root(subtests: Subt
                 assert isinstance(doc, BasicDocument)  # ensure using basic parser
                 
                 # Ensure inserts implicit favicon link
-                (favicon_link,) = [
+                (favicon_link,) = (
                     link for link in links if
                     link.type_title == FAVICON_TYPE_TITLE and
                     link.relative_url == '/favicon.ico'
-                ]
+                )
                 
                 # Characterize known limitation:
                 # Ensure CANNOT rewrite implicit favicon link
@@ -378,11 +379,11 @@ async def test_does_not_recognize_implicit_link_to_favicon_from_outside_site_roo
             (doc, links, _) = rr.document_and_links()
             
             # Ensure does NOT insert implicit favicon link
-            () = [
+            () = (
                 link for link in links if
                 link.type_title == FAVICON_TYPE_TITLE and
                 link.relative_url == '/favicon.ico'
-            ]
+            )
 
 
 @skip('not yet automated')
@@ -501,12 +502,12 @@ async def test_recognizes_http_redirect_as_a_link() -> None:
             (doc, links, _) = rr.document_and_links()
             
             # Ensure inserts redirect link
-            (redirect_link,) = [
+            (redirect_link,) = (
                 link for link in links if
                 link.type_title == 'Redirect' and
                 link.relative_url == 'https://xkcd.com/' and
                 link.embedded
-            ]
+            )
 
 
 @skip('fails: not yet implemented')
@@ -521,7 +522,7 @@ def test_recognizes_links_defined_by_plugins() -> None:
     pass
 
 
-def _parse_html_and_links(html: str) -> Tuple[Document, List[Link]]:
+def _parse_html_and_links(html: str) -> tuple[Document, list[Link]]:
     doc_and_links = parse_html_and_links(html.encode('utf-8'), 'utf-8', 'lxml')
     assert doc_and_links is not None
     return doc_and_links

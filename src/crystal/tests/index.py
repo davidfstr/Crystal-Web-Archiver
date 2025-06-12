@@ -44,12 +44,13 @@ import os
 import sys
 import time
 import traceback
-from typing import Any, Callable, Coroutine, Dict, List, Iterator, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from collections.abc import Callable, Coroutine, Iterator
 from unittest import SkipTest
 import warnings
 
 
-def _test_functions_in_module(mod) -> List[Callable]:
+def _test_functions_in_module(mod) -> list[Callable]:
     return [
         f for f in mod.__dict__.values() 
         if (
@@ -96,13 +97,13 @@ _TEST_FUNCS = (
 )
 
 
-_TestFuncId = Tuple[str, str]  # (module, func_name)
+_TestFuncId = tuple[str, str]  # (module, func_name)
 
 
 # TODO: Rename "test_names" to something more appropriate,
 #       now that items can also refer to test modules (and not just test functions)
 @bg_affinity
-def run_tests(test_names: List[str]) -> bool:
+def run_tests(test_names: list[str]) -> bool:
     """
     Runs automated UI tests, printing a summary report,
     and returning whether the run was OK.
@@ -114,7 +115,7 @@ def run_tests(test_names: List[str]) -> bool:
         return _run_tests(test_names)
 
 
-def _run_tests(test_names: List[str]) -> bool:
+def _run_tests(test_names: list[str]) -> bool:
     # Ensure ancestor caller did already call set_tests_are_running()
     assert tests_are_running()
     

@@ -30,7 +30,8 @@ import os
 import re
 import shutil
 from textwrap import dedent
-from typing import Callable, Dict, Generator, Iterator, List, Literal, Optional
+from typing import Dict, List, Literal, Optional
+from collections.abc import Callable, Generator, Iterator
 from typing_extensions import override
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
 
@@ -45,13 +46,13 @@ class ProjectServer:
     """Runs the archive server on a thread."""
     
     # NOTE: Only changed when tests are running
-    _last_created: 'Optional[ProjectServer]'=None
+    _last_created: Optional[ProjectServer]=None
     
     def __init__(self,
             project: Project,
-            port: Optional[int]=None,
+            port: int | None=None,
             *, verbosity: Verbosity='normal',
-            stdout: Optional[TextIOBase]=None,
+            stdout: TextIOBase | None=None,
             ) -> None:
         if port is None:
             port = _DEFAULT_SERVER_PORT
@@ -136,8 +137,8 @@ class ProjectServer:
 
 def get_request_url(
         archive_url: str,
-        port: Optional[int]=None,
-        project_default_url_prefix: Optional[str]=None,
+        port: int | None=None,
+        project_default_url_prefix: str | None=None,
         ) -> str:
     """
     Given the absolute URL of a resource, returns the URL that should be used to
@@ -159,7 +160,7 @@ _PIN_DATE_JS_PATH_RE = re.compile(r'^/_/crystal/pin_date\.js\?t=([0-9]+)$')
 _PIN_DATE_JS_PATH_PREFIX = '/_/crystal/pin_date.js?t='
 
 # Set of archived headers that may be played back as-is
-_HEADER_ALLOWLIST = set([
+_HEADER_ALLOWLIST = {
     'date',
     'vary',
     'content-disposition',
@@ -233,9 +234,9 @@ _HEADER_ALLOWLIST = set([
     
     # Site-specific: Substack
     'x-cluster',
-])
+}
 # Set of archived headers known to cause problems if blindly played back
-_HEADER_DENYLIST = set([
+_HEADER_DENYLIST = {
     # Connection
     'transfer-encoding',# overridden by this web server
     'content-length',   # overridden by this web server
@@ -292,7 +293,7 @@ _HEADER_DENYLIST = set([
     'x-cache',
     'x-ecn-p',
     'vtag',
-])
+}
 # Whether to suppress warnings related to unknown X- HTTP headers
 _IGNORE_UNKNOWN_X_HEADERS = True
 
@@ -315,7 +316,7 @@ _HTTP_COLON_SLASH_SLASH_RE = re.compile(r'(?i)https?://')
 class _HttpServer(HTTPServer):
     project: Project
     verbosity: Verbosity
-    stdout: Optional[TextIOBase]
+    stdout: TextIOBase | None
     
     @override
     def handle_error(self, request, client_address):
@@ -347,7 +348,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return self.headers.get('Host', self._server_host)
     
     @property
-    def referer(self) -> Optional[str]:
+    def referer(self) -> str | None:
         return self.headers.get('Referer')
     
     # === Handle Incoming Request ===
@@ -454,7 +455,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 # in downloading it immediately upon access
                 matching_rg = self._find_group_matching_archive_url(archive_url)
                 if matching_rg is not None and not readonly and dynamic_ok:
-                    self._print_warning('*** Dynamically downloading new resource in group %r: %s' % (
+                    self._print_warning('*** Dynamically downloading new resource in group {!r}: {}'.format(
                         matching_rg.display_name,
                         archive_url,
                     ))
@@ -475,7 +476,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             if resource.definitely_has_no_revisions:
                 revision = None  # type: Optional[ResourceRevision]
             else:
-                def get_default_revision() -> Optional[ResourceRevision]:
+                def get_default_revision() -> ResourceRevision | None:
                     assert resource is not None
                     return resource.default_revision(
                         stale_ok=True if self.project.readonly else False
@@ -491,7 +492,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     # in downloading it immediately upon access
                     matching_rr = self._find_root_resource_matching_archive_url(archive_url)
                     if matching_rr is not None:
-                        self._print_warning('*** Dynamically downloading root resource %r: %s' % (
+                        self._print_warning('*** Dynamically downloading root resource {!r}: {}'.format(
                             matching_rr.display_name,
                             archive_url,
                         ))
@@ -501,7 +502,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     # in downloading it immediately upon access
                     matching_rg = self._find_group_matching_archive_url(archive_url)
                     if matching_rg is not None:
-                        self._print_warning('*** Dynamically downloading existing resource in group %r: %s' % (
+                        self._print_warning('*** Dynamically downloading existing resource in group {!r}: {}'.format(
                             matching_rg.display_name,
                             archive_url,
                         ))
@@ -540,14 +541,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     referer_archive_urlparts = urlparse(referer_archive_url)
                     assert isinstance(referer_archive_urlparts.scheme, str)
                     assert isinstance(referer_archive_urlparts.netloc, str)
-                    requested_archive_url = '%s://%s%s' % (
+                    requested_archive_url = '{}://{}{}'.format(
                         referer_archive_urlparts.scheme,
                         referer_archive_urlparts.netloc,
                         self.path,
                     )
                     redirect_url = self.get_request_url(requested_archive_url)
                     
-                    self._print_warning('*** Dynamically rewriting link from %s: %s' % (
+                    self._print_warning('*** Dynamically rewriting link from {}: {}'.format(
                         referer_archive_url,
                         requested_archive_url,
                     ))
@@ -565,13 +566,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_not_found_page(vary_referer=True)
         return
     
-    def _find_root_resource_matching_archive_url(self, archive_url: str) -> Optional[RootResource]:
+    def _find_root_resource_matching_archive_url(self, archive_url: str) -> RootResource | None:
         for rr in self.project.root_resources:
             if rr.resource.url == archive_url:
                 return rr
         return None
     
-    def _find_group_matching_archive_url(self, archive_url: str) -> Optional[ResourceGroup]:
+    def _find_group_matching_archive_url(self, archive_url: str) -> ResourceGroup | None:
         # ...excluding "do not download" groups
         for rg in self.project.resource_groups:
             if rg.contains_url(archive_url) and not rg.do_not_download:
@@ -580,7 +581,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @staticmethod
     @bg_affinity
-    def _try_download_revision_dynamically(resource: Resource, *, needs_result: bool) -> Optional[ResourceRevision]:
+    def _try_download_revision_dynamically(resource: Resource, *, needs_result: bool) -> ResourceRevision | None:
         try:
             return resource.download(
                 # NOTE: Need to wait for embedded resources as well.
@@ -604,7 +605,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     # === Send Page ===
     
     @bg_affinity
-    def send_welcome_page(self, query_params: Dict[str, List[str]], *, vary_referer: bool) -> None:
+    def send_welcome_page(self, query_params: dict[str, list[str]], *, vary_referer: bool) -> None:
         # TODO: Is this /?url=** path used anywhere anymore?
         if 'url' in query_params:
             archive_url = query_params['url'][0]
@@ -802,7 +803,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 if name_lower not in _HEADER_DENYLIST:
                     if not (_IGNORE_UNKNOWN_X_HEADERS and name_lower.startswith('x-')):
                         self._print_warning(
-                            '*** Ignoring unknown header in archive: %s: %s' % (name, value))
+                            '*** Ignoring unknown header in archive: {}: {}'.format(name, value))
                 continue
         if _CACHE_CONTROL_POLICY is not None:
             self.send_header('Cache-Control', _CACHE_CONTROL_POLICY)
@@ -833,9 +834,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @bg_affinity
     def send_revision_body(self, 
             revision: ResourceRevision, 
-            doc: Optional[Document], 
-            links: List[Link], 
-            revision_datetime: Optional[datetime.datetime]
+            doc: Document | None, 
+            links: list[Link], 
+            revision_datetime: datetime.datetime | None
             ) -> None:
         # Send body
         if doc is None:
@@ -873,7 +874,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @staticmethod
     def _rewrite_links(
-            links: List[Link],
+            links: list[Link],
             base_url: str,
             get_request_url: Callable[[str], str]
             ) -> None:
@@ -908,11 +909,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # === URL Transformation ===
     
-    def get_archive_url(self, request_path: str) -> Optional[str]:
+    def get_archive_url(self, request_path: str) -> str | None:
         match = _REQUEST_PATH_IN_ARCHIVE_RE.match(request_path)
         if match:
             (scheme, rest) = match.groups()
-            archive_url = '%s://%s' % (scheme, rest)
+            archive_url = '{}://{}'.format(scheme, rest)
             return archive_url
         else:
             # If valid default URL prefix is set, use it
@@ -931,7 +932,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def get_request_url_with_host(
             archive_url: str,
             request_host: str,
-            default_url_prefix: Optional[str],
+            default_url_prefix: str | None,
             ) -> str:
         """
         Given the absolute URL of a resource, returns the URL that should be used to
@@ -946,7 +947,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         request_scheme = 'http'
         request_netloc = request_host
-        request_path = '_/%s/%s%s' % (
+        request_path = '_/{}/{}{}'.format(
             archive_url_parts.scheme,
             archive_url_parts.netloc, archive_url_parts.path)
         request_params = archive_url_parts.params
@@ -990,7 +991,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return self.server.verbosity
     
     @property
-    def _stdout(self) -> Optional[TextIOBase]:
+    def _stdout(self) -> TextIOBase | None:
         return self.server.stdout
 
 

@@ -1,7 +1,8 @@
 from contextlib import contextmanager, redirect_stdout
 import io
 import sys
-from typing import Callable, cast, Iterator, List, TextIO
+from typing import cast, List, TextIO
+from collections.abc import Callable, Iterator
 
 
 @contextmanager
@@ -22,7 +23,7 @@ _WRITE_CALLABLE_ATTRS = [
 ]
 
 class _MultiplexedWriteOnlyTextIO:
-    def __init__(self, bases: List[TextIO]) -> None:
+    def __init__(self, bases: list[TextIO]) -> None:
         if not len(bases) >= 1:
             raise ValueError()
         self._bases = bases
@@ -38,7 +39,7 @@ class _MultiplexedWriteOnlyTextIO:
 
 
 class _MultiplexedCallable:
-    def __init__(self, bases: List[Callable]) -> None:
+    def __init__(self, bases: list[Callable]) -> None:
         if not len(bases) >= 1:
             raise ValueError()
         self._bases = bases

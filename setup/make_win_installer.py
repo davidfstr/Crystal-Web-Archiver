@@ -2,14 +2,14 @@ import os
 from typing import Tuple
 
 # Read current win-installer.iss
-with open('win-installer.iss', 'r', newline='\r\n') as f:
+with open('win-installer.iss', newline='\r\n') as f:
     old_lines = list(f)
 for line in old_lines:
     if not line.endswith('\r\n'):
         raise AssertionError(f'win-installer.iss: Expected line to end with CRLF: {line!r}')
 
 # Locate existing [Files] stanza
-source_line_range: Tuple[int, int]
+source_line_range: tuple[int, int]
 for (i, line) in enumerate(old_lines):
     if line.strip() == '[Files]':
         for (j, line) in enumerate(old_lines[i+1:], i+1):

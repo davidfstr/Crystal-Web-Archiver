@@ -23,7 +23,8 @@ from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
 import os.path
-from typing import AsyncIterator, cast, Iterator, Optional, Tuple
+from typing import cast, Optional, Tuple
+from collections.abc import AsyncIterator, Iterator
 from typing_extensions import override
 from unittest import skip
 from unittest.mock import patch
@@ -417,7 +418,7 @@ async def test_can_serve_revisions_from_project_with_major_version_2() -> None:
 @asynccontextmanager
 async def _project_opened_without_migrating(
         project_dirpath: str
-        ) -> AsyncIterator[Tuple[MainWindow, Project]]:
+        ) -> AsyncIterator[tuple[MainWindow, Project]]:
     class NonUpgradingProject(Project):
         @override
         def _apply_migrations(self, *args, **kwargs) -> None:
@@ -461,6 +462,6 @@ async def _wait_for_project_to_upgrade() -> None:
     if OpenProjectProgressDialog._upgrading_revision_progress is None:
         OpenProjectProgressDialog._upgrading_revision_progress = 0
     
-    def progression_func() -> Optional[int]:
+    def progression_func() -> int | None:
         return OpenProjectProgressDialog._upgrading_revision_progress
     await wait_while(progression_func)

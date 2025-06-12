@@ -12,8 +12,8 @@ from typing import BinaryIO, List, Optional, Tuple
 
 def parse_xml_and_links(
         xml_bytes: BinaryIO,
-        declared_charset: Optional[str]=None
-        ) -> Optional[Tuple[Document, List[Link]]]:
+        declared_charset: str | None=None
+        ) -> tuple[Document, list[Link]] | None:
     """
     Parses an XML document, returning a FastSoup object that can be
     examined through a BeautifulSoup-compatible API.

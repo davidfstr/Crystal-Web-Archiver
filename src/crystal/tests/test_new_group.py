@@ -18,7 +18,8 @@ from crystal.tests.util.xurlparse import urlpatternparse
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_windows
 import re
-from typing import Iterator, Optional, Tuple
+from typing import Optional, Tuple
+from collections.abc import Iterator
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -430,7 +431,7 @@ async def test_given_node_is_selected_in_entity_tree_when_press_new_group_button
                 assertEqual('Feed', await _source_name_for_node(feed_rgn__rss_feed_nrn__home_rrn, mw))
 
 
-async def _expand_node(node_ti: TreeItem, mw: Optional[MainWindow]=None, *, will_download: bool=False) -> None:
+async def _expand_node(node_ti: TreeItem, mw: MainWindow | None=None, *, will_download: bool=False) -> None:
     node_ti.Expand()
     if will_download:
         if mw is None:
@@ -444,7 +445,7 @@ async def _expand_node(node_ti: TreeItem, mw: Optional[MainWindow]=None, *, will
         stacklevel_extra=1)
 
 
-async def _source_name_for_node(node_ti: TreeItem, mw: MainWindow) -> Optional[str]:
+async def _source_name_for_node(node_ti: TreeItem, mw: MainWindow) -> str | None:
     node_ti.SelectItem()
     
     click_button(mw.new_group_button)
@@ -587,12 +588,12 @@ async def test_when_edit_group_then_new_group_options_not_shown() -> None:
 
 
 @contextmanager
-def _served_simple_site_with_group() -> Iterator[Tuple[str, str]]:
+def _served_simple_site_with_group() -> Iterator[tuple[str, str]]:
     server = MockHttpServer({
         '/': dict(
             status_code=200,
             headers=[('Content-Type', 'text/html')],
-            content='<a href="/assets/image.png">Comic 1</a>'.encode('utf-8')
+            content=b'<a href="/assets/image.png">Comic 1</a>'
         ),
         '/assets/image.png': dict(
             status_code=200,

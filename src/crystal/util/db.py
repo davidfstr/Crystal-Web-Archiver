@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Callable
-from typing_extensions import Self
+from collections.abc import Callable
+from typing import Self
 
 
 # Whether to print each database query
@@ -71,7 +71,7 @@ def get_column_names_of_table(c: DatabaseCursor, table_name: str) -> list[str]:
         column_name
         for (_, column_name, column_type, _, _, _)
         # NOTE: Cannot use regular '?' placeholder in this PRAGMA
-        in c.execute('PRAGMA table_info(%s)' % (table_name,))
+        in c.execute('PRAGMA table_info({})'.format(table_name))
     ]
 
 

@@ -19,7 +19,8 @@ from crystal.model import (
 import locale
 import os
 import tempfile
-from typing import Iterator, List, Optional
+from typing import List, Optional
+from collections.abc import Iterator
 from unittest import skip
 import wx
 
@@ -241,7 +242,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         )
 
 
-def _change_url_prefix_actions_in_top_level_menu(mw: MainWindow) -> List[wx.MenuItem]:
+def _change_url_prefix_actions_in_top_level_menu(mw: MainWindow) -> list[wx.MenuItem]:
     entity_menu = mw.entity_menu  # cache
     entity_menu.ProcessEvent(wx.MenuEvent(type=wx.EVT_MENU_OPEN.typeId))
     entity_menu.ProcessEvent(wx.MenuEvent(type=wx.EVT_MENU_CLOSE.typeId))
@@ -591,7 +592,7 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
             assert '900 more' == more_ti.Text
             
             more_ti.Expand()
-            def more_children_visible() -> Optional[bool]:
+            def more_children_visible() -> bool | None:
                 assert comic_group_ti is not None
                 return (len(comic_group_ti.Children) > (100 + 1)) or None
             await wait_for(more_children_visible)
@@ -610,7 +611,7 @@ async def test_given_more_node_selected_when_expand_more_node_then_first_newly_v
             more_ti.SelectItem()
             
             more_ti.Expand()
-            def more_children_visible() -> Optional[bool]:
+            def more_children_visible() -> bool | None:
                 assert comic_group_ti is not None
                 return (len(comic_group_ti.Children) > (100 + 20 + 1)) or None
             await wait_for(more_children_visible)

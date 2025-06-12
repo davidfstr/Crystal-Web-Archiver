@@ -47,7 +47,8 @@ from functools import partial
 import os
 import sqlite3
 import time
-from typing import ContextManager, Iterator, Optional, Union
+from typing import ContextManager, Optional, Union
+from collections.abc import Iterator
 import webbrowser
 import wx
 
@@ -67,7 +68,7 @@ class MainWindow:
     
     def __init__(self,
             project: Project,
-            progress_listener: Optional[OpenProjectProgressListener]=None,
+            progress_listener: OpenProjectProgressListener | None=None,
             ) -> None:
         """
         Raises:
@@ -442,7 +443,7 @@ class MainWindow:
     # === Entity Pane: Properties ===
     
     @property
-    def _suggested_url_or_url_pattern_for_selection(self) -> Optional[str]:
+    def _suggested_url_or_url_pattern_for_selection(self) -> str | None:
         selected_entity = self.entity_tree.selected_entity
         
         if isinstance(selected_entity, (Resource, RootResource)):
@@ -457,7 +458,7 @@ class MainWindow:
         return self.entity_tree.source_of_selection
     
     @property
-    def _suggested_name_for_selection(self) -> Optional[str]:
+    def _suggested_name_for_selection(self) -> str | None:
         return self.entity_tree.name_of_selection
     
     # === Operations ===
@@ -852,7 +853,7 @@ class MainWindow:
     
     # === Entity Pane: Events ===
     
-    def _on_selected_entity_changed(self, event: Optional[wx.TreeEvent]=None) -> None:
+    def _on_selected_entity_changed(self, event: wx.TreeEvent | None=None) -> None:
         selected_entity = self.entity_tree.selected_entity  # cache
         
         readonly = self._readonly  # cache
@@ -985,7 +986,7 @@ class MainWindow:
     
     # === Status Bar: Events ===
     
-    def _on_preferences(self, event: Union[wx.MenuEvent, wx.CommandEvent]) -> None:
+    def _on_preferences(self, event: wx.MenuEvent | wx.CommandEvent) -> None:
         if event.Id == wx.ID_PREFERENCES or isinstance(event.EventObject, wx.Button):
             PreferencesDialog(self._frame, self.project)
         else:

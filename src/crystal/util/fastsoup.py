@@ -2,9 +2,10 @@ import bs4
 from bs4 import BeautifulSoup
 import lxml.html
 from typing import (
-    Callable, Dict, Iterable, List, Literal, MutableMapping, Optional,
-    Pattern, TYPE_CHECKING, Union
+    Dict, List, Literal, Optional, TYPE_CHECKING, Union
 )
+from collections.abc import Callable, Iterable, MutableMapping
+from re import Pattern
 
 if TYPE_CHECKING:
     from crystal.doc.html import HtmlParserType
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 
 def parse_html(
         html_bytes: bytes,
-        from_encoding: Optional[str],
+        from_encoding: str | None,
         parser_type: 'HtmlParserType',
         ) -> 'FastSoup':
     """
@@ -46,15 +47,15 @@ class FastSoup:  # abstract
     # === Document ===
     
     def find_all(self, 
-            tag_name: Optional[str]=None, 
-            **attrs: Union[str, Pattern, Literal[True]]
+            tag_name: str | None=None, 
+            **attrs: str | Pattern | Literal[True]
             ) -> Iterable[Tag]:
         raise NotImplementedError()
     
     @classmethod
     def find_all_compile(cls, 
-            tag_name: Optional[str]=None, 
-            **attrs: Union[str, Pattern, Literal[True]]
+            tag_name: str | None=None, 
+            **attrs: str | Pattern | Literal[True]
             ) -> FindFunc:
         raise NotImplementedError()
     
@@ -72,13 +73,13 @@ class FastSoup:  # abstract
     def tag_name(self, tag: Tag) -> str:
         raise NotImplementedError()
     
-    def tag_attrs(self, tag: Tag) -> MutableMapping[str, Union[str, List[str]]]:
+    def tag_attrs(self, tag: Tag) -> MutableMapping[str, str | list[str]]:
         raise NotImplementedError()
     
-    def tag_string(self, tag: Tag) -> Optional[str]:
+    def tag_string(self, tag: Tag) -> str | None:
         raise NotImplementedError()
     
-    def set_tag_string(self, tag: Tag, string: Optional[str]) -> None:
+    def set_tag_string(self, tag: Tag, string: str | None) -> None:
         raise NotImplementedError()
     
     def tag_insert_before(self, tag: Tag, tag2: Tag) -> None:
@@ -92,16 +93,16 @@ class BeautifulFastSoup(FastSoup):
     # === Document ===
     
     def find_all(self, 
-            tag_name: Optional[str]=None, 
-            **attrs: Union[str, Pattern, Literal[True]]
+            tag_name: str | None=None, 
+            **attrs: str | Pattern | Literal[True]
             ) -> Iterable[Tag]:
         return self._base.find_all(tag_name, **attrs)  # type: ignore[arg-type]
     
     # NOTE: BeautifulFastSoup doesn't actually support precompiling find_all() queries
     @classmethod
     def find_all_compile(cls, 
-            tag_name: Optional[str]=None, 
-            **attrs: Union[str, Pattern, Literal[True]]
+            tag_name: str | None=None, 
+            **attrs: str | Pattern | Literal[True]
             ) -> FindFunc:
         def find_func(soup: FastSoup) -> Iterable[Tag]:
             if not isinstance(soup, BeautifulFastSoup):
@@ -126,15 +127,15 @@ class BeautifulFastSoup(FastSoup):
         assert isinstance(tag, bs4.Tag)
         return tag.name
     
-    def tag_attrs(self, tag: Tag) -> MutableMapping[str, Union[str, List[str]]]:
+    def tag_attrs(self, tag: Tag) -> MutableMapping[str, str | list[str]]:
         assert isinstance(tag, bs4.Tag)
         return tag.attrs  # type: ignore[return-value]
     
-    def tag_string(self, tag: Tag) -> Optional[str]:
+    def tag_string(self, tag: Tag) -> str | None:
         assert isinstance(tag, bs4.Tag)
         return tag.string
     
-    def set_tag_string(self, tag: Tag, string: Optional[str]) -> None:
+    def set_tag_string(self, tag: Tag, string: str | None) -> None:
         assert isinstance(tag, bs4.Tag)
         tag.string = string;
     
@@ -151,15 +152,15 @@ class LxmlFastSoup(FastSoup):
     # === Document ===
     
     def find_all(self, 
-            tag_name: Optional[str]=None, 
-            **attrs: Union[str, Pattern, Literal[True]]
+            tag_name: str | None=None, 
+            **attrs: str | Pattern | Literal[True]
             ) -> Iterable[Tag]:
         return self.find_all_compile(tag_name, **attrs)(self)
     
     @classmethod
     def find_all_compile(cls, 
-            tag_name: Optional[str]=None, 
-            **attrs: Union[str, Pattern, Literal[True]]
+            tag_name: str | None=None, 
+            **attrs: str | Pattern | Literal[True]
             ) -> FindFunc:
         tag_pattern = tag_name if tag_name is not None else '*'
         attr_pattern = ''.join([
@@ -192,7 +193,7 @@ class LxmlFastSoup(FastSoup):
         return find_func
     
     @staticmethod
-    def _make_attr_pattern_part(name: str, value_pat: Union[str, Pattern, Literal[True]]) -> str:
+    def _make_attr_pattern_part(name: str, value_pat: str | Pattern | Literal[True]) -> str:
         if value_pat == True or isinstance(value_pat, Pattern):
             return f'@{name}'
         elif isinstance(value_pat, str):
@@ -248,15 +249,15 @@ class LxmlFastSoup(FastSoup):
         assert isinstance(tag, lxml.html.HtmlElement)
         return tag.tag
     
-    def tag_attrs(self, tag: Tag) -> MutableMapping[str, Union[str, List[str]]]:
+    def tag_attrs(self, tag: Tag) -> MutableMapping[str, str | list[str]]:
         assert isinstance(tag, lxml.html.HtmlElement)
         return tag.attrib
     
-    def tag_string(self, tag: Tag) -> Optional[str]:
+    def tag_string(self, tag: Tag) -> str | None:
         assert isinstance(tag, lxml.html.HtmlElement)
         return tag.text
     
-    def set_tag_string(self, tag: Tag, string: Optional[str]) -> None:
+    def set_tag_string(self, tag: Tag, string: str | None) -> None:
         assert isinstance(tag, lxml.html.HtmlElement)
         tag.text = string
     

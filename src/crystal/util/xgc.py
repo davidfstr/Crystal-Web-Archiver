@@ -3,7 +3,7 @@ import gc
 import os
 import sys
 import time
-from typing import Iterator
+from collections.abc import Iterator
 
 
 # If True, then the runtime of foreground tasks is tracked to ensure
@@ -27,7 +27,7 @@ def start_profiling_gc() -> None:
             if last_gc_start is not None:
                 duration = now - last_gc_start
                 if duration > _GC_RUNTIME_THRESHOLD:
-                    print('*** %s took %.02fs to execute: %r' % (
+                    print('*** {} took {:.02f}s to execute: {!r}'.format(
                         'Garbage collection',
                         duration,
                         info,

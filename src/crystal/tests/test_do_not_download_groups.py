@@ -21,7 +21,8 @@ from crystal.tests.util.windows import (
 )
 import os
 import tempfile
-from typing import AsyncIterator, Tuple
+from typing import Tuple
+from collections.abc import AsyncIterator
 from unittest import skip
 from unittest.mock import ANY
 
@@ -68,10 +69,10 @@ async def test_then_embedded_resource_does_not_appear_in_a_hidden_embedded_clust
         assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
         
         # Expand HTML page children in entity tree
-        (hidden_embedded_ti,) = [
+        (hidden_embedded_ti,) = (
             child for child in home_ti.Children
             if child.Text == '(Hidden: Embedded)'
-        ]
+        )
         hidden_embedded_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(hidden_embedded_ti))
         
@@ -255,7 +256,7 @@ async def test_when_reopen_project_then_group_that_was_marked_as_do_not_download
 
 @asynccontextmanager
 async def _project_with_do_not_download_group_open(
-        ) -> AsyncIterator[Tuple[MainWindow, Project, str, str, str]]:
+        ) -> AsyncIterator[tuple[MainWindow, Project, str, str, str]]:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Add comic image to project,
         # since it's not part of the default project test data

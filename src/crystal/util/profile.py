@@ -6,7 +6,8 @@ import inspect
 import sys
 import threading
 import time
-from typing import Callable, Iterator, Optional, Union
+from typing import Optional, Union
+from collections.abc import Callable, Iterator
 
 
 _excluded_delta_time_stack = threading.local()
@@ -15,7 +16,7 @@ _excluded_delta_time_stack = threading.local()
 def warn_if_slow(
         title: str,
         max_duration: float,
-        message: Union[Callable[[], str], str],
+        message: Callable[[], str] | str,
         *, enabled: bool=True
         ) -> Iterator[None]:
     """
@@ -53,11 +54,11 @@ def warn_if_slow(
             message_str = message() if callable(message) else message
             assert isinstance(message_str, str)
             excluded_part = (
-                ' (%.02fs excluded)' % (excluded_delta_time,)
+                ' ({:.02f}s excluded)'.format(excluded_delta_time)
                 if excluded_delta_time > 0
                 else ''
             )
-            print("*** %s took %.02fs%s to execute: %s" % (
+            print("*** {} took {:.02f}s{} to execute: {}".format(
                 title,
                 delta_time,
                 excluded_part,
@@ -113,7 +114,7 @@ def create_profiled_callable(title: str, max_duration: float, callable: Callable
                 start_line_number = str(inspect.getsourcelines(root_callable)[-1])
             except Exception:
                 start_line_number = '?'
-            return '%s @ [%s:%s]' % (
+            return '{} @ [{}:{}]'.format(
                 root_callable,
                 file,
                 start_line_number

@@ -16,7 +16,8 @@ from crystal.tests.util.windows import NewRootUrlDialog, MainWindow, OpenOrCreat
 from crystal.util.ports import is_port_in_use
 from io import StringIO
 import tempfile
-from typing import AsyncIterator, Callable, Optional, Tuple
+from typing import Optional, Tuple
+from collections.abc import AsyncIterator, Callable
 from unittest import skip
 
 
@@ -170,8 +171,8 @@ async def test_when_serve_page_with_unknown_x_header_then_excludes_header_silent
 
 @asynccontextmanager
 async def _xkcd_home_page_served(
-        alter_revision_func: Optional[Callable[[ResourceRevision], None]]=None,
-        ) -> AsyncIterator[Tuple[ResourceRevision, WebPage, str]]:
+        alter_revision_func: Callable[[ResourceRevision], None] | None=None,
+        ) -> AsyncIterator[tuple[ResourceRevision, WebPage, str]]:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Define URLs
         home_url = 'https://xkcd.com/'
@@ -191,7 +192,7 @@ async def _xkcd_home_page_served(
             yield (revision, server_page, captured_stdout_str)
 
 
-async def serve_and_fetch_xkcd_home_page(mw: MainWindow) -> Tuple[WebPage, str]:
+async def serve_and_fetch_xkcd_home_page(mw: MainWindow) -> tuple[WebPage, str]:
     home_url = 'https://xkcd.com/'
     
     with redirect_stdout(StringIO()) as captured_stdout:

@@ -2,7 +2,8 @@ from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 import sys
 import time
 from typing import Dict, List, Optional, overload, Tuple, Type, TypeVar, Union
-from typing_extensions import override, Self
+from typing_extensions import override
+from typing import Self
 import wx
 
 
@@ -14,9 +15,9 @@ _DELAY_UNTIL_PROGRESS_DIALOG_SHOWS = 100 / 1000  # sec
 
 class _AbstractProgressDialog:
     _dialog_title: str  # abstract
-    _CancelException: Type[Exception]  # abstract
+    _CancelException: type[Exception]  # abstract
     
-    _dialog_style: Optional[int]
+    _dialog_style: int | None
     _dialog: 'Optional[DeferredProgressDialog]'
     
     def __init__(self) -> None:
@@ -173,11 +174,11 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
     _dialog_title = 'Opening Project...'  # override
     _CancelException = CancelOpenProject  # override
     
-    _approx_revision_count: Optional[float]
-    _resource_count: Optional[int]
-    _root_resource_count: Optional[int]
-    _resource_group_count: Optional[int]
-    _entity_tree_node_count: Optional[int]
+    _approx_revision_count: float | None
+    _resource_count: int | None
+    _root_resource_count: int | None
+    _resource_group_count: int | None
+    _entity_tree_node_count: int | None
     
     # NOTE: Only changed when tests are running
     _always_show_upgrade_required_modal = False
@@ -500,7 +501,7 @@ class LoadUrlsProgressDialog(_AbstractProgressDialog, LoadUrlsProgressListener):
 
 _R = TypeVar('_R')
 
-_Call = Tuple[str, Tuple[object, ...], Dict[str, object]]
+_Call = tuple[str, tuple[object, ...], dict[str, object]]
 
 class DeferredProgressDialog:
     """
@@ -519,7 +520,7 @@ class DeferredProgressDialog:
             style=wx.PD_APP_MODAL|wx.PD_AUTO_HIDE,
             
             # DeferredProgressDialog parameters
-            show_after: Optional[float]=None,
+            show_after: float | None=None,
             
             # Unknown parameters
             *args,
@@ -555,7 +556,7 @@ class DeferredProgressDialog:
     
     # === Properties ===
     
-    def _get_name(self) -> Optional[str]:
+    def _get_name(self) -> str | None:
         return self._name
     def _set_name(self, name: str) -> None:
         self._name = name
@@ -596,7 +597,7 @@ class DeferredProgressDialog:
             self._dialog = None
         self._shown = False
     
-    def Update(self, value: int, newmsg: str='') -> Tuple[bool, bool]:
+    def Update(self, value: int, newmsg: str='') -> tuple[bool, bool]:
         # Show self if show_at time has passed
         if not self._shown and time.time() >= self._show_at:
             self.Show()
@@ -605,7 +606,7 @@ class DeferredProgressDialog:
         self._value = value
         return self._call(('Update', (value, newmsg), {}), (True, False))
     
-    def Pulse(self, newmsg: str) -> Tuple[bool, bool]:
+    def Pulse(self, newmsg: str) -> tuple[bool, bool]:
         # Show self if show_at time has passed
         if not self._shown and time.time() >= self._show_at:
             self.Show()

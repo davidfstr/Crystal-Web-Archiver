@@ -246,10 +246,10 @@ async def test_given_on_ssd_when_resource_group_node_expanded_then_only_new_reso
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     
-                    (comic_group_ti,) = [
+                    (comic_group_ti,) = (
                         child for child in root_ti.Children
                         if child.Text.endswith(f'- {comic_group.name}')
-                    ]
+                    )
                     
                     comic_group_ti.Expand()
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
@@ -275,10 +275,10 @@ async def test_given_not_on_ssd_when_resource_group_node_expanded_then_all_proje
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     
-                    (comic_group_ti,) = [
+                    (comic_group_ti,) = (
                         child for child in root_ti.Children
                         if child.Text.endswith(f'- {comic_group.name}')
-                    ]
+                    )
                     
                     comic_group_ti.Expand()
                     await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_group_ti))
@@ -294,7 +294,7 @@ async def test_given_not_on_ssd_when_resource_group_node_expanded_then_all_proje
                     )
 
 
-def _loaded_resources(project: Project) -> List[Resource]:
+def _loaded_resources(project: Project) -> list[Resource]:
     # HACK: Use private API
     resource_for_url = project._resource_for_url
     resource_for_id = project._resource_for_id
@@ -302,5 +302,5 @@ def _loaded_resources(project: Project) -> List[Resource]:
     return list(resource_for_url.values())
 
 
-def _sort_resources(resources: List[Resource]) -> List[Resource]:
+def _sort_resources(resources: list[Resource]) -> list[Resource]:
     return sorted(resources, key=lambda r: r._id)

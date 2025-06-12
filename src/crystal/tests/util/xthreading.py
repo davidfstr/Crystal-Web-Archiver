@@ -2,7 +2,8 @@ from concurrent.futures import Future
 from crystal.tests.util.wait import wait_for
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.xthreading import bg_call_later
-from typing import Callable, Optional, TypeVar
+from typing import Optional, TypeVar
+from collections.abc import Callable
 
 
 _R = TypeVar('_R')
@@ -10,7 +11,7 @@ _R = TypeVar('_R')
 
 _DEFAULT_WAIT_TIMEOUT_FOR_UNIT = 4.0
 
-async def bg_call_and_wait(callable: Callable[[], _R], *, timeout: Optional[float]=None) -> _R:
+async def bg_call_and_wait(callable: Callable[[], _R], *, timeout: float | None=None) -> _R:
     """
     Start the specified callable on a background thread and
     waits for it to finish running.

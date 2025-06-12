@@ -20,7 +20,8 @@ from crystal.util.xcollections.lazy import AppendableLazySequence, Unmaterialize
 from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
 from crystal.util.xtraceback import format_exception_for_user
 import os
-from typing import Iterator, List, Optional, Tuple
+from typing import List, Optional, Tuple
+from collections.abc import Iterator
 import wx
 
 
@@ -125,7 +126,7 @@ class TaskTree:
     def _on_get_tooltip_event(self, event: wx.Event) -> None:
         event.tooltip_cell[0] = self._tooltip_for_tree_item_id(event.tree_item_id)
     
-    def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId) -> Optional[str]:
+    def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId) -> str | None:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
         node = TaskTreeNode.for_node_view(node_view)
         if node is None:
@@ -252,7 +253,7 @@ class TaskTreeNode:
     @classmethod
     def _calculate_tree_node_subtitle(cls,
             task_subtitle: str,
-            task_crash_reason: Optional[CrashReason]) -> str:
+            task_crash_reason: CrashReason | None) -> str:
         return (
             task_subtitle
             if task_crash_reason is None
@@ -261,7 +262,7 @@ class TaskTreeNode:
     
     @classmethod
     def _calculate_tree_node_text_color(cls,
-            task_crash_reason: Optional[CrashReason]) -> Optional[wx.Colour]:
+            task_crash_reason: CrashReason | None) -> wx.Colour | None:
         return (
             cls._CRASH_TEXT_COLOR
             if task_crash_reason is not None
@@ -270,11 +271,11 @@ class TaskTreeNode:
     
     @classmethod
     def _calculate_tree_node_bold(cls,
-            task_crash_reason: Optional[CrashReason]) -> bool:
+            task_crash_reason: CrashReason | None) -> bool:
         return task_crash_reason is not None
     
     @property
-    def tooltip(self) -> Optional[str]:
+    def tooltip(self) -> str | None:
         """
         The tooltip to display when the mouse hovers over this node.
         """
@@ -365,7 +366,7 @@ class TaskTreeNode:
                 self.task_did_append_child(task, child)
     
     @capture_crashes_to_stderr
-    def task_did_append_child(self, task: Task, child: Optional[Task]) -> None:
+    def task_did_append_child(self, task: Task, child: Task | None) -> None:
         if isinstance(task, RootTask) and isinstance(child, CrashedTask):
             # Specially, allow RootTask to append a CrashedTask when RootTask is crashed
             bulkhead = BulkheadCell()  # type: Bulkhead
@@ -374,7 +375,7 @@ class TaskTreeNode:
         self._task_did_append_child(bulkhead, task, child)
     
     @capture_crashes_to_bulkhead_arg
-    def _task_did_append_child(self, bulkhead: Bulkhead, task: Task, child: Optional[Task]) -> None:
+    def _task_did_append_child(self, bulkhead: Bulkhead, task: Task, child: Task | None) -> None:
         if (task.scheduling_style == SCHEDULING_STYLE_SEQUENTIAL and
                 self._num_visible_children == self._MAX_VISIBLE_CHILDREN):
             @capture_crashes_to(bulkhead)
@@ -535,7 +536,7 @@ class TaskTreeNode:
     @capture_crashes_to_task_arg
     def task_did_clear_children(self,
             task: Task,
-            child_indexes: Optional[List[int]]=None
+            child_indexes: list[int] | None=None
             ) -> None:
         assert task is self.task
         if child_indexes is None:

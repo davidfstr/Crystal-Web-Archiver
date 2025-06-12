@@ -5,7 +5,8 @@ from crystal.util.xthreading import (
     bg_affinity, fg_affinity, start_thread_switching_coroutine, SwitchToThread,
 )
 import os
-from typing import Callable, Generator, List, Optional, Tuple
+from typing import List, Optional, Tuple
+from collections.abc import Callable, Generator
 from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
 
@@ -39,7 +40,7 @@ class UrlCleaner:
         )
     
     @fg_affinity
-    def _run(self, url_candidates: List[str]) -> Generator[SwitchToThread, None, None]:
+    def _run(self, url_candidates: list[str]) -> Generator[SwitchToThread, None, None]:
         assert len(url_candidates) >= 1
         
         self._on_running_changed_func(True)
@@ -68,7 +69,7 @@ class UrlCleaner:
             self._finish(cleaned_url)
     
     @fg_affinity
-    def _finish(self, cleaned_url: Optional[str]) -> None:
+    def _finish(self, cleaned_url: str | None) -> None:
         if cleaned_url is not None:
             self._set_cleaned_url_func(cleaned_url)
         self._on_running_changed_func(False)
@@ -88,7 +89,7 @@ def cleaned_url_is_at_site_root(url_input: str) -> bool:
     return urlparse(candidate).path == '/'
 
 
-def _candidate_urls_from_user_input(url_input: str) -> List[str]:
+def _candidate_urls_from_user_input(url_input: str) -> list[str]:
     """
     Given a potentially messy URL typed manually by the user,
     such as from a browser's URL bar, return candidate URLs
@@ -166,7 +167,7 @@ def _candidate_urls_from_user_input(url_input: str) -> List[str]:
 
 @bg_affinity
 def _resolve_url_from_candidates(
-        url_candidates: List[str],
+        url_candidates: list[str],
         did_cancel_func: Callable[[], bool]) -> str:
     """
     Given a list of candidate URLs, return the first URL that can be fetched

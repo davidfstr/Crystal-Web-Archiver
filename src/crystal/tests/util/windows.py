@@ -20,7 +20,8 @@ import re
 import sys
 import tempfile
 import traceback
-from typing import AsyncIterator, Awaitable, Callable, Optional, Tuple, TYPE_CHECKING, ContextManager
+from typing import Optional, Tuple, TYPE_CHECKING, ContextManager
+from collections.abc import AsyncIterator, Awaitable, Callable
 import wx
 
 if TYPE_CHECKING:
@@ -40,7 +41,7 @@ class OpenOrCreateDialog:
     create_button: wx.Button
     
     @staticmethod
-    async def wait_for(timeout: Optional[float]=None) -> OpenOrCreateDialog:
+    async def wait_for(timeout: float | None=None) -> OpenOrCreateDialog:
         self = OpenOrCreateDialog(ready=True)
         open_or_create_project_dialog = await wait_for(
             window_condition('cr-open-or-create-project'),
@@ -63,10 +64,10 @@ class OpenOrCreateDialog:
     
     @asynccontextmanager
     async def create(self, 
-            project_dirpath: Optional[str]=None,
+            project_dirpath: str | None=None,
             *, autoclose: bool=True,
-            delete: Optional[bool]=None,
-            ) -> AsyncIterator[Tuple[MainWindow, Project]]:
+            delete: bool | None=None,
+            ) -> AsyncIterator[tuple[MainWindow, Project]]:
         """
         Creates a new project.
         
@@ -145,11 +146,11 @@ class OpenOrCreateDialog:
     @asynccontextmanager
     async def open(self, 
             project_dirpath: str, 
-            *, readonly: Optional[bool]=None,
+            *, readonly: bool | None=None,
             autoclose: bool=True,
             using_crystalopen: bool=False,
-            wait_func: Optional[Callable[[], Awaitable[None]]]=None,
-            ) -> AsyncIterator[Tuple[MainWindow, Project]]:
+            wait_func: Callable[[], Awaitable[None]] | None=None,
+            ) -> AsyncIterator[tuple[MainWindow, Project]]:
         """
         Opens an existing project.
         
@@ -201,10 +202,10 @@ class OpenOrCreateDialog:
 
 
 class MainWindow:
-    _connect_timeout: Optional[float]
+    _connect_timeout: float | None
     
     main_window: wx.Frame
-    entity_tree: 'EntityTree'
+    entity_tree: EntityTree
     new_root_url_button: wx.Button
     new_group_button: wx.Button
     edit_button: wx.Button
@@ -217,7 +218,7 @@ class MainWindow:
     read_write_icon: wx.StaticText
     
     @staticmethod
-    async def wait_for(*, timeout: Optional[float]=None) -> MainWindow:
+    async def wait_for(*, timeout: float | None=None) -> MainWindow:
         self = MainWindow(ready=True)
         self._connect_timeout = timeout
         await self._connect()
@@ -291,7 +292,7 @@ class MainWindow:
         old_task_count = len(task_root_ti.Children)
         
         click_button(self.download_button)
-        def task_count_changed_condition() -> Optional[int]:
+        def task_count_changed_condition() -> int | None:
             assert task_root_ti is not None
             new_task_count = len(task_root_ti.Children)
             if new_task_count != old_task_count:
@@ -506,7 +507,7 @@ class NewGroupDialog:
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
     source_field: wx.Choice
-    preview_members_pane: Optional[wx.CollapsiblePane]
+    preview_members_pane: wx.CollapsiblePane | None
     preview_members_list: wx.ListBox
     cancel_button: wx.Button
     ok_button: wx.Button
@@ -550,14 +551,14 @@ class NewGroupDialog:
         return self
     
     @staticmethod
-    def window_condition() -> Callable[[], Optional[wx.Window]]:
+    def window_condition() -> Callable[[], wx.Window | None]:
         return window_condition('cr-new-group-dialog')
     
     def __init__(self, *, ready: bool=False) -> None:
         assert ready, 'Did you mean to use NewGroupDialog.wait_for()?'
     
     # TODO: Rename -> source_name
-    def _get_source(self) -> Optional[str]:
+    def _get_source(self) -> str | None:
         selection_ci = self.source_field.GetSelection()
         if selection_ci == wx.NOT_FOUND:
             return None
@@ -575,7 +576,7 @@ class NewGroupDialog:
             assert cur_source_display_url is not None
             return cur_source_display_url
             
-    def _set_source(self, source_name: Optional[str]) -> None:
+    def _set_source(self, source_name: str | None) -> None:
         if source_name is None:
             selection_ci = 0
         else:
@@ -617,7 +618,7 @@ class NewGroupDialog:
 class PreferencesDialog:
     html_parser_field: wx.Choice
     stale_before_checkbox: wx.CheckBox
-    stale_before_date_picker: 'wx.adv.DatePickerCtrl'
+    stale_before_date_picker: wx.adv.DatePickerCtrl
     cookie_field: wx.ComboBox
     ok_button: wx.Button
     
@@ -662,7 +663,7 @@ class EntityTree:
     def __init__(self, window: wx.TreeCtrl) -> None:
         self.window = window
     
-    async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> Optional[str]:
+    async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> str | None:
         if tree_item.tree != self.window:
             raise ValueError()
         return tree_item.Tooltip('icon')
@@ -715,10 +716,10 @@ class EntityTree:
         """
         def show_popup(menu: wx.Menu) -> None:
             try:
-                (set_prefix_menuitem,) = [
+                (set_prefix_menuitem,) = (
                     mi for mi in menu.MenuItems
                     if mi.ItemLabelText.startswith(action_prefix)
-                ]
+                )
             except ValueError:  # not enough values to unpack
                 raise MenuitemMissingError()
             if not set_prefix_menuitem.Enabled:

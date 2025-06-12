@@ -50,7 +50,7 @@ class ProgressBarCalculator:
             self._rc_total.update(delta_total)
     total = property(_get_total, _set_total)
     
-    def remaining_str_and_time_per_item_str(self) -> Tuple[str, str]:
+    def remaining_str_and_time_per_item_str(self) -> tuple[str, str]:
         """Compute estimated remaining time, in format "MM:SS" or "HH:MM:SS"."""
         n = self.n
         total = self.total
@@ -141,17 +141,17 @@ class ProgressBarCalculator:
         d, h = divmod(hours, 24)
         if d:
             # ex: '1d + 7:08:54'
-            return '{0:d}d + {1:d}:{2:02d}:{3:02d}'.format(d, h, m, s)
+            return f'{d:d}d + {h:d}:{m:02d}:{s:02d}'
         elif h:
             # ex: '7:08:54'
-            return '{0:d}:{1:02d}:{2:02d}'.format(h, m, s)
+            return f'{h:d}:{m:02d}:{s:02d}'
         else:
             # ex: '08:54'
-            return '{0:02d}:{1:02d}'.format(m, s)
+            return f'{m:02d}:{s:02d}'
 
 
 class RateCalculator:
-    def __init__(self, initial: int, total: Optional[int]=None) -> None:
+    def __init__(self, initial: int, total: int | None=None) -> None:
         self._tqdm = _TqdmWithoutDisplay(
             initial=initial,  # self.n = initial
             total=total,
@@ -173,14 +173,14 @@ class RateCalculator:
     def n(self) -> int:
         return self._tqdm.n
     
-    def _get_total(self) -> Optional[int]:
+    def _get_total(self) -> int | None:
         return self._tqdm.total
-    def _set_total(self, total: Optional[int]) -> None:
+    def _set_total(self, total: int | None) -> None:
         self._tqdm.total = total
     total = property(_get_total, _set_total)
     
     @property
-    def rate(self) -> Optional[float]:
+    def rate(self) -> float | None:
         dn = self._tqdm._ema_dn()  # type: ignore[attr-defined]  # cache
         dt = self._tqdm._ema_dt()  # type: ignore[attr-defined]  # cache
         rate = dn / dt if dt else None

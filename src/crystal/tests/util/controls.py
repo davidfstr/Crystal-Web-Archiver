@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager, contextmanager
 from crystal.tests.util.runner import pump_wx_events
 from crystal.util.wx_treeitem_gettooltip import GetTooltipEvent
 from crystal.util.xos import is_windows
-from typing import AsyncIterator, Callable, Iterator, List, Literal, Optional
+from typing import List, Literal, Optional
+from collections.abc import AsyncIterator, Callable, Iterator
 from unittest.mock import patch
 import wx
 
@@ -75,7 +76,7 @@ def select_menuitem_now(menu: wx.Menu, menuitem_id: int) -> None:
 # ------------------------------------------------------------------------------
 # Utility: Controls: wx.TreeCtrl
 
-def get_children_of_tree_item(tree: wx.TreeCtrl, tii: wx.TreeItemId) -> List[TreeItem]:
+def get_children_of_tree_item(tree: wx.TreeCtrl, tii: wx.TreeItemId) -> list[TreeItem]:
     children = []  # type: List[TreeItem]
     next_child_tii = tree.GetFirstChild(tii)[0]
     while next_child_tii.IsOk():
@@ -110,7 +111,7 @@ class TreeItem:
     def Bold(self) -> bool:
         return self.tree.IsBold(self.id)
     
-    def Tooltip(self, tooltip_type: Literal['icon', 'label', None]=None) -> Optional[str]:
+    def Tooltip(self, tooltip_type: Literal['icon', 'label', None]=None) -> str | None:
         event = GetTooltipEvent(tree_item_id=self.id, tooltip_cell=[Ellipsis], tooltip_type=tooltip_type)
         self.tree.ProcessEvent(event)  # callee should set: event.tooltip_cell[0]
         assert event.tooltip_cell[0] is not Ellipsis
@@ -123,7 +124,7 @@ class TreeItem:
         return self.tree.IsSelected(self.id)
     
     @staticmethod
-    def GetSelection(tree: wx.TreeCtrl) -> Optional[TreeItem]:
+    def GetSelection(tree: wx.TreeCtrl) -> TreeItem | None:
         selected_tii = tree.GetSelection()
         if selected_tii.IsOk():
             return TreeItem(tree, selected_tii)
@@ -148,7 +149,7 @@ class TreeItem:
         assert root_tii.IsOk()
         return TreeItem(tree, root_tii)
     
-    def GetFirstChild(self) -> Optional[TreeItem]:
+    def GetFirstChild(self) -> TreeItem | None:
         first_child_tii = self.tree.GetFirstChild(self.id)[0]
         if first_child_tii.IsOk():
             return TreeItem(self.tree, first_child_tii)
@@ -156,7 +157,7 @@ class TreeItem:
             return None
     
     @property
-    def Children(self) -> List[TreeItem]:
+    def Children(self) -> list[TreeItem]:
         return get_children_of_tree_item(self.tree, self.id)
     
     @property
@@ -168,7 +169,7 @@ class TreeItem:
     def find_child(
             parent_ti: TreeItem,
             url_or_url_pattern: str,
-            default_url_prefix: Optional[str]=None
+            default_url_prefix: str | None=None
             ) -> TreeItem:
         """
         Returns the first child of the specified parent tree item with the
@@ -180,23 +181,23 @@ class TreeItem:
             if url_or_url_pattern.startswith(default_url_prefix):
                 url_or_url_pattern = url_or_url_pattern[len(default_url_prefix):]  # reinterpret
         try:
-            (matching_child_ti,) = [
+            (matching_child_ti,) = (
                 child for child in parent_ti.Children
                 if child.Text.startswith(f'{url_or_url_pattern} - ')
-            ]
+            )
         except ValueError:
             try:
-                (matching_child_ti,) = [
+                (matching_child_ti,) = (
                     child for child in parent_ti.Children
                     if child.Text == url_or_url_pattern
-                ]
+                )
             except ValueError:
                 raise TreeItem.ChildNotFound(
                     f'Child {url_or_url_pattern} not found in specified TreeItem'
                 ) from None
         return matching_child_ti
     
-    def try_find_child(parent_ti: TreeItem, *args, **kwargs) -> Optional[TreeItem]:
+    def try_find_child(parent_ti: TreeItem, *args, **kwargs) -> TreeItem | None:
         try:
             return parent_ti.find_child(*args, **kwargs)
         except TreeItem.ChildNotFound:
@@ -210,10 +211,10 @@ class TreeItem:
         Raises TreeItem.ChildNotFound if such a child is not found.
         """
         try:
-            (matching_child_ti,) = [
+            (matching_child_ti,) = (
                 child for child in parent_ti.Children
                 if title_fragment in child.Text
-            ]
+            )
             return matching_child_ti
         except ValueError:
             raise TreeItem.ChildNotFound(

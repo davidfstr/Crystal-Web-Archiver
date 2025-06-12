@@ -26,8 +26,9 @@ from crystal.url_input import _candidate_urls_from_user_input as EXPAND
 import os
 import tempfile
 import time
-from typing import AsyncIterator, Dict, Iterator, List, Optional, Tuple, Union
-from typing_extensions import Self
+from typing import Dict, List, Optional, Tuple, Union
+from collections.abc import AsyncIterator, Iterator
+from typing import Self
 from unittest import skip
 from unittest.mock import ANY, patch
 from urllib.parse import urlparse
@@ -328,12 +329,12 @@ async def test_when_edit_url_then_new_url_options_not_shown() -> None:
 
 
 @contextmanager
-def _served_simple_site_with_2_urls() -> Iterator[Tuple[str, str]]:
+def _served_simple_site_with_2_urls() -> Iterator[tuple[str, str]]:
     server = MockHttpServer({
         '/': dict(
             status_code=200,
             headers=[('Content-Type', 'text/html')],
-            content='<img src="/assets/image.png" />'.encode('utf-8')
+            content=b'<img src="/assets/image.png" />'
         ),
         '/assets/image.png': dict(
             status_code=200,
@@ -1168,7 +1169,7 @@ def _EXPAND_enabled() -> Iterator[None]:
 @asynccontextmanager
 async def _new_root_url_dialog_open(*,
         autoclose: bool=True
-        ) -> AsyncIterator[Tuple[NewRootUrlDialog, Project]]:
+        ) -> AsyncIterator[tuple[NewRootUrlDialog, Project]]:
     # Never allow automated tests to make real internet requests
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=590, url=ANY)):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
@@ -1246,7 +1247,7 @@ def _urlopen_paused() -> Iterator[None]:
                 time.sleep(DEFAULT_WAIT_PERIOD)
 
 
-def _assert_contains_sublist(xs: List[str], ys: List[str]) -> None:
+def _assert_contains_sublist(xs: list[str], ys: list[str]) -> None:
     last_index = -1
     for y in ys:
         try:

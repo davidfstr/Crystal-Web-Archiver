@@ -22,19 +22,19 @@ TERMINAL_FG_BOLD_YELLOW =   '\033[1;33m'
 TERMINAL_RESET =            '\033[0m'
 
 
-def print_success(message: str, file: Optional[TextIOBase]=None) -> None:
+def print_success(message: str, file: TextIOBase | None=None) -> None:
     print(_colorize(TERMINAL_FG_GREEN, message), file=file)
 
 
-def print_error(message: str, file: Optional[TextIOBase]=None) -> None:
+def print_error(message: str, file: TextIOBase | None=None) -> None:
     print(_colorize(TERMINAL_FG_RED, message), file=file)
 
 
-def print_warning(message: str, file: Optional[TextIOBase]=None) -> None:
+def print_warning(message: str, file: TextIOBase | None=None) -> None:
     print(_colorize(TERMINAL_FG_YELLOW, message), file=file)
 
 
-def print_info(message: str, file: Optional[TextIOBase]=None) -> None:
+def print_info(message: str, file: TextIOBase | None=None) -> None:
     print(_colorize(TERMINAL_FG_CYAN, message), file=file)
 
 

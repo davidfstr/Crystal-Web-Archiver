@@ -17,8 +17,10 @@ from dataclasses import dataclass
 import json
 import re
 from typing import (
-    Callable, List, Literal, Match, Optional, Tuple, Type, Union
+    List, Literal, Optional, Tuple, Type, Union
 )
+from collections.abc import Callable
+from re import Match
 from urllib.parse import urlparse
 
 
@@ -89,7 +91,7 @@ FAVICON_TYPE_TITLE = 'Icon'
 
 def parse_html_and_links(
         html_bytes: bytes, 
-        declared_charset: Optional[str],
+        declared_charset: str | None,
         parser_type: HtmlParserType,
         ) -> 'Optional[Tuple[Document, List[Link]]]':
     try:
@@ -198,12 +200,12 @@ def parse_html_and_links(
             type_title = FAVICON_TYPE_TITLE
             embedded = True
         elif tag_name == 'link' and (
-                ('rel' in tag_attrs and 'preload' in tag_attrs['rel'])):
+                'rel' in tag_attrs and 'preload' in tag_attrs['rel']):
             title = None
             type_title = 'Preload'
             embedded = True
         elif tag_name == 'link' and 'rel' in tag_attrs:
-            def format_rel(rel: Union[str, List[str]]) -> str:
+            def format_rel(rel: str | list[str]) -> str:
                 if isinstance(rel, str):
                     return rel
                 elif isinstance(rel, list):
@@ -292,10 +294,10 @@ def parse_html_and_links(
     # <* *="http(s)://**">
     # This type of link is used on: https://blog.calm.com/take-a-deep-breath
     # where the attribute name is "data-url".
-    seen_tags_and_attr_names = set([
+    seen_tags_and_attr_names = {
         (_IdentityKey(link.tag), link.attr_name) for link in links
         if isinstance(link, HtmlLink)
-    ])  # capture
+    }  # capture
     for tag in XPS.STAR_XP(html):
         tag_ident = _IdentityKey(tag)  # cache
         for (attr_name, attr_value) in html.tag_attrs(tag).items():
@@ -336,7 +338,7 @@ def _remove_integrity_attr_func(html: FastSoup, tag: Tag) -> Callable[[], None]:
     return remove_integrity_attr
 
 
-def _get_image_tag_title(html: FastSoup, tag: Tag) -> Optional[str]:
+def _get_image_tag_title(html: FastSoup, tag: Tag) -> str | None:
     tag_attrs = html.tag_attrs(tag)  # cache
     
     if 'alt' in tag_attrs:
@@ -354,7 +356,7 @@ def _process_srcset_attr(html: FastSoup, img_or_source_tag: Tag) -> 'List[HtmlLi
     
     links = []
     
-    def process_candidate(parts: List[str]) -> None:
+    def process_candidate(parts: list[str]) -> None:
         nonlocal links, srcset
         
         def replace_url_in_old_attr_value(url: str, old_attr_value: str) -> str:
@@ -390,7 +392,7 @@ def _process_srcset_attr(html: FastSoup, img_or_source_tag: Tag) -> 'List[HtmlLi
 #       (due to data: URLs) so cannot just split on comma
 _SRCSET_PART_RE = re.compile(r' *(data:[^ ]+|[^ ,]+)(?: +([^ ,]+))? *,')
 
-def _parse_srcset_str(srcset_str: str) -> Optional[List[List[str]]]:
+def _parse_srcset_str(srcset_str: str) -> list[list[str]] | None:
     candidates = []
     for parts in _SRCSET_PART_RE.findall(srcset_str + ','):
         if parts[1] == '':
@@ -400,7 +402,7 @@ def _parse_srcset_str(srcset_str: str) -> Optional[List[List[str]]]:
     return candidates
 
 
-def _format_srcset_str(srcset: List[List[str]]) -> str:
+def _format_srcset_str(srcset: list[list[str]]) -> str:
     return ','.join([' '.join(parts) for parts in srcset])
 
 
@@ -408,7 +410,7 @@ class HtmlDocument(Document):
     def __init__(self,
             html: FastSoup,
             *, is_html: bool=True,
-            pre_stringify_actions: Optional[List[Callable[[], None]]]=None,
+            pre_stringify_actions: list[Callable[[], None]] | None=None,
             ) -> None:
         self._html = html
         self._is_html = is_html
@@ -421,7 +423,7 @@ class HtmlDocument(Document):
             return script
         return self._try_insert_html_element(create_script) is not None
     
-    def try_insert_favicon_link(self, favicon_url: str) -> Optional[Link]:
+    def try_insert_favicon_link(self, favicon_url: str) -> Link | None:
         def create_link(html: FastSoup) -> Tag:
             link = self._html.new_tag('link')
             self._html.tag_attrs(link)['rel'] = 'icon'
@@ -434,7 +436,7 @@ class HtmlDocument(Document):
             link_tag, self._html, 'href', FAVICON_TYPE_TITLE, None, True)
         return link
     
-    def _try_insert_html_element(self, create_element_func: Callable[[FastSoup], Tag]) -> Optional[Tag]:
+    def _try_insert_html_element(self, create_element_func: Callable[[FastSoup], Tag]) -> Tag | None:
         if not self._is_html:
             # Don't try to insert an HTML link into a non-HTML document,
             # such as an XML document
@@ -465,9 +467,9 @@ class HtmlLink(Link):
             tag_doc: FastSoup,
             attr_name: str,
             type_title: str,
-            title: Optional[str],
+            title: str | None,
             embedded: bool,
-            *, rewrite_side_effect: Optional[Callable[[], None]]=None,
+            *, rewrite_side_effect: Callable[[], None] | None=None,
             ) -> 'HtmlLink':
         """
         Creates a link that is derived from the attribute of an HTML element.
@@ -491,7 +493,7 @@ class HtmlLink(Link):
             tag_doc: FastSoup,
             attr_name: str,
             type_title: str,
-            title: Optional[str],
+            title: str | None,
             embedded: bool,
             relative_url: str,
             replace_url_in_old_attr_value: Callable[[str, str], str]
@@ -515,7 +517,7 @@ class HtmlLink(Link):
     def create_external(
             relative_url: str,
             type_title: str,
-            title: Optional[str],
+            title: str | None,
             embedded: bool
             ) -> 'HtmlLink':
         """
@@ -532,15 +534,15 @@ class HtmlLink(Link):
         return HtmlLink(relative_url, None, None, None, type_title, title, embedded)
     
     def __init__(self,
-            relative_url: Optional[str],
-            tag: Optional[Tag],
-            tag_doc: Optional[FastSoup],
-            attr_name: Optional[str],
+            relative_url: str | None,
+            tag: Tag | None,
+            tag_doc: FastSoup | None,
+            attr_name: str | None,
             type_title: str,
-            title: Optional[str],
+            title: str | None,
             embedded: bool,
-            *, replace_url_in_old_attr_value: Optional[Callable[[str, str], str]]=None,
-            rewrite_side_effect: Optional[Callable[[], None]]=None,
+            *, replace_url_in_old_attr_value: Callable[[str, str], str] | None=None,
+            rewrite_side_effect: Callable[[], None] | None=None,
             ) -> None:
         self._relative_url = relative_url
         self._tag = tag
@@ -576,11 +578,11 @@ class HtmlLink(Link):
     relative_url = property(_get_relative_url, _set_relative_url)
     
     @property
-    def tag(self) -> Optional[Tag]:
+    def tag(self) -> Tag | None:
         return self._tag
     
     @property
-    def attr_name(self) -> Optional[str]:
+    def attr_name(self) -> str | None:
         return self._attr_name
     
     def _get_attr_value(self) -> str:
@@ -607,7 +609,7 @@ class HtmlLink(Link):
     
     def __repr__(self) -> str:
         # TODO: Update repr to include new constructor parameters
-        return 'HtmlLink(%s,%s,%s,%s)' % (repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))
+        return 'HtmlLink({},{},{},{})'.format(repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))
 
 
 class _IdentityKey:

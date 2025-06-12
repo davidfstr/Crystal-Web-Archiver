@@ -2,7 +2,7 @@ from typing import Optional
 from urllib.parse import urlparse, urlunparse
 
 
-def get_url_domain_prefix_for(url_or_url_prefix: str) -> Optional[str]:
+def get_url_domain_prefix_for(url_or_url_prefix: str) -> str | None:
     """
     Given a URL or URL prefix, returns the URL for its enclosing domain,
     with no trailing slash.
@@ -18,7 +18,7 @@ def get_url_domain_prefix_for(url_or_url_prefix: str) -> Optional[str]:
         fragment='',
     ))
 
-def get_url_directory_prefix_for(url_or_url_prefix: str) -> Optional[str]:
+def get_url_directory_prefix_for(url_or_url_prefix: str) -> str | None:
     """
     Given a URL or URL prefix, returns the URL for its enclosing directory,
     with no trailing slash.

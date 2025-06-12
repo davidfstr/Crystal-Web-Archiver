@@ -2,7 +2,8 @@ from crystal import resources
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows
 import os
-from typing import Callable, Protocol, Union
+from typing import Protocol, Union
+from collections.abc import Callable
 import wx
 
 
@@ -48,7 +49,7 @@ class ShowModalFunc(Protocol):
 
 def mocked_show_modal(
         dialog_name: str,
-        return_code: Union[int, Callable[[wx.Dialog], int]],
+        return_code: int | Callable[[wx.Dialog], int],
         ) -> ShowModalFunc:
     """
     Creates a mocked version of ShowModal which verifies that the expected

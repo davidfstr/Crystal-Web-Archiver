@@ -3,7 +3,7 @@ from typing import Optional
 import wx
 
 
-def SetFocus(window: wx.Window, previously_focused: Optional[wx.Window]) -> wx.Window:
+def SetFocus(window: wx.Window, previously_focused: wx.Window | None) -> wx.Window:
     """
     Replacement for wx.Window.SetFocus() that works properly even on Linux.
     

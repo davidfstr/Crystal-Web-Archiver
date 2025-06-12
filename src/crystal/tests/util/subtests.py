@@ -2,7 +2,8 @@ from contextlib import contextmanager
 from functools import wraps
 from io import StringIO
 import traceback
-from typing import Awaitable, Callable, Iterator, Optional
+from typing import Optional
+from collections.abc import Awaitable, Callable, Iterator
 from unittest import SkipTest
 
 
@@ -34,7 +35,7 @@ class SubtestsContext:
                     raise SubtestFailed()
     
     @contextmanager
-    def test(self, msg: Optional[str]=None, **kwargs: object) -> Iterator[None]:
+    def test(self, msg: str | None=None, **kwargs: object) -> Iterator[None]:
         """
         Context in which a subtest runs.
         

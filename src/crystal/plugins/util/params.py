@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 
 
-def try_get_int(params: Dict[str, List[str]], key: str) -> Optional[int]:
+def try_get_int(params: dict[str, list[str]], key: str) -> int | None:
     str_value = try_get_str(params, key)
     if str_value is None:
         return None
@@ -11,7 +11,7 @@ def try_get_int(params: Dict[str, List[str]], key: str) -> Optional[int]:
         return None
 
 
-def try_get_str(params: Dict[str, List[str]], key: str) -> Optional[str]:
+def try_get_str(params: dict[str, list[str]], key: str) -> str | None:
     values = params.get(key)
     if values is None:
         return None

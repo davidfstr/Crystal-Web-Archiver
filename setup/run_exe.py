@@ -11,7 +11,7 @@ from typing import List, Optional
 _POLL_INTERVAL = 1  # seconds
 
 
-def main(args: List[str]) -> None:
+def main(args: list[str]) -> None:
     # Recognize special "--" argument
     try:
         remainder_start = args.index('---')
@@ -70,8 +70,8 @@ def main(args: List[str]) -> None:
     
     # 1. Run executable until complete
     # 2. Tail the stdout and stderr log files
-    with open(stdout_filepath, 'r', encoding='utf-8') as stdout_stream:
-        with open(stderr_filepath, 'r', encoding='utf-8') as stderr_stream:
+    with open(stdout_filepath, encoding='utf-8') as stdout_stream:
+        with open(stderr_filepath, encoding='utf-8') as stderr_stream:
             process_returncode = None  # type: Optional[int]
             def run_process():
                 nonlocal process_returncode

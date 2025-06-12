@@ -1,6 +1,7 @@
 from crystal.util.lazymap import lazymap
 from sortedcontainers import SortedList, SortedKeyList
-from typing import Callable, Generic, TypeVar
+from typing import Generic, TypeVar
+from collections.abc import Callable
 
 
 _E1 = TypeVar('_E1')

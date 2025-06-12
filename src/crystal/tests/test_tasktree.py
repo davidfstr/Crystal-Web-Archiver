@@ -31,7 +31,8 @@ from crystal.util.xcollections.lazy import (
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 import math
 import tempfile
-from typing import AsyncIterator, Callable, cast, Iterator, List, Optional, Sequence, Tuple
+from typing import cast, List, Optional, Tuple
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from unittest import skip
 from unittest.mock import call, patch
 
@@ -406,7 +407,7 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
 
 
 @contextmanager
-def _children_marked_as_complete_upon_creation(ordinals: List[int]) -> Iterator[None]:
+def _children_marked_as_complete_upon_creation(ordinals: list[int]) -> Iterator[None]:
     # Prepare: Mark appropriate children as complete immediately upon creation
     super_goc_download_task = Resource.get_or_create_download_task
     def get_or_create_download_task(*args, **kwargs) -> 'Tuple[DownloadResourceTask, bool]':
@@ -530,7 +531,7 @@ async def _project_with_resource_group_starting_to_download(
         small_max_visible_children: int,
         small_max_leading_complete_children: int,
         scheduler_thread_enabled: bool=True,
-        ) -> AsyncIterator[Tuple[MainWindow, Project, TaskTreeNode, TaskTreeNode, Callable[[], Resource]]]:
+        ) -> AsyncIterator[tuple[MainWindow, Project, TaskTreeNode, TaskTreeNode, Callable[[], Resource]]]:
     if not (small_max_leading_complete_children <= small_max_visible_children):
         raise ValueError()
     
@@ -624,7 +625,7 @@ def _cleanup_download_of_resource_group(
     assert len(project.root_task.children) == 0
 
 
-def _viewport(ttn: TaskTreeNode) -> Tuple[int, int, bool, bool]:
+def _viewport(ttn: TaskTreeNode) -> tuple[int, int, bool, bool]:
     """
     Returns information about the visible tasks in the specified TaskTreeNode.
     """
@@ -702,7 +703,7 @@ def _is_more_node(tn: NodeView) -> bool:
     return _value_of_more_node(tn) is not None
 
 
-def _value_of_more_node(tn: NodeView) -> Optional[int]:
+def _value_of_more_node(tn: NodeView) -> int | None:
     tn_title = tn.title
     if not tn_title.endswith(' more'):
         return None

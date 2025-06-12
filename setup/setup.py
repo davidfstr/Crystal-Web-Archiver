@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
+r"""
 py2app/py2exe build script for Crystal Web Archiver.
 
 Usage (All Platforms):
@@ -20,7 +19,7 @@ import os
 from setuptools import setup
 import sys
 
-with open('./setup_settings.py', 'r', encoding='utf-8') as f:
+with open('./setup_settings.py', encoding='utf-8') as f:
     exec(f.read())
 
 if sys.platform == 'darwin':
@@ -107,7 +106,7 @@ elif sys.platform == 'win32':
     
     # py2exe doesn't look for modules in the directory of the main
     # source file by default, so we must add it to the system path explicitly.
-    sys.path.append('..\src')
+    sys.path.append(r'..\src')
     
     extra_setup_options = dict(
         setup_requires=['py2exe'],

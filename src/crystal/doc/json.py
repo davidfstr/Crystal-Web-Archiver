@@ -2,7 +2,6 @@
 Parses JSON documents.
 """
 
-from __future__ import absolute_import
 from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
@@ -13,8 +12,8 @@ from typing import BinaryIO, Optional
 
 def parse_json_and_links(
         body_bytes: BinaryIO,
-        declared_charset: Optional[str]=None
-        ) -> Optional[tuple[Document, list[Link]]]:
+        declared_charset: str | None=None
+        ) -> tuple[Document, list[Link]] | None:
     try:
         json_obj = json.load(body_bytes)  # type: ignore[attr-defined]
     except Exception:

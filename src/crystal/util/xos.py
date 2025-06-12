@@ -19,7 +19,7 @@ def is_linux() -> bool:
     return (platform.system() == 'Linux')
 
 
-def windows_major_version() -> Optional[int]:
+def windows_major_version() -> int | None:
     """
     Returns the major version number of Windows, or None if unknown.
     
@@ -41,7 +41,7 @@ def windows_major_version() -> Optional[int]:
         return math.floor(release_number)
 
 
-def mac_version() -> Optional[List[int]]:
+def mac_version() -> list[int] | None:
     if not is_mac_os():
         return None
     

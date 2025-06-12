@@ -5,8 +5,9 @@ from crystal.tests.util.runner import bg_sleep
 import datetime
 import os
 import time
-from typing import Callable, Optional, TYPE_CHECKING, TypeVar, Union
-from typing_extensions import Literal
+from typing import Optional, TYPE_CHECKING, TypeVar, Union
+from collections.abc import Callable
+from typing import Literal
 import warnings
 import wx
 
@@ -34,10 +35,10 @@ HARD_TIMEOUT_MULTIPLIER = 2.0
 # Utility: Wait While
 
 async def wait_while(
-        progression_func: Callable[[], Optional[_T]],
-        *, progress_timeout: Optional[float]=None,
-        progress_timeout_message: Optional[Callable[[], str]]=None,
-        period: Optional[float]=None,
+        progression_func: Callable[[], _T | None],
+        *, progress_timeout: float | None=None,
+        progress_timeout_message: Callable[[], str] | None=None,
+        period: float | None=None,
         ) -> None:
     """
     Waits while the specified progression returns different non-None values
@@ -57,7 +58,7 @@ async def wait_while(
         return  # done
     print_new_status(last_status)
     
-    def do_check_status() -> Optional[bool]:
+    def do_check_status() -> bool | None:
         nonlocal last_status
         
         current_status = progression_func()
@@ -93,10 +94,10 @@ DEFAULT_WAIT_PERIOD = 0.1  # arbitrary
 
 
 async def wait_for(
-        condition: Callable[[], Optional[_T]],
-        timeout: Optional[float]=None,
-        *, period: Optional[float]=None,
-        message: Optional[Callable[[], str]]=None,
+        condition: Callable[[], _T | None],
+        timeout: float | None=None,
+        *, period: float | None=None,
+        message: Callable[[], str] | None=None,
         stacklevel_extra: int=0,
         screenshot_on_error: bool=True,
         ) -> _T:
@@ -164,7 +165,7 @@ async def wait_for(
                     message_suffix_str = f'{condition!r}'
                 
                 warnings.warn(
-                    'Soft timeout exceeded (%.1fs > %.1fs). %s' % (
+                    'Soft timeout exceeded ({:.1f}s > {:.1f}s). {}'.format(
                         delta_time,
                         soft_timeout,
                         message_suffix_str
@@ -172,7 +173,7 @@ async def wait_for(
                     stacklevel=(2 + stacklevel_extra))
 
 
-def wait_for_sync(condition: Callable[[], Optional[_T]], *args, **kwargs) -> _T:
+def wait_for_sync(condition: Callable[[], _T | None], *args, **kwargs) -> _T:
     """
     Similar to wait_for() but does not release the current thread between waits.
     """
@@ -193,12 +194,12 @@ class WaitTimedOut(Exception):
 
 def window_condition(
         name: str, *, hidden_ok: bool=False
-        ) -> Callable[[], Optional[wx.Window]]:
+        ) -> Callable[[], wx.Window | None]:
     """
     Whether the named window exists and is visible.
     Truthy return value is the window.
     """
-    def window() -> Optional[wx.Window]:
+    def window() -> wx.Window | None:
         window = wx.FindWindowByName(name)  # type: Optional[wx.Window]
         if window is None:
             return None
@@ -215,12 +216,12 @@ def window_condition(
 
 def first_child_of_tree_item_is_not_loading_condition(
         ti: TreeItem
-        ) -> Callable[[], Optional[wx.TreeItemId]]:
+        ) -> Callable[[], wx.TreeItemId | None]:
     """
     Whether the specified tree item's children is done loading.
     Truthy return value is the first loaded child.
     """
-    def first_child_of_tree_item_is_not_loading() -> Optional[TreeItem]:
+    def first_child_of_tree_item_is_not_loading() -> TreeItem | None:
         first_child_ti = ti.GetFirstChild()
         if first_child_ti is None:
             return None
@@ -232,14 +233,14 @@ def first_child_of_tree_item_is_not_loading_condition(
 
 def tree_has_children_condition(
         tree: wx.TreeCtrl,
-        ) -> Callable[[], Optional[Literal[True]]]:
+        ) -> Callable[[], Literal[True] | None]:
     """Whether the specified tree has children."""
     return not_condition(tree_has_no_children_condition(tree))
 
 
 def tree_has_no_children_condition(
         tree: wx.TreeCtrl, 
-        ) -> Callable[[], Optional[Literal[True]]]:
+        ) -> Callable[[], Literal[True] | None]:
     """Whether the specified tree has no children."""
     from crystal.tests.util.controls import TreeItem
     return tree_item_has_no_children_condition(TreeItem(tree, tree.GetRootItem()))
@@ -247,9 +248,9 @@ def tree_has_no_children_condition(
 
 def tree_item_has_no_children_condition(
         ti: TreeItem
-        ) -> Callable[[], Optional[Literal[True]]]:
+        ) -> Callable[[], Literal[True] | None]:
     """Whether the specified tree item has no children."""
-    def tree_item_has_no_children() -> Optional[Literal[True]]:
+    def tree_item_has_no_children() -> Literal[True] | None:
         first_child_tii = ti.tree.GetFirstChild(ti.id)[0]
         if not first_child_tii.IsOk():
             return True
@@ -258,18 +259,18 @@ def tree_item_has_no_children_condition(
     return tree_item_has_no_children
 
 
-def is_enabled_condition(window: wx.Window) -> Callable[[], Optional[Literal[True]]]:
+def is_enabled_condition(window: wx.Window) -> Callable[[], Literal[True] | None]:
     """Whether the specified window is enabled."""
-    def is_enabled() -> Optional[Literal[True]]:
+    def is_enabled() -> Literal[True] | None:
         return window.Enabled or None
     return is_enabled
 
 
 def not_condition(
-        condition: Callable[[], Optional[_T]]
-        ) -> Callable[[], Optional[Literal[True]]]:
+        condition: Callable[[], _T | None]
+        ) -> Callable[[], Literal[True] | None]:
     """Whether the specified condition is falsy."""
-    def not_() -> Optional[Literal[True]]:
+    def not_() -> Literal[True] | None:
         if condition():
             return None
         else:
@@ -278,13 +279,13 @@ def not_condition(
 
 
 def or_condition(
-        *conditions: Callable[[], Optional[_T]]
-        ) -> Callable[[], Optional[_T]]:
+        *conditions: Callable[[], _T | None]
+        ) -> Callable[[], _T | None]:
     """
     Whether any of the specified conditions are true.
     Truthy return value is the return value of the first truthy condition.
     """
-    def or_() -> Optional[_T]:
+    def or_() -> _T | None:
         for condition in conditions:
             result = condition()
             if result is not None:

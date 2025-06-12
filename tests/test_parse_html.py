@@ -123,7 +123,7 @@ def test_recognizes_links_inside_style_tags() -> None:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:
             with subtests.test(html_parser_type=html_parser_type):
                 (_, (link,)) = _parse_html_and_links(
-                    """<style>@import "oo.css";</style>""".encode('utf-8'),
+                    b"""<style>@import "oo.css";</style>""",
                     html_parser_type=html_parser_type)
                 assert 'oo.css' == link.relative_url
                 assert 'CSS @import' == link.type_title
@@ -135,7 +135,7 @@ def test_recognizes_links_inside_style_attributes() -> None:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:
             with subtests.test(html_parser_type=html_parser_type):
                 (_, (link,)) = _parse_html_and_links(
-                    """<dl style="background-image: url('./Forum_read.png')"></dl>""".encode('utf-8'),
+                    b"""<dl style="background-image: url('./Forum_read.png')"></dl>""",
                     html_parser_type=html_parser_type)
                 assert './Forum_read.png' == link.relative_url
                 assert 'CSS URL Reference' == link.type_title
@@ -147,7 +147,7 @@ def test_recognizes_body_background_link() -> None:
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:
             with subtests.test(html_parser_type=html_parser_type):
                 (_, (link,)) = _parse_html_and_links(
-                    """<body background="background.png"></body>""".encode('utf-8'),
+                    b"""<body background="background.png"></body>""",
                     html_parser_type=html_parser_type)
                 assert 'background.png' == link.relative_url
                 assert 'Background Image' == link.type_title
@@ -160,7 +160,7 @@ def test_recognizes_src_attribute() -> None:
             with subtests.test(html_parser_type=html_parser_type):
                 # <img src=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<img src="background.png" title="Background" />""".encode('utf-8'),
+                    b"""<img src="background.png" title="Background" />""",
                     html_parser_type=html_parser_type)
                 assert 'background.png' == link.relative_url
                 assert 'Image' == link.type_title
@@ -169,7 +169,7 @@ def test_recognizes_src_attribute() -> None:
                 
                 # <iframe src=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<iframe src="content.html" name="content"></iframe>""".encode('utf-8'),
+                    b"""<iframe src="content.html" name="content"></iframe>""",
                     html_parser_type=html_parser_type)
                 assert 'content.html' == link.relative_url
                 assert 'IFrame' == link.type_title
@@ -193,7 +193,7 @@ def test_recognizes_src_attribute() -> None:
                 
                 # <frame src=*>, improperly outside a <frameset>
                 (_, (link,)) = _parse_html_and_links(
-                    """<frame src="content.html" name="content"></frame>""".encode('utf-8'),
+                    b"""<frame src="content.html" name="content"></frame>""",
                     html_parser_type=html_parser_type)
                 assert 'content.html' == link.relative_url
                 assert 'Frame' == link.type_title
@@ -202,7 +202,7 @@ def test_recognizes_src_attribute() -> None:
                 
                 # <input type="image" src=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<input type="image" src="login-button.png" alt="Login" />""".encode('utf-8'),
+                    b"""<input type="image" src="login-button.png" alt="Login" />""",
                     html_parser_type=html_parser_type)
                 assert 'login-button.png' == link.relative_url
                 assert 'Form Image' == link.type_title
@@ -211,7 +211,7 @@ def test_recognizes_src_attribute() -> None:
                 
                 # <??? src=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<div src="image.png"></div>""".encode('utf-8'),
+                    b"""<div src="image.png"></div>""",
                     html_parser_type=html_parser_type)
                 assert 'image.png' == link.relative_url
                 assert 'Unknown Embedded (div)' == link.type_title
@@ -311,7 +311,7 @@ def test_recognizes_href_attribute() -> None:
             with subtests.test(html_parser_type=html_parser_type):
                 # <a href=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<a href="https://example.com">Website</a>""".encode('utf-8'),
+                    b"""<a href="https://example.com">Website</a>""",
                     html_parser_type=html_parser_type)
                 assert 'https://example.com' == link.relative_url
                 assert 'Link' == link.type_title
@@ -320,7 +320,7 @@ def test_recognizes_href_attribute() -> None:
                 
                 # <link rel="stylesheet" href=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<link rel="stylesheet" href="styles" />""".encode('utf-8'),
+                    b"""<link rel="stylesheet" href="styles" />""",
                     html_parser_type=html_parser_type)
                 assert 'styles' == link.relative_url
                 assert 'Stylesheet' == link.type_title
@@ -329,7 +329,7 @@ def test_recognizes_href_attribute() -> None:
                 
                 # <link type="text/css" href=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<link type="text/css" href="styles" />""".encode('utf-8'),
+                    b"""<link type="text/css" href="styles" />""",
                     html_parser_type=html_parser_type)
                 assert 'styles' == link.relative_url
                 assert 'Stylesheet' == link.type_title
@@ -338,7 +338,7 @@ def test_recognizes_href_attribute() -> None:
                 
                 # <link href="*.css">
                 (_, (link,)) = _parse_html_and_links(
-                    """<link href="styles.css" />""".encode('utf-8'),
+                    b"""<link href="styles.css" />""",
                     html_parser_type=html_parser_type)
                 assert 'styles.css' == link.relative_url
                 assert 'Stylesheet' == link.type_title
@@ -347,7 +347,7 @@ def test_recognizes_href_attribute() -> None:
                 
                 # <link rel="shortcut icon" href=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<link rel="shortcut icon" href="favicon.ico" />""".encode('utf-8'),
+                    b"""<link rel="shortcut icon" href="favicon.ico" />""",
                     html_parser_type=html_parser_type)
                 assert 'favicon.ico' == link.relative_url
                 assert 'Icon' == link.type_title
@@ -356,7 +356,7 @@ def test_recognizes_href_attribute() -> None:
                 
                 # <link rel="icon" href=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<link rel="icon" href="favicon.ico" />""".encode('utf-8'),
+                    b"""<link rel="icon" href="favicon.ico" />""",
                     html_parser_type=html_parser_type)
                 assert 'favicon.ico' == link.relative_url
                 assert 'Icon' == link.type_title
@@ -365,7 +365,7 @@ def test_recognizes_href_attribute() -> None:
                 
                 # <link rel="apple-touch-icon" href=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<link rel="apple-touch-icon" href="appicon.png" />""".encode('utf-8'),
+                    b"""<link rel="apple-touch-icon" href="appicon.png" />""",
                     html_parser_type=html_parser_type)
                 assert 'appicon.png' == link.relative_url
                 assert 'Icon' == link.type_title
@@ -374,7 +374,7 @@ def test_recognizes_href_attribute() -> None:
 
                 # <??? href=*>
                 (_, (link,)) = _parse_html_and_links(
-                    """<div href="image.png"></div>""".encode('utf-8'),
+                    b"""<div href="image.png"></div>""",
                     html_parser_type=html_parser_type)
                 assert 'image.png' == link.relative_url
                 assert 'Unknown Href (div)' == link.type_title
@@ -388,7 +388,7 @@ def test_recognizes_input_button_onclick() -> None:
             with subtests.test(html_parser_type=html_parser_type):
                 # <* onclick='*.location = "*";'>
                 (_, (link,)) = _parse_html_and_links(
-                    """<input type='button' onclick='window.location = "http://example.com/";' value='Example'>""".encode('utf-8'),
+                    b"""<input type='button' onclick='window.location = "http://example.com/";' value='Example'>""",
                     html_parser_type=html_parser_type)
                 assert ('http://example.com/', 'Clickable', 'Example', False) == (
                     link.relative_url, link.type_title, link.title, link.embedded,
@@ -401,7 +401,7 @@ def test_recognizes_a_onclick() -> None:
             with subtests.test(html_parser_type=html_parser_type):
                 # <* onclick='*.location = "*";'>
                 (_, (link1, link2)) = _parse_html_and_links(
-                    """<a href="moon-img.html" onclick="window.self.location='moon.html'" target="main">Sailor Moon</a>""".encode('utf-8'),
+                    b"""<a href="moon-img.html" onclick="window.self.location='moon.html'" target="main">Sailor Moon</a>""",
                     html_parser_type=html_parser_type)
                 assert ('moon-img.html', 'Link', 'Sailor Moon', False) == (
                     link1.relative_url, link1.type_title, link1.title, link1.embedded,
@@ -418,7 +418,7 @@ def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
                 # <script [type="text/javascript"]>..."http(s)://**"...</script>
                 if True:
                     (_, (link,)) = _parse_html_and_links(
-                        """<script>const url = "http://example.com/"; window.location = url;</script>""".encode('utf-8'),
+                        b"""<script>const url = "http://example.com/"; window.location = url;</script>""",
                         html_parser_type=html_parser_type)
                     assert 'http://example.com/' == link.relative_url
                     assert 'Script Reference' == link.type_title
@@ -426,7 +426,7 @@ def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
                     assert False == link.embedded
                     
                     (_, (link,)) = _parse_html_and_links(
-                        """<script>const url = "http://example.com/poster.png"; window.location = url;</script>""".encode('utf-8'),
+                        b"""<script>const url = "http://example.com/poster.png"; window.location = url;</script>""",
                         html_parser_type=html_parser_type)
                     assert 'http://example.com/poster.png' == link.relative_url
                     assert 'Script Reference' == link.type_title
@@ -434,13 +434,13 @@ def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
                     assert True == link.embedded
                     
                     (_, ()) = _parse_html_and_links(
-                        """<script type="x-json">["http://example.com/"]</script>""".encode('utf-8'),
+                        b"""<script type="x-json">["http://example.com/"]</script>""",
                         html_parser_type=html_parser_type)
                 
                 # <script [type="text/javascript"]>..."http(s)://"...</script>
                 if True:
                     (_, (link,)) = _parse_html_and_links(
-                        """<script>const url = 'http://' + disqus_shortname + '.disqus.com/embed.js'; window.location = url;</script>""".encode('utf-8'),
+                        b"""<script>const url = 'http://' + disqus_shortname + '.disqus.com/embed.js'; window.location = url;</script>""",
                         html_parser_type=html_parser_type)
                     assert 'http://' == link.relative_url
                     assert 'Script Reference' == link.type_title
@@ -462,7 +462,7 @@ def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
                 # <script [type="text/javascript"]>..."//**"...</script>
                 if True:
                     (_, (link,)) = _parse_html_and_links(
-                        """<script>const url = "//home.html"; window.location = url;</script>""".encode('utf-8'),
+                        b"""<script>const url = "//home.html"; window.location = url;</script>""",
                         html_parser_type=html_parser_type)
                     assert '//home.html' == link.relative_url
                     assert 'Script Reference' == link.type_title
@@ -470,7 +470,7 @@ def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
                     assert False == link.embedded
                     
                     (_, (link,)) = _parse_html_and_links(
-                        """<script>const url = "//poster.png"; window.location = url;</script>""".encode('utf-8'),
+                        b"""<script>const url = "//poster.png"; window.location = url;</script>""",
                         html_parser_type=html_parser_type)
                     assert '//poster.png' == link.relative_url
                     assert 'Script Reference' == link.type_title
@@ -478,7 +478,7 @@ def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
                     assert True == link.embedded
                     
                     (_, ()) = _parse_html_and_links(
-                        """<script type="x-json">["//home.html"]</script>""".encode('utf-8'),
+                        b"""<script type="x-json">["//home.html"]</script>""",
                         html_parser_type=html_parser_type)
 
 
@@ -489,7 +489,7 @@ def test_recognizes_unknown_attribute_with_absolute_url() -> None:
                 # <* *="http(s)://**">
                 if True:
                     (_, (link,)) = _parse_html_and_links(
-                        """<a data-src="https://squarespace.com/">Logo</a>""".encode('utf-8'),
+                        b"""<a data-src="https://squarespace.com/">Logo</a>""",
                         html_parser_type=html_parser_type)
                     assert 'https://squarespace.com/' == link.relative_url
                     assert 'Attribute Reference' == link.type_title
@@ -497,7 +497,7 @@ def test_recognizes_unknown_attribute_with_absolute_url() -> None:
                     assert False == link.embedded
                     
                     (_, (link,)) = _parse_html_and_links(
-                        """<img data-src="https://images.squarespace-cdn.com/calm+circle+logo.png" />""".encode('utf-8'),
+                        b"""<img data-src="https://images.squarespace-cdn.com/calm+circle+logo.png" />""",
                         html_parser_type=html_parser_type)
                     assert 'https://images.squarespace-cdn.com/calm+circle+logo.png' == link.relative_url
                     assert 'Attribute Reference' == link.type_title
@@ -513,7 +513,7 @@ def test_when_rewrite_link_using_integrity_then_removes_integrity_attribute() ->
         for html_parser_type in HTML_PARSER_TYPE_CHOICES:
             with subtests.test(tag='script', html_parser_type=html_parser_type):
                 (doc, (link,)) = _parse_html_and_links(
-                    '<script src="https://example.com/script.js" integrity="sha384-v8BU367qNbs/aIZIxuivaU55N5GPF89WBerHoGA4QTcbUjYiLQtKdrfXnqAcXyTv"></script>'.encode('utf-8'),
+                    b'<script src="https://example.com/script.js" integrity="sha384-v8BU367qNbs/aIZIxuivaU55N5GPF89WBerHoGA4QTcbUjYiLQtKdrfXnqAcXyTv"></script>',
                     html_parser_type=html_parser_type)
                 assert (
                     'https://example.com/script.js',
@@ -535,7 +535,7 @@ def test_when_rewrite_link_using_integrity_then_removes_integrity_attribute() ->
             
             with subtests.test(tag='link', html_parser_type=html_parser_type):
                 (doc, (link,)) = _parse_html_and_links(
-                    '<link crossorigin="anonymous" href="https://use.fontawesome.com/releases/v5.12.1/css/all.css" integrity="sha384-v8BU367qNbs/aIZIxuivaU55N5GPF89WBerHoGA4QTcbUjYiLQtKdrfXnqAcXyTv" media="all" rel="stylesheet" type="text/css"/>'.encode('utf-8'),
+                    b'<link crossorigin="anonymous" href="https://use.fontawesome.com/releases/v5.12.1/css/all.css" integrity="sha384-v8BU367qNbs/aIZIxuivaU55N5GPF89WBerHoGA4QTcbUjYiLQtKdrfXnqAcXyTv" media="all" rel="stylesheet" type="text/css"/>',
                     html_parser_type=html_parser_type)
                 assert (
                     'https://use.fontawesome.com/releases/v5.12.1/css/all.css',
@@ -560,7 +560,7 @@ def test_when_rewrite_link_using_integrity_then_removes_integrity_attribute() ->
 
 def _parse_html_and_links(
         html_bytes: bytes, 
-        *, declared_charset: Optional[str]=None,
+        *, declared_charset: str | None=None,
         html_parser_type: HtmlParserType,
         ) -> 'Tuple[Document, List[Link]]':
     result = try_parse_html_and_links(html_bytes, declared_charset, html_parser_type)

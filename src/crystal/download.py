@@ -16,8 +16,9 @@ import os
 import platform
 import ssl
 from typing import (
-    BinaryIO, cast, Dict, Iterable, Optional, Set, Tuple, TYPE_CHECKING, Union
+    BinaryIO, cast, Dict, Optional, Set, Tuple, TYPE_CHECKING, Union
 )
+from collections.abc import Iterable
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -130,7 +131,7 @@ class ResourceRequest:
     @staticmethod
     def create(
             url: str,
-            request_cookie: Optional[str]=None,
+            request_cookie: str | None=None,
             known_etags: Iterable[str]=()
             ) -> 'ResourceRequest':
         """
@@ -145,7 +146,7 @@ class ResourceRequest:
         else:
             raise urllib.error.URLError('URL scheme "%s" is not supported.' % url_parts.scheme)
     
-    def __call__(self) -> Tuple[Optional[ResourceRevisionMetadata], BinaryIO]:
+    def __call__(self) -> tuple[ResourceRevisionMetadata | None, BinaryIO]:
         """
         Returns a (metadata, body_stream) tuple, where
             `metadata` is a JSON-serializable dictionary or None and
@@ -159,7 +160,7 @@ class ResourceRequest:
 class HttpResourceRequest(ResourceRequest):
     def __init__(self, 
             url: str,
-            request_cookie: Optional[str]=None,
+            request_cookie: str | None=None,
             known_etags: Iterable[str]=()
             ) -> None:
         if urlparse(url).scheme not in ('http', 'https'):
@@ -168,7 +169,7 @@ class HttpResourceRequest(ResourceRequest):
         self._request_cookie = request_cookie
         self._known_etags = known_etags
     
-    def __call__(self) -> Tuple[ResourceRevisionMetadata, BinaryIO]:
+    def __call__(self) -> tuple[ResourceRevisionMetadata, BinaryIO]:
         url_parts = urlparse(self.url)
         scheme = url_parts.scheme
         host_and_port = url_parts.netloc

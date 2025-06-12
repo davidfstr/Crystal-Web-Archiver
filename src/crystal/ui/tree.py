@@ -20,11 +20,12 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_raising
 )
 from crystal.util.xthreading import fg_affinity
-from typing import Callable, cast, Container, Dict, List, NewType, NoReturn, Optional, Tuple, Union
+from typing import cast, Dict, List, NewType, NoReturn, Optional, Tuple, Union
+from collections.abc import Callable, Container
 import wx
 
 
-IconSet = Tuple[Tuple[wx.TreeItemIcon, wx.Bitmap], ...]
+IconSet = tuple[tuple[wx.TreeItemIcon, wx.Bitmap], ...]
 ImageIndex = NewType('ImageIndex', int)
 
 _DEFAULT_TREE_ICON_SIZE = (16,16)
@@ -72,7 +73,7 @@ class TreeView:
     which will not be displayed 
     """
     
-    def __init__(self, parent_peer: wx.Window, *, name: Optional[str]=None) -> None:
+    def __init__(self, parent_peer: wx.Window, *, name: str | None=None) -> None:
         self.delegate = None  # type: object
         self.peer = _OrderedTreeCtrl(
             parent_peer,
@@ -109,12 +110,12 @@ class TreeView:
     
     # TODO: Rename: selection
     @property
-    def selected_node(self) -> Optional[NodeView]:
+    def selected_node(self) -> NodeView | None:
         return self.selected_node_in(self.peer)
     
     # TODO: Rename: selection_in
     @staticmethod
-    def selected_node_in(tree_peer: wx.TreeCtrl) -> Optional[NodeView]:
+    def selected_node_in(tree_peer: wx.TreeCtrl) -> NodeView | None:
         try:
             selected_node_id = tree_peer.GetSelection()
         except Exception as e:
@@ -234,9 +235,9 @@ class NodeView:
             self.peer.SetItemText(value)
     title = property(_get_title, _set_title)
     
-    def _get_text_color(self) -> Optional[wx.Colour]:
+    def _get_text_color(self) -> wx.Colour | None:
         return self._text_color
-    def _set_text_color(self, value: Optional[wx.Colour]) -> None:
+    def _set_text_color(self, value: wx.Colour | None) -> None:
         self._text_color = value
         if self.peer:
             self.peer.SetItemTextColour(value or self.DEFAULT_TEXT_COLOR)
@@ -261,7 +262,7 @@ class NodeView:
                 self.icon_set = self.icon_set
     expandable = property(_get_expandable, _set_expandable)
     
-    def _get_icon_set(self) -> Optional[IconSet]:
+    def _get_icon_set(self) -> IconSet | None:
         """
         A sequence of (wx.TreeItemIcon, wx.Bitmap) tuples, specifying the set of icons applicable
         to this node in various states. If None, then a default icon set is used, depending on
@@ -272,10 +273,10 @@ class NodeView:
             self._icon_set_func = None
         return self._icon_set
     def _set_icon_set(self,
-            value: Union[
-                Optional[IconSet],
-                Callable[[], Optional[IconSet]]  # deferred value
-            ]) -> None:
+            value: (
+                IconSet | None |
+                Callable[[], IconSet | None]  # deferred value
+            )) -> None:
         if callable(value):
             self._icon_set_func = value
             self._icon_set = None
@@ -295,15 +296,15 @@ class NodeView:
                 self.peer.SetItemImage(self._tree.get_image_id_for_bitmap(bitmap), which)
     icon_set = property(_get_icon_set, _set_icon_set)
     
-    def _get_children(self) -> List[NodeView]:
+    def _get_children(self) -> list[NodeView]:
         return self._children
-    def _set_children(self, new_children: List[NodeView]) -> None:
+    def _set_children(self, new_children: list[NodeView]) -> None:
         self.set_children(new_children)
     children = cast('List[NodeView]', property(_get_children, _set_children))
     
     def set_children(self,
-            new_children: List[NodeView],
-            progress_listener: Optional[OpenProjectProgressListener]=None,
+            new_children: list[NodeView],
+            progress_listener: OpenProjectProgressListener | None=None,
             *, _initial: bool=False
             ) -> None:
         """
@@ -388,7 +389,7 @@ class NodeView:
                     raise
     
     @property
-    def parent(self) -> Optional[NodeView]:
+    def parent(self) -> NodeView | None:
         if not self.peer:
             raise ValueError('Cannot lookup parent when not attached to a tree.')
         parent_treeitemid = self.peer.GetItemParent()
@@ -537,7 +538,7 @@ class NodeViewPeer(tuple):
     
     # TODO: Delete unused method
     @fg_affinity
-    def GetFirstChild(self) -> Tuple[wx.TreeItemId, object]:
+    def GetFirstChild(self) -> tuple[wx.TreeItemId, object]:
         node_id = self.node_id  # cache
         if node_id.IsOk():
             with wrapped_object_deleted_error_raising(self._raise_no_longer_exists):

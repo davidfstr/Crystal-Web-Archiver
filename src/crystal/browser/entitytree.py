@@ -94,9 +94,9 @@ class EntityTree(Bulkhead):
     
     # === Bulkhead ===
     
-    def _get_crash_reason(self) -> Optional[CrashReason]:
+    def _get_crash_reason(self) -> CrashReason | None:
         return self._crash_reason
-    def _set_crash_reason(self, reason: Optional[CrashReason]) -> None:
+    def _set_crash_reason(self, reason: CrashReason | None) -> None:
         from crystal.task import CrashedTask
         
         if reason is None:
@@ -136,14 +136,14 @@ class EntityTree(Bulkhead):
         return self.view.peer
     
     @property
-    def selected_entity(self) -> Optional[NodeEntity]:
+    def selected_entity(self) -> NodeEntity | None:
         selected_node = self.selected_node
         if selected_node is None:
             return None
         return selected_node.entity
     
     @property
-    def selected_node(self) -> Optional[Node]:
+    def selected_node(self) -> Node | None:
         selected_node_view = self.view.selected_node
         if selected_node_view is None:
             return None
@@ -158,7 +158,7 @@ class EntityTree(Bulkhead):
         return Node.for_node_view(selected_node_view).source
     
     @property
-    def name_of_selection(self) -> Optional[str]:
+    def name_of_selection(self) -> str | None:
         entity = self.selected_entity
         if isinstance(entity, (RootResource, ResourceGroup)):
             return entity.name
@@ -318,9 +318,9 @@ class EntityTree(Bulkhead):
         menu.Destroy()
     
     def create_change_url_prefix_menuitems_for(self,
-            node: Optional[Node],
+            node: Node | None,
             *, menu_type: Literal['popup', 'top_level']
-            ) -> Tuple[List[wx.MenuItem], Callable[[], None]]:
+            ) -> Tuple[list[wx.MenuItem], Callable[[], None]]:
         menuitems = []  # type: List[wx.MenuItem]
         on_attach_menuitems = lambda: None
         def append_disabled_menuitem() -> None:
@@ -371,7 +371,7 @@ class EntityTree(Bulkhead):
         self.on_change_url_prefix_menuitem_selected(event, self._right_clicked_node)
     
     @capture_crashes_to_self
-    def on_change_url_prefix_menuitem_selected(self, event: wx.MenuEvent, node: Optional[Node]) -> None:
+    def on_change_url_prefix_menuitem_selected(self, event: wx.MenuEvent, node: Node | None) -> None:
         assert node is not None
         
         item_id = event.Id
@@ -412,7 +412,7 @@ class EntityTree(Bulkhead):
         self.root.update_title_of_descendants()  # update URLs in titles
     
     @staticmethod
-    def _url_or_url_prefix_for(node: Union[_ResourceNode, ResourceGroupNode]) -> str:
+    def _url_or_url_prefix_for(node: _ResourceNode | ResourceGroupNode) -> str:
         if isinstance(node, _ResourceNode):
             return node.resource.url
         elif isinstance(node, ResourceGroupNode):
@@ -451,7 +451,7 @@ class EntityTree(Bulkhead):
     def _on_get_tooltip_event(self, event: GetTooltipEvent) -> None:
         event.tooltip_cell[0] = self._tooltip_for_tree_item_id(event.tree_item_id, event.tooltip_type)
     
-    def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId, tooltip_type: Literal['icon', 'label']) -> Optional[str]:
+    def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId, tooltip_type: Literal['icon', 'label']) -> str | None:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
         node = Node.for_node_view(node_view)
         if tooltip_type == 'icon':
@@ -476,7 +476,7 @@ def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     
     Behavior is undefined if `new_seq` or `old_seq` contains duplicate elements.
     """
-    old_seq_selfdict = dict([(x, x) for x in old_seq])
+    old_seq_selfdict = {x: x for x in old_seq}
     return [old_seq_selfdict.get(x, x) for x in new_seq]
 
 
@@ -504,15 +504,15 @@ class Node(Bulkhead):
         self._view.delegate = self
     view = property(_get_view, _set_view)
     
-    def _get_children(self) -> List[Node]:
+    def _get_children(self) -> list[Node]:
         return self._children
-    def _set_children(self, value: List[Node]) -> None:
+    def _set_children(self, value: list[Node]) -> None:
         self.set_children(value)
     children = property(_get_children, _set_children)
     
     def set_children(self,
-            value: List[Node],
-            progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
+            value: list[Node],
+            progress_listener: OpenProjectProgressListener | None=None) -> None:
         """
         Raises:
         * CancelOpenProject
@@ -524,21 +524,21 @@ class Node(Bulkhead):
         self.view.set_children([child.view for child in value], progress_listener)
     
     @property
-    def icon_tooltip(self) -> Optional[str]:
+    def icon_tooltip(self) -> str | None:
         """
         The tooltip to display when the mouse hovers over this node's icon.
         """
         return None
     
     @property
-    def label_tooltip(self) -> Optional[str]:
+    def label_tooltip(self) -> str | None:
         """
         The tooltip to display when the mouse hovers over this node's label.
         """
         return None
     
     @property
-    def entity(self) -> Optional[NodeEntity]:
+    def entity(self) -> NodeEntity | None:
         """
         The entity represented by this node, or None if not applicable.
         """
@@ -553,9 +553,9 @@ class Node(Bulkhead):
     
     # === Bulkhead ===
     
-    def _get_crash_reason(self) -> Optional[CrashReason]:
+    def _get_crash_reason(self) -> CrashReason | None:
         return self._crash_reason
-    def _set_crash_reason(self, reason: Optional[CrashReason]) -> None:
+    def _set_crash_reason(self, reason: CrashReason | None) -> None:
         """
         Called when a crash occurs while expanding this node,
         to display the crash information in the UI as a single child error node.
@@ -599,7 +599,7 @@ class Node(Bulkhead):
         """
         self.update_icon_set_of_descendants_with_resource(None)
     
-    def update_icon_set_of_descendants_with_resource(self, resource: Optional[Resource]) -> None:
+    def update_icon_set_of_descendants_with_resource(self, resource: Resource | None) -> None:
         """
         Updates the icon set of this node's descendants, usually due to a project change.
         
@@ -650,7 +650,7 @@ class Node(Bulkhead):
         if not isinstance(maybe_title, NotImplementedType):
             self.view.title = maybe_title
     
-    def calculate_title(self) -> Union[str, NotImplementedType]:
+    def calculate_title(self) -> str | NotImplementedType:
         return NotImplemented
     
     @final
@@ -662,7 +662,7 @@ class Node(Bulkhead):
         if not isinstance(maybe_icon_set, NotImplementedType):
             self.view.icon_set = maybe_icon_set
     
-    def calculate_icon_set(self) -> Union[Optional[IconSet], NotImplementedType]:
+    def calculate_icon_set(self) -> IconSet | None | NotImplementedType:
         return NotImplemented
     
     # === Dispose ===
@@ -678,7 +678,7 @@ class Node(Bulkhead):
     # === Utility ===
     
     def __repr__(self):
-        return '<%s titled %s at %s>' % (type(self).__name__, repr(self.view.title), hex(id(self)))
+        return '<{} titled {} at {}>'.format(type(self).__name__, repr(self.view.title), hex(id(self)))
 
 
 class RootNode(Node):
@@ -701,7 +701,7 @@ class RootNode(Node):
     
     @override
     def update_children(self, 
-            progress_listener: Optional[OpenProjectProgressListener]=None) -> None:
+            progress_listener: OpenProjectProgressListener | None=None) -> None:
         """
         Raises:
         * CancelOpenProject
@@ -795,7 +795,7 @@ class _ResourceNode(Node):
     # === Properties ===
     
     @override
-    def calculate_icon_set(self) -> Optional[IconSet]:
+    def calculate_icon_set(self) -> IconSet | None:
         return (
             (wx.TreeItemIcon_Normal, BADGED_TREE_NODE_ICON(
                 self._tree_node_icon_name,
@@ -803,13 +803,13 @@ class _ResourceNode(Node):
                 self._status_badge_name(force_recalculate=True))),
         )
     
-    def _status_badge_name(self, *, force_recalculate: bool=False) -> Optional[str]:
+    def _status_badge_name(self, *, force_recalculate: bool=False) -> str | None:
         if not self._status_badge_name_calculated or force_recalculate:
             self._status_badge_name_value = self._calculate_status_badge_name()
             self._status_badge_name_calculated = True
         return self._status_badge_name_value
     
-    def _calculate_status_badge_name(self) -> Optional[str]:
+    def _calculate_status_badge_name(self) -> str | None:
         is_dnd_url = False
         url = self.resource.url  # cache
         for rg in self.resource.project.resource_groups:
@@ -842,8 +842,8 @@ class _ResourceNode(Node):
     
     @override
     @property
-    def icon_tooltip(self) -> Optional[str]:
-        return '%s %s' % (self._status_badge_tooltip, self._entity_tooltip)
+    def icon_tooltip(self) -> str | None:
+        return '{} {}'.format(self._status_badge_tooltip, self._entity_tooltip)
     
     @property
     def _status_badge_tooltip(self) -> str:
@@ -896,7 +896,7 @@ class _ResourceNode(Node):
         if self.download_future is None:
             self.download_future = self.resource.download()
             
-            def download_done(future: 'Future[ResourceRevision]') -> None:
+            def download_done(future: Future[ResourceRevision]) -> None:
                 try:
                     revision = future.result()
                 except CannotDownloadWhenProjectReadOnlyError:
@@ -1052,7 +1052,7 @@ class _ResourceNode(Node):
     @capture_crashes_to_stderr
     def on_selection_deleted(self,
             old_selected_node_view: NodeView,
-            ) -> Optional[NodeView]:
+            ) -> NodeView | None:
         old_selected_node = Node.for_node_view(old_selected_node_view)
         if isinstance(old_selected_node, _ResourceNode):
             # Probably this node still exists but in a different location.
@@ -1120,9 +1120,9 @@ class RootResourceNode(_ResourceNode):
         project = root_resource.project
         display_url = project.get_display_url(root_resource.url)
         if root_resource.name != '':
-            return '%s - %s' % (display_url, root_resource.name)
+            return '{} - {}'.format(display_url, root_resource.name)
         else:
-            return '%s' % (display_url,)
+            return '{}'.format(display_url)
     
     @override
     @property
@@ -1194,7 +1194,7 @@ class NormalResourceNode(_ResourceNode):
 class LinkedResourceNode(_ResourceNode):
     def __init__(self,
             resource: Resource,
-            links: List[Link],
+            links: list[Link],
             *, source: ResourceGroupSource,
             ) -> None:
         self.resource = resource
@@ -1215,14 +1215,14 @@ class LinkedResourceNode(_ResourceNode):
     def calculate_title(self) -> str:
         project = self.resource.project
         link_titles = ', '.join([self._full_title_of_link(link) for link in self.links])
-        return '%s - %s' % (
+        return '{} - {}'.format(
             project.get_display_url(self.resource.url),
             link_titles)
     
     @staticmethod
     def _full_title_of_link(link: Link) -> str:
         if link.title:
-            return '%s: %s' % (link.type_title, link.title)
+            return '{}: {}'.format(link.type_title, link.title)
         else:
             return '%s' % link.type_title
     
@@ -1297,7 +1297,7 @@ class _GroupedNode(Node):  # abstract
     # === Properties ===
     
     @override
-    def calculate_icon_set(self) -> Optional[IconSet]:
+    def calculate_icon_set(self) -> IconSet | None:
         return (
             (wx.TreeItemIcon_Normal, BADGED_ART_PROVIDER_TREE_NODE_ICON(
                 wx.ART_FOLDER,
@@ -1309,7 +1309,7 @@ class _GroupedNode(Node):  # abstract
             )),
         )
     
-    def _status_badge_name(self) -> Optional[str]:
+    def _status_badge_name(self) -> str | None:
         if self.resource_group.do_not_download:
             return 'prohibition'
         else:
@@ -1317,7 +1317,7 @@ class _GroupedNode(Node):  # abstract
     
     @override
     @property
-    def icon_tooltip(self) -> Optional[str]:
+    def icon_tooltip(self) -> str | None:
         status_badge_name = self._status_badge_name()
         if status_badge_name is None:
             return f'{self.entity_tooltip.capitalize()}'
@@ -1371,9 +1371,9 @@ class ResourceGroupNode(_GroupedNode):
         project = resource_group.project
         display_url = project.get_display_url(resource_group.url_pattern)
         if resource_group.name != '':
-            return '%s - %s' % (display_url, resource_group.name)
+            return '{} - {}'.format(display_url, resource_group.name)
         else:
-            return '%s' % (display_url,)
+            return '{}'.format(display_url)
     
     @override
     @property
@@ -1495,8 +1495,8 @@ class GroupedLinkedResourcesNode(_GroupedNode):
     
     def __init__(self,
             resource_group: ResourceGroup,
-            root_rsrc_nodes: List[RootResourceNode],
-            linked_rsrc_nodes: List[LinkedResourceNode],
+            root_rsrc_nodes: list[RootResourceNode],
+            linked_rsrc_nodes: list[LinkedResourceNode],
             source: ResourceGroupSource,
             ) -> None:
         super().__init__(resource_group, source=source)
@@ -1531,7 +1531,7 @@ class GroupedLinkedResourcesNode(_GroupedNode):
     
     @override
     @property
-    def entity(self) -> Optional[NodeEntity]:
+    def entity(self) -> NodeEntity | None:
         # This node groups together various _ResourceNode entities that
         # are in the same ResourceGroup
         return self.resource_group
@@ -1548,7 +1548,7 @@ class GroupedLinkedResourcesNode(_GroupedNode):
 class MorePlaceholderNode(Node):
     def __init__(self,
             more_count: int,
-            delegate: Optional[object]=None,
+            delegate: object | None=None,
             *, source: DeferrableResourceGroupSource
             ) -> None:
         super().__init__(source=source)

@@ -6,12 +6,13 @@ from crystal.doc.generic import Document, Link
 import tinycss2
 from tinycss2 import ast
 from tinycss2.serializer import serialize_string_value, serialize_url
-from typing import List, Iterable, Optional, Tuple
+from typing import List, Optional, Tuple
+from collections.abc import Iterable
 
 
 def parse_css_and_links(
         body_bytes: bytes, 
-        declared_charset: Optional[str]=None
+        declared_charset: str | None=None
         ) -> 'Tuple[CssDocument, List[Link]]':
     (rules, _) = tinycss2.parse_stylesheet_bytes(
         body_bytes,
@@ -57,7 +58,7 @@ def _parse_css_and_links(rules) -> 'Tuple[CssDocument, List[Link]]':
 
 
 # https://doc.courtbouillon.org/tinycss2/stable/api_reference.html#term-component-values
-def _parse_links_from_component_values(tokens, links: List[Link]) -> None:
+def _parse_links_from_component_values(tokens, links: list[Link]) -> None:
     for token in tokens:
         # url(**)
         if isinstance(token, ast.URLToken):

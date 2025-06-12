@@ -11,7 +11,7 @@ from typing import Optional
 
 def parse_html_and_links(
         html_bytes: bytes, 
-        declared_charset: Optional[str]=None
+        declared_charset: str | None=None
         ) -> tuple[Document, list[Link]]:
     if not isinstance(html_bytes, bytes):
         raise ValueError('This parser implementation only accepts bytestrings.')
@@ -37,7 +37,7 @@ def parse_html_and_links(
 
 
 class BasicDocument(Document):
-    def __init__(self, dividers_and_links: 'list[str | BasicLink]') -> None:
+    def __init__(self, dividers_and_links: list[str | BasicLink]) -> None:
         self._dividers_and_links = dividers_and_links
     
     def __str__(self) -> str:

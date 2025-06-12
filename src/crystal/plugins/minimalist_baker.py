@@ -35,10 +35,10 @@ _FACETWP_PAGE_RE = re.compile(r'''(<a class="[^"]+" data-page="([^"]+)")(>[^<]+<
 
 def postprocess_document_and_links(
         url: str,
-        doc: Optional[Document],
-        links: List[Link],
+        doc: Document | None,
+        links: list[Link],
         **kwargs,
-        ) -> Tuple[Optional[Document], List[Link]]:
+        ) -> tuple[Document | None, list[Link]]:
     if not url.startswith('https://minimalistbaker.com/'):
         return (doc, links)
     if not isinstance(doc, HtmlDocument):

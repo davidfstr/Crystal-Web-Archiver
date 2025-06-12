@@ -19,9 +19,10 @@ import tempfile
 import threading
 import time
 from typing import (
-    AsyncIterator, BinaryIO, Callable, cast, Iterable, Iterator, List, NoReturn,
+    BinaryIO, cast, List, NoReturn,
 )
-from typing_extensions import Self
+from collections.abc import AsyncIterator, Callable, Iterable, Iterator
+from typing import Self
 from unittest import skip
 from unittest.mock import ANY, Mock, patch, PropertyMock
 
@@ -110,7 +111,7 @@ async def test_download_does_autopopulate_date_header_if_not_received_from_origi
 
 
 @contextmanager
-def _file_served(headers: List[List[str]], content_bytes: bytes) -> Iterator[int]:
+def _file_served(headers: list[list[str]], content_bytes: bytes) -> Iterator[int]:
     class RequestHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # override
             self.send_response_only(200)
@@ -363,7 +364,7 @@ async def test_given_project_has_revision_with_maximum_id_when_download_revision
 @contextmanager
 def _downloads_mocked_to_raise_network_io_error() -> Iterator:
     def raise_connection_reset() -> NoReturn:
-        raise IOError('Connection reset')
+        raise OSError('Connection reset')
     def is_connection_reset(e: object) -> bool:
         return (
             isinstance(e, IOError) and

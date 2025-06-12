@@ -42,11 +42,12 @@ from time import (
 from types import TracebackType
 import traceback
 from typing import (
-    Any, Callable, cast, final, Generic, List, Literal, Iterator, Optional,
-    Sequence, Tuple, TYPE_CHECKING, TypeVar, Union
+    Any, cast, final, Generic, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union
 )
+from collections.abc import Callable, Iterator, Sequence
 from typing import NoReturn as Never
-from typing_extensions import Concatenate, override, ParamSpec
+from typing_extensions import override, ParamSpec
+from typing import Concatenate
 from weakref import WeakSet
 
 if TYPE_CHECKING:
@@ -199,9 +200,9 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
     
     # === Bulkhead ===
     
-    def _get_crash_reason(self) -> Optional[CrashReason]:
+    def _get_crash_reason(self) -> CrashReason | None:
         return self._crash_reason
-    def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
+    def _set_crash_reason(self, value: CrashReason | None) -> None:
         self._crash_reason = value
         for lis in self.listeners:
             if hasattr(lis, 'task_crash_reason_did_change'):
@@ -236,7 +237,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
     #       since in truth a Task can already have multiple parents,
     #       but we currently only remember one parent at a time.
     @property
-    def parent(self) -> Optional[Task]:
+    def parent(self) -> Task | None:
         """
         The most-recently set parent of this task or None if no such parent
         exists or this task type doesn't permit parent tracking.
@@ -372,7 +373,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
                     print(f'    - {lis}')
         child.listeners.append(self)
     
-    def notify_did_append_child(self, child: Optional[Task]) -> None:
+    def notify_did_append_child(self, child: Task | None) -> None:
         """
         Notifies listeners that a child was appended to this task's children.
         
@@ -427,7 +428,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
             if hasattr(lis, 'task_did_complete'):
                 run_bulkhead_call(lis.task_did_complete, self)  # type: ignore[attr-defined]
     
-    def finalize_children(self, final_children: List[Task]) -> None:
+    def finalize_children(self, final_children: list[Task]) -> None:
         """
         Replace all completed children with a new set of completed children.
         
@@ -504,7 +505,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
     
     @capture_crashes_to_self
     @fg_affinity
-    def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
+    def try_get_next_task_unit(self) -> Callable[[], None] | None:
         """
         Returns a callable ("task unit") that completes a unit of work for
         this task, or None if no more units can be provided until at least
@@ -613,7 +614,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
             else:
                 raise ValueError('Container task has an unknown scheduling style (%s).' % self.scheduling_style)
     
-    def _notify_did_schedule_all_children(self) -> Union[bool, Optional[Callable[[], None]]]:
+    def _notify_did_schedule_all_children(self) -> bool | Callable[[], None] | None:
         if hasattr(self, 'did_schedule_all_children'):
             self.did_schedule_all_children()  # type: ignore[attr-defined]
             # (Children may have changed)
@@ -798,7 +799,7 @@ _LARGE_DISK_MIN_PROJECT_FREE_BYTES = 1024 * 1024 * 1024 * 4  # 4 GiB
 _MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH = 3
 
 
-def _get_abstract_resource_title(abstract_resource: Union[Resource, RootResource]) -> str:
+def _get_abstract_resource_title(abstract_resource: Resource | RootResource) -> str:
     """
     Arguments:
     * abstract_resource -- a Resource or a RootResource.
@@ -806,7 +807,7 @@ def _get_abstract_resource_title(abstract_resource: Union[Resource, RootResource
     resource = abstract_resource.resource
     name = getattr(abstract_resource, 'name', '') or ''
     if name != '':
-        return '%s - %s' % (resource.url, name)
+        return '{} - {}'.format(resource.url, name)
     else:
         return '%s' % (resource.url)
 
@@ -841,7 +842,7 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
         'did_download',
     )
     
-    def __init__(self, abstract_resource: Union[Resource, RootResource]) -> None:
+    def __init__(self, abstract_resource: Resource | RootResource) -> None:
         """
         Arguments:
         * abstract_resource -- a Resource or a RootResource.
@@ -867,7 +868,7 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
             body_revision = None
         else:
             @does_not_capture_crashes
-            def fg_task() -> Optional[ResourceRevision]:
+            def fg_task() -> ResourceRevision | None:
                 DRBT = DownloadResourceBodyTask
                 if DRBT._dr_profiling_context is None:
                     DRBT._dr_profiling_context = create_profiling_context(
@@ -943,7 +944,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
     )
     
     def __init__(self,
-            abstract_resource: Union[Resource, RootResource],
+            abstract_resource: Resource | RootResource,
             *, needs_result: bool=True,
             is_embedded: bool=False,
             ) -> None:
@@ -1104,7 +1105,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
             else:
                 # Identify embedded resources
                 @does_not_capture_crashes
-                def fg_task() -> List[Resource]:
+                def fg_task() -> list[Resource]:
                     embedded_resources = []
                     link_urls_seen = set()
                     base_url = self.resource.url  # cache
@@ -1243,7 +1244,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
             
             self.finish()
     
-    def _ancestor_downloading_resources(self) -> List[Resource]:
+    def _ancestor_downloading_resources(self) -> list[Resource]:
         ancestors = []
         cur_task = self  # type: Optional[Task]
         while cur_task is not None:
@@ -1283,7 +1284,7 @@ class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]'])
         self._resource_revision = resource_revision
     
     @bg_affinity
-    def __call__(self) -> 'Tuple[List[Link], List[Resource]]':
+    def __call__(self) -> Tuple[List[Link], List[Resource]]:
         """
         Raises:
         * RevisionBodyMissingError
@@ -1298,7 +1299,7 @@ class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]'])
             linked_resources = []  # type: List[Resource]
         else:
             self.subtitle = 'Recording links...'
-            def record_links() -> List[Resource]:
+            def record_links() -> list[Resource]:
                 return Resource.bulk_create(r.project, urls, r.url)
             linked_resources = fg_call_and_wait(record_links)
         
@@ -1332,7 +1333,7 @@ class _PlaceholderTask(_LeafTask):  # abstract
     def __init__(self,
             title: str,
             value: object=_NO_VALUE,
-            exception: Optional[Exception]=None,
+            exception: Exception | None=None,
             prefinish: bool=False) -> None:
         super().__init__(title=title)
         self._value = value
@@ -1363,7 +1364,7 @@ class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
     
     # Ignore any crash reason set on a flyweight task
     @override
-    def _set_crash_reason(self, value: Optional[CrashReason]) -> None:
+    def _set_crash_reason(self, value: CrashReason | None) -> None:
         # NOTE: Swallowing the bad set operation rather than raising another
         #       exception because calling error-handling code is not expected
         #       to be able to handle a followup exception raised in this context.
@@ -1372,7 +1373,7 @@ class _FlyweightPlaceholderTask(_PlaceholderTask):  # abstract
     # Ignore any parent set on a flyweight task
     @property
     @override
-    def parent(self) -> Optional[Task]:
+    def parent(self) -> Task | None:
         return None
 
 
@@ -1495,7 +1496,7 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
     
     @override
     @capture_crashes_to_self
-    def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
+    def try_get_next_task_unit(self) -> Callable[[], None] | None:
         # Load children, if not already done
         if not self._children_loaded:
             return self._load_children_and_update_completed_status
@@ -1764,11 +1765,11 @@ class RootTask(_PureContainerTask):
     # === Bulkhead ===
     
     @override
-    def _get_crash_reason(self) -> Optional[CrashReason]:
+    def _get_crash_reason(self) -> CrashReason | None:
         return self._crash_reason
     @override
     @capture_crashes_to_stderr
-    def _set_crash_reason(self, reason: Optional[CrashReason]) -> None:
+    def _set_crash_reason(self, reason: CrashReason | None) -> None:
         if reason is None:
             self._crash_reason = None
         else:
@@ -1875,7 +1876,7 @@ class RootTask(_PureContainerTask):
     @capture_crashes_to_self
     @fg_affinity
     @scheduler_affinity
-    def try_get_next_task_unit(self) -> Optional[Callable[[], None]]:
+    def try_get_next_task_unit(self) -> Callable[[], None] | None:
         if self.complete:
             return None
         
@@ -1969,7 +1970,7 @@ def start_schedule_forever(root_task: RootTask) -> None:
                             #@does_not_capture_crashes
                             #@fg_affinity
                             #@scheduler_affinity
-                            def fg_task() -> Tuple[Optional[Callable[[], None]], bool]:
+                            def fg_task() -> tuple[Callable[[], None] | None, bool]:
                                 return (
                                     run_bulkhead_call(root_task.try_get_next_task_unit),
                                     root_task.complete
@@ -2009,7 +2010,7 @@ def is_synced_with_scheduler_thread() -> bool:
     return False
 
 
-def _is_scheduler_thread(thread: Optional[threading.Thread]=None) -> bool:
+def _is_scheduler_thread(thread: threading.Thread | None=None) -> bool:
     """
     Returns whether this thread is a scheduler thread,
     responsible for running Tasks in a Project.

@@ -15,9 +15,10 @@ import shutil
 import subprocess
 import sys
 from typing import (
-    BinaryIO, Dict, Iterator, List, Literal, Optional, Tuple, TYPE_CHECKING,
+    BinaryIO, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING,
     Union,
 )
+from collections.abc import Iterator
 import xml.etree.ElementTree as ET
 
 
@@ -159,7 +160,7 @@ def install_to_linux_desktop_environment() -> None:
     #       because some apps (like GNOME/KDE's Open Dialog) cannot scale icons themselves.
     if True:
         # Determine icon names for regular folder, which actually resolve to an icon
-        icon_names: List[str]
+        icon_names: list[str]
         try:
             regular_folder_dirpath = os.path.dirname(__file__)
             p = subprocess.run(
@@ -260,7 +261,7 @@ def install_to_linux_desktop_environment() -> None:
 def _get_or_load_best_icon(
         name: str,
         type: Literal['png', 'svg'],
-        dimension: Union[Tuple[int, int], EllipsisType],
+        dimension: tuple[int, int] | EllipsisType,
         ) -> bytes:
     """
     Returns the bytes for the icon with the specified name and type
@@ -289,7 +290,7 @@ def _get_or_load_best_icon(
 _PNG_SIGNATURE = bytes([137, 80, 78, 71, 13, 10, 26, 10])  # b'\x89PNG\r\n\x1a\n'
 
 
-def get_png_dimensions(f: BinaryIO) -> Optional[Tuple[int, int]]:
+def get_png_dimensions(f: BinaryIO) -> tuple[int, int] | None:
     """
     Reads the specified PNG file object to determine its (width, height) dimensions.
     Returns None if the file is not a valid PNG file.
@@ -320,7 +321,7 @@ def get_png_dimensions(f: BinaryIO) -> Optional[Tuple[int, int]]:
     return (width, height)
 
 
-def get_svg_dimensions(f: BinaryIO) -> Optional[Tuple[int, int]]:
+def get_svg_dimensions(f: BinaryIO) -> tuple[int, int] | None:
     """
     Reads the specified SVG file object to determine its (width, height) dimensions.
     Returns None if the file is not a valid SVG file or no dimensions are defined.

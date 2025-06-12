@@ -3,7 +3,8 @@ from crystal.util.wx_dialog import (
     position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
 )
 from crystal.util.xos import is_wx_gtk
-from typing import Callable, Optional
+from typing import Optional
+from collections.abc import Callable
 import wx
 
 
@@ -20,12 +21,12 @@ class BetterMessageDialog(wx.Dialog):
             message: str, 
             title: str, 
             style,
-            *, checkbox_label: Optional[str]=None,
-            on_checkbox_clicked: Optional[Callable[[wx.CommandEvent], None]]=None,
-            yes_label: Optional[str]=None, 
-            no_label: Optional[str]=None, 
+            *, checkbox_label: str | None=None,
+            on_checkbox_clicked: Callable[[wx.CommandEvent], None] | None=None,
+            yes_label: str | None=None, 
+            no_label: str | None=None, 
             escape_is_cancel: bool=False,
-            name: Optional[str]=None,
+            name: str | None=None,
             ) -> None:
         """
         Arguments:

@@ -63,7 +63,7 @@ class Shell:
             eof = 'Ctrl-Z plus Return'
         else:
             eof = 'Ctrl-D (i.e. EOF)'
-        exit_instructions = 'Use %s() or %s to exit' % ('exit', eof)
+        exit_instructions = 'Use {}() or {} to exit'.format('exit', eof)
         
         python_version = '.'.join([str(x) for x in sys.version_info[:3]])
         try:
@@ -94,7 +94,7 @@ class Shell:
 
 class _Proxy:
     _unset_repr: str
-    _value: 'Optional[object]'
+    _value: Optional[object]
     
     @staticmethod
     def _patch_help() -> None:

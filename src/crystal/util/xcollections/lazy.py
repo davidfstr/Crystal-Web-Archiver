@@ -1,8 +1,9 @@
 from enum import Enum
 from typing import (
-    Any, Callable, Generic, Iterator, List, overload, Sequence, TypeVar, Union,
+    Any, Generic, List, overload, TypeVar, Union,
 )
-from typing_extensions import Literal
+from collections.abc import Callable, Iterator, Sequence
+from typing import Literal
 
 
 _E = TypeVar('_E')
@@ -60,12 +61,12 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     def __getitem__(self, index: int) -> _E:
         ...
     @overload
-    def __getitem__(self, index: int, unmaterialized_ok: Literal[True]) -> Union[_E, UnmaterializedItem]:
+    def __getitem__(self, index: int, unmaterialized_ok: Literal[True]) -> _E | UnmaterializedItem:
         ...
     @overload
     def __getitem__(self, index: slice) -> Sequence[_E]:
         ...
-    def __getitem__(self, index: Union[int, slice], unmaterialized_ok: bool=False):
+    def __getitem__(self, index: int | slice, unmaterialized_ok: bool=False):
         """
         Returns the item at the specified index, materializing it if necessary.
         
