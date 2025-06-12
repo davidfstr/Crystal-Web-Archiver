@@ -1,3 +1,11 @@
+# This module provides routines for installing the Crystal application
+# into the Linux desktop environment (e.g., creating .desktop files,
+# MIME types, and icons). This module is invoked when the
+# --install-to-desktop command-line argument is provided to Crystal.
+# 
+# This module is only intended to be used on Linux systems and should not be
+# imported or executed on non-Linux platforms.
+
 from contextlib import contextmanager
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from functools import cache
