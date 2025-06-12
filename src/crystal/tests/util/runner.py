@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Generator
 from crystal.util.xthreading import bg_affinity, fg_affinity, fg_call_and_wait
 import sys
 import time
@@ -56,7 +56,7 @@ def run_test(test_func: Callable[[], Awaitable[_T]] | Callable[[], _T]) -> _T:
 @fg_affinity
 def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
         duration: float
-        ) -> Awaitable[None]:  # or Generator[Command, object, None]
+        ) -> Generator[Command, object, None]:
     """
     Switch to a background thread, sleep for the specified duration (in seconds), and
     then resume this foreground thread.
@@ -72,11 +72,11 @@ def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
 
 @coroutine
 @fg_affinity
-def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
+def bg_fetch_url(
         url: str,
         *, headers: dict[str, str] | None=None,
         timeout: float | None=None,
-        ) -> Awaitable[WebPage]:  # or Generator[Command, object, WebPage]
+        ) -> Generator[Command, object, WebPage]:
     """
     Switch to a background thread, fetch the specified URL, and
     then resume this foreground thread.
@@ -98,8 +98,7 @@ def bg_fetch_url(  # type: ignore[misc]  # ignore non-Generator return type here
 
 @coroutine
 @fg_affinity
-def pump_wx_events(  # type: ignore[misc]  # ignore non-Generator return type here
-        ) -> Awaitable[None]:  # or Generator[Command, object, None]
+def pump_wx_events() -> Generator[Command, object, None]:
     """
     Process all pending events on the wx event queue.
     """
@@ -108,8 +107,7 @@ def pump_wx_events(  # type: ignore[misc]  # ignore non-Generator return type he
 
 @coroutine
 @fg_affinity
-def bg_breakpoint(  # type: ignore[misc]  # ignore non-Generator return type here
-        ) -> Awaitable[None]:  # or Generator[Command, object, None]
+def bg_breakpoint() -> Generator[Command, object, None]:
     """
     Stops the program in the debugger, with the foreground thread released,
     allowing the user to interact with the UI while the debugger has the program paused.
