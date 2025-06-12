@@ -440,7 +440,7 @@ class EntityTree(Bulkhead):
             self.peer.SetToolTip(new_tooltip)
     
     @capture_crashes_to_self
-    def _on_get_tooltip_event(self, event: GetTooltipEvent) -> None:
+    def _on_get_tooltip_event(self, event: GetTooltipEvent) -> None:  # type: ignore[reportInvalidTypeForm]
         event.tooltip_cell[0] = self._tooltip_for_tree_item_id(event.tree_item_id, event.tooltip_type)
     
     def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId, tooltip_type: Literal['icon', 'label']) -> str | None:

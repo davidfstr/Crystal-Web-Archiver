@@ -223,7 +223,7 @@ def install_to_linux_desktop_environment() -> None:
                     dst_file.write(_get_or_load_best_icon('docicon', 'svg', dimension))
     
     # If KDE, restart plasmasession so that desktop detects new icons immediately
-    import psutil
+    import psutil  # type: ignore[reportMissingModuleSource]  # Linux-only dependency
     for process in psutil.process_iter(attrs=['cmdline', 'pid', 'cwd', 'environ']):
         process_cmdline = process.cmdline()
         if (len(process_cmdline) >= 1 and
