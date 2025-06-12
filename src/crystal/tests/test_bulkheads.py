@@ -1,62 +1,59 @@
+from collections.abc import Callable
 from concurrent.futures import Future
 from contextlib import redirect_stderr
+from crystal import task
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.doc.generic import create_external_link, Link
-from crystal import task
+from crystal.model import Project, Resource, ResourceGroup, RootResource
 import crystal.task
 from crystal.task import (
-    CrashedTask,
-    DownloadResourceGroupTask, DownloadResourceGroupMembersTask, 
-    _DownloadResourcesPlaceholderTask, DownloadResourceTask,
-    ParseResourceRevisionLinks,
-    Task, UpdateResourceGroupMembersTask
+    _DownloadResourcesPlaceholderTask, CrashedTask,
+    DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
+    DownloadResourceTask, ParseResourceRevisionLinks, Task,
+    UpdateResourceGroupMembersTask,
 )
-from crystal.tests.util.controls import click_button, select_menuitem_now, TreeItem
+from crystal.tests.util.controls import (
+    click_button, select_menuitem_now, TreeItem,
+)
 from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks,
-    clear_top_level_tasks_on_exit,
-    first_task_title_progression,
-    MAX_DOWNLOAD_DURATION_PER_ITEM,
-    scheduler_disabled, scheduler_thread_context,
-    step_scheduler,
-    step_scheduler_now,
-    ttn_for_task,
+    append_deferred_top_level_tasks, clear_top_level_tasks_on_exit,
+    first_task_title_progression, MAX_DOWNLOAD_DURATION_PER_ITEM,
+    scheduler_disabled, scheduler_thread_context, step_scheduler,
+    step_scheduler_now, ttn_for_task,
 )
 from crystal.tests.util.wait import (
-    first_child_of_tree_item_is_not_loading_condition,
-    wait_for, wait_while,
+    first_child_of_tree_item_is_not_loading_condition, wait_for, wait_while,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.tests.util.xthreading import bg_call_and_wait as _bg_call_and_wait
-from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.ui.tree import NodeView
+from crystal.util import cli
 from crystal.util.bulkheads import (
-    BulkheadCell,
-    capture_crashes_to,
-    capture_crashes_to_self, capture_crashes_to_stderr,
     capture_crashes_to_bulkhead_arg as capture_crashes_to_task_arg,
-    crashes_captured_to,
+)
+from crystal.util.bulkheads import (
+    capture_crashes_to_self, capture_crashes_to_stderr, crashes_captured_to,
     run_bulkhead_call,
 )
-from crystal.util import cli
+from crystal.util.bulkheads import BulkheadCell, capture_crashes_to
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_asan, is_ci, is_mac_os
-from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
+from crystal.util.xthreading import (
+    bg_call_later, fg_call_and_wait, is_foreground_thread,
+)
 from io import StringIO
 import sys
 import threading
 from typing import cast, List, Optional, Tuple, TypeVar, Union
-from collections.abc import Callable
 from unittest import skip
 from unittest.mock import patch
 import wx
-
 
 _CRASH = ValueError('Simulated crash')
 

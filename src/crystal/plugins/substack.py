@@ -2,7 +2,7 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from crystal.plugins.util.params import try_get_int, try_get_str
 import json
 import sys
-from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 
 def normalize_url(old_url: str, **kwargs) -> str:

@@ -1,11 +1,10 @@
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from functools import wraps
 from io import StringIO
 import traceback
 from typing import Optional
-from collections.abc import Awaitable, Callable, Iterator
 from unittest import SkipTest
-
 
 # ------------------------------------------------------------------------------
 # Utility: Subtests

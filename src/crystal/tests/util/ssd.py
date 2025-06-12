@@ -1,6 +1,6 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
 from unittest.mock import patch
-from collections.abc import Iterator
 
 
 @contextmanager

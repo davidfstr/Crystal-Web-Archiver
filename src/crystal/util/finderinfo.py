@@ -7,7 +7,6 @@ References:
 """
 from crystal.util.xos import is_mac_os
 
-
 _EMPTY = b'\x00' * 32
 
 

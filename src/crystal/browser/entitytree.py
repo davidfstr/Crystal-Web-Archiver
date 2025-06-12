@@ -8,13 +8,11 @@ from crystal.doc.generic import Link
 from crystal.doc.html.soup import TEXT_LINK_TYPE_TITLE
 from crystal.model import (
     Project, ProjectHasTooManyRevisionsError, Resource, ResourceGroup,
-    ResourceGroupSource,
-    ResourceRevision, RevisionBodyMissingError, RevisionDeletedError,
-    RootResource,
+    ResourceGroupSource, ResourceRevision, RevisionBodyMissingError,
+    RevisionDeletedError, RootResource,
 )
 from crystal.progress import (
-    CancelLoadUrls,
-    DummyOpenProjectProgressListener,
+    CancelLoadUrls, DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
 )
 from crystal.task import (
@@ -23,20 +21,17 @@ from crystal.task import (
 # TODO: Expand this star import
 from crystal.ui.tree import *
 from crystal.util.bulkheads import (
-    Bulkhead,
-    capture_crashes_to,
-    capture_crashes_to_self,
-    capture_crashes_to_stderr,
-    CrashReason,
-    run_bulkhead_call,
+    Bulkhead, capture_crashes_to, capture_crashes_to_self,
+    capture_crashes_to_stderr, CrashReason, run_bulkhead_call,
 )
 from crystal.util.notimplemented import NotImplemented, NotImplementedType
 from crystal.util.url_prefix import (
-    get_url_directory_prefix_for,
-    get_url_domain_prefix_for,
+    get_url_directory_prefix_for, get_url_domain_prefix_for,
 )
 from crystal.util.wx_bind import bind
-from crystal.util.wx_treeitem_gettooltip import EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent
+from crystal.util.wx_treeitem_gettooltip import (
+    EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent,
+)
 from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import os
@@ -46,7 +41,6 @@ from typing import cast, final, List, Literal, Optional, Union
 from typing_extensions import override
 from urllib.parse import urljoin, urlparse, urlunparse
 import wx
-
 
 DeferrableResourceGroupSource = Union[
     ResourceGroupSource,

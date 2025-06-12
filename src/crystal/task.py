@@ -1,19 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import Future
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
+from crystal.util import cli
 from crystal.util.bulkheads import (
-    Bulkhead,
-    capture_crashes_to_self,
-    capture_crashes_to_stderr,
-    crashes_captured_to,
-    CrashReason,
-    does_not_capture_crashes,
+    Bulkhead, capture_crashes_to_self, capture_crashes_to_stderr,
+    crashes_captured_to, CrashReason, does_not_capture_crashes,
     run_bulkhead_call,
 )
 from crystal.util.caffeination import Caffeination
-from crystal.util import cli
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import (
     create_profiling_context, ignore_runtime_from_enclosing_warn_if_slow,
@@ -22,32 +19,28 @@ from crystal.util.profile import (
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
-from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItemError
+from crystal.util.xcollections.lazy import (
+    AppendableLazySequence, UnmaterializedItemError,
+)
 from crystal.util.xgc import gc_disabled
 from crystal.util.xsqlite3 import is_database_closed_error
 from crystal.util.xthreading import (
-    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, 
-    fg_waiting_calling_thread,
-    is_foreground_thread, NoForegroundThreadError
+    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
+    fg_waiting_calling_thread, is_foreground_thread, NoForegroundThreadError,
 )
 from functools import wraps
 import os
 import shutil
 import sys
 import threading
-from time import (
-    sleep,
-    sleep as scheduler_sleep,
-)
-from types import TracebackType
+from time import sleep
+from time import sleep as scheduler_sleep
 import traceback
-from typing import (
-    Any, cast, final, Generic, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union
-)
-from collections.abc import Callable, Iterator, Sequence
+from types import TracebackType
+from typing import Any, cast, Concatenate, final, Generic, List, Literal
 from typing import NoReturn as Never
+from typing import Optional, Tuple, TYPE_CHECKING, TypeVar, Union
 from typing_extensions import override, ParamSpec
-from typing import Concatenate
 from weakref import WeakSet
 
 if TYPE_CHECKING:
@@ -768,7 +761,6 @@ class CrashedTask(_LeafTask[Never]):
 from crystal.model import Resource
 from urllib.parse import urljoin
 
-
 # Limit how fast Crystal can download from a remote server to avoid overwhelming
 # any particular remote server.
 DELAY_BETWEEN_DOWNLOADS = 0.5  # secs
@@ -1034,7 +1026,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
     @capture_crashes_to_self
     def child_task_did_complete(self, task: Task) -> None:
         from crystal.model import (
-            ProjectHasTooManyRevisionsError, RevisionBodyMissingError
+            ProjectHasTooManyRevisionsError, RevisionBodyMissingError,
         )
         
         if task is self._download_body_task:

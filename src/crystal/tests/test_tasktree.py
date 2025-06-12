@@ -1,14 +1,14 @@
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from contextlib import (
     AbstractContextManager, asynccontextmanager, contextmanager, nullcontext,
 )
 from crystal.browser.tasktree import _MoreNodeView, TaskTreeNode
-from crystal.model import Resource
+from crystal.model import Project, Resource, ResourceGroup, RootResource
 import crystal.task
 from crystal.task import (
-    DownloadResourceTask,
-    DownloadResourceGroupMembersTask, DownloadResourceGroupTask, 
-    _PlaceholderTask, SCHEDULING_STYLE_ROUND_ROBIN,
-    Task, UpdateResourceGroupMembersTask,
+    _PlaceholderTask, DownloadResourceGroupMembersTask,
+    DownloadResourceGroupTask, DownloadResourceTask,
+    SCHEDULING_STYLE_ROUND_ROBIN, Task, UpdateResourceGroupMembersTask,
 )
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import click_button, TreeItem
@@ -16,26 +16,25 @@ from crystal.tests.util.data import MAX_TIME_TO_DOWNLOAD_404_URL
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks,
-    mark_as_complete as _mark_as_complete,
     scheduler_disabled, scheduler_thread_context,
-    ttn_for_task as _ttn_for_task,
 )
-from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, wait_while
+from crystal.tests.util.tasks import append_deferred_top_level_tasks
+from crystal.tests.util.tasks import mark_as_complete as _mark_as_complete
+from crystal.tests.util.tasks import ttn_for_task as _ttn_for_task
+from crystal.tests.util.wait import (
+    tree_has_no_children_condition, wait_for, wait_while,
+)
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
-from crystal.ui.tree import NodeView
 from crystal.ui.tree2 import NodeView as NodeView2
+from crystal.ui.tree import NodeView
 from crystal.util.xcollections.lazy import (
     AppendableLazySequence, UnmaterializedItem,
 )
-from crystal.model import Project, Resource, ResourceGroup, RootResource
 import math
 import tempfile
 from typing import cast, List, Optional, Tuple
-from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from unittest import skip
 from unittest.mock import call, patch
-
 
 # === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit visible children ===
 

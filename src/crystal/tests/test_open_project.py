@@ -7,10 +7,9 @@ from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.ssd import database_on_ssd
-from crystal.tests.util.subtests import SubtestsContext, awith_subtests
+from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.wait import (
-    first_child_of_tree_item_is_not_loading_condition,
-    wait_for,
+    first_child_of_tree_item_is_not_loading_condition, wait_for,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xos import is_linux, is_mac_os, is_windows
@@ -20,7 +19,6 @@ from typing import List
 from unittest import skip
 from unittest.mock import call, patch
 import wx
-
 
 # === Test: Create Project ===
 

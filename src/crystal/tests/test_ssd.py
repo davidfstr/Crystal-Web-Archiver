@@ -9,7 +9,6 @@ from typing import List
 from unittest import skip
 from unittest.mock import patch
 
-
 # TODO: Implement the following tests, checking the output of 
 #       is_ssd() after mocking subprocess input.
 

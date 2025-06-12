@@ -8,7 +8,10 @@ This thread is responsible for:
 """
 
 from collections import deque
-from crystal.util.bulkheads import capture_crashes_to_stderr, ensure_is_bulkhead_call
+from collections.abc import Callable, Generator, Iterator
+from crystal.util.bulkheads import (
+    capture_crashes_to_stderr, ensure_is_bulkhead_call,
+)
 from crystal.util.profile import create_profiled_callable
 from enum import Enum
 from functools import partial, wraps
@@ -17,10 +20,8 @@ import sys
 import threading
 import traceback
 from typing import cast, Deque, Optional, overload, TypeVar
-from collections.abc import Callable, Generator, Iterator
 from typing_extensions import ParamSpec
 import wx
-
 
 # Whether to explicitly manage the queue of deferred foreground tasks,
 # instead of letting wxPython manage the queue internally.

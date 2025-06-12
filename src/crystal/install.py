@@ -6,6 +6,7 @@
 # This module is only intended to be used on Linux systems and should not be
 # imported or executed on non-Linux platforms.
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from functools import cache
@@ -15,10 +16,8 @@ import shutil
 import subprocess
 import sys
 from typing import (
-    BinaryIO, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING,
-    Union,
+    BinaryIO, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING, Union,
 )
-from collections.abc import Iterator
 import xml.etree.ElementTree as ET
 
 

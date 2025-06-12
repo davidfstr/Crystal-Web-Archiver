@@ -1,5 +1,5 @@
 from crystal.doc.generic import Document, Link
-from crystal.doc.html import HtmlParserType, HTML_PARSER_TYPE_CHOICES
+from crystal.doc.html import HTML_PARSER_TYPE_CHOICES, HtmlParserType
 from crystal.doc.html import parse_html_and_links as try_parse_html_and_links
 from crystal.doc.html.soup import HtmlDocument
 from crystal.server import _RequestHandler

@@ -1,5 +1,5 @@
-from crystal.util.bulkheads import capture_crashes_to_stderr
 from collections.abc import Callable
+from crystal.util.bulkheads import capture_crashes_to_stderr
 import wx
 
 

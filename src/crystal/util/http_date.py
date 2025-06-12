@@ -1,7 +1,6 @@
 from crystal.util.xdatetime import datetime_is_aware, datetime_is_in_utc
 import datetime
 
-
 # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Date#syntax
 # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Modified-Since#syntax
 # 

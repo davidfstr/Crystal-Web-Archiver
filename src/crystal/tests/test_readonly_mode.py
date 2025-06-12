@@ -1,7 +1,8 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.model import Project
 from crystal.tests.util.skip import skipTest
-from crystal.tests.util.subtests import SubtestsContext, awith_subtests
+from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xos import is_mac_os, is_windows
 import os
@@ -9,9 +10,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
-from collections.abc import Iterator
 from unittest import skip
-
 
 # ------------------------------------------------------------------------------
 # Tests

@@ -5,7 +5,9 @@ Parses JSON documents.
 from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
-from crystal.doc.html.soup import ABSOLUTE_HTTP_LINK_RE, PROBABLE_EMBEDDED_URL_RE
+from crystal.doc.html.soup import (
+    ABSOLUTE_HTTP_LINK_RE, PROBABLE_EMBEDDED_URL_RE,
+)
 import json
 from typing import BinaryIO, Optional
 

@@ -10,45 +10,35 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from concurrent.futures import Future
 import copy
+from crystal import resources as resources_
 from crystal.doc.css import parse_css_and_links
 from crystal.doc.generic import create_external_link
 from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.doc.json import parse_json_and_links
 from crystal.doc.xml import parse_xml_and_links
-from crystal.plugins import (
-    phpbb as plugins_phpbb,
-    substack as plugins_substack,
-    minimalist_baker as plugins_minbaker,
-    wordpress as plugins_wordpress,
-)   
+from crystal.plugins import minimalist_baker as plugins_minbaker
+from crystal.plugins import phpbb as plugins_phpbb
+from crystal.plugins import substack as plugins_substack
+from crystal.plugins import wordpress as plugins_wordpress
 from crystal.progress import (
-    CancelLoadUrls,
-    CancelOpenProject,
-    DummyLoadUrlsProgressListener,
-    DummyOpenProjectProgressListener,
-    LoadUrlsProgressListener,
-    OpenProjectProgressListener,
-    VetoUpgradeProject,
+    CancelLoadUrls, CancelOpenProject, DummyLoadUrlsProgressListener,
+    DummyOpenProjectProgressListener, LoadUrlsProgressListener,
+    OpenProjectProgressListener, VetoUpgradeProject,
 )
-from crystal import resources as resources_
-from crystal.util import http_date
+from crystal.util import gio, http_date, xcgi, xshutil
 from crystal.util.bulkheads import (
     capture_crashes_to_bulkhead_arg as capture_crashes_to_task_arg,
-    capture_crashes_to_stderr,
-    run_bulkhead_call,
 )
+from crystal.util.bulkheads import capture_crashes_to_stderr, run_bulkhead_call
 from crystal.util.db import (
-    DatabaseConnection,
-    DatabaseCursor,
-    get_column_names_of_table,
-    get_index_names,
-    is_no_such_column_error_for,
+    DatabaseConnection, DatabaseCursor, get_column_names_of_table,
+    get_index_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis, EllipsisType
-from crystal.util import gio
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import create_profiling_context, warn_if_slow
 from crystal.util.progress import DevNullFile
@@ -57,13 +47,11 @@ from crystal.util.test_mode import tests_are_running
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
-from crystal.util import xcgi
 from crystal.util.xcollections.ordereddict import as_ordereddict
 from crystal.util.xcollections.sortedlist import BLACK_HOLE_SORTED_LIST
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xgc import gc_disabled
 from crystal.util.xos import is_linux, is_mac_os, is_windows
-from crystal.util import xshutil
 from crystal.util.xsqlite3 import sqlite_has_json_support
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
@@ -76,6 +64,7 @@ import mimetypes
 import os
 import pathlib
 import re
+from re import Pattern
 import shutil
 from sortedcontainers import SortedList
 import sqlite3
@@ -84,26 +73,23 @@ from tempfile import NamedTemporaryFile
 from textwrap import dedent
 import threading
 import time
-import traceback
 from tqdm import tqdm
+import traceback
 from typing import (
-    Any, BinaryIO, cast, Dict, Generic,
-    List, Literal, Optional, overload, TYPE_CHECKING,
-    Tuple, TypedDict, TypeVar, Union
+    Any, BinaryIO, cast, Dict, Generic, List, Literal, Optional, overload,
+    Self, Tuple, TYPE_CHECKING, TypedDict, TypeVar, Union,
 )
-from collections.abc import Callable, Iterable, Iterator, Sequence
-from re import Pattern
 from typing_extensions import deprecated, override
-from typing import Self
-from urllib.parse import urlparse, urlunparse, quote as url_quote
+from urllib.parse import quote as url_quote
+from urllib.parse import urlparse, urlunparse
 from weakref import WeakValueDictionary
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
     from crystal.doc.html import HtmlParserType
     from crystal.task import (
-        DownloadResourceTask, DownloadResourceBodyTask,
-        DownloadResourceGroupTask, Task,
+        DownloadResourceBodyTask, DownloadResourceGroupTask,
+        DownloadResourceTask, Task,
     )
 
 
@@ -1024,7 +1010,9 @@ class Project(ListenableMixin):
                 raise ValueError('Expected an aware datetime (with a UTC offset)')
         self._min_fetch_date = min_fetch_date
         if not self._loading:
-            from crystal.task import ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH
+            from crystal.task import (
+                ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
+            )
             if ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH:
                 for r in self._materialized_resources:
                     r.already_downloaded_this_session = False
@@ -1414,7 +1402,9 @@ class Project(ListenableMixin):
         Raises:
         * ProjectReadOnlyError
         """
-        from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
+        from crystal.task import (
+            DownloadResourceGroupTask, DownloadResourceTask,
+        )
         
         if self.readonly:
             raise ProjectReadOnlyError()
@@ -1477,7 +1467,9 @@ class Project(ListenableMixin):
         Raises:
         * ProjectReadOnlyError
         """
-        from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
+        from crystal.task import (
+            DownloadResourceGroupTask, DownloadResourceTask,
+        )
         
         if self.readonly:
             raise ProjectReadOnlyError()
@@ -1899,7 +1891,7 @@ class Resource:
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
         """
         from crystal.task import PROFILE_RECORD_LINKS
-        
+
         # 1. Create Resources in memory initially, deferring any database INSERTs
         # 2. Identify new resources that need to be inserted in the database
         resource_for_new_url = OrderedDict()

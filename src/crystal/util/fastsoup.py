@@ -1,11 +1,9 @@
 import bs4
 from bs4 import BeautifulSoup
-import lxml.html
-from typing import (
-    Dict, List, Literal, Optional, TYPE_CHECKING, Union
-)
 from collections.abc import Callable, Iterable, MutableMapping
+import lxml.html
 from re import Pattern
+from typing import Dict, List, Literal, Optional, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from crystal.doc.html import HtmlParserType

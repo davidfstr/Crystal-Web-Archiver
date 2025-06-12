@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from crystal.browser.new_root_url import fields_hide_hint_when_focused
 from crystal.model import Project, Resource, RootResource
@@ -5,35 +6,32 @@ from crystal.task import DownloadResourceGroupTask
 from crystal.tests.util.asserts import *
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
-from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
+from crystal.tests.util.subtests import (
+    awith_subtests, SubtestsContext, with_subtests,
+)
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks,
-    clear_top_level_tasks_on_exit,
-    scheduler_disabled,
-    wait_for_download_to_start_and_finish,
+    append_deferred_top_level_tasks, clear_top_level_tasks_on_exit,
+    scheduler_disabled, wait_for_download_to_start_and_finish,
 )
 from crystal.tests.util.wait import (
-    DEFAULT_WAIT_PERIOD,
-    first_child_of_tree_item_is_not_loading_condition,
-    tree_has_no_children_condition,
-    wait_for,
+    DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
+    tree_has_no_children_condition, wait_for,
 )
-from crystal.tests.util.windows import NewRootUrlDialog, EntityTree, OpenOrCreateDialog
-from crystal.util.wx_dialog import mocked_show_modal
-from crystal.util.wx_window import SetFocus
+from crystal.tests.util.windows import (
+    EntityTree, NewRootUrlDialog, OpenOrCreateDialog,
+)
 import crystal.url_input
 from crystal.url_input import _candidate_urls_from_user_input as EXPAND
+from crystal.util.wx_dialog import mocked_show_modal
+from crystal.util.wx_window import SetFocus
 import os
 import tempfile
 import time
-from typing import Dict, List, Optional, Tuple, Union
-from collections.abc import AsyncIterator, Iterator
-from typing import Self
+from typing import Dict, List, Optional, Self, Tuple, Union
 from unittest import skip
 from unittest.mock import ANY, patch
 from urllib.parse import urlparse
 import wx
-
 
 # === Test: Create & Delete Standalone ===
 

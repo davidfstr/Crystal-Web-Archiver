@@ -4,7 +4,6 @@ in the desktop environment.
 """
 from unittest import skip
 
-
 # === Icon Tests for .crystalproj ===
 
 # --- macOS ---

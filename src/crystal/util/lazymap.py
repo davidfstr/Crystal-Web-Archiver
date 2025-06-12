@@ -1,6 +1,5 @@
-from typing import Generic, List, TypeVar
 from collections.abc import Callable, Sequence
-
+from typing import Generic, List, TypeVar
 
 _E1 = TypeVar('_E1')
 _E2 = TypeVar('_E2')

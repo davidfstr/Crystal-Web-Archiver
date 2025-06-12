@@ -3,9 +3,8 @@ Provides a tree UI with an API similar to the 'tree' module, but with one differ
 * subtitles are supported (in addition to the regular title)
 """
 
-from crystal.ui.tree import NodeView as NodeView1
-
 # Clients should be able to import TreeView from this package
+from crystal.ui.tree import NodeView as NodeView1
 from crystal.ui.tree import TreeView
 
 

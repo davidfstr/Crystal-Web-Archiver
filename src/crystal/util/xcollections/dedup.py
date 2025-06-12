@@ -1,6 +1,5 @@
 from typing import List, TypeVar
 
-
 _E = TypeVar('_E')
 
 

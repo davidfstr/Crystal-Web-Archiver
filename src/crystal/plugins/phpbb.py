@@ -1,8 +1,7 @@
 from crystal.plugins.util.params import try_get_int, try_get_str
 import re
 import sys
-from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
-
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 _FORUM_PAGE_ITEM_COUNT = 25
 _TOPIC_PAGE_ITEM_COUNT = 20

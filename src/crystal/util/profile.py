@@ -1,4 +1,5 @@
 import atexit
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
 from functools import wraps
@@ -7,8 +8,6 @@ import sys
 import threading
 import time
 from typing import Optional, Union
-from collections.abc import Callable, Iterator
-
 
 _excluded_delta_time_stack = threading.local()
 

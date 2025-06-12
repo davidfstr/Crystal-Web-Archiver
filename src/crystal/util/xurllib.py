@@ -1,6 +1,6 @@
+import sys
 import urllib.parse
 from urllib.parse import ParseResult, urlunparse
-import sys
 
 
 def patch_urlparse_to_never_raise_valueerror():

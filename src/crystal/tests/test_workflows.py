@@ -4,24 +4,22 @@ from crystal.model import Project, Resource
 from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
 from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
-    click_button, set_checkbox_value, TreeItem
+    click_button, set_checkbox_value, TreeItem,
 )
 from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
-    assert_does_open_webbrowser_to, fetch_archive_url,
-    is_url_not_in_archive, served_project,
+    assert_does_open_webbrowser_to, fetch_archive_url, is_url_not_in_archive,
+    served_project,
 )
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
-    DEFAULT_WAIT_PERIOD,
-    DEFAULT_WAIT_TIMEOUT,
+    DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT,
     first_child_of_tree_item_is_not_loading_condition,
-    tree_has_no_children_condition,
-    wait_for,
+    tree_has_no_children_condition, wait_for,
 )
 from crystal.tests.util.windows import (
-    NewGroupDialog, NewRootUrlDialog, EntityTree,
-    MainWindow, OpenOrCreateDialog, PreferencesDialog,
+    EntityTree, MainWindow, NewGroupDialog, NewRootUrlDialog,
+    OpenOrCreateDialog, PreferencesDialog,
 )
 from crystal.util.xos import is_windows
 import datetime
@@ -30,7 +28,6 @@ import tempfile
 from typing import List, Union
 from unittest import skip
 from urllib.parse import urlparse
-
 
 # ------------------------------------------------------------------------------
 # Tests

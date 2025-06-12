@@ -1,6 +1,5 @@
 import re
 
-
 _URL_WITH_REPLYTOCOM = re.compile(r'^(https?://[^?]+)\?replytocom=[0-9]+/?$')
 
 _URL_WITH_POSTTYPE_SLASH = re.compile(r'^(https?://[^?]+\?post_type=[a-zA-Z_]*)((?:/|%2F)*)$')

@@ -5,8 +5,6 @@ import re
 from typing import List, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-
-
 _URL_WITH_TP_IMAGE_ID = re.compile(r'^(https?://[^?]+)\?tp_image_id=[0-9]+$')
 _URL_WITH_OM_HIDE = re.compile(r'^(https?://[^?]+)\?omhide=[a-z]+$')
 

@@ -17,7 +17,6 @@ from textwrap import dedent
 from unittest import skip
 from unittest.mock import patch
 
-
 _FAVICON_PATH = '/favicon.ico'
 
 

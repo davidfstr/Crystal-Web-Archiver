@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, nullcontext
-from crystal.browser.new_root_url import NewRootUrlDialog as RealNewRootUrlDialog
+from crystal.browser.new_root_url import (
+    NewRootUrlDialog as RealNewRootUrlDialog,
+)
 from crystal.model import Project
 from crystal.task import is_synced_with_scheduler_thread
 from crystal.tests.util.controls import (
-    click_button, file_dialog_returning,
-    select_menuitem_now, TreeItem
+    click_button, file_dialog_returning, select_menuitem_now, TreeItem,
 )
 from crystal.tests.util.runner import bg_sleep, pump_wx_events
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
-    tree_has_no_children_condition,
-    wait_for, WaitTimedOut, window_condition, not_condition, or_condition
+    not_condition, or_condition, tree_has_no_children_condition, wait_for,
+    WaitTimedOut, window_condition,
 )
 from crystal.util.xos import is_mac_os
 import os.path
@@ -20,8 +22,7 @@ import re
 import sys
 import tempfile
 import traceback
-from typing import Optional, Tuple, TYPE_CHECKING, ContextManager
-from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import ContextManager, Optional, Tuple, TYPE_CHECKING
 import wx
 
 if TYPE_CHECKING:

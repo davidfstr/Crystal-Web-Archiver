@@ -1,4 +1,5 @@
 import bs4
+from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.doc.generic import Document, Link
@@ -6,13 +7,14 @@ from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.basic import BasicDocument
 from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.model import (
-    Project, Resource, ResourceRevision, ResourceRevisionMetadata, RootResource
+    Project, Resource, ResourceRevision, ResourceRevisionMetadata,
+    RootResource,
 )
 from crystal.tests.util.asserts import assertEqual, assertRaises
 from crystal.tests.util.controls import click_button
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
-from crystal.tests.util.subtests import SubtestsContext, awith_subtests
+from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import (
     MainWindow, OpenOrCreateDialog, PreferencesDialog,
@@ -23,11 +25,9 @@ import os
 import tempfile
 from textwrap import dedent
 from typing import List, Tuple
-from collections.abc import Iterator
 from unittest import skip
 from unittest.mock import Mock, patch
-from urllib.parse import ParseResult, urlparse, urljoin
-
+from urllib.parse import ParseResult, urljoin, urlparse
 
 # ------------------------------------------------------------------------------
 # Tests: HTML Parser Option

@@ -2,27 +2,23 @@
 HTML parser implementation that uses BeautifulSoup.
 """
 
+from collections.abc import Callable
 from crystal.doc.css import (
-    CssDocument,
-    parse_css_and_links_from_style_attribute,
+    CssDocument, parse_css_and_links_from_style_attribute,
     parse_css_and_links_from_style_tag,
 )
 from crystal.doc.generic import Document, Link
 from crystal.doc.html import HtmlParserType
 from crystal.util.fastsoup import (
     BeautifulFastSoup, FastSoup, FindFunc, LxmlFastSoup, name_of_tag,
-    parse_html, Tag
+    parse_html, Tag,
 )
 from dataclasses import dataclass
 import json
 import re
-from typing import (
-    List, Literal, Optional, Tuple, Type, Union
-)
-from collections.abc import Callable
 from re import Match
+from typing import List, Literal, Optional, Tuple, Type, Union
 from urllib.parse import urlparse
-
 
 _PARSER_LIBRARY_T_CHOICES = (
     LxmlFastSoup,

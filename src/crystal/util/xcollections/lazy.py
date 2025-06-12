@@ -1,10 +1,6 @@
-from enum import Enum
-from typing import (
-    Any, Generic, List, overload, TypeVar, Union,
-)
 from collections.abc import Callable, Iterator, Sequence
-from typing import Literal
-
+from enum import Enum
+from typing import Any, Generic, List, Literal, overload, TypeVar, Union
 
 _E = TypeVar('_E')
 

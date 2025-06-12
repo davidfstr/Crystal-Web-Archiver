@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import sqlite3
 from collections.abc import Callable
+import sqlite3
 from typing import Self
-
 
 # Whether to print each database query
 VERBOSE_QUERIES = False

@@ -1,34 +1,14 @@
+from collections.abc import Callable, Coroutine, Iterator
 from contextlib import contextmanager
 from crystal.tests import (
-    test_bulkheads,
-    test_disk_io_errors,
-    test_do_not_download_groups,
-    test_download,
-    test_download_body,
-    test_edit_group,
-    test_edit_root_url,
-    test_entitytree,
-    test_file_extension_visibility,
-    test_hibernate,
-    test_icons,
-    test_install_to_desktop,
-    test_load_urls,
-    test_log_drawer,
-    test_menus,
-    test_new_group,
-    test_new_root_url,
-    test_open_project,
-    test_parse_html,
-    test_profile,
-    test_project_migrate,
-    test_readonly_mode,
-    test_server,
-    test_shell,
-    test_ssd,
-    test_tasks,
-    test_tasktree,
-    test_workflows,
-    test_xthreading,
+    test_bulkheads, test_disk_io_errors, test_do_not_download_groups,
+    test_download, test_download_body, test_edit_group, test_edit_root_url,
+    test_entitytree, test_file_extension_visibility, test_hibernate,
+    test_icons, test_install_to_desktop, test_load_urls, test_log_drawer,
+    test_menus, test_new_group, test_new_root_url, test_open_project,
+    test_parse_html, test_profile, test_project_migrate, test_readonly_mode,
+    test_server, test_shell, test_ssd, test_tasks, test_tasktree,
+    test_workflows, test_xthreading,
 )
 from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
@@ -36,8 +16,8 @@ from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
 from crystal.util.xthreading import bg_affinity
-from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
 from crystal.util.xtime import sleep_profiled
+from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
 from functools import wraps
 import gc
 import os
@@ -45,7 +25,6 @@ import sys
 import time
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
-from collections.abc import Callable, Coroutine, Iterator
 from unittest import SkipTest
 import warnings
 

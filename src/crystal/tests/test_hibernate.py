@@ -1,14 +1,19 @@
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from crystal.model import Project, RootResource, Resource, ResourceGroup
-from crystal.task import DownloadResourceGroupTask, DownloadResourceGroupMembersTask, DownloadResourceTask
+from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.task import (
+    DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
+    DownloadResourceTask,
+)
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
-from crystal.tests.util.tasks import scheduler_disabled, step_scheduler, clear_top_level_tasks_on_exit, \
-    append_deferred_top_level_tasks, step_scheduler_until_done
+from crystal.tests.util.tasks import (
+    append_deferred_top_level_tasks, clear_top_level_tasks_on_exit,
+    scheduler_disabled, step_scheduler, step_scheduler_until_done,
+)
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal
-from collections.abc import AsyncIterator, Iterator
 from unittest.mock import patch
 import wx
 

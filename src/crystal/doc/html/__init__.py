@@ -7,7 +7,6 @@ from __future__ import annotations
 from crystal.doc.generic import Document, Link
 from typing import BinaryIO, Literal, Optional, Tuple, Union
 
-
 # HTML parsing library to use. See comparison between options at: 
 # https://beautiful-soup-4.readthedocs.io/en/latest/#installing-a-parser
 HtmlParserType = Literal['lxml', 'html_parser']
@@ -41,7 +40,7 @@ def parse_html_and_links(
     """    
     import crystal.doc.html.basic as basic
     import crystal.doc.html.soup as soup
-    
+
     # Convert html_bytes to string
     if hasattr(html_bytes, 'read'):
         html_bytes = html_bytes.read()  # type: ignore[union-attr]

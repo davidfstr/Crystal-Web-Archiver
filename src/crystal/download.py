@@ -3,11 +3,11 @@ Provides services for downloading a ResourceRevision.
 """
 
 from collections import defaultdict
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from crystal import __version__
 from crystal.model import (
-    ProjectHasTooManyRevisionsError,
-    Resource, ResourceRevision, ResourceRevisionMetadata,
+    ProjectHasTooManyRevisionsError, Resource, ResourceRevision,
+    ResourceRevisionMetadata,
 )
 from crystal.util.xos import is_mac_os, is_windows
 from crystal.util.xthreading import fg_call_and_wait
@@ -16,12 +16,11 @@ import os
 import platform
 import ssl
 from typing import (
-    BinaryIO, cast, Dict, Optional, Set, Tuple, TYPE_CHECKING, Union
+    BinaryIO, cast, Dict, Optional, Set, Tuple, TYPE_CHECKING, Union,
 )
-from collections.abc import Iterable
 import urllib.error
-import urllib.request
 from urllib.parse import urlparse
+import urllib.request
 
 if TYPE_CHECKING:
     from crystal.task import DownloadResourceBodyTask

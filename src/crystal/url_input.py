@@ -1,3 +1,4 @@
+from collections.abc import Callable, Generator
 from crystal.download import HTTP_REQUEST_TIMEOUT
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.test_mode import tests_are_running
@@ -6,7 +7,6 @@ from crystal.util.xthreading import (
 )
 import os
 from typing import List, Optional, Tuple
-from collections.abc import Callable, Generator
 from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
 

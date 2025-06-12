@@ -1,8 +1,7 @@
 import threading
 from tqdm.std import TqdmDefaultWriteLock  # type: ignore[attr-defined]
 import traceback
-from typing import List, Tuple
-from typing import assert_never, Literal
+from typing import assert_never, List, Literal, Tuple
 
 
 def patch_tqdm_to_debug_deadlocks(on_deadlock: Literal['raise', 'keep_trying']='raise') -> None:

@@ -1,10 +1,9 @@
+from collections.abc import Callable
 from concurrent.futures import Future
 from crystal.tests.util.wait import wait_for
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.xthreading import bg_call_later
 from typing import Optional, TypeVar
-from collections.abc import Callable
-
 
 _R = TypeVar('_R')
 

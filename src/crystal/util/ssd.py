@@ -1,4 +1,6 @@
-from crystal.util.xos import is_linux, is_mac_os, is_windows, windows_major_version
+from crystal.util.xos import (
+    is_linux, is_mac_os, is_windows, windows_major_version,
+)
 import json
 import os
 import os.path

@@ -1,5 +1,6 @@
-from shutil import _copyfileobj_readinto  # type: ignore[attr-defined]  # private API
-
+from shutil import (  # type: ignore[attr-defined]  # private API
+    _copyfileobj_readinto,
+)
 
 copyfileobj_readinto = _copyfileobj_readinto
 copyfileobj_readinto.__doc__ = (

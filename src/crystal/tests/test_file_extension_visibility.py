@@ -4,7 +4,6 @@ in the desktop environment and in the main window title.
 """
 from unittest import skip
 
-
 # === macOS ===
 
 @skip('not yet automated')

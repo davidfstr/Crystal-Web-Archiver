@@ -1,6 +1,9 @@
 # TODO: Consider extracting functions shared between dialogs to own module
-from crystal.browser.new_root_url import NewRootUrlDialog, fields_hide_hint_when_focused
+from collections.abc import Callable
 from crystal.browser.entitytree import ResourceGroupNode, RootResourceNode
+from crystal.browser.new_root_url import (
+    fields_hide_hint_when_focused, NewRootUrlDialog,
+)
 from crystal.model import Project, ResourceGroup, ResourceGroupSource
 from crystal.progress import CancelLoadUrls
 from crystal.util.unicode_labels import decorate_label
@@ -13,9 +16,7 @@ from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xthreading import fg_affinity
 import sys
 from typing import Optional, Tuple, Union
-from collections.abc import Callable
 import wx
-
 
 _WINDOW_INNER_PADDING = 10
 _FORM_LABEL_INPUT_SPACING = 5

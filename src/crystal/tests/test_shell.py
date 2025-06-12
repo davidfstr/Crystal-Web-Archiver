@@ -1,16 +1,17 @@
 from ast import literal_eval
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
+from crystal.tests.util.screenshots import take_error_screenshot
+from crystal.tests.util.server import served_project
+from crystal.tests.util.skip import skipTest
+from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER,
     wait_for_sync, WaitTimedOut,
 )
 from crystal.tests.util.windows import MainWindow
-from crystal.tests.util.screenshots import take_error_screenshot
-from crystal.tests.util.server import served_project
-from crystal.tests.util.skip import skipTest
-from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.util.xos import is_asan, is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from functools import wraps
@@ -26,12 +27,10 @@ import textwrap
 import time
 import traceback
 from typing import List, Optional, Tuple, Union
-from collections.abc import Callable, Iterator
 from unittest import skip, SkipTest, TestCase
 from unittest.mock import ANY
 import urllib
 import warnings
-
 
 _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
 

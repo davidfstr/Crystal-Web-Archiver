@@ -1,40 +1,35 @@
 from concurrent.futures import Future
-from crystal.model import ResourceRevision, RootResource
+from crystal.model import (
+    Project, Resource, ResourceGroup, ResourceRevision, RootResource,
+)
 from crystal.server import ProjectServer
 from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
-    DownloadResourceGroupMembersTask,
-    ProjectFreeSpaceTooLowError, Task,
+    DownloadResourceGroupMembersTask, ProjectFreeSpaceTooLowError, Task,
 )
 from crystal.tests.util.asserts import *
 from crystal.tests.util.data import (
-    MAX_TIME_TO_DOWNLOAD_404_URL,
-    MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY
+    MAX_TIME_TO_DOWNLOAD_404_URL, MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY,
 )
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import fetch_archive_url, served_project
 from crystal.tests.util.skip import skipTest
-from crystal.tests.util.subtests import SubtestsContext, awith_subtests
+from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks,
-    clear_top_level_tasks_on_exit,
-    scheduler_disabled,
-    scheduler_thread_context,
-    step_scheduler,
+    append_deferred_top_level_tasks, clear_top_level_tasks_on_exit,
+    scheduler_disabled, scheduler_thread_context, step_scheduler,
     step_scheduler_until_done,
 )
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.tests.util.xthreading import bg_call_and_wait
-from crystal.model import Project, Resource, ResourceGroup
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xcollections.lazy import AppendableLazySequence
 from crystal.util.xthreading import is_foreground_thread
 import re
 from typing import NamedTuple
 from unittest import skip
-from unittest.mock import patch, Mock, PropertyMock
-
+from unittest.mock import Mock, patch, PropertyMock
 
 # ==============================================================================
 # Test: Tasks

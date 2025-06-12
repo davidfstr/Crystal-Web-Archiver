@@ -2,7 +2,6 @@ import io
 import os.path
 import traceback
 
-
 _CRYSTAL_PACKAGE_PARENT_DIRPATH = os.path.abspath(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 

@@ -7,7 +7,6 @@ import threading
 import time
 from typing import List, Optional
 
-
 _POLL_INTERVAL = 1  # seconds
 
 

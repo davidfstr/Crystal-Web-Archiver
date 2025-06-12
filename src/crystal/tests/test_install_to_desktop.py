@@ -4,7 +4,6 @@ implemented by the install.py module.
 """
 from unittest import skip
 
-
 # === Not Linux ===
 
 @skip('not yet automated')

@@ -1,8 +1,7 @@
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import os
 from typing import NoReturn, Optional
-from collections.abc import Callable, Iterator
-
 
 # Whether RuntimeError('wrapped C/C++ object of type ... has been deleted')
 # (or its sibling WindowDeletedError) is silently ignored.

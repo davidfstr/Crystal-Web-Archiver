@@ -5,20 +5,20 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Generator, Iterator
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
-from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
+from crystal.model import (
+    Project, Resource, ResourceGroup, ResourceRevision, RootResource,
+)
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
-    print_error,
-    print_info,
-    print_success,
-    print_warning,
+    print_error, print_info, print_success, print_warning,
 )
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import (
-    bg_affinity, bg_call_later, fg_call_and_wait, 
+    bg_affinity, bg_call_later, fg_call_and_wait,
     run_thread_switching_coroutine, SwitchToThread,
 )
 import datetime
@@ -31,10 +31,8 @@ import re
 import shutil
 from textwrap import dedent
 from typing import Dict, List, Literal, Optional
-from collections.abc import Callable, Generator, Iterator
 from typing_extensions import override
 from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
-
 
 _DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
 

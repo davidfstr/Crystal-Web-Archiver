@@ -1,13 +1,12 @@
+from collections.abc import Iterator
 from contextlib import contextmanager, redirect_stderr
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.util.profile import (
-    ignore_runtime_from_enclosing_warn_if_slow,
-    warn_if_slow,
+    ignore_runtime_from_enclosing_warn_if_slow, warn_if_slow,
 )
 import gc
 import io
 import time
-from collections.abc import Iterator
 from unittest.mock import patch
 
 

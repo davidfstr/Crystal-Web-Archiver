@@ -1,11 +1,11 @@
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 import sys
 import time
-from typing import Dict, List, Optional, overload, Tuple, Type, TypeVar, Union
+from typing import (
+    Dict, List, Optional, overload, Self, Tuple, Type, TypeVar, Union,
+)
 from typing_extensions import override
-from typing import Self
 import wx
-
 
 _DELAY_UNTIL_PROGRESS_DIALOG_SHOWS = 100 / 1000  # sec
 

@@ -5,7 +5,6 @@ import subprocess
 import threading
 from typing import Optional
 
-
 _ES_CONTINUOUS = 0x80000000
 _ES_SYSTEM_REQUIRED = 0x00000001  # prevents idle sleep
 _ES_DISPLAY_REQUIRED = 0x00000002  # prevents screen sleep

@@ -9,21 +9,17 @@ This abstraction provides:
 
 from __future__ import annotations
 
+from collections.abc import Callable, Container
 from crystal.progress import OpenProjectProgressListener
 from crystal.util.bulkheads import run_bulkhead_call
 from crystal.util.wx_bind import bind
 from crystal.util.wx_error import (
-    IGNORE_USE_AFTER_FREE,
-    is_wrapped_object_deleted_error,
-    WindowDeletedError,
-    wrapped_object_deleted_error_ignored,
-    wrapped_object_deleted_error_raising
+    IGNORE_USE_AFTER_FREE, is_wrapped_object_deleted_error, WindowDeletedError,
+    wrapped_object_deleted_error_ignored, wrapped_object_deleted_error_raising,
 )
 from crystal.util.xthreading import fg_affinity
 from typing import cast, Dict, List, NewType, NoReturn, Optional, Tuple, Union
-from collections.abc import Callable, Container
 import wx
-
 
 IconSet = tuple[tuple[wx.TreeItemIcon, wx.Bitmap], ...]
 ImageIndex = NewType('ImageIndex', int)

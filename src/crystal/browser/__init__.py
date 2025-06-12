@@ -1,18 +1,20 @@
+from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
-from crystal import APP_NAME
 from crystal import __version__ as crystal_version
+from crystal import APP_NAME
+from crystal.browser.entitytree import (
+    EntityTree, ResourceGroupNode, RootResourceNode,
+)
+from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.browser.new_group import NewGroupDialog
 from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
-from crystal.browser.entitytree import EntityTree, ResourceGroupNode, RootResourceNode
-from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import (
-    Project, Resource, ResourceGroup, ResourceGroupSource, RootResource
+    Project, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
 from crystal.progress import (
-    CancelLoadUrls,
-    DummyOpenProjectProgressListener,
+    CancelLoadUrls, DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
 )
 from crystal.server import ProjectServer
@@ -21,14 +23,15 @@ from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
 from crystal.ui.log_drawer import LogDrawer
 from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
-from crystal.util.bulkheads import capture_crashes_to_stderr, capture_crashes_to
+from crystal.util.bulkheads import (
+    capture_crashes_to, capture_crashes_to_stderr,
+)
 from crystal.util.ellipsis import EllipsisType
 from crystal.util.finderinfo import get_hide_file_extension
 from crystal.util.test_mode import tests_are_running
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.url_prefix import (
-    get_url_directory_prefix_for,
-    get_url_domain_prefix_for,
+    get_url_directory_prefix_for, get_url_domain_prefix_for,
 )
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
@@ -39,16 +42,18 @@ from crystal.util.wx_timer import Timer, TimerError
 from crystal.util.xos import (
     is_kde_or_non_gnome, is_linux, is_mac_os, is_windows, mac_version,
 )
-from crystal.util.xsqlite3 import is_database_closed_error, is_database_gone_error
+from crystal.util.xsqlite3 import (
+    is_database_closed_error, is_database_gone_error,
+)
 from crystal.util.xthreading import (
-    bg_call_later, fg_affinity, fg_call_later, fg_call_and_wait, set_is_quitting
+    bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
+    set_is_quitting,
 )
 from functools import partial
 import os
 import sqlite3
 import time
 from typing import ContextManager, Optional, Union
-from collections.abc import Iterator
 import webbrowser
 import wx
 

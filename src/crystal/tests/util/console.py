@@ -1,8 +1,8 @@
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager, redirect_stdout
 import io
 import sys
 from typing import cast, List, TextIO
-from collections.abc import Callable, Iterator
 
 
 @contextmanager

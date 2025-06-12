@@ -1,12 +1,11 @@
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from crystal.util.xos import is_mac_os
 from functools import wraps
 import os
 import sys
 from typing import TypeVar
-from collections.abc import Callable, Iterator
 from typing_extensions import ParamSpec
-
 
 _P = ParamSpec('_P')
 _T = TypeVar('_T')

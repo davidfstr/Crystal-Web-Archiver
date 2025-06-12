@@ -4,7 +4,6 @@ import platform
 import subprocess
 from typing import List, Optional
 
-
 # === OS Detection ===
 
 def is_mac_os() -> bool:

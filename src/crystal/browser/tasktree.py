@@ -1,29 +1,32 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import (
     CrashedTask, DownloadResourceGroupMembersTask, RootTask,
     SCHEDULING_STYLE_SEQUENTIAL, Task,
 )
-from crystal.util.bulkheads import (
-    Bulkhead, BulkheadCell,
-    capture_crashes_to,
-    capture_crashes_to_bulkhead_arg,
-    capture_crashes_to_bulkhead_arg as capture_crashes_to_task_arg,
-    capture_crashes_to_stderr,
-    CrashReason,
-)
+from crystal.ui.tree2 import NodeView, NULL_NODE_VIEW, TreeView
 from crystal.ui.tree import NodeView as NodeView1
-from crystal.ui.tree2 import TreeView, NodeView, NULL_NODE_VIEW
+from crystal.util.bulkheads import (
+    capture_crashes_to_bulkhead_arg as capture_crashes_to_task_arg,
+)
+from crystal.util.bulkheads import Bulkhead, BulkheadCell, capture_crashes_to
+from crystal.util.bulkheads import capture_crashes_to_bulkhead_arg
+from crystal.util.bulkheads import capture_crashes_to_stderr, CrashReason
 from crystal.util.wx_bind import bind
-from crystal.util.wx_treeitem_gettooltip import EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent
-from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItemError
-from crystal.util.xthreading import fg_call_later, fg_call_and_wait, is_foreground_thread
+from crystal.util.wx_treeitem_gettooltip import (
+    EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent,
+)
+from crystal.util.xcollections.lazy import (
+    AppendableLazySequence, UnmaterializedItemError,
+)
+from crystal.util.xthreading import (
+    fg_call_and_wait, fg_call_later, is_foreground_thread,
+)
 from crystal.util.xtraceback import format_exception_for_user
 import os
 from typing import List, Optional, Tuple
-from collections.abc import Iterator
 import wx
-
 
 _ID_DISMISS = 101
 

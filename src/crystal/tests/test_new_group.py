@@ -1,5 +1,6 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
-from crystal.model import Project, Resource, RootResource, ResourceGroup
+from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
@@ -7,23 +8,21 @@ from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
-    tree_item_has_no_children_condition,
-    tree_has_no_children_condition,
+    tree_has_no_children_condition, tree_item_has_no_children_condition,
     wait_for,
 )
 from crystal.tests.util.windows import (
-    NewGroupDialog, NewRootUrlDialog, EntityTree, MainWindow, OpenOrCreateDialog,
+    EntityTree, MainWindow, NewGroupDialog, NewRootUrlDialog,
+    OpenOrCreateDialog,
 )
 from crystal.tests.util.xurlparse import urlpatternparse
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_windows
 import re
 from typing import Optional, Tuple
-from collections.abc import Iterator
 from unittest import skip
 from unittest.mock import patch
 import wx
-
 
 # === Test: Create & Delete Standalone ===
 

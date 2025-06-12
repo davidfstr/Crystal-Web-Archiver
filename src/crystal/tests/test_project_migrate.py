@@ -7,12 +7,13 @@ In particular this module tests the Project._apply_migrations() method.
 All tests below implicitly include the condition:
 * given_project_opened_as_writable
 """
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
-import crystal.main
-from crystal.model import (
-    Project, Resource, ResourceRevision as RR, ResourceRevisionMetadata,
-)
 from crystal import progress
+import crystal.main
+from crystal.model import Project, Resource
+from crystal.model import ResourceRevision as RR
+from crystal.model import ResourceRevisionMetadata
 from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
 from crystal.tests.test_server import serve_and_fetch_xkcd_home_page
 from crystal.tests.util.controls import click_button
@@ -24,12 +25,10 @@ from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
 import os.path
 from typing import cast, Optional, Tuple
-from collections.abc import AsyncIterator, Iterator
 from typing_extensions import override
 from unittest import skip
 from unittest.mock import patch
 import wx
-
 
 # === .crystalopen & README ===
 

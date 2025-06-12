@@ -1,9 +1,9 @@
+from collections.abc import Callable
 from crystal import resources
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows
 import os
 from typing import Protocol, Union
-from collections.abc import Callable
 import wx
 
 

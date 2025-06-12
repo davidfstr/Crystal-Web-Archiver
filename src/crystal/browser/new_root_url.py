@@ -1,19 +1,18 @@
+from collections.abc import Callable
 from crystal.url_input import cleaned_url_is_at_site_root, UrlCleaner
-from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.test_mode import tests_are_running
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
     CreateButtonSizer, position_dialog_initially, ShowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
-from crystal.util.xos import is_linux, is_wx_gtk, is_windows
+from crystal.util.xos import is_linux, is_windows, is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
 import os
 from typing import Literal, Optional, Tuple, Union
-from collections.abc import Callable
 import wx
-
 
 ChangePrefixCommand = Union[
     # Set prefix

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from crystal.tests.util.runner import pump_wx_events
 from crystal.util.wx_treeitem_gettooltip import GetTooltipEvent
 from crystal.util.xos import is_windows
 from typing import List, Literal, Optional
-from collections.abc import AsyncIterator, Callable, Iterator
 from unittest.mock import patch
 import wx
-
 
 # ------------------------------------------------------------------------------
 # Utility: Controls: wx.Button

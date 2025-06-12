@@ -42,17 +42,17 @@ class Shell:
         try:
             import guppy
             import guppy.heapy
-            import guppy.heapy.Use
-            import guppy.heapy.View
-            import guppy.heapy.ImpSet
-            import guppy.heapy.Target
-            import guppy.heapy.UniSet
+            import guppy.heapy.Classifiers
             import guppy.heapy.Doc
+            import guppy.heapy.ImpSet
+            import guppy.heapy.OutputHandling
+            import guppy.heapy.Part
             import guppy.heapy.Path
             import guppy.heapy.RefPat
-            import guppy.heapy.Classifiers
-            import guppy.heapy.Part
-            import guppy.heapy.OutputHandling
+            import guppy.heapy.Target
+            import guppy.heapy.UniSet
+            import guppy.heapy.Use
+            import guppy.heapy.View
         except ImportError:
             pass
     

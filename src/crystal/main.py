@@ -25,18 +25,19 @@ import sys
 import threading
 import time
 import traceback
+
 try:
     from typing import TYPE_CHECKING
 except ImportError:
     TYPE_CHECKING = False
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from crystal.browser import MainWindow
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
     from crystal.shell import Shell
     from typing import List, Optional
-    from collections.abc import Callable
     import wx
 
 
@@ -161,7 +162,7 @@ def _main(args: list[str]) -> None:
     args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
     
     from crystal.util.xos import is_linux
-    
+
     # Parse CLI arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -241,8 +242,8 @@ def _main(args: list[str]) -> None:
     
     # Start GUI subsystem
     import wx
-    import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
     import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
+    import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
     
     @atexit.register
     def on_atexit() -> None:
@@ -348,7 +349,9 @@ def _main(args: list[str]) -> None:
         
         # Starts tests if requested
         if parsed_args.test is not None:
-            from crystal.util.xthreading import bg_call_later, fg_call_later, has_foreground_thread
+            from crystal.util.xthreading import (
+                bg_call_later, fg_call_later, has_foreground_thread,
+            )
             assert has_foreground_thread(), (
                 'Expected foreground thread to be running before starting tests, '
                 'because tests expect to be able to schedule callables on '
@@ -367,7 +370,7 @@ def _main(args: list[str]) -> None:
             from crystal.tests.index import run_tests
             from crystal.util.bulkheads import capture_crashes_to_stderr
             from crystal.util.xthreading import NoForegroundThreadError
-            
+
             # NOTE: Any unhandled exception will probably call os._exit(1)
             #       before reaching this decorator.
             @capture_crashes_to_stderr
@@ -438,7 +441,7 @@ def _did_launch(
     """
     from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
     from crystal.util.test_mode import tests_are_running
-    
+
     # If project to open was passed on the command-line, use it
     if parsed_args.filepath is not None:
         filepath = parsed_args.filepath  # reinterpret
@@ -473,6 +476,7 @@ def _did_launch(
             
             # Create main window
             from crystal.browser import MainWindow
+
             # NOTE: Can raise CancelOpenProject
             window = MainWindow(project, progress_listener)
     except CancelOpenProject:

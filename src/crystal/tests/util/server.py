@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
-from crystal.model import Project
 from crystal import resources
+from crystal.model import Project
 from crystal.server import get_request_url, ProjectServer
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
-from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util import http_date
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait
 import datetime
@@ -18,10 +19,8 @@ import os
 import re
 import tempfile
 from typing import Dict, List, Optional
-from collections.abc import Iterator
 import unittest.mock
 from zipfile import ZipFile
-
 
 # ------------------------------------------------------------------------------
 # Utility: Server

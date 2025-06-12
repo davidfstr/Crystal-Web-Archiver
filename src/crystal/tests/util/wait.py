@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from crystal.tests.util.screenshots import take_error_screenshot
+from collections.abc import Callable
 from crystal.tests.util.runner import bg_sleep
+from crystal.tests.util.screenshots import take_error_screenshot
 import datetime
 import os
 import time
-from typing import Optional, TYPE_CHECKING, TypeVar, Union
-from collections.abc import Callable
-from typing import Literal
+from typing import Literal, Optional, TYPE_CHECKING, TypeVar, Union
 import warnings
 import wx
 

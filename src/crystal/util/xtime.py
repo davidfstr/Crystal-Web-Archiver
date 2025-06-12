@@ -1,8 +1,7 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
 import sys
 import time
-from collections.abc import Iterator
-
 
 _MAX_SLEEP_IMPRECISION_MULTIPLIER = 15
 

@@ -5,7 +5,7 @@ from typing import Optional
 
 def create_external_link(relative_url: str, type_title: str, title: str | None, embedded: bool) -> Link:
     import crystal.doc.html.soup as soup
-    
+
     # HACK: Reuse existing link class rather than create a new one just for the generic case
     return soup.HtmlLink.create_external(relative_url, type_title, title, embedded)
 

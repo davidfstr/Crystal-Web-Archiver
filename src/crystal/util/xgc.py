@@ -1,10 +1,9 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
 import gc
 import os
 import sys
 import time
-from collections.abc import Iterator
-
 
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.

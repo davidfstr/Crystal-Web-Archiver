@@ -1,7 +1,8 @@
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, redirect_stdout
 from copy import deepcopy
-from crystal.model import Project, Resource, ResourceRevision, RootResource
 from crystal import server
+from crystal.model import Project, Resource, ResourceRevision, RootResource
 from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_sleep
@@ -12,14 +13,14 @@ from crystal.tests.util.server import (
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
-from crystal.tests.util.windows import NewRootUrlDialog, MainWindow, OpenOrCreateDialog
+from crystal.tests.util.windows import (
+    MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
+)
 from crystal.util.ports import is_port_in_use
 from io import StringIO
 import tempfile
 from typing import Optional, Tuple
-from collections.abc import AsyncIterator, Callable
 from unittest import skip
-
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
 #       in test_workflows.py. Write stubs for all such behaviors

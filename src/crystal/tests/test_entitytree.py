@@ -1,29 +1,27 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
+from crystal.model import (
+    DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
+)
 from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.downloads import network_down
+from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
+from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
-    first_child_of_tree_item_is_not_loading_condition,
+    DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
     wait_for,
 )
-from crystal.tests.util.runner import bg_sleep
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import (
-    MainWindow, MenuitemMissingError, OpenOrCreateDialog
-)
-from crystal.model import (
-    DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
+    MainWindow, MenuitemMissingError, OpenOrCreateDialog,
 )
 import locale
 import os
 import tempfile
 from typing import List, Optional
-from collections.abc import Iterator
 from unittest import skip
 import wx
-
 
 # ------------------------------------------------------------------------------
 # Test: EntityTree: Default Domain/Directory

@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from crystal.util.xthreading import bg_affinity, fg_affinity, fg_call_and_wait
 import sys
 import time
 import traceback
 from types import coroutine, FrameType
-from typing import (
-    Dict, Generic, Optional, TYPE_CHECKING, TypeVar, Union
-)
-from collections.abc import Awaitable, Callable
-import urllib.request
+from typing import Dict, Generic, Optional, TYPE_CHECKING, TypeVar, Union
 import urllib.error
+import urllib.request
 
 if TYPE_CHECKING:
     from crystal.tests.util.server import WebPage

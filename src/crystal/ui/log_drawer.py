@@ -1,6 +1,6 @@
 from collections import OrderedDict
-from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util import cli
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.wx_bind import bind
 from crystal.util.xos import (
     is_linux, is_mac_os, is_windows, windows_major_version,

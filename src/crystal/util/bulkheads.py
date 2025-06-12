@@ -1,15 +1,13 @@
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from crystal.util import cli
 from functools import wraps
 import sys
 import traceback
 from typing import (
-    List, Optional, overload, Protocol, TypeVar, Union
+    Concatenate, List, Optional, overload, Protocol, TypeVar, Union,
 )
-from collections.abc import Callable, Iterator
 from typing_extensions import ParamSpec
-from typing import Concatenate
-
 
 _S = TypeVar('_S')
 _B = TypeVar('_B', bound='Bulkhead')

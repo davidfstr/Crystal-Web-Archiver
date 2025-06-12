@@ -1,20 +1,19 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from crystal import resources
 from crystal.model import (
     Project, Resource, ResourceGroup, ResourceRevision, RootResource,
 )
-from crystal import resources
 from crystal.server import ProjectServer
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
-    assert_does_open_webbrowser_to,
-    extracted_project,
+    assert_does_open_webbrowser_to, extracted_project,
     served_project_from_filepath,
 )
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
-    first_child_of_tree_item_is_not_loading_condition,
-    wait_for,
+    first_child_of_tree_item_is_not_loading_condition, wait_for,
 )
 from crystal.tests.util.windows import (
     EntityTree, MainWindow, OpenOrCreateDialog,
@@ -22,10 +21,8 @@ from crystal.tests.util.windows import (
 import os
 import tempfile
 from typing import Tuple
-from collections.abc import AsyncIterator
 from unittest import skip
 from unittest.mock import ANY
-
 
 # All of the following tests have the implicit prefix:
 # - test_given_html_page_links_to_embedded_resource_in_a_do_not_download_group...
