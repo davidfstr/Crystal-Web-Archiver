@@ -222,6 +222,8 @@ To **run UI tests**, run `poetry run python -m crystal --test` in Terminal (Mac)
 
 To **typecheck**, run `poetry run mypy` in Terminal (Mac) or in Command Prompt (Windows).
 
+To **sort imports**, run `poetry run isort .` in Terminal (Mac) or in Command Prompt (Windows).
+
 [COMPILING.txt]: COMPILING.txt
 
 
