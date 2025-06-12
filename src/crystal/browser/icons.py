@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from crystal import resources
-from crystal.util.cache import cache
+from functools import cache
 from typing import Dict, Optional
 import wx
 

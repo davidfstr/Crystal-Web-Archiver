@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from crystal.util.ellipsis import Ellipsis, EllipsisType
+from functools import cache
 import os
 import os.path
 import shutil
@@ -10,15 +11,6 @@ from typing import (
     Union,
 )
 import xml.etree.ElementTree as ET
-
-
-try:
-    # Python 3.9+
-    from functools import cache  # type: ignore[attr-defined]
-except ImportError:
-    # Python 3.8
-    from functools import lru_cache
-    cache = lru_cache(maxsize=None)
 
 
 def install_to_linux_desktop_environment() -> None:
