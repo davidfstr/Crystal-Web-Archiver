@@ -2,7 +2,7 @@ import math
 import os
 import platform
 import subprocess
-from typing import List, Optional
+from typing import Optional
 
 # === OS Detection ===
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager, nullcontext
+from contextlib import AbstractContextManager, asynccontextmanager, nullcontext
 from crystal.browser.new_root_url import (
     NewRootUrlDialog as RealNewRootUrlDialog,
 )
@@ -22,7 +22,7 @@ import re
 import sys
 import tempfile
 import traceback
-from typing import ContextManager, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 import wx
 
 if TYPE_CHECKING:
@@ -99,7 +99,7 @@ class OpenOrCreateDialog:
                     ignore_cleanup_errors=True
                 ) if delete
                 else nullcontext(tempfile.mkdtemp(suffix='.crystalproj'))
-            )  # type: ContextManager[str]
+            )  # type: AbstractContextManager[str]
             
             with tmpdir_context as project_dirpath:
                 assert project_dirpath is not None

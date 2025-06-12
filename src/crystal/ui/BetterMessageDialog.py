@@ -4,7 +4,6 @@ from crystal.util.wx_dialog import (
     position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
 )
 from crystal.util.xos import is_wx_gtk
-from typing import Optional
 import wx
 
 _WINDOW_INNER_PADDING = 10

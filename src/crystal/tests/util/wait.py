@@ -6,7 +6,7 @@ from crystal.tests.util.screenshots import take_error_screenshot
 import datetime
 import os
 import time
-from typing import Literal, Optional, TYPE_CHECKING, TypeVar, Union
+from typing import Literal, Optional, TYPE_CHECKING, TypeVar
 import warnings
 import wx
 

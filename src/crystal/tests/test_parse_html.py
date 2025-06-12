@@ -24,7 +24,6 @@ import lxml.html
 import os
 import tempfile
 from textwrap import dedent
-from typing import List, Tuple
 from unittest import skip
 from unittest.mock import Mock, patch
 from urllib.parse import ParseResult, urljoin, urlparse
@@ -38,7 +37,7 @@ async def test_uses_html_parser_specified_in_preferences() -> None:
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            rr = RootResource(project, 'Home', Resource(project, home_url))
+            RootResource(project, 'Home', Resource(project, home_url))
             r = Resource(project, home_url)
             
             # Ensure default HTML parser for new project is lxml

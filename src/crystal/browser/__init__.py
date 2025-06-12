@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from contextlib import contextmanager, nullcontext
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from crystal import __version__ as crystal_version
 from crystal import APP_NAME
 from crystal.browser.entitytree import (
@@ -53,7 +53,7 @@ from functools import partial
 import os
 import sqlite3
 import time
-from typing import ContextManager, Optional, Union
+from typing import Optional
 import webbrowser
 import wx
 
@@ -816,7 +816,7 @@ class MainWindow:
                 #       the current working directory is not writable,
                 #       so make sure the current working directory is
                 #       writable before potentially starting Firefox
-                open_browser_context = self._cwd_set_to_writable_dir()  # type: ContextManager
+                open_browser_context = self._cwd_set_to_writable_dir()  # type: AbstractContextManager
             else:
                 open_browser_context = nullcontext()
             with open_browser_context:

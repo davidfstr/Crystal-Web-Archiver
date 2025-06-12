@@ -8,9 +8,9 @@ from crystal.util.xos import (
 from crystal.util.xthreading import fg_call_later
 from enum import Enum
 from functools import cached_property
-from io import StringIO, TextIOBase
+from io import TextIOBase
 from threading import Lock
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional
 import wx
 from wx.richtext import RichTextCtrl
 

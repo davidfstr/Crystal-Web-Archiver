@@ -6,7 +6,7 @@ from crystal.util.xthreading import (
     bg_affinity, fg_affinity, start_thread_switching_coroutine, SwitchToThread,
 )
 import os
-from typing import List, Optional, Tuple
+from typing import Tuple
 from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
 
@@ -217,7 +217,7 @@ def _resolve_url_from_candidates(
                 
                 # Return this candidate (which might itself be a redirect)
                 return url_candidate
-        except Exception as e:
+        except Exception:
             # One of:
             # 1. Network down
             # 2. Domain does not exist

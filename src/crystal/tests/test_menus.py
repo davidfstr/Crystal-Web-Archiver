@@ -2,7 +2,6 @@ from crystal.tests.test_shell import (  # TODO: Extract methods to shared module
     _create_new_empty_project, _OK_THREAD_STOP_SUFFIX, _py_eval, crystal_shell,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
-import tempfile
 import textwrap
 
 

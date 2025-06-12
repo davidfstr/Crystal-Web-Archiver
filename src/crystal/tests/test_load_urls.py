@@ -12,7 +12,6 @@ from crystal.tests.util.wait import (
     tree_has_no_children_condition, wait_for,
 )
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
-import tempfile
 from unittest import skip
 from unittest.mock import patch
 

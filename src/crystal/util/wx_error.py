@@ -1,7 +1,7 @@
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import os
-from typing import NoReturn, Optional
+from typing import NoReturn
 
 # Whether RuntimeError('wrapped C/C++ object of type ... has been deleted')
 # (or its sibling WindowDeletedError) is silently ignored.
@@ -62,4 +62,3 @@ def wrapped_object_deleted_error_raising(
 
 class WindowDeletedError(Exception):
     """Raises when code attempts to manipulate a wx.Window that has been deleted."""
-    pass

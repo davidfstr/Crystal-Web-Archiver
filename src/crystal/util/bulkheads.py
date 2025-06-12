@@ -4,9 +4,7 @@ from crystal.util import cli
 from functools import wraps
 import sys
 import traceback
-from typing import (
-    Concatenate, List, Optional, overload, Protocol, TypeVar, Union,
-)
+from typing import Concatenate, overload, Protocol, TypeVar
 from typing_extensions import ParamSpec
 
 _S = TypeVar('_S')

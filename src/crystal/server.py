@@ -5,7 +5,7 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Generator
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
@@ -25,14 +25,12 @@ import datetime
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from io import StringIO, TextIOBase
-import os
+from io import TextIOBase
 import re
-import shutil
 from textwrap import dedent
-from typing import Dict, List, Literal, Optional
+from typing import Literal, Optional
 from typing_extensions import override
-from urllib.parse import parse_qs, ParseResult, urljoin, urlparse, urlunparse
+from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
 _DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
 

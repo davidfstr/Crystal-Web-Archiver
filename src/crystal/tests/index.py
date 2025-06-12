@@ -1,4 +1,4 @@
-from collections.abc import Callable, Coroutine, Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from crystal.tests import (
     test_bulkheads, test_disk_io_errors, test_do_not_download_groups,
@@ -18,13 +18,12 @@ from crystal.util.xcollections.dedup import dedup_list
 from crystal.util.xthreading import bg_affinity
 from crystal.util.xtime import sleep_profiled
 from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
-from functools import wraps
 import gc
 import os
 import sys
 import time
 import traceback
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, Optional
 from unittest import SkipTest
 import warnings
 

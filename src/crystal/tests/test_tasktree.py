@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Callable, Iterator, Sequence
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import (
     AbstractContextManager, asynccontextmanager, contextmanager, nullcontext,
 )
@@ -30,11 +30,9 @@ from crystal.ui.tree import NodeView
 from crystal.util.xcollections.lazy import (
     AppendableLazySequence, UnmaterializedItem,
 )
-import math
-import tempfile
-from typing import cast, List, Optional, Tuple
+from typing import cast, Tuple
 from unittest import skip
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 # === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit visible children ===
 

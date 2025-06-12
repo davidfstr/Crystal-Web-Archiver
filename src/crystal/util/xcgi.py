@@ -1,5 +1,3 @@
-import sys
-from typing import Dict, Tuple
 
 
 # NOTE: py2app doesn't appear to bundle the email.message module correctly,

@@ -2,8 +2,7 @@ from crystal.doc.css import CssDocument
 from crystal.doc.css import parse_css_and_links as try_parse_css_and_links
 from crystal.doc.generic import Document, Link
 from textwrap import dedent
-from typing import List, Optional, Tuple
-from unittest import skip
+from typing import List, Tuple
 
 # === Tests ===
 

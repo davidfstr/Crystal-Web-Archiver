@@ -1,7 +1,6 @@
 from crystal.util.xos import is_windows
 from tqdm import tqdm
 from tqdm.std import EMA  # type: ignore[attr-defined]
-from typing import Optional, Tuple
 from typing_extensions import override
 
 

@@ -18,9 +18,6 @@ from crystal.tests.util.windows import (
 )
 from crystal.util.ports import is_port_in_use
 from io import StringIO
-import tempfile
-from typing import Optional, Tuple
-from unittest import skip
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
 #       in test_workflows.py. Write stubs for all such behaviors

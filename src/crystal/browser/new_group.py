@@ -14,8 +14,6 @@ from crystal.util.wx_dialog import (
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xthreading import fg_affinity
-import sys
-from typing import Optional, Tuple, Union
 import wx
 
 _WINDOW_INNER_PADDING = 10

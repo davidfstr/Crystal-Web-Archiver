@@ -1,6 +1,6 @@
 from crystal.util.xos import is_windows
 import subprocess
-from typing import List, Literal
+from typing import Literal
 
 
 def set_windows_file_attrib(itempath: str, attribs: list[Literal['+h', '+s']]) -> None:

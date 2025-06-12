@@ -1,7 +1,7 @@
 """Tests for DownloadResourceBodyTask"""
 
-from collections.abc import AsyncIterator, Callable, Iterable, Iterator
-from contextlib import asynccontextmanager, contextmanager
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from crystal import resources
 from crystal.model import (
     Project, ProjectHasTooManyRevisionsError, Resource, ResourceRevision,
@@ -18,10 +18,9 @@ import os
 import sqlite3
 import tempfile
 import threading
-import time
-from typing import BinaryIO, cast, List, NoReturn, Self
+from typing import BinaryIO, cast, NoReturn, Self
 from unittest import skip
-from unittest.mock import ANY, Mock, patch, PropertyMock
+from unittest.mock import ANY, Mock, patch
 
 # ------------------------------------------------------------------------------
 # Tests: Success Cases

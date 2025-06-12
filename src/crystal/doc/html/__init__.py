@@ -5,7 +5,7 @@ Parses HTML documents.
 from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
-from typing import BinaryIO, Literal, Optional, Tuple, Union
+from typing import BinaryIO, Literal, Tuple
 
 # HTML parsing library to use. See comparison between options at: 
 # https://beautiful-soup-4.readthedocs.io/en/latest/#installing-a-parser

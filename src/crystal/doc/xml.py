@@ -6,8 +6,7 @@ from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
 from crystal.util.fastsoup import BeautifulFastSoup
-import re
-from typing import BinaryIO, List, Optional, Tuple
+from typing import BinaryIO, List
 
 
 def parse_xml_and_links(
@@ -26,7 +25,7 @@ def parse_xml_and_links(
             from_encoding=declared_charset,
             features='xml',
         ))
-    except Exception as e:
+    except Exception:
         return None
     
     links = []

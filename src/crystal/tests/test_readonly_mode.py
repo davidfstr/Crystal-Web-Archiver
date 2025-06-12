@@ -6,7 +6,6 @@ from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xos import is_mac_os, is_windows
 import os
-import shutil
 import stat
 import subprocess
 import tempfile

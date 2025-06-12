@@ -4,7 +4,7 @@ from crystal.util.wx_dialog import position_dialog_initially
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import datetime
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Dict, TYPE_CHECKING
 from tzlocal import get_localzone
 import wx
 

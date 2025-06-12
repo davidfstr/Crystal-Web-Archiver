@@ -1,4 +1,4 @@
-from typing import List, TypeVar
+from typing import TypeVar
 
 _E = TypeVar('_E')
 

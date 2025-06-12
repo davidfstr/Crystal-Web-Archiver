@@ -1,5 +1,3 @@
-from collections.abc import Iterator
-from contextlib import contextmanager
 from crystal.model import (
     DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
 )
@@ -19,7 +17,6 @@ from crystal.tests.util.windows import (
 import locale
 import os
 import tempfile
-from typing import List, Optional
 from unittest import skip
 import wx
 
@@ -373,7 +370,7 @@ async def test_given_rr_is_not_downloaded_and_project_is_read_only_when_expand_r
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 # Create RootResource but don't download it
                 r = Resource(project, home_url)
-                home_rr = RootResource(project, 'Home', r)
+                RootResource(project, 'Home', r)
             
             # Reopen project as read-only
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):

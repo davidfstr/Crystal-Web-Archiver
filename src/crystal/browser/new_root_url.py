@@ -10,8 +10,7 @@ from crystal.util.wx_dialog import (
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_windows, is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
-import os
-from typing import Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Union
 import wx
 
 ChangePrefixCommand = Union[

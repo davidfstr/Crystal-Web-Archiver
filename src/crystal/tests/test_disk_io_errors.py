@@ -15,7 +15,6 @@ from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import OpenOrCreateDialog
 import io
 import os
-import tempfile
 from unittest import skip
 
 # ------------------------------------------------------------------------------
@@ -83,7 +82,6 @@ async def test_given_default_revision_with_body_containing_bad_blocks_when_relat
         'hh' if is_windows() else 'ii', 1, 0))
     sock.close()
     """
-    pass
 
 
 # ------------------------------------------------------------------------------

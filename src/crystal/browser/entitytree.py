@@ -34,12 +34,10 @@ from crystal.util.wx_treeitem_gettooltip import (
 )
 from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
-import os
-import threading
 import time
-from typing import cast, final, List, Literal, Optional, Union
+from typing import cast, Dict, final, Literal, Optional, Tuple, Union
 from typing_extensions import override
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import urljoin
 import wx
 
 DeferrableResourceGroupSource = Union[
@@ -633,7 +631,6 @@ class Node(Bulkhead):
         Subclasses may override this method to recompute their children nodes.
         The default implementation takes no action.
         """
-        pass
     
     @final
     def update_title(self) -> None:

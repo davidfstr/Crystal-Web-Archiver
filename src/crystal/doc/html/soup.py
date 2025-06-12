@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import json
 import re
 from re import Match
-from typing import List, Literal, Optional, Tuple, Type, Union
+from typing import List, Optional, Tuple, Type
 from urllib.parse import urlparse
 
 _PARSER_LIBRARY_T_CHOICES = (

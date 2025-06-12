@@ -9,7 +9,7 @@ from crystal.doc.html.soup import (
     ABSOLUTE_HTTP_LINK_RE, PROBABLE_EMBEDDED_URL_RE,
 )
 import json
-from typing import BinaryIO, Optional
+from typing import BinaryIO
 
 
 def parse_json_and_links(

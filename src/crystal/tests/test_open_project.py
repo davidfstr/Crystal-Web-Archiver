@@ -15,7 +15,6 @@ from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import os.path
 import tempfile
-from typing import List
 from unittest import skip
 from unittest.mock import call, patch
 import wx

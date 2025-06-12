@@ -2,7 +2,7 @@ from collections.abc import Callable
 from crystal.browser.icons import add_transparent_left_border
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_mac_os, is_windows
-from typing import List, Optional
+from typing import List
 import wx
 
 

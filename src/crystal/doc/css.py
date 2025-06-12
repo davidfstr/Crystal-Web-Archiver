@@ -7,7 +7,7 @@ from crystal.doc.generic import Document, Link
 import tinycss2
 from tinycss2 import ast
 from tinycss2.serializer import serialize_string_value, serialize_url
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 
 def parse_css_and_links(

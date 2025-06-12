@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 
 def create_external_link(relative_url: str, type_title: str, title: str | None, embedded: bool) -> Link:
     import crystal.doc.html.soup as soup

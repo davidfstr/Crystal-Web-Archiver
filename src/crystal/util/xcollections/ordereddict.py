@@ -5,7 +5,7 @@ extended collections in the standard `collections` module.
 
 from collections import OrderedDict
 import sys
-from typing import cast, Dict, TypeVar
+from typing import cast, TypeVar
 
 
 class defaultordereddict(OrderedDict):

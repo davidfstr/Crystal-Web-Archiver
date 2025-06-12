@@ -18,7 +18,6 @@ def normalize_url(old_url: str, **kwargs) -> str:
                     d_obj = json.loads(urlsafe_b64decode(d))  # type: ignore[attr-defined]
                 except ValueError:
                     print('*** Substack: Unable to decode "d" argument: ' + d, file=sys.stderr)
-                    pass
                 else:
                     if isinstance(d_obj, dict):
                         # Pin $.properties.browserSessionId to fixed arbitrary valid value

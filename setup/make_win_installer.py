@@ -1,5 +1,4 @@
 import os
-from typing import Tuple
 
 # Read current win-installer.iss
 with open('win-installer.iss', newline='\r\n') as f:

@@ -15,9 +15,7 @@ import os.path
 import shutil
 import subprocess
 import sys
-from typing import (
-    BinaryIO, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING, Union,
-)
+from typing import BinaryIO, Dict, Literal, Optional, Tuple, Union
 import xml.etree.ElementTree as ET
 
 

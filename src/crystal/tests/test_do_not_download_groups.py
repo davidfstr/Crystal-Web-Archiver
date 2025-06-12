@@ -20,7 +20,6 @@ from crystal.tests.util.windows import (
 )
 import os
 import tempfile
-from typing import Tuple
 from unittest import skip
 from unittest.mock import ANY
 
@@ -43,7 +42,7 @@ async def test_when_download_html_page_then_does_not_download_embedded_resource_
         comic_image_rg_ti = home_ti.find_child(comic_image_rg_pattern)
         comic_image_rg_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_image_rg_ti))
-        comic_image_r_ti = comic_image_rg_ti.find_child(comic_image_r_url)
+        comic_image_rg_ti.find_child(comic_image_r_url)
         
         home_r = project.get_resource(home_url)
         assert home_r is not None
@@ -145,7 +144,7 @@ async def test_given_do_not_download_group_selected_in_entity_tree_when_press_do
         comic_image_rg_ti = root_ti.find_child(comic_image_rg_pattern)
         comic_image_rg_ti.Expand()
         await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_image_rg_ti))
-        comic_image_r_ti = comic_image_rg_ti.find_child(comic_image_r_url)
+        comic_image_rg_ti.find_child(comic_image_r_url)
         
         comic_image_r = project.get_resource(comic_image_r_url)
         assert comic_image_r is not None

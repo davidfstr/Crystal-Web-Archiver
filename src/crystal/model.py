@@ -72,12 +72,11 @@ import sys
 from tempfile import NamedTemporaryFile
 from textwrap import dedent
 import threading
-import time
 from tqdm import tqdm
 import traceback
 from typing import (
-    Any, BinaryIO, cast, Dict, Generic, List, Literal, Optional, overload,
-    Self, Tuple, TYPE_CHECKING, TypedDict, TypeVar, Union,
+    Any, BinaryIO, cast, Dict, Generic, List, Literal, Optional, Self, Tuple,
+    TYPE_CHECKING, TypedDict, TypeVar, Union,
 )
 from typing_extensions import deprecated, override
 from urllib.parse import quote as url_quote
@@ -1684,7 +1683,6 @@ class CrossProjectReferenceError(Exception):
 
 class ProjectFormatError(Exception):
     """The on-disk format of a Project is corrupted in some way."""
-    pass
 
 
 class ProjectTooNewError(Exception):
@@ -1692,7 +1690,6 @@ class ProjectTooNewError(Exception):
     The project has a greater major version than this version of Crystal
     knows how to open safely.
     """
-    pass
 
 
 class ProjectReadOnlyError(Exception):
@@ -2527,7 +2524,6 @@ class RootResource:
         Raised when an attempt is made to create a new `RootResource` for a `Resource`
         that is already associated with an existing `RootResource`.
         """
-        pass
 
 
 class ResourceRevision:

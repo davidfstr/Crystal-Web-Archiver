@@ -201,7 +201,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
                     lambda: rr_future.done() or None,
                     timeout=MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY)
                 try:
-                    rr = rr_future.result()
+                    rr_future.result()
                 except ProjectFreeSpaceTooLowError:
                     if expect_failure:
                         pass  # expected
@@ -276,7 +276,7 @@ async def test_given_download_resource_group_members_when_add_group_member_via_d
                 
                 async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                     with clear_top_level_tasks_on_exit(project):
-                        comic1_rr = RootResource(project, '', Resource(project, comic1_url))
+                        RootResource(project, '', Resource(project, comic1_url))
                         comic_g = ResourceGroup(project, '', comic_pattern)
                         
                         server = ProjectServer(project)

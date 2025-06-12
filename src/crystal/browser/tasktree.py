@@ -24,7 +24,6 @@ from crystal.util.xthreading import (
     fg_call_and_wait, fg_call_later, is_foreground_thread,
 )
 from crystal.util.xtraceback import format_exception_for_user
-import os
 from typing import List, Optional, Tuple
 import wx
 

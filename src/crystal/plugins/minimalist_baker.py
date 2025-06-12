@@ -2,7 +2,6 @@ from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
 import json
 import re
-from typing import List, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 _URL_WITH_TP_IMAGE_ID = re.compile(r'^(https?://[^?]+)\?tp_image_id=[0-9]+$')

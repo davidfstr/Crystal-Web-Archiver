@@ -1,9 +1,6 @@
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
-import sys
 import time
-from typing import (
-    Dict, List, Optional, overload, Self, Tuple, Type, TypeVar, Union,
-)
+from typing import List, Optional, overload, Self, TypeVar
 from typing_extensions import override
 import wx
 

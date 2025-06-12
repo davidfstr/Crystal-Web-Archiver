@@ -5,7 +5,6 @@ from crystal.util.ssd import is_ssd
 from crystal.util.xos import is_linux, is_mac_os
 import os.path
 from textwrap import dedent
-from typing import List
 from unittest import skip
 from unittest.mock import patch
 

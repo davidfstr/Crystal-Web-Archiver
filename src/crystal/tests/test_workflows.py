@@ -25,7 +25,6 @@ from crystal.util.xos import is_windows
 import datetime
 import re
 import tempfile
-from typing import List, Union
 from unittest import skip
 from urllib.parse import urlparse
 

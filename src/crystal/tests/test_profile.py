@@ -6,7 +6,6 @@ from crystal.util.profile import (
 )
 import gc
 import io
-import time
 from unittest.mock import patch
 
 

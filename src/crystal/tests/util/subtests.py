@@ -3,7 +3,6 @@ from contextlib import contextmanager
 from functools import wraps
 from io import StringIO
 import traceback
-from typing import Optional
 from unittest import SkipTest
 
 # ------------------------------------------------------------------------------

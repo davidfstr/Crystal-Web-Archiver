@@ -1,5 +1,4 @@
 from crystal.util.xos import is_wx_gtk
-from typing import Optional
 import wx
 
 

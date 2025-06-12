@@ -14,10 +14,9 @@ from crystal.tests.util.wait import (
 )
 from crystal.tests.util.xthreading import bg_call_and_wait
 from crystal.util.xthreading import fg_affinity
-import math
 import re
 import threading
-from typing import List, Optional
+from typing import List
 from unittest.mock import patch
 import wx
 
@@ -68,7 +67,6 @@ async def wait_for_download_to_start_and_finish(
             if did_start_download:
                 # Didn't observe what the item count was
                 # but we DID see evidence that a download actually started
-                item_count = None
                 break
             if immediate_finish_ok:
                 return
@@ -97,7 +95,7 @@ async def wait_for_download_to_start_and_finish(
         else:
             did_start_download = True
             # NOTE: Currently unused. Just proving that we can calculate it.
-            item_count = int(m.group(3))
+            int(m.group(3))
             break
         
         await bg_sleep(period)

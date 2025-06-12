@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 from types import coroutine, FrameType
-from typing import Dict, Generic, Optional, TYPE_CHECKING, TypeVar, Union
+from typing import Generic, TYPE_CHECKING, TypeVar, Union
 import urllib.error
 import urllib.request
 

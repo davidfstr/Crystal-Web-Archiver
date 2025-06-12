@@ -7,7 +7,7 @@ import inspect
 import sys
 import threading
 import time
-from typing import Optional, Union
+from typing import Optional
 
 _excluded_delta_time_stack = threading.local()
 

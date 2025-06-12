@@ -2,8 +2,7 @@
 Provides services for downloading a ResourceRevision.
 """
 
-from collections import defaultdict
-from collections.abc import Collection, Iterable
+from collections.abc import Iterable
 from crystal import __version__
 from crystal.model import (
     ProjectHasTooManyRevisionsError, Resource, ResourceRevision,
@@ -13,11 +12,8 @@ from crystal.util.xos import is_mac_os, is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
 import os
-import platform
 import ssl
-from typing import (
-    BinaryIO, cast, Dict, Optional, Set, Tuple, TYPE_CHECKING, Union,
-)
+from typing import BinaryIO, cast, Collection, Dict, TYPE_CHECKING
 import urllib.error
 from urllib.parse import urlparse
 import urllib.request

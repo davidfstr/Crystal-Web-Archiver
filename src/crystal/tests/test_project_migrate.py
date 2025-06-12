@@ -24,7 +24,6 @@ from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
 import os.path
-from typing import cast, Optional, Tuple
 from typing_extensions import override
 from unittest import skip
 from unittest.mock import patch

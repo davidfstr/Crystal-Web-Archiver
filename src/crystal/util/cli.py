@@ -1,5 +1,4 @@
 from io import TextIOBase
-from typing import Optional
 
 # ------------------------------------------------------------------------------
 # Terminal Colors

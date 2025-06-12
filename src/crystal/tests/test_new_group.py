@@ -19,7 +19,6 @@ from crystal.tests.util.xurlparse import urlpatternparse
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_windows
 import re
-from typing import Optional, Tuple
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -544,7 +543,7 @@ async def test_when_add_group_then_does_not_download_immediately_by_default() ->
             
             # Ensure did NOT start downloading
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            comic_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)
+            root_ti.find_child(comic_pattern, project.default_url_prefix)
             assert tree_has_no_children_condition(mw.task_tree)()
 
 
@@ -566,14 +565,14 @@ async def test_when_add_group_can_download_group_immediately_with_1_extra_click(
             
             # Ensure started downloading
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            comic_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)
+            root_ti.find_child(comic_pattern, project.default_url_prefix)
             await wait_for_download_to_start_and_finish(mw.task_tree)
 
 
 async def test_when_edit_group_then_new_group_options_not_shown() -> None:
     with _served_simple_site_with_group() as (_, comic_pattern):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            rg = ResourceGroup(project, 'Comic', comic_pattern)
+            ResourceGroup(project, 'Comic', comic_pattern)
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             comic_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)
             comic_ti.SelectItem()

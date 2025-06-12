@@ -1,5 +1,5 @@
 from ast import literal_eval
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
@@ -14,10 +14,8 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import MainWindow
 from crystal.util.xos import is_asan, is_windows
 from crystal.util.xthreading import fg_call_and_wait
-from functools import wraps
-from io import StringIO, TextIOBase
+from io import TextIOBase
 import os
-import platform
 import re
 from select import select
 import subprocess
@@ -25,9 +23,8 @@ import sys
 import tempfile
 import textwrap
 import time
-import traceback
-from typing import List, Optional, Tuple, Union
-from unittest import skip, SkipTest, TestCase
+from typing import List, Optional
+from unittest import skip
 from unittest.mock import ANY
 import urllib
 import warnings

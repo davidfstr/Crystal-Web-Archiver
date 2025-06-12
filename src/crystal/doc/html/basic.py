@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
 import re
-from typing import Optional
 
 
 def parse_html_and_links(

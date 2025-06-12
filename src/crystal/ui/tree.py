@@ -18,7 +18,7 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_ignored, wrapped_object_deleted_error_raising,
 )
 from crystal.util.xthreading import fg_affinity
-from typing import cast, Dict, List, NewType, NoReturn, Optional, Tuple, Union
+from typing import cast, Dict, List, NewType, NoReturn, Optional
 import wx
 
 IconSet = tuple[tuple[wx.TreeItemIcon, wx.Bitmap], ...]

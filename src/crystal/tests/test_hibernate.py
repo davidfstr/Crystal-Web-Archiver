@@ -254,7 +254,7 @@ async def test_when_close_project_abruptly_and_reopen_project_with_stale_resume_
             project_dirpath = project.path
             
             comic_g = ResourceGroup(project, '', comic_pattern, source=None)
-            comic1_rr = RootResource(project, '', Resource(project, comic1_url))
+            RootResource(project, '', Resource(project, comic1_url))
             comic2_rr = RootResource(project, '', Resource(project, comic2_url))
             feed_rr = RootResource(project, '', Resource(project, feed_url))
             

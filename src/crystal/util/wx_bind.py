@@ -35,7 +35,7 @@ def _bind_target() -> Iterator[None]:
     """
     try:
         yield
-    except BaseException as e:
+    except BaseException:
         err_file = sys.stderr
         print(cli.TERMINAL_FG_RED, end='', file=err_file)
         print('Exception in wxPython listener:', file=err_file)

@@ -8,7 +8,7 @@ This thread is responsible for:
 """
 
 from collections import deque
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Generator
 from crystal.util.bulkheads import (
     capture_crashes_to_stderr, ensure_is_bulkhead_call,
 )
@@ -19,7 +19,7 @@ import os
 import sys
 import threading
 import traceback
-from typing import cast, Deque, Optional, overload, TypeVar
+from typing import cast, Deque, Optional, TypeVar
 from typing_extensions import ParamSpec
 import wx
 

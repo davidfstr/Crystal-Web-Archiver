@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 import re
 import tempfile
-from typing import Dict, List, Optional
+from typing import List, Optional
 import unittest.mock
 from zipfile import ZipFile
 

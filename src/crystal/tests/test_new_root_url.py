@@ -25,9 +25,8 @@ from crystal.url_input import _candidate_urls_from_user_input as EXPAND
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.wx_window import SetFocus
 import os
-import tempfile
 import time
-from typing import Dict, List, Optional, Self, Tuple, Union
+from typing import Dict, Optional, Self, Union
 from unittest import skip
 from unittest.mock import ANY, patch
 from urllib.parse import urlparse

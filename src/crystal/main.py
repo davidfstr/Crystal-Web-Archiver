@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
     from crystal.shell import Shell
-    from typing import List, Optional
+    from typing import Optional
     import wx
 
 

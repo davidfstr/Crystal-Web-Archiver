@@ -5,7 +5,7 @@ from crystal.doc.html.soup import HtmlDocument
 from crystal.server import _RequestHandler
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from textwrap import dedent
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 # === Tests: Parse/Format Document ===
 

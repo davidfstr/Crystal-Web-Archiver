@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import Future
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util import cli
 from crystal.util.bulkheads import (
@@ -36,10 +36,9 @@ import threading
 from time import sleep
 from time import sleep as scheduler_sleep
 import traceback
-from types import TracebackType
-from typing import Any, cast, Concatenate, final, Generic, List, Literal
+from typing import Any, cast, final, Generic, List, Literal
 from typing import NoReturn as Never
-from typing import Optional, Tuple, TYPE_CHECKING, TypeVar, Union
+from typing import Optional, Tuple, TYPE_CHECKING, TypeVar
 from typing_extensions import override, ParamSpec
 from weakref import WeakSet
 
@@ -1043,7 +1042,6 @@ class DownloadResourceTask(Task['ResourceRevision']):
                     pass
                     
                     # Behave as if there are no embedded resources
-                    pass
                 except Exception as e:
                     if is_database_closed_error(e):
                         # Probably the project was closed. Ignore error.
@@ -1055,7 +1053,6 @@ class DownloadResourceTask(Task['ResourceRevision']):
                         traceback.print_exc(file=sys.stderr)
                     
                     # Behave as if there are no embedded resources
-                    pass
                 else:
                     # 1. If revision is an error page then do not download any embedded
                     #    resources automatically. Poorly written error pages may

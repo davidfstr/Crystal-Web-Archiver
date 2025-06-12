@@ -1,5 +1,3 @@
-from collections.abc import Callable
-from concurrent.futures import Future
 from contextlib import redirect_stderr
 from crystal import task
 from crystal.browser import MainWindow as RealMainWindow
@@ -50,7 +48,7 @@ from crystal.util.xthreading import (
 from io import StringIO
 import sys
 import threading
-from typing import cast, List, Optional, Tuple, TypeVar, Union
+from typing import List, Tuple
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -437,8 +435,8 @@ async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() 
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
-                atom_feed_r = Resource(project, atom_feed_url)
-                rss_feed_r = Resource(project, rss_feed_url)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
                 
                 # Create DownloadResourceGroupMembersTask
                 feed_g = ResourceGroup(project, '', feed_pattern, source=None)
@@ -484,7 +482,7 @@ async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
-                atom_feed_r = Resource(project, atom_feed_url)
+                Resource(project, atom_feed_url)
                 
                 # Create DownloadResourceGroupMembersTask
                 feed_g = ResourceGroup(project, '', feed_pattern, source=None)
@@ -511,7 +509,7 @@ async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_
                 assert download_rg_members_task.crash_reason is None
                 
                 with patch.object(download_rg_members_task, 'notify_did_append_child', notify_did_append_child):
-                    rss_feed_r = Resource(project, rss_feed_url)
+                    Resource(project, rss_feed_url)
                 
                 # Postcondition
                 assert download_rg_members_task.crash_reason is not None
@@ -547,7 +545,7 @@ async def test_when_TTN_task_crash_reason_did_change_crashes_in_deferred_fg_task
                 home_r.download(); append_deferred_top_level_tasks(project)
                 (download_r_task,) = project.root_task.children
                 assert isinstance(download_r_task, DownloadResourceTask)
-                download_r_ttn = ttn_for_task(download_r_task)
+                ttn_for_task(download_r_task)
                 
                 # Force DownloadResourceTask into an illegal state
                 # (i.e. a container task with empty children)
@@ -585,8 +583,8 @@ async def test_when_TTN_task_did_set_children_crashes_at_top_level_then_T_displa
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
-                atom_feed_r = Resource(project, atom_feed_url)
-                rss_feed_r = Resource(project, rss_feed_url)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
                 
                 # Create DownloadResourceGroupMembersTask
                 feed_g = ResourceGroup(project, '', feed_pattern, source=None)
@@ -630,8 +628,8 @@ async def test_when_TTN_task_did_set_children_crashes_in_deferred_fg_task_then_T
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
-                atom_feed_r = Resource(project, atom_feed_url)
-                rss_feed_r = Resource(project, rss_feed_url)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
                 
                 # Create DownloadResourceGroupMembersTask
                 feed_g = ResourceGroup(project, '', feed_pattern, source=None)
@@ -672,7 +670,7 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
                 home_r.download(); append_deferred_top_level_tasks(project)
                 (download_r_task,) = project.root_task.children
                 assert isinstance(download_r_task, DownloadResourceTask)
-                download_r_ttn = ttn_for_task(download_r_task)
+                ttn_for_task(download_r_task)
                 
                 # Precondition
                 assert download_r_task.crash_reason is None
@@ -711,7 +709,7 @@ async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T
                 home_r.download(); append_deferred_top_level_tasks(project)
                 (download_r_task,) = project.root_task.children
                 assert isinstance(download_r_task, DownloadResourceTask)
-                download_r_ttn = ttn_for_task(download_r_task)
+                ttn_for_task(download_r_task)
                 
                 # Precondition
                 assert download_r_task.crash_reason is None
@@ -741,7 +739,7 @@ async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_disp
                 home_r.download(); append_deferred_top_level_tasks(project)
                 (download_r_task,) = project.root_task.children
                 assert isinstance(download_r_task, DownloadResourceTask)
-                download_r_ttn = ttn_for_task(download_r_task)
+                ttn_for_task(download_r_task)
                 
                 # Precondition
                 assert download_r_task.crash_reason is None
@@ -771,7 +769,7 @@ async def test_when_TTN_task_child_did_complete_crashes_in_deferred_fg_task_then
                 home_r.download(); append_deferred_top_level_tasks(project)
                 (download_r_task,) = project.root_task.children
                 assert isinstance(download_r_task, DownloadResourceTask)
-                download_r_ttn = ttn_for_task(download_r_task)
+                ttn_for_task(download_r_task)
                 
                 # Precondition
                 assert download_r_task.crash_reason is None
@@ -833,8 +831,8 @@ async def test_when_RGN_on_expanded_crashes_while_loading_urls_then_children_rep
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
-                atom_feed_r = Resource(project, atom_feed_url)
-                rss_feed_r = Resource(project, rss_feed_url)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
                 
                 # Create ResourceGroupNode
                 feed_g = ResourceGroup(project, '', feed_pattern, source=None)
@@ -865,8 +863,8 @@ async def test_when_RGN_on_expanded_crashes_while_updating_children_then_childre
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
-                atom_feed_r = Resource(project, atom_feed_url)
-                rss_feed_r = Resource(project, rss_feed_url)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
                 
                 # Create ResourceGroupNode
                 feed_g = ResourceGroup(project, '', feed_pattern, source=None)
@@ -897,7 +895,7 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
-                atom_feed_r = Resource(project, atom_feed_url)
+                Resource(project, atom_feed_url)
                 
                 # Create ResourceGroupNode
                 feed_g = ResourceGroup(project, '', feed_pattern, source=None)
@@ -920,7 +918,7 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
                 # crash the line: children_rs.append(NormalResourceNode(...))
                 with patch('crystal.browser.entitytree.NormalResourceNode', side_effect=_CRASH), \
                         patch.object(ResourceGroupNode, 'update_children', update_children):
-                    rss_feed_r = Resource(project, rss_feed_url)
+                    Resource(project, rss_feed_url)
                     await wait_for(lambda: update_children.called or None)  # type: ignore[attr-defined]
                 
                 # Postconditions
@@ -954,7 +952,7 @@ async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entit
                 () = et_root_ti.Children
                 
                 with patch('crystal.browser.entitytree.RootResourceNode', side_effect=_CRASH):
-                    home_rr = RootResource(project, 'Home', Resource(project, home_url))
+                    RootResource(project, 'Home', Resource(project, home_url))
                 
                 # Postconditions
                 if True:
@@ -1139,8 +1137,8 @@ async def test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 home_r = Resource(project, home_url)
-                atom_feed_r = Resource(project, atom_feed_url)
-                rss_feed_r = Resource(project, rss_feed_url)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
                 
                 # Create UpdateResourceGroupMembersTask
                 home_rr = RootResource(project, 'Home', home_r)
@@ -1236,8 +1234,8 @@ async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             with clear_top_level_tasks_on_exit(project):
                 home_r = Resource(project, home_url)
-                atom_feed_r = Resource(project, atom_feed_url)
-                rss_feed_r = Resource(project, rss_feed_url)
+                Resource(project, atom_feed_url)
+                Resource(project, rss_feed_url)
                 
                 # Create DownloadResourceGroupMembersTask
                 home_rr = RootResource(project, 'Home', home_r)
