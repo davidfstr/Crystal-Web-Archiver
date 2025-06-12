@@ -1,3 +1,4 @@
+from concurrent.futures import Future
 from crystal.model import ResourceRevision, RootResource
 from crystal.server import ProjectServer
 from crystal.task import (
@@ -28,7 +29,6 @@ from crystal.tests.util.xthreading import bg_call_and_wait
 from crystal.model import Project, Resource, ResourceGroup
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xcollections.lazy import AppendableLazySequence
-from crystal.util.xfutures import Future
 from crystal.util.xthreading import is_foreground_thread
 import re
 from typing import NamedTuple

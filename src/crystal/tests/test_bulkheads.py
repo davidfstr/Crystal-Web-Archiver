@@ -1,3 +1,4 @@
+from concurrent.futures import Future
 from contextlib import redirect_stderr
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
@@ -46,7 +47,6 @@ from crystal.util import cli
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_asan, is_ci, is_mac_os
-from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait, is_foreground_thread
 from io import StringIO
 import sys

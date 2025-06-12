@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import Future
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import cProfile
 from crystal.util.bulkheads import (
@@ -22,7 +23,6 @@ from crystal.util.progress import ProgressBarCalculator
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
 from crystal.util.xcollections.lazy import AppendableLazySequence, UnmaterializedItemError
-from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util.xsqlite3 import is_database_closed_error
 from crystal.util.xthreading import (

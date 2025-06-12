@@ -10,6 +10,7 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 from __future__ import annotations
 
 from collections import OrderedDict
+from concurrent.futures import Future
 import copy
 from crystal.doc.css import parse_css_and_links
 from crystal.doc.generic import create_external_link
@@ -60,7 +61,6 @@ from crystal.util import xcgi
 from crystal.util.xcollections.ordereddict import as_ordereddict
 from crystal.util.xcollections.sortedlist import BLACK_HOLE_SORTED_LIST
 from crystal.util.xdatetime import datetime_is_aware
-from crystal.util.xfutures import Future
 from crystal.util.xgc import gc_disabled
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util import xshutil

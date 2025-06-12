@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import Future
 from crystal.browser.icons import (
     BADGED_ART_PROVIDER_TREE_NODE_ICON, BADGED_TREE_NODE_ICON, TREE_NODE_ICONS,
 )
@@ -37,7 +38,6 @@ from crystal.util.url_prefix import (
 from crystal.util.wx_bind import bind
 from crystal.util.wx_treeitem_gettooltip import EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent
 from crystal.util.xcollections.ordereddict import defaultordereddict
-from crystal.util.xfutures import Future
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import os
 import threading
