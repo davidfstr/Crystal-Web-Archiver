@@ -116,7 +116,16 @@ jobs:
           #- macos-15  # ARM-based
         # Test the earliest supported Python version only
         python-version:
+          # Test earliest to latest Python versions supported by Crystal,
+          # on at least one OS.
+          # 
+          # NOTE: Testing all Python versions on Linux would be faster
+          #       than on macOS because Linux runners are faster than 
+          #       every other OS. However macOS is the second fastest OS,
+          #       and doesn't require precompiled wxPython .wgn files.
           - "3.11.9"
+          - "3.12.9"
+          - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 23  # 150% of normal time: 15 min, as of 2024-02-16
