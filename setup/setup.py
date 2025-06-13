@@ -93,7 +93,13 @@ if sys.platform == 'darwin':
             'excludes': [
                 'numpy',
                 'test',  # CPython test data
-            ] + extra_excludes
+            ] + extra_excludes,
+            # Workaround for py2app + Python 3.13 dylib signing issue
+            # https://github.com/ronaldoussoren/py2app/issues/546
+            'dylib_excludes': [
+                '/Library/Frameworks/Python.framework/Versions/3.13/Frameworks/Tcl.framework',
+                '/Library/Frameworks/Python.framework/Versions/3.13/Frameworks/Tk.framework',
+            ],
         }},
     )
 elif sys.platform == 'win32':
