@@ -28,11 +28,12 @@ def test_version_and_copyright_in_windows_binary_is_correct() -> None:
     with open(iss_filepath, encoding='utf-8') as f:
         iss = f.read()
     
+    # Import variables from setup_settings.py
     setup_settings_filepath = os.path.join(
         os.path.dirname(__file__), '..', 'setup', 'setup_settings.py')
+    env = {}  # type: dict[str, str]
     with open(setup_settings_filepath, encoding='utf-8') as f:
-        exec(f.read())
-    COPYRIGHT_STRING_ = locals()['COPYRIGHT_STRING']  # HACK
+        exec(f.read(), env)
     
     m = re.search(r'\nAppVersion=(.*)\n', iss)
     assert m is not None
@@ -43,7 +44,7 @@ def test_version_and_copyright_in_windows_binary_is_correct() -> None:
     m = re.search(r'\nAppCopyright=(.*)\n', iss)
     assert m is not None
     app_copyright = m.group(1)
-    assert COPYRIGHT_STRING_.replace('©', '(C)') == app_copyright, \
+    assert env['COPYRIGHT_STRING'].replace('©', '(C)') == app_copyright, \
         'Copyright string in win-installer.iss does not match expected string from setup_settings.py'
     
     m = re.search(r'\nOutputBaseFilename=(.*)\n', iss)
