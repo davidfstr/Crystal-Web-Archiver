@@ -366,11 +366,13 @@ def _downloads_mocked_to_raise_network_io_error() -> Iterator:
             str(e) == 'Connection reset'
         )
     
+    DATA_BEFORE_EOF = b'<html>'
+    
     def mock_read() -> Iterable[bytes]:
-        yield b'<html>'
+        yield DATA_BEFORE_EOF
         raise_connection_reset()
     def mock_readinto() -> Iterable[int]:
-        yield len(b'<html>')
+        yield len(DATA_BEFORE_EOF)
         raise_connection_reset()
     
     mock_response = Mock(spec=HTTPResponse)
@@ -387,12 +389,24 @@ def _downloads_mocked_to_raise_network_io_error() -> Iterator:
     mock_connection = Mock(spec_set=HTTPConnection)
     mock_connection.getresponse = Mock(return_value=mock_response)
     mock_connection.close = Mock(return_value=None)
-    
     with patch(
             # HTTPConnection used by HttpResourceRequest.__call__()
             'crystal.download.HTTPConnection',
             return_value=mock_connection):
-        yield is_connection_reset
+        
+        # Shrink the copy buffer size in the "length" parameter,
+        # because Python 3.12+ assumes that a read that doesn't fill the
+        # copy buffer is an EOF, without checking. We want to ensure that
+        # at least 2 calls to read() or readinto() are made.
+        from crystal.util import xshutil
+        super_copyfileobj_readinto = xshutil.copyfileobj_readinto
+        def copyfileobj_readinto(src, dst, length=len(DATA_BEFORE_EOF)):
+            return super_copyfileobj_readinto(src, dst, length=length)
+        with patch(
+                # xshutil.copyfileobj_readinto used by ResourceRevision._create_from_stream()
+                'crystal.util.xshutil.copyfileobj_readinto',
+                copyfileobj_readinto):
+            yield is_connection_reset
 
 
 @contextmanager

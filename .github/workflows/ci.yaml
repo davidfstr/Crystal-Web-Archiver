@@ -116,7 +116,16 @@ jobs:
           #- macos-15  # ARM-based
         # Test the earliest supported Python version only
         python-version:
+          # Test earliest to latest Python versions supported by Crystal,
+          # on at least one OS.
+          # 
+          # NOTE: Testing all Python versions on Linux would be faster
+          #       than on macOS because Linux runners are faster than 
+          #       every other OS. However macOS is the second fastest OS,
+          #       and doesn't require precompiled wxPython .wgn files.
           - "3.11.9"
+          - "3.12.9"
+          - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 23  # 150% of normal time: 15 min, as of 2024-02-16
@@ -286,29 +295,15 @@ jobs:
       # wxPython from source takes about 40 minutes on GitHub Actions
       # 
       # NOTE: To recompile the .wgn, see instructions in: doc/how_to_make_wxpython_wagon.md
-      - name: Install dependency wxPython from wagon (Python 3.8)
-        if: startsWith(matrix.python-version, '3.8.')
-        run: |
-          poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py38-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.1-py38-none-linux_x86_64.wgn
-      - name: Install dependency wxPython from wagon (Python 3.9)
-        if: startsWith(matrix.python-version, '3.9.')
-        run: |
-          poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py39-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.1-py39-none-linux_x86_64.wgn
       - name: Install dependency wxPython from wagon (Python 3.11)
         if: startsWith(matrix.python-version, '3.11.')
         run: |
           poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.1-py311-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.1-py311-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py311-none-linux_x86_64.wgn
+          poetry run wagon install wxPython-4.2.3-py311-none-linux_x86_64.wgn
 
       - name: Fail if wxPython wagon is not available for this Python version
-        if: ${{ !startsWith(matrix.python-version, '3.8.') &&
-                !startsWith(matrix.python-version, '3.9.') &&
-                !startsWith(matrix.python-version, '3.11.') }}
+        if: ${{ !startsWith(matrix.python-version, '3.11.') }}
         run: |
           echo "ERROR: No precompiled wxPython wagon is available for Python ${{ matrix.python-version }} on Linux."
           echo "You must build a .wgn for this Python version and update the workflow."

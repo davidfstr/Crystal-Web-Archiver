@@ -19,8 +19,10 @@ import os
 from setuptools import setup
 import sys
 
+# Import variables from setup_settings.py
+env = {}  # type: dict[str, str]
 with open('./setup_settings.py', encoding='utf-8') as f:
-    exec(f.read())
+    exec(f.read(), env)
 
 if sys.platform == 'darwin':
     # If run without args, build application
@@ -38,7 +40,7 @@ if sys.platform == 'darwin':
     PLIST = {
         # 1. Define app name used by the application menu
         # 2. Define file name of the created .app
-        'CFBundleName': APP_NAME,
+        'CFBundleName': env['APP_NAME'],
         'CFBundleDocumentTypes': [
             # Associate application with .crystalproj files
             {
@@ -59,10 +61,10 @@ if sys.platform == 'darwin':
             },
         ],
         'CFBundleIdentifier': 'net.dafoster.crystal',
-        'CFBundleShortVersionString': VERSION_STRING,
+        'CFBundleShortVersionString': env['VERSION_STRING'],
         'CFBundleSignature': 'CrWA',  # Crystal Web Archiver
-        'CFBundleVersion': VERSION_STRING,
-        'NSHumanReadableCopyright': COPYRIGHT_STRING,
+        'CFBundleVersion': env['VERSION_STRING'],
+        'NSHumanReadableCopyright': env['COPYRIGHT_STRING'],
     }
     
     # Exclude PIL unless $CRYSTAL_SUPPORT_SCREENSHOTS is True
@@ -84,10 +86,20 @@ if sys.platform == 'darwin':
             'argv_emulation': False,
             'iconfile': 'media/AppIconMac.icns',
             'plist': PLIST,
+            'includes': [
+                # xattr depends on cffi but py2app doesn't detect that automatically
+                '_cffi_backend', 'cffi',
+            ],
             'excludes': [
                 'numpy',
                 'test',  # CPython test data
-            ] + extra_excludes
+            ] + extra_excludes,
+            # Workaround for py2app + Python 3.13 dylib signing issue
+            # https://github.com/ronaldoussoren/py2app/issues/546
+            'dylib_excludes': [
+                '/Library/Frameworks/Python.framework/Versions/3.13/Frameworks/Tcl.framework',
+                '/Library/Frameworks/Python.framework/Versions/3.13/Frameworks/Tk.framework',
+            ],
         }},
     )
 elif sys.platform == 'win32':
@@ -117,7 +129,7 @@ elif sys.platform == 'win32':
                 (1, r'media\OpenerIcon.ico'),
             ],
             # Executable name
-            'dest_base': APP_NAME,
+            'dest_base': env['APP_NAME'],
         }],
         data_files=[
             # crystal.resources
@@ -155,6 +167,6 @@ else:
     exit('This build script can only run on Mac OS X and Windows.')
 
 setup(
-    name=APP_NAME,
+    name=env['APP_NAME'],
     **extra_setup_options
 )

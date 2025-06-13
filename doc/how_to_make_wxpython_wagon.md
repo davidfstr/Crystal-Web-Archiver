@@ -78,14 +78,14 @@ python3 -m pip install wagon[dist]  # or: python3.x -m pip install wagon[dist]
 ```bash
 # Compile wagon
 cd /usr/src  # shared folder with Docker host
-time wagon create wxPython==4.2.1  # use version from pyproject.toml
+time wagon create wxPython==4.2.3  # use version from pyproject.toml
     # real  81m6.382s
 ```
 
 * Upload the .wgn file as a release artifact to a release tag on GitHub,
   such as the [v1.4.0b tag](https://github.com/davidfstr/Crystal-Web-Archiver/releases/tag/v1.4.0b)
 
-* Copy the URL for that .wgn to push-github-action.yml, replacing the old .wgn
+* Copy the URL for that .wgn to ci.yaml, replacing the old .wgn
 
 * Push up your commits on a new branch to GitHub, so that a Linux
   Continuous Integration job does start.
