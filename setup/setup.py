@@ -84,6 +84,10 @@ if sys.platform == 'darwin':
             'argv_emulation': False,
             'iconfile': 'media/AppIconMac.icns',
             'plist': PLIST,
+            'includes': [
+                # xattr depends on cffi but py2app doesn't detect that automatically
+                '_cffi_backend', 'cffi',
+            ],
             'excludes': [
                 'numpy',
                 'test',  # CPython test data
