@@ -61,8 +61,10 @@ def _main(args: list[str]) -> None:
         from appdirs import user_log_dir
         from crystal import APP_AUTHOR, APP_NAME
         
-        log_dirpath = user_log_dir(APP_NAME, APP_AUTHOR)
-        os.makedirs(log_dirpath, exist_ok=True)
+        log_dirpath = os.environ.get('CRYSTAL_LOG_DIR')
+        if log_dirpath is None:
+            log_dirpath = user_log_dir(APP_NAME, APP_AUTHOR)
+            os.makedirs(log_dirpath, exist_ok=True)
         
         sys.stdout = open(
             os.path.join(log_dirpath, 'stdout.log'), 

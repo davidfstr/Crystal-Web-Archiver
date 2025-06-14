@@ -358,6 +358,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup RAM Disk
+        # Source Code: https://github.com/chad-golden/setup-ramdisk
+        # Tutorial: https://www.chadgolden.com/blog/github-actions-hosted-windows-runners-slower-than-expected-ci-and-you#so-what-else-can-we-do-harder-wins
+        uses: chad-golden/setup-ramdisk@v1.0.1
+        with:
+          size-in-mb: 512
+          drive-letter: 'R'
+          # Copy $GITHUB_WORKSPACE to R:\workspace automatically
+          copy-workspace: true
+      
+      - name: Configure temporary files to be created on RAM disk
+        shell: pwsh
+        run: |
+          # Create a temporary directory on the RAM disk
+          New-Item -Path "R:\\tmp" -ItemType Directory
+          
+          # Configure Unix tools and Python
+          echo "TMPDIR=R:\\tmp"      | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Configure Windows tools (primary location)
+          echo "TEMP=R:\\tmp"        | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Configure Windows tools (fallback location)
+          echo "TMP=R:\\tmp"         | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Configure GitHub Actions
+          echo "RUNNER_TEMP=R:\\tmp" | Out-File -FilePath $env:GITHUB_ENV -Append
+      
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -366,11 +391,13 @@ jobs:
       # NOTE: Step must be after "Set up Python" so that Poetry installs
       #       itself into that Python
       - name: Install Poetry
+        working-directory: "R:\\workspace"
         run: |
           python -m pip install -U pip setuptools
           python -m pip install -U "poetry==2.1.1"
 
       - name: Install dependencies with Poetry
+        working-directory: "R:\\workspace"
         # If build takes a very long time, then it's likely that the version
         # of wxPython installed does not offer a precompiled wheel for this
         # version of Python. Check the wxPython PyPI page to confirm.
@@ -378,17 +405,19 @@ jobs:
         run: poetry install
 
       - name: Display SQLite version and JSON support
+        working-directory: "R:\\workspace"
         run: |
           python3 -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
           poetry run python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
 
       - name: Run non-UI tests
+        working-directory: "R:\\workspace"
         run: poetry run python -m pytest
 
       - name: Install Inno Setup 6
         run: |
-          Invoke-WebRequest -Uri "https://files.jrsoftware.org/is/6/innosetup-6.4.3.exe" -OutFile "$env:USERPROFILE\\is.exe"
-          Start-Process -Wait -FilePath "$env:USERPROFILE\\is.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"
+          Invoke-WebRequest -Uri "https://files.jrsoftware.org/is/6/innosetup-6.4.3.exe" -OutFile "$env:RUNNER_TEMP\\is.exe"
+          Start-Process -Wait -FilePath "$env:RUNNER_TEMP\\is.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"
 
       - name: Display Inno Setup in Program Files
         run: |
@@ -396,23 +425,23 @@ jobs:
           dir "C:\Program Files (x86)\Inno Setup 6"
 
       - name: Build .exe and installer
-        working-directory: ".\\setup"
+        working-directory: "R:\\workspace\\setup"
         run: "poetry run .\\make-win.bat"
 
       - name: Run UI tests
-        working-directory: ".\\setup"
+        working-directory: "R:\\workspace\\setup"
         run: |
-          $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
-          $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
+          $env:CRYSTAL_LOG_DIR = "$RUNNER_TEMP\Logs"
+          $env:CRYSTAL_SCREENSHOTS_DIRPATH = "R:\\workspace\\screenshots"
           $env:CRYSTAL_FAULTHANDLER = "True"
-          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
+          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$env:CRYSTAL_LOG_DIR\stdout.log" "--stderrfile=$env:CRYSTAL_LOG_DIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
 
       - name: Upload screenshot if test failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
-          path: screenshots
+          path: "R:\\workspace\\screenshots"
           if-no-files-found: ignore
       
       - name: Upload distribution artifact
@@ -423,5 +452,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dist-win
-          path: "setup\\dist-win\\*.exe"
+          path: "R:\\workspace\\setup\\dist-win\\*.exe"
           if-no-files-found: warn
