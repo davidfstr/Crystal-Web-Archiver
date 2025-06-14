@@ -222,7 +222,7 @@ class WebPage:
     def is_not_in_archive(self) -> bool:
         return (
             self._status == 404 and
-            self.title == 'Not in Archive | Crystal Web Archiver'
+            self.title == 'Not in Archive | Crystal'
         )
     
     @property

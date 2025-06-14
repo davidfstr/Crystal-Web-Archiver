@@ -622,7 +622,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             <html>
             <head>
                 <meta charset="utf-8" />
-                <title>Welcome | Crystal Web Archiver</title>
+                <title>Welcome | Crystal</title>
             </head>
             <body>
                 <p>Enter the URL of a page to load from the archive:</p>
@@ -648,7 +648,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             <html>
             <head>
                 <meta charset="utf-8" />
-                <title>Not Found | Crystal Web Archiver</title>
+                <title>Not Found | Crystal</title>
             </head>
             <body>
                 <p>There is no page here.</>
@@ -670,7 +670,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             <html>
             <head>
                 <meta charset="utf-8" />
-                <title>Not in Archive | Crystal Web Archiver</title>
+                <title>Not in Archive | Crystal</title>
             </head>
             <body>
                 <p>The requested resource was not found in the archive.</p>
@@ -719,7 +719,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             <html>
             <head>
                 <meta charset="utf-8" />
-                <title>Fetch Error | Crystal Web Archiver</title>
+                <title>Fetch Error | Crystal</title>
             </head>
             <body>
                 <p>

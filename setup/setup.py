@@ -1,5 +1,5 @@
 r"""
-py2app/py2exe build script for Crystal Web Archiver.
+py2app/py2exe build script for Crystal.
 
 Usage (All Platforms):
     python setup.py
@@ -62,7 +62,7 @@ if sys.platform == 'darwin':
         ],
         'CFBundleIdentifier': 'net.dafoster.crystal',
         'CFBundleShortVersionString': env['VERSION_STRING'],
-        'CFBundleSignature': 'CrWA',  # Crystal Web Archiver
+        'CFBundleSignature': 'CrWA',  # Crystal (Web Archiver)
         'CFBundleVersion': env['VERSION_STRING'],
         'NSHumanReadableCopyright': env['COPYRIGHT_STRING'],
     }

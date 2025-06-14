@@ -35,13 +35,19 @@ Release Notes ⋮
       which helps to identify heap-use-after-free bugs related to
       interacting with wxPython that corrupt memory.
 
-* Support changes
+* Support changes **(Breaking Change)**
     * Windows 11+ is now the minimum Windows version.
       Drop support for Windows 7, 8, 8.1, and 10.
     * macOS 13+ is now the minimum macOS version.
       Drop support for macOS 12.
     * Python 3.11+ is now the minimum Python version.
       Drop support for Python 3.8, 3.9, and 3.10.
+
+* Branding changes
+    * "Crystal Web Archiver" is now known as "Crystal", in short form,
+      or as "Crystal: A Website Downloader" in long form.
+        * Application binary name is changed. **(Breaking Change)**
+        * Log file location is changed. **(Breaking Change)**
 
 ### v1.9.0b (June 22, 2024)
 

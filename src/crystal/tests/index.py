@@ -251,7 +251,7 @@ def _warnings_sent_to_ci() -> Iterator[None]:
         # annotations are associated with the correct file
         # 
         # Depending on OS, `filename` initially looks like:
-        #     - macOS: setup/dist/Crystal Web Archiver.app/Contents/Resources/lib/python38.zip/crystal/tests/index.py
+        #     - macOS: setup/dist/Crystal.app/Contents/Resources/lib/python38.zip/crystal/tests/index.py
         #     - Linux: src/crystal/tests/index.py
         #     - Windows: crystal\tests\index.pyc
         filename_parts = filename.split(os.path.sep)

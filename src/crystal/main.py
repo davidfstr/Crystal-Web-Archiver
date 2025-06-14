@@ -292,7 +292,7 @@ def _main(args: list[str]) -> None:
                 locale.setlocale(locale.LC_ALL, '')
             
             # Activate wx keepalive until self._finish_launch() is called
-            self._keepalive_frame = wx.Frame(None, -1, 'Crystal Web Archiver')
+            self._keepalive_frame = wx.Frame(None, -1, 'Crystal')
             
             # Call self._finish_launch() after a short delay if it isn't
             # called in the meantime by MacOpenFile

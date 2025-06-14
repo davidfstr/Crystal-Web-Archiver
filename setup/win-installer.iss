@@ -1,10 +1,10 @@
 [Setup]
-AppName=Crystal Web Archiver
+AppName=Crystal
 AppVersion=1.9.0b
 AppCopyright=Copyright (C) 2011-2025 David Foster. All Rights Reserved
-DefaultDirName={pf}\Crystal Web Archiver
-DefaultGroupName=Crystal Web Archiver
-UninstallDisplayIcon={app}\Crystal Web Archiver.exe
+DefaultDirName={pf}\Crystal
+DefaultGroupName=Crystal
+UninstallDisplayIcon={app}\Crystal.exe
 Compression=lzma2
 SolidCompression=yes
 OutputBaseFilename=crystal-win-1.9.0b
@@ -28,7 +28,7 @@ Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen"; ValueType: string; ValueNam
 ; Assign icon to file type
 ; https://learn.microsoft.com/en-us/windows/win32/shell/how-to-assign-a-custom-icon-to-a-file-type
 Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\DefaultIcon"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\DefaultIcon"; ValueType: expandsz; ValueName: ""; ValueData: "{app}\Crystal Web Archiver.exe,1"
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\DefaultIcon"; ValueType: expandsz; ValueName: ""; ValueData: "{app}\Crystal.exe,1"
 Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell"; Flags: uninsdeletekey
 ; Tell Explorer to add "Open with Crystal" to the contextual menu for a .crystalopen file
 ; https://learn.microsoft.com/en-us/windows/win32/shell/context-menu-handlers
@@ -36,7 +36,7 @@ Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open"; Flags: uninsdele
 Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open"; ValueType: string; ValueName: ""; ValueData: "Open with Crystal"
 ; Tell Explorer to open .crystalopen files with the Crystal app
 Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open\command"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Crystal Web Archiver.exe"" ""%1"""
+Root: HKLM; Subkey: "SOFTWARE\Classes\.crystalopen\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Crystal.exe"" ""%1"""
 
 ; === .crystalproj ===
 ; NOTE: Cannot use leading dot (.) because defining a Directory Class rather than a real file extension
@@ -51,11 +51,11 @@ Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj\shell\open"; Flags: uninsdelet
 Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj\shell\open"; ValueType: string; ValueName: ""; ValueData: "Open with Crystal"
 ; Tell Explorer to open .crystalproj directories with the Crystal app
 Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj\shell\open\command"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Crystal Web Archiver.exe"" ""%1"""
+Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Crystal.exe"" ""%1"""
 
 ; NOTE: To regenerate file list: poetry run python make_win_installer.py
 [Files]
-Source: "dist\Crystal Web Archiver.exe"; DestDir: "{app}"
+Source: "dist\Crystal.exe"; DestDir: "{app}"
 Source: "dist\MSVCP140.dll"; DestDir: "{app}"
 Source: "dist\PIL._imaging.pyd"; DestDir: "{app}"
 Source: "dist\PIL._imagingcms.pyd"; DestDir: "{app}"
@@ -847,4 +847,4 @@ Source: "dist\lib\tzdata\zoneinfo\US\Samoa"; DestDir: "{app}\lib\tzdata\zoneinfo
 Source: "dist\lib\tzdata\zoneinfo\US\__init__.py"; DestDir: "{app}\lib\tzdata\zoneinfo\US"
 
 [Icons]
-Name: "{group}\Crystal Web Archiver"; Filename: "{app}\Crystal Web Archiver.exe"
+Name: "{group}\Crystal"; Filename: "{app}\Crystal.exe"

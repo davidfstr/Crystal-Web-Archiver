@@ -191,7 +191,7 @@ jobs:
           TERM: __interactive__
         run: |
           ulimit -c unlimited  # allow core dumps of unlimited size
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots "setup/dist/Crystal Web Archiver.app/Contents/MacOS/Crystal Web Archiver" --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots "setup/dist/Crystal.app/Contents/MacOS/Crystal" --test
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
@@ -402,10 +402,10 @@ jobs:
       - name: Run UI tests
         working-directory: ".\\setup"
         run: |
-          $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal Web Archiver\Logs"
+          $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
           $env:CRYSTAL_FAULTHANDLER = "True"
-          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal Web Archiver.exe" "---" "--test"
+          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal.exe" "---" "--test"
 
       - name: Upload screenshot if test failure
         if: failure()
