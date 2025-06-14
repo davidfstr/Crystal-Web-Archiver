@@ -37,6 +37,13 @@ if sys.platform == 'darwin':
             'This script requires py2app to be installed. ' + 
             'Download it from http://undefined.org/python/py2app.html')
     
+    import platform
+    arch = platform.machine()
+    if arch not in ('x86_64', 'arm64'):
+        exit(
+            'This script only supports Intel (x86_64) and Apple Silicon (arm64). ' +
+            'Current architecture: ' + arch)
+    
     PLIST = {
         # 1. Define app name used by the application menu
         # 2. Define file name of the created .app
@@ -65,6 +72,16 @@ if sys.platform == 'darwin':
         'CFBundleSignature': 'CrWA',  # Crystal (Web Archiver)
         'CFBundleVersion': env['VERSION_STRING'],
         'NSHumanReadableCopyright': env['COPYRIGHT_STRING'],
+        'LSArchitecturePriority': [
+            # Force the built application to run on the same architecture as the
+            # machine it was built on, because the build process does not yet
+            # build versions of some extensions (like PIL) for architectures
+            # other than the one it is built on.
+            # 
+            # TODO: Tell py2app to build for both 'x86_64' and 'arm64'
+            #       architectures using the --arch option.
+            arch,
+        ],
     }
     
     # Exclude PIL unless $CRYSTAL_SUPPORT_SCREENSHOTS is True
