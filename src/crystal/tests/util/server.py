@@ -166,6 +166,8 @@ def extracted_project(
     #       ignore_cleanup_errors=True will prevent Windows from raising,
     #       at the cost of leaving the temporary directory around
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as project_parent_dirpath:
+        print(f'FIXME: extracting project to: {project_parent_dirpath}')
+        
         # Extract project
         with resources.open_binary(zipped_project_filename) as zipped_project_file:
             with ZipFile(zipped_project_file, 'r') as project_zipfile:
