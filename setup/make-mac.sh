@@ -19,7 +19,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Slim .app
-zip dist/Crystal\ Web\ Archiver.app/Contents/Resources/lib/python3*.zip \
+zip dist/Crystal.app/Contents/Resources/lib/python3*.zip \
     -d "wx/locale/*"
 
 # Build .dmg
