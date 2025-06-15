@@ -95,7 +95,7 @@ PyScreeze = "^0.1.28"
 flameprof = "^0.4"
 # Declare setuptools explicitly for setup.py and py2exe.
 # Version >=70,<71 is necessary for make-mac.sh and py2app to build successfully.
-setuptools = ">=70,<71"
+setuptools = ">=70,<79"
 isort = "^6.0.1"
 
 [build-system]
