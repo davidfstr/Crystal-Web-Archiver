@@ -73,8 +73,6 @@ py2exe = { version = "^0.13.0.2", markers = "sys_platform == 'win32' and python_
 tinycss2 = "^1.1.0"
 appdirs = "^1.4.4"
 colorama = "^0.4.4"
-# Bundle latest version of HTTPS & SSL certificates
-certifi = "*"
 tzlocal = "^4.2"
 lxml = "^5.2.2"
 tqdm = "^4.65.0"
@@ -87,6 +85,7 @@ pywin32 = { version = "*", markers = "sys_platform == 'win32'" }
 wmi = { version = "*", markers = "sys_platform == 'win32'" }
 typing-extensions = "^4.8.0"
 types-tqdm = "^4.66.0.20240106"
+truststore = "*"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.0,<8.0"

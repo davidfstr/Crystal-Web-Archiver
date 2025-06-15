@@ -26,6 +26,12 @@ Release Notes ⋮
     * The "do not download" status of resource groups is saved,
       and is no longer forgotten when a project is closed.
 
+* Downloading improvements
+    * HTTPS certificates are now loaded from the system certificate store
+      rather than from certifi's static certificate bundle.
+        * On Linux you may need to install the `ca-certificates` package
+          manually to setup the system's certificate store.
+
 * Minor fixes
     * Fix closing a project to no longer have a couple of heap-use-after-free
       issues which could corrupt memory, potentially crashing Crystal later.

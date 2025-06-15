@@ -11,8 +11,8 @@ from crystal.model import (
 from crystal.util.xos import is_mac_os, is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
-import os
 import ssl
+import truststore
 from typing import BinaryIO, cast, Collection, Dict, TYPE_CHECKING
 import urllib.error
 from urllib.parse import urlparse
@@ -257,22 +257,21 @@ def get_ssl_context() -> ssl.SSLContext:
     """
     global _SSL_CONTEXT
     if _SSL_CONTEXT is None:
-        # Load system CA certificates
-        ctx = ssl.create_default_context(
-            # Optimize options to connect from client to server
-            # (rather than optimizing for a server receiving a client connection)
-            purpose=ssl.Purpose.SERVER_AUTH)
-        
-        # Load bundled certifi CA certificates
-        import certifi  # slow!
-        cafile1 = certifi.where()
-        ctx.load_verify_locations(cafile=cafile1)
-        
-        # Load certificates from $SSL_CERT_FILE, if specified,
-        # just like OpenSSL library does
-        cafile2 = os.environ.get('SSL_CERT_FILE')
-        if cafile2 is not None:
-            ctx.load_verify_locations(cafile=cafile2)
+        # Load certifications from OS certificate store.
+        # 
+        # Optimize options to connect from client to server
+        # (rather than optimizing for a server receiving a client connection),
+        # emulating the behavior of ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH).
+        # 
+        # On Linux:
+        # - OpenSSL's $SSL_CERT_FILE and $SSL_CERT_DIR environment variables
+        #   can be used to override the default CA certificates.
+        # - Certificate locations for major distros are supported,
+        #   with the authoritative list in truststore/_openssl.py:
+        #   https://github.com/sethmlarson/truststore/blob/8725ad5ea26966eeb2960be24b85ca6c9371f11f/src/truststore/_openssl.py#L8-L17
+        ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.check_hostname = True
         
         _SSL_CONTEXT = ctx  # export
     return _SSL_CONTEXT
