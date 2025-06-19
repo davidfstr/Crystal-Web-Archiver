@@ -6,3 +6,7 @@ dist-win
 
 # setup.py
 setuptools-*.egg
+
+# Ignore py2app build logs
+py2app.stdout.log
+py2app.stderr.log

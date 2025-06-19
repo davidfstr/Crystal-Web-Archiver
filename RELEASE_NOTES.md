@@ -26,6 +26,10 @@ Release Notes ⋮
     * The "do not download" status of resource groups is saved,
       and is no longer forgotten when a project is closed.
 
+* Distribution improvements
+    * The macOS app is codesigned and no longer requires you to bypass
+      Gatekeeper security settings to open it for the first time.
+
 * Downloading improvements
     * HTTPS certificates are now loaded from the system certificate store
       rather than from certifi's static certificate bundle.

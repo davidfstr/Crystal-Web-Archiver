@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      show_notarization_log:
+        description: 'Show notarization log for macOS'
+        required: false
+        default: false
+        type: boolean
 
 # Customize the run name if the workflow is run manually.
 # Otherwise use the default run name (as specified by '').
@@ -131,6 +136,8 @@ jobs:
     timeout-minutes: 23  # 150% of normal time: 15 min, as of 2024-02-16
     env:
       # Enables capturing and uploading core dumps on macOS
+      # TODO: Convert this to a workflow_dispatch input so that it can be
+      #       enabled in the GitHub Actions UI.
       ENABLE_CORE_DUMPS: 'false'
     steps:
       - name: Checkout code
@@ -163,8 +170,51 @@ jobs:
       - name: Run non-UI tests
         run: poetry run python -m pytest
 
+      - name: Import Developer ID certificate
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_dist_artifact == 'true' }}
+        env:
+          # A base64-encoded .p12 file containing the Developer ID certificate
+          # and private key, which is used to sign the macOS app and disk image.
+          # Generate with: base64 < developerID_application.p12 | pbcopy
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          # Password that the Developer ID certificate .p12 file was created with.
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$CERTIFICATE_P12" ] || [ -z "$CERTIFICATE_PASSWORD" ]; then
+            echo "WARNING: Codesigning environment variables not set. Skipping codesigning."
+            if [ "$GITHUB_ACTIONS" = "true" ]; then
+              echo "::warning::Codesigning environment variables not set. Skipping codesigning."
+            fi
+            exit 0
+          fi
+          echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+          # Create a new keychain with an empty password for temporary use in CI
+          security create-keychain -p "" build.keychain
+          # Import the Developer ID certificate and private key into the new keychain, allowing only codesign to access the key
+          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign > /dev/null
+          # Set the list of keychains where credentials are searched by default to be only the new keychain
+          security list-keychains -s build.keychain
+          # Set the keychain where codesign stores new credentials
+          security default-keychain -s build.keychain
+          # Unlock the keychain so it can be used without prompting for a password
+          security unlock-keychain -p "" build.keychain
+          # Grant codesign and other Apple tools the ability to access the private key
+          # in the unlocked keychain without prompting for a password
+          security set-key-partition-list -S apple-tool:,apple: -k "" build.keychain > /dev/null
+
       - name: Build .app and disk image
         working-directory: "./setup"
+        env:
+          # ex: "Developer ID Application: John Smith (##########)"
+          CERTIFICATE_NAME: ${{ secrets.CERTIFICATE_NAME }}
+          # ex: "me@example.com"
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          # ex: "##########" (10-digit Team ID)
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # An app-specific password created at https://appleid.apple.com/
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # Pass the workflow_dispatch input to the script
+          SHOW_NOTARIZATION_LOG: ${{ github.event.inputs.show_notarization_log }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.build_dist_artifact }}" == "true" ]]; then
             # If building a distribution artifact then also build the disk image
