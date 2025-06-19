@@ -170,7 +170,7 @@ jobs:
             # If building a distribution artifact then also build the disk image
             MAKE_POST_ARGS=""
             # If building a distribution artifact then omit screenshot support to save space
-            MAKE_PRE_ARGS=""
+            export CRYSTAL_SUPPORT_SCREENSHOTS=False
           else
             # --app-only:
             # 1. Don't build the disk image because it intermittently fails
@@ -179,9 +179,9 @@ jobs:
             MAKE_POST_ARGS="--app-only"
             # If not building a distribution artifact then include
             # screenshot support for better debugging
-            MAKE_PRE_ARGS="CRYSTAL_SUPPORT_SCREENSHOTS=True"
+            export CRYSTAL_SUPPORT_SCREENSHOTS=True
           fi
-          $MAKE_PRE_ARGS poetry run ./make-mac.sh $MAKE_POST_ARGS
+          poetry run ./make-mac.sh $MAKE_POST_ARGS
       
       - name: Enable core dumps
         if: env.ENABLE_CORE_DUMPS == 'true'
