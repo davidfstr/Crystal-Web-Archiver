@@ -842,5 +842,14 @@ Source: "dist\lib\tzdata\zoneinfo\US\Pacific"; DestDir: "{app}\lib\tzdata\zonein
 Source: "dist\lib\tzdata\zoneinfo\US\Samoa"; DestDir: "{app}\lib\tzdata\zoneinfo\US"
 Source: "dist\lib\tzdata\zoneinfo\US\__init__.py"; DestDir: "{app}\lib\tzdata\zoneinfo\US"
 
+[Tasks]
+Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"
+
+[Run]
+Filename: "{app}\Crystal.exe"; Description: "Launch Crystal"; Flags: postinstall skipifsilent
+
 [Icons]
+; Creates a shortcut for Crystal.exe in the program group (Start Menu folder).
 Name: "{group}\Crystal"; Filename: "{app}\Crystal.exe"
+; Creates a shortcut for Crystal.exe on the desktop, if the user selects the "Create a desktop icon" task.
+Name: "{commondesktop}\Crystal"; Filename: "{app}\Crystal.exe"; Tasks: desktopicon
