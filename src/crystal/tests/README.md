@@ -1,8 +1,5 @@
 # Automated Tests for Crystal
 
-As of 2025 there are now so many automated tests that it's worth documenting
-the patterns that have worked well for writing tests in Crystal.
-
 Most tests are end-to-end UI tests, which open up a real Crystal project,
 interact with UI controls to perform actions, and verify that the output
 UI or project state is as expected.
