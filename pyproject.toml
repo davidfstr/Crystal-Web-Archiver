@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "crystal-web"
-version = "1.9.0b"
+version = "1.10.0"
 description = "Downloads websites for long-term archival."
 authors = ["David Foster <david@dafoster.net>"]
 readme = "README.md"
 license = "Proprietary"
 repository = "https://github.com/davidfstr/Crystal-Web-Archiver"
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: MacOS X",
     "Environment :: Win32 (MS Windows)",
     "Environment :: X11 Applications",

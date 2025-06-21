@@ -1,13 +1,13 @@
 [Setup]
 AppName=Crystal
-AppVersion=1.9.0b
+AppVersion=1.10.0
 AppCopyright=Copyright (C) 2011-2025 David Foster. All Rights Reserved
 DefaultDirName={autopf}\Crystal
 DefaultGroupName=Crystal
 UninstallDisplayIcon={app}\Crystal.exe
 Compression=lzma2
 SolidCompression=yes
-OutputBaseFilename=crystal-win-1.9.0b
+OutputBaseFilename=crystal-win-1.10.0
 OutputDir=dist-win
 DisableProgramGroupPage=yes
 ; Tell Explorer to refresh file extension information after (un)install,

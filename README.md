@@ -11,15 +11,15 @@ scrolling feeds of content (such as social media sites).
 
 If you are an early adopter and want to get started downloading your first website
 with Crystal, please see the Tutorial below.
-Additional documentation will be available once Crystal is no longer **in beta**.
+Additional documentation will be available once Crystal v2.0 is released.
 
 Download ⬇︎
 --------
 
 Either install a binary version of Crystal:
 
-* [macOS 13 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.9.0b/crystal-mac-1.9.0b.dmg)
-* [Windows 11 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.9.0b/crystal-win-1.9.0b.exe)
+* [macOS 13 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.10.0/crystal-mac-1.10.0.dmg)
+* [Windows 11 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.10.0/crystal-win-1.10.0.exe)
 
 Or install from source, using pipx:
 
