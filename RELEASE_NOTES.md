@@ -29,6 +29,8 @@ Release Notes ⋮
 * Distribution improvements
     * The macOS app is codesigned and no longer requires you to bypass
       Gatekeeper security settings to open it for the first time.
+    * The Windows installer now offers to create a desktop icon and
+      open Crystal after installation.
 
 * Downloading improvements
     * HTTPS certificates are now loaded from the system certificate store
