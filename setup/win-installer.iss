@@ -2,7 +2,7 @@
 AppName=Crystal
 AppVersion=1.9.0b
 AppCopyright=Copyright (C) 2011-2025 David Foster. All Rights Reserved
-DefaultDirName={pf}\Crystal
+DefaultDirName={autopf}\Crystal
 DefaultGroupName=Crystal
 UninstallDisplayIcon={app}\Crystal.exe
 Compression=lzma2
