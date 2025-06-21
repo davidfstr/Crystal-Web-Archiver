@@ -10,7 +10,12 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### v1.10.0 (June 21, 2025)
+
+This release contains significant usability improvements: Reopening a project
+resumes any downloads that were previously running, enabling download of very
+large websites across multiple session of using Crystal. Additionally the
+number of clicks to perform several common actions is reduced.
 
 * Workflow improvements
     * Reopening a project resumes any downloads that were in progress
@@ -60,6 +65,7 @@ Release Notes ⋮
       or as "Crystal: A Website Downloader" in long form.
         * Application binary name is changed. **(Breaking Change)**
         * Log file location is changed. **(Breaking Change)**
+    * Crystal is no longer advertised with a beta version.
 
 ### v1.9.0b (June 22, 2024)
 
