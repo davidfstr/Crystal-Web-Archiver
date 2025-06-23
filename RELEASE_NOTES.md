@@ -65,7 +65,10 @@ number of clicks to perform several common actions is reduced.
       or as "Crystal: A Website Downloader" in long form.
         * Application binary name is changed. **(Breaking Change)**
         * Log file location is changed. **(Breaking Change)**
-    * Crystal is no longer advertised with a beta version.
+    * Crystal is no longer advertised as "beta" software.
+        * It is highly stable, with strong backward-compatibility guarantees.
+        * Still, a proper intro video needs to be created to make it easy 
+          for new users to see the value of Crystal.
 
 ### v1.9.0b (June 22, 2024)
 
