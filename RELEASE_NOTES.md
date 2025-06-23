@@ -14,7 +14,7 @@ Release Notes ⋮
 
 This release contains significant usability improvements: Reopening a project
 resumes any downloads that were previously running, enabling download of very
-large websites across multiple session of using Crystal. Additionally the
+large websites across multiple sessions of using Crystal. Additionally the
 number of clicks to perform several common actions is reduced.
 
 * Workflow improvements
