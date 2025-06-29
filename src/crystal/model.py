@@ -1716,6 +1716,9 @@ class _WeakTaskRef(Generic[_TK]):
     def _get_task(self) -> _TK | None:
         return self._task
     def _set_task(self, value: _TK | None) -> None:
+        if value is not None and value.complete:
+            # Do not hold reference to an already completed task
+            value = None  # reinterpret
         if self._task:
             self._task.listeners.remove(self)
         self._task = value
