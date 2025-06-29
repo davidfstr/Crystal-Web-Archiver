@@ -1381,17 +1381,16 @@ class Project(ListenableMixin):
     
     def add_task(self, task: Task) -> None:
         """
-        Schedules the specified top-level task for execution.
-        
-        The specified task is allowed to already be complete.
+        Schedules the specified top-level task for execution,
+        unless it is already complete.
         
         Raises:
         * ProjectClosedError -- if this project is closed
         """
-        task_was_complete = task.complete  # capture
-        self.root_task.append_child(task, already_complete_ok=True)
-        if task_was_complete:
-            self.root_task.child_task_did_complete(task)
+        if task.complete:
+            # Do not schedule already complete tasks
+            return
+        self.root_task.append_child(task)
     
     @fg_affinity
     def hibernate_tasks(self) -> None:
