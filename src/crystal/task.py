@@ -437,6 +437,8 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         
         for c in final_children:
             self.append_child(c, already_complete_ok=True)
+            # Immediately stop listening to the child because it is already complete
+            c.listeners.remove(self)
         # NOTE: Must manually update some bookkeeping normally done by
         #       task_did_complete() because that event type isn't being fired
         self._num_children_complete = len(final_children)
@@ -656,7 +658,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
             assert task in self.children_unsynchronized
         
         self._num_children_complete += 1
-        
+
         task.listeners.remove(self)
         if self._use_extra_listener_assertions:
             assert self not in task.listeners
