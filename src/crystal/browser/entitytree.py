@@ -364,13 +364,13 @@ class EntityTree(Bulkhead):
     
     @capture_crashes_to_self
     def on_change_url_prefix_menuitem_selected(self, event: wx.MenuEvent, node: Node | None) -> None:
-        assert node is not None
-        
         item_id = event.Id
         if item_id == self._ID_SET_DOMAIN_PREFIX:
+            assert node is not None
             assert isinstance(node, (_ResourceNode, ResourceGroupNode))
             self.set_default_url_prefix('domain', self._url_or_url_prefix_for(node))
         elif item_id == self._ID_SET_DIRECTORY_PREFIX:
+            assert node is not None
             assert isinstance(node, (_ResourceNode, ResourceGroupNode))
             self.set_default_url_prefix('directory', self._url_or_url_prefix_for(node))
         elif item_id == self._ID_CLEAR_PREFIX:

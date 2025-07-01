@@ -12,6 +12,11 @@ Release Notes ⋮
 
 ### main
 
+* Workflow improvements
+    * On Windows selecting any item in the Entity menu immediately after
+      creating a new project, such as "New Root URL..." or "New Group..."
+      no longer fails.
+
 * Minor fixes
     * Rephrased the placeholder text for Name fields to more-obviously be
       placeholders, especially for environments like Windows where the
