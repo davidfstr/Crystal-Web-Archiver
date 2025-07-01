@@ -10,6 +10,13 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Minor fixes
+    * Rephrased the placeholder text for Name fields to more-obviously be
+      placeholders, especially for environments like Windows where the
+      placeholder text color is similar to the regular text color.
+
 ### v1.10.0 (June 21, 2025)
 
 This release contains significant usability improvements: Reopening a project

@@ -188,7 +188,7 @@ class NewGroupDialog:
         self.name_field = wx.TextCtrl(
             parent, value=initial_name,
             name='cr-new-group-dialog__name-field')
-        self.name_field.Hint = 'Post'
+        self.name_field.Hint = 'e.g. Post'
         self.name_field.SetSelection(-1, -1)  # select all upon focus
         fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         

@@ -210,7 +210,7 @@ class NewRootUrlDialog:
                 self._name_field = wx.TextCtrl(
                     parent, value=initial_name,
                     name='cr-new-root-url-dialog__name-field')
-                self._name_field.Hint = 'Home'
+                self._name_field.Hint = 'e.g. Home'
                 self._name_field.SetSelection(-1, -1)  # select all upon focus
                 name_field_and_space.Add(self._name_field, proportion=1, flag=wx.EXPAND)
                 
