@@ -29,6 +29,11 @@ on:
 run-name: >
   ${{ github.event_name == 'workflow_dispatch' && 'Manual CI run' || '' }}
 
+# Set the subset of tests to run across all environments.
+# To run all tests, set to an empty string.
+env:
+  TEST_NAMES: ""
+
 # 1. Test Crystal binary on each supported OS
 # 2. Test Crystal with Address Sanitizer on macOS specially
 #    because segfaults more common on macOS
@@ -108,7 +113,7 @@ jobs:
           # Multiply timeouts because ASan builds of Python are slower than regular builds
           CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER: '2.0'
         run: |
-          crystal --test
+          crystal --test ${TEST_NAMES}
 
   build-macos:
     strategy:
@@ -246,7 +251,7 @@ jobs:
           TERM: __interactive__
         run: |
           ulimit -c unlimited  # allow core dumps of unlimited size
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots "setup/dist/Crystal.app/Contents/MacOS/Crystal" --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots "setup/dist/Crystal.app/Contents/MacOS/Crystal" --test ${TEST_NAMES}
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
@@ -388,7 +393,7 @@ jobs:
           # https://stackoverflow.com/a/3718867/604063
           MALLOC_CHECK_: '2'
         run: |
-          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test
+          CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots poetry run xvfb-run crystal --test ${TEST_NAMES}
 
       - name: Upload screenshot if test failure
         if: failure()
@@ -460,7 +465,7 @@ jobs:
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
           $env:CRYSTAL_FAULTHANDLER = "True"
-          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal.exe" "---" "--test"
+          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal.exe" "---" "--test" ${env:TEST_NAMES}
 
       - name: Upload screenshot if test failure
         if: failure()
