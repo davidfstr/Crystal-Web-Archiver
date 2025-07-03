@@ -12,9 +12,12 @@ class SubtestsContext:
     def __init__(self, test_name: str) -> None:
         self._test_name = test_name
         self._report = StringIO()
+        self._had_failure_or_error = False
     
-    # TODO: Allow with-statement to be used on SubtestsContext directly,
-    #       eliminating the need to call run() in the API.
+    # TODO: Inline implementation of SubtestsContext.run() into with_subtests()
+    #       rather than keeping it in SubtestsContext.
+    # 
+    # NOTE: Duplicate logic in SubtestsContext.run() and awith_subtests().
     @contextmanager
     def run(self) -> 'Iterator[SubtestsContext]':
         raised_exc = True
@@ -29,8 +32,12 @@ class SubtestsContext:
             if len(subtest_report) != 0:
                 print(subtest_report, end='')
                 print('-' * 70)
-                if not raised_exc:
-                    raise SubtestFailed()
+                if self._had_failure_or_error:
+                    if not raised_exc:
+                        raise SubtestFailed()
+                    else:
+                        # Allow the previously raised exception to propagate
+                        pass
     
     @contextmanager
     def test(self, msg: str | None=None, **kwargs: object) -> Iterator[None]:
@@ -63,12 +70,14 @@ class SubtestsContext:
             if isinstance(e, AssertionError):
                 exc_category = 'FAILURE'
                 exc_traceback_useful = True
+                self._had_failure_or_error = True
             elif isinstance(e, SkipTest):
                 exc_category = 'SKIP'
                 exc_traceback_useful = False
             else:
                 exc_category = 'ERROR'
                 exc_traceback_useful = True
+                self._had_failure_or_error = True
             
             subtest_name_parts = [f'[{msg}] '] if msg is not None else []
             for (k, v) in kwargs.items():
@@ -112,6 +121,7 @@ def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], 
     return wrapper
 
 
+# NOTE: Duplicate logic in SubtestsContext.run() and awith_subtests().
 def awith_subtests(test_func: Callable[[SubtestsContext], Awaitable[None]]) -> Callable[[], Awaitable[None]]:
     """Decorates a test function which can use subtests."""
     test_func_id = (test_func.__module__, test_func.__name__)
@@ -132,8 +142,12 @@ def awith_subtests(test_func: Callable[[SubtestsContext], Awaitable[None]]) -> C
             if len(subtest_report) != 0:
                 print(subtest_report, end='')
                 print('-' * 70)
-                if not raised_exc:
-                    raise Exception('Subtests did fail')
+                if subtests._had_failure_or_error:
+                    if not raised_exc:
+                        raise SubtestFailed()
+                    else:
+                        # Allow the previously raised exception to propagate
+                        pass
     return wrapper
 
 
