@@ -53,7 +53,7 @@ from crystal.util.xcollections.sortedlist import BLACK_HOLE_SORTED_LIST
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xgc import gc_disabled
 from crystal.util.xos import is_linux, is_mac_os, is_windows
-from crystal.util.xsqlite3 import sqlite_has_json_support
+from crystal.util.xsqlite3 import is_database_read_only_error, sqlite_has_json_support
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
     is_foreground_thread,
@@ -365,6 +365,19 @@ class Project(ListenableMixin):
         try:
             # Enable use of REGEXP operator and regexp() function
             db.create_function('regexp', 2, lambda x, y: re.search(x, y) is not None)
+            
+            # Check whether the database is actually writable by SQLite.
+            # Some remote filesystems (such as GVFS/SFTP) may support
+            # creating a database file but not actually writing to it.
+            if not readonly_actual:
+                try:
+                    c = db.cursor()
+                    c.execute('pragma user_version = user_version')
+                except Exception as e:
+                    if is_database_read_only_error(e):
+                        readonly_actual = True  # reinterpret
+                    else:
+                        raise
             
             # Prefer Write Ahead Log (WAL) mode for higher performance
             if not readonly_actual:
