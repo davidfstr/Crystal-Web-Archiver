@@ -33,6 +33,7 @@ with a focus on archiving websites that are at risk of becoming no longer availa
 * Use `crystal --test` to run all end-to-end tests. All end-to-end tests take as long as 4 minutes to run locally, so prefer running individual test files when possible.
 * Use `pytest` to run all unit tests. The exit code will be 0 only if tests pass. All unit tests take less than a second to run locally, so you can run them all at once without worrying about performance.
 
-## bash and shell scripts
+## Limitations
 
-* Prefer long-form options over short-form options for clarity. When converting a short-form option to a specific long-form option be sure the specific long-form option actually exists.
+* For files over 1000 lines Copilot should provide a diff for manual application instead of editing directly with a tool. Copilot's editing tools do not work reliably on files more than 1000 lines long.
+    * In particular `crystal/model.py` and `crystal/task.py` are over 1000 lines long and should not be edited directly.
