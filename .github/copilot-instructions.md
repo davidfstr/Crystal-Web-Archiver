@@ -33,6 +33,11 @@ with a focus on archiving websites that are at risk of becoming no longer availa
 * Use `crystal --test` to run all end-to-end tests. All end-to-end tests take as long as 4 minutes to run locally, so prefer running individual test files when possible.
 * Use `pytest` to run all unit tests. The exit code will be 0 only if tests pass. All unit tests take less than a second to run locally, so you can run them all at once without worrying about performance.
 
+## Conventions
+
+* Use single quotes for strings, e.g. `my_string = 'hello'`.
+* Use double quotes for docstrings, e.g. `"""This is a docstring."""`
+
 ## Limitations
 
 * For files over 1000 lines Copilot should provide a diff for manual application instead of editing directly with a tool. Copilot's editing tools do not work reliably on files more than 1000 lines long.
