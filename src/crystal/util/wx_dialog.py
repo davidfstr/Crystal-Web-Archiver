@@ -1,8 +1,12 @@
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from crystal import resources
 from crystal.util.test_mode import tests_are_running
+from crystal.util.wx_bind import bind
 from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows
+from crystal.util.xthreading import ContinueSoonFunc, FgCommand, fg_affinity
+from types import coroutine
 from typing import Protocol
+import warnings
 import wx
 
 
@@ -12,6 +16,14 @@ def ShowModal(dialog: wx.Dialog) -> int:
     running automated tests.
     """
     is_running_tests = tests_are_running()  # cache
+    
+    if not isinstance(dialog, wx.MessageDialog):
+        warnings.warn(
+            'ShowModalAsync should be preferred for showing modal dialogs '
+            'other than wx.MessageDialog because it is less prone to deadlocks.',
+            category=DeprecationWarning,
+            stacklevel=2
+        )
     
     if is_running_tests and isinstance(dialog, wx.MessageDialog):
         # A wx.MessageDialog opened with ShowModal cannot be interacted
@@ -65,6 +77,74 @@ def mocked_show_modal(
     ShowModal.call_count = 0
     return ShowModal
 
+# ------------------------------------------------------------------------------
+# ShowModalAsync
+
+@coroutine
+@fg_affinity
+def ShowModalAsync(dialog: wx.Dialog) -> Generator[FgCommand, ContinueSoonFunc | int, int]:
+    """
+    Shows the specified dialog and suspends until the dialog is closed,
+    usually by the user clicking a button.
+    
+    Must be called from within a coroutine run by start_fg_coroutine().
+    
+    Example:
+        async def my_fg_coroutine() -> None:
+            dialog = ...
+            return_code = await ShowModalAsync(dialog)
+            ...  # do something with the return code
+        
+        start_fg_coroutine(my_fg_coroutine)
+    """
+    continue_soon_func = yield FgCommand.GET_CONTINUE_SOON_FUNC
+    assert callable(continue_soon_func)  # is a ContinueSoonFunc
+    
+    def on_button(event: wx.CommandEvent) -> None:
+        dialog.SetReturnCode(event.EventObject.Id)
+        on_close()
+
+    def on_char_hook(event: wx.KeyEvent) -> None:
+        # TODO: Support Command-Period on macOS. Unfortunately the following
+        #       never returns true: `keycode == ord('.') and event.CmdDown()`
+        is_cancel_gesture = (
+            # Esc key
+            event.KeyCode == wx.WXK_ESCAPE
+        )
+        
+        if is_cancel_gesture:
+            # Try to find a cancel button
+            cancel_btn = dialog.FindWindowById(wx.ID_CANCEL)
+            if cancel_btn and cancel_btn.IsEnabled():
+                cancel_btn.Command(wx.EVT_BUTTON.typeId)
+            else:
+                dialog.SetReturnCode(dialog.GetEscapeId())
+                on_close()
+            return  # don't propagate
+        
+        event.Skip()
+    
+    def on_close(event: wx.CloseEvent | None = None):
+        if event is not None:
+            dialog.SetReturnCode(dialog.GetEscapeId())
+        
+        return_code = dialog.GetReturnCode()  # capture
+        # NOTE: The caller is responsible for destroying the dialog
+        dialog.Hide()
+        continue_soon_func(return_code)
+
+    bind(dialog, wx.EVT_BUTTON, on_button)
+    bind(dialog, wx.EVT_CHAR_HOOK, on_char_hook)
+    bind(dialog, wx.EVT_CLOSE, on_close)
+    dialog.Show()
+    
+    return_code = yield FgCommand.SUSPEND_UNTIL_CONTINUE
+    assert isinstance(return_code, int)
+    return return_code
+
+
+# ------------------------------------------------------------------------------
+# Misc Utilities
 
 def position_dialog_initially(dialog: wx.Dialog) -> None:
     """

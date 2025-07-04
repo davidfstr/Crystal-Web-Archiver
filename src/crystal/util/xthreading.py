@@ -14,13 +14,14 @@ from crystal.util.bulkheads import (
     capture_crashes_to_stderr, ensure_is_bulkhead_call,
 )
 from crystal.util.profile import create_profiled_callable
+from crystal.util.xfunctools import partial2
 from enum import Enum
 from functools import partial, wraps
 import os
 import sys
 import threading
 import traceback
-from typing import cast, Deque, Optional, TypeVar
+from typing import Any, assert_never, cast, Deque, Optional, Protocol, TypeVar
 from typing_extensions import ParamSpec
 import wx
 
@@ -473,6 +474,56 @@ def run_thread_switching_coroutine(
 
 
 _CALL_NOW = lambda f: f()
+
+
+# ------------------------------------------------------------------------------
+# Foreground Coroutines
+
+class FgCommand(Enum):
+    GET_CONTINUE_SOON_FUNC = 1
+    SUSPEND_UNTIL_CONTINUE = 2
+
+
+class ContinueSoonFunc(Protocol):
+    def __call__(self, return_value: Any = None) -> None: ...
+
+
+@fg_affinity
+def start_fg_coroutine(
+        coro: Generator[FgCommand, ContinueSoonFunc | Any, None],
+        capture_crashes_to_deco: Callable[[Callable[..., None]], Callable[..., None]],
+        ) -> None:
+    """
+    Starts and drives a foreground coroutine that yields FgCommand instructions.
+    The coroutine is resumed when the provided ContinueSoonFunc is called.
+    
+    Arguments:
+    * coro -- the coroutine to run, which yields FgCommand instructions.
+    * capture_crashes_to_deco -- 
+        a decorator that captures exceptions raised by the coroutine
+        and does something with them, such as printing a traceback.
+        Is usually one of the @capture_crashes_to* decorators.
+    """
+    @capture_crashes_to_deco
+    @fg_affinity
+    def step(send_value: Any) -> None:
+        try:
+            command = coro.send(send_value)
+        except StopIteration:
+            return
+
+        if command == FgCommand.GET_CONTINUE_SOON_FUNC:
+            # Provide a function that, when called, schedules the next step
+            def continue_soon(return_value: Any=None) -> None:
+                """Calls the next step of the coroutine."""
+                fg_call_later(partial2(step, return_value))
+            step(continue_soon)
+        elif command == FgCommand.SUSPEND_UNTIL_CONTINUE:
+            # Suspend until continue_soon is called
+            pass
+        else:
+            assert_never(command)
+    step(None)
 
 
 # ------------------------------------------------------------------------------

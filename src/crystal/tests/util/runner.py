@@ -54,7 +54,7 @@ def run_test(test_func: Callable[[], Awaitable[_T]] | Callable[[], _T]) -> _T:
 
 @coroutine
 @fg_affinity
-def bg_sleep(  # type: ignore[misc]  # ignore non-Generator return type here
+def bg_sleep(
         duration: float
         ) -> Generator[Command, object, None]:
     """

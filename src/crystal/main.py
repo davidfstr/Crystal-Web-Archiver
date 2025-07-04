@@ -25,6 +25,7 @@ import sys
 import threading
 import time
 import traceback
+from typing import ParamSpec, TypeVar
 
 try:
     from typing import TYPE_CHECKING
@@ -39,6 +40,10 @@ if TYPE_CHECKING:
     from crystal.shell import Shell
     from typing import Optional
     import wx
+
+
+_P = ParamSpec('_P')
+_RT = TypeVar('_RT')
 
 
 def main() -> None:
@@ -311,11 +316,17 @@ def _main(args: list[str]) -> None:
                 self._finish_launch(filepath)
         
         def _finish_launch(self, filepath: str | None=None) -> None:
+            from crystal.util.xthreading import start_fg_coroutine
+            start_fg_coroutine(
+                self._do_finish_launch(filepath),  # type: ignore[arg-type]
+                _capture_crashes_to_stderr_and_capture_systemexit_to_quit)
+        
+        async def _do_finish_launch(self, filepath: str | None) -> None:
             self._did_finish_launch = True
             
             try:
                 nonlocal last_project
-                last_project = _did_launch(parsed_args, shell, filepath)
+                last_project = await _did_launch(parsed_args, shell, filepath)
             except SystemExit:
                 nonlocal did_quit_during_first_launch
                 did_quit_during_first_launch = True
@@ -407,7 +418,13 @@ def _main(args: list[str]) -> None:
             parsed_args.filepath = None
             
             # Re-launch, reopening the initial dialog
-            last_project = _did_launch(parsed_args, shell)  # can raise SystemExit
+            from crystal.util.xthreading import start_fg_coroutine
+            async def relaunch():
+                nonlocal last_project
+                last_project = await _did_launch(parsed_args, shell)  # can raise SystemExit
+            start_fg_coroutine(
+                relaunch(),
+                _capture_crashes_to_stderr_and_capture_systemexit_to_quit)
     except SystemExit as e:
         if e.code not in [None, 0]:
             # Exit with error
@@ -427,7 +444,7 @@ def _main(args: list[str]) -> None:
                 print('Warning: Exiting app while some pending events still exist')
 
 
-def _did_launch(
+async def _did_launch(
         parsed_args,
         shell: Shell | None,
         filepath: str | None=None
@@ -460,7 +477,7 @@ def _did_launch(
             if filepath is None:
                 # NOTE: Can raise SystemExit
                 retry_on_cancel = True
-                project = _prompt_for_project(progress_listener, **project_kwargs)
+                project = await _prompt_for_project(progress_listener, **project_kwargs)
             else:
                 # NOTE: Can raise CancelOpenProject
                 retry_on_cancel = False
@@ -480,7 +497,7 @@ def _did_launch(
         if project is not None:
             project.close()
         if retry_on_cancel:
-            return _did_launch(parsed_args, shell, filepath)
+            return await _did_launch(parsed_args, shell, filepath)
         else:
             raise SystemExit()
     
@@ -494,7 +511,7 @@ def _did_launch(
     return project
 
 
-def _prompt_for_project(
+async def _prompt_for_project(
         progress_listener: OpenProjectProgressListener,
         **project_kwargs: object
         ) -> Project:
@@ -534,8 +551,8 @@ def _prompt_for_project(
         ]))
         
         while True:
-            from crystal.util.wx_dialog import ShowModal
-            choice = ShowModal(dialog)
+            from crystal.util.wx_dialog import ShowModalAsync
+            choice = await ShowModalAsync(dialog)
             
             project_kwargs = {
                 **project_kwargs,
@@ -748,6 +765,25 @@ def _show_invalid_project_dialog(
     with dialog:
         position_dialog_initially(dialog)
         _show_modal_func(dialog)
+
+
+def _capture_crashes_to_stderr_and_capture_systemexit_to_quit(
+        func: Callable[_P, _RT]
+        ) -> Callable[_P, _RT | None]:
+    """
+    A variant of @capture_crashes_to_stderr that captures crashes
+    but interprets SystemExit exceptions as a normal request to quit.
+    """
+    from crystal.util.bulkheads import capture_crashes_to_stderr
+    @capture_crashes_to_stderr
+    def bulkhead_call(*args: _P.args, **kwargs: _P.kwargs) -> _RT | None:
+        try:
+            return func(*args, **kwargs)  # cr-traceback: ignore
+        except SystemExit:
+            from crystal.util.xthreading import set_is_quitting
+            set_is_quitting()
+            return None
+    return bulkhead_call
 
 
 # ------------------------------------------------------------------------------
