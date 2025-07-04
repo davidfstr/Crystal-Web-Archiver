@@ -64,11 +64,8 @@ def _main(args: list[str]) -> None:
         log_dirpath = user_log_dir(APP_NAME, APP_AUTHOR)
         os.makedirs(log_dirpath, exist_ok=True)
         
-        sys.stdout = open(
-            os.path.join(log_dirpath, 'stdout.log'), 
-            'w', encoding='utf-8', buffering=1)
-        sys.stderr = open(
-            os.path.join(log_dirpath, 'stderr.log'), 
+        sys.stdout = sys.stderr = open(
+            os.path.join(log_dirpath, 'stdouterr.log'), 
             'w', encoding='utf-8', buffering=1)
     
     # If CRYSTAL_FAULTHANDLER == True or running from source,

@@ -465,7 +465,7 @@ jobs:
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
           $env:CRYSTAL_FAULTHANDLER = "True"
-          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdoutfile=$LOGDIR\stdout.log" "--stderrfile=$LOGDIR\stderr.log" "dist\Crystal.exe" "---" "--test" ${env:TEST_NAMES}
+          poetry run python run_exe.py "--argsfile=arguments.txt" "--stdouterrfile=$LOGDIR\stdouterr.log" "dist\Crystal.exe" "---" "--test" ${env:TEST_NAMES}
 
       - name: Upload screenshot if test failure
         if: failure()
