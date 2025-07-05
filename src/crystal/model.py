@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from concurrent.futures import Future
+from contextlib import contextmanager
 import copy
 from crystal import resources as resources_
 from crystal.doc.css import parse_css_and_links
@@ -187,6 +188,16 @@ class Project(ListenableMixin):
         * path -- 
             path to a project directory (ending with `FILE_EXTENSION`)
             or to a project opener (ending with `OPENER_FILE_EXTENSION`).
+        * progress_listener --
+            receives progress updates while the project is being opened.
+        * load_urls_progress_listener --
+            receives progress updates while URLs are being loaded,
+            even after the project has been opened.
+        * readonly --
+            whether to open the project in read-only mode.
+            If True, the project must already exist at the specified path.
+            Note that a project on read-only media (such as a DVD-R) will
+            always be opened in read-only mode, regardless of this argument.
         
         Raises:
         * FileNotFoundError --
@@ -198,11 +209,13 @@ class Project(ListenableMixin):
         """
         super().__init__()
         
+        cls = type(self)
         if progress_listener is None:
             progress_listener = DummyOpenProjectProgressListener()
         if load_urls_progress_listener is None:
             load_urls_progress_listener = DummyLoadUrlsProgressListener()
         self._load_urls_progress_listener = load_urls_progress_listener
+        readonly_requested = readonly  # rename for clarity
         
         # Remove any trailing slash from the path
         (head, tail) = os.path.split(path)
@@ -229,80 +242,21 @@ class Project(ListenableMixin):
         
         progress_listener.opening_project()
         
+        create = not os.path.exists(path)
+        if create and readonly_requested:
+            # Can't create a project if cannot write to disk
+            raise FileNotFoundError(f'Cannot create new project at {path!r} when readonly=True')
+        
         self._loading = True
         try:
-            create = not os.path.exists(path)
-            if create and readonly:
-                # Can't create a project if cannot write to disk
-                raise FileNotFoundError(f'Cannot create new project at {path!r} when readonly=True')
-            
             # Create/verify project structure
             if create:
-                # Create new project structure, minus database file
-                os.mkdir(path)
-                os.mkdir(os.path.join(path, self._REVISIONS_DIRNAME))
-                
-                # TODO: Consider let _apply_migrations() define the rest of the
-                #       project structure, rather than duplicating logic here
-                os.mkdir(os.path.join(path, self._TEMPORARY_DIRNAME))
-                with open(os.path.join(path, self._OPENER_DEFAULT_FILENAME), 'wb') as f:
-                    f.write(self._OPENER_DEFAULT_CONTENT)
-                with open(os.path.join(self.path, self._README_FILENAME), 'w', newline='') as tf:
-                    tf.write(self._README_DEFAULT_CONTENT)
-                with open(os.path.join(self.path, self._DESKTOP_INI_FILENAME), 'w', newline='') as tf:
-                    tf.write(self._DESKTOP_INI_CONTENT)
-                os.mkdir(os.path.join(path, self._ICONS_DIRNAME))
-                with resources_.open_binary('docicon.ico') as src_file:
-                    with open(os.path.join(path, self._ICONS_DIRNAME, 'docicon.ico'), 'wb') as dst_file:
-                        shutil.copyfileobj(src_file, dst_file)
+                cls._create_directory_structure(path)
             else:
-                # Ensure existing project structure looks OK
-                Project._ensure_valid(path)
+                cls._ensure_directory_structure_valid(path)
             
-            # Open database
-            db_filepath = os.path.join(path, self._DB_FILENAME)  # cache
-            can_write_db = (
-                # Can write to *.crystalproj
-                # (is not Locked on macOS, is not on read-only volume)
-                os.access(path, os.W_OK) and (
-                    not os.path.exists(db_filepath) or
-                    # Can write to database
-                    # (is not Locked on macOS, is not Read Only on Windows, is not on read-only volume)
-                    os.access(db_filepath, os.W_OK)
-                )
-            )
-            db_connect_query = (
-                '?immutable=1'
-                if not can_write_db
-                else (
-                    '?mode=ro'
-                    if readonly
-                    else ''
-                )
-            )
-            db = sqlite3.connect(
-                'file:' + url_quote(db_filepath) + db_connect_query,
-                uri=True)
-            
-            try:
-                self._database_is_on_ssd = is_ssd(db_filepath)
-            except Exception:
-                # NOTE: Specially check for unexpected errors because SSD detection
-                #       is somewhat brittle and I don't want errors to completely
-                #       block opening a project
-                print(
-                    '*** Unexpected error while checking whether project database is on SSD',
-                    file=sys.stderr)
-                traceback.print_exc(file=sys.stderr)
-                
-                self._database_is_on_ssd = False  # conservative
-            
-            self._readonly = readonly or not can_write_db
-            self._db = DatabaseConnection(db, lambda: self.readonly)
-            try:
-                # Enable use of REGEXP operator and regexp() function
-                db.create_function('regexp', 2, lambda x, y: re.search(x, y) is not None)
-                
+            with cls._open_database_but_close_if_raises(path, readonly_requested) as (
+                    self._db, self._readonly, self._database_is_on_ssd):
                 c = self._db.cursor()
                 
                 # Create new project content, if missing
@@ -316,9 +270,6 @@ class Project(ListenableMixin):
                     else DummyOpenProjectProgressListener()
                 )
                 self._load(c, self._db, load_progress_listener)
-            except:
-                self.close()
-                raise
         finally:
             self._loading = False
         
@@ -336,6 +287,101 @@ class Project(ListenableMixin):
         if tests_are_running():
             Project._last_opened_project = self
     
+    @classmethod
+    def _create_directory_structure(cls, project_path: str) -> None:
+        """
+        Create a new project's directory structure, minus the database file.
+        """
+        os.mkdir(project_path)
+        os.mkdir(os.path.join(project_path, cls._REVISIONS_DIRNAME))
+        
+        # TODO: Consider let _apply_migrations() define the rest of the
+        #       project structure, rather than duplicating logic here
+        os.mkdir(os.path.join(project_path, cls._TEMPORARY_DIRNAME))
+        with open(os.path.join(project_path, cls._OPENER_DEFAULT_FILENAME), 'wb') as f:
+            f.write(cls._OPENER_DEFAULT_CONTENT)
+        with open(os.path.join(project_path, cls._README_FILENAME), 'w', newline='') as tf:
+            tf.write(cls._README_DEFAULT_CONTENT)
+        with open(os.path.join(project_path, cls._DESKTOP_INI_FILENAME), 'w', newline='') as tf:
+            tf.write(cls._DESKTOP_INI_CONTENT)
+        os.mkdir(os.path.join(project_path, cls._ICONS_DIRNAME))
+        with resources_.open_binary('docicon.ico') as src_file:
+            with open(os.path.join(project_path, cls._ICONS_DIRNAME, 'docicon.ico'), 'wb') as dst_file:
+                shutil.copyfileobj(src_file, dst_file)
+    
+    @classmethod
+    @contextmanager
+    def _open_database_but_close_if_raises(
+            cls,
+            project_path: str,
+            readonly_requested: bool,
+            ) -> Iterator[Tuple[DatabaseConnection, bool, bool]]:
+        """
+        Opens the project database before entering the context,
+        but closes it if an exception is raised in the context.
+        
+        Yields (db, readonly_actual, database_is_on_ssd).
+        """
+        
+        # Open database
+        db_filepath = os.path.join(project_path, cls._DB_FILENAME)  # cache
+        can_write_db = (
+            # Can write to *.crystalproj
+            # (is not Locked on macOS, is not on read-only volume)
+            os.access(project_path, os.W_OK) and (
+                not os.path.exists(db_filepath) or
+                # Can write to database
+                # (is not Locked on macOS, is not Read Only on Windows, is not on read-only volume)
+                os.access(db_filepath, os.W_OK)
+            )
+        )
+        db_connect_query = (
+            '?immutable=1'
+            if not can_write_db
+            else (
+                '?mode=ro'
+                if readonly_requested
+                else ''
+            )
+        )
+        db_raw = sqlite3.connect(
+            'file:' + url_quote(db_filepath) + db_connect_query,
+            uri=True)
+        
+        try:
+            database_is_on_ssd = is_ssd(db_filepath)
+        except Exception:
+            # NOTE: Specially check for unexpected errors because SSD detection
+            #       is somewhat brittle and I don't want errors to completely
+            #       block opening a project
+            print(
+                '*** Unexpected error while checking whether project database is on SSD',
+                file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            
+            database_is_on_ssd = False  # conservative
+        
+        readonly_actual = readonly_requested or not can_write_db
+        db = DatabaseConnection(db_raw, readonly_actual)
+        try:
+            # Enable use of REGEXP operator and regexp() function
+            db.create_function('regexp', 2, lambda x, y: re.search(x, y) is not None)
+            
+            # Prefer Write Ahead Log (WAL) mode for higher performance
+            if not readonly_actual:
+                c = db.cursor()
+                [(new_journal_mode,)] = c.execute('pragma journal_mode = wal')
+                if new_journal_mode != 'wal':
+                    print(
+                        '*** Unable to open database in WAL mode. '
+                            'Downloads may be slower.',
+                        file=sys.stderr)
+            
+            yield (db, readonly_actual, database_is_on_ssd)
+        except:
+            cls._close_database(db, readonly_actual)
+            raise
+    
     # --- Load: Validity ---
     
     @classmethod
@@ -348,7 +394,7 @@ class Project(ListenableMixin):
         if normalized_path is None:
             return False
         try:
-            Project._ensure_valid(normalized_path)
+            Project._ensure_directory_structure_valid(normalized_path)
         except ProjectFormatError:
             return False
         else:
@@ -373,7 +419,7 @@ class Project(ListenableMixin):
         return None  # invalid
     
     @staticmethod
-    def _ensure_valid(path: str) -> None:
+    def _ensure_directory_structure_valid(path: str) -> None:
         """
         Raises:
         * ProjectFormatError -- if the project at the specified path is invalid
@@ -716,14 +762,6 @@ class Project(ListenableMixin):
             c: DatabaseCursor,
             db: DatabaseConnection,
             progress_listener: OpenProjectProgressListener) -> None:
-        # Prefer Write Ahead Log (WAL) mode for higher performance
-        if not self.readonly:
-            [(new_journal_mode,)] = c.execute('pragma journal_mode = wal')
-            if new_journal_mode != 'wal':
-                print(
-                    '*** Unable to open database in WAL mode. '
-                        'Downloads may be slower.',
-                    file=sys.stderr)
         
         # Upgrade database schema to latest version (unless is readonly)
         if not self.readonly:
@@ -1642,12 +1680,21 @@ class Project(ListenableMixin):
             #        in a deterministic fashion, rather than relying on 
             #        garbage collection to clean up objects.)
         
+        self._close_database(self._db, self.readonly)
+        
+        # Unexport reference to self, if running tests
+        if tests_are_running():
+            if Project._last_opened_project is self:
+                Project._last_opened_project = None
+    
+    @staticmethod
+    def _close_database(db: DatabaseConnection, readonly: bool) -> None:
         # Disable Write Ahead Log (WAL) mode when closing database
         # in case the user decides to burn the project to read-only media,
         # as recommended by: https://www.sqlite.org/wal.html#readonly
-        if not self.readonly:
+        if not readonly:
             try:
-                c = self._db.cursor()
+                c = db.cursor()
                 [(old_journal_mode,)] = c.execute('pragma journal_mode')
                 if old_journal_mode == 'wal':
                     [(new_journal_mode,)] = c.execute('pragma journal_mode = delete')
@@ -1660,12 +1707,7 @@ class Project(ListenableMixin):
                 # Ignore errors while closing database
                 pass
         
-        self._db.close()
-        
-        # Unexport reference to self, if running tests
-        if tests_are_running():
-            if Project._last_opened_project is self:
-                Project._last_opened_project = None
+        db.close()
     
     # === Context Manager ===
     

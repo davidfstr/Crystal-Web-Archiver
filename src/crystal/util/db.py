@@ -13,13 +13,13 @@ class DatabaseConnection:
     
     def __init__(self,
             db: sqlite3.dbapi2.Connection,
-            readonly_func: Callable[[], bool]) -> None:
+            readonly: bool) -> None:
         self._db = db
-        self._readonly_func = readonly_func
+        self._readonly = readonly
     
     def cursor(self, *args, **kwargs) -> DatabaseCursor:
         c = self._db.cursor(*args, **kwargs)  # type: sqlite3.dbapi2.Cursor
-        return DatabaseCursor(c, self._readonly_func())
+        return DatabaseCursor(c, self._readonly)
     
     def __getattr__(self, attr_name: str):
         return getattr(self._db, attr_name)
