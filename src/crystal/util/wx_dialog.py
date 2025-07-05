@@ -10,6 +10,9 @@ import warnings
 import wx
 
 
+# ------------------------------------------------------------------------------
+# wx.Dialog.ShowModal
+
 def ShowModal(dialog: wx.Dialog) -> int:
     """
     Replacement for wx.Dialog.ShowModel() that works properly even when
@@ -195,3 +198,6 @@ def CreateButtonSizer(
     
     sizer.Realize()
     return sizer
+
+
+# ------------------------------------------------------------------------------
