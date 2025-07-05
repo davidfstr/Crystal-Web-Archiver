@@ -13,13 +13,19 @@ class DatabaseConnection:
     
     def __init__(self,
             db: sqlite3.dbapi2.Connection,
-            readonly: bool) -> None:
+            readonly: bool,
+            mark_dirty_func: Callable[[], None]) -> None:
         self._db = db
         self._readonly = readonly
+        self._mark_dirty_func = mark_dirty_func
     
     def cursor(self, *args, **kwargs) -> DatabaseCursor:
         c = self._db.cursor(*args, **kwargs)  # type: sqlite3.dbapi2.Cursor
         return DatabaseCursor(c, self._readonly)
+    
+    def commit(self) -> None:
+        self._db.commit()
+        self._mark_dirty_func()
     
     def __getattr__(self, attr_name: str):
         return getattr(self._db, attr_name)
