@@ -63,7 +63,8 @@ def set_foreground_thread(fg_thread: threading.Thread | None) -> None:
     _fg_thread = fg_thread
 
 
-def is_foreground_thread() -> bool:
+# NOTE: _expect is used by automated tests when patching this function
+def is_foreground_thread(*, _expect: bool | None=None) -> bool:
     """
     Returns whether the current thread is the foreground thread
     (with the active wx.App object).
@@ -125,7 +126,9 @@ def bg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
     if __debug__:  # no -O passed on command line?
         @wraps(func)
         def wrapper(*args, **kwargs):
-            assert not is_foreground_thread()
+            if is_foreground_thread(_expect=False):
+                raise AssertionError(
+                    f'bg_affinity: Expected call on not foreground thread: {func}')
             return func(*args, **kwargs)  # cr-traceback: ignore
         return wrapper
     else:
