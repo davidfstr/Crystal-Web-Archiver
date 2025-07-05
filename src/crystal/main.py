@@ -711,7 +711,7 @@ def _load_project(
     Raises:
     * CancelOpenProject
     """
-    from crystal.model import Project, ProjectFormatError, ProjectTooNewError
+    from crystal.model import Project, ProjectFormatError, ProjectReadOnlyError, ProjectTooNewError
     from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog
     from crystal.util.wx_dialog import position_dialog_initially
     import wx
@@ -722,7 +722,7 @@ def _load_project(
     
     try:
         return Project(project_path, progress_listener, LoadUrlsProgressDialog(), **project_kwargs)  # type: ignore[arg-type]
-    except FileNotFoundError:
+    except ProjectReadOnlyError:
         # TODO: Present this error to the user nicely
         raise
     except ProjectFormatError:

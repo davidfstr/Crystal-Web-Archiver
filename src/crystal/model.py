@@ -183,7 +183,8 @@ class Project(ListenableMixin):
             path: str,
             progress_listener: OpenProjectProgressListener | None=None,
             load_urls_progress_listener: LoadUrlsProgressListener | None=None,
-            *, readonly: bool=False) -> None:
+            *, readonly: bool=False,
+            is_untitled: bool=False) -> None:
         """
         Loads a project from the specified itempath, or creates a new one if none is found.
         
@@ -203,8 +204,9 @@ class Project(ListenableMixin):
             always be opened in read-only mode, regardless of this argument.
         
         Raises:
-        * FileNotFoundError --
-            if readonly is True and no project already exists at the specified path
+        * ProjectReadOnlyError --
+            if a new project could not be created because the path is 
+            on a read-only filesystem or a filesystem that SQLite cannot write to
         * ProjectFormatError -- if the project at the specified path is invalid
         * ProjectTooNewError -- 
             if the project is a version newer than this version of Crystal can open safely
@@ -233,13 +235,15 @@ class Project(ListenableMixin):
         
         self.path = path
         
+        self._readonly = True  # will reinitialize after database is located
+        self._is_untitled = is_untitled
+        self._is_dirty = False
         self._properties = dict()               # type: Dict[str, Optional[str]]
         self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
         self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
         self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
-        self._readonly = True  # will reinitialize after database is located
         
         self._min_fetch_date = None  # type: Optional[datetime.datetime]
         
@@ -248,7 +252,8 @@ class Project(ListenableMixin):
         create = not os.path.exists(path)
         if create and readonly_requested:
             # Can't create a project if cannot write to disk
-            raise FileNotFoundError(f'Cannot create new project at {path!r} when readonly=True')
+            raise ProjectReadOnlyError(
+                f'Cannot create new project at {path!r} when readonly=True')
         
         self._loading = True
         try:
@@ -257,22 +262,30 @@ class Project(ListenableMixin):
                 cls._create_directory_structure(path)
             else:
                 cls._ensure_directory_structure_valid(path)
-            
-            with cls._open_database_but_close_if_raises(path, readonly_requested) as (
-                    self._db, self._readonly, self._database_is_on_ssd):
-                c = self._db.cursor()
-                
-                # Create new project content, if missing
+            try:
+                # NOTE: May raise ProjectReadOnlyError if the database cannot be opened as writable
+                with cls._open_database_but_close_if_raises(path, readonly_requested, self._mark_dirty_if_untitled, expect_writable=create) as (
+                        self._db, self._readonly, self._database_is_on_ssd):
+                    c = self._db.cursor()
+                    
+                    # Create new project content, if missing
+                    if create:
+                        self._create(c, self._db)
+                    
+                    # Load from existing project
+                    # NOTE: Don't provide detailed feedback when creating a project initially
+                    load_progress_listener = (
+                        progress_listener if not create
+                        else DummyOpenProjectProgressListener()
+                    )
+                    self._load(c, self._db, load_progress_listener)
+                    
+                    # Reset dirty state after loading
+                    self._is_dirty = False
+            except:
                 if create:
-                    self._create(c, self._db)
-                
-                # Load from existing project
-                # NOTE: Don't provide detailed feedback when creating a project initially
-                load_progress_listener = (
-                    progress_listener if not create
-                    else DummyOpenProjectProgressListener()
-                )
-                self._load(c, self._db, load_progress_listener)
+                    shutil.rmtree(path, ignore_errors=True)
+                raise
         finally:
             self._loading = False
         
@@ -315,14 +328,20 @@ class Project(ListenableMixin):
             cls,
             project_path: str,
             readonly_requested: bool,
+            mark_dirty_func: Callable[[], None],
+            expect_writable: bool
             ) -> Iterator[Tuple[DatabaseConnection, bool, bool]]:
         """
         Opens the project database before entering the context,
         but closes it if an exception is raised in the context.
         
         Yields (db, readonly_actual, database_is_on_ssd).
-        
+
         Effects of this method are reversed by `_close_database()`.
+        
+        Raises:
+        * ProjectReadOnlyError -- 
+            if expect_writable is True but the project database cannot be opened as writable
         """
         
         # Open database
@@ -364,7 +383,7 @@ class Project(ListenableMixin):
             database_is_on_ssd = False  # conservative
         
         readonly_actual = readonly_requested or not can_write_db
-        db = DatabaseConnection(db_raw, readonly_actual)
+        db = DatabaseConnection(db_raw, readonly_actual, mark_dirty_func)
         try:
             # Enable use of REGEXP operator and regexp() function
             db.create_function('regexp', 2, lambda x, y: re.search(x, y) is not None)
@@ -377,10 +396,15 @@ class Project(ListenableMixin):
                     c = db.cursor()
                     c.execute('pragma user_version = user_version')
                 except Exception as e:
+                    # TODO: Write an automated test for this failure case
                     if is_database_read_only_error(e):
                         readonly_actual = True  # reinterpret
                     else:
                         raise
+            
+            if expect_writable and readonly_actual:
+                raise ProjectReadOnlyError(
+                    f'Cannot open project database as writable at {project_path!r}')
             
             # Prefer Write Ahead Log (WAL) mode for higher performance
             if not readonly_actual:
@@ -947,6 +971,35 @@ class Project(ListenableMixin):
         and is not persisted.
         """
         return self._readonly
+    
+    @property
+    def is_untitled(self) -> bool:
+        """
+        Whether this project is untitled.
+        
+        A project is considered untitled if it was created in a temporary directory.
+        """
+        return self._is_untitled
+    
+    @property
+    def is_dirty(self) -> bool:
+        """
+        Whether this project has been modified since it was last saved.
+        
+        A project is considered dirty if it is untitled and has been modified.
+        """
+        return self._is_dirty
+    
+    def _mark_dirty_if_untitled(self) -> None:
+        """
+        Marks this project as dirty if it is untitled.
+        
+        This method should be called after any change is made to a project,
+        so that if it is an untitled project then it will later be saved to
+        a permanent location.
+        """
+        if self._is_untitled:
+            self._is_dirty = True
     
     def _get_property(self, name: str, default: _OptionalStr) -> str | _OptionalStr:
         return self._properties.get(name) or default
@@ -1598,7 +1651,10 @@ class Project(ListenableMixin):
                 if r is None:
                     # Resource no longer exists. Ignore related download.
                     continue
-                tasks.append(DownloadResourceTask(r, needs_result=False))
+                tasks.append(DownloadResourceTask(
+                    r,
+                    needs_result=False,
+                    ignore_already_downloaded_this_session=True))
             elif hibernated_task['type'] == 'DownloadResourceGroupTask':
                 rg = self._get_resource_group_with_id(int(hibernated_task['group_id']))
                 if rg is None:
@@ -1608,6 +1664,10 @@ class Project(ListenableMixin):
             else:
                 raise ValueError('Unknown task type: ' + hibernated_task['type'])
         for t in tasks:
+            assert not t.complete, (
+                f'Unhibernated task is already complete '
+                f'but was not complete when it was hibernated: {t!r}'
+            )
             self.add_task(t)
     
     # === Events: Resource Lifecycle ===
@@ -1696,6 +1756,83 @@ class Project(ListenableMixin):
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_forget'):
                 run_bulkhead_call(lis.resource_group_did_forget, group)  # type: ignore[attr-defined]
+    
+    # === Save As ===
+    
+    @fg_affinity
+    def save_as(self, new_path: str) -> Future[None]:
+        """
+        Saves this project to the specified path soon, which must not already exist.
+        The project will be reopened at the new path.
+        
+        If a failure occurs when saving the new project this project will remain open.
+        
+        Raises in returned Future:
+        * FileExistsError --
+            if a file or directory exists at the specified path
+        * ProjectReadOnlyError --
+            the specified path is not writable
+        """
+        return start_thread_switching_coroutine(
+            SwitchToThread.FOREGROUND,
+            self._save_as_coro(new_path),
+            capture_crashes_to_deco=None,
+            uses_future_result=True
+        )
+    
+    @fg_affinity
+    def _save_as_coro(self, new_path: str) -> Generator[SwitchToThread, None, None]:
+        if os.path.exists(new_path):
+            raise FileExistsError(
+                f'Cannot save project to {new_path!r} because a file or '
+                f'directory already exists at that path')
+        
+        # Save the current state of tasks
+        self.hibernate_tasks()
+        
+        # - Stop and destroy tasks
+        # - Stop scheduler
+        # - Close database
+        # TODO: Handle failures during close in a sensible way
+        self.close(capture_crashes=False)
+        
+        # Move/copy the project directory to the new path.
+        # - If the project is untitled, it will be renamed.
+        # - If the project is titled, it will be copied.
+        # TODO: Provide interface to report copy/move progress to UI
+        # TODO: Provide interface for UI to cancel the save operation, including the copy/move
+        # TODO: Handle failures during copy/move gracefully
+        yield SwitchToThread.BACKGROUND
+        if self._is_untitled:
+            # NOTE: Will use os.rename() if possible, otherwise shutil.copytree() + rmtree()
+            shutil.move(self.path, new_path)
+            self._is_untitled = False
+        else:
+            shutil.copytree(self.path, new_path, dirs_exist_ok=True)
+        yield SwitchToThread.FOREGROUND
+        
+        old_path = self.path  # capture
+        try:
+            self.path = new_path
+            
+            # - Open database
+            # - Start scheduler
+            # NOTE: May raise ProjectReadOnlyError if the project
+            #       cannot be opened as writable at the new path
+            self._reopen(expect_writable=True)
+        except:
+            # Try to reopen the project at the old path
+            if os.path.exists(old_path):
+                self.path = old_path
+                self._reopen(expect_writable=False)
+                self.unhibernate_tasks()
+            raise
+        
+        # Restore the state of tasks
+        self.unhibernate_tasks()
+        
+        assert self._is_untitled == False
+        assert self._is_dirty == False
     
     # === Close & Reopen ===
     
@@ -1828,6 +1965,28 @@ class Project(ListenableMixin):
                 pass
         
         db.close()
+    
+    @fg_affinity
+    def _reopen(self, expect_writable: bool) -> None:
+        """
+        Reopens this project at self.path.
+        
+        Is the inverse of `close()`, but does not restore the state of tasks.
+        
+        Raises:
+        * ProjectReadOnlyError
+            -- if expect_writable is True and the project cannot be opened as writable
+        """
+        cls = type(self)
+        
+        # Open database at the new path
+        with cls._open_database_but_close_if_raises(self.path, self._readonly, self._mark_dirty_if_untitled, expect_writable) as (
+                self._db, self._readonly, self._database_is_on_ssd):
+            # Reset dirty state after loading
+            self._is_dirty = False
+        
+        # Start scheduler
+        self._start_scheduler()
     
     # === Context Manager ===
     
