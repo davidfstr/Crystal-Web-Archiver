@@ -69,6 +69,7 @@ class OpenOrCreateDialog:
             project_dirpath: str | None=None,
             *, autoclose: bool=True,
             delete: bool | None=None,
+            wait_for_tasks_to_complete_on_close: bool | None=None,
             ) -> AsyncIterator[tuple[MainWindow, Project]]:
         """
         Creates a new project.
@@ -100,7 +101,11 @@ class OpenOrCreateDialog:
             
             with tmpdir_context as project_dirpath:
                 assert project_dirpath is not None
-                async with self.create(project_dirpath, autoclose=autoclose) as (mw, project2):
+                async with self.create(
+                            project_dirpath,
+                            autoclose=autoclose,
+                            wait_for_tasks_to_complete_on_close=wait_for_tasks_to_complete_on_close
+                        ) as (mw, project2):
                     yield (mw, project2)
             return
         else:
@@ -122,7 +127,9 @@ class OpenOrCreateDialog:
             raise
         finally:
             if autoclose:
-                await mw.close(exc_info_while_close)
+                await mw.close(
+                    exc_info_while_close,
+                    wait_for_tasks_to_complete=wait_for_tasks_to_complete_on_close)
     
     async def create_and_leave_open(self, project_dirpath: str) -> MainWindow:
         old_opened_project = Project._last_opened_project  # capture
@@ -313,12 +320,12 @@ class MainWindow:
     # === Close ===
     
     CLOSE_TIMEOUT = 4.0
-    
-    async def close(self, exc_info=None) -> None:
-        if is_synced_with_scheduler_thread():
-            # Immediately close project
-            pass
-        else:
+
+    async def close(self, exc_info=None, *, wait_for_tasks_to_complete: bool | None=None) -> None:
+        if wait_for_tasks_to_complete is None:  # auto
+            wait_for_tasks_to_complete = not is_synced_with_scheduler_thread()
+
+        if wait_for_tasks_to_complete:
             # Try wait for any lingering tasks to complete.
             # 
             # Does workaround: https://github.com/davidfstr/Crystal-Web-Archiver/issues/74

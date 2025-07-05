@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from concurrent.futures import Future
+from collections.abc import Callable, Iterator, Sequence
+from concurrent.futures import CancelledError, Future
 from contextlib import AbstractContextManager, nullcontext
 import cProfile
 from crystal.util import cli
@@ -165,6 +165,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         '_children',
         '_num_children_complete',
         '_complete',
+        '_cancelled',
         '_did_yield_self',
         '_future',
         # NOTE: Used differently by SCHEDULING_STYLE_SEQUENTIAL and SCHEDULING_STYLE_ROUND_ROBIN
@@ -185,6 +186,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         self._children = []  # type: Sequence[Task]
         self._num_children_complete = 0
         self._complete = False
+        self._cancelled = False
         
         self._did_yield_self = False            # used by leaf tasks
         self._future = None  # type: Optional[Future[_R]]  # used by leaf tasks
@@ -196,10 +198,16 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         return self._crash_reason
     def _set_crash_reason(self, value: CrashReason | None) -> None:
         self._crash_reason = value
+        # Notify listeners last, which can run arbitrary code
         for lis in self.listeners:
             if hasattr(lis, 'task_crash_reason_did_change'):
                 run_bulkhead_call(lis.task_crash_reason_did_change, self)  # type: ignore[attr-defined]
-    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
+    crash_reason = cast(CrashReason | None, property(
+        _get_crash_reason, _set_crash_reason,
+        doc=(
+            "The reason this task crashed, or None if it has not crashed. "
+            "A crashed task may be complete or incomplete."
+        )))
     
     # === Properties ===
     
@@ -220,6 +228,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
             assert value == 'Complete', \
                 f'Cannot change subtitle of completed task {self!r} to {value!r}'
         self._subtitle = value
+        # Notify listeners last, which can run arbitrary code
         for lis in self.listeners:
             if hasattr(lis, 'task_subtitle_did_change'):
                 run_bulkhead_call(lis.task_subtitle_did_change, self)  # type: ignore[attr-defined]
@@ -279,12 +288,41 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
     def num_children_complete(self) -> int:
         return self._num_children_complete
     
+    def in_task_tree(self, root_task: RootTask | None=None) -> bool:
+        """
+        Whether this task is in the specified task tree.
+        
+        If root_task is None then checks whether this task is in any task tree.
+        """
+        cur_task = self  # type: Task | None
+        while cur_task is not None:
+            if isinstance(cur_task, RootTask):
+                assert cur_task._parent is None, (
+                    f'RootTask {cur_task!r} should not have a parent, '
+                    f'but has {cur_task._parent!r}'
+                )
+                if root_task is None:
+                    return True
+                else:
+                    return cur_task == root_task
+            cur_task = cur_task._parent
+        return False
+    
     @property
     def complete(self) -> bool:
         """
         Whether this task is complete.
         """
         return self._complete
+    
+    @property
+    def cancelled(self) -> bool:
+        """
+        Whether this task was cancelled.
+
+        Every cancelled task is also complete, but not every complete task is cancelled.
+        """
+        return self._cancelled
     
     @property
     def future(self) -> Future[_R]:
@@ -294,13 +332,16 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         This property is only defined by default for leaf tasks.
         Container tasks may optionally override this if they
         conceptually return a value.
+        
+        Raises:
+        * TaskHasNoResult -- if this task does not define a result.
         """
         if callable(self):
             if self._future is None:
                 self._future = Future()
             return self._future
         else:
-            raise ValueError('Container tasks do not define a result by default.')
+            raise TaskHasNoResult('Container tasks do not define a result by default.')
     
     @capture_crashes_to_self
     def dispose(self) -> None:
@@ -415,10 +456,32 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         
         self.subtitle = 'Complete'
         
+        # Notify listeners last, which can run arbitrary code
         # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
         for lis in list(self.listeners):
             if hasattr(lis, 'task_did_complete'):
                 run_bulkhead_call(lis.task_did_complete, self)  # type: ignore[attr-defined]
+    
+    def cancel(self) -> None:
+        """
+        Cancels this task, also marking it as complete.
+        
+        Takes no action if the task is already complete.
+        """
+        if self._complete:
+            return
+        
+        self._cancelled = True
+        try:
+            # NOTE: The future may or may not cancel successfully, and that's OK
+            _ = self.future.cancel()
+        except TaskHasNoResult:
+            pass
+        
+        # 1. Mark this task as complete
+        # 2. Notify listeners last, which can run arbitrary code
+        self.finish()
+        assert self._complete
     
     def finalize_children(self, final_children: list[Task]) -> None:
         """
@@ -459,6 +522,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
             
             self._next_child_index = 0
             
+            # Notify listeners last, which can run arbitrary code
             # NOTE: Call these listeners also inside the lock
             #       because they are likely to be updating
             #       data structures that need to be strongly
@@ -487,6 +551,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         self._children = [c for c in self.children if not c.complete]
         self._num_children_complete = 0
         
+        # Notify listeners last, which can run arbitrary code
         # NOTE: Call these listeners also inside the lock
         #       because they are likely to be updating
         #       data structures that need to be strongly
@@ -663,6 +728,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         if self._use_extra_listener_assertions:
             assert self not in task.listeners
         
+        # Notify listeners last, which can run arbitrary code
         if hasattr(self, 'child_task_did_complete'):
             self.child_task_did_complete(task)
         for lis in self.listeners:
@@ -689,6 +755,10 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
             # that assertions aren't too expensive
             len(self._children) < Task._USE_EXTRA_LISTENER_ASSERTIONS_WHEN_CHILD_COUNT_BELOW
         )
+
+
+class TaskHasNoResult(ValueError):
+    pass
 
 
 class TaskDisposedException(Exception):
@@ -1036,7 +1106,12 @@ class DownloadResourceTask(Task['ResourceRevision']):
                 pass
             else:
                 try:
-                    body_revision = self._download_body_task.future.result()
+                    body_revision = self._download_body_task.future.result(timeout=0)
+                except CancelledError:
+                    self.cancel()
+                    return
+                except TimeoutError:
+                    raise AssertionError()
                 except (CannotDownloadWhenProjectReadOnlyError,
                         ProjectFreeSpaceTooLowError,
                         ProjectHasTooManyRevisionsError):
@@ -1073,12 +1148,20 @@ class DownloadResourceTask(Task['ResourceRevision']):
         elif task is self._parse_links_task:
             try:
                 try:
-                    (links, _) = self._parse_links_task.future.result()
+                    (links, _) = self._parse_links_task.future.result(timeout=0)
+                except CancelledError:
+                    self.cancel()
+                    return
+                except TimeoutError:
+                    raise AssertionError()
                 finally:
                     self._parse_links_task.dispose()
             except RevisionBodyMissingError:
                 assert self._download_body_task is not None
-                body_revision = self._download_body_task.future.result()
+                try:
+                    body_revision = self._download_body_task.future.result(timeout=0)
+                except (CancelledError, TimeoutError):
+                    raise AssertionError()
                 
                 print(
                     f'*** {body_revision!s} is missing its body on disk. Redownloading it.',
@@ -1193,15 +1276,21 @@ class DownloadResourceTask(Task['ResourceRevision']):
             # Complete self._download_body_with_embedded_future,
             # with value of self._download_body_task.future
             if self._download_body_task is not None:
-                exc = self._download_body_task.future.exception()
-                if self._download_body_with_embedded_future is None:
-                    self._download_body_with_embedded_future = Future()
-                if not self._download_body_with_embedded_future.done():  # not disposed
-                    if exc is not None:
-                        self._download_body_with_embedded_future.set_exception(exc)
-                    else:
-                        self._download_body_with_embedded_future.set_result(
-                            self._download_body_task.future.result())
+                try:
+                    exc = self._download_body_task.future.exception(timeout=0)
+                    if self._download_body_with_embedded_future is None:
+                        self._download_body_with_embedded_future = Future()
+                    if not self._download_body_with_embedded_future.done():  # not disposed
+                        if exc is not None:
+                            self._download_body_with_embedded_future.set_exception(exc)
+                        else:
+                            self._download_body_with_embedded_future.set_result(
+                                self._download_body_task.future.result(timeout=0))
+                except CancelledError:
+                    self.cancel()
+                    return
+                except TimeoutError:
+                    raise AssertionError()
             
             # Cull children, allowing related memory to be freed
             if self._already_downloaded_task is not None:
@@ -1752,6 +1841,7 @@ class RootTask(_PureContainerTask):
         super().__init__(title='ROOT')
         self.subtitle = 'Running'
         self._children_to_add_soon = []  # type: List[Tuple[Task, bool]]
+        self._cancel_tree_soon = False
     
     # === Bulkhead ===
     
@@ -1873,6 +1963,11 @@ class RootTask(_PureContainerTask):
         
         self.append_deferred_top_level_tasks()
         
+        if self._cancel_tree_soon:
+            cls = type(self)
+            cls._cancel_tree_now(self)
+            return None
+        
         # Only the root task is allowed to have no children normally
         if len(self.children) == 0:
             return None
@@ -1910,12 +2005,32 @@ class RootTask(_PureContainerTask):
     
     # === Public Operations ===
     
-    def interrupt(self) -> None:
+    @fg_affinity
+    def cancel_tree(self) -> None:
         """
-        Stop all descendent tasks, asynchronously,
-        by interrupting the scheduler thread.
+        Cancels all descendent tasks and self soon, on the scheduler thread.
         """
-        self.finish()
+        self._cancel_tree_soon = True
+    
+    @classmethod
+    @fg_affinity
+    @scheduler_affinity
+    def _cancel_tree_now(cls, task: Task) -> None:
+        """
+        Cancels all descendent tasks and self.
+        """
+        try:
+            # Cancel all children first
+            task_children_iter = (
+                task.children.materialized_items()
+                if isinstance(task.children, AppendableLazySequence)
+                else iter(task.children)
+            )  # type: Iterator[Task]
+            for child in list(task_children_iter):
+                cls._cancel_tree_now(child)
+        finally:
+            # Cancel self last
+            task.cancel()
     
     # === Utility ===
     
@@ -1931,10 +2046,12 @@ class RootTask(_PureContainerTask):
 _ROOT_TASK_POLL_INTERVAL = .1 # secs
 
 
-def start_schedule_forever(root_task: RootTask) -> None:
+def start_scheduler_thread(root_task: RootTask) -> threading.Thread:
     """
     Asynchronously runs the specified RootTask until it completes,
     or until there is no foreground thread remaining.
+    
+    Returns the scheduler thread object.
     """
     # NOTE: Don't use @crashes_captured_to(root_task) because a RootTask
     #       crashed in this outer context could not have the crash dismissed
@@ -1955,6 +2072,7 @@ def start_schedule_forever(root_task: RootTask) -> None:
                     # NOTE: Use enter_if_crashed=True so that the usual
                     #       `sleep(_ROOT_TASK_POLL_INTERVAL)` logic will be
                     #       used to poll until the root task becomes uncrashed
+                    #       or complete
                     with crashes_captured_to(root_task, enter_if_crashed=True):
                         if root_task.crash_reason is None:
                             # NOTE: Some decorators omitted as a (speculative) performance optimization
@@ -1971,8 +2089,22 @@ def start_schedule_forever(root_task: RootTask) -> None:
                             except NoForegroundThreadError:
                                 return
                         else:
+                            # If the root task is crashed, is attempting to cancel, but has not yet cancelled,
+                            # then we need to cancel it manually, because RootTask.try_get_next_task_unit()
+                            # will never be called by the scheduler thread, because RootTask is crashed.
+                            if root_task._cancel_tree_soon and not root_task.cancelled:
+                                # Cancel the root task and all its children
+                                try:
+                                    fg_call_and_wait(lambda: root_task._cancel_tree_now(root_task))
+                                finally:
+                                    # Even if cancellation crashes, ensure the root task is still
+                                    # marked as complete so that the scheduler thread can exit
+                                    if not root_task.complete:
+                                        root_task._complete = True
+                                        assert root_task.complete
+
                             unit = None
-                            task_complete = False
+                            task_complete = root_task.complete
                         
                         if unit is None:
                             if task_complete:
@@ -1985,7 +2117,7 @@ def start_schedule_forever(root_task: RootTask) -> None:
             if _PROFILE_SCHEDULER:
                 assert profiler is not None
                 profiler.dump_stats('scheduler.prof')
-    bg_call_later(bg_daemon_task, daemon=True)
+    return bg_call_later(bg_daemon_task, daemon=True)
 
 
 def is_synced_with_scheduler_thread() -> bool:

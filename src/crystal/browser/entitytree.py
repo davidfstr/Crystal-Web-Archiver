@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from concurrent.futures import Future
+from concurrent.futures import CancelledError, Future
 from crystal.browser.icons import (
     BADGED_ART_PROVIDER_TREE_NODE_ICON, BADGED_TREE_NODE_ICON, TREE_NODE_ICONS,
 )
@@ -889,14 +889,16 @@ class _ResourceNode(Node):
             
             def download_done(future: Future[ResourceRevision]) -> None:
                 try:
-                    revision = future.result()
+                    revision = future.result(timeout=0)
                 except CannotDownloadWhenProjectReadOnlyError:
                     self._set_error_child('Cannot download: Project is read only')
                 except ProjectFreeSpaceTooLowError:
                     self._set_error_child('Cannot download: Disk is full')
                 except ProjectHasTooManyRevisionsError:
                     self._set_error_child('Cannot download: Project has too many revisions')
-                except Exception:
+                except CancelledError:
+                    self._set_error_child('Cannot download: Download was cancelled')
+                except (TimeoutError, Exception):
                     self._set_error_child('Cannot download: Unexpected error')
                 else:
                     revision = revision.resolve_http_304()  # reinterpret

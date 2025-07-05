@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import Project
 import crystal.task
-from crystal.task import _is_scheduler_thread, scheduler_affinity, Task
+from crystal.task import RootTask, _is_scheduler_thread, scheduler_affinity, Task
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.wait import (
@@ -159,16 +159,75 @@ def append_deferred_top_level_tasks(project: Project) -> None:
 # Utility: Scheduler Manual Control
 
 @contextmanager
-def scheduler_disabled() -> Iterator[None]:
+def scheduler_disabled() -> Iterator[DisabledScheduler]:
     """
     Context where the scheduler thread is disabled for any Projects that are opened.
     
     Projects opened before entering this context will continue to have active
     scheduler threads.
     """
-    with patch('crystal.task.start_schedule_forever', lambda task: None), \
+    start_call_count = 0
+    stop_call_count = 0
+    
+    class FakeSchedulerThread:
+        def __init__(self, root_task: RootTask) -> None:
+            self._root_task = root_task
+        
+        def join(self, timeout: float | None = None) -> None:
+            nonlocal stop_call_count
+            stop_call_count += 1
+            
+            if self._root_task._cancel_tree_soon and not self._root_task.cancelled:
+                # HACK: Patch to disable thread affinity checks when stepping the scheduler,
+                #       because this Thread.join() may be called from a background thread
+                #       (while running tests) which is synchronized with both the
+                #       foreground thread and the scheduler thread, but is hard to
+                #       prove to the affinity checking decorators properly.
+                def mock_is_foreground_thread(_expect: bool | None=None) -> bool:
+                    if _expect is not None:
+                        return _expect
+                    else:
+                        return True
+                with patch('crystal.util.xthreading.is_foreground_thread', mock_is_foreground_thread), \
+                        patch('crystal.task.is_synced_with_scheduler_thread', return_value=True):
+                    # Step the scheduler one last time to ensure that the
+                    # cancellation is processed.
+                    step_scheduler_now(root_task=self._root_task, expect_done=True)
+                assert self._root_task.cancelled
+                assert self._root_task.complete
+            else:
+                raise AssertionError('Expected the scheduler thread to be stopping')
+        
+        def is_alive(self) -> bool:
+            return not self._root_task.complete
+    
+    def start_fake_scheduler_thread(root_task: RootTask) -> FakeSchedulerThread:
+        nonlocal start_call_count
+        start_call_count += 1
+        return FakeSchedulerThread(root_task)
+    
+    with patch('crystal.task.start_scheduler_thread', wraps=start_fake_scheduler_thread) as start_func_mock, \
             scheduler_thread_context():
-        yield
+        yield DisabledScheduler(
+            start_count_func=lambda: start_call_count,
+            stop_count_func=lambda: stop_call_count
+        )
+
+
+class DisabledScheduler:
+    def __init__(self, start_count_func, stop_count_func) -> None:
+        self._start_count_func = start_count_func
+        self._stop_count_func = stop_count_func
+
+    @property
+    def start_count(self) -> int:
+        """Returns the number of times the scheduler thread was started."""
+        return self._start_count_func()
+    
+    @property
+    def stop_count(self) -> int:
+        """Returns the number of times the scheduler thread was stopped."""
+        return self._stop_count_func()
 
 
 @contextmanager
@@ -217,18 +276,29 @@ async def step_scheduler(
 
 @scheduler_affinity  # manual control of scheduler thread is assumed
 def step_scheduler_now(
-        project: Project,
-        *, expect_done: bool=False,
+        project: Project | None = None,
+        *, root_task: RootTask | None = None,
+        expect_done: bool=False,
         ) -> None:
     """
     Performs one unit of work from the scheduler.
     
+    Must specify either `project` or `root_task`.
+    
     Arguments:
     * expect_done -- Whether it's expected that no work is left. Must be True.
     """
+    if project is not None:
+        if root_task is not None:
+            raise ValueError('Cannot specify both project and root_task')
+        root_task = project.root_task
+    else:  # project is None
+        if root_task is None:
+            raise ValueError('Must specify either project or root_task')
+    
     if expect_done != True:
         raise ValueError('step_scheduler_now() only supports expect_done=True')
-    unit = project.root_task.try_get_next_task_unit()
+    unit = root_task.try_get_next_task_unit()
     assert expect_done
     assert unit is None
 
