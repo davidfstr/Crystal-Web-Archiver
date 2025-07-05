@@ -1941,7 +1941,7 @@ def start_schedule_forever(root_task: RootTask) -> None:
     #       such that the RootTask would actually start running again properly
     @capture_crashes_to_stderr
     def bg_daemon_task() -> None:
-        setattr(threading.current_thread(), '_cr_is_scheduler_thread', True)
+        _set_scheduler_thread()
         assert _is_scheduler_thread()
         assert is_synced_with_scheduler_thread()
         
@@ -2009,6 +2009,15 @@ def _is_scheduler_thread(thread: threading.Thread | None=None) -> bool:
     if thread is None:
         thread = threading.current_thread()
     return getattr(thread, '_cr_is_scheduler_thread', False)
+
+
+def _set_scheduler_thread(thread: threading.Thread | None=None) -> None:
+    """
+    Marks this thread as a scheduler thread.
+    """
+    if thread is None:
+        thread = threading.current_thread()
+    setattr(thread, '_cr_is_scheduler_thread', True)
 
 
 # ------------------------------------------------------------------------------
