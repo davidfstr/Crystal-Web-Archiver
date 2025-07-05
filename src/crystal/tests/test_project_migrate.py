@@ -457,9 +457,12 @@ def _count_files_in(dirpath: str) -> int:
 
 
 async def _wait_for_project_to_upgrade() -> None:
-    if OpenProjectProgressDialog._upgrading_revision_progress is None:
-        OpenProjectProgressDialog._upgrading_revision_progress = 0
-    
     def progression_func() -> int | None:
         return OpenProjectProgressDialog._upgrading_revision_progress
     await wait_while(progression_func)
+
+def _wait_for_project_to_upgrade__before_open() -> None:
+    OpenProjectProgressDialog._upgrading_revision_progress = 0
+_wait_for_project_to_upgrade.before_open = (  # type: ignore[attr-defined]
+    _wait_for_project_to_upgrade__before_open
+)

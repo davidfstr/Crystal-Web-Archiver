@@ -171,6 +171,8 @@ class OpenOrCreateDialog:
             itempath_to_open = project_dirpath
         
         with file_dialog_returning(itempath_to_open):
+            if wait_func is not None and hasattr(wait_func, 'before_open'):
+                wait_func.before_open()
             click_button(self.open_button)
             
             if wait_func is not None:
