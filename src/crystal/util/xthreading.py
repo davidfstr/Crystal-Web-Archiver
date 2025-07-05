@@ -347,6 +347,31 @@ def bg_call_later(
 
 
 # ------------------------------------------------------------------------------
+# Wait on Foreground Thread
+
+@fg_affinity
+def fg_wait_for(condition_func: Callable[[], bool], *, timeout: float | None, poll_interval: float) -> None:
+    """
+    Waits for the specified condition to become true, in the foreground thread.
+    The foreground thread is held while waiting.
+    
+    Events are processed in the wx event loop while waiting,
+    to avoid deadlocks in the wx event loop.
+    
+    Raises:
+    * TimeoutError -- if the condition does not become true within the specified timeout
+    """
+    raise NotImplementedError(
+        'It is not possible to implement the documented behavior of '
+        'fg_wait_for() safely because it is not possible to process '
+        'all wx events in a nested event loop. In particular an event posted '
+        'by wx.CallAfter() will not be processed until the nested event loop '
+        'exits. Because wx.CallAfter() events cannot be processed, any other '
+        'thread that calls fg_call_and_wait() will deadlock and block forever.'
+    )
+
+
+# ------------------------------------------------------------------------------
 # Thread Switching Coroutines
 
 class SwitchToThread(Enum):

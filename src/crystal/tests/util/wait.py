@@ -193,6 +193,8 @@ async def wait_for_future(future: Future[_T]) -> _T:
     """
     Waits for the specified Future to be done, returning the future's result
     or raising its exception.
+    
+    The foreground thread is released periodically while waiting.
     """
     await wait_for(lambda: future.done() or None, stacklevel_extra=1)
     try:

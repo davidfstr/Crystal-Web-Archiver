@@ -1521,6 +1521,50 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
             assert len(root_task.children) == 0
 
 
+@frequently_corrupts_memory
+async def test_when_RT_crashed_then_can_close_project() -> None:
+    # NOTE: Use a real scheduler thread to test error handling
+    #       inside the real start_scheduler_thread() function
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create(wait_for_tasks_to_complete_on_close=False) as (mw, project):
+            root_task = project.root_task
+
+            # Preconditions
+            assert root_task.crash_reason is None
+            () = project.root_task.children
+            
+            # RT @ try_get_next_task_unit
+            # 
+            # In RootTask.try_get_next_task_unit,
+            # in RootTask.append_deferred_top_level_tasks,
+            # crash the line: super().append_child(...)
+            super_append_child = Task.append_child
+            def append_child(self, child: Task, *args, **kwargs) -> None:
+                if isinstance(child, DownloadResourceTask):
+                    # Simulate crash when appending a DownloadResourceTask
+                    append_child.call_count += 1  # type: ignore[attr-defined]
+                    raise _CRASH
+                else:
+                    return super_append_child(self, child, *args, **kwargs)
+            append_child.call_count = 0  # type: ignore[attr-defined]
+            with patch.object(Task, 'append_child', append_child):
+                # Create DownloadResourceTask in RootTask
+                home_r = Resource(project, home_url)
+                home_r.download()
+                
+                # Wait for the crash to happen
+                await wait_for(lambda: (append_child.call_count >= 1) or None)  # type: ignore[attr-defined]
+            
+            # Postconditions
+            assert root_task.crash_reason is not None
+            (scheduler_crashed_task,) = project.root_task.children
+            assert isinstance(scheduler_crashed_task, CrashedTask)
+            
+            # (Try to close project when exit context, with CrashedTask still present)
+
 # ------------------------------------------------------------------------------
 # Test: Dismissing Crashes
 
