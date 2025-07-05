@@ -43,6 +43,8 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'get_root_resource',
     'hibernate_tasks',
     'html_parser_type',
+    'is_dirty',
+    'is_untitled',
     'is_valid',
     'listeners',
     'load_urls',
@@ -58,6 +60,7 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'resources_matching_pattern',
     'root_resources',
     'root_task',
+    'save_as',
     'unhibernate_tasks',
     'urls_matching_pattern',
 ]

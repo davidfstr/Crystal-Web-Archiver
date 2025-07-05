@@ -9,6 +9,7 @@ from crystal.tests import (
     test_menus, test_new_group, test_new_root_url, test_open_project,
     test_parse_html, test_profile, test_project_migrate, test_readonly_mode,
     test_server, test_shell, test_ssd, test_tasks, test_tasktree,
+    test_untitled_projects,
     test_workflows, test_xthreading,
 )
 from crystal.tests.util.downloads import delay_between_downloads_minimized
@@ -71,6 +72,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_ssd) +
     _test_functions_in_module(test_tasks) +
     _test_functions_in_module(test_tasktree) +
+    _test_functions_in_module(test_untitled_projects) +
     _test_functions_in_module(test_workflows) +
     _test_functions_in_module(test_xthreading) +
     []
