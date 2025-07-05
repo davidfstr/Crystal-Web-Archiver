@@ -9,6 +9,7 @@ This thread is responsible for:
 
 from collections import deque
 from collections.abc import Callable, Generator
+from concurrent.futures import Future
 from crystal.util.bulkheads import (
     capture_crashes_to_stderr, ensure_is_bulkhead_call,
 )
@@ -352,9 +353,9 @@ class SwitchToThread(Enum):
 def start_thread_switching_coroutine(
         first_command: SwitchToThread,
         coro: Generator[SwitchToThread, None, _R],
-        capture_crashes_to_deco: Callable[[Callable[[], None]], Callable[[], None]],
-        /,
-        ) -> None:
+        /, capture_crashes_to_deco: Callable[[Callable[[], None]], Callable[[], None]] | None = None,
+        *, uses_future_result: bool = False,
+        ) -> Future[_R]:
     """
     Starts the specified thread-switching-coroutine on a new background thread.
     
@@ -368,7 +369,33 @@ def start_thread_switching_coroutine(
     (when first_command == SwitchToThread.FOREGROUND and subsequent yields
     also say SwitchToThread.FOREGROUND), then that prefix is run to completion
     synchronously before this method returns.
+    
+    Arguments:
+    * first_command -- thread which the coroutine starts running on
+    * coro -- thread-switching coroutine to run
+    * capture_crashes_to_deco -- 
+        capture_crashes_to* decorator for handling exceptions raised by the coroutine.
+        May be None iff uses_future_result is True.
+    * uses_future_result --
+        whether the caller promises to always check the returned Future for
+        a result or an exception
+    
+    Returns a Future that will be given the result of running the coroutine
+    or the exception that the coroutine raised.
     """
+    bubble_exceptions_to_deco: bool
+    if capture_crashes_to_deco is None:
+        if not uses_future_result:
+            raise ValueError('If uses_future_result=False then a capture_crashes_to_deco is required')
+        
+        bubble_exceptions_to_deco = False
+        capture_crashes_to_deco = capture_crashes_to_stderr  # reinterpret
+    else:
+        bubble_exceptions_to_deco = True
+    
+    future = Future()  # type: Future[_R]
+    future.set_running_or_notify_cancel()
+    
     # If is foreground thread, immediately run any prefix of the coroutine
     # that wants to be on the foreground thread
     if is_foreground_thread():
@@ -381,17 +408,34 @@ def start_thread_switching_coroutine(
                 try:
                     command = next(coro)
                 except StopIteration as e:
+                    future.set_result(e.value)
+                    return
+                except BaseException as e:
+                    future.set_exception(e)
+                    if bubble_exceptions_to_deco:
+                        raise
                     return
             assert command == SwitchToThread.BACKGROUND
             
             first_command = command  # reinterpret
         fg_task()
+        if future.done():
+            return future
     
     # Run remainder of coroutine on a new background thread
     @capture_crashes_to_deco
     def bg_task() -> None:
-        run_thread_switching_coroutine(first_command, coro)
+        try:
+            result = run_thread_switching_coroutine(first_command, coro)
+        except BaseException as e:
+            future.set_exception(e)
+            if bubble_exceptions_to_deco:
+                raise
+        else:
+            future.set_result(result)
     bg_call_later(bg_task)
+    
+    return future
 
 
 @bg_affinity

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import Future
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.screenshots import take_error_screenshot
 import datetime
@@ -177,6 +178,7 @@ def wait_for_sync(condition: Callable[[], _T | None], *args, **kwargs) -> _T:
     Similar to wait_for() but does not release the current thread between waits.
     """
     from crystal.tests.util.runner import SleepCommand
+    # TODO: Set stacklevel_extra kwarg to an appropriate value
     coro = wait_for(condition, *args, **kwargs)
     while True:
         try:
@@ -185,6 +187,18 @@ def wait_for_sync(condition: Callable[[], _T | None], *args, **kwargs) -> _T:
             return e.value
         assert isinstance(command, SleepCommand)
         time.sleep(command.delay)
+
+
+async def wait_for_future(future: Future[_T]) -> _T:
+    """
+    Waits for the specified Future to be done, returning the future's result
+    or raising its exception.
+    """
+    await wait_for(lambda: future.done() or None, stacklevel_extra=1)
+    try:
+        return future.result(timeout=0)
+    except TimeoutError:
+        raise AssertionError('Expected future to be already done')
 
 
 class WaitTimedOut(Exception):
