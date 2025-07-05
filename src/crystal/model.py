@@ -273,10 +273,7 @@ class Project(ListenableMixin):
         finally:
             self._loading = False
         
-        # Hold on to the root task and scheduler
-        import crystal.task
-        self.root_task = crystal.task.RootTask()
-        crystal.task.start_schedule_forever(self.root_task)
+        self._start_scheduler()
         
         # Define initial configuration
         self._request_cookie = None  # type: Optional[str]
@@ -321,6 +318,8 @@ class Project(ListenableMixin):
         but closes it if an exception is raised in the context.
         
         Yields (db, readonly_actual, database_is_on_ssd).
+        
+        Effects of this method are reversed by `_close_database()`.
         """
         
         # Open database
@@ -381,6 +380,16 @@ class Project(ListenableMixin):
         except:
             cls._close_database(db, readonly_actual)
             raise
+    
+    def _start_scheduler(self) -> None:
+        """
+        Starts the scheduler thread for this project.
+        
+        Effects of this method are reversed by `_stop_scheduler()`.
+        """
+        import crystal.task
+        self.root_task = crystal.task.RootTask()
+        crystal.task.start_schedule_forever(self.root_task)
     
     # --- Load: Validity ---
     
@@ -1673,12 +1682,12 @@ class Project(ListenableMixin):
     # === Close ===
     
     def close(self) -> None:
-        # Stop scheduler thread soon
-        if hasattr(self, 'root_task'):
-            self.root_task.interrupt()
-            # (TODO: Actually wait for the scheduler thread to exit
-            #        in a deterministic fashion, rather than relying on 
-            #        garbage collection to clean up objects.)
+        """
+        Closes this project, stopping any tasks and closing all files.
+        
+        Effects of this method are reversed by `reopen()`.
+        """
+        self._stop_scheduler()
         
         self._close_database(self._db, self.readonly)
         
@@ -1687,8 +1696,29 @@ class Project(ListenableMixin):
             if Project._last_opened_project is self:
                 Project._last_opened_project = None
     
+    def _stop_scheduler(self) -> None:
+        """
+        Stops the scheduler thread for this project.
+        
+        Is the inverse of `_start_scheduler()`.
+        """
+        if not hasattr(self, 'root_task'):
+            # No scheduler thread to stop
+            return
+        
+        # Stop scheduler thread soon
+        self.root_task.interrupt()
+        # (TODO: Actually wait for the scheduler thread to exit
+        #        in a deterministic fashion, rather than relying on 
+        #        garbage collection to clean up objects.)
+    
     @staticmethod
     def _close_database(db: DatabaseConnection, readonly: bool) -> None:
+        """
+        Closes the database for this project.
+        
+        Is the inverse of `_open_database_but_close_if_raises()`.
+        """
         # Disable Write Ahead Log (WAL) mode when closing database
         # in case the user decides to burn the project to read-only media,
         # as recommended by: https://www.sqlite.org/wal.html#readonly
