@@ -4,6 +4,8 @@ with a focus on archiving websites that are at risk of becoming no longer availa
 
 # Crystal Concepts
 
+Projects:
+
 * Crystal saves a downloaded website in a "project", stored on disk in a .crystalproj directory, which appears as a single file in Finder and Windows Explorer.
 * A project contains "resources", each of which corresponds to a URL which can be downloaded.
 * A project contains "root resources", each of which corresponds to a well-known URL that is the starting point for downloading a website or part of a website.
@@ -11,6 +13,35 @@ with a focus on archiving websites that are at risk of becoming no longer availa
 * A project contains "resource revisions", each of which is a specific version of a resource that has been downloaded.
 * A resource is considered "downloaded" when it has at least one resource revision.
 * An opened project manages "tasks", each of which corresponds to a running long-lived operation that edits a project, such as downloading root resources or resource groups.
+
+UI:
+
+* The user interface for Crystal is built with wxPython.
+* Projects have at most one "main window" which (1) displays the project's root resources and resource groups in an "entity tree" and (2) displays the project's tasks in a "task tree".
+* A project may also be created directly - in Crystal's embedded Python shell or in automated tests - without a main window.
+
+Threads:
+
+* The wxPython user interface must both only be accessed from the foreground thread, which is the main thread of the application.
+* Projects must also only be accessed from the foreground thread, because its SQLite database enforces a single-threaded access policy.
+* Many functions are marked with the `@fg_affinity` decorator, which enforces that they are only called from the foreground thread.
+* A callable can be scheduled to run on the foreground thread using `crystal.util.xthreading.fg_call_later()`, which is a wrapper around `wx.CallAfter()`.
+* A callable can be run synchronously on the foreground thread using `crystal.util.xthreading.fg_call_and_wait()`, although care should be taken to avoid deadlocks.
+* Any thread that is not the foreground thread is considered a "background thread".
+* Some functions are marked with the `@bg_affinity` decorator to enforce they are only called from a background thread.
+* Each project has a "scheduler thread" that runs tasks in the background, such as downloading resources. A scheduler thread is also a kind of background thread.
+* Some functions are marked with the `@scheduler_affinity` decorator to enforce they are only called from the scheduler thread.
+
+Error Handling:
+
+* Crystal uses a "bulkhead" pattern to ensure that (1) the blast radius of an unhandled exception is confined to its containing "bulkhead", and (2) all unhandled exceptions are reported to the user in the UI when possible, or to stderr otherwise:
+    * Functions can be marked with one of the `@capture_crashes_to*` decorators to declare how unhandled exceptions should be handled.
+    * Many `@capture_crashes_to*` decorators capture exceptions to a `Bulkhead`, which reports them to the user in the UI.
+    * Unhandled exceptions which occur while running a task are captured to the task's `Bulkhead`, which reports them to the UI through the task's node in the task tree.
+    * Unhandled exceptions which occur in contexts where they cannot be reasonably reported to the UI are captured to stderr using the `@capture_crashes_to_stderr` decorator.
+* The traceback of an unhandled exception is always printed to stderr, regardless of how it is captured, so that it is visible to developers:
+    * An unhandled exception which is reported in the UI is also printed as a yellow warning to stderr.
+    * An unhandled exception which is not reported in the UI is printed as a red error to stderr.
 
 # Development Guidelines
 
