@@ -233,7 +233,6 @@ class Project(ListenableMixin):
         
         self.path = path
         
-        self._close_future = None               # type: Future | None
         self._properties = dict()               # type: Dict[str, Optional[str]]
         self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
         self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
@@ -1701,10 +1700,9 @@ class Project(ListenableMixin):
     # === Close & Reopen ===
     
     @fg_affinity
-    def close(self, *, immediately: bool=False) -> Future[None]:
+    def close(self, *, capture_crashes: bool=True) -> None:
         """
         Closes this project soon, stopping any tasks and closing all files.
-        Returns a Future that will complete when the project is fully closed.
         
         By default this method captures any exceptions that occur internally
         since the caller doesn't usually have a realistic way to handle them.
@@ -1714,46 +1712,27 @@ class Project(ListenableMixin):
         This method is prepared to operate on projects with corrupted state,
         since even corrupted projects will attempt to close themselves gracefully.
         
-        If immediately is True, then the project will be fully closed
-        when this method returns, at the cost of potentially leaving
-        some tasks running for a short amount of time.
-        
-        It is safe to call this method multiple times,
-        while the project is closing or has already closed.
+        It is safe to call this method multiple times, even after the project has closed.
         """
-        if hasattr(self, '_close_future') and self._close_future is not None:
-            return self._close_future
-        self._close_future = future = start_thread_switching_coroutine(
-            SwitchToThread.FOREGROUND,
-            self._close_coro(immediately),
-            capture_crashes_to_stderr,
-            # Many callers of close() probably will NOT check the result
-            # of the Future returned by close(), so report exceptions
-            # loudly to stderr
-            uses_future_result=False,
+        guarded = (
+            capture_crashes_to_stderr if capture_crashes else (lambda f: f)
         )
-        if immediately:
-            assert future.done(), \
-                'Project.close() with immediately=True should have completed immediately but did not'
-        return future
-    
-    # NOTE: Does NOT capture exceptions internally, unlike close()
-    @fg_affinity
-    def _close_coro(self, immediately: bool) -> Generator[SwitchToThread, None, None]:
-        try:
-            yield SwitchToThread.FOREGROUND
-            yield from self._stop_scheduler_coro(immediately)
-        finally:
+        @guarded
+        def do_close() -> None:
             try:
-                yield SwitchToThread.FOREGROUND
-                self._close_database(self._db, self.readonly)
+                self._stop_scheduler()
             finally:
-                # Unexport reference to self, if running tests
-                if tests_are_running():
-                    if Project._last_opened_project is self:
-                        Project._last_opened_project = None
+                try:
+                    self._close_database(self._db, self.readonly)
+                finally:
+                    # Unexport reference to self, if running tests
+                    if tests_are_running():
+                        if Project._last_opened_project is self:
+                            Project._last_opened_project = None
+        do_close()
     
-    def _stop_scheduler_coro(self, immediately: bool) -> Iterator[SwitchToThread]:
+    @fg_affinity
+    def _stop_scheduler(self) -> None:
         """
         Stops the scheduler thread for this project.
         
@@ -1765,8 +1744,6 @@ class Project(ListenableMixin):
         Raises:
         * TimeoutError -- if the scheduler thread does not exit promptly within a timeout
         """
-        yield SwitchToThread.FOREGROUND
-        
         # Stop scheduler thread soon
         if hasattr(self, 'root_task'):
             try:
@@ -1775,18 +1752,20 @@ class Project(ListenableMixin):
                 assert self.root_task._cancel_tree_soon, \
                     'Root task should be pending cancellation, even if cancel_tree() partially failed'
         
-        if immediately:
-            # Don't wait for the scheduler thread to exit (or perform related cleanup checks)
-            # because that requires switching to a background thread and NOT completing
-            # before returning from this method
-            return
-        
         # Wait for the scheduler thread to exit
         if hasattr(self, '_scheduler_thread') and self._scheduler_thread is not None:
-            yield SwitchToThread.BACKGROUND
             scheduler_thread = self._scheduler_thread  # capture
-            scheduler_thread.join(self._SCHEDULER_JOIN_TIMEOUT)
-            if scheduler_thread.is_alive():
+            def scheduler_thread_is_dead() -> bool:
+                scheduler_thread.join(20 / 1000)  # 20 ms
+                return not scheduler_thread.is_alive()
+            try:
+                fg_wait_for(
+                    scheduler_thread_is_dead,
+                    timeout=self._SCHEDULER_JOIN_TIMEOUT,
+                    # No need to sleep additionally between polls because 
+                    # scheduler_thread_is_dead() sleeps internally
+                    poll_interval=0)
+            except TimeoutError:
                 tb = get_thread_stack(scheduler_thread)
                 msg = f"Scheduler thread failed to stop within {self._SCHEDULER_JOIN_TIMEOUT} seconds.\n\n"
                 if tb:
@@ -1794,7 +1773,6 @@ class Project(ListenableMixin):
                 else:
                     msg += "Scheduler thread stack unavailable."
                 raise TimeoutError(msg)
-            yield SwitchToThread.FOREGROUND
             
             self._scheduler_thread = None
         

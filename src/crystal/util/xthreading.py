@@ -16,21 +16,15 @@ from crystal.util.bulkheads import (
 from crystal.util.profile import create_profiled_callable
 from crystal.util.xfunctools import partial2
 from enum import Enum
-from functools import partial, wraps
+from functools import wraps
 import os
 import sys
 import threading
+import time
 import traceback
 from typing import Any, assert_never, cast, Deque, Optional, Protocol, TypeVar
 from typing_extensions import ParamSpec
 import wx
-
-# Whether to explicitly manage the queue of deferred foreground tasks,
-# instead of letting wxPython manage the queue internally.
-# 
-# Can be useful for debugging, because when True the queue of deferred foreground tasks
-# is directly inspectable by examining the "_fg_calls" variable in this module.
-_DEBUG_FG_CALL_QUEUE = False
 
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.
@@ -141,7 +135,8 @@ def bg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
 
 def fg_call_later(
         callable: Callable[_P, None],
-        # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
+        # TODO: Give `args` the type `_P` once that can be spelled in Python's type system.
+        #       Currently only a `*args` parameter can be annotated with `_P.args`.
         *, args=(),
         profile: bool=True,
         force_later: bool=False,
@@ -184,46 +179,56 @@ def fg_call_later(
     
     if is_fg_thread and not force_later:
         callable(*args)
-    else:
+        return
+    
+    if len(args) != 0:
+        (callable, args) = (partial2(callable, *args), ())  # reinterpret
+    _deferred_fg_calls.append(callable)
+    try:
+        wx.CallAfter(_run_deferred_fg_calls)
+    except Exception as e:
+        if not has_foreground_thread():
+            raise NoForegroundThreadError()
+        
+        # ex: RuntimeError: wrapped C/C++ object of type PyApp has been deleted
+        if str(e) == 'wrapped C/C++ object of type PyApp has been deleted':
+            raise NoForegroundThreadError()
+        # ex: AssertionError: No wx.App created yet
+        elif str(e) == 'No wx.App created yet':
+            raise NoForegroundThreadError()
+        else:
+            raise
+
+
+# Queue of deferred foreground callables to run
+_deferred_fg_calls = deque()  # type: Deque[Callable[[], None]]
+
+
+@capture_crashes_to_stderr
+def _run_deferred_fg_calls() -> None:
+    """
+    Runs all deferred foreground callables that were scheduled by fg_call_later().
+    Returns whether any callables were run.
+    """
+    # Don't run more than the number of calls that were initially scheduled
+    # to avoid an infinite loop in case a type of callable always
+    # schedules at least one callable of the same type.
+    max_calls_to_run = len(_deferred_fg_calls)  # capture
+    for _ in range(max_calls_to_run):
         try:
-            if _DEBUG_FG_CALL_QUEUE:
-                if len(args) == 0:
-                    _fg_call_later_in_order(callable)
-                else:
-                    _fg_call_later_in_order(partial(callable, *args))
-            else:
-                wx.CallAfter(callable, *args)
-        except Exception as e:
-            if not has_foreground_thread():
-                raise NoForegroundThreadError()
-            
-            # ex: RuntimeError: wrapped C/C++ object of type PyApp has been deleted
-            if str(e) == 'wrapped C/C++ object of type PyApp has been deleted':
-                raise NoForegroundThreadError()
-            # ex: AssertionError: No wx.App created yet
-            elif str(e) == 'No wx.App created yet':
-                raise NoForegroundThreadError()
-            else:
-                raise
-
-
-_fg_calls = deque()  # type: Deque[Callable[[], None]]
-
-def _fg_call_later_in_order(callable: Callable[[], None]) -> None:
-    _fg_calls.append(callable)
-    wx.CallAfter(_do_fg_calls)
-
-def _do_fg_calls() -> None:
-    while True:
-        try:
-            cur_fg_call = _fg_calls.popleft()  # type: Callable[[], None]
+            cur_fg_call = _deferred_fg_calls.popleft()  # type: Callable[[], None]
         except IndexError:
             break
-        try:
-            cur_fg_call()
-        except Exception:
-            # Print traceback of any unhandled exception
-            traceback.print_exc()
+        else:
+            try:
+                # NOTE: If _DEFERRED_FG_CALLS_MUST_CAPTURE_CRASHES is True
+                #       then it should be impossible for this to raise an exception
+                #       because ensure_is_bulkhead_call() should have been called
+                #       on the callable before it was added to the queue.
+                cur_fg_call()
+            except Exception:
+                traceback.print_exc()
+                # (keep running other calls)
 
 
 def fg_call_and_wait(
@@ -361,14 +366,25 @@ def fg_wait_for(condition_func: Callable[[], bool], *, timeout: float | None, po
     Raises:
     * TimeoutError -- if the condition does not become true within the specified timeout
     """
-    raise NotImplementedError(
-        'It is not possible to implement the documented behavior of '
-        'fg_wait_for() safely because it is not possible to process '
-        'all wx events in a nested event loop. In particular an event posted '
-        'by wx.CallAfter() will not be processed until the nested event loop '
-        'exits. Because wx.CallAfter() events cannot be processed, any other '
-        'thread that calls fg_call_and_wait() will deadlock and block forever.'
-    )
+    start_time = time.monotonic()  # capture
+    with wx.EventLoopActivator(loop := wx.GetApp().GetTraits().CreateEventLoop()):
+        while True:
+            if condition_func():
+                break
+            if timeout is not None and (time.monotonic() - start_time) > timeout:
+                raise TimeoutError(
+                    f'fg_wait_for: Timed out waiting for condition: {condition_func}')
+            # Process any enqueued foreground callables
+            _run_deferred_fg_calls()
+            # Process one wx event
+            # NOTE: It is unsafe to keep calling Dispatch() in a loop
+            #       while there are pending events because some OS 
+            #       event loops always appear to have pending events.
+            #       Therefore we only process one event per iteration.
+            if loop.Pending():
+                loop.Dispatch()
+            if poll_interval > 0:
+                time.sleep(poll_interval)
 
 
 # ------------------------------------------------------------------------------

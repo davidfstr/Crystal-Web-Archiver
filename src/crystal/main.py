@@ -411,11 +411,11 @@ def _main(args: list[str]) -> None:
             if shell is not None:
                 shell.detach()
             if last_project is not None:
-                close_future = last_project.close()
-                assert close_future.done(), (
-                    'Expected project to already be fully closed '
-                    'during the MainLoop by MainWindow'
-                )
+                # TODO: Implement Project.closed so that this assertion can be checked
+                #assert last_project.closed, (
+                #    'Expected project to already be fully closed '
+                #    'during the MainLoop by MainWindow'
+                #)
                 last_project = None
             
             # Quit?

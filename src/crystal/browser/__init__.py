@@ -176,11 +176,7 @@ class MainWindow:
             if tests_are_running():
                 MainWindow._last_created = self
         except:
-            # Close immediately because cannot return a Future to caller in this context
-            # NOTE: Can probably safely close immediately because
-            #       no tasks are likely to be running yet
-            closed_future = project.close(immediately=True)
-            assert closed_future.done()
+            project.close()
             raise
     
     @property
@@ -515,8 +511,6 @@ class MainWindow:
         """
         Closes this window, disposing any related resources.
         """
-        immediately = not event.CanVeto()  # rename
-        
         if self._autohibernate_timer is not None:
             self._autohibernate_timer.stop()
         
@@ -538,23 +532,10 @@ class MainWindow:
             for a in self._actions:
                 a.dispose()
             
-            close_future = self.project.close(immediately=immediately)
+            self.project.close()
         
-        # Destroy self, possibly in the future
-        if immediately:
-            assert close_future.done()
-            self._frame.Destroy()
-        else:
-            # NOTE: Must Veto, since will not destroy the frame immediately
-            assert event.CanVeto(), 'Should still be able to veto the close event'
-            event.Veto()
-            
-            self._frame.Hide()
-            
-            @capture_crashes_to_stderr
-            def on_closed() -> None:
-                self._frame.Destroy()
-            close_future.add_done_callback(lambda future: fg_call_later(on_closed))
+        # Destroy self, since we did not Veto() the close event
+        self._frame.Destroy()
     
     # === Entity Pane: New/Edit Root Url ===
     
