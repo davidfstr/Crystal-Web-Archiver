@@ -19,10 +19,10 @@ from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import (
     MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
+import crystal.tests.util.xtempfile as xtempfile
 from io import BytesIO
 import lxml.html
 import os
-import tempfile
 from textwrap import dedent
 from unittest import skip
 from unittest.mock import Mock, patch
@@ -178,7 +178,7 @@ async def test_recognizes_explicit_link_to_favicon(subtests: SubtestsContext) ->
         ).lstrip('\n')
         assert '919f27.ico' in HTML_TEXT  # ensure has explicit favicon link
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             os.rmdir(project_dirpath)
             with Project(project_dirpath) as project:
                 rr = ResourceRevision.create_from_response(
@@ -279,7 +279,7 @@ async def test_recognizes_implicit_link_to_favicon_from_site_root(subtests: Subt
     FORCE_BASIC_PARSER_TEXT = '<!-- <frameset></frameset> -->'
     
     with subtests.test(parser='soup'):
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             os.rmdir(project_dirpath)
             with Project(project_dirpath) as project:
                 rr = ResourceRevision.create_from_response(
@@ -309,7 +309,7 @@ async def test_recognizes_implicit_link_to_favicon_from_site_root(subtests: Subt
                 assert 'favicon2.ico' in str(doc)
     
     with subtests.test(parser='basic'):
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             os.rmdir(project_dirpath)
             with Project(project_dirpath) as project:
                 rr = ResourceRevision.create_from_response(
@@ -361,7 +361,7 @@ async def test_does_not_recognize_implicit_link_to_favicon_from_outside_site_roo
     ).lstrip('\n')
     assert 'favicon.ico' not in HTML_TEXT  # ensure no explicit favicon link
     
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         os.rmdir(project_dirpath)
         with Project(project_dirpath) as project:
             rr = ResourceRevision.create_from_response(
@@ -460,7 +460,7 @@ async def test_does_recognize_invalid_relative_urls_as_links() -> None:
     assert "//*[@id='" == bad_link.relative_url
     assert '#' == good_link.relative_url
     
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         os.rmdir(project_dirpath)
         with Project(project_dirpath) as project:
             rr = ResourceRevision.create_from_response(
@@ -484,7 +484,7 @@ async def test_does_recognize_invalid_relative_urls_as_links() -> None:
 
 
 async def test_recognizes_http_redirect_as_a_link() -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         os.rmdir(project_dirpath)
         with Project(project_dirpath) as project:
             rr = ResourceRevision.create_from_response(

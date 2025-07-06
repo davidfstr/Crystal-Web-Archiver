@@ -10,6 +10,7 @@ from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
+import crystal.tests.util.xtempfile as xtempfile
 import io
 import os
 import tempfile
@@ -244,7 +245,7 @@ async def test_when_download_resource_given_revision_body_missing_then_redownloa
         ),
     })
     with server:
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 r = Resource(project, server.get_url('/'))
                 revision_future = r.download(wait_for_embedded=True)

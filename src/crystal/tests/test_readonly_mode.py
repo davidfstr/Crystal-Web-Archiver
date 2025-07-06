@@ -4,18 +4,18 @@ from crystal.model import Project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.windows import OpenOrCreateDialog
+import crystal.tests.util.xtempfile as xtempfile
 from crystal.util.xos import is_mac_os, is_windows
 import os
 import stat
 import subprocess
-import tempfile
 from unittest import skip
 
 # ------------------------------------------------------------------------------
 # Tests
 
 async def test_project_opens_as_readonly_when_user_requests_it_in_ui() -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         # Create empty project
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
             pass
@@ -38,7 +38,7 @@ async def test_project_opens_as_readonly_when_project_is_on_readonly_filesystem(
     if not is_mac_os():
         skipTest('only supported on macOS')
     
-    with tempfile.TemporaryDirectory() as working_dirpath:
+    with xtempfile.TemporaryDirectory() as working_dirpath:
         volume_src_dirpath = os.path.join(working_dirpath, 'Project')
         os.mkdir(volume_src_dirpath)
         
@@ -78,7 +78,7 @@ async def test_project_opens_as_readonly_when_project_is_on_readonly_filesystem(
 
 @awith_subtests
 async def test_project_opens_as_readonly_when_project_directory_or_database_is_locked(subtests: SubtestsContext) -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         # Create empty project
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
             pass

@@ -21,6 +21,7 @@ from crystal.tests.util.windows import (
     EntityTree, MainWindow, NewGroupDialog, NewRootUrlDialog,
     OpenOrCreateDialog, PreferencesDialog,
 )
+import crystal.tests.util.xtempfile as xtempfile
 from crystal.util.xos import is_windows
 import datetime
 import re
@@ -53,7 +54,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
             feed_item_pattern = sp.get_request_url('https://xkcd.com/##/')
             assert feed_item_pattern != comic_pattern
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             # 1. Test can create project
             # 2. Test can quit
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
@@ -687,7 +688,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
             comic2_url = sp.get_request_url('https://xkcd.com/2/')
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 assert root_ti.GetFirstChild() is None  # no entities
@@ -790,7 +791,7 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
     home_v2_etag = '"62e1f036-1f64"'
     comic1_v1_etag = '"62e1f036-1f21"'
     
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
             # Start xkcd v1
             with served_project('testdata_xkcd.crystalproj.zip') as sp1:

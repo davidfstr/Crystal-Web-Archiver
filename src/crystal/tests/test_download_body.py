@@ -10,6 +10,7 @@ from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import OpenOrCreateDialog
+import crystal.tests.util.xtempfile as xtempfile
 from crystal.util.db import DatabaseCursor
 import errno
 from http.client import HTTPConnection, HTTPResponse
@@ -243,7 +244,7 @@ async def test_when_network_io_error_and_database_error_then_tries_to_delete_par
 
 
 async def test_when_open_project_given_partial_body_files_exist_then_deletes_all_partial_body_files() -> None:
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         # Create empty project
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
             pass

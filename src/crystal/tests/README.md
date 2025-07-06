@@ -180,8 +180,10 @@ before creating and reopening it, but this verbose pattern is discouraged for
 new tests:
 
 ```
+    import crystal.tests.util.xtempfile as xtempfile
+    
     # Create empty project directory
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         
         # Create project
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):

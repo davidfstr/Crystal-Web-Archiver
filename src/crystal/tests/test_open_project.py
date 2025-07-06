@@ -12,9 +12,9 @@ from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition, wait_for,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
+import crystal.tests.util.xtempfile as xtempfile
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import os.path
-import tempfile
 from unittest import skip
 from unittest.mock import call, patch
 import wx
@@ -46,7 +46,7 @@ async def test_when_create_project_then_shows_dialog_saying_opening_project_but_
 
 
 async def test_can_create_project_with_url_unsafe_characters() -> None:
-    with tempfile.TemporaryDirectory(prefix='original#2', suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(prefix='original#2', suffix='.crystalproj') as project_dirpath:
         assert '#' in project_dirpath
         
         ocd = await OpenOrCreateDialog.wait_for()

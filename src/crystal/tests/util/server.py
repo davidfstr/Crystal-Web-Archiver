@@ -8,6 +8,7 @@ from crystal.model import Project
 from crystal.server import get_request_url, ProjectServer
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+import crystal.tests.util.xtempfile as xtempfile
 from crystal.util import http_date
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.xdatetime import datetime_is_aware
@@ -17,7 +18,6 @@ from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 import re
-import tempfile
 from typing import List, Optional
 import unittest.mock
 from zipfile import ZipFile
@@ -162,10 +162,7 @@ class MockHttpServer:
 def extracted_project(
         zipped_project_filename: str
         ) -> Iterator[str]:
-    # NOTE: If a file inside the temporary directory is still open,
-    #       ignore_cleanup_errors=True will prevent Windows from raising,
-    #       at the cost of leaving the temporary directory around
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as project_parent_dirpath:
+    with xtempfile.TemporaryDirectory() as project_parent_dirpath:
         # Extract project
         with resources.open_binary(zipped_project_filename) as zipped_project_file:
             with ZipFile(zipped_project_file, 'r') as project_zipfile:

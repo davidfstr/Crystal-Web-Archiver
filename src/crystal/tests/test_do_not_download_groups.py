@@ -18,8 +18,8 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import (
     EntityTree, MainWindow, OpenOrCreateDialog,
 )
+import crystal.tests.util.xtempfile as xtempfile
 import os
-import tempfile
 from unittest import skip
 from unittest.mock import ANY
 
@@ -210,7 +210,7 @@ async def test_when_reopen_project_then_group_that_was_marked_as_do_not_download
     comic_image_rg_pattern = 'https://imgs.xkcd.com/comics/*'
     
     # Case 1: New group marked as do_not_download
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         os.rmdir(project_dirpath)
         
         # Create project with do_not_download group
@@ -227,7 +227,7 @@ async def test_when_reopen_project_then_group_that_was_marked_as_do_not_download
             assert True == comic_image_rg2.do_not_download
     
     # Case 2: Edited group marked as do_not_download
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
         os.rmdir(project_dirpath)
         
         # Create project with group. Edit to mark as do_not_download.

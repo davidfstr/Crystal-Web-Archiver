@@ -14,9 +14,9 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import (
     MainWindow, MenuitemMissingError, OpenOrCreateDialog,
 )
+import crystal.tests.util.xtempfile as xtempfile
 import locale
 import os
-import tempfile
 from unittest import skip
 import wx
 
@@ -365,7 +365,7 @@ async def test_given_rr_is_not_downloaded_and_project_is_read_only_when_expand_r
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             # Create project
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 # Create RootResource but don't download it
@@ -435,7 +435,7 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
         
-        with tempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             # Download revision
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 r = Resource(project, home_url)
