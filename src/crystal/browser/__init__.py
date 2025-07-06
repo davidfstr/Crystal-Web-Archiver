@@ -71,11 +71,18 @@ class MainWindow:
     # NOTE: Only changed when tests are running
     _last_created: 'Optional[MainWindow]'=None
     
+    @fg_affinity
     def __init__(self,
             project: Project,
             progress_listener: OpenProjectProgressListener | None=None,
             ) -> None:
         """
+        Creates a MainWindow that displays, listens to, and takes ownership of the given Project.
+        
+        When the MainWindow is closed, the Project will be closed automatically.
+        
+        If this constructor raises an exception the Project will still be closed, immediately.
+        
         Raises:
         * CancelOpenProject
         """
@@ -86,87 +93,95 @@ class MainWindow:
         self._log_drawer = None  # type: Optional[LogDrawer]
         self._project_server = None  # type: Optional[ProjectServer]
         
-        self._create_actions()
-        
-        frame_title: str
-        filename_with_ext = os.path.basename(project.path)
-        (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
-        if is_windows() or is_kde_or_non_gnome():
-            frame_title = f'{filename_without_ext} - {APP_NAME}'
-        else:  # is_mac_os(); other
-            extension_visible = (
-                not get_hide_file_extension(project.path) if is_mac_os()
-                else True
-            )
-            if extension_visible:
-                frame_title = filename_with_ext
-            else:
-                frame_title = filename_without_ext
-        
-        # TODO: Rename: raw_frame -> frame,
-        #               frame -> frame_content
-        raw_frame = wx.Frame(None, title=frame_title, name='cr-main-window')
         try:
-            # macOS: Define proxy icon beside the filename in the titlebar
-            raw_frame.SetRepresentedFilename(project.path)
-            # Define frame icon, if appropriate
-            set_dialog_or_frame_icon_if_appropriate(raw_frame)
+            self._create_actions()
             
-            # 1. Define *single* child with full content of the wx.Frame,
-            #    so that LogDrawer can be created for this window later
-            # 2. Add all controls to a root wx.Panel rather than to the
-            #    raw wx.Frame directly so that tab traversal between child
-            #    components works correctly.
-            frame = wx.Panel(raw_frame)
+            frame_title: str
+            filename_with_ext = os.path.basename(project.path)
+            (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
+            if is_windows() or is_kde_or_non_gnome():
+                frame_title = f'{filename_without_ext} - {APP_NAME}'
+            else:  # is_mac_os(); other
+                extension_visible = (
+                    not get_hide_file_extension(project.path) if is_mac_os()
+                    else True
+                )
+                if extension_visible:
+                    frame_title = filename_with_ext
+                else:
+                    frame_title = filename_without_ext
             
-            frame_sizer = wx.BoxSizer(wx.VERTICAL)
-            frame.SetSizer(frame_sizer)
+            # TODO: Rename: raw_frame -> frame,
+            #               frame -> frame_content
+            raw_frame = wx.Frame(None, title=frame_title, name='cr-main-window')
+            try:
+                # macOS: Define proxy icon beside the filename in the titlebar
+                raw_frame.SetRepresentedFilename(project.path)
+                # Define frame icon, if appropriate
+                set_dialog_or_frame_icon_if_appropriate(raw_frame)
+                
+                # 1. Define *single* child with full content of the wx.Frame,
+                #    so that LogDrawer can be created for this window later
+                # 2. Add all controls to a root wx.Panel rather than to the
+                #    raw wx.Frame directly so that tab traversal between child
+                #    components works correctly.
+                frame = wx.Panel(raw_frame)
+                
+                frame_sizer = wx.BoxSizer(wx.VERTICAL)
+                frame.SetSizer(frame_sizer)
+                
+                splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE, name='cr-main-window-splitter')
+                splitter.SetSashGravity(1.0)
+                splitter.SetMinimumPaneSize(20)
+                
+                entity_pane = self._create_entity_pane(splitter, progress_listener)
+                task_pane = self._create_task_pane(splitter)
+                splitter.SplitHorizontally(entity_pane, task_pane, -task_pane.GetBestSize().height)
+                
+                frame_sizer.Add(splitter, proportion=1, flag=wx.EXPAND)
+                
+                frame_sizer.Add(
+                    self._create_status_bar(frame),
+                    proportion=0,
+                    flag=wx.EXPAND)
+                
+                raw_frame.MenuBar = self._create_menu_bar(raw_frame)
+                
+                bind(raw_frame, wx.EVT_CLOSE, self._on_close_frame)
+                
+                frame.Fit()
+                raw_frame.Fit()  # NOTE: Must Fit() before Show() here so that wxGTK actually fits correctly
+                raw_frame.Show(True)
+                
+                # Define minimum size for main window
+                min_width = entity_pane.GetBestSize().Width
+                min_height = task_pane.GetBestSize().Height * 2
+                raw_frame.MinSize = wx.Size(min_width, min_height)
+                
+                self._frame = raw_frame
+            except:
+                raw_frame.Destroy()
+                raise
             
-            splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE, name='cr-main-window-splitter')
-            splitter.SetSashGravity(1.0)
-            splitter.SetMinimumPaneSize(20)
+            self._unhibernate()
             
-            entity_pane = self._create_entity_pane(splitter, progress_listener)
-            task_pane = self._create_task_pane(splitter)
-            splitter.SplitHorizontally(entity_pane, task_pane, -task_pane.GetBestSize().height)
+            # Auto-hibernate every few minutes, in case Crystal crashes
+            self._autohibernate_timer = None
+            try:
+                self._autohibernate_timer = Timer(self._hibernate, self._AUTOHIBERNATE_PERIOD)
+            except TimerError:
+                pass
             
-            frame_sizer.Add(splitter, proportion=1, flag=wx.EXPAND)
-            
-            frame_sizer.Add(
-                self._create_status_bar(frame),
-                proportion=0,
-                flag=wx.EXPAND)
-            
-            raw_frame.MenuBar = self._create_menu_bar(raw_frame)
-            
-            bind(raw_frame, wx.EVT_CLOSE, self._on_close_frame)
-            
-            frame.Fit()
-            raw_frame.Fit()  # NOTE: Must Fit() before Show() here so that wxGTK actually fits correctly
-            raw_frame.Show(True)
-            
-            # Define minimum size for main window
-            min_width = entity_pane.GetBestSize().Width
-            min_height = task_pane.GetBestSize().Height * 2
-            raw_frame.MinSize = wx.Size(min_width, min_height)
-            
-            self._frame = raw_frame
+            # Export reference to self, if running tests
+            if tests_are_running():
+                MainWindow._last_created = self
         except:
-            raw_frame.Destroy()
+            # Close immediately because cannot return a Future to caller in this context
+            # NOTE: Can probably safely close immediately because
+            #       no tasks are likely to be running yet
+            closed_future = project.close(immediately=True)
+            assert closed_future.done()
             raise
-        
-        self._unhibernate()
-        
-        # Auto-hibernate every few minutes, in case Crystal crashes
-        self._autohibernate_timer = None
-        try:
-            self._autohibernate_timer = Timer(self._hibernate, self._AUTOHIBERNATE_PERIOD)
-        except TimerError:
-            pass
-        
-        # Export reference to self, if running tests
-        if tests_are_running():
-            MainWindow._last_created = self
     
     @property
     def _readonly(self) -> bool:
@@ -194,7 +209,7 @@ class MainWindow:
             wx.ID_CLOSE,
             '',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W')),
-            action_func=self._on_close_project,
+            action_func=self._on_close_window,
             enabled=True)
         self._save_project_action = Action(
             wx.ID_SAVE,
@@ -475,7 +490,7 @@ class MainWindow:
         The caller is still responsible for closing the underlying Project.
         """
         dummy_event = wx.CommandEvent()
-        self._on_close_project(dummy_event)
+        self._on_close_window(dummy_event)
     
     def __enter__(self) -> 'MainWindow':
         return self
@@ -485,7 +500,7 @@ class MainWindow:
     
     # === File Menu: Events ===
     
-    def _on_close_project(self, event: wx.CommandEvent) -> None:
+    def _on_close_window(self, event: wx.CommandEvent) -> None:
         self._frame.Close()  # will trigger call to _on_close_frame()
     
     def _on_quit(self, event: wx.CommandEvent) -> None:
@@ -500,6 +515,8 @@ class MainWindow:
         """
         Closes this window, disposing any related resources.
         """
+        immediately = not event.CanVeto()  # rename
+        
         if self._autohibernate_timer is not None:
             self._autohibernate_timer.stop()
         
@@ -520,8 +537,24 @@ class MainWindow:
             # wx.Objects in the frame while the frame is being deleted
             for a in self._actions:
                 a.dispose()
+            
+            close_future = self.project.close(immediately=immediately)
         
-        event.Skip()  # continue dispose of frame
+        # Destroy self, possibly in the future
+        if immediately:
+            assert close_future.done()
+            self._frame.Destroy()
+        else:
+            # NOTE: Must Veto, since will not destroy the frame immediately
+            assert event.CanVeto(), 'Should still be able to veto the close event'
+            event.Veto()
+            
+            self._frame.Hide()
+            
+            @capture_crashes_to_stderr
+            def on_closed() -> None:
+                self._frame.Destroy()
+            close_future.add_done_callback(lambda future: fg_call_later(on_closed))
     
     # === Entity Pane: New/Edit Root Url ===
     

@@ -65,6 +65,14 @@ class DatabaseCursor:
         return getattr(self._c, attr_name)
 
 
+def get_table_names(c: DatabaseCursor) -> list[str]:
+    return [
+        table_name
+        for (table_name,) in
+        c.execute('SELECT name FROM sqlite_master WHERE type = "table"')
+    ]
+
+
 def get_column_names_of_table(c: DatabaseCursor, table_name: str) -> list[str]:
     return [
         column_name
