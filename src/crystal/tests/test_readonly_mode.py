@@ -72,6 +72,7 @@ async def test_project_opens_as_readonly_when_project_is_on_readonly_filesystem(
         finally:
             subprocess.run([
                 'umount',
+                '-f',
                 volume_dirpath,
             ], check=True)
 
