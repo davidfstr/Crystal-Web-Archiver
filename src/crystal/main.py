@@ -258,6 +258,7 @@ def _main(args: list[str]) -> None:
     
     # 1. Create wx.App and call app.OnInit(), opening the initial dialog
     # 2. Initialize the foreground thread
+    from crystal.util.bulkheads import capture_crashes_to_stderr
     class MyApp(wx.App):
         def __init__(self, *args, **kwargs):
             from crystal import APP_NAME
@@ -273,6 +274,7 @@ def _main(args: list[str]) -> None:
             # (May insert debugging code here in the future)
             pass
         
+        @capture_crashes_to_stderr
         def OnInit(self):
             # If running as Mac .app, LC_CTYPE may be set to the default locale
             # instead of LANG. So copy any such locale to LANG.
@@ -302,12 +304,14 @@ def _main(args: list[str]) -> None:
                 time.sleep(.2)
                 
                 if not self._did_finish_launch:
-                    wx.CallAfter(lambda: self._finish_launch())
+                    from crystal.util.xthreading import fg_call_later
+                    fg_call_later(self._finish_launch)
             thread = threading.Thread(target=wait_for_maybe_open_file, daemon=False)
             thread.start()
             
             return True
         
+        @capture_crashes_to_stderr
         def MacOpenFile(self, filepath):
             if self._did_finish_launch:
                 # Ignore attempts to open additional projects if one is already open
@@ -315,6 +319,7 @@ def _main(args: list[str]) -> None:
             else:
                 self._finish_launch(filepath)
         
+        @capture_crashes_to_stderr
         def _finish_launch(self, filepath: str | None=None) -> None:
             from crystal.util.xthreading import start_fg_coroutine
             start_fg_coroutine(
@@ -377,7 +382,6 @@ def _main(args: list[str]) -> None:
             # before starting bg_task() on background thread
             from crystal.tests.index import run_tests
             from crystal.util.bulkheads import capture_crashes_to_stderr
-            from crystal.util.xthreading import NoForegroundThreadError
 
             # NOTE: Any unhandled exception will probably call os._exit(1)
             #       before reaching this decorator.
