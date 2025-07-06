@@ -563,7 +563,8 @@ class TaskTreeNode:
     # === Dispose ===
     
     def dispose(self) -> None:
-        self.task.listeners.remove(self)
+        if self in self.task.listeners:
+            self.task.listeners.remove(self)
         self.tree_node.dispose()
         self.tree_node = NULL_NODE_VIEW
     
