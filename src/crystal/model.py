@@ -1780,9 +1780,8 @@ class Project(ListenableMixin):
             uses_future_result=True
         )
     
+    @fg_affinity
     def _save_as_coro(self, new_path: str) -> Generator[SwitchToThread, None, None]:
-        yield SwitchToThread.FOREGROUND
-        
         if os.path.exists(new_path):
             raise FileExistsError(
                 f'Cannot save project to {new_path!r} because a file or '
@@ -1795,7 +1794,7 @@ class Project(ListenableMixin):
         # - Stop scheduler
         # - Close database
         # TODO: Handle failures during close in a sensible way
-        yield from self._close_coro()
+        self.close(capture_crashes=False)
         
         # Move/copy the project directory to the new path.
         # - If the project is untitled, it will be renamed.
@@ -1810,7 +1809,6 @@ class Project(ListenableMixin):
             self._is_untitled = False
         else:
             shutil.copytree(self.path, new_path, dirs_exist_ok=True)
-        
         yield SwitchToThread.FOREGROUND
         
         old_path = self.path  # capture
