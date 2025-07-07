@@ -10,7 +10,7 @@ Callers that attempt to do otherwise may get thrown `ProgrammingError`s.
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from concurrent.futures import Future
 from contextlib import contextmanager
 import copy
@@ -45,6 +45,7 @@ from crystal.util.profile import create_profiling_context, warn_if_slow
 from crystal.util.progress import DevNullFile
 from crystal.util.ssd import is_ssd
 from crystal.util.test_mode import tests_are_running
+from crystal.util.thread_debug import get_thread_stack
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xbisect import bisect_key_right
@@ -55,8 +56,8 @@ from crystal.util.xgc import gc_disabled
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xsqlite3 import is_database_read_only_error, sqlite_has_json_support
 from crystal.util.xthreading import (
-    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
-    is_foreground_thread,
+    SwitchToThread, bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, fg_wait_for,
+    is_foreground_thread, start_thread_switching_coroutine,
 )
 import datetime
 import json
@@ -166,8 +167,10 @@ class Project(ListenableMixin):
         '''.lstrip('\n')
     ).replace('\n', '\r\n')
     _ICONS_DIRNAME = 'icons'
-    
     _MAX_REVISION_ID = (2 ** 60) - 1  # for projects with major version >= 2
+    
+    # Other constants
+    _SCHEDULER_JOIN_TIMEOUT = 5.0  # seconds
     
     # NOTE: Only changed when tests are running
     _last_opened_project: Project | None=None
@@ -402,7 +405,9 @@ class Project(ListenableMixin):
         """
         import crystal.task
         self.root_task = crystal.task.RootTask()
-        crystal.task.start_schedule_forever(self.root_task)
+        self._scheduler_thread = (
+            crystal.task.start_scheduler_thread(self.root_task)
+        )  # type: threading.Thread | None
     
     # --- Load: Validity ---
     
@@ -1151,7 +1156,6 @@ class Project(ListenableMixin):
         """
         return self._sorted_resource_urls is not None
     
-    
     @fg_affinity
     def _check_url_collection_invariants(self) -> None:
         """
@@ -1340,6 +1344,7 @@ class Project(ListenableMixin):
     
     @property
     def _materialized_resources(self) -> Iterable[Resource]:
+        """Returns all resource in the project that have been loaded into memory."""
         return self._resource_for_id.values()
     
     @fg_affinity
@@ -1692,45 +1697,117 @@ class Project(ListenableMixin):
             if hasattr(lis, 'resource_group_did_forget'):
                 run_bulkhead_call(lis.resource_group_did_forget, group)  # type: ignore[attr-defined]
     
-    # === Close ===
+    # === Close & Reopen ===
     
-    def close(self) -> None:
+    @fg_affinity
+    def close(self, *, capture_crashes: bool=True) -> None:
         """
-        Closes this project, stopping any tasks and closing all files.
+        Closes this project soon, stopping any tasks and closing all files.
+        
+        By default this method captures any exceptions that occur internally
+        since the caller doesn't usually have a realistic way to handle them.
         
         Effects of this method are reversed by `reopen()`.
+        
+        This method is prepared to operate on projects with corrupted state,
+        since even corrupted projects will attempt to close themselves gracefully.
+        
+        It is safe to call this method multiple times, even after the project has closed.
         """
-        self._stop_scheduler()
-        
-        self._close_database(self._db, self.readonly)
-        
-        # Unexport reference to self, if running tests
-        if tests_are_running():
-            if Project._last_opened_project is self:
-                Project._last_opened_project = None
+        guarded = (
+            capture_crashes_to_stderr if capture_crashes else (lambda f: f)
+        )
+        @guarded
+        def do_close() -> None:
+            try:
+                self._stop_scheduler()
+            finally:
+                try:
+                    self._close_database(self._db, self.readonly)
+                finally:
+                    # Unexport reference to self, if running tests
+                    if tests_are_running():
+                        if Project._last_opened_project is self:
+                            Project._last_opened_project = None
+        do_close()
     
+    @fg_affinity
     def _stop_scheduler(self) -> None:
         """
         Stops the scheduler thread for this project.
         
         Is the inverse of `_start_scheduler()`.
-        """
-        if not hasattr(self, 'root_task'):
-            # No scheduler thread to stop
-            return
         
+        This method is prepared to operate on projects with corrupted state,
+        since even corrupted projects will attempt to close themselves gracefully.
+        
+        Raises:
+        * TimeoutError -- if the scheduler thread does not exit promptly within a timeout
+        """
         # Stop scheduler thread soon
-        self.root_task.interrupt()
-        # (TODO: Actually wait for the scheduler thread to exit
-        #        in a deterministic fashion, rather than relying on 
-        #        garbage collection to clean up objects.)
+        if hasattr(self, 'root_task'):
+            try:
+                self.root_task.cancel_tree()
+            finally:
+                assert self.root_task._cancel_tree_soon, \
+                    'Root task should be pending cancellation, even if cancel_tree() partially failed'
+        
+        # Wait for the scheduler thread to exit
+        if hasattr(self, '_scheduler_thread') and self._scheduler_thread is not None:
+            scheduler_thread = self._scheduler_thread  # capture
+            def scheduler_thread_is_dead() -> bool:
+                scheduler_thread.join(20 / 1000)  # 20 ms
+                return not scheduler_thread.is_alive()
+            try:
+                fg_wait_for(
+                    scheduler_thread_is_dead,
+                    timeout=self._SCHEDULER_JOIN_TIMEOUT,
+                    # No need to sleep additionally between polls because 
+                    # scheduler_thread_is_dead() sleeps internally
+                    poll_interval=0)
+            except TimeoutError:
+                tb = get_thread_stack(scheduler_thread)
+                msg = f"Scheduler thread failed to stop within {self._SCHEDULER_JOIN_TIMEOUT} seconds.\n\n"
+                if tb:
+                    msg += f"Scheduler thread stack (possible deadlock):\n{tb}"
+                else:
+                    msg += "Scheduler thread stack unavailable."
+                raise TimeoutError(msg)
+            
+            self._scheduler_thread = None
+        
+        # 1. Verify that all task references have been cleared
+        # 2. Perform assertions last, which can raise
+        if tests_are_running():
+            for r in self._materialized_resources:
+                for task_ref in [r._download_body_task_ref, r._download_task_ref, r._download_task_noresult_ref]:
+                    if task_ref is not None and task_ref.task is not None:
+                        if task_ref.task.complete:
+                            # WeakTaskRef should never refer to a completed task
+                            raise AssertionError(
+                                f'WeakTaskRef still refers to a task that was completed: '
+                                f'{r=!r}, {task_ref=!r}')
+                        elif not task_ref.task.in_task_tree(self.root_task):
+                            # WeakTaskRef should never refer to a task that is not in the task tree
+                            raise AssertionError(
+                                f'WeakTaskRef refers to a task that is not in the task tree: '
+                                f'{r=!r}, {task_ref=!r}')
+                        else:
+                            # All tasks should be completed
+                            raise AssertionError(
+                                f'Task in task tree was not completed: '
+                                f'{r=!r}, {task_ref=!r}')
     
     @staticmethod
+    @fg_affinity
     def _close_database(db: DatabaseConnection, readonly: bool) -> None:
         """
         Closes the database for this project.
         
         Is the inverse of `_open_database_but_close_if_raises()`.
+        
+        This method is prepared to operate on projects with corrupted state,
+        since even corrupted projects will attempt to close themselves gracefully.
         """
         # Disable Write Ahead Log (WAL) mode when closing database
         # in case the user decides to burn the project to read-only media,
@@ -1815,7 +1892,7 @@ class _WeakTaskRef(Generic[_TK]):
         self.task = None
     
     def __repr__(self) -> str:
-        return f'_WeakTaskRef({self._task!r})'
+        return f'<_WeakTaskRef to {self._task!r} at {hex(id(self))}>'
 
 
 class Resource:

@@ -44,9 +44,9 @@ async def test_project_opens_as_readonly_when_project_is_on_readonly_filesystem(
         
         # Create empty project
         project_dirpath = os.path.join(volume_src_dirpath, 'Project.crystalproj')
-        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
             pass
-        
+
         # Create disk image with project on it
         dmg_filepath = os.path.join(working_dirpath, 'Project.dmg')
         subprocess.run([
@@ -67,7 +67,7 @@ async def test_project_opens_as_readonly_when_project_is_on_readonly_filesystem(
         assert os.path.exists(volume_dirpath)
         try:
             mounted_project_dirpath = os.path.join(volume_dirpath, 'Project.crystalproj')
-            async with (await OpenOrCreateDialog.wait_for()).open(mounted_project_dirpath) as (mw, project):
+            async with (await OpenOrCreateDialog.wait_for()).open(mounted_project_dirpath) as (mw, _):
                 assert True == mw.readonly
         finally:
             subprocess.run([
