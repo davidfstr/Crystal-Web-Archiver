@@ -10,7 +10,6 @@ from crystal.task import is_synced_with_scheduler_thread
 from crystal.tests.util.controls import (
     click_button, file_dialog_returning, select_menuitem_now, TreeItem,
 )
-from crystal.tests.util.runner import bg_sleep, pump_wx_events
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
     not_condition, or_condition, tree_has_no_children_condition, wait_for,

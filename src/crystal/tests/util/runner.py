@@ -101,6 +101,10 @@ def bg_fetch_url(
 def pump_wx_events() -> Generator[Command, object, None]:
     """
     Process all pending events on the wx event queue.
+    
+    Caution: If fg_wait_for() is called while this command is running,
+    it is possible that only *some* pending events will be processed
+    after pump_wx_events() returns, rather than all of them.
     """
     yield PumpWxEventsCommand()
 

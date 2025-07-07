@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from crystal.tests.util.runner import pump_wx_events
 from crystal.util.wx_treeitem_gettooltip import GetTooltipEvent
 from crystal.util.xos import is_windows
 from typing import List, Literal, Optional
@@ -238,16 +237,12 @@ class TreeItem:
         PopupMenu.called = False  # type: ignore[attr-defined]
         with patch.object(self.tree, 'PopupMenu', PopupMenu):
             await self.right_click()
-        assert PopupMenu.called  # type: ignore[attr-defined]
+            assert PopupMenu.called  # type: ignore[attr-defined]
         if raised_exc is not None:
             raise raised_exc
     
     async def right_click(self) -> None:
-        # TODO: Consider calling ProcessEvent directly rather than relying
-        #       on pump_wx_events(), which has been observed to be unreliable
-        #       on Windows in the past for posting individual events
-        wx.PostEvent(self.tree, wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.tree, self.id))
-        await pump_wx_events()
+        self.tree.ProcessEvent(wx.TreeEvent(wx.EVT_TREE_ITEM_RIGHT_CLICK.typeId, self.tree, self.id))
     
     # === Comparison ===
     
