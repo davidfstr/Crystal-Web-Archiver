@@ -395,22 +395,6 @@ projects, using the `@scheduler_disabled` context manager:
             ...
 ```
 
-When the scheduler is disabled, it's recommended to explicitly clean up any 
-tasks that aren't complete before closing a project, especially if an assertion
-failure during a test causes it to exit early.
-The `clear_top_level_tasks_on_exit` context manager makes this cleanup easy:
-
-```
-    with scheduler_disabled():
-        
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            
-            # Cleanup any tasks still running before closing the project,
-            # even if an exception was raised
-            with clear_top_level_tasks_on_exit(project):
-                ...
-```
-
 When the scheduler is disabled, adding a task to the project (either directly
 or indirectly) will NOT add it to the task tree immediately automatically.
 The `append_deferred_top_level_tasks` function (in `crystal.tests.util.tasks`)

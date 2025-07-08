@@ -10,8 +10,9 @@ from crystal.tests.util.subtests import (
     awith_subtests, SubtestsContext, with_subtests,
 )
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks, clear_top_level_tasks_on_exit,
-    scheduler_disabled, wait_for_download_to_start_and_finish,
+    append_deferred_top_level_tasks,
+    scheduler_disabled,
+    wait_for_download_to_start_and_finish,
 )
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
@@ -253,25 +254,24 @@ async def test_when_add_url_then_can_avoid_downloading_url_with_1_extra_click() 
 async def test_when_add_url_at_site_root_then_can_download_site_with_1_extra_click() -> None:
     with _served_simple_site_with_2_urls() as (home_url, _), scheduler_disabled():
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                assert mw.new_root_url_button.Enabled
-                click_button(mw.new_root_url_button)
-                nud = await NewRootUrlDialog.wait_for()
-                
-                nud.url_field.Value = home_url  # at site root
-                assert nud.download_immediately_checkbox.Value
-                assert nud.create_group_checkbox.Enabled
-                click_checkbox(nud.create_group_checkbox)  # extra click #1
-                assert nud.create_group_checkbox.Value
-                await nud.ok()
-                append_deferred_top_level_tasks(project)
-                
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                home_ti = root_ti.find_child(home_url, project.default_url_prefix)
-                site_g = root_ti.find_child(home_url + '**', project.default_url_prefix)
-                (download_rg_task,) = project.root_task.children
-                assert isinstance(download_rg_task, DownloadResourceGroupTask)
-                # (Do NOT wait for group to finish downloading)
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = home_url  # at site root
+            assert nud.download_immediately_checkbox.Value
+            assert nud.create_group_checkbox.Enabled
+            click_checkbox(nud.create_group_checkbox)  # extra click #1
+            assert nud.create_group_checkbox.Value
+            await nud.ok()
+            append_deferred_top_level_tasks(project)
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+            site_g = root_ti.find_child(home_url + '**', project.default_url_prefix)
+            (download_rg_task,) = project.root_task.children
+            assert isinstance(download_rg_task, DownloadResourceGroupTask)
+            # (Do NOT wait for group to finish downloading)
 
 
 async def test_when_add_url_not_at_site_root_then_cannot_download_site_or_create_group_for_site() -> None:
@@ -289,24 +289,23 @@ async def test_when_add_url_not_at_site_root_then_cannot_download_site_or_create
 async def test_when_add_url_at_site_root_then_can_create_group_for_site_but_not_download_it_with_extra_clicks() -> None:
     with _served_simple_site_with_2_urls() as (home_url, _), scheduler_disabled():
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                assert mw.new_root_url_button.Enabled
-                click_button(mw.new_root_url_button)
-                nud = await NewRootUrlDialog.wait_for()
-                
-                nud.url_field.Value = home_url  # at site root
-                assert nud.create_group_checkbox.Enabled
-                click_checkbox(nud.create_group_checkbox)  # extra click #1
-                assert nud.create_group_checkbox.Value
-                click_checkbox(nud.download_immediately_checkbox)  # extra click #2
-                assert not nud.download_immediately_checkbox.Value
-                await nud.ok()
-                append_deferred_top_level_tasks(project)
-                
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                home_ti = root_ti.find_child(home_url, project.default_url_prefix)
-                site_g = root_ti.find_child(home_url + '**', project.default_url_prefix)
-                () = project.root_task.children
+            assert mw.new_root_url_button.Enabled
+            click_button(mw.new_root_url_button)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            nud.url_field.Value = home_url  # at site root
+            assert nud.create_group_checkbox.Enabled
+            click_checkbox(nud.create_group_checkbox)  # extra click #1
+            assert nud.create_group_checkbox.Value
+            click_checkbox(nud.download_immediately_checkbox)  # extra click #2
+            assert not nud.download_immediately_checkbox.Value
+            await nud.ok()
+            append_deferred_top_level_tasks(project)
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+            site_g = root_ti.find_child(home_url + '**', project.default_url_prefix)
+            () = project.root_task.children
 
 
 async def test_when_edit_url_then_new_url_options_not_shown() -> None:

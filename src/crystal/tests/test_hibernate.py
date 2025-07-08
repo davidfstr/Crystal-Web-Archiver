@@ -8,8 +8,10 @@ from crystal.task import (
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks, clear_top_level_tasks_on_exit,
-    scheduler_disabled, step_scheduler, step_scheduler_until_done,
+    append_deferred_top_level_tasks,
+    scheduler_disabled,
+    step_scheduler,
+    step_scheduler_until_done,
 )
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
@@ -71,52 +73,51 @@ async def test_when_reopen_project_given_resource_group_was_downloading_then_res
         # Reopen same project, and resume downloads
         async with _open_project_with_resume_data(project_dirpath, resume=True) as project:
             assert project is not None
-            with clear_top_level_tasks_on_exit(project):
-                # Ensure comic #1 and #2 are downloaded, but not #3
-                if True:
-                    (comic1_rr, comic2_rr, comic3_rr) = project.root_resources
-                    
-                    assert comic1_rr.resource.has_any_revisions()
-                    assert comic2_rr.resource.has_any_revisions()
-                    assert not comic3_rr.resource.has_any_revisions()
-                    
-                    assert comic1_rr.resource.already_downloaded_this_session
-                    assert comic2_rr.resource.already_downloaded_this_session
-                    assert not comic3_rr.resource.already_downloaded_this_session
+            # Ensure comic #1 and #2 are downloaded, but not #3
+            if True:
+                (comic1_rr, comic2_rr, comic3_rr) = project.root_resources
                 
-                (comic_g,) = project.resource_groups
+                assert comic1_rr.resource.has_any_revisions()
+                assert comic2_rr.resource.has_any_revisions()
+                assert not comic3_rr.resource.has_any_revisions()
                 
-                # Ensure task list has only a task to download the group
-                append_deferred_top_level_tasks(project)
-                (drg_task,) = project.root_task.children
-                assert isinstance(drg_task, DownloadResourceGroupTask)
-                assert comic_g == drg_task.group
+                assert comic1_rr.resource.already_downloaded_this_session
+                assert comic2_rr.resource.already_downloaded_this_session
+                assert not comic3_rr.resource.already_downloaded_this_session
+            
+            (comic_g,) = project.resource_groups
+            
+            # Ensure task list has only a task to download the group
+            append_deferred_top_level_tasks(project)
+            (drg_task,) = project.root_task.children
+            assert isinstance(drg_task, DownloadResourceGroupTask)
+            assert comic_g == drg_task.group
+            
+            # Ensure group download task has children showing that
+            # comic #1 and #2 are downloaded, but not #3
+            if True:
+                load_children_of_drg_task(drg_task, scheduler_thread_enabled=False)
+                (_, drgm_task) = drg_task.children
+                assert isinstance(drgm_task, DownloadResourceGroupMembersTask)
                 
-                # Ensure group download task has children showing that
-                # comic #1 and #2 are downloaded, but not #3
-                if True:
-                    load_children_of_drg_task(drg_task, scheduler_thread_enabled=False)
-                    (_, drgm_task) = drg_task.children
-                    assert isinstance(drgm_task, DownloadResourceGroupMembersTask)
-                    
-                    (comic1_dr_task, comic2_dr_task, comic3_dr_task, *_) = drgm_task.children
-                    assert isinstance(comic1_dr_task, DownloadResourceTask)
-                    assert isinstance(comic2_dr_task, DownloadResourceTask)
-                    assert isinstance(comic3_dr_task, DownloadResourceTask)
-                    assert comic1_dr_task.complete
-                    assert comic2_dr_task.complete
-                    assert not comic3_dr_task.complete
-                    
-                    def assert_first_executed_child_is_correct() -> None:
-                        assert (
-                            drgm_task.children.index(comic3_dr_task) ==
-                            drgm_task._next_child_index
-                        )
-                    await step_scheduler(project, after_get=assert_first_executed_child_is_correct)
+                (comic1_dr_task, comic2_dr_task, comic3_dr_task, *_) = drgm_task.children
+                assert isinstance(comic1_dr_task, DownloadResourceTask)
+                assert isinstance(comic2_dr_task, DownloadResourceTask)
+                assert isinstance(comic3_dr_task, DownloadResourceTask)
+                assert comic1_dr_task.complete
+                assert comic2_dr_task.complete
+                assert not comic3_dr_task.complete
                 
-                # Step scheduler until comic #3 downloaded
-                while not comic3_dr_task.complete:
-                    await step_scheduler(project)
+                def assert_first_executed_child_is_correct() -> None:
+                    assert (
+                        drgm_task.children.index(comic3_dr_task) ==
+                        drgm_task._next_child_index
+                    )
+                await step_scheduler(project, after_get=assert_first_executed_child_is_correct)
+            
+            # Step scheduler until comic #3 downloaded
+            while not comic3_dr_task.complete:
+                await step_scheduler(project)
 
 
 async def test_when_reopen_project_given_resource_was_downloading_then_resumes_downloading() -> None:
@@ -148,22 +149,21 @@ async def test_when_reopen_project_given_resource_was_downloading_then_resumes_d
         
         # Reopen same project, and resume downloads
         async with _open_project_with_resume_data(project_dirpath, resume=True) as project:
-            with clear_top_level_tasks_on_exit(project):
-                (atom_feed_rr, comic1_rr) = project.root_resources
-                
-                # Ensure task list has only tasks to download the remaining resources
-                append_deferred_top_level_tasks(project)
-                (comic1_dr_task,) = project.root_task.children
-                assert isinstance(comic1_dr_task, DownloadResourceTask)
-                assert comic1_rr.resource == comic1_dr_task.resource
-                
-                # Step scheduler until resource #2 downloaded
-                while not comic1_dr_task.complete:
-                    await step_scheduler(project)
-                await step_scheduler(project, expect_done=True)
-                
-                # Ensure no download tasks left
-                () = project.root_task.children
+            (atom_feed_rr, comic1_rr) = project.root_resources
+            
+            # Ensure task list has only tasks to download the remaining resources
+            append_deferred_top_level_tasks(project)
+            (comic1_dr_task,) = project.root_task.children
+            assert isinstance(comic1_dr_task, DownloadResourceTask)
+            assert comic1_rr.resource == comic1_dr_task.resource
+            
+            # Step scheduler until resource #2 downloaded
+            while not comic1_dr_task.complete:
+                await step_scheduler(project)
+            await step_scheduler(project, expect_done=True)
+            
+            # Ensure no download tasks left
+            () = project.root_task.children
 
 
 async def test_when_reopen_project_and_user_cancels_resume_then_does_not_resume_downloading() -> None:
@@ -234,11 +234,10 @@ async def test_when_reopen_project_as_readonly_then_does_not_resume_downloading(
         
         # Reopen same project normally, and resume downloads
         async with _open_project_with_resume_data(project_dirpath, resume=True) as project:
-            with clear_top_level_tasks_on_exit(project):
-                # Ensure download tasks are resumed
-                append_deferred_top_level_tasks(project)
-                (comic1_dr_task,) = project.root_task.children
-                assert isinstance(comic1_dr_task, DownloadResourceTask)
+            # Ensure download tasks are resumed
+            append_deferred_top_level_tasks(project)
+            (comic1_dr_task,) = project.root_task.children
+            assert isinstance(comic1_dr_task, DownloadResourceTask)
 
 
 async def test_when_close_project_abruptly_and_reopen_project_with_stale_resume_data_then_resume_ignores_invalid_data() -> None:
@@ -296,12 +295,11 @@ async def test_when_close_project_abruptly_and_reopen_project_with_stale_resume_
         
         # Reopen the project
         async with _open_project_with_resume_data(project_dirpath, resume=True) as project:
-            with clear_top_level_tasks_on_exit(project):
-                # Ensure that the stale resume data is ignored,
-                # and the download of the non-stale Resource is resumed
-                append_deferred_top_level_tasks(project)
-                (dr_task2,) = project.root_task.children
-                assert isinstance(dr_task2, DownloadResourceTask)
+            # Ensure that the stale resume data is ignored,
+            # and the download of the non-stale Resource is resumed
+            append_deferred_top_level_tasks(project)
+            (dr_task2,) = project.root_task.children
+            assert isinstance(dr_task2, DownloadResourceTask)
 
 
 async def test_when_close_project_normally_and_no_tasks_running_then_resume_data_in_database_is_cleared() -> None:
@@ -366,11 +364,10 @@ async def test_while_project_open_then_periodically_saves_resume_data_so_that_ca
             
             # Reopen the project
             async with _open_project_with_resume_data(project_dirpath, resume=True) as project:
-                with clear_top_level_tasks_on_exit(project):
-                    # Ensure that the download is resumed
-                    append_deferred_top_level_tasks(project)
-                    (comic1_dr_task,) = project.root_task.children
-                    assert isinstance(comic1_dr_task, DownloadResourceTask)
+                # Ensure that the download is resumed
+                append_deferred_top_level_tasks(project)
+                (comic1_dr_task,) = project.root_task.children
+                assert isinstance(comic1_dr_task, DownloadResourceTask)
 
 
 # === Utility ===

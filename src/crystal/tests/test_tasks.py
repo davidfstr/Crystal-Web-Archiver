@@ -16,8 +16,10 @@ from crystal.tests.util.server import fetch_archive_url, served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks, clear_top_level_tasks_on_exit,
-    scheduler_disabled, scheduler_thread_context, step_scheduler,
+    append_deferred_top_level_tasks,
+    scheduler_disabled,
+    scheduler_thread_context,
+    step_scheduler,
     step_scheduler_until_done,
 )
 from crystal.tests.util.wait import wait_for
@@ -275,50 +277,49 @@ async def test_given_download_resource_group_members_when_add_group_member_via_d
                 comic_pattern = sp.get_request_url('https://xkcd.com/#/')
                 
                 async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-                    with clear_top_level_tasks_on_exit(project):
-                        RootResource(project, '', Resource(project, comic1_url))
-                        comic_g = ResourceGroup(project, '', comic_pattern)
+                    RootResource(project, '', Resource(project, comic1_url))
+                    comic_g = ResourceGroup(project, '', comic_pattern)
+                    
+                    server = ProjectServer(project)
+                    try:
+                        drg_task = comic_g.create_download_task()
+                        project.add_task(drg_task); append_deferred_top_level_tasks(project)
                         
-                        server = ProjectServer(project)
-                        try:
-                            drg_task = comic_g.create_download_task()
-                            project.add_task(drg_task); append_deferred_top_level_tasks(project)
-                            
-                            drgm_task = drg_task._download_members_task
-                            if children_loaded_before_member_added:
-                                load_children_of_drg_task(drg_task, scheduler_thread_enabled=False)
-                                assertEqual(1, _group_size_in_subtitle(drgm_task))
-                            else:
-                                assertEqual('Queued', drgm_task.subtitle)
-                            
-                            # Trigger start of dynamic download of new group member
-                            # 
-                            # Meanwhile:
-                            # - Patch Resource.download() to start download and return an
-                            #   already-completed Future with an arbitrary result,
-                            #   rather than blocking on the foreground thread
-                            # - Prevent foreground thread from being detected as the scheduler thread
-                            super_resource_download = Resource.download
-                            def resource_download(self: Resource, *args, **kwargs) -> 'Future[ResourceRevision]':
-                                _ = super_resource_download(self, *args, **kwargs)
-                                result = Future()  # type: Future[ResourceRevision]
-                                result.set_result(ResourceRevision.create_from_error(self, Exception('Simulated error')))
-                                return result
-                            with patch.object(Resource, 'download', resource_download):
-                                assert is_foreground_thread()
-                                with scheduler_thread_context(enabled=False):
-                                    _ = await fetch_archive_url(comic2_url)
-                            
-                            # Process deferred event: DRGMT.group_did_add_member
-                            await step_scheduler(project)
-                            
-                            # Ensure newly discovered group member is queued for download
-                            assertEqual(2, _group_size_in_subtitle(drgm_task))
-                        finally:
-                            server.close()
+                        drgm_task = drg_task._download_members_task
+                        if children_loaded_before_member_added:
+                            load_children_of_drg_task(drg_task, scheduler_thread_enabled=False)
+                            assertEqual(1, _group_size_in_subtitle(drgm_task))
+                        else:
+                            assertEqual('Queued', drgm_task.subtitle)
                         
-                        # Drain tasks explicitly, to avoid subtitle-related warning
-                        await step_scheduler_until_done(project)
+                        # Trigger start of dynamic download of new group member
+                        # 
+                        # Meanwhile:
+                        # - Patch Resource.download() to start download and return an
+                        #   already-completed Future with an arbitrary result,
+                        #   rather than blocking on the foreground thread
+                        # - Prevent foreground thread from being detected as the scheduler thread
+                        super_resource_download = Resource.download
+                        def resource_download(self: Resource, *args, **kwargs) -> 'Future[ResourceRevision]':
+                            _ = super_resource_download(self, *args, **kwargs)
+                            result = Future()  # type: Future[ResourceRevision]
+                            result.set_result(ResourceRevision.create_from_error(self, Exception('Simulated error')))
+                            return result
+                        with patch.object(Resource, 'download', resource_download):
+                            assert is_foreground_thread()
+                            with scheduler_thread_context(enabled=False):
+                                _ = await fetch_archive_url(comic2_url)
+                        
+                        # Process deferred event: DRGMT.group_did_add_member
+                        await step_scheduler(project)
+                        
+                        # Ensure newly discovered group member is queued for download
+                        assertEqual(2, _group_size_in_subtitle(drgm_task))
+                    finally:
+                        server.close()
+                    
+                    # Drain tasks explicitly, to avoid subtitle-related warning
+                    await step_scheduler_until_done(project)
 
 
 def _group_size_in_subtitle(t: DownloadResourceGroupMembersTask) -> int:

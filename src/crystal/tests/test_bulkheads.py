@@ -19,10 +19,13 @@ from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks, clear_top_level_tasks_on_exit,
-    first_task_title_progression, MAX_DOWNLOAD_DURATION_PER_ITEM,
-    scheduler_disabled, scheduler_thread_context, step_scheduler,
-    step_scheduler_now, ttn_for_task,
+    append_deferred_top_level_tasks,
+    first_task_title_progression,
+    MAX_DOWNLOAD_DURATION_PER_ITEM,
+    scheduler_disabled,
+    step_scheduler,
+    step_scheduler_now,
+    ttn_for_task,
 )
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition, wait_for, wait_while,
@@ -363,26 +366,25 @@ async def test_when_T_try_get_next_task_unit_crashes_then_T_displays_as_crashed(
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                # Create DownloadResourceTask
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                (download_r_task,) = project.root_task.children
-                assert isinstance(download_r_task, DownloadResourceTask)
-                
-                # Force DownloadResourceTask into an illegal state
-                # (i.e. a container task with empty children)
-                # which should crash the next call to DRG.try_get_next_task_unit()
-                assert len(download_r_task.children) > 0
-                download_r_task._children = []
-                
-                # Precondition
-                assert download_r_task.crash_reason is None
-                
-                await step_scheduler(project, expect_done=True)
-                
-                # Postcondition
-                assert download_r_task.crash_reason is not None
+            # Create DownloadResourceTask
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            
+            # Force DownloadResourceTask into an illegal state
+            # (i.e. a container task with empty children)
+            # which should crash the next call to DRG.try_get_next_task_unit()
+            assert len(download_r_task.children) > 0
+            download_r_task._children = []
+            
+            # Precondition
+            assert download_r_task.crash_reason is None
+            
+            await step_scheduler(project, expect_done=True)
+            
+            # Postcondition
+            assert download_r_task.crash_reason is not None
 
 
 @frequently_corrupts_memory
@@ -393,35 +395,34 @@ async def test_when_DRT_child_task_did_complete_event_crashes_then_DRT_displays_
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                # Create DownloadResourceTask
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                (download_r_task,) = project.root_task.children
-                assert isinstance(download_r_task, DownloadResourceTask)
-                
-                # Precondition
-                assert download_r_task.crash_reason is None
-                
-                # Download URL
+            # Create DownloadResourceTask
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            
+            # Precondition
+            assert download_r_task.crash_reason is None
+            
+            # Download URL
+            await step_scheduler(project)
+            
+            # Parse links
+            #
+            # Patch urljoin() to simulate effect of calling urlparse('//[oops'),
+            # which raises an exception in stock Python:
+            # https://discuss.python.org/t/urlparse-can-sometimes-raise-an-exception-should-it/44465
+            # 
+            # NOTE: Overrides the fix in commit 5aaaba57076d537a4872bb3cf7270112ca497a06,
+            #       reintroducing the related bug it fixed.
+            with patch('crystal.task.urljoin', side_effect=ValueError('Invalid IPv6 URL')):
                 await step_scheduler(project)
-                
-                # Parse links
-                #
-                # Patch urljoin() to simulate effect of calling urlparse('//[oops'),
-                # which raises an exception in stock Python:
-                # https://discuss.python.org/t/urlparse-can-sometimes-raise-an-exception-should-it/44465
-                # 
-                # NOTE: Overrides the fix in commit 5aaaba57076d537a4872bb3cf7270112ca497a06,
-                #       reintroducing the related bug it fixed.
-                with patch('crystal.task.urljoin', side_effect=ValueError('Invalid IPv6 URL')):
-                    await step_scheduler(project)
-                
-                # Postcondition:
-                # Ensure crashed in DownloadResourceTask.child_task_did_complete(),
-                # when tried to resolve relative_urls from links parsed by
-                # ParseResourceRevisionLinks to absolute URLs
-                assert download_r_task.crash_reason is not None
+            
+            # Postcondition:
+            # Ensure crashed in DownloadResourceTask.child_task_did_complete(),
+            # when tried to resolve relative_urls from links parsed by
+            # ParseResourceRevisionLinks to absolute URLs
+            assert download_r_task.crash_reason is not None
 
 
 @frequently_corrupts_memory
@@ -434,41 +435,40 @@ async def test_when_DRGMT_load_children_crashes_then_DRGT_displays_as_crashed() 
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                Resource(project, atom_feed_url)
-                Resource(project, rss_feed_url)
-                
-                # Create DownloadResourceGroupMembersTask
-                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
-                feed_g.download(); append_deferred_top_level_tasks(project)
-                (download_rg_task,) = project.root_task.children
-                assert isinstance(download_rg_task, DownloadResourceGroupTask)
-                (update_rg_members_task, download_rg_members_task) = download_rg_task.children
-                assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
-                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
-                
-                # Capture download_rg_members_task.{_pdb, _children_loaded, subtitle}
-                # after exiting DownloadResourceGroupMembersTask.__init__()
-                pbc_after_init = download_rg_members_task._pbc
-                children_loaded_after_init = download_rg_members_task._children_loaded
-                subtitle_after_init = download_rg_members_task.subtitle
-                assert None == pbc_after_init
-                assert False == children_loaded_after_init
-                assert 'Queued' == subtitle_after_init
-                
-                # Precondition
-                assert download_rg_members_task.crash_reason is None
-                
-                # Load children of DownloadResourceGroupMembersTask
-                # 
-                # Patch DownloadResourceGroupMembersTask.initialize_children() to reintroduce
-                # a bug in DownloadResourceGroupMembersTask._load_children() that was
-                # fixed in commit 44f5bd429201972d324df1287e673ddef9ffa936
-                with patch.object(download_rg_members_task, 'initialize_children', side_effect=_CRASH):
-                    await step_scheduler(project)
-                
-                # Postcondition
-                assert download_rg_members_task.crash_reason is not None
+            Resource(project, atom_feed_url)
+            Resource(project, rss_feed_url)
+            
+            # Create DownloadResourceGroupMembersTask
+            feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+            feed_g.download(); append_deferred_top_level_tasks(project)
+            (download_rg_task,) = project.root_task.children
+            assert isinstance(download_rg_task, DownloadResourceGroupTask)
+            (update_rg_members_task, download_rg_members_task) = download_rg_task.children
+            assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
+            assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+            
+            # Capture download_rg_members_task.{_pdb, _children_loaded, subtitle}
+            # after exiting DownloadResourceGroupMembersTask.__init__()
+            pbc_after_init = download_rg_members_task._pbc
+            children_loaded_after_init = download_rg_members_task._children_loaded
+            subtitle_after_init = download_rg_members_task.subtitle
+            assert None == pbc_after_init
+            assert False == children_loaded_after_init
+            assert 'Queued' == subtitle_after_init
+            
+            # Precondition
+            assert download_rg_members_task.crash_reason is None
+            
+            # Load children of DownloadResourceGroupMembersTask
+            # 
+            # Patch DownloadResourceGroupMembersTask.initialize_children() to reintroduce
+            # a bug in DownloadResourceGroupMembersTask._load_children() that was
+            # fixed in commit 44f5bd429201972d324df1287e673ddef9ffa936
+            with patch.object(download_rg_members_task, 'initialize_children', side_effect=_CRASH):
+                await step_scheduler(project)
+            
+            # Postcondition
+            assert download_rg_members_task.crash_reason is not None
 
 
 @frequently_corrupts_memory
@@ -481,38 +481,37 @@ async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                Resource(project, atom_feed_url)
+            Resource(project, atom_feed_url)
+            
+            # Create DownloadResourceGroupMembersTask
+            feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+            feed_g.download(); append_deferred_top_level_tasks(project)
+            (download_rg_task,) = project.root_task.children
+            assert isinstance(download_rg_task, DownloadResourceGroupTask)
+            (update_rg_members_task, download_rg_members_task) = download_rg_task.children
+            assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
+            assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+            
+            super_notify_did_append_child = download_rg_members_task.notify_did_append_child
+            def notify_did_append_child(*args, **kwargs):
+                super_notify_did_append_child(*args, **kwargs)
                 
-                # Create DownloadResourceGroupMembersTask
-                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
-                feed_g.download(); append_deferred_top_level_tasks(project)
-                (download_rg_task,) = project.root_task.children
-                assert isinstance(download_rg_task, DownloadResourceGroupTask)
-                (update_rg_members_task, download_rg_members_task) = download_rg_task.children
-                assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
-                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
-                
-                super_notify_did_append_child = download_rg_members_task.notify_did_append_child
-                def notify_did_append_child(*args, **kwargs):
-                    super_notify_did_append_child(*args, **kwargs)
-                    
-                    # Simulate failure of `self._pbc.total += 1`
-                    # due to self._pbc being unset, due to known issue:
-                    # https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
-                    # 
-                    # TODO: Once that issue is fixed, replace the next line with:
-                    #           raise _CRASH
-                    raise AttributeError("'DownloadResourceGroupMembersTask' object has no attribute '_pbc'")
-                
-                # Precondition
-                assert download_rg_members_task.crash_reason is None
-                
-                with patch.object(download_rg_members_task, 'notify_did_append_child', notify_did_append_child):
-                    Resource(project, rss_feed_url)
-                
-                # Postcondition
-                assert download_rg_members_task.crash_reason is not None
+                # Simulate failure of `self._pbc.total += 1`
+                # due to self._pbc being unset, due to known issue:
+                # https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
+                # 
+                # TODO: Once that issue is fixed, replace the next line with:
+                #           raise _CRASH
+                raise AttributeError("'DownloadResourceGroupMembersTask' object has no attribute '_pbc'")
+            
+            # Precondition
+            assert download_rg_members_task.crash_reason is None
+            
+            with patch.object(download_rg_members_task, 'notify_did_append_child', notify_did_append_child):
+                Resource(project, rss_feed_url)
+            
+            # Postcondition
+            assert download_rg_members_task.crash_reason is not None
 
 
 # ------------------------------------------------------------------------------
@@ -539,37 +538,36 @@ async def test_when_TTN_task_crash_reason_did_change_crashes_in_deferred_fg_task
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                # Create DownloadResourceTask and TaskTreeNode
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                (download_r_task,) = project.root_task.children
-                assert isinstance(download_r_task, DownloadResourceTask)
-                ttn_for_task(download_r_task)
+            # Create DownloadResourceTask and TaskTreeNode
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            ttn_for_task(download_r_task)
+            
+            # Force DownloadResourceTask into an illegal state
+            # (i.e. a container task with empty children)
+            # which should crash the next call to DRG.try_get_next_task_unit()
+            assert len(download_r_task.children) > 0
+            download_r_task._children = []
+            
+            # Precondition
+            assert download_r_task.crash_reason is None
+            
+            # In TaskTreeNode.task_crash_reason_did_change,
+            # crash the line: ... = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
+            with patch('crystal.browser.tasktree.TaskTreeNode._calculate_tree_node_subtitle', side_effect=_CRASH) as crash_point:
+                with redirect_stderr(StringIO()) as captured_stderr:
+                    await step_scheduler(project, expect_done=True)
+            
+            # Postconditions
+            if True:
+                assert download_r_task.crash_reason is not None
+                assert crash_point.call_count >= 1
                 
-                # Force DownloadResourceTask into an illegal state
-                # (i.e. a container task with empty children)
-                # which should crash the next call to DRG.try_get_next_task_unit()
-                assert len(download_r_task.children) > 0
-                download_r_task._children = []
-                
-                # Precondition
-                assert download_r_task.crash_reason is None
-                
-                # In TaskTreeNode.task_crash_reason_did_change,
-                # crash the line: ... = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
-                with patch('crystal.browser.tasktree.TaskTreeNode._calculate_tree_node_subtitle', side_effect=_CRASH) as crash_point:
-                    with redirect_stderr(StringIO()) as captured_stderr:
-                        await step_scheduler(project, expect_done=True)
-                
-                # Postconditions
-                if True:
-                    assert download_r_task.crash_reason is not None
-                    assert crash_point.call_count >= 1
-                    
-                    assert 'Exception in bulkhead:' in captured_stderr.getvalue()
-                    assert 'Traceback' in captured_stderr.getvalue()
-                    assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
+                assert 'Exception in bulkhead:' in captured_stderr.getvalue()
+                assert 'Traceback' in captured_stderr.getvalue()
+                assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
 
 
 @frequently_corrupts_memory
@@ -582,39 +580,38 @@ async def test_when_TTN_task_did_set_children_crashes_at_top_level_then_T_displa
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                Resource(project, atom_feed_url)
-                Resource(project, rss_feed_url)
+            Resource(project, atom_feed_url)
+            Resource(project, rss_feed_url)
+            
+            # Create DownloadResourceGroupMembersTask
+            feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+            feed_g.download(); append_deferred_top_level_tasks(project)
+            (download_rg_task,) = project.root_task.children
+            assert isinstance(download_rg_task, DownloadResourceGroupTask)
+            (update_rg_members_task, download_rg_members_task) = download_rg_task.children
+            assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
+            assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+            
+            # Precondition
+            assert download_rg_members_task.crash_reason is None
+            
+            # In TaskTreeNode.task_did_set_children,
+            # crash the assertion: assert self._num_visible_children == visible_child_count
+            if True:
+                super_task_did_set_children = TaskTreeNode.task_did_set_children
+                # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
+                @capture_crashes_to_stderr
+                def task_did_set_children(self, task: Task, child_count: int) -> None:
+                    # Corrupt the value of self._num_visible_children
+                    self._num_visible_children += 100
+                    return super_task_did_set_children(self, task, child_count)
                 
-                # Create DownloadResourceGroupMembersTask
-                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
-                feed_g.download(); append_deferred_top_level_tasks(project)
-                (download_rg_task,) = project.root_task.children
-                assert isinstance(download_rg_task, DownloadResourceGroupTask)
-                (update_rg_members_task, download_rg_members_task) = download_rg_task.children
-                assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
-                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
-                
-                # Precondition
-                assert download_rg_members_task.crash_reason is None
-                
-                # In TaskTreeNode.task_did_set_children,
-                # crash the assertion: assert self._num_visible_children == visible_child_count
-                if True:
-                    super_task_did_set_children = TaskTreeNode.task_did_set_children
-                    # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
-                    @capture_crashes_to_stderr
-                    def task_did_set_children(self, task: Task, child_count: int) -> None:
-                        # Corrupt the value of self._num_visible_children
-                        self._num_visible_children += 100
-                        return super_task_did_set_children(self, task, child_count)
-                    
-                    # Load children of DownloadResourceGroupMembersTask
-                    with patch.object(TaskTreeNode, 'task_did_set_children', task_did_set_children):
-                        await step_scheduler(project)
-                
-                # Postcondition
-                assert download_rg_members_task.crash_reason is not None
+                # Load children of DownloadResourceGroupMembersTask
+                with patch.object(TaskTreeNode, 'task_did_set_children', task_did_set_children):
+                    await step_scheduler(project)
+            
+            # Postcondition
+            assert download_rg_members_task.crash_reason is not None
 
 
 @frequently_corrupts_memory
@@ -627,33 +624,32 @@ async def test_when_TTN_task_did_set_children_crashes_in_deferred_fg_task_then_T
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                Resource(project, atom_feed_url)
-                Resource(project, rss_feed_url)
-                
-                # Create DownloadResourceGroupMembersTask
-                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
-                feed_g.download(); append_deferred_top_level_tasks(project)
-                (download_rg_task,) = project.root_task.children
-                assert isinstance(download_rg_task, DownloadResourceGroupTask)
-                (update_rg_members_task, download_rg_members_task) = download_rg_task.children
-                assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
-                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
-                
-                # Precondition
-                assert download_rg_members_task.crash_reason is None
-                
-                # Load children of DownloadResourceGroupMembersTask
-                # 
-                # In TaskTreeNode.task_did_set_children,
-                # crash the call: self.tree_node.append_child(...)
-                with patch.object(NodeView, 'append_child', side_effect=_CRASH) as crash_point:
-                    await step_scheduler(project)
-                    await pump_wx_events()  # force deferral by fg_call_later() to run
-                
-                # Postcondition
-                assert crash_point.call_count >= 1
-                assert download_rg_members_task.crash_reason is not None
+            Resource(project, atom_feed_url)
+            Resource(project, rss_feed_url)
+            
+            # Create DownloadResourceGroupMembersTask
+            feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+            feed_g.download(); append_deferred_top_level_tasks(project)
+            (download_rg_task,) = project.root_task.children
+            assert isinstance(download_rg_task, DownloadResourceGroupTask)
+            (update_rg_members_task, download_rg_members_task) = download_rg_task.children
+            assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
+            assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+            
+            # Precondition
+            assert download_rg_members_task.crash_reason is None
+            
+            # Load children of DownloadResourceGroupMembersTask
+            # 
+            # In TaskTreeNode.task_did_set_children,
+            # crash the call: self.tree_node.append_child(...)
+            with patch.object(NodeView, 'append_child', side_effect=_CRASH) as crash_point:
+                await step_scheduler(project)
+                await pump_wx_events()  # force deferral by fg_call_later() to run
+            
+            # Postcondition
+            assert crash_point.call_count >= 1
+            assert download_rg_members_task.crash_reason is not None
 
 
 @frequently_corrupts_memory
@@ -664,35 +660,34 @@ async def test_when_TTN_task_did_append_child_crashes_at_top_level_then_T_displa
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                # Create DownloadResourceTask and TaskTreeNode
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                (download_r_task,) = project.root_task.children
-                assert isinstance(download_r_task, DownloadResourceTask)
-                ttn_for_task(download_r_task)
+            # Create DownloadResourceTask and TaskTreeNode
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            ttn_for_task(download_r_task)
+            
+            # Precondition
+            assert download_r_task.crash_reason is None
+            
+            # In TaskTreeNode.task_did_append_child,
+            # crash the line: child = task.children[-1]  # lookup child
+            if True:
+                super_task_did_append_child = TaskTreeNode.task_did_append_child
+                # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
+                @capture_crashes_to_stderr
+                def task_did_append_child(self, task: Task, child: Task | None) -> None:
+                    # Corrupt the value of task.children
+                    task._children = []
+                    child = None  # force access of task.children
+                    return super_task_did_append_child(self, task, child)
                 
-                # Precondition
-                assert download_r_task.crash_reason is None
-                
-                # In TaskTreeNode.task_did_append_child,
-                # crash the line: child = task.children[-1]  # lookup child
-                if True:
-                    super_task_did_append_child = TaskTreeNode.task_did_append_child
-                    # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
-                    @capture_crashes_to_stderr
-                    def task_did_append_child(self, task: Task, child: Task | None) -> None:
-                        # Corrupt the value of task.children
-                        task._children = []
-                        child = None  # force access of task.children
-                        return super_task_did_append_child(self, task, child)
-                    
-                    # Load children of DownloadResourceGroupMembersTask
-                    with patch.object(TaskTreeNode, 'task_did_append_child', task_did_append_child):
-                        await step_scheduler(project)
-                
-                # Postcondition
-                assert download_r_task.crash_reason is not None
+                # Load children of DownloadResourceGroupMembersTask
+                with patch.object(TaskTreeNode, 'task_did_append_child', task_did_append_child):
+                    await step_scheduler(project)
+            
+            # Postcondition
+            assert download_r_task.crash_reason is not None
 
 
 @frequently_corrupts_memory
@@ -703,26 +698,25 @@ async def test_when_TTN_task_did_append_child_crashes_in_deferred_fg_task_then_T
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                # Create DownloadResourceTask and TaskTreeNode
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                (download_r_task,) = project.root_task.children
-                assert isinstance(download_r_task, DownloadResourceTask)
-                ttn_for_task(download_r_task)
-                
-                # Precondition
-                assert download_r_task.crash_reason is None
-                
-                # In TaskTreeNode.task_did_append_child,
-                # Crash the line: self.tree_node.append_child(child_ttnode.tree_node)
-                with patch.object(NodeView, 'append_child', side_effect=_CRASH) as crash_point:
-                    await step_scheduler(project)
-                    await pump_wx_events()  # force deferral by fg_call_later() to run
-                
-                # Postcondition
-                assert crash_point.call_count >= 1
-                assert download_r_task.crash_reason is not None
+            # Create DownloadResourceTask and TaskTreeNode
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            ttn_for_task(download_r_task)
+            
+            # Precondition
+            assert download_r_task.crash_reason is None
+            
+            # In TaskTreeNode.task_did_append_child,
+            # Crash the line: self.tree_node.append_child(child_ttnode.tree_node)
+            with patch.object(NodeView, 'append_child', side_effect=_CRASH) as crash_point:
+                await step_scheduler(project)
+                await pump_wx_events()  # force deferral by fg_call_later() to run
+            
+            # Postcondition
+            assert crash_point.call_count >= 1
+            assert download_r_task.crash_reason is not None
 
 
 @frequently_corrupts_memory
@@ -733,26 +727,25 @@ async def test_when_TTN_task_child_did_complete_crashes_at_top_level_then_T_disp
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                # Create DownloadResourceTask and TaskTreeNode
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                (download_r_task,) = project.root_task.children
-                assert isinstance(download_r_task, DownloadResourceTask)
-                ttn_for_task(download_r_task)
-                
-                # Precondition
-                assert download_r_task.crash_reason is None
-                
-                # In TaskTreeNode.task_child_did_complete,
-                # crash the line: with self._complete_events_ignored():
-                with patch.object(TaskTreeNode, '_complete_events_ignored', side_effect=_CRASH) as crash_point:
-                    await step_scheduler(project)
-                    await pump_wx_events()  # force deferral by fg_call_later() to run
-                
-                # Postcondition
-                assert crash_point.call_count >= 1
-                assert download_r_task.crash_reason is not None
+            # Create DownloadResourceTask and TaskTreeNode
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            ttn_for_task(download_r_task)
+            
+            # Precondition
+            assert download_r_task.crash_reason is None
+            
+            # In TaskTreeNode.task_child_did_complete,
+            # crash the line: with self._complete_events_ignored():
+            with patch.object(TaskTreeNode, '_complete_events_ignored', side_effect=_CRASH) as crash_point:
+                await step_scheduler(project)
+                await pump_wx_events()  # force deferral by fg_call_later() to run
+            
+            # Postcondition
+            assert crash_point.call_count >= 1
+            assert download_r_task.crash_reason is not None
 
 
 @frequently_corrupts_memory
@@ -763,27 +756,26 @@ async def test_when_TTN_task_child_did_complete_crashes_in_deferred_fg_task_then
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                # Create DownloadResourceTask and TaskTreeNode
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                (download_r_task,) = project.root_task.children
-                assert isinstance(download_r_task, DownloadResourceTask)
-                ttn_for_task(download_r_task)
-                
-                # Precondition
-                assert download_r_task.crash_reason is None
-                
-                # In TaskTreeNode.task_child_did_complete,
-                # crash the line: self.tree_node.children = new_children
-                with patch.object(TaskTreeNode, '_MAX_LEADING_COMPLETE_CHILDREN', 0), \
-                        patch.object(NodeView, 'set_children', side_effect=_CRASH) as crash_point:
-                    await step_scheduler(project)
-                    await pump_wx_events()  # force deferral by fg_call_later() to run
-                
-                # Postcondition
-                assert crash_point.call_count >= 1
-                assert download_r_task.crash_reason is not None
+            # Create DownloadResourceTask and TaskTreeNode
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            ttn_for_task(download_r_task)
+            
+            # Precondition
+            assert download_r_task.crash_reason is None
+            
+            # In TaskTreeNode.task_child_did_complete,
+            # crash the line: self.tree_node.children = new_children
+            with patch.object(TaskTreeNode, '_MAX_LEADING_COMPLETE_CHILDREN', 0), \
+                    patch.object(NodeView, 'set_children', side_effect=_CRASH) as crash_point:
+                await step_scheduler(project)
+                await pump_wx_events()  # force deferral by fg_call_later() to run
+            
+            # Postcondition
+            assert crash_point.call_count >= 1
+            assert download_r_task.crash_reason is not None
 
 
 @skip('not yet automated')
@@ -830,26 +822,25 @@ async def test_when_RGN_on_expanded_crashes_while_loading_urls_then_children_rep
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                Resource(project, atom_feed_url)
-                Resource(project, rss_feed_url)
-                
-                # Create ResourceGroupNode
-                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                feed_ti = root_ti.find_child(feed_pattern)
-                
-                # In ResourceGroupNode.on_expanded,
-                # crash the line: self.resource_group.project.load_urls()
-                with patch.object(project, 'load_urls', side_effect=_CRASH):
-                    feed_ti.Expand()
-                    await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
-                
-                # Postconditions
-                (error_ti,) = feed_ti.Children
-                assert _ErrorNode.CRASH_TITLE == error_ti.Text
-                assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
-                assert True == error_ti.Bold
+            Resource(project, atom_feed_url)
+            Resource(project, rss_feed_url)
+            
+            # Create ResourceGroupNode
+            feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            feed_ti = root_ti.find_child(feed_pattern)
+            
+            # In ResourceGroupNode.on_expanded,
+            # crash the line: self.resource_group.project.load_urls()
+            with patch.object(project, 'load_urls', side_effect=_CRASH):
+                feed_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
+            
+            # Postconditions
+            (error_ti,) = feed_ti.Children
+            assert _ErrorNode.CRASH_TITLE == error_ti.Text
+            assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
+            assert True == error_ti.Bold
 
 
 @frequently_corrupts_memory
@@ -862,26 +853,25 @@ async def test_when_RGN_on_expanded_crashes_while_updating_children_then_childre
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                Resource(project, atom_feed_url)
-                Resource(project, rss_feed_url)
-                
-                # Create ResourceGroupNode
-                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                feed_ti = root_ti.find_child(feed_pattern)
-                
-                # In ResourceGroupNode.update_children,
-                # crash the line: children_rs.append(NormalResourceNode(...))
-                with patch('crystal.browser.entitytree.NormalResourceNode', side_effect=_CRASH):
-                    feed_ti.Expand()
-                    await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
-                
-                # Postconditions
-                (error_ti,) = feed_ti.Children
-                assert _ErrorNode.CRASH_TITLE == error_ti.Text
-                assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
-                assert True == error_ti.Bold
+            Resource(project, atom_feed_url)
+            Resource(project, rss_feed_url)
+            
+            # Create ResourceGroupNode
+            feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            feed_ti = root_ti.find_child(feed_pattern)
+            
+            # In ResourceGroupNode.update_children,
+            # crash the line: children_rs.append(NormalResourceNode(...))
+            with patch('crystal.browser.entitytree.NormalResourceNode', side_effect=_CRASH):
+                feed_ti.Expand()
+                await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
+            
+            # Postconditions
+            (error_ti,) = feed_ti.Children
+            assert _ErrorNode.CRASH_TITLE == error_ti.Text
+            assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
+            assert True == error_ti.Bold
 
 
 @frequently_corrupts_memory
@@ -894,38 +884,37 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                Resource(project, atom_feed_url)
-                
-                # Create ResourceGroupNode
-                feed_g = ResourceGroup(project, '', feed_pattern, source=None)
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                feed_ti = root_ti.find_child(feed_pattern)
-                
-                # Expand ResourceGroupNode
-                feed_ti.Expand()
-                await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
-                
-                super_update_children = ResourceGroupNode.update_children
-                # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
-                @capture_crashes_to_stderr
-                def update_children(self, *args, **kwargs) -> None:
-                    update_children.called = True  # type: ignore[attr-defined]
-                    return super_update_children(self, *args, **kwargs)
-                update_children.called = False  # type: ignore[attr-defined]
-                
-                # In ResourceGroupNode.update_children,
-                # crash the line: children_rs.append(NormalResourceNode(...))
-                with patch('crystal.browser.entitytree.NormalResourceNode', side_effect=_CRASH), \
-                        patch.object(ResourceGroupNode, 'update_children', update_children):
-                    Resource(project, rss_feed_url)
-                    await wait_for(lambda: update_children.called or None)  # type: ignore[attr-defined]
-                
-                # Postconditions
-                (error_ti,) = feed_ti.Children
-                assert _ErrorNode.CRASH_TITLE == error_ti.Text
-                assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
-                assert True == error_ti.Bold
+            Resource(project, atom_feed_url)
+            
+            # Create ResourceGroupNode
+            feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            feed_ti = root_ti.find_child(feed_pattern)
+            
+            # Expand ResourceGroupNode
+            feed_ti.Expand()
+            await wait_for(first_child_of_tree_item_is_not_loading_condition(feed_ti))
+            
+            super_update_children = ResourceGroupNode.update_children
+            # NOTE: Need some kind of @capture_crashes_to* here to pass caller checks
+            @capture_crashes_to_stderr
+            def update_children(self, *args, **kwargs) -> None:
+                update_children.called = True  # type: ignore[attr-defined]
+                return super_update_children(self, *args, **kwargs)
+            update_children.called = False  # type: ignore[attr-defined]
+            
+            # In ResourceGroupNode.update_children,
+            # crash the line: children_rs.append(NormalResourceNode(...))
+            with patch('crystal.browser.entitytree.NormalResourceNode', side_effect=_CRASH), \
+                    patch.object(ResourceGroupNode, 'update_children', update_children):
+                Resource(project, rss_feed_url)
+                await wait_for(lambda: update_children.called or None)  # type: ignore[attr-defined]
+            
+            # Postconditions
+            (error_ti,) = feed_ti.Children
+            assert _ErrorNode.CRASH_TITLE == error_ti.Text
+            assert _ErrorNode.CRASH_TEXT_COLOR == error_ti.TextColour
+            assert True == error_ti.Bold
 
 
 # ------------------------------------------------------------------------------
@@ -946,48 +935,47 @@ async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entit
             rmw = RealMainWindow._last_created
             assert rmw is not None
             
-            with clear_top_level_tasks_on_exit(project):
-                # Preconditions
+            # Preconditions
+            et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            () = et_root_ti.Children
+            
+            with patch('crystal.browser.entitytree.RootResourceNode', side_effect=_CRASH):
+                RootResource(project, 'Home', Resource(project, home_url))
+            
+            # Postconditions
+            if True:
+                assert rmw.entity_tree.crash_reason is not None
+                
                 et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 () = et_root_ti.Children
                 
-                with patch('crystal.browser.entitytree.RootResourceNode', side_effect=_CRASH):
-                    RootResource(project, 'Home', Resource(project, home_url))
+                project.root_task.append_deferred_top_level_tasks()
+                (updating_et_crashed_task,) = project.root_task.children
+                assert isinstance(updating_et_crashed_task, CrashedTask)
+            
+            # test_given_updating_entity_tree_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_refresh_menuitem
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (scheduler_crashed_ti,) = root_ti.Children
+            def show_popup(menu: wx.Menu) -> None:
+                (refresh_menuitem,) = (
+                    mi for mi in menu.MenuItems
+                    if mi.ItemLabelText == 'Refresh'
+                )
+                assert refresh_menuitem.Enabled
                 
-                # Postconditions
+                # test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed
+                select_menuitem_now(menu, refresh_menuitem.Id)
                 if True:
-                    assert rmw.entity_tree.crash_reason is not None
+                    assert rmw.entity_tree.crash_reason is None
                     
                     et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                    () = et_root_ti.Children
+                    (home_ti,) = et_root_ti.Children
                     
-                    project.root_task.append_deferred_top_level_tasks()
-                    (updating_et_crashed_task,) = project.root_task.children
-                    assert isinstance(updating_et_crashed_task, CrashedTask)
-                
-                # test_given_updating_entity_tree_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_refresh_menuitem
-                root_ti = TreeItem.GetRootItem(mw.task_tree)
-                (scheduler_crashed_ti,) = root_ti.Children
-                def show_popup(menu: wx.Menu) -> None:
-                    (refresh_menuitem,) = (
-                        mi for mi in menu.MenuItems
-                        if mi.ItemLabelText == 'Refresh'
-                    )
-                    assert refresh_menuitem.Enabled
+                    # RT -- notices all finished children; clears them
+                    step_scheduler_now(project, expect_done=True)
                     
-                    # test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed
-                    select_menuitem_now(menu, refresh_menuitem.Id)
-                    if True:
-                        assert rmw.entity_tree.crash_reason is None
-                        
-                        et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                        (home_ti,) = et_root_ti.Children
-                        
-                        # RT -- notices all finished children; clears them
-                        step_scheduler_now(project, expect_done=True)
-                        
-                        () = project.root_task.children
-                await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
+                    () = project.root_task.children
+            await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
 
 
 # ------------------------------------------------------------------------------
@@ -1025,94 +1013,93 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                # Create DownloadResourceTask
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                (download_r_task,) = project.root_task.children
-                assert isinstance(download_r_task, DownloadResourceTask)
+            # Create DownloadResourceTask
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            
+            # Precondition
+            assert download_r_task.crash_reason is None
+            
+            # RT > DRT > DownloadResourceBodyTask
+            def check() -> None:
+                assert not download_r_task.children[0].complete
+            await step_scheduler(project, after_get=check)
+            assert download_r_task.children[0].complete
+            
+            # RT > DRT > ParseResourceRevisionLinks
+            def check() -> None:
+                assert not download_r_task.children[1].complete
+            await step_scheduler(project, after_get=check)
+            assert download_r_task.children[1].complete
+            assert len(download_r_task.children) >= 3
+            
+            # RT > DRT > DRT[0] > DownloadResourceBodyTask
+            def check() -> None:
+                assert not download_r_task.children[2].children[0].complete
+            await step_scheduler(project, after_get=check)
+            assert download_r_task.children[2].children[0].complete
+            
+            # RT > DRT > DRT[0] > ParseResourceRevisionLinks
+            await _step_scheduler_with_unit_from_PRRL_and_crash_task(
+                download_r_task.children[2].children[1],
+                home_r)
+            
+            await step_scheduler(project, expect_done=True)
+            
+            # Postconditions:
+            # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
+            #    when tried to resolve relative_urls from links parsed by
+            #    ParseResourceRevisionLinks to absolute URLs
+            # 2. Ensure crash cascades to parent of inner DownloadResourceTask
+            # 3. Ensure crash cascade stops just before reaching the RootTask
+            assert download_r_task.children[2].crash_reason is not None
+            assert download_r_task.crash_reason is not None
+            assert project.root_task.crash_reason is None
+            
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (download_r_ti,) = root_ti.Children
+            
+            # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+            tooltip = download_r_ti.Tooltip()
+            assert tooltip is not None
+            assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
+            assert (
+                'at crystal/task.py:' in tooltip or
+                'at crystal/task.pyc:' in tooltip or
+                r'at crystal\task.pyc:' in tooltip
+            ), f'Tooltip was: {tooltip}'
+            
+            # test_given_crashed_task_not_at_top_level_when_right_click_task_then_menu_appears_with_disabled_dismiss_menuitem
+            download_r_ti.Expand()
+            (download_rb_ti, prrl_ti, download_r1_ti, *_) = download_r_ti.Children
+            assert download_r1_ti.Text.endswith(TaskTreeNode._CRASH_SUBTITLE)
+            def show_popup(menu: wx.Menu) -> None:
+                (dismiss_menuitem,) = (
+                    mi for mi in menu.MenuItems
+                    if mi.ItemLabelText == 'Dismiss'
+                )
+                assert not dismiss_menuitem.Enabled
+            await download_r1_ti.right_click_showing_popup_menu(show_popup)
+            
+            # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
+            def show_popup(menu: wx.Menu) -> None:
+                (dismiss_menuitem,) = (
+                    mi for mi in menu.MenuItems
+                    if mi.ItemLabelText == 'Dismiss'
+                )
+                assert dismiss_menuitem.Enabled
                 
-                # Precondition
-                assert download_r_task.crash_reason is None
-                
-                # RT > DRT > DownloadResourceBodyTask
-                def check() -> None:
-                    assert not download_r_task.children[0].complete
-                await step_scheduler(project, after_get=check)
-                assert download_r_task.children[0].complete
-                
-                # RT > DRT > ParseResourceRevisionLinks
-                def check() -> None:
-                    assert not download_r_task.children[1].complete
-                await step_scheduler(project, after_get=check)
-                assert download_r_task.children[1].complete
-                assert len(download_r_task.children) >= 3
-                
-                # RT > DRT > DRT[0] > DownloadResourceBodyTask
-                def check() -> None:
-                    assert not download_r_task.children[2].children[0].complete
-                await step_scheduler(project, after_get=check)
-                assert download_r_task.children[2].children[0].complete
-                
-                # RT > DRT > DRT[0] > ParseResourceRevisionLinks
-                await _step_scheduler_with_unit_from_PRRL_and_crash_task(
-                    download_r_task.children[2].children[1],
-                    home_r)
-                
-                await step_scheduler(project, expect_done=True)
-                
-                # Postconditions:
-                # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
-                #    when tried to resolve relative_urls from links parsed by
-                #    ParseResourceRevisionLinks to absolute URLs
-                # 2. Ensure crash cascades to parent of inner DownloadResourceTask
-                # 3. Ensure crash cascade stops just before reaching the RootTask
-                assert download_r_task.children[2].crash_reason is not None
-                assert download_r_task.crash_reason is not None
-                assert project.root_task.crash_reason is None
-                
-                root_ti = TreeItem.GetRootItem(mw.task_tree)
-                (download_r_ti,) = root_ti.Children
-                
-                # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-                tooltip = download_r_ti.Tooltip()
-                assert tooltip is not None
-                assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
-                assert (
-                    'at crystal/task.py:' in tooltip or
-                    'at crystal/task.pyc:' in tooltip or
-                    r'at crystal\task.pyc:' in tooltip
-                ), f'Tooltip was: {tooltip}'
-                
-                # test_given_crashed_task_not_at_top_level_when_right_click_task_then_menu_appears_with_disabled_dismiss_menuitem
-                download_r_ti.Expand()
-                (download_rb_ti, prrl_ti, download_r1_ti, *_) = download_r_ti.Children
-                assert download_r1_ti.Text.endswith(TaskTreeNode._CRASH_SUBTITLE)
-                def show_popup(menu: wx.Menu) -> None:
-                    (dismiss_menuitem,) = (
-                        mi for mi in menu.MenuItems
-                        if mi.ItemLabelText == 'Dismiss'
-                    )
-                    assert not dismiss_menuitem.Enabled
-                await download_r1_ti.right_click_showing_popup_menu(show_popup)
-                
-                # test_given_regular_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_menuitem
-                def show_popup(menu: wx.Menu) -> None:
-                    (dismiss_menuitem,) = (
-                        mi for mi in menu.MenuItems
-                        if mi.ItemLabelText == 'Dismiss'
-                    )
-                    assert dismiss_menuitem.Enabled
+                # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
+                if True:
+                    select_menuitem_now(menu, dismiss_menuitem.Id)
                     
-                    # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
-                    if True:
-                        select_menuitem_now(menu, dismiss_menuitem.Id)
-                        
-                        # RT -- notices all finished children; clears them
-                        step_scheduler_now(project, expect_done=True)
-                        
-                        () = root_ti.Children
-                await download_r_ti.right_click_showing_popup_menu(show_popup)
+                    # RT -- notices all finished children; clears them
+                    step_scheduler_now(project, expect_done=True)
+                    
+                    () = root_ti.Children
+            await download_r_ti.right_click_showing_popup_menu(show_popup)
 
 
 @frequently_corrupts_memory
@@ -1135,90 +1122,89 @@ async def test_when_URGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                home_r = Resource(project, home_url)
-                Resource(project, atom_feed_url)
-                Resource(project, rss_feed_url)
-                
-                # Create UpdateResourceGroupMembersTask
-                home_rr = RootResource(project, 'Home', home_r)
-                feed_g = ResourceGroup(project, '', feed_pattern, source=home_rr)
-                feed_g.download(); append_deferred_top_level_tasks(project)
-                (download_rg_task,) = project.root_task.children
-                assert isinstance(download_rg_task, DownloadResourceGroupTask)
-                (update_rg_members_task, download_rg_members_task) = download_rg_task.children
-                assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
-                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
-                
-                # Preconditions
-                assert download_rg_task.crash_reason is None
-                assert update_rg_members_task.crash_reason is None
-                
-                # RT > DRGT > URGMT > DRT > DownloadResourceBodyTask
-                def check() -> None:
-                    assert not update_rg_members_task.children[0].children[0].complete
-                await step_scheduler(project, after_get=check)
-                assert update_rg_members_task.children[0].children[0].complete
-                
-                # RT > DRGT > DRGMT @ _load_children_and_update_completed_status
-                def check() -> None:
-                    assert len(download_rg_members_task.children) == 0
-                await step_scheduler(project, after_get=check)
-                assert len(download_rg_members_task.children) == 2
-                
-                # RT > DRGT > URGMT > DRT > ParseResourceRevisionLinks
-                await _step_scheduler_with_unit_from_PRRL_and_crash_task(
-                    update_rg_members_task.children[0].children[1],
-                    home_r)
+            home_r = Resource(project, home_url)
+            Resource(project, atom_feed_url)
+            Resource(project, rss_feed_url)
+            
+            # Create UpdateResourceGroupMembersTask
+            home_rr = RootResource(project, 'Home', home_r)
+            feed_g = ResourceGroup(project, '', feed_pattern, source=home_rr)
+            feed_g.download(); append_deferred_top_level_tasks(project)
+            (download_rg_task,) = project.root_task.children
+            assert isinstance(download_rg_task, DownloadResourceGroupTask)
+            (update_rg_members_task, download_rg_members_task) = download_rg_task.children
+            assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
+            assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+            
+            # Preconditions
+            assert download_rg_task.crash_reason is None
+            assert update_rg_members_task.crash_reason is None
+            
+            # RT > DRGT > URGMT > DRT > DownloadResourceBodyTask
+            def check() -> None:
+                assert not update_rg_members_task.children[0].children[0].complete
+            await step_scheduler(project, after_get=check)
+            assert update_rg_members_task.children[0].children[0].complete
+            
+            # RT > DRGT > DRGMT @ _load_children_and_update_completed_status
+            def check() -> None:
+                assert len(download_rg_members_task.children) == 0
+            await step_scheduler(project, after_get=check)
+            assert len(download_rg_members_task.children) == 2
+            
+            # RT > DRGT > URGMT > DRT > ParseResourceRevisionLinks
+            await _step_scheduler_with_unit_from_PRRL_and_crash_task(
+                update_rg_members_task.children[0].children[1],
+                home_r)
+            
+            # RT > DRGT > DRGMT > ... (doesn't matter)
+            await step_scheduler(project)
+            
+            # 1. RT > DRGT > URGMT -- notices crashed child
+            # 2. RT > DRGT > DRGMT > ... (doesn't matter)
+            await step_scheduler(project)
+            
+            # Postconditions #1:
+            # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
+            #    when tried to resolve relative_urls from links parsed by
+            #    ParseResourceRevisionLinks to absolute URLs
+            # 2. Ensure crash cascades to URGMT
+            # 3. Ensure crash does NOT cascade to DRGT yet,
+            #    because DRGMT is not complete
+            # 4. Ensure crash does not cascade to the RootTask
+            assert update_rg_members_task.children[0].crash_reason is not None
+            assert update_rg_members_task.crash_reason is not None
+            assert download_rg_task.crash_reason is None
+            assert project.root_task.crash_reason is None
+            
+            # Wait for DRGMT to complete
+            while not download_rg_members_task.complete:
+                assert download_rg_members_task.crash_reason is None
                 
                 # RT > DRGT > DRGMT > ... (doesn't matter)
                 await step_scheduler(project)
-                
-                # 1. RT > DRGT > URGMT -- notices crashed child
-                # 2. RT > DRGT > DRGMT > ... (doesn't matter)
-                await step_scheduler(project)
-                
-                # Postconditions #1:
-                # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
-                #    when tried to resolve relative_urls from links parsed by
-                #    ParseResourceRevisionLinks to absolute URLs
-                # 2. Ensure crash cascades to URGMT
-                # 3. Ensure crash does NOT cascade to DRGT yet,
-                #    because DRGMT is not complete
-                # 4. Ensure crash does not cascade to the RootTask
-                assert update_rg_members_task.children[0].crash_reason is not None
-                assert update_rg_members_task.crash_reason is not None
-                assert download_rg_task.crash_reason is None
-                assert project.root_task.crash_reason is None
-                
-                # Wait for DRGMT to complete
-                while not download_rg_members_task.complete:
-                    assert download_rg_members_task.crash_reason is None
-                    
-                    # RT > DRGT > DRGMT > ... (doesn't matter)
-                    await step_scheduler(project)
-                
-                # RT > DRGT -- notices crashed URGMT child
-                await step_scheduler(project, expect_done=True)
-                
-                # Postconditions #2
-                # 1. Ensure crash from URGMT cascades to DRGT after DRGMT completes
-                # 2. Ensure crash does not cascade to the RootTask
-                assert download_rg_task.crash_reason is not None
-                assert project.root_task.crash_reason is None
-                
-                root_ti = TreeItem.GetRootItem(mw.task_tree)
-                (download_rg_ti,) = root_ti.Children
-                
-                # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-                tooltip = download_rg_ti.Tooltip()
-                assert tooltip is not None
-                assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
-                assert (
-                    'at crystal/task.py:' in tooltip or
-                    'at crystal/task.pyc:' in tooltip or
-                    r'at crystal\task.pyc:' in tooltip
-                ), f'Tooltip was: {tooltip}'
+            
+            # RT > DRGT -- notices crashed URGMT child
+            await step_scheduler(project, expect_done=True)
+            
+            # Postconditions #2
+            # 1. Ensure crash from URGMT cascades to DRGT after DRGMT completes
+            # 2. Ensure crash does not cascade to the RootTask
+            assert download_rg_task.crash_reason is not None
+            assert project.root_task.crash_reason is None
+            
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (download_rg_ti,) = root_ti.Children
+            
+            # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+            tooltip = download_rg_ti.Tooltip()
+            assert tooltip is not None
+            assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
+            assert (
+                'at crystal/task.py:' in tooltip or
+                'at crystal/task.pyc:' in tooltip or
+                r'at crystal\task.pyc:' in tooltip
+            ), f'Tooltip was: {tooltip}'
 
 
 @frequently_corrupts_memory
@@ -1232,108 +1218,107 @@ async def test_when_DRGMT_child_of_DRGT_crashes_then_DRGT_displays_as_crashed_af
         feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                home_r = Resource(project, home_url)
-                Resource(project, atom_feed_url)
-                Resource(project, rss_feed_url)
-                
-                # Create DownloadResourceGroupMembersTask
-                home_rr = RootResource(project, 'Home', home_r)
-                feed_g = ResourceGroup(project, '', feed_pattern, source=home_rr)
-                feed_g.download(); append_deferred_top_level_tasks(project)
-                (download_rg_task,) = project.root_task.children
-                assert isinstance(download_rg_task, DownloadResourceGroupTask)
-                (update_rg_members_task, download_rg_members_task) = download_rg_task.children
-                assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
-                assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
-                
-                # Preconditions
-                assert download_rg_task.crash_reason is None
-                assert download_rg_members_task.crash_reason is None
-                
-                # RT > DRGT > URGMT > ... (doesn't matter)
-                def check() -> None:
-                    assert not update_rg_members_task.children[0].children[0].complete
-                await step_scheduler(project, after_get=check)
-                assert update_rg_members_task.children[0].children[0].complete
-                
-                # RT > DRGT > DRGMT @ _load_children_and_update_completed_status
-                def check() -> None:
-                    assert len(download_rg_members_task.children) == 0
-                await step_scheduler(project, after_get=check)
-                assert len(download_rg_members_task.children) == 2
-                
-                # RT > DRGT > URGMT > ... (doesn't matter)
-                def check() -> None:
-                    assert not update_rg_members_task.children[0].children[1].complete
-                await step_scheduler(project, after_get=check)
-                assert update_rg_members_task.children[0].children[1].complete
-                
-                # RT > DRGT > DRGMT > DRT > DownloadResourceBodyTask
-                def check() -> None:
-                    assert not download_rg_members_task.children[0].children[0].complete
-                await step_scheduler(project, after_get=check)
-                assert download_rg_members_task.children[0].children[0].complete
-                
-                # RT > DRGT > URGMT > ... (doesn't matter)
-                def check() -> None:
-                    assert not update_rg_members_task.children[0].children[2].children[0].complete
-                await step_scheduler(project, after_get=check)
-                assert update_rg_members_task.children[0].children[2].children[0].complete
-                
-                # RT > DRGT > DRGMT > DRT > ParseResourceRevisionLinks
-                await _step_scheduler_with_unit_from_PRRL_and_crash_task(
-                    download_rg_members_task.children[0].children[1],
-                    home_r)
+            home_r = Resource(project, home_url)
+            Resource(project, atom_feed_url)
+            Resource(project, rss_feed_url)
+            
+            # Create DownloadResourceGroupMembersTask
+            home_rr = RootResource(project, 'Home', home_r)
+            feed_g = ResourceGroup(project, '', feed_pattern, source=home_rr)
+            feed_g.download(); append_deferred_top_level_tasks(project)
+            (download_rg_task,) = project.root_task.children
+            assert isinstance(download_rg_task, DownloadResourceGroupTask)
+            (update_rg_members_task, download_rg_members_task) = download_rg_task.children
+            assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
+            assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
+            
+            # Preconditions
+            assert download_rg_task.crash_reason is None
+            assert download_rg_members_task.crash_reason is None
+            
+            # RT > DRGT > URGMT > ... (doesn't matter)
+            def check() -> None:
+                assert not update_rg_members_task.children[0].children[0].complete
+            await step_scheduler(project, after_get=check)
+            assert update_rg_members_task.children[0].children[0].complete
+            
+            # RT > DRGT > DRGMT @ _load_children_and_update_completed_status
+            def check() -> None:
+                assert len(download_rg_members_task.children) == 0
+            await step_scheduler(project, after_get=check)
+            assert len(download_rg_members_task.children) == 2
+            
+            # RT > DRGT > URGMT > ... (doesn't matter)
+            def check() -> None:
+                assert not update_rg_members_task.children[0].children[1].complete
+            await step_scheduler(project, after_get=check)
+            assert update_rg_members_task.children[0].children[1].complete
+            
+            # RT > DRGT > DRGMT > DRT > DownloadResourceBodyTask
+            def check() -> None:
+                assert not download_rg_members_task.children[0].children[0].complete
+            await step_scheduler(project, after_get=check)
+            assert download_rg_members_task.children[0].children[0].complete
+            
+            # RT > DRGT > URGMT > ... (doesn't matter)
+            def check() -> None:
+                assert not update_rg_members_task.children[0].children[2].children[0].complete
+            await step_scheduler(project, after_get=check)
+            assert update_rg_members_task.children[0].children[2].children[0].complete
+            
+            # RT > DRGT > DRGMT > DRT > ParseResourceRevisionLinks
+            await _step_scheduler_with_unit_from_PRRL_and_crash_task(
+                download_rg_members_task.children[0].children[1],
+                home_r)
+            
+            # RT > DRGT > URGMT > ... (doesn't matter)
+            await step_scheduler(project)
+            
+            # 1. RT > DRGT > DRGMT -- notices crashed child
+            # 2. RT > DRGT > URGMT > ... (doesn't matter)
+            await step_scheduler(project)
+            
+            # Postconditions #1:
+            # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
+            #    when tried to resolve relative_urls from links parsed by
+            #    ParseResourceRevisionLinks to absolute URLs
+            # 2. Ensure crash cascades to DRGMT
+            # 3. Ensure crash does NOT cascade to DRGT yet,
+            #    because URGMT is not complete
+            # 4. Ensure crash does not cascade to the RootTask
+            assert download_rg_members_task.children[0].crash_reason is not None
+            assert download_rg_members_task.crash_reason is not None
+            assert download_rg_task.crash_reason is None
+            assert project.root_task.crash_reason is None
+            
+            # Wait for URGMT to complete
+            while not update_rg_members_task.complete:
+                assert update_rg_members_task.crash_reason is None
                 
                 # RT > DRGT > URGMT > ... (doesn't matter)
                 await step_scheduler(project)
-                
-                # 1. RT > DRGT > DRGMT -- notices crashed child
-                # 2. RT > DRGT > URGMT > ... (doesn't matter)
-                await step_scheduler(project)
-                
-                # Postconditions #1:
-                # 1. Ensure crashed in DownloadResourceTask.child_task_did_complete(),
-                #    when tried to resolve relative_urls from links parsed by
-                #    ParseResourceRevisionLinks to absolute URLs
-                # 2. Ensure crash cascades to DRGMT
-                # 3. Ensure crash does NOT cascade to DRGT yet,
-                #    because URGMT is not complete
-                # 4. Ensure crash does not cascade to the RootTask
-                assert download_rg_members_task.children[0].crash_reason is not None
-                assert download_rg_members_task.crash_reason is not None
-                assert download_rg_task.crash_reason is None
-                assert project.root_task.crash_reason is None
-                
-                # Wait for URGMT to complete
-                while not update_rg_members_task.complete:
-                    assert update_rg_members_task.crash_reason is None
-                    
-                    # RT > DRGT > URGMT > ... (doesn't matter)
-                    await step_scheduler(project)
-                
-                # RT > DRGT -- notices crashed DRGMT child
-                await step_scheduler(project, expect_done=True)
-                
-                # Postconditions #2
-                # 1. Ensure crash from DRGMT cascades to DRGT after URGMT completes
-                # 2. Ensure crash does not cascade to the RootTask
-                assert download_rg_task.crash_reason is not None
-                assert project.root_task.crash_reason is None
-                
-                root_ti = TreeItem.GetRootItem(mw.task_tree)
-                (download_rg_ti,) = root_ti.Children
-                
-                # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-                tooltip = download_rg_ti.Tooltip()
-                assert tooltip is not None
-                assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
-                assert (
-                    'at crystal/task.py:' in tooltip or
-                    'at crystal/task.pyc:' in tooltip or
-                    r'at crystal\task.pyc:' in tooltip
-                ), f'Tooltip was: {tooltip}'
+            
+            # RT > DRGT -- notices crashed DRGMT child
+            await step_scheduler(project, expect_done=True)
+            
+            # Postconditions #2
+            # 1. Ensure crash from DRGMT cascades to DRGT after URGMT completes
+            # 2. Ensure crash does not cascade to the RootTask
+            assert download_rg_task.crash_reason is not None
+            assert project.root_task.crash_reason is None
+            
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (download_rg_ti,) = root_ti.Children
+            
+            # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+            tooltip = download_rg_ti.Tooltip()
+            assert tooltip is not None
+            assert 'ValueError: Invalid IPv6 URL' in tooltip, f'Tooltip was: {tooltip}'
+            assert (
+                'at crystal/task.py:' in tooltip or
+                'at crystal/task.pyc:' in tooltip or
+                r'at crystal\task.pyc:' in tooltip
+            ), f'Tooltip was: {tooltip}'
 
 
 # ------------------------------------------------------------------------------
@@ -1354,90 +1339,89 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
         rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with clear_top_level_tasks_on_exit(project):
-                root_task = project.root_task
+            root_task = project.root_task
+            
+            # Create DownloadResourceTask #1 in RootTask, pre-appended
+            home_r = Resource(project, home_url)
+            home_r.download(); append_deferred_top_level_tasks(project)
+            
+            # Create DownloadResourceTask #2 in RootTask, un-appended
+            atom_feed_r = Resource(project, atom_feed_url)
+            atom_feed_r.download()
+            
+            # Preconditions
+            assert root_task.crash_reason is None
+            (download_r_task1,) = project.root_task.children
+            assert isinstance(download_r_task1, DownloadResourceTask)
+            
+            # RT @ try_get_next_task_unit
+            # 
+            # In RootTask.try_get_next_task_unit,
+            # in RootTask.append_deferred_top_level_tasks,
+            # crash the line: super().append_child(...)
+            super_append_child = Task.append_child
+            def append_child(self, child: Task, *args, **kwargs) -> None:
+                if isinstance(child, DownloadResourceTask):
+                    # Simulate crash when appending a DownloadResourceTask
+                    append_child.call_count += 1  # type: ignore[attr-defined]
+                    raise _CRASH
+                else:
+                    return super_append_child(self, child, *args, **kwargs)
+            append_child.call_count = 0  # type: ignore[attr-defined]
+            with patch.object(Task, 'append_child', append_child):
+                await step_scheduler(project, expect_done=True)
+                assert append_child.call_count >= 1  # type: ignore[attr-defined]
+            
+            # Postconditions
+            assert root_task.crash_reason is not None
+            (download_r_task1, scheduler_crashed_task) = project.root_task.children
+            assert isinstance(download_r_task1, DownloadResourceTask)
+            assert isinstance(scheduler_crashed_task, CrashedTask)
+            for child in root_task.children:
+                if not isinstance(child, CrashedTask) and not child.complete:
+                    assert child.subtitle in ['Scheduler crashed', 'Complete'], \
+                        f'Top-level task has unexpected subtitle: {child.subtitle}'
+            
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (download_r_ti, scheduler_crashed_ti) = root_ti.Children
+            
+            # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
+            tooltip = scheduler_crashed_ti.Tooltip()
+            assert tooltip is not None
+            assert 'ValueError: Simulated crash' in tooltip, f'Tooltip was: {tooltip}'
+            assert (
+                'at crystal/task.py:' in tooltip or
+                'at crystal/task.pyc:' in tooltip or
+                r'at crystal\task.pyc:' in tooltip
+            ), f'Tooltip was: {tooltip}'
+            assert 'in append_deferred_top_level_tasks' in tooltip, f'Tooltip was: {tooltip}'
+            
+            # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
+            def show_popup(menu: wx.Menu) -> None:
+                (dismiss_all_menuitem,) = (
+                    mi for mi in menu.MenuItems
+                    if mi.ItemLabelText == 'Dismiss All'
+                )
+                assert dismiss_all_menuitem.Enabled
                 
-                # Create DownloadResourceTask #1 in RootTask, pre-appended
-                home_r = Resource(project, home_url)
-                home_r.download(); append_deferred_top_level_tasks(project)
-                
-                # Create DownloadResourceTask #2 in RootTask, un-appended
-                atom_feed_r = Resource(project, atom_feed_url)
-                atom_feed_r.download()
+                # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed
+                select_menuitem_now(menu, dismiss_all_menuitem.Id)
+                () = root_ti.Children
+            await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
+            
+            # ...and new top level tasks can be added that will run
+            if True:
+                # Create DownloadResourceTask #3 in RootTask, pre-appended
+                rss_feed_r = Resource(project, rss_feed_url)
+                rss_feed_r.download(); append_deferred_top_level_tasks(project)
                 
                 # Preconditions
                 assert root_task.crash_reason is None
-                (download_r_task1,) = project.root_task.children
-                assert isinstance(download_r_task1, DownloadResourceTask)
+                (download_r_task2,) = project.root_task.children
+                assert isinstance(download_r_task2, DownloadResourceTask)
                 
-                # RT @ try_get_next_task_unit
-                # 
-                # In RootTask.try_get_next_task_unit,
-                # in RootTask.append_deferred_top_level_tasks,
-                # crash the line: super().append_child(...)
-                super_append_child = Task.append_child
-                def append_child(self, child: Task, *args, **kwargs) -> None:
-                    if isinstance(child, DownloadResourceTask):
-                        # Simulate crash when appending a DownloadResourceTask
-                        append_child.call_count += 1  # type: ignore[attr-defined]
-                        raise _CRASH
-                    else:
-                        return super_append_child(self, child, *args, **kwargs)
-                append_child.call_count = 0  # type: ignore[attr-defined]
-                with patch.object(Task, 'append_child', append_child):
-                    await step_scheduler(project, expect_done=True)
-                    assert append_child.call_count >= 1  # type: ignore[attr-defined]
-                
-                # Postconditions
-                assert root_task.crash_reason is not None
-                (download_r_task1, scheduler_crashed_task) = project.root_task.children
-                assert isinstance(download_r_task1, DownloadResourceTask)
-                assert isinstance(scheduler_crashed_task, CrashedTask)
-                for child in root_task.children:
-                    if not isinstance(child, CrashedTask) and not child.complete:
-                        assert child.subtitle in ['Scheduler crashed', 'Complete'], \
-                            f'Top-level task has unexpected subtitle: {child.subtitle}'
-                
-                root_ti = TreeItem.GetRootItem(mw.task_tree)
-                (download_r_ti, scheduler_crashed_ti) = root_ti.Children
-                
-                # test_when_hover_mouse_over_crashed_task_then_tooltip_with_user_facing_traceback_appears
-                tooltip = scheduler_crashed_ti.Tooltip()
-                assert tooltip is not None
-                assert 'ValueError: Simulated crash' in tooltip, f'Tooltip was: {tooltip}'
-                assert (
-                    'at crystal/task.py:' in tooltip or
-                    'at crystal/task.pyc:' in tooltip or
-                    r'at crystal\task.pyc:' in tooltip
-                ), f'Tooltip was: {tooltip}'
-                assert 'in append_deferred_top_level_tasks' in tooltip, f'Tooltip was: {tooltip}'
-                
-                # test_given_scheduler_crashed_task_at_top_level_when_right_click_task_then_menu_appears_with_enabled_dismiss_all_menuitem
-                def show_popup(menu: wx.Menu) -> None:
-                    (dismiss_all_menuitem,) = (
-                        mi for mi in menu.MenuItems
-                        if mi.ItemLabelText == 'Dismiss All'
-                    )
-                    assert dismiss_all_menuitem.Enabled
-                    
-                    # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed
-                    select_menuitem_now(menu, dismiss_all_menuitem.Id)
-                    () = root_ti.Children
-                await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
-                
-                # ...and new top level tasks can be added that will run
-                if True:
-                    # Create DownloadResourceTask #3 in RootTask, pre-appended
-                    rss_feed_r = Resource(project, rss_feed_url)
-                    rss_feed_r.download(); append_deferred_top_level_tasks(project)
-                    
-                    # Preconditions
-                    assert root_task.crash_reason is None
-                    (download_r_task2,) = project.root_task.children
-                    assert isinstance(download_r_task2, DownloadResourceTask)
-                    
-                    # Ensure task runs (at least one step)
-                    await step_scheduler(project)
+                # Ensure task runs (at least one step)
+                await step_scheduler(project)
 
 
 @skip('covered by: test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed')

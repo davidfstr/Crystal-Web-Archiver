@@ -320,16 +320,3 @@ def mark_as_complete(task: Task) -> None:
     assert not task.complete
     task.finish()
     assert task.complete
-
-
-@contextmanager
-@scheduler_affinity  # manual control of scheduler thread is assumed
-def clear_top_level_tasks_on_exit(project: Project) -> Iterator[None]:
-    try:
-        yield
-    finally:
-        project.root_task.cancel_tree()
-        step_scheduler_now(project, expect_done=True)
-
-
-# ------------------------------------------------------------------------------
