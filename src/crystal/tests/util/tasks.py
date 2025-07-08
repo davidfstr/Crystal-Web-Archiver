@@ -177,6 +177,10 @@ def scheduler_disabled() -> Iterator[DisabledScheduler]:
             nonlocal stop_call_count
             stop_call_count += 1
             
+            if self._root_task.complete:
+                # Scheduler thread is already stopped or stopping
+                return
+            
             if self._root_task._cancel_tree_soon and not self._root_task.cancelled:
                 # HACK: Patch to disable thread affinity checks when stepping the scheduler,
                 #       because this Thread.join() may be called from a background thread
@@ -324,18 +328,8 @@ def clear_top_level_tasks_on_exit(project: Project) -> Iterator[None]:
     try:
         yield
     finally:
-        # Uncrash root task, if it was crashed
-        project.root_task.crash_reason = None
-        
-        # Force root task children to complete
-        project.root_task.append_deferred_top_level_tasks()
-        for c in project.root_task.children:
-            if not c.complete:
-                mark_as_complete(c)
-        
-        # Clear root task children
-        assert None == project.root_task.try_get_next_task_unit()
-        assert len(project.root_task.children) == 0
+        project.root_task.cancel_tree()
+        step_scheduler_now(project, expect_done=True)
 
 
 # ------------------------------------------------------------------------------
