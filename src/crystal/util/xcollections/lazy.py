@@ -132,12 +132,12 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
     def __contains__(self, item: object) -> bool:
         return item in self._cached_prefix
     
-    def materialized_items(self) -> Iterator[_E]:
+    def materialized_items(self) -> list[_E]:
         items = []
         for item in self._cached_prefix:
             if not isinstance(item, UnmaterializedItem):
                 items.append(item)
-        return iter(items)
+        return items
 
 
 class UnmaterializedItemError(ValueError):

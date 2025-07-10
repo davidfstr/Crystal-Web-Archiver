@@ -456,6 +456,19 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         
         self.subtitle = 'Complete'
         
+        # Warn if any incomplete children exist
+        if self._use_extra_listener_assertions:
+            m_children = self.children
+            if isinstance(m_children, AppendableLazySequence):
+                m_children = m_children.materialized_items()  # reinterpret
+            incomplete_children = [c for c in m_children if not c.complete]
+            if len(incomplete_children) > 0:
+                print(
+                    f'*** Expected all children of completed {self!r} to already be complete, '
+                    f'but found incomplete children: {incomplete_children}. '
+                    f'Listeners related to incomplete children may not be disposed properly.'
+                )
+        
         # Notify listeners last, which can run arbitrary code
         # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
         for lis in list(self.listeners):
@@ -2021,12 +2034,12 @@ class RootTask(_PureContainerTask):
         """
         try:
             # Cancel all children first
-            task_children_iter = (
+            task_children_copy = (
                 task.children.materialized_items()
                 if isinstance(task.children, AppendableLazySequence)
-                else iter(task.children)
-            )  # type: Iterator[Task]
-            for child in list(task_children_iter):
+                else list(task.children)
+            )
+            for child in task_children_copy:
                 cls._cancel_tree_now(child)
         finally:
             # Cancel self last
