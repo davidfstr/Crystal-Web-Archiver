@@ -56,7 +56,17 @@ from unittest import skip
 from unittest.mock import patch
 import wx
 
-_CRASH = ValueError('Simulated crash')
+
+def _mark_as_simulated_crash(e: Exception) -> Exception:
+    """
+    Marks an exception as a simulated crash,
+    which will only print an abbreviated traceback.
+    """
+    e.cr_is_simulated_crash = True  # type: ignore[attr-defined]
+    return e
+
+
+_CRASH = _mark_as_simulated_crash(ValueError('Simulated crash'))
 
 
 # Marks tests that frequently trigger use-after-free errors by closing
@@ -415,7 +425,7 @@ async def test_when_DRT_child_task_did_complete_event_crashes_then_DRT_displays_
             # 
             # NOTE: Overrides the fix in commit 5aaaba57076d537a4872bb3cf7270112ca497a06,
             #       reintroducing the related bug it fixed.
-            with patch('crystal.task.urljoin', side_effect=ValueError('Invalid IPv6 URL')):
+            with patch('crystal.task.urljoin', side_effect=_create_simulated_url_join_exception()):
                 await step_scheduler(project)
             
             # Postcondition:
@@ -502,7 +512,9 @@ async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_
                 # 
                 # TODO: Once that issue is fixed, replace the next line with:
                 #           raise _CRASH
-                raise AttributeError("'DownloadResourceGroupMembersTask' object has no attribute '_pbc'")
+                raise _mark_as_simulated_crash(
+                    AttributeError("'DownloadResourceGroupMembersTask' object has no attribute '_pbc'")
+                )
             
             # Precondition
             assert download_rg_members_task.crash_reason is None
@@ -1631,10 +1643,14 @@ async def _step_scheduler_with_unit_from_PRRL_and_crash_task(prrl_task: Task, ho
     #    NOTE: Overrides the fix in commit 5aaaba57076d537a4872bb3cf7270112ca497a06,
     #          reintroducing the related bug it fixed.
     with patch.object(prrl_task, '__call__', return_value=_PRRL_call_result__1_link) as mock_call, \
-            patch('crystal.task.urljoin', side_effect=ValueError('Invalid IPv6 URL')):
+            patch('crystal.task.urljoin', side_effect=_create_simulated_url_join_exception()):
         await step_scheduler(project)
         assert mock_call.call_count >= 1
     assert prrl_task.complete
+
+
+def _create_simulated_url_join_exception() -> Exception:
+    return _mark_as_simulated_crash(ValueError('Invalid IPv6 URL'))
 
 
 # ------------------------------------------------------------------------------

@@ -361,8 +361,12 @@ def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False, fix_tb:
     if full_tb_summary is not None:
         print('Exception in bulkhead:', file=err_file)
         print('Traceback (most recent call last):', file=err_file)
-        for x in traceback.format_list(full_tb_summary):
-            print(x, end='', file=err_file)
+        if getattr(e, 'cr_is_simulated_crash', False):
+            # Suppress traceback for simulated crashes
+            print('  ...', file=err_file)
+        else:
+            for x in traceback.format_list(full_tb_summary):
+                print(x, end='', file=err_file)
     for x in traceback.format_exception_only(type(e), e):
         print(x, end='', file=err_file)
     print(cli.TERMINAL_RESET, end='', file=err_file)
