@@ -15,6 +15,7 @@ from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
+from crystal.util.xos import is_ci, is_windows
 from crystal.util.xthreading import bg_affinity, has_foreground_thread
 from crystal.util.xtime import sleep_profiled
 from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
@@ -150,7 +151,12 @@ def _run_tests(test_names: list[str]) -> bool:
             
             # Garbage collect, running any finalizers in __del__() early,
             # such as the warnings printed by ListenableMixin
-            gc.collect()
+            # 
+            # NOTE: Don't garbage collect on Windows CI because it prints
+            #       an unactionable warning that makes test output hard to read:
+            #       "Windows fatal exception: code 0x800401f0"
+            if not (is_windows() and is_ci()):
+                gc.collect()
             
             if not has_foreground_thread():
                 print('FATAL ERROR: Foreground thread is not running')
