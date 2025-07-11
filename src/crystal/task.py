@@ -1855,6 +1855,7 @@ class RootTask(_PureContainerTask):
         self.subtitle = 'Running'
         self._children_to_add_soon = []  # type: List[Tuple[Task, bool]]
         self._cancel_tree_soon = False
+        self._paused = False
     
     # === Bulkhead ===
     
@@ -1898,20 +1899,17 @@ class RootTask(_PureContainerTask):
     
     @fg_affinity
     def _dismiss_all_scheduled_tasks(self) -> None:
+        # Pause scheduler thread while cleaning up
+        self._paused = True
+        
         # Clear crash reason of the root task, so that children can be removed
-        # 
-        # HACK: Unfortunately clearing the crash reason will ALSO
-        #       unblock the scheduler thread which will try to run
-        #       descendent tasks of the RootTask while the RootTask
-        #       is still being cleaned up.
         self.crash_reason = None
         
         # Remove all top-level tasks, including the CrashedTask
         # 
-        # HACK: Pretend to be the scheduler thread so that the
-        #       task tree can be modified, despite the real
-        #       scheduled thread running concurrently, after
-        #       the crash reason was cleared.
+        # NOTE: Pretend to be the scheduler thread so that the
+        #       task tree can be modified. This is safe because
+        #       the real scheduler thread is paused and will not run any tasks.
         from crystal.tests.util.tasks import scheduler_thread_context
         with scheduler_thread_context():
             self._next_child_index = 0
@@ -1940,6 +1938,10 @@ class RootTask(_PureContainerTask):
                             raise
                 assert child.complete
             self.clear_completed_children()
+            assert len(self.children) == 0
+        
+        # Resume scheduler thread after clean up complete
+        self._paused = False
     
     @classmethod
     def _mark_children_subtitles_as_scheduler_crashed(cls, parent: Task) -> None:
@@ -2006,6 +2008,9 @@ class RootTask(_PureContainerTask):
     @fg_affinity
     @scheduler_affinity
     def try_get_next_task_unit(self) -> Callable[[], None] | None:
+        if self._paused:
+            return None
+        
         if self.complete:
             return None
         
