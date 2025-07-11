@@ -466,7 +466,8 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
                 print(
                     f'*** Expected all children of completed {self!r} to already be complete, '
                     f'but found incomplete children: {incomplete_children}. '
-                    f'Listeners related to incomplete children may not be disposed properly.'
+                    f'Listeners related to incomplete children may not be disposed properly.',
+                    file=sys.stderr
                 )
         
         # Notify listeners last, which can run arbitrary code

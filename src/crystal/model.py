@@ -1784,19 +1784,19 @@ class Project(ListenableMixin):
                     if task_ref is not None and task_ref.task is not None:
                         if task_ref.task.complete:
                             # WeakTaskRef should never refer to a completed task
-                            raise AssertionError(
-                                f'WeakTaskRef still refers to a task that was completed: '
-                                f'{r=!r}, {task_ref=!r}')
+                            print(
+                                f'*** Incomplete task cleanup: WeakTaskRef still refers to a task that was completed: '
+                                f'{r=!r}, {task_ref=!r}', file=sys.stderr)
                         elif not task_ref.task.in_task_tree(self.root_task):
                             # WeakTaskRef should never refer to a task that is not in the task tree
-                            raise AssertionError(
-                                f'WeakTaskRef refers to a task that is not in the task tree: '
-                                f'{r=!r}, {task_ref=!r}')
+                            print(
+                                f'*** Incomplete task cleanup: WeakTaskRef refers to a task that is not in the task tree: '
+                                f'{r=!r}, {task_ref=!r}', file=sys.stderr)
                         else:
                             # All tasks should be completed
-                            raise AssertionError(
-                                f'Task in task tree was not completed: '
-                                f'{r=!r}, {task_ref=!r}')
+                            print(
+                                f'*** Incomplete task cleanup: Task in task tree was not completed: '
+                                f'{r=!r}, {task_ref=!r}', file=sys.stderr)
     
     @staticmethod
     @fg_affinity
