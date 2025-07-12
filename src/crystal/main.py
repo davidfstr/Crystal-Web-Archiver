@@ -25,12 +25,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import ParamSpec, TypeVar
-
-try:
-    from typing import TYPE_CHECKING
-except ImportError:
-    TYPE_CHECKING = False
+from typing import ParamSpec, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -461,8 +456,10 @@ async def _did_launch(
     Raises:
     * SystemExit -- if the user quits
     """
-    from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
+    from crystal.model import Project
+    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog, OpenProjectProgressDialog
     from crystal.util.test_mode import tests_are_running
+    import tempfile
 
     # If project to open was passed on the command-line, use it
     if parsed_args.filepath is not None:
@@ -569,7 +566,7 @@ async def _prompt_for_project(
             
             try:
                 if choice == wx.ID_YES:
-                    return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
+                    return _create_untitled_project(dialog, progress_listener, **project_kwargs)
                 elif choice == wx.ID_NO:
                     return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
                 elif choice == wx.ID_CANCEL:
@@ -581,34 +578,29 @@ async def _prompt_for_project(
                 continue
 
 
-def _prompt_to_create_project(
+def _create_untitled_project(
         parent: wx.Window,
         progress_listener: OpenProjectProgressListener,
         **project_kwargs: object
         ) -> Project:
-    """
-    Raises:
-    * CancelOpenProject -- if the user cancels the prompt early
-    """
     from crystal.model import Project
-    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog
-    import wx
+    from crystal.progress import LoadUrlsProgressDialog
+    import tempfile
     
-    dialog = wx.FileDialog(parent,
-        message='',
-        wildcard='*' + Project.FILE_EXTENSION,
-        style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
-    with dialog:
-        if not dialog.ShowModal() == wx.ID_OK:
-            raise CancelOpenProject()
-        
-        project_path = dialog.GetPath()
-        if not project_path.endswith(Project.FILE_EXTENSION):
-            project_path += Project.FILE_EXTENSION
+    # Create an untitled project
     
-    if os.path.exists(project_path):
-        shutil.rmtree(project_path)
-    return Project(project_path, progress_listener, LoadUrlsProgressDialog(), **project_kwargs)  # type: ignore[arg-type]
+    # TODO: Alter Project.__init__ to create path internally
+    #       when is_untitled=True
+    untitled_project_dirpath = tempfile.mkdtemp(suffix=Project.FILE_EXTENSION)
+    os.rmdir(untitled_project_dirpath)
+    
+    return Project(
+        untitled_project_dirpath,
+        progress_listener, 
+        LoadUrlsProgressDialog(), 
+        is_untitled=True, 
+        **project_kwargs  # type: ignore[arg-type]
+    )
 
 
 def _prompt_to_open_project(

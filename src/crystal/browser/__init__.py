@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from crystal import __version__ as crystal_version
 from crystal import APP_NAME
@@ -11,7 +11,7 @@ from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import (
-    Project, Resource, ResourceGroup, ResourceGroupSource, RootResource,
+    Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
 from crystal.progress import (
     CancelLoadUrls, DummyOpenProjectProgressListener,
@@ -96,20 +96,7 @@ class MainWindow:
         try:
             self._create_actions()
             
-            frame_title: str
-            filename_with_ext = os.path.basename(project.path)
-            (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
-            if is_windows() or is_kde_or_non_gnome():
-                frame_title = f'{filename_without_ext} - {APP_NAME}'
-            else:  # is_mac_os(); other
-                extension_visible = (
-                    not get_hide_file_extension(project.path) if is_mac_os()
-                    else True
-                )
-                if extension_visible:
-                    frame_title = filename_with_ext
-                else:
-                    frame_title = filename_without_ext
+            frame_title = self._calculate_frame_title(project)
             
             # TODO: Rename: raw_frame -> frame,
             #               frame -> frame_content
@@ -163,6 +150,9 @@ class MainWindow:
                 raw_frame.Destroy()
                 raise
             
+            # Start listening to project events
+            project.listeners.append(self)
+            
             self._unhibernate()
             
             # Auto-hibernate every few minutes, in case Crystal crashes
@@ -178,6 +168,30 @@ class MainWindow:
         except:
             project.close()
             raise
+    
+    @staticmethod
+    def _calculate_frame_title(project) -> str:
+        frame_title: str
+        filename_with_ext = os.path.basename(project.path)
+        (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
+        if project.is_untitled:
+            filename_without_ext = 'Untitled Project'  # reinterpret
+        if is_windows() or is_kde_or_non_gnome():
+            frame_title = f'{filename_without_ext} - {APP_NAME}'
+        else:  # is_mac_os(); other
+            if project.is_untitled:
+                # Never show extension for untitled projects
+                extension_visible = False
+            else:
+                extension_visible = (
+                    not get_hide_file_extension(project.path) if is_mac_os()
+                    else True
+                )
+            if extension_visible:
+                frame_title = filename_with_ext
+            else:
+                frame_title = filename_without_ext
+        return frame_title
     
     @property
     def _readonly(self) -> bool:
@@ -207,13 +221,13 @@ class MainWindow:
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W')),
             action_func=self._on_close_window,
             enabled=True)
+        (s_label, s_enabled, s_action_func) = self._calculate_save_action_properties()
         self._save_project_action = Action(
             wx.ID_SAVE,
-            '',
+            s_label,
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('S')),
-            # TODO: Support untitled projects (that require an initial save)
-            action_func=None,
-            enabled=False)
+            action_func=s_action_func,
+            enabled=s_enabled)
         self._quit_action = Action(
             wx.ID_EXIT,
             '',
@@ -290,6 +304,12 @@ class MainWindow:
         
         # HACK: Gather all actions indirectly by inspecting fields
         self._actions = [a for a in self.__dict__.values() if isinstance(a, Action)]
+    
+    def _calculate_save_action_properties(self) -> tuple[str, bool, Callable[[wx.MenuEvent], None] | None]:
+        label = '&Save...' if self.project.is_untitled else ''
+        enabled = self.project.is_untitled
+        action_func = self._on_save_project if self.project.is_untitled else None
+        return (label, enabled, action_func)
     
     # === Menubar ===
     
@@ -494,7 +514,75 @@ class MainWindow:
     def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
         self.close()
     
+    # === Project: Events ===
+    
+    @capture_crashes_to_stderr
+    def project_is_dirty_did_change(self) -> None:
+        if is_mac_os():
+            @capture_crashes_to_stderr
+            @fg_affinity
+            def fg_task() -> None:
+                self._frame.OSXSetModified(self.project.is_dirty)
+            fg_call_later(fg_task)
+    
     # === File Menu: Events ===
+    
+    def _on_save_project(self, event: wx.MenuEvent) -> None:
+        """Handle Save menu item for untitled projects."""
+        if not self.project.is_untitled:
+            return
+        
+        # Prompt for a save location
+        dialog = wx.FileDialog(self._frame,
+            message='',
+            wildcard='*' + Project.FILE_EXTENSION,
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+        with dialog:
+            if dialog.ShowModal() != wx.ID_OK:
+                return
+            
+            new_project_path = dialog.GetPath()
+            if not new_project_path.endswith(self.project.FILE_EXTENSION):
+                new_project_path += self.project.FILE_EXTENSION
+                
+            # Save the project
+            future = self.project.save_as(new_project_path)
+            
+            # Update the window title and proxy icon
+            @capture_crashes_to_stderr
+            @fg_affinity
+            def on_save_complete() -> None:
+                # Check whether save succeeded
+                try:
+                    future.result()
+                except FileExistsError:
+                    raise AssertionError()
+                # TODO: Handle ProjectReadOnlyError more gracefully,
+                #       by providing a more-targeted error message
+                except (ProjectReadOnlyError, Exception) as e:
+                    dialog = wx.MessageDialog(
+                        self._frame,
+                        message=f'Error saving project: {str(e)}',
+                        caption='Save Error',
+                        style=wx.ICON_ERROR|wx.OK
+                    )
+                    dialog.Name = 'cr-save-error-dialog'
+                    with dialog:
+                        dialog.ShowModal()
+                    return
+                
+                # Update window title
+                self._frame.SetTitle(self._calculate_frame_title(self.project))
+                
+                # Update proxy icon
+                self._frame.SetRepresentedFilename(new_project_path)
+                
+                # Update Save menu item
+                (s_label, s_enabled, s_action_func) = self._calculate_save_action_properties()
+                self._save_project_action.label = s_label
+                self._save_project_action.enabled = s_enabled
+                self._save_project_action.action_func = s_action_func
+            future.add_done_callback(lambda _: fg_call_later(on_save_complete))
     
     def _on_close_window(self, event: wx.CommandEvent) -> None:
         self._frame.Close()  # will trigger call to _on_close_frame()
@@ -532,6 +620,7 @@ class MainWindow:
             for a in self._actions:
                 a.dispose()
             
+            self.project.listeners.remove(self)
             self.project.close()
         
         # Destroy self, since we did not Veto() the close event

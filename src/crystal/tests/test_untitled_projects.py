@@ -246,6 +246,8 @@ def _untitled_project() -> Iterator[Project]:
             yield project
 
 
+# TODO: Use xtempfile.TemporaryDirectory instead of this function,
+#       and instead of all direct uses of tempfile.TemporaryDirectory
 def _temporary_directory():
     return tempfile.TemporaryDirectory(
         # NOTE: If a file inside the temporary directory is still open,

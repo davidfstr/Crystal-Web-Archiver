@@ -998,8 +998,32 @@ class Project(ListenableMixin):
         so that if it is an untitled project then it will later be saved to
         a permanent location.
         """
+        if not self._is_untitled:
+            return
+        if self._is_dirty:
+            return
+        self._is_dirty = True
+        
+        for lis in self.listeners:
+            if hasattr(lis, 'project_is_dirty_did_change'):
+                run_bulkhead_call(lis.project_is_dirty_did_change)  # type: ignore[attr-defined]
+    
+    def _mark_clean_and_titled(self) -> None:
+        """
+        Marks this project as clean and titled.
+        
+        This method should be called after a project has been saved to a permanent location,
+        so that it is no longer considered dirty.
+        """
         if self._is_untitled:
-            self._is_dirty = True
+            self._is_untitled = False
+        
+        if self._is_dirty:
+            self._is_dirty = False
+            
+            for lis in self.listeners:
+                if hasattr(lis, 'project_is_dirty_did_change'):
+                    run_bulkhead_call(lis.project_is_dirty_did_change)
     
     def _get_property(self, name: str, default: _OptionalStr) -> str | _OptionalStr:
         return self._properties.get(name) or default
@@ -1763,9 +1787,10 @@ class Project(ListenableMixin):
     def save_as(self, new_path: str) -> Future[None]:
         """
         Saves this project to the specified path soon, which must not already exist.
-        The project will be reopened at the new path.
+        This project will be reopened at the new path.
         
-        If a failure occurs when saving the new project this project will remain open.
+        If a failure occurs when saving the new project this project will
+        remain open at its original path.
         
         Raises in returned Future:
         * FileExistsError --
@@ -1969,7 +1994,7 @@ class Project(ListenableMixin):
     @fg_affinity
     def _reopen(self, expect_writable: bool) -> None:
         """
-        Reopens this project at self.path.
+        Reopens this project at self.path, which is a permanent path.
         
         Is the inverse of `close()`, but does not restore the state of tasks.
         
@@ -1982,8 +2007,7 @@ class Project(ListenableMixin):
         # Open database at the new path
         with cls._open_database_but_close_if_raises(self.path, self._readonly, self._mark_dirty_if_untitled, expect_writable) as (
                 self._db, self._readonly, self._database_is_on_ssd):
-            # Reset dirty state after loading
-            self._is_dirty = False
+            self._mark_clean_and_titled()
         
         # Start scheduler
         self._start_scheduler()
@@ -2575,7 +2599,7 @@ class Resource:
         from least-recent to most-recent.
         """
         if self._definitely_has_no_revisions:
-            return []
+            return
         
         RR = ResourceRevision
         

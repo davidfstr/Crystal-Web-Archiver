@@ -13,6 +13,8 @@ Release Notes ⋮
 ### main
 
 * Workflow improvements
+    * Crystal now creates new projects as untitled by default instead of immediately
+      asking for a name and location to save the empty project at.
     * On Windows selecting any item in the Entity menu immediately after
       creating a new project, such as "New Root URL..." or "New Group..."
       no longer fails.
