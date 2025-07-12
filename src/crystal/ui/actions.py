@@ -28,7 +28,7 @@ class Action:
         self._menuitem_id = menuitem_id
         self._label = label
         self._accel = accel
-        self._action_func = action_func
+        self.action_func = action_func
         self._enabled = enabled
         self._button_bitmap = button_bitmap
         self._button_label = button_label
@@ -38,6 +38,16 @@ class Action:
     
     # === Properties ===
     
+    def _get_label(self) -> str:
+        return self._label
+    def _set_label(self, label: str) -> None:
+        self._label = label
+        for mi in self._menuitems:
+            mi.Label = label
+        for b in self._buttons:
+            b.Label = wx.Control.RemoveMnemonics(label)
+    label = property(_get_label, _set_label)
+    
     def _get_enabled(self) -> bool:
         return self._enabled
     def _set_enabled(self, enabled: bool) -> None:
@@ -46,7 +56,6 @@ class Action:
             mi.Enabled = enabled
         for b in self._buttons:
             b.Enabled = enabled
-        
     enabled = property(_get_enabled, _set_enabled)
     
     # === Operations ===
@@ -59,7 +68,7 @@ class Action:
         menuitem = menu.Append(self._menuitem_id, self._label)
         if self._accel is not None:
             menuitem.Accel = self._accel
-        if self._action_func is not None:
+        if self.action_func is not None:
             bind(menu, wx.EVT_MENU, self._on_menuitem_command)
         menuitem.Enabled = self._enabled
         
@@ -96,8 +105,8 @@ class Action:
         #        work consistently on macOS. Any action added as a button
         #        should also be added as a menuitem too, and we CAN set an
         #        accelerator reliably there.)
-        if self._action_func is not None:
-            bind(button, wx.EVT_BUTTON, self._action_func)
+        if self.action_func is not None:
+            bind(button, wx.EVT_BUTTON, self.action_func)
         button.Enabled = self._enabled
         
         self._buttons.append(button)  # save reference
@@ -113,9 +122,9 @@ class Action:
     # === Events ===
     
     def _on_menuitem_command(self, event: wx.CommandEvent) -> None:
-        if self._action_func is not None and event.Id in [m.Id for m in self._menuitems]:
+        if self.action_func is not None and event.Id in [m.Id for m in self._menuitems]:
             # NOTE: It is the responsiblity of the action function to call
             #       event.Skip() if appropriate.
-            self._action_func(event)
+            self.action_func(event)
         else:
             event.Skip()
