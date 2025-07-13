@@ -15,7 +15,7 @@ import wx
 
 def ShowModal(dialog: wx.Dialog) -> int:
     """
-    Replacement for wx.Dialog.ShowModel() that works properly even when
+    Replacement for wx.Dialog.ShowModal() that works properly even when
     running automated tests.
     """
     is_running_tests = tests_are_running()  # cache

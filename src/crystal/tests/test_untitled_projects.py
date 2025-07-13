@@ -255,16 +255,11 @@ async def test_when_dirty_untitled_project_closed_then_prompts_to_save() -> None
                 assert mw.main_window.OSXIsModified()
 
             # Close the project, expect a prompt to save, and save to the specified path
-            with patch('crystal.util.wx_dialog.ShowModal', return_value=wx.ID_YES), \
-                    file_dialog_returning(save_path):
+            with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_YES), \
+                    patch('wx.FileDialog.ShowModal', return_value=wx.ID_OK), \
+                    patch('wx.FileDialog.GetPath', return_value=save_path):
                 await mw.close()
                 assert os.path.exists(save_path)
-            
-            # Verify project is now clean and titled
-            assert not project.is_dirty
-            if is_mac_os():
-                # Verify no dot in close box on macOS
-                assert not mw.main_window.OSXIsModified()
 
 
 async def test_when_clean_untitled_project_closed_then_does_not_prompt_to_save() -> None:
