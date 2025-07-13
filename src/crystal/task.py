@@ -456,6 +456,19 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         
         self.subtitle = 'Complete'
         
+        # Warn if any incomplete children exist
+        if self._use_extra_listener_assertions:
+            m_children = self.children
+            if isinstance(m_children, AppendableLazySequence):
+                m_children = m_children.materialized_items()  # reinterpret
+            incomplete_children = [c for c in m_children if not c.complete]
+            if len(incomplete_children) > 0:
+                print(
+                    f'*** Expected all children of completed {self!r} to already be complete, '
+                    f'but found incomplete children: {incomplete_children}. '
+                    f'Listeners related to incomplete children may not be disposed properly.'
+                )
+        
         # Notify listeners last, which can run arbitrary code
         # NOTE: Making a copy of the listener list since it is likely to be modified by callees.
         for lis in list(self.listeners):
@@ -1842,6 +1855,7 @@ class RootTask(_PureContainerTask):
         self.subtitle = 'Running'
         self._children_to_add_soon = []  # type: List[Tuple[Task, bool]]
         self._cancel_tree_soon = False
+        self._paused = False
     
     # === Bulkhead ===
     
@@ -1868,21 +1882,11 @@ class RootTask(_PureContainerTask):
                 pass
             
             # Report crash to Task Tree
-            @fg_affinity
-            def dismiss_all_scheduled_tasks() -> None:
-                # Clear the crash reason
-                self.crash_reason = None
-                
-                # Remove all top-level tasks, including the CrashedTask
-                self._next_child_index = 0
-                for child in self.children:
-                    if not child.complete:
-                        child.finish()
-                self.clear_completed_children()
+            
             crash_reason_view = CrashedTask(
                 'Scheduler crashed',
                 reason,
-                dismiss_all_scheduled_tasks,
+                self._dismiss_all_scheduled_tasks,
                 dismiss_action_title='Dismiss All')
             # NOTE: Might raise if RootTask is in a sufficiently invalid state
             self.append_child(crash_reason_view)
@@ -1892,6 +1896,52 @@ class RootTask(_PureContainerTask):
                 self.append_deferred_top_level_tasks()
             fg_call_and_wait(fg_task)
     crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
+    
+    @fg_affinity
+    def _dismiss_all_scheduled_tasks(self) -> None:
+        # Pause scheduler thread while cleaning up
+        self._paused = True
+        
+        # Clear crash reason of the root task, so that children can be removed
+        self.crash_reason = None
+        
+        # Remove all top-level tasks, including the CrashedTask
+        # 
+        # NOTE: Pretend to be the scheduler thread so that the
+        #       task tree can be modified. This is safe because
+        #       the real scheduler thread is paused and will not run any tasks.
+        from crystal.tests.util.tasks import scheduler_thread_context
+        with scheduler_thread_context():
+            self._next_child_index = 0
+            for child in list(self.children):
+                if child.complete:
+                    continue
+                try:
+                    # Try to cancel the child and its descendents
+                    RootTask._cancel_tree_now(child)
+                except:
+                    if child.complete:
+                        continue
+                    # Try to cancel the child alone
+                    try:
+                        child.cancel()
+                    except:
+                        if child.complete:
+                            continue
+                        # Try to forcefully finish the child alone
+                        try:
+                            child.finish()
+                        except:
+                            if child.complete:
+                                continue
+                            # Give up
+                            raise
+                assert child.complete
+            self.clear_completed_children()
+            assert len(self.children) == 0
+        
+        # Resume scheduler thread after clean up complete
+        self._paused = False
     
     @classmethod
     def _mark_children_subtitles_as_scheduler_crashed(cls, parent: Task) -> None:
@@ -1958,6 +2008,9 @@ class RootTask(_PureContainerTask):
     @fg_affinity
     @scheduler_affinity
     def try_get_next_task_unit(self) -> Callable[[], None] | None:
+        if self._paused:
+            return None
+        
         if self.complete:
             return None
         
@@ -2012,6 +2065,8 @@ class RootTask(_PureContainerTask):
         """
         self._cancel_tree_soon = True
     
+    # TODO: Move this to the Task class and make it public.
+    #       Several classes need this functionality.
     @classmethod
     @fg_affinity
     @scheduler_affinity
@@ -2021,12 +2076,12 @@ class RootTask(_PureContainerTask):
         """
         try:
             # Cancel all children first
-            task_children_iter = (
+            task_children_copy = (
                 task.children.materialized_items()
                 if isinstance(task.children, AppendableLazySequence)
-                else iter(task.children)
-            )  # type: Iterator[Task]
-            for child in list(task_children_iter):
+                else list(task.children)
+            )
+            for child in task_children_copy:
                 cls._cancel_tree_now(child)
         finally:
             # Cancel self last

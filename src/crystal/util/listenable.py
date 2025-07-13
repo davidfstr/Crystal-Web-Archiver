@@ -8,7 +8,7 @@ class ListenableMixin:
     Mixin for objects that have a listener list.
     """
     _WARN_IF_LEAKING_LISTENERS = \
-        os.environ.get('CRYSTAL_LEAKING_LISTENER_WARNINGS', 'False') == 'True'
+        os.environ.get('CRYSTAL_LEAKING_LISTENER_WARNINGS', 'True') == 'True'
     
     # Optimize per-instance memory use, since some subclasses have very many objects
     __slots__ = (

@@ -316,7 +316,8 @@ async def step_scheduler_until_done(project: Project) -> None:
         await bg_call_and_wait(scheduler_thread_context()(unit))
 
 
+@scheduler_affinity  # manual control of scheduler thread is assumed
 def mark_as_complete(task: Task) -> None:
     assert not task.complete
-    task.finish()
+    RootTask._cancel_tree_now(task)
     assert task.complete
