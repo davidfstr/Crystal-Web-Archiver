@@ -314,6 +314,85 @@ async def test_when_titled_project_explicitly_saved_then_does_nothing() -> None:
             main_window.close()
 
 
+# === Untitled Project: Logout Tests ===
+
+async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_when_save_pressed_then_saves_and_closes_project() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
+            assert project.is_untitled
+            assert not project.is_dirty
+
+            # Make the project dirty
+            r = Resource(project, 'https://example.com/')
+            assert project.is_dirty
+
+            def _ensure_logout_vetoed_and_return_yes(*args, **kwargs) -> int:
+                assert logout_event.GetVeto(), \
+                    'Logout should be vetoed before showing any user prompts'
+                return wx.ID_YES
+
+            # Start logout. Expect a prompt to save. Save.
+            with patch('wx.MessageDialog.ShowModal', _ensure_logout_vetoed_and_return_yes), \
+                    patch('wx.FileDialog.ShowModal', return_value=wx.ID_OK), \
+                    patch('wx.FileDialog.GetPath', return_value=save_path):
+                
+                # Simulate OS logout
+                with _simulate_os_logout_on_exit() as logout_event:
+                    pass
+                
+                # Verify the project was saved
+                assert os.path.exists(save_path)
+
+
+@skip('covered by: test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_when_save_pressed_then_saves_and_closes_project')
+async def test_given_os_logout_with_dirty_untitled_project_then_vetoes_logout_before_prompting_to_save() -> None:
+    pass
+
+
+async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_when_cancel_pressed_then_does_not_close_project() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
+        assert project.is_untitled
+        assert not project.is_dirty
+
+        # Make the project dirty
+        r = Resource(project, 'https://example.com/')
+        assert project.is_dirty
+        
+        # Start logout. Expect a prompt to save. Cancel.
+        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_CANCEL):
+            logout_event = _simulate_os_logout()
+
+            # Verify the logout was vetoed
+            assert logout_event.GetVeto()
+            
+            # Verify the project is still dirty and untitled
+            assert project.is_dirty
+            assert project.is_untitled
+        
+        # Now close the project without saving
+        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_NO):
+            await mw.close()
+
+
+async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_when_do_not_save_pressed_then_closes_project_without_saving() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
+        assert project.is_untitled
+        assert not project.is_dirty
+
+        # Make the project dirty
+        r = Resource(project, 'https://example.com/')
+        assert project.is_dirty
+        
+        # Start logout. Expect a prompt to save. Do not save.
+        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_NO):
+            _simulate_os_logout()
+            
+            # Ensure project was closed
+            assert not mw.main_window.IsShown()
+
+
 # === Utility ===
 
 @contextmanager
@@ -410,3 +489,16 @@ def _filesystem_of_temporary_directory() -> int:
     Returns the filesystem ID of the system's temporary directory.
     """
     return os.stat(tempfile.gettempdir()).st_dev
+
+
+def _simulate_os_logout() -> wx.CloseEvent:
+    with _simulate_os_logout_on_exit() as logout_event:
+        return logout_event
+
+
+@contextmanager
+def _simulate_os_logout_on_exit() -> Iterator[wx.CloseEvent]:
+    app = wx.GetApp()
+    logout_event = wx.CloseEvent(wx.EVT_QUERY_END_SESSION.typeId)
+    yield logout_event
+    app.ProcessEvent(logout_event)

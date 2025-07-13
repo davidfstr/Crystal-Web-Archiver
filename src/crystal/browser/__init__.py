@@ -499,14 +499,17 @@ class MainWindow:
     
     # === Operations ===
     
-    def close(self) -> None:
+    @fg_affinity
+    def close(self, *, prompt_to_save_untitled: bool = False) -> None:
         """
-        Closes this window.
+        Closes this window, disposing any related resources.
         
-        The caller is still responsible for closing the underlying Project.
+        Does NOT prompt to save the project if it is untitled, by default,
+        to ensure the close operation is not cancelled.
+        
+        See also: MainWindow.try_close()
         """
-        dummy_event = wx.CommandEvent()
-        self._on_close_window(dummy_event)
+        self._on_close_frame(prompt_to_save_untitled=prompt_to_save_untitled)
     
     def __enter__(self) -> 'MainWindow':
         return self
@@ -594,13 +597,44 @@ class MainWindow:
         else:
             event.Skip()
     
+    # TODO: Move this method adjacent to close()
     @fg_affinity
-    def _on_close_frame(self, event: wx.CloseEvent) -> None:
+    def _on_close_frame(self,
+            event: wx.CloseEvent | None = None,
+            *, prompt_to_save_untitled: bool = True,
+            ) -> None:
         """
-        Closes this window, disposing any related resources.
+        Tries to close this window, disposing any related resources.
+        
+        If the project is untitled and dirty, prompts to save it unless prompt_to_save_untitled=False.
+        If the user cancels the prompt the close event is vetoed.
+        """
+        did_not_cancel = self.try_close(prompt_to_save_untitled=prompt_to_save_untitled)
+        if not did_not_cancel and event is not None:
+            # Cancel the close
+            event.Veto()
+    
+    # TODO: Move this method adjacent to close()
+    @fg_affinity
+    def try_close(self,
+            *, prompt_to_save_untitled: bool = True,
+            will_prompt_to_save: Callable[[], None] | None = None,
+            ) -> bool:
+        """
+        Tries to close this window, disposing any related resources.
+        
+        If the project is untitled and dirty, prompts to save it unless prompt_to_save_untitled=False.
+        If the user cancels the prompt, the window is not closed, and returns False.
+        
+        In all other situations, the project is closed and returns True.
+        
+        See also: MainWindow.close()
         """
         # If the project is untitled and dirty, prompt to save it
-        if self.project.is_untitled and self.project.is_dirty:
+        if self.project.is_untitled and self.project.is_dirty and prompt_to_save_untitled:
+            if will_prompt_to_save is not None:
+                will_prompt_to_save()
+            
             dialog = wx.MessageDialog(
                 self._frame,
                 message='Do you want to save the changes you made to this project?',
@@ -611,8 +645,7 @@ class MainWindow:
             with dialog:
                 result = ShowModal(dialog)
             if result == wx.ID_CANCEL:
-                event.Veto()  # Cancel the close
-                return
+                return False
             elif result == wx.ID_YES:
                 # Prompt for a save location
                 file_dialog = wx.FileDialog(self._frame,
@@ -621,8 +654,7 @@ class MainWindow:
                     style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
                 with file_dialog:
                     if file_dialog.ShowModal() != wx.ID_OK:
-                        event.Veto()  # Cancel the close
-                        return
+                        return False
                     
                     new_project_path = file_dialog.GetPath()
                     if not new_project_path.endswith(self.project.FILE_EXTENSION):
@@ -645,8 +677,7 @@ class MainWindow:
                         with error_dialog:
                             error_dialog.ShowModal()
                         
-                        event.Veto()  # Cancel the close
-                        return
+                        return False
             elif result == wx.ID_NO:
                 # Do not save, just close
                 pass
@@ -679,6 +710,12 @@ class MainWindow:
         
         # Destroy self, since we did not Veto() the close event
         self._frame.Destroy()
+        
+        # Clear reference to self if we're the last created MainWindow
+        if MainWindow._last_created is self:
+            MainWindow._last_created = None
+        
+        return True
     
     # === Entity Pane: New/Edit Root Url ===
     
