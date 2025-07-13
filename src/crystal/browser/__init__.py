@@ -46,7 +46,7 @@ from crystal.util.xsqlite3 import (
     is_database_closed_error, is_database_gone_error,
 )
 from crystal.util.xthreading import (
-    bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
+    bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, fg_wait_for,
     set_is_quitting,
 )
 from functools import partial
@@ -599,6 +599,60 @@ class MainWindow:
         """
         Closes this window, disposing any related resources.
         """
+        # If the project is untitled and dirty, prompt to save it
+        if self.project.is_untitled and self.project.is_dirty:
+            dialog = wx.MessageDialog(
+                self._frame,
+                message='Do you want to save the changes you made to this project?',
+                caption='Save Changes',
+                style=wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION
+            )
+            dialog.Name = 'cr-save-changes-dialog'
+            with dialog:
+                result = ShowModal(dialog)
+            if result == wx.ID_CANCEL:
+                event.Veto()  # Cancel the close
+                return
+            elif result == wx.ID_YES:
+                # Prompt for a save location
+                file_dialog = wx.FileDialog(self._frame,
+                    message='',
+                    wildcard='*' + Project.FILE_EXTENSION,
+                    style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+                with file_dialog:
+                    if file_dialog.ShowModal() != wx.ID_OK:
+                        event.Veto()  # Cancel the close
+                        return
+                    
+                    new_project_path = file_dialog.GetPath()
+                    if not new_project_path.endswith(self.project.FILE_EXTENSION):
+                        new_project_path += self.project.FILE_EXTENSION
+                    
+                    # Save the project
+                    future = self.project.save_as(new_project_path)
+                    
+                    # Wait for save to complete
+                    try:
+                        fg_wait_for(lambda: future.done(), timeout=None, poll_interval=0.1)
+                    except (ProjectReadOnlyError, Exception) as e:
+                        error_dialog = wx.MessageDialog(
+                            self._frame,
+                            message=f'Error saving project: {str(e)}',
+                            caption='Save Error',
+                            style=wx.ICON_ERROR|wx.OK
+                        )
+                        error_dialog.Name = 'cr-save-error-dialog'
+                        with error_dialog:
+                            error_dialog.ShowModal()
+                        
+                        event.Veto()  # Cancel the close
+                        return
+            elif result == wx.ID_NO:
+                # Do not save, just close
+                pass
+            else:
+                raise AssertionError(f'Unexpected dialog result: {result}')
+        
         if self._autohibernate_timer is not None:
             self._autohibernate_timer.stop()
         
