@@ -1,4 +1,6 @@
+import random
 import sqlite3
+from typing import LiteralString
 
 
 def is_database_closed_error(e: object) -> bool:
@@ -39,3 +41,38 @@ def sqlite_has_json_support() -> bool:
                 return False
             else:
                 raise
+
+
+def random_choices_from_table_ids(
+    k: int,
+    table_name: LiteralString,
+    c: sqlite3.Cursor
+) -> list[int]:
+    """
+    Return k random IDs from `table_name`, allowing duplicates,
+    without reading all IDs into memory.
+
+    Runs in time O(k/density * log(N)), where N is the number of rows in the table,
+    and density is the ratio of the number of rows to the range of IDs.
+    
+    Uses O(k) memory to store the random IDs.
+
+    Raises:
+    * IndexError -- if the table is empty
+    """
+    [(min_id,)] = c.execute(f'select min(id) from {table_name}')
+    [(max_id,)] = c.execute(f'select max(id) from {table_name}')
+    if min_id is None or max_id is None:
+        raise IndexError(f'Table {table_name!r} is empty')
+    
+    random_ids: list[int] = []
+    while len(random_ids) < k:
+        # Pick a candidate id in the full integer range
+        id_candidate = random.randint(min_id, max_id)
+
+        # log(N) lookup in PK index
+        c.execute(f'select id from {table_name} where id = ?', (id_candidate,))
+        hits = c.fetchall()
+        if len(hits) > 0:
+            random_ids.append(id_candidate)
+    return random_ids

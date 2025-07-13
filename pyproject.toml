@@ -88,6 +88,7 @@ wmi = { version = "*", markers = "sys_platform == 'win32'" }
 typing-extensions = "^4.8.0"
 types-tqdm = "^4.66.0.20240106"
 truststore = "*"
+send2trash = "^1.8.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.0,<8.0"
