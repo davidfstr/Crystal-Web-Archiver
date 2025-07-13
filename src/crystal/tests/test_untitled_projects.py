@@ -1,20 +1,28 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
-from crystal.model import Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource
+from crystal.browser import MainWindow as RealMainWindow
+from crystal.model import (
+    Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource,
+)
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
+from crystal.tests.util.controls import file_dialog_returning
 from crystal.tests.util.server import served_project
-from crystal.tests.util.subtests import SubtestsContext, awith_subtests
+from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks, scheduler_disabled, step_scheduler, step_scheduler_until_done
+    append_deferred_top_level_tasks, scheduler_disabled, step_scheduler,
+    step_scheduler_until_done,
 )
 from crystal.tests.util.wait import wait_for_future
-from crystal.util.xos import is_ci, is_mac_os, is_linux
+from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.util.xos import is_ci, is_linux, is_mac_os
 from functools import cache
 import os
 import subprocess
 import tempfile
 from typing import Iterator
-from unittest import SkipTest, skip
+from unittest import skip, SkipTest
+from unittest.mock import patch
+import wx
 
 
 # TODO: Reorder the "===" sections in this file to be in a more logical order,
@@ -215,24 +223,100 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
             await step_scheduler(project)
 
 
-@skip('not yet implemented')
-async def test_when_dirty_untitled_project_closed_then_prompts_to_save_and_becomes_clean_and_titled() -> None:
-    pass
+# === Untitled Project: Create Tests ===
+
+async def test_given_prompt_to_create_or_save_project_dialog_visible_when_create_button_pressed_then_untitled_project_created() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=True) as (mw, project):
+        assert project.is_untitled
+        assert not project.is_dirty
+
+        # Verify window title indicates untitled project
+        assert 'Untitled' in mw.main_window.GetTitle()
+        save_item = mw.main_window.MenuBar.FindItemById(wx.ID_SAVE)
+        assert save_item is not None
+        assert save_item.IsEnabled()
 
 
-@skip('not yet implemented')
+# === Untitled Project: Close Tests ===
+
+async def test_when_dirty_untitled_project_closed_then_prompts_to_save() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
+            assert project.is_untitled
+            assert not project.is_dirty
+
+            # Make the project dirty by creating a resource
+            r = Resource(project, 'https://example.com/')
+            assert project.is_dirty
+            if is_mac_os():
+                # Verify dot in close box on macOS
+                assert mw.main_window.OSXIsModified()
+
+            # Close the project, expect a prompt to save, and save to the specified path
+            with patch('crystal.util.wx_dialog.ShowModal', return_value=wx.ID_YES), \
+                    file_dialog_returning(save_path):
+                await mw.close()
+                assert os.path.exists(save_path)
+            
+            # Verify project is now clean and titled
+            assert not project.is_dirty
+            if is_mac_os():
+                # Verify no dot in close box on macOS
+                assert not mw.main_window.OSXIsModified()
+
+
 async def test_when_clean_untitled_project_closed_then_does_not_prompt_to_save() -> None:
-    pass
+    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
+        assert project.is_untitled
+        assert not project.is_dirty
+
+        # Close project. Ensure no prompt to save.
+        with patch('wx.MessageDialog.ShowModal') as mock_show_modal:
+            await mw.close()
+            mock_show_modal.assert_not_called()
 
 
-@skip('not yet implemented')
+# === Titled Project: Clean/Dirty State Tests ===
+
 async def test_when_titled_project_modified_then_remains_clean() -> None:
-    pass
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
+        with Project(project_path) as project:
+            assert not project.is_untitled
+            assert not project.is_dirty
+            
+            # Modify the project
+            r = Resource(project, 'https://example.com/')
+            RootResource(project, 'Example', r)
+            
+            # Verify project remains clean even after modification
+            assert not project.is_dirty
 
 
-@skip('not yet implemented')
+# === Titled Project: Save Tests ===
+
 async def test_when_titled_project_explicitly_saved_then_does_nothing() -> None:
-    pass
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        project_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
+        with Project(project_path) as project:
+            main_window = RealMainWindow(project)
+            
+            # Verify Save... menu item is disabled
+            save_item = main_window._frame.MenuBar.FindItemById(wx.ID_SAVE)
+            assert save_item is not None
+            assert not save_item.IsEnabled()
+            
+            # Try to save. Ensure no save dialog appears.
+            with patch('wx.FileDialog.ShowModal') as mock_show_modal:
+                save_event = wx.CommandEvent(wx.EVT_MENU.typeId, wx.ID_SAVE)
+                main_window._frame.ProcessEvent(save_event)
+                
+                # Verify no save dialog was shown
+                mock_show_modal.assert_not_called()
+            
+            main_window.close()
 
 
 # === Utility ===
