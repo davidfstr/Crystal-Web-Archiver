@@ -26,9 +26,9 @@ from crystal.plugins import phpbb as plugins_phpbb
 from crystal.plugins import substack as plugins_substack
 from crystal.plugins import wordpress as plugins_wordpress
 from crystal.progress import (
-    CancelLoadUrls, CancelOpenProject, DummyLoadUrlsProgressListener,
+    CancelLoadUrls, CancelOpenProject, CancelSaveAs, DummyLoadUrlsProgressListener,
     DummyOpenProjectProgressListener, LoadUrlsProgressListener,
-    OpenProjectProgressListener, VetoUpgradeProject,
+    OpenProjectProgressListener, SaveAsProgressListener, VetoUpgradeProject,
 )
 from crystal.util import gio, http_date, xcgi, xshutil
 from crystal.util.bulkheads import (
@@ -52,6 +52,8 @@ from crystal.util.xbisect import bisect_key_right
 from crystal.util.xcollections.ordereddict import as_ordereddict
 from crystal.util.xcollections.sortedlist import BLACK_HOLE_SORTED_LIST
 from crystal.util.xdatetime import datetime_is_aware
+from crystal.util.xshutil import walkzip
+from crystal.util.xsqlite3 import random_choices_from_table_ids
 from crystal.util.xgc import gc_disabled
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xsqlite3 import is_database_read_only_error, sqlite_has_json_support
@@ -67,13 +69,16 @@ import os
 import pathlib
 import re
 from re import Pattern
+from send2trash import send2trash, TrashPermissionError
 import shutil
+from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 from sortedcontainers import SortedList
 import sqlite3
 import sys
 from tempfile import NamedTemporaryFile
 from textwrap import dedent
 import threading
+import time
 from tqdm import tqdm
 import traceback
 from typing import (
@@ -114,6 +119,8 @@ class Project(ListenableMixin):
     """
     
     FILE_EXTENSION = '.crystalproj'
+    # TODO: Add icons/etc for this file extension
+    PARTIAL_FILE_EXTENSION = '.crystalproj-partial'
     OPENER_FILE_EXTENSION = '.crystalopen'
     
     # Project structure constants
@@ -771,7 +778,7 @@ class Project(ListenableMixin):
             assert self._LATEST_SUPPORTED_MAJOR_VERSION == 2
     
     @staticmethod
-    def _get_major_version(c: DatabaseCursor) -> int:
+    def _get_major_version(c: DatabaseCursor | sqlite3.Cursor) -> int:
         rows = list(c.execute(
             'select value from project_property where name = ?',
             ('major_version',)))
@@ -1784,7 +1791,10 @@ class Project(ListenableMixin):
     # === Save As ===
     
     @fg_affinity
-    def save_as(self, new_path: str) -> Future[None]:
+    def save_as(self,
+            new_path: str,
+            progress_listener: Optional['SaveAsProgressListener'] = None
+            ) -> Future[None]:
         """
         Saves this project to the specified path soon, which must not already exist.
         This project will be reopened at the new path.
@@ -1797,67 +1807,305 @@ class Project(ListenableMixin):
             if a file or directory exists at the specified path
         * ProjectReadOnlyError --
             the specified path is not writable
+        * CancelSaveAs --
+            if the user cancels the save operation
         """
         return start_thread_switching_coroutine(
             SwitchToThread.FOREGROUND,
-            self._save_as_coro(new_path),
+            self._save_as_coro(new_path, progress_listener),
             capture_crashes_to_deco=None,
             uses_future_result=True
         )
     
     @fg_affinity
-    def _save_as_coro(self, new_path: str) -> Generator[SwitchToThread, None, None]:
+    def _save_as_coro(self,
+            new_path: str, 
+            progress_listener: Optional['SaveAsProgressListener'] = None
+            ) -> Generator[SwitchToThread, None, None]:
         if os.path.exists(new_path):
             raise FileExistsError(
                 f'Cannot save project to {new_path!r} because a file or '
                 f'directory already exists at that path')
         
+        if not new_path.endswith(Project.FILE_EXTENSION):
+            raise ValueError(
+                f'Cannot save project to {new_path!r} because it does not end with '
+                f'the expected file extension {Project.FILE_EXTENSION!r}')
+        new_partial_path = (
+            new_path.removesuffix(Project.FILE_EXTENSION) +
+            Project.PARTIAL_FILE_EXTENSION
+        )
+        
+        old_path = self.path  # capture
+        
         # Save the current state of tasks
-        self.hibernate_tasks()
+        if not self.readonly:
+            self.hibernate_tasks()
         
         # - Stop and destroy tasks
         # - Stop scheduler
         # - Close database
         # TODO: Handle failures during close in a sensible way
         self.close(capture_crashes=False)
-        
-        # Move/copy the project directory to the new path.
-        # - If the project is untitled, it will be renamed.
-        # - If the project is titled, it will be copied.
-        # TODO: Provide interface to report copy/move progress to UI
-        # TODO: Provide interface for UI to cancel the save operation, including the copy/move
-        # TODO: Handle failures during copy/move gracefully
-        yield SwitchToThread.BACKGROUND
-        if self._is_untitled:
-            # NOTE: Will use os.rename() if possible, otherwise shutil.copytree() + rmtree()
-            shutil.move(self.path, new_path)
-            self._is_untitled = False
-        else:
-            shutil.copytree(self.path, new_path, dirs_exist_ok=True)
-        yield SwitchToThread.FOREGROUND
-        
-        old_path = self.path  # capture
         try:
-            self.path = new_path
+            # Move/copy the project directory to the new path.
+            # - If the project is untitled, it will be renamed.
+            # - If the project is titled, it will be copied.
+            yield SwitchToThread.BACKGROUND
+            try:
+                if self._is_untitled:
+                    # Move the project directory to the new path
+                    try:
+                        # Try atomic move first
+                        os.rename(old_path, new_path)
+                    except OSError:
+                        # Try copy and delete if atomic move fails
+                        
+                        # Copy
+                        self._copytree_of_project_with_progress(
+                            old_path, new_partial_path, progress_listener)
+                        os.rename(new_partial_path, new_path)
+                        
+                        # Delete, on a best-effort basis, in the background
+                        # NOTE: If the delete fails or is interrupted the
+                        #       old path should be pointing to a 
+                        #       temporary directory that will eventually
+                        #       be cleaned up by the OS later.
+                        @capture_crashes_to_stderr
+                        def bg_delete_old_path() -> None:
+                            try:
+                                shutil.rmtree(old_path)
+                            except OSError:
+                                pass
+                        bg_call_later(bg_delete_old_path, daemon=True)
+                    
+                    self._is_untitled = False
+                else:
+                    # Copy the project directory to the new path
+                    self._copytree_of_project_with_progress(
+                        self.path, new_partial_path, progress_listener)
+                    os.rename(new_partial_path, new_path)
+            except:
+                # Clean up partial copy if an error occurs
+                if os.path.exists(new_partial_path):
+                    try:
+                        send2trash(new_partial_path)
+                    except (TrashPermissionError, OSError, Exception):
+                        # Give up. Leave the partial copy in place
+                        # for the user to delete manually.
+                        pass
+                
+                raise
             
             # - Open database
             # - Start scheduler
-            # NOTE: May raise ProjectReadOnlyError if the project
-            #       cannot be opened as writable at the new path
-            self._reopen(expect_writable=True)
+            yield SwitchToThread.FOREGROUND
+            self.path = new_path
+            self._reopen()
+            
+            # Restore the state of tasks
+            if not self.readonly:
+                self.unhibernate_tasks()
+        
+            assert self._is_untitled == False
+            assert self._is_dirty == False
         except:
             # Try to reopen the project at the old path
             if os.path.exists(old_path):
+                yield SwitchToThread.FOREGROUND
                 self.path = old_path
-                self._reopen(expect_writable=False)
-                self.unhibernate_tasks()
+                self._reopen()
+                if not self.readonly:
+                    self.unhibernate_tasks()
+            
             raise
+    
+    @staticmethod
+    @bg_affinity
+    def _copytree_of_project_with_progress(
+            src_project_dirpath: str,
+            dst_project_dirpath: str,
+            progress_listener: 'SaveAsProgressListener | None' = None
+            ) -> None:
+        """
+        Copies an entire directory tree to a new location with progress reporting.
         
-        # Restore the state of tasks
-        self.unhibernate_tasks()
+        Raises:
+        * CancelSaveAs -- if the user cancels the operation
+        * ProjectFormatError -- if the project format appears to be invalid
+        """
+        # Sample size chosen to be large enough to provide a reasonable estimate
+        # of project size without taking too much time to collect.
+        # 
+        # On a 5,400 RPM HDD:
+        # - Find Sample Time: 7.14 seconds
+        # - Size Sample Time: 8.04 seconds
+        # 
+        # On an SSD:
+        # - Find Sample Time: 0.25 seconds
+        # - Size Sample Time: 0.23 seconds
+        REVISIONS_SAMPLE_SIZE = 256  # revisions
         
-        assert self._is_untitled == False
-        assert self._is_dirty == False
+        # Ensure at least 1 report will be made during each 1-second interval
+        TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5  # seconds
+        
+        if progress_listener is None:
+            from crystal.progress import DummySaveAsProgressListener
+            progress_listener = DummySaveAsProgressListener()
+        
+        # Calculate approximate size of project resource revision files
+        approx_revision_count: int
+        approx_revision_data_size: int
+        if True:
+            # 1. Count approximate number of revisions
+            # 2. Get project major version
+            # 3. Get IDs for random revision sample
+            approx_revision_count: int  # type: ignore[no-redef]
+            major_version: int
+            random_revision_ids: list[int]
+            db_filepath = os.path.join(src_project_dirpath, Project._DB_FILENAME)
+            db_connect_query = '?mode=ro'
+            db_raw = sqlite3.connect(
+                'file:' + url_quote(db_filepath) + db_connect_query,
+                uri=True)
+            with db_raw:
+                c = db_raw.cursor()
+                # NOTE: This is much faster than count(1)
+                [(max_revision_id,)] = c.execute('select max(id) from resource_revision')
+                approx_revision_count = max_revision_id or 0
+                
+                major_version = Project._get_major_version(c)
+                
+                # Estimate total size of all resource revisions
+                progress_listener.calculating_total_size(
+                    f'Sampling {REVISIONS_SAMPLE_SIZE:,} of about {approx_revision_count:,} revisions...')
+                try:
+                    random_revision_ids = random_choices_from_table_ids(
+                        k=REVISIONS_SAMPLE_SIZE,
+                        table_name='resource_revision',
+                        c=c
+                    )
+                except IndexError:
+                    # If the table is empty, size will be zero
+                    random_revision_ids = []
+            
+            # Get sizes for random revision sample
+            size_for_revision_id: dict[int, int] = {}
+            progress_listener.calculating_total_size(f'Sizing sample of {REVISIONS_SAMPLE_SIZE:,} revisions...')
+            for revision_id in random_revision_ids:
+                if revision_id in size_for_revision_id:
+                    continue
+                revision_body_filepath = ResourceRevision._body_filepath_with(
+                    project_path=src_project_dirpath,
+                    major_version=major_version,
+                    revision_id=revision_id)
+                try:
+                    size_for_revision_id[revision_id] = os.path.getsize(revision_body_filepath)
+                except OSError:
+                    # File doesn't exist or is inaccessible
+                    continue
+            if len(size_for_revision_id) == 0 and approx_revision_count > 0:
+                raise ProjectFormatError(
+                    f'Unable to locate any of {REVISIONS_SAMPLE_SIZE} resource revisions '
+                    f'for project {src_project_dirpath!r}')
+            
+            # Estimate total size of all resource revisions based on the sample
+            approx_revision_data_size = math.ceil(
+                sum(size_for_revision_id.values()) * 
+                approx_revision_count / REVISIONS_SAMPLE_SIZE
+            )
+        
+        # Calculate total size of source project directory
+        total_byte_count = 0
+        total_file_count = 0
+        progress_listener.calculating_total_size('Sizing remaining project files...')
+        # NOTE: topdown=True is used to:
+        #       (1) allow skipping the revisions directory and to
+        #       (2) size the project database (which resides directly
+        #           within the project directory) as early as possible
+        for (parent_dirpath, dirnames, filenames) in os.walk(src_project_dirpath, topdown=True):
+            # If the revisions directory is encountered, add its approximate size
+            # and file count to the totals rather than walking into it
+            if parent_dirpath == src_project_dirpath and Project._REVISIONS_DIRNAME in dirnames:
+                total_byte_count += approx_revision_data_size
+                total_file_count += approx_revision_count
+                dirnames.remove(Project._REVISIONS_DIRNAME)
+            
+            for filename in filenames:
+                filepath = os.path.join(parent_dirpath, filename)
+                try:
+                    # TODO: Access the os.DirEntry object from the os.scandir() call
+                    #       used inside of os.walk() to avoid calls to os.path.getsize()
+                    total_byte_count += os.path.getsize(filepath)
+                    total_file_count += 1
+                except OSError:
+                    # File is inaccessible
+                    continue
+        progress_listener.total_size_calculated(total_file_count, total_byte_count)
+        
+        # Copy project directory contents, with progress reporting
+        bytes_copied = 0
+        files_copied = 0
+        start_time = time.monotonic()  # capture
+        last_report_time = start_time
+        os.mkdir(dst_project_dirpath)
+        for (src_parent_dirpath, dst_parent_dirpath, dirnames, filenames) in walkzip(
+                src_project_dirpath, dst_project_dirpath, topdown=True):
+            # Copy files to the current destination directory
+            for filename in filenames:
+                src_filepath = os.path.join(src_parent_dirpath, filename)
+                dst_filepath = os.path.join(dst_parent_dirpath, filename)
+                
+                # Copy the file
+                with open(src_filepath, 'rb') as src_file, \
+                        open(dst_filepath, 'wb') as dst_file:
+                    # Copy in chunks to allow progress reporting
+                    while True:
+                        chunk = src_file.read(COPY_BUFSIZE)
+                        if not chunk:
+                            break
+                        
+                        dst_file.write(chunk)
+                        bytes_copied += len(chunk)
+                        
+                        # Report progress, but not too frequently
+                        current_time = time.monotonic()  # capture
+                        if (current_time - last_report_time) >= TARGET_MAX_DELAY_BETWEEN_REPORTS:
+                            elapsed = current_time - start_time
+                            bytes_per_second = bytes_copied / elapsed if elapsed > 0 else 0
+                            progress_listener.copying(
+                                min(files_copied, total_file_count),
+                                filename,
+                                min(bytes_copied, total_byte_count),
+                                bytes_per_second)
+                            
+                            last_report_time = current_time
+                
+                # Preserve file metadata
+                try:
+                    shutil.copystat(src_filepath, dst_filepath)
+                except OSError:
+                    # Some metadata might not be copyable, ignore errors
+                    pass
+                
+                files_copied += 1
+            
+            # Create directories in the current destination directory
+            for dirname in dirnames:
+                dst_dirpath = os.path.join(dst_parent_dirpath, dirname)
+                os.mkdir(dst_dirpath)
+        
+        # Final progress report
+        if True:
+            elapsed = time.monotonic() - start_time
+            bytes_per_second = bytes_copied / elapsed if elapsed > 0 else 0
+            progress_listener.copying(
+                files_copied,
+                '',  # Placeholder filename for final report
+                min(bytes_copied, total_byte_count),
+                bytes_per_second)
+            
+            progress_listener.did_copy_files()
     
     # === Close & Reopen ===
     
@@ -1992,7 +2240,7 @@ class Project(ListenableMixin):
         db.close()
     
     @fg_affinity
-    def _reopen(self, expect_writable: bool) -> None:
+    def _reopen(self) -> None:
         """
         Reopens this project at self.path, which is a permanent path.
         
@@ -2005,7 +2253,7 @@ class Project(ListenableMixin):
         cls = type(self)
         
         # Open database at the new path
-        with cls._open_database_but_close_if_raises(self.path, self._readonly, self._mark_dirty_if_untitled, expect_writable) as (
+        with cls._open_database_but_close_if_raises(self.path, self._readonly, self._mark_dirty_if_untitled, expect_writable=False) as (
                 self._db, self._readonly, self._database_is_on_ssd):
             self._mark_clean_and_titled()
         
@@ -3244,13 +3492,29 @@ class ResourceRevision:
         if self._id is None:
             raise RevisionDeletedError()
         
-        major_version = self.project.major_version
+        return self._body_filepath_with(
+            project_path=self.project.path,
+            major_version=self.project.major_version,
+            revision_id=self._id)
+    
+    @staticmethod
+    def _body_filepath_with(
+            project_path: str,
+            major_version: int,
+            revision_id: int,
+            ) -> str:
+        """
+        Raises:
+        * ProjectHasTooManyRevisionsError --
+            if this revision's in-memory ID is higher than what the 
+            project format supports on disk
+        """
         if major_version >= 2:
             os_path_sep = os.path.sep  # cache
             
-            revision_relpath_parts = f'{self._id:015x}'
+            revision_relpath_parts = f'{revision_id:015x}'
             if len(revision_relpath_parts) != 15:
-                assert self._id > Project._MAX_REVISION_ID
+                assert revision_id > Project._MAX_REVISION_ID
                 raise ProjectHasTooManyRevisionsError(
                     f'Revision ID {id} is too high to store in the '
                     'major version 2 project format')
@@ -3262,12 +3526,12 @@ class ResourceRevision:
                 revision_relpath_parts[12:15]
             )
         elif major_version == 1:
-            revision_relpath = str(self._id)
+            revision_relpath = str(revision_id)
         else:
             raise AssertionError()
         
         return os.path.join(
-            self.project.path, Project._REVISIONS_DIRNAME, revision_relpath)
+            project_path, Project._REVISIONS_DIRNAME, revision_relpath)
     
     # === Metadata ===
     

@@ -1,5 +1,6 @@
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
+import sys
 from crystal import __version__ as crystal_version
 from crystal import APP_NAME
 from crystal.browser.entitytree import (
@@ -14,8 +15,8 @@ from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
 from crystal.progress import (
-    CancelLoadUrls, DummyOpenProjectProgressListener,
-    OpenProjectProgressListener,
+    CancelLoadUrls, CancelSaveAs, DummyOpenProjectProgressListener,
+    OpenProjectProgressListener, SaveAsProgressDialog,
 )
 from crystal.server import ProjectServer
 from crystal.task import DownloadResourceGroupMembersTask, RootTask
@@ -53,6 +54,7 @@ from functools import partial
 import os
 import sqlite3
 import time
+import traceback
 from typing import Optional
 import webbrowser
 import wx
@@ -228,6 +230,12 @@ class MainWindow:
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('S')),
             action_func=s_action_func,
             enabled=s_enabled)
+        self._save_as_project_action = Action(
+            wx.ID_SAVEAS,
+            '',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('S')),
+            action_func=self._on_save_as_project,
+            enabled=True)
         self._quit_action = Action(
             wx.ID_EXIT,
             '',
@@ -308,7 +316,7 @@ class MainWindow:
     def _calculate_save_action_properties(self) -> tuple[str, bool, Callable[[wx.MenuEvent], None] | None]:
         label = '&Save...' if self.project.is_untitled else ''
         enabled = self.project.is_untitled
-        action_func = self._on_save_project if self.project.is_untitled else None
+        action_func = self._on_save_as_project if self.project.is_untitled else None
         return (label, enabled, action_func)
     
     # === Menubar ===
@@ -320,6 +328,7 @@ class MainWindow:
         file_menu.AppendSeparator()
         self._close_project_action.append_menuitem_to(file_menu)
         self._save_project_action.append_menuitem_to(file_menu)
+        self._save_as_project_action.append_menuitem_to(file_menu)
         # Append Quit menuitem
         if True:
             self._quit_action.append_menuitem_to(file_menu)
@@ -530,11 +539,11 @@ class MainWindow:
     
     # === File Menu: Events ===
     
-    def _on_save_project(self, event: wx.MenuEvent) -> None:
-        """Handle Save menu item for untitled projects."""
-        if not self.project.is_untitled:
-            return
-        
+    def _on_save_as_project(self, event: wx.MenuEvent) -> None:
+        """
+        1. Handle Save menu item for untitled projects.
+        2. Handle Save As menu item for all projects.
+        """
         # Prompt for a save location
         dialog = wx.FileDialog(self._frame,
             message='',
@@ -544,48 +553,45 @@ class MainWindow:
             if dialog.ShowModal() != wx.ID_OK:
                 return
             
-            new_project_path = dialog.GetPath()
+            new_project_path = dialog.GetPath()  # capture
             if not new_project_path.endswith(self.project.FILE_EXTENSION):
                 new_project_path += self.project.FILE_EXTENSION
-                
-            # Save the project
-            future = self.project.save_as(new_project_path)
+        
+        # Save the project
+        progress_dialog = SaveAsProgressDialog(self._frame)
+        future = self.project.save_as(new_project_path, progress_dialog)
+        
+        # Update the window title and proxy icon
+        @capture_crashes_to_stderr
+        @fg_affinity
+        def on_save_complete() -> None:
+            # Check whether save succeeded
+            try:
+                future.result(timeout=0)
+            except FileExistsError:
+                raise AssertionError()
+            except CancelSaveAs:
+                return
+            # TODO: Handle ProjectReadOnlyError more gracefully,
+            #       by providing a more-targeted error message
+            except (ProjectReadOnlyError, Exception) as e:
+                self._show_save_error_dialog(e)
+                return
+            finally:
+                progress_dialog.reset()
             
-            # Update the window title and proxy icon
-            @capture_crashes_to_stderr
-            @fg_affinity
-            def on_save_complete() -> None:
-                # Check whether save succeeded
-                try:
-                    future.result()
-                except FileExistsError:
-                    raise AssertionError()
-                # TODO: Handle ProjectReadOnlyError more gracefully,
-                #       by providing a more-targeted error message
-                except (ProjectReadOnlyError, Exception) as e:
-                    dialog = wx.MessageDialog(
-                        self._frame,
-                        message=f'Error saving project: {str(e)}',
-                        caption='Save Error',
-                        style=wx.ICON_ERROR|wx.OK
-                    )
-                    dialog.Name = 'cr-save-error-dialog'
-                    with dialog:
-                        dialog.ShowModal()
-                    return
-                
-                # Update window title
-                self._frame.SetTitle(self._calculate_frame_title(self.project))
-                
-                # Update proxy icon
-                self._frame.SetRepresentedFilename(new_project_path)
-                
-                # Update Save menu item
-                (s_label, s_enabled, s_action_func) = self._calculate_save_action_properties()
-                self._save_project_action.label = s_label
-                self._save_project_action.enabled = s_enabled
-                self._save_project_action.action_func = s_action_func
-            future.add_done_callback(lambda _: fg_call_later(on_save_complete))
+            # Update window title
+            self._frame.SetTitle(self._calculate_frame_title(self.project))
+            
+            # Update proxy icon
+            self._frame.SetRepresentedFilename(new_project_path)
+            
+            # Update Save menu item
+            (s_label, s_enabled, s_action_func) = self._calculate_save_action_properties()
+            self._save_project_action.label = s_label
+            self._save_project_action.enabled = s_enabled
+            self._save_project_action.action_func = s_action_func
+        future.add_done_callback(lambda _: fg_call_later(on_save_complete))
     
     def _on_close_window(self, event: wx.CommandEvent) -> None:
         self._frame.Close()  # will trigger call to _on_close_frame()
@@ -661,23 +667,22 @@ class MainWindow:
                         new_project_path += self.project.FILE_EXTENSION
                     
                     # Save the project
-                    future = self.project.save_as(new_project_path)
+                    progress_dialog = SaveAsProgressDialog(self._frame)
+                    future = self.project.save_as(new_project_path, progress_dialog)
                     
                     # Wait for save to complete
                     try:
                         fg_wait_for(lambda: future.done(), timeout=None, poll_interval=0.1)
-                    except (ProjectReadOnlyError, Exception) as e:
-                        error_dialog = wx.MessageDialog(
-                            self._frame,
-                            message=f'Error saving project: {str(e)}',
-                            caption='Save Error',
-                            style=wx.ICON_ERROR|wx.OK
-                        )
-                        error_dialog.Name = 'cr-save-error-dialog'
-                        with error_dialog:
-                            error_dialog.ShowModal()
-                        
+                        future.result()
+                    except CancelSaveAs:
                         return False
+                    # TODO: Handle ProjectReadOnlyError more gracefully,
+                    #       by providing a more-targeted error message
+                    except (ProjectReadOnlyError, Exception) as e:
+                        self._show_save_error_dialog(e)
+                        return False
+                    finally:
+                        progress_dialog.reset()
             elif result == wx.ID_NO:
                 # Do not save, just close
                 pass
@@ -716,6 +721,20 @@ class MainWindow:
             MainWindow._last_created = None
         
         return True
+
+    @fg_affinity
+    def _show_save_error_dialog(self, e: Exception) -> None:
+        traceback.print_exception(e, file=sys.stderr)
+        
+        error_dialog = wx.MessageDialog(
+            self._frame,
+            message=f'Error saving project: {str(e) or type(e).__name__}',
+            caption='Save Error',
+            style=wx.ICON_ERROR|wx.OK
+        )
+        error_dialog.Name = 'cr-save-error-dialog'
+        with error_dialog:
+            ShowModal(error_dialog)
     
     # === Entity Pane: New/Edit Root Url ===
     
