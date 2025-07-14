@@ -131,6 +131,22 @@ def bg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
 
 
 # ------------------------------------------------------------------------------
+# Thread Trampolines
+
+def fg_trampoline(func: Callable[_P, None]) -> Callable[_P, None]:
+    """
+    Alters the decorated function to run on the foreground thread soon.
+    """
+    @wraps(func)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> None:
+        if is_foreground_thread():
+            func(*args, **kwargs)
+        else:
+            fg_call_later(partial2(func, *args, **kwargs))
+    return wrapper
+
+
+# ------------------------------------------------------------------------------
 # Call on Foreground Thread
 
 def fg_call_later(
