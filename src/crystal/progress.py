@@ -531,7 +531,7 @@ class DeferredProgressDialog:
             (title, message, maximum, parent, style) + args,
             kwargs
         )]  # type: List[_Call]
-        self._show_at = time.time() + show_after
+        self._show_at = time.monotonic() + show_after
         
         self._shown = False
         self._name = None  # type: Optional[str]
@@ -596,7 +596,7 @@ class DeferredProgressDialog:
     
     def Update(self, value: int, newmsg: str='') -> tuple[bool, bool]:
         # Show self if show_at time has passed
-        if not self._shown and time.time() >= self._show_at:
+        if not self._shown and time.monotonic() >= self._show_at:
             self.Show()
         
         # Defer/apply operation
@@ -605,7 +605,7 @@ class DeferredProgressDialog:
     
     def Pulse(self, newmsg: str) -> tuple[bool, bool]:
         # Show self if show_at time has passed
-        if not self._shown and time.time() >= self._show_at:
+        if not self._shown and time.monotonic() >= self._show_at:
             self.Show()
         
         # Defer/apply operation
