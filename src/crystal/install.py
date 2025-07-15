@@ -213,14 +213,15 @@ def install_to_linux_desktop_environment() -> None:
                 folder_icon_abs_dirpath = os.path.join(local_icons_dirpath, folder_icon_dirpath)
                 os.makedirs(folder_icon_abs_dirpath, exist_ok=True)
                 
-                # Install PNG icon for folder type
-                with open(f'{folder_icon_abs_dirpath}/crystalproj.png', 'wb') as dst_file:
-                    dst_file.write(_get_or_load_best_icon('docicon', 'png', dimension))
-                
-                # Install SVG icon for folder type,
-                # because at least KDE on Kubuntu 22 seems to ignore PNG icons
-                with open(f'{folder_icon_abs_dirpath}/crystalproj.svg', 'wb') as dst_file:
-                    dst_file.write(_get_or_load_best_icon('docicon', 'svg', dimension))
+                for ext_suffix in ('', '-partial'):
+                    # Install PNG icon for folder type
+                    with open(f'{folder_icon_abs_dirpath}/crystalproj{ext_suffix}.png', 'wb') as dst_file:
+                        dst_file.write(_get_or_load_best_icon('docicon', 'png', dimension))
+                    
+                    # Install SVG icon for folder type,
+                    # because at least KDE on Kubuntu 22 seems to ignore PNG icons
+                    with open(f'{folder_icon_abs_dirpath}/crystalproj{ext_suffix}.svg', 'wb') as dst_file:
+                        dst_file.write(_get_or_load_best_icon('docicon', 'svg', dimension))
     
     # If KDE, restart plasmasession so that desktop detects new icons immediately
     import psutil  # type: ignore[reportMissingModuleSource]  # Linux-only dependency

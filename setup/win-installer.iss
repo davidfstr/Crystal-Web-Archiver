@@ -53,6 +53,21 @@ Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj\shell\open"; ValueType: string
 Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj\shell\open\command"; Flags: uninsdeletekey
 Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Crystal.exe"" ""%1"""
 
+; === .crystalproj-partial ===
+; NOTE: Cannot use leading dot (.) because defining a Directory Class rather than a real file extension
+Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj-partial"; Flags: uninsdeletekey
+; Mark "crystalproj-partial" as a Directory Class that can be used an a desktop.ini file
+; https://learn.microsoft.com/en-us/windows/win32/shell/how-to-implement-custom-verbs-for-folders-through-desktop-ini
+Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj-partial"; ValueType: string; ValueName: "CanUseForDirectory"; ValueData: ""
+Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj-partial\shell"; Flags: uninsdeletekey
+; Tell Explorer to add "Open with Crystal" to the contextual menu for a .crystalproj-partial directory
+; https://learn.microsoft.com/en-us/windows/win32/shell/context-menu-handlers
+Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj-partial\shell\open"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj-partial\shell\open"; ValueType: string; ValueName: ""; ValueData: "Open with Crystal"
+; Tell Explorer to open .crystalproj-partial directories with the Crystal app
+Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj-partial\shell\open\command"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SOFTWARE\Classes\crystalproj-partial\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Crystal.exe"" ""%1"""
+
 ; NOTE: To regenerate file list: poetry run python make_win_installer.py
 [Files]
 Source: "dist\Crystal.exe"; DestDir: "{app}"

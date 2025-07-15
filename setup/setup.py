@@ -58,6 +58,16 @@ if sys.platform == 'darwin':
                 'CFBundleTypeRole': 'Editor',
                 'LSTypeIsPackage': True,
             },
+            # Associate application with .crystalproj-partial files
+            {
+                'CFBundleTypeExtensions': ['crystalproj-partial'],
+                'CFBundleTypeMIMETypes': ['application/vnd.crystal.project.partial'],
+                # TODO: Add distinct icon for partial projects
+                'CFBundleTypeIconFile': 'DocIconMac.icns',
+                'CFBundleTypeName': 'Crystal Project (Partial)',
+                'CFBundleTypeRole': 'Editor',
+                'LSTypeIsPackage': True,
+            },
             # Associate application with .crystalopen files
             {
                 'CFBundleTypeExtensions': ['crystalopen'],

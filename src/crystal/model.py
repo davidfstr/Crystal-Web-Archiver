@@ -120,7 +120,6 @@ class Project(ListenableMixin):
     """
     
     FILE_EXTENSION = '.crystalproj'
-    # TODO: Add icons/etc for this file extension
     PARTIAL_FILE_EXTENSION = '.crystalproj-partial'
     OPENER_FILE_EXTENSION = '.crystalopen'
     
