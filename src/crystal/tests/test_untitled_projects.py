@@ -186,6 +186,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
             assert os.path.exists(new_rr_body_filepath)
         
         # Test saving an untitled project while downloads are in progress
+        # AKA: test_when_save_as_project_with_active_tasks_then_hibernates_and_restores_tasks
         with subtests.test(tasks_running=True), \
                 _untitled_project() as project, \
                 _temporary_directory() as new_container_dirpath:
@@ -391,6 +392,112 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
             
             # Ensure project was closed
             assert not mw.main_window.IsShown()
+
+
+# === Save As Tests + Progress Dialog Tests ===
+
+@skip('not yet automated')
+async def test_when_save_as_menu_item_selected_for_titled_or_untitled_project_then_shows_save_as_dialog() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_untitled_project_to_different_filesystem_then_copies_project_and_shows_progress_dialog() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_project_and_does_not_show_progress_dialog() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_titled_project_then_copies_project_and_shows_progress_dialog() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialog() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_large_project_then_progress_updates_incrementally() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_project_with_many_small_files_then_progress_updates_by_file_count() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_project_with_few_large_files_then_progress_updates_by_byte_count() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cleans_up() -> None:
+    pass
+
+
+@skip('fails: probably fails with an error instead of replacing')
+async def test_when_save_as_project_and_destination_project_exists_then_replaces_destination() -> None:
+    pass
+
+
+@skip('partially fails: probably fails with a generic error instead of a specific error')
+async def test_when_save_as_project_and_destination_filesystem_readonly_then_fails_with_error() -> None:
+    pass
+
+
+@skip('partially fails: probably fails with a generic error instead of a specific error')
+async def test_when_save_as_project_and_destination_filesystem_writable_generally_but_not_writable_by_sqlite_then_fails_with_error() -> None:
+    pass
+
+
+# TODO: Alter behavior to detect likely disk full error BEFORE starting Save As operation.
+@skip('not yet automated')
+async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_cleans_up() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpectedly_then_fails_with_error_and_cleans_up() -> None:
+    pass
+
+
+@skip('partially fails: a writeable copy is created but it is opened as read-only rather than as writable')
+async def test_when_save_as_readonly_project_then_creates_writable_copy() -> None:
+    pass
+
+
+@skip('covered by: test_when_untitled_project_saved_then_becomes_clean_and_titled')
+async def test_when_save_as_project_with_active_tasks_then_hibernates_and_restores_tasks() -> None:
+    pass
+
+
+# NOTE: This can happen if a very large resource revision is being downloaded
+#       and Project._stop_scheduler() times out waiting for the scheduler thread to stop.
+@skip('fails: the project is left in a closed state but the MainWindow is left open')
+async def test_when_save_as_project_and_tasks_fail_to_hibernate_then_handles_gracefully() -> None:
+    pass
+
+
+# NOTE: Under normal circumstances tasks should never fail to restore.
+@skip('not yet automated')
+async def test_when_save_as_project_and_tasks_fail_to_unhibernate_then_handles_gracefully() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_project_with_corrupted_database_then_fails_with_error() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_when_save_as_project_with_missing_revision_files_then_ignores_missing_revision_files() -> None:
+    pass
 
 
 # === Utility ===
