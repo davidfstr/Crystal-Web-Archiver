@@ -5,7 +5,8 @@ from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource,
 )
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
-from crystal.tests.util.controls import file_dialog_returning
+from crystal.tests.util import xtempfile
+from crystal.tests.util.controls import file_dialog_returning, select_menuitem_now
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
@@ -19,7 +20,7 @@ from functools import cache
 import os
 import subprocess
 import tempfile
-from typing import Iterator
+from typing import Callable, ContextManager
 from unittest import skip, SkipTest
 from unittest.mock import patch
 import wx
@@ -396,53 +397,32 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
 
 # === Save As Tests + Progress Dialog Tests ===
 
-async def test_when_save_as_menu_item_selected_for_titled_or_untitled_project_then_shows_save_as_dialog() -> None:
-    """Test that Save As menu item shows file dialog for both untitled and titled projects."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
+@awith_subtests
+async def test_when_save_as_menu_item_selected_for_titled_or_untitled_project_then_shows_save_as_dialog(subtests: SubtestsContext) -> None:
+    with xtempfile.TemporaryDirectory() as tmp_dir:
         save_as_path = os.path.join(tmp_dir, 'SavedProject.crystalproj')
-        
-        # Test with untitled project
-        with _untitled_project() as untitled_project:
-            main_window = RealMainWindow(untitled_project)
-            
-            # Verify Save As menu item is enabled
-            save_as_item = main_window._frame.MenuBar.FindItemById(wx.ID_SAVEAS)
-            assert save_as_item is not None
-            assert save_as_item.IsEnabled()
-            
-            # Trigger Save As and verify file dialog appears
-            with patch('wx.FileDialog.ShowModal', return_value=wx.ID_OK), \
-                    patch('wx.FileDialog.GetPath', return_value=save_as_path):
-                save_as_event = wx.CommandEvent(wx.EVT_MENU.typeId, wx.ID_SAVEAS)
-                main_window._frame.ProcessEvent(save_as_event)
-                
-                # Wait for save operation to complete
-                await wait_for_future(untitled_project.save_as(save_as_path))
-            
-            main_window.close()
-        
-        # Test with titled project
         titled_project_path = os.path.join(tmp_dir, 'TitledProject.crystalproj')
         save_as_path2 = os.path.join(tmp_dir, 'SavedProject2.crystalproj')
         
-        with Project(titled_project_path) as titled_project:
-            main_window = RealMainWindow(titled_project)
-            
-            # Verify Save As menu item is enabled for titled projects too
-            save_as_item = main_window._frame.MenuBar.FindItemById(wx.ID_SAVEAS)
-            assert save_as_item is not None
-            assert save_as_item.IsEnabled()
-            
-            # Trigger Save As and verify file dialog appears
-            with patch('wx.FileDialog.ShowModal', return_value=wx.ID_OK), \
-                    patch('wx.FileDialog.GetPath', return_value=save_as_path2):
-                save_as_event = wx.CommandEvent(wx.EVT_MENU.typeId, wx.ID_SAVEAS)
-                main_window._frame.ProcessEvent(save_as_event)
-                
-                # Wait for save operation to complete
-                await wait_for_future(titled_project.save_as(save_as_path2))
-            
-            main_window.close()
+        async def run_save_as_case(
+                project_context_factory: Callable[[], ContextManager[Project]],
+                target_path: str
+                ) -> None:
+            with project_context_factory() as project, \
+                    RealMainWindow(project) as rmw:
+                # NOTE: Internally asserts that file dialog is shown
+                with file_dialog_returning(target_path):
+                    # NOTE: Internally asserts that menuitem is enabled
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+
+        # Test with untitled project
+        with subtests.test(project_type='untitled'):
+            await run_save_as_case(lambda: _untitled_project(), save_as_path)
+
+        # Test with titled project
+        with subtests.test(project_type='titled'):
+            await run_save_as_case(lambda: Project(titled_project_path), save_as_path2)
 
 
 async def test_when_save_as_untitled_project_to_different_filesystem_then_copies_project_and_shows_progress_dialog() -> None:
