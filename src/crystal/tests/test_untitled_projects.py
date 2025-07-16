@@ -1,27 +1,38 @@
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource,
 )
+from crystal.progress import CancelSaveAs, SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
-from crystal.tests.util.controls import file_dialog_returning
+from crystal.tests.util import xtempfile
+from crystal.tests.util.controls import (
+    file_dialog_returning, select_menuitem_now,
+)
+from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks, scheduler_disabled, step_scheduler,
     step_scheduler_until_done,
 )
-from crystal.tests.util.wait import wait_for_future
-from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.util.xos import is_ci, is_linux, is_mac_os
+from crystal.tests.util.wait import wait_for, wait_for_future, wait_for_future_ignoring_result
+from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
+from crystal.util.db import DatabaseCursor
+from crystal.util.wx_dialog import mocked_show_modal
+from crystal.util.xos import is_ci, is_linux, is_mac_os, is_windows
+from dataclasses import dataclass
+import errno
 from functools import cache
 import os
+import sqlite3
 import subprocess
 import tempfile
-from typing import Iterator
+from typing import Callable, ContextManager, Never
 from unittest import skip, SkipTest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import warnings
 import wx
 
 
@@ -186,6 +197,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
             assert os.path.exists(new_rr_body_filepath)
         
         # Test saving an untitled project while downloads are in progress
+        # AKA: test_when_save_as_project_with_active_tasks_then_hibernates_and_restores_tasks
         with subtests.test(tasks_running=True), \
                 _untitled_project() as project, \
                 _temporary_directory() as new_container_dirpath:
@@ -255,12 +267,10 @@ async def test_when_dirty_untitled_project_closed_then_prompts_to_save() -> None
                 assert mw.main_window.OSXIsModified()
 
             # Close the project, expect a prompt to save, and save to the specified path
-            with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_YES), \
-                    patch('wx.FileDialog.ShowModal', return_value=wx.ID_OK), \
-                    patch('wx.FileDialog.GetPath', return_value=save_path):
+            with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)), \
+                    file_dialog_returning(save_path):
                 await mw.close()
                 assert os.path.exists(save_path)
-
 
 async def test_when_clean_untitled_project_closed_then_does_not_prompt_to_save() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
@@ -268,7 +278,7 @@ async def test_when_clean_untitled_project_closed_then_does_not_prompt_to_save()
         assert not project.is_dirty
 
         # Close project. Ensure no prompt to save.
-        with patch('wx.MessageDialog.ShowModal') as mock_show_modal:
+        with patch('crystal.browser.ShowModal') as mock_show_modal:
             await mw.close()
             mock_show_modal.assert_not_called()
 
@@ -328,15 +338,16 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
             r = Resource(project, 'https://example.com/')
             assert project.is_dirty
 
-            def _ensure_logout_vetoed_and_return_yes(*args, **kwargs) -> int:
+            def _ensure_logout_vetoed_and_return_yes(dialog: wx.Dialog) -> int:
                 assert logout_event.GetVeto(), \
                     'Logout should be vetoed before showing any user prompts'
                 return wx.ID_YES
 
             # Start logout. Expect a prompt to save. Save.
-            with patch('wx.MessageDialog.ShowModal', _ensure_logout_vetoed_and_return_yes), \
-                    patch('wx.FileDialog.ShowModal', return_value=wx.ID_OK), \
-                    patch('wx.FileDialog.GetPath', return_value=save_path):
+            with patch('crystal.browser.ShowModal', mocked_show_modal(
+                        'cr-save-changes-dialog',
+                        _ensure_logout_vetoed_and_return_yes)), \
+                    file_dialog_returning(save_path):
                 
                 # Simulate OS logout
                 with _simulate_os_logout_on_exit() as logout_event:
@@ -361,7 +372,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
         assert project.is_dirty
         
         # Start logout. Expect a prompt to save. Cancel.
-        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_CANCEL):
+        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)):
             logout_event = _simulate_os_logout()
 
             # Verify the logout was vetoed
@@ -372,7 +383,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
             assert project.is_untitled
         
         # Now close the project without saving
-        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_NO):
+        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             await mw.close()
 
 
@@ -386,11 +397,550 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
         assert project.is_dirty
         
         # Start logout. Expect a prompt to save. Do not save.
-        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_NO):
+        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             _simulate_os_logout()
             
             # Ensure project was closed
             assert not mw.main_window.IsShown()
+
+
+# === Save As Tests + Progress Dialog Tests ===
+
+@awith_subtests
+async def test_when_save_as_menu_item_selected_for_titled_or_untitled_project_then_shows_save_as_dialog(subtests: SubtestsContext) -> None:
+    with xtempfile.TemporaryDirectory() as tmp_dir:
+        save_as_path = os.path.join(tmp_dir, 'SavedProject.crystalproj')
+        titled_project_path = os.path.join(tmp_dir, 'TitledProject.crystalproj')
+        save_as_path2 = os.path.join(tmp_dir, 'SavedProject2.crystalproj')
+        
+        async def run_save_as_case(
+                project_context_factory: Callable[[], ContextManager[Project]],
+                target_path: str
+                ) -> None:
+            with project_context_factory() as project, \
+                    RealMainWindow(project) as rmw:
+                async with _wait_for_save_as_to_complete(project):
+                    # NOTE: Internally asserts that file dialog is shown
+                    with file_dialog_returning(target_path):
+                        # NOTE: Internally asserts that menuitem is enabled
+                        select_menuitem_now(
+                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+
+        # Test with untitled project
+        with subtests.test(project_type='untitled'):
+            await run_save_as_case(lambda: _untitled_project(), save_as_path)
+
+        # Test with titled project
+        with subtests.test(project_type='titled'):
+            await run_save_as_case(lambda: Project(titled_project_path), save_as_path2)
+
+
+async def test_when_save_as_untitled_project_to_different_filesystem_then_copies_project_and_shows_progress_dialog() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _temporary_directory_on_new_filesystem() as new_container_dirpath, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Download a resource revision to make the project have some data
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        rr = rr_future.result(timeout=0)
+        
+        # Save to different filesystem (using UI)
+        old_project_dirpath = project.path  # capture
+        new_project_dirpath = os.path.join(
+            new_container_dirpath,
+            os.path.basename(old_project_dirpath))
+        async with _wait_for_save_as_dialog_to_complete(project):
+            with file_dialog_returning(new_project_dirpath):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        
+        # Verify project was copied
+        if True:
+            assert os.path.exists(new_project_dirpath)
+            
+            new_rr_body_filepath = rr._body_filepath
+            assert os.path.exists(new_rr_body_filepath)
+
+
+async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_project_and_does_not_show_progress_dialog() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            _temporary_directory() as new_container_dirpath, \
+            RealMainWindow(project) as rmw:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Download a resource revision to make the project have some data
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        rr = rr_future.result()
+        old_rr_body_filepath = rr._body_filepath  # capture
+        
+        # Save to same filesystem
+        old_project_dirpath = project.path  # capture
+        new_project_dirpath = os.path.join(
+            new_container_dirpath,
+            os.path.basename(old_project_dirpath))
+        old_project_fs = os.stat(old_project_dirpath).st_dev
+        new_project_fs = os.stat(new_container_dirpath).st_dev
+        assert old_project_fs == new_project_fs, (
+            'Expected old and new paths to be on same filesystem'
+        )
+        
+        async with _assert_save_as_dialog_not_shown_during_save_as(project):
+            with file_dialog_returning(new_project_dirpath):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        
+        # Verify project was moved (original no longer exists)
+        if True:
+            assert not os.path.exists(old_project_dirpath)
+            assert os.path.exists(new_project_dirpath)
+            
+            new_rr_body_filepath = rr._body_filepath
+            assert new_rr_body_filepath != old_rr_body_filepath
+            assert os.path.exists(new_rr_body_filepath)
+
+
+async def test_when_save_as_titled_project_then_copies_project_and_shows_progress_dialog() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            tempfile.TemporaryDirectory() as tmp_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Create a titled project with some data
+        original_project_path = os.path.join(tmp_dir, 'OriginalProject.crystalproj')
+        with Project(original_project_path) as project:
+            assert not project.is_untitled
+            
+            # Download a resource revision
+            r = Resource(project, atom_feed_url)
+            rr_future = r.download()
+            await step_scheduler_until_done(project)
+            rr = rr_future.result()
+            original_rr_body_filepath = rr._body_filepath  # capture
+        
+        # Reopen the project and perform Save As
+        with Project(original_project_path) as project, \
+                RealMainWindow(project) as rmw:
+            copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
+            # NOTE: Verifies progress dialog is shown internally
+            async with _wait_for_save_as_dialog_to_complete(project):
+                with file_dialog_returning(copy_project_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        
+        # Verify project was copied, and original still exists
+        if True:
+            assert os.path.exists(original_project_path)
+            assert os.path.exists(copy_project_path)
+            
+            assert os.path.exists(original_rr_body_filepath)
+            copied_rr_body_filepath = rr._body_filepath
+            assert os.path.exists(copied_rr_body_filepath)
+
+
+async def test_when_save_as_large_project_then_progress_updates_incrementally() -> None:
+    # HACK: Duplicates Project._copytree_of_project_with_progress.TARGET_MAX_DELAY_BETWEEN_REPORTS
+    COPYTREE_TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5
+    
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _temporary_directory_on_new_filesystem() as save_dir, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Add a resource with downloaded content to create a project with some data
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        rr = rr_future.result()
+        
+        new_project_dirpath = os.path.join(save_dir, 'copy.crystalproj')
+        
+        # Use an infinite generator for time.monotonic to handle many progress updates
+        def time_generator():
+            t = 0.0
+            while True:
+                yield t
+                # Increment slightly above threshold to always trigger progress reports
+                t += COPYTREE_TARGET_MAX_DELAY_BETWEEN_REPORTS + 0.1
+        
+        # Patch COPY_BUFSIZE to a small value to force many progress updates
+        # even for our relatively small test project
+        with patch('crystal.model.COPY_BUFSIZE', 5000), \
+                patch('time.monotonic', side_effect=time_generator()):
+            
+            # Save to different filesystem (using UI)
+            async with _wait_for_save_as_dialog_to_complete(project) as spies:
+                with file_dialog_returning(new_project_dirpath):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            spy_copying = spies.copying
+            
+            # Verify the project copy operation started successfully
+            assert os.path.exists(new_project_dirpath)
+            
+            # Verify that copying() was called multiple times to show incremental progress
+            assert spy_copying is not None, 'Expected SaveAsProgressDialog to be created'
+            assert spy_copying.call_count >= 2, (
+                f'Expected copying() to be called at least 2 times for incremental progress, '
+                f'but it was called {spy_copying.call_count} times'
+            )
+            if spy_copying.call_count > 100:
+                warnings.warn(
+                    'SaveAsProgressDialog.copying() was called very many times '
+                    f'({spy_copying.call_count}), which may slow down this test. '
+                    'Consider increasing COPY_BUFSIZE or adjusting the test project size.'
+                )
+            
+            # Verify that progress increases monotonically
+            call_args_list = spy_copying.call_args_list
+            bytes_copied_values = [call.args[2] for call in call_args_list]  # 3rd argument is bytes_copied
+            for i in range(1, len(bytes_copied_values)):
+                assert bytes_copied_values[i] >= bytes_copied_values[i-1], (
+                    f'Expected bytes_copied to increase monotonically, '
+                    f'but got {bytes_copied_values[i]} after {bytes_copied_values[i-1]}'
+                )
+            
+            # Verify the final call shows completion
+            final_call = call_args_list[-1]
+            final_bytes_copied = final_call.args[2]
+            assert final_bytes_copied > 0, 'Expected final bytes_copied to be > 0'
+
+
+async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cleans_up() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
+            _temporary_directory_on_new_filesystem() as save_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Add some data to the project to ensure there's something to copy
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        
+        save_path = os.path.join(save_dir, 'CanceledProject.crystalproj')
+        with _assert_project_not_copied(project, save_path):
+            # Run the save operation
+            with patch.object(SaveAsProgressDialog, 'copying', side_effect=CancelSaveAs) as mock_copying:
+                async with _wait_for_save_as_dialog_to_complete(project):
+                    with file_dialog_returning(save_path):
+                        select_menuitem_now(
+                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            
+            # Ensure cancellation was triggered properly
+            assert mock_copying.call_count > 0, f'copying() was never called. Call count: {mock_copying.call_count}'
+
+
+@skip('unimplementable: save dialog does not allow overwriting existing projects')
+async def test_when_save_as_project_and_destination_project_exists_then_replaces_destination() -> None:
+    pass
+
+
+@skip('unimplementable: save dialog does not allow saving to read-only locations')
+async def test_when_save_as_project_and_destination_filesystem_readonly_then_fails_with_error() -> None:
+    pass
+
+
+async def test_when_save_as_project_and_destination_filesystem_writable_generally_but_not_writable_by_sqlite_then_reopens_as_readonly() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
+            _temporary_directory_on_new_filesystem() as save_dir:
+        mw = await MainWindow.wait_for(timeout=0)
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Add some data to the project to ensure there's something to copy
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        
+        save_path = os.path.join(save_dir, 'SqliteUnwritableProject.crystalproj')
+        
+        assert not project.readonly
+        assert not mw.readonly
+        
+        # Mock DatabaseCursor.execute to fail on the specific SQLite pragma
+        # that checks database writability
+        original_execute = DatabaseCursor.execute
+        def spy_execute(self, command: str, *args, **kwargs):
+            if command == 'pragma user_version = user_version':
+                raise sqlite3.OperationalError('attempt to write a readonly database')
+            return original_execute(self, command, *args, **kwargs)
+        
+        # Run the save operation
+        with patch.object(DatabaseCursor, 'execute', spy_execute), \
+                patch('crystal.browser.ShowModal', mocked_show_modal(
+                    'cr-save-error-dialog', wx.ID_OK)):
+            async with _wait_for_save_as_dialog_to_complete(project):
+                with file_dialog_returning(save_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        
+        assert project.readonly, \
+            'Expected project to be reopened as read-only after SQLite error'
+        # TODO: Add UI support for readonly status of project changing
+        #assert mw.readonly, \
+        #    'Expected UI to show that project was reopened as read-only'
+
+
+async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_cleans_up() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
+            _temporary_directory_on_new_filesystem() as save_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Add some data to the project to ensure there's something to copy
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        
+        save_path = os.path.join(save_dir, 'DiskFullProject.crystalproj')
+        with _assert_project_not_copied(project, save_path):
+            def raise_disk_full_error() -> Never:
+                if is_windows():
+                    raise OSError(errno.ENOSPC, 'There is not enough space on the disk')
+                elif is_linux() or is_mac_os():
+                    raise OSError(errno.ENOSPC, 'No space left on device')
+                else:
+                    raise AssertionError('Unsupported OS for disk full simulation')
+            
+            # Run the save operation
+            with _file_object_write_mocked_to(raise_disk_full_error), \
+                    patch('crystal.browser.ShowModal', mocked_show_modal(
+                        'cr-save-error-dialog', wx.ID_OK)):
+                async with _wait_for_save_as_dialog_to_complete(project):
+                    with file_dialog_returning(save_path):
+                        select_menuitem_now(
+                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+
+
+@awith_subtests
+async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpectedly_then_fails_with_error_and_cleans_up(subtests: SubtestsContext) -> None:
+    if is_windows():
+        fs_gone_errors = [
+            OSError(errno.ENOENT, 'No such file or directory'),  # mount point disappears
+            OSError(errno.EIO, 'Input/output error'),  # device is suddenly unavailable
+            OSError(55, 'The specified network resource or device is no longer available'),
+            OSError(15, 'The system cannot find the drive specified'),
+        ]
+    elif is_linux() or is_mac_os():
+        fs_gone_errors = [
+            OSError(errno.ENOENT, 'No such file or directory'),  # mount point disappears
+            OSError(errno.EIO, 'Input/output error'),  # device is suddenly unavailable
+            OSError(errno.ENODEV, 'No such device'),  # device removal
+            OSError(errno.ESTALE, 'Stale file handle'),  # NFS or network filesystems
+        ]
+    else:
+        raise AssertionError('Unsupported OS for filesystem unmount simulation')
+    
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _temporary_directory_on_new_filesystem() as save_dir:
+        for error in fs_gone_errors:
+            with subtests.test(error=error), \
+                    _untitled_project() as project, \
+                    RealMainWindow(project) as rmw:
+                
+                atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+                
+                # Add some data to the project to ensure there's something to copy
+                r = Resource(project, atom_feed_url)
+                rr_future = r.download()
+                await step_scheduler_until_done(project)
+                
+                save_path = os.path.join(save_dir, 'DiskFullProject.crystalproj')
+                with _assert_project_not_copied(project, save_path):
+                    def raise_destination_filesystem_gone_error() -> Never:
+                        raise error
+                    
+                    # Run the save operation
+                    with _file_object_write_mocked_to(raise_destination_filesystem_gone_error), \
+                            patch('crystal.browser.ShowModal', mocked_show_modal(
+                                'cr-save-error-dialog', wx.ID_OK)):
+                        async with _wait_for_save_as_dialog_to_complete(project):
+                            with file_dialog_returning(save_path):
+                                select_menuitem_now(
+                                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+
+
+# TODO: Consider altering the behavior such that the copy is opened as writable rather than readonly
+async def test_when_save_as_readonly_project_then_creates_writable_copy_but_opens_as_readonly() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            tempfile.TemporaryDirectory() as tmp_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Create a titled project with some data, initially writable
+        original_project_path = os.path.join(tmp_dir, 'OriginalProject.crystalproj')
+        with Project(original_project_path) as project:
+            assert not project.readonly, 'Original project should be writable'
+            
+            # Download a resource revision
+            r = Resource(project, atom_feed_url)
+            rr_future = r.download()
+            await step_scheduler_until_done(project)
+            rr = rr_future.result()
+        
+        # Reopen the project as readonly
+        with Project(original_project_path, readonly=True) as readonly_project, \
+                RealMainWindow(readonly_project) as rmw:
+            assert readonly_project.readonly, 'Project should be opened as readonly'
+            
+            # Perform Save As
+            copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
+            async with _wait_for_save_as_dialog_to_complete(readonly_project):
+                with file_dialog_returning(copy_project_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            
+            # Verify project was copied to new location
+            assert os.path.exists(copy_project_path)
+            assert os.path.exists(original_project_path)  # original still exists
+            
+            # Verify the copied project is writable on disk (file permissions)
+            db_filepath = os.path.join(copy_project_path, Project._DB_FILENAME)
+            assert os.access(copy_project_path, os.W_OK), 'Copied project directory should be writable'
+            assert os.access(db_filepath, os.W_OK), 'Copied database file should be writable'
+            
+            # But the project object should still be readonly (preserving original state)
+            assert readonly_project.readonly, \
+                'Project should remain readonly after save_as, preserving original readonly state'
+            assert readonly_project.path == copy_project_path, 'Project should be at new path'
+        
+        # Verify that opening the copied project normally (without readonly=True) makes it writable
+        with Project(copy_project_path) as reopened_project:
+            assert not reopened_project.readonly, \
+                'Copied project should be writable when opened normally, proving files are actually writable'
+
+
+@skip('covered by: test_when_untitled_project_saved_then_becomes_clean_and_titled')
+async def test_when_save_as_project_with_active_tasks_then_hibernates_and_restores_tasks() -> None:
+    pass
+
+
+# NOTE: This can happen if a very large resource revision is being downloaded
+#       and Project._stop_scheduler() times out waiting for the scheduler thread to stop.
+async def test_when_save_as_project_and_old_project_fails_to_close_then_handles_gracefully() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            scheduler_disabled(simulate_thread_never_dies=True), \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
+            _temporary_directory_on_new_filesystem() as save_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Add some data to the project to ensure there's something to save
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        rr = rr_future.result()
+        
+        save_path = os.path.join(save_dir, 'FailedSaveProject.crystalproj')
+        old_path = project.path  # capture original path
+        
+        with _assert_project_not_copied(project, save_path):
+            # Patch the scheduler join timeout to 0 to force immediate timeout
+            with patch.object(Project, '_SCHEDULER_JOIN_TIMEOUT', 0):
+                # Mock error dialog to acknowledge the timeout error
+                with patch('crystal.browser.ShowModal', mocked_show_modal(
+                        'cr-save-error-dialog', wx.ID_OK)):
+                    async with _wait_for_save_as_dialog_to_complete(project):
+                        with file_dialog_returning(save_path):
+                            select_menuitem_now(
+                                menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        
+        # Verify project is still at original path and remains functional
+        assert project.path == old_path
+        assert project._is_untitled
+        assert os.path.exists(old_path)
+        
+        # Verify the resource and data are still accessible
+        assert rr._body_filepath
+        assert os.path.exists(rr._body_filepath)
+
+
+async def test_when_save_as_project_and_new_project_fails_to_open_then_handles_gracefully() -> None:
+    """
+    Test that when saving an untitled project and the new project fails to open 
+    (e.g., due to database corruption), the operation fails gracefully with an error dialog
+    and the original untitled project remains open and functional.
+    """
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
+            _temporary_directory_on_new_filesystem() as save_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Add some data to the project to ensure there's something to save
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        rr = rr_future.result()
+        
+        save_path = os.path.join(save_dir, 'CorruptedProject.crystalproj')
+        old_path = project.path  # capture original path
+        
+        with _assert_project_not_copied(project, save_path):
+            def raise_database_corruption_error(*args, **kwargs):
+                # Simulate a corrupted database file by raising a DatabaseError
+                # when trying to open the copied project's database
+                if 'CorruptedProject.crystalproj' in str(args[0]):
+                    raise sqlite3.DatabaseError('database disk image is malformed')
+                # Allow the original database connection to succeed
+                return sqlite3.connect(*args, **kwargs)
+            
+            # Run the save operation
+            with patch('sqlite3.connect', side_effect=raise_database_corruption_error), \
+                    patch('crystal.browser.ShowModal', mocked_show_modal(
+                        'cr-save-error-dialog', wx.ID_OK)):
+                async with _wait_for_save_as_dialog_to_complete(project):
+                    with file_dialog_returning(save_path):
+                        select_menuitem_now(
+                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        
+        # Verify project is still at original path and remains functional
+        assert project.path == old_path
+        assert project._is_untitled
+        assert os.path.exists(old_path)
+        
+        # Verify the resource and data are still accessible
+        assert rr._body_filepath
+        assert os.path.exists(rr._body_filepath)
+
+
+@skip('not yet automated: not valuable to automate: rare case')
+async def test_when_save_as_project_with_corrupted_database_then_fails_with_error() -> None:
+    pass
+
+
+@skip('not yet automated: not valuable to automate: rare case')
+async def test_when_save_as_project_with_missing_revision_files_then_ignores_missing_revision_files() -> None:
+    pass
 
 
 # === Utility ===
@@ -502,3 +1052,175 @@ def _simulate_os_logout_on_exit() -> Iterator[wx.CloseEvent]:
     logout_event = wx.CloseEvent(wx.EVT_QUERY_END_SESSION.typeId)
     yield logout_event
     app.ProcessEvent(logout_event)
+
+
+@dataclass
+class SaveAsSpies:
+    """Mutable container for spies on SaveAsProgressDialog methods."""
+    copying: MagicMock | None = None
+    did_copy_files: MagicMock | None = None
+
+@asynccontextmanager
+async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterator[SaveAsSpies]:
+    """
+    Context that upon entry spies on SaveAsProgressDialog and Project.save_as,
+    yields for the caller to start a Save As operation,
+    and upon exit waits for the dialog to complete AND the save_as operation to fully complete.
+    
+    The yielded spies object will be filled out upon exiting the context.
+    """
+    spies_yielded = None
+    
+    patcher_copying = None
+    patcher_did_copy_files = None
+    spy_copying = None
+    spy_did_copy_files = None
+    
+    def SaveAsProgressDialogSpy(*args, **kwargs) -> SaveAsProgressDialog:  # wraps real constructor
+        nonlocal patcher_copying, patcher_did_copy_files
+        nonlocal spy_did_copy_files, spy_copying
+        nonlocal spies_yielded
+        
+        assert (
+            spy_did_copy_files is None and
+            spy_copying is None
+        ), 'Expected SaveAsProgressDialog to be created only once'
+        assert spies_yielded is not None, 'Expected SaveAsSpies to already be yielded'
+        
+        instance = SaveAsProgressDialog(*args, **kwargs)
+        
+        # Spy on calls to the returned SaveAsProgressDialog instance
+        patcher_copying = patch.object(instance, 'copying', wraps=instance.copying)
+        patcher_did_copy_files = patch.object(instance, 'did_copy_files', wraps=instance.did_copy_files)
+        spy_copying = patcher_copying.start()
+        spy_did_copy_files = patcher_did_copy_files.start()
+        
+        # Update the yielded spies object with spy instances
+        spies_yielded.copying = spy_copying
+        spies_yielded.did_copy_files = spy_did_copy_files
+        
+        return instance
+    
+    try:
+        with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
+            async with _wait_for_save_as_to_complete(project):
+                # 1. Tell caller to start a Save As operation
+                # 2. Yield a placeholder for spies that will be updated when the dialog is created
+                yield (spies_yielded := SaveAsSpies())
+    finally:
+        if patcher_did_copy_files is not None:
+            patcher_did_copy_files.stop()
+        if patcher_copying is not None:
+            patcher_copying.stop()
+
+
+@asynccontextmanager
+async def _wait_for_save_as_to_complete(project: Project) -> AsyncIterator[None]:
+    """
+    Context that upon entry spies on Project.save_as,
+    yields for the caller to start a Save As operation,
+    and upon exit waits for the save_as operation to fully complete.
+    """
+    save_as_called = False
+    save_as_future = None
+    
+    original_save_as = project.save_as  # capture
+    def save_as_wrapper(*args, **kwargs):
+        """Wrapper for Project.save_as that captures the returned Future."""
+        nonlocal save_as_future, save_as_called
+        future = original_save_as(*args, **kwargs)
+        save_as_called = True
+        save_as_future = future
+        return future
+    
+    with patch.object(project, 'save_as', save_as_wrapper):
+        # Tell caller to start a Save As operation
+        yield
+        
+        # Wait for Save As operation to fully complete
+        await wait_for(lambda: save_as_called or None)
+        assert save_as_future is not None
+        await wait_for_future_ignoring_result(save_as_future)
+        
+        # Sleep 1 event loop iteration for other observers of the Future
+        # to finish their actions, notably MainWindow.on_save_complete
+        # HACK: An actual wait would be more reliable than a sleep
+        await pump_wx_events()
+
+
+@asynccontextmanager
+async def _assert_save_as_dialog_not_shown_during_save_as(project: Project) -> AsyncIterator[None]:
+    """
+    Context that upon entry spies on SaveAsProgressDialog,
+    yields for the caller to start a Save As operation,
+    and upon exit ensures the dialog was not shown.
+    """
+    patcher = None
+    spy = None
+    def SaveAsProgressDialogSpy(*args, **kwargs):  # wraps real constructor
+        nonlocal patcher, spy
+        assert spy is None, 'Expected SaveAsProgressDialog to be created only once'
+        
+        instance = SaveAsProgressDialog(*args, **kwargs)
+        patcher = patch.object(instance, 'calculating_total_size', wraps=instance.calculating_total_size)
+        spy = patcher.start()
+        return instance
+    
+    try:
+        old_project_dirpath = project.path  # capture
+        assert os.path.exists(old_project_dirpath)
+        with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
+            async with _wait_for_save_as_to_complete(project):
+                yield
+            
+            assert not os.path.exists(old_project_dirpath)
+
+            assert spy is not None, 'Expected SaveAsProgressDialog to be created'
+            assert spy.call_count == 0, (
+                'Expected SaveAsProgressDialog to not be shown, '
+                f'but it was shown {spy.call_count} times'
+            )
+    finally:
+        if patcher is not None:
+            patcher.stop()
+
+
+@contextmanager
+def _assert_project_not_copied(project: Project, save_path: str) -> Iterator[None]:
+    """Ensure that the project is not copied on exit."""
+    partial_path = save_path.replace('.crystalproj', '.crystalproj-partial')
+    
+    assert project._is_untitled, 'Expected project to start as untitled'
+    
+    yield
+    
+    # Verify that the project is still at its original location (untitled)
+    assert project._is_untitled, 'Project should still be untitled after cancellation'
+    
+    # Verify cleanup occurred - neither the final file nor partial file should exist
+    assert not os.path.exists(save_path), f'Final save file should not exist: {save_path}'
+    assert not os.path.exists(partial_path), f'Partial save file should not exist: {partial_path}'
+
+
+@contextmanager
+def _file_object_write_mocked_to(raise_func: Callable[[], Never]) -> Iterator[None]:
+    """
+    Context manager that mocks the file object write() method to raise an error.
+    """
+    real_open = open  # capture
+    mock_write_call_count = 0
+    def fake_open(file, mode='r', *args, **kwargs):
+        file_obj = real_open(file, mode, *args, **kwargs)
+        if 'w' in mode:
+            def mock_write(*args, **kwargs) -> Never:
+                nonlocal mock_write_call_count
+                mock_write_call_count += 1
+                raise_func()
+            file_obj.write = mock_write
+        return file_obj
+    
+    with patch('builtins.open', fake_open):
+        yield
+    
+    # Ensure write() was actually called
+    assert mock_write_call_count > 0, f'write() was never called. Call count: {mock_write_call_count}'

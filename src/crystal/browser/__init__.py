@@ -456,8 +456,6 @@ class MainWindow:
         return self.entity_tree.peer
     
     def _create_button_bar(self, parent: wx.Window):
-        readonly = self._readonly  # cache
-        
         new_root_url_button = self._new_root_url_action.create_button(parent, name='cr-add-url-button')
         new_group_button = self._new_group_action.create_button(parent, name='cr-add-group-button')
         edit_entity_button = self._edit_action.create_button(parent, name='cr-edit-button')
@@ -724,7 +722,10 @@ class MainWindow:
 
     @fg_affinity
     def _show_save_error_dialog(self, e: Exception) -> None:
-        traceback.print_exception(e, file=sys.stderr)
+        # Show error information on stderr
+        # HACK: Suppress while tests are running to keep the output clean
+        if not tests_are_running():
+            traceback.print_exception(e, file=sys.stderr)
         
         error_dialog = wx.MessageDialog(
             self._frame,

@@ -82,8 +82,9 @@ def mocked_show_modal(
     """
     ShowModal: ShowModalFunc
     def ShowModal(dialog: wx.Dialog) -> int:  # type: ignore[no-redef]
-        assert dialog_name == dialog.Name, \
-            f'Expected dialog with name {dialog_name!r}, got {dialog.Name!r}'
+        assert dialog_name == dialog.Name, (
+            f'Expected dialog with name {dialog_name!r}, got {dialog.Name!r}. '
+            f'Caption={dialog.Caption!r}, Message={dialog.Message!r}')
         ShowModal.call_count += 1
         if callable(return_code):
             return return_code(dialog)

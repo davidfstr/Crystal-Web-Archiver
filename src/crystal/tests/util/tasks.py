@@ -159,23 +159,36 @@ def append_deferred_top_level_tasks(project: Project) -> None:
 # Utility: Scheduler Manual Control
 
 @contextmanager
-def scheduler_disabled() -> Iterator[DisabledScheduler]:
+def scheduler_disabled(*, simulate_thread_never_dies: bool = False) -> Iterator[DisabledScheduler]:
     """
     Context where the scheduler thread is disabled for any Projects that are opened.
     
     Projects opened before entering this context will continue to have active
     scheduler threads.
+    
+    Arguments:
+    * simulate_thread_never_dies --
+        If True, the FIRST fake scheduler thread created in this context will always
+        report that it's alive, simulating a stuck scheduler thread that never
+        stops. This is useful for testing timeout scenarios.
     """
     start_call_count = 0
     stop_call_count = 0
     
     class FakeSchedulerThread:
-        def __init__(self, root_task: RootTask) -> None:
+        def __init__(self, root_task: RootTask, simulate_thread_never_dies: bool) -> None:
             self._root_task = root_task
+            self._simulate_thread_never_dies = simulate_thread_never_dies
+            
+            # Fake ident, to prevent AttributeError when get_thread_stack() is called
+            self.ident = None
         
         def join(self, timeout: float | None = None) -> None:
             nonlocal stop_call_count
             stop_call_count += 1
+            
+            if self._simulate_thread_never_dies:
+                return
             
             if self._root_task.complete:
                 # Scheduler thread is already stopped or stopping
@@ -203,12 +216,18 @@ def scheduler_disabled() -> Iterator[DisabledScheduler]:
                 raise AssertionError('Expected the scheduler thread to be stopping')
         
         def is_alive(self) -> bool:
+            if self._simulate_thread_never_dies:
+                return True
             return not self._root_task.complete
     
     def start_fake_scheduler_thread(root_task: RootTask) -> FakeSchedulerThread:
         nonlocal start_call_count
         start_call_count += 1
-        return FakeSchedulerThread(root_task)
+        return FakeSchedulerThread(
+            root_task,
+            # Only first thread created within the scheduler_disabled() context
+            # may simulate the thread never dying.
+            simulate_thread_never_dies if start_call_count == 1 else False)
     
     with patch('crystal.task.start_scheduler_thread', wraps=start_fake_scheduler_thread) as start_func_mock, \
             scheduler_thread_context():

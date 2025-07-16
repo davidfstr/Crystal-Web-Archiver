@@ -88,6 +88,7 @@ from typing import (
 from typing_extensions import deprecated, override
 from urllib.parse import quote as url_quote
 from urllib.parse import urlparse, urlunparse
+import warnings
 from weakref import WeakValueDictionary
 
 if TYPE_CHECKING:
@@ -242,6 +243,7 @@ class Project(ListenableMixin):
         
         self.path = path
         
+        self._closed = False
         self._readonly = True  # will reinitialize after database is located
         self._is_untitled = is_untitled
         self._is_dirty = False
@@ -403,7 +405,6 @@ class Project(ListenableMixin):
                     c = db.cursor()
                     c.execute('pragma user_version = user_version')
                 except Exception as e:
-                    # TODO: Write an automated test for this failure case
                     if is_database_read_only_error(e):
                         readonly_actual = True  # reinterpret
                     else:
@@ -1842,12 +1843,16 @@ class Project(ListenableMixin):
         if not self.readonly:
             self.hibernate_tasks()
         
-        # - Stop and destroy tasks
-        # - Stop scheduler
-        # - Close database
-        # TODO: Handle failures during close in a sensible way
-        self.close(capture_crashes=False)
         try:
+            # - Stop and destroy tasks
+            # - Stop scheduler
+            # - Close database
+            # NOTE: Failures during close may indicate that the in-memory
+            #       Project state is somehow inconsistent. Thus when the
+            #       recovery code below attempts to reopen using the same
+            #       Project state it may fail again.
+            self.close(capture_crashes=False)
+            
             # Move/copy the project directory to the new path.
             # - If the project is untitled, it will be renamed.
             # - If the project is titled, it will be copied.
@@ -1878,7 +1883,7 @@ class Project(ListenableMixin):
                             except OSError:
                                 pass
                         bg_call_later(bg_delete_old_path, daemon=True)
-                    
+
                     self._is_untitled = False
                 else:
                     # Copy the project directory to the new path
@@ -1906,9 +1911,6 @@ class Project(ListenableMixin):
             # Restore the state of tasks
             if not self.readonly:
                 self.unhibernate_tasks()
-        
-            assert self._is_untitled == False
-            assert self._is_dirty == False
         except:
             # Try to reopen the project at the old path
             if os.path.exists(old_path):
@@ -1919,6 +1921,10 @@ class Project(ListenableMixin):
                     self.unhibernate_tasks()
             
             raise
+        else:
+            self._mark_clean_and_titled()
+            assert self._is_untitled == False
+            assert self._is_dirty == False
     
     @staticmethod
     @bg_affinity
@@ -2124,22 +2130,28 @@ class Project(ListenableMixin):
         
         It is safe to call this method multiple times, even after the project has closed.
         """
-        guarded = (
-            capture_crashes_to_stderr if capture_crashes else (lambda f: f)
-        )
-        @guarded
-        def do_close() -> None:
-            try:
-                self._stop_scheduler()
-            finally:
+        if self._closed:
+            # Already closed
+            return
+        try:
+            guarded = (
+                capture_crashes_to_stderr if capture_crashes else (lambda f: f)
+            )
+            @guarded
+            def do_close() -> None:
                 try:
-                    self._close_database(self._db, self.readonly)
+                    self._stop_scheduler()
                 finally:
-                    # Unexport reference to self, if running tests
-                    if tests_are_running():
-                        if Project._last_opened_project is self:
-                            Project._last_opened_project = None
-        do_close()
+                    try:
+                        self._close_database(self._db, self.readonly)
+                    finally:
+                        # Unexport reference to self, if running tests
+                        if tests_are_running():
+                            if Project._last_opened_project is self:
+                                Project._last_opened_project = None
+            do_close()
+        finally:
+            self._closed = True
     
     @fg_affinity
     def _stop_scheduler(self) -> None:
@@ -2242,23 +2254,39 @@ class Project(ListenableMixin):
     @fg_affinity
     def _reopen(self) -> None:
         """
-        Reopens this project at self.path, which is a permanent path.
+        Reopens this project at self.path.
         
         Is the inverse of `close()`, but does not restore the state of tasks.
-        
-        Raises:
-        * ProjectReadOnlyError
-            -- if expect_writable is True and the project cannot be opened as writable
         """
-        cls = type(self)
-        
-        # Open database at the new path
-        with cls._open_database_but_close_if_raises(self.path, self._readonly, self._mark_dirty_if_untitled, expect_writable=False) as (
-                self._db, self._readonly, self._database_is_on_ssd):
-            self._mark_clean_and_titled()
-        
-        # Start scheduler
-        self._start_scheduler()
+        try:
+            cls = type(self)
+            
+            # Open database at the new path
+            old_readonly = self._readonly
+            with cls._open_database_but_close_if_raises(self.path, old_readonly, self._mark_dirty_if_untitled, expect_writable=False) as (
+                    self._db, new_readonly, self._database_is_on_ssd):
+                if new_readonly != old_readonly:
+                    self._readonly = new_readonly
+                    
+                    # TODO: Add UI support for readonly status of project changing
+                    if not tests_are_running():
+                        warnings.warn(
+                            'Project readonly status changed, but UI does not yet '
+                            'know how to update appropriately in response.'
+                        )
+            
+            # Start scheduler
+            self._start_scheduler()
+        except:
+            # Clean up partially opened state
+            self._closed = False  # allow close() to run
+            self.close()
+            assert self._closed
+            
+            raise
+        else:
+            # Successfully reopened
+            self._closed = False
     
     # === Context Manager ===
     

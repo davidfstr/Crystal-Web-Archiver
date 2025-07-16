@@ -196,11 +196,20 @@ async def wait_for_future(future: Future[_T]) -> _T:
     
     The foreground thread is released periodically while waiting.
     """
-    await wait_for(lambda: future.done() or None, stacklevel_extra=1)
+    await wait_for_future_ignoring_result(future, stacklevel_extra=1)
     try:
         return future.result(timeout=0)
     except TimeoutError:
         raise AssertionError('Expected future to be already done')
+
+
+async def wait_for_future_ignoring_result(future: Future, *, stacklevel_extra: int=0) -> None:
+    """
+    Waits for the specified Future to be done.
+    
+    The foreground thread is released periodically while waiting.
+    """
+    await wait_for(lambda: future.done() or None, stacklevel_extra=1 + stacklevel_extra)
 
 
 class WaitTimedOut(Exception):
