@@ -446,23 +446,25 @@ async def test_when_save_as_untitled_project_to_different_filesystem_then_copies
         new_project_dirpath = os.path.join(
             new_container_dirpath,
             os.path.basename(old_project_dirpath))
-        async with _save_as_dialog_completed():
+        async with _wait_for_save_as_dialog_to_complete():
             with file_dialog_returning(new_project_dirpath):
                 select_menuitem_now(
                     menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         
-        # Verify project directory and resource revision was copied
-        assert os.path.exists(new_project_dirpath)
-        new_rr_body_filepath = rr._body_filepath
-        assert os.path.exists(new_rr_body_filepath)
+        # Verify project was copied
+        if True:
+            assert os.path.exists(new_project_dirpath)
+            
+            new_rr_body_filepath = rr._body_filepath
+            assert os.path.exists(new_rr_body_filepath)
 
 
 async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_project_and_does_not_show_progress_dialog() -> None:
-    """Test that Save As to same filesystem moves the project efficiently without progress dialog."""
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
-            _temporary_directory() as new_container_dirpath:
+            _temporary_directory() as new_container_dirpath, \
+            RealMainWindow(project) as rmw:
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
@@ -478,28 +480,25 @@ async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_proje
         new_project_dirpath = os.path.join(
             new_container_dirpath,
             os.path.basename(old_project_dirpath))
-        
-        # Verify we're on the same filesystem
         old_project_fs = os.stat(old_project_dirpath).st_dev
         new_project_fs = os.stat(new_container_dirpath).st_dev
         assert old_project_fs == new_project_fs, (
             'Expected old and new paths to be on same filesystem'
         )
         
-        # TODO: Mock progress dialog to verify it's NOT shown for efficient move
-        with RealMainWindow(project) as rmw:
+        async with _assert_save_as_dialog_not_shown(old_project_dirpath):
             with file_dialog_returning(new_project_dirpath):
                 select_menuitem_now(
                     menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         
         # Verify project was moved (original no longer exists)
-        assert not os.path.exists(old_project_dirpath)
-        assert os.path.exists(new_project_dirpath)
-        
-        # Verify resource revision was moved
-        new_rr_body_filepath = rr._body_filepath
-        assert new_rr_body_filepath != old_rr_body_filepath
-        assert os.path.exists(new_rr_body_filepath)
+        if True:
+            assert not os.path.exists(old_project_dirpath)
+            assert os.path.exists(new_project_dirpath)
+            
+            new_rr_body_filepath = rr._body_filepath
+            assert new_rr_body_filepath != old_rr_body_filepath
+            assert os.path.exists(new_rr_body_filepath)
 
 
 async def test_when_save_as_titled_project_then_copies_project_and_shows_progress_dialog() -> None:
@@ -1019,7 +1018,7 @@ def _simulate_os_logout_on_exit() -> Iterator[wx.CloseEvent]:
 
 
 @asynccontextmanager
-async def _save_as_dialog_completed() -> AsyncIterator[None]:
+async def _wait_for_save_as_dialog_to_complete() -> AsyncIterator[None]:
     """
     Context that upon entry spies on SaveAsProgressDialog,
     yields for the caller to start a Save As operation,
@@ -1042,6 +1041,42 @@ async def _save_as_dialog_completed() -> AsyncIterator[None]:
             
             # Wait for Save As operation to complete
             await wait_for(lambda: spy_did_copy_files and spy_did_copy_files.called or None)
+    finally:
+        if patcher is not None:
+            patcher.stop()
+
+
+@asynccontextmanager
+async def _assert_save_as_dialog_not_shown(old_project_dirpath: str) -> AsyncIterator[None]:
+    """
+    Context that upon entry spies on SaveAsProgressDialog,
+    yields for the caller to start a Save As operation,
+    and upon exit ensures the dialog was not shown.
+    """
+    patcher = None
+    spy = None
+    def SaveAsProgressDialogSpy(*args, **kwargs):  # wraps real constructor
+        nonlocal patcher, spy
+        assert spy is None, 'Expected SaveAsProgressDialog to be created only once'
+        
+        instance = SaveAsProgressDialog(*args, **kwargs)
+        patcher = patch.object(instance, 'calculating_total_size', wraps=instance.calculating_total_size)
+        spy = patcher.start()
+        return instance
+    
+    try:
+        assert os.path.exists(old_project_dirpath)
+        with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
+            yield
+            
+            # Wait for Save As operation to complete
+            await wait_for(lambda: not os.path.exists(old_project_dirpath) or None)
+
+            assert spy is not None, 'Expected SaveAsProgressDialog to be created'
+            assert spy.call_count == 0, (
+                'Expected SaveAsProgressDialog to not be shown, '
+                f'but it was shown {spy.call_count} times'
+            )
     finally:
         if patcher is not None:
             patcher.stop()
