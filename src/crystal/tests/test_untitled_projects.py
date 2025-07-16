@@ -1,9 +1,10 @@
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource,
 )
+from crystal.progress import SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
 from crystal.tests.util import xtempfile
 from crystal.tests.util.controls import file_dialog_returning, select_menuitem_now
@@ -13,7 +14,7 @@ from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks, scheduler_disabled, step_scheduler,
     step_scheduler_until_done,
 )
-from crystal.tests.util.wait import wait_for_future
+from crystal.tests.util.wait import wait_for, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xos import is_ci, is_linux, is_mac_os
 from functools import cache
@@ -426,11 +427,11 @@ async def test_when_save_as_menu_item_selected_for_titled_or_untitled_project_th
 
 
 async def test_when_save_as_untitled_project_to_different_filesystem_then_copies_project_and_shows_progress_dialog() -> None:
-    """Test that Save As to different filesystem copies the project and shows progress dialog."""
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _temporary_directory_on_new_filesystem() as new_container_dirpath, \
             _untitled_project() as project, \
-            _temporary_directory_on_new_filesystem() as new_container_dirpath:
+            RealMainWindow(project) as rmw:
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
@@ -438,33 +439,20 @@ async def test_when_save_as_untitled_project_to_different_filesystem_then_copies
         r = Resource(project, atom_feed_url)
         rr_future = r.download()
         await step_scheduler_until_done(project)
-        rr = rr_future.result()
+        rr = rr_future.result(timeout=0)
         
-        # Save to different filesystem
+        # Save to different filesystem (using UI)
         old_project_dirpath = project.path  # capture
         new_project_dirpath = os.path.join(
             new_container_dirpath,
             os.path.basename(old_project_dirpath))
+        async with _save_as_dialog_completed():
+            with file_dialog_returning(new_project_dirpath):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         
-        # Verify we're actually on different filesystems
-        old_project_fs = os.stat(old_project_dirpath).st_dev
-        new_project_fs = os.stat(new_container_dirpath).st_dev
-        if old_project_fs == new_project_fs:
-            raise SkipTest('Could not create directory on different filesystem')
-        
-        try:
-            # TODO: Mock progress dialog to verify it's shown
-            await wait_for_future(project.save_as(new_project_dirpath))
-        except ProjectReadOnlyError as e:
-            raise SkipTest(
-                'cannot create a writable directory on different filesystem: ' + str(e)
-            )
-        
-        # Verify project was copied (original still exists for untitled -> different FS)
-        # and new copy exists
+        # Verify project directory and resource revision was copied
         assert os.path.exists(new_project_dirpath)
-        
-        # Verify resource revision was copied
         new_rr_body_filepath = rr._body_filepath
         assert os.path.exists(new_rr_body_filepath)
 
@@ -499,7 +487,10 @@ async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_proje
         )
         
         # TODO: Mock progress dialog to verify it's NOT shown for efficient move
-        await wait_for_future(project.save_as(new_project_dirpath))
+        with RealMainWindow(project) as rmw:
+            with file_dialog_returning(new_project_dirpath):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         
         # Verify project was moved (original no longer exists)
         assert not os.path.exists(old_project_dirpath)
@@ -536,7 +527,10 @@ async def test_when_save_as_titled_project_then_copies_project_and_shows_progres
             copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
             
             # TODO: Mock progress dialog to verify it's shown
-            await wait_for_future(project.save_as(copy_project_path))
+            with RealMainWindow(project) as rmw:
+                with file_dialog_returning(copy_project_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
             
             # Verify original project still exists (it's a copy operation)
             assert os.path.exists(original_project_path)
@@ -570,7 +564,10 @@ async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialo
             save_path = os.path.join(new_container_dirpath, 'SavedUntitled.crystalproj')
             
             # TODO: Mock SaveAsProgressDialog to verify it's shown
-            await wait_for_future(untitled_project.save_as(save_path))
+            with RealMainWindow(untitled_project) as rmw:
+                with file_dialog_returning(save_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
             assert os.path.exists(save_path)
         
         # Test with titled project
@@ -584,7 +581,10 @@ async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialo
             copy_path = os.path.join(tmp_dir, 'CopiedTitled.crystalproj')
             
             # TODO: Mock SaveAsProgressDialog to verify it's shown
-            await wait_for_future(titled_project.save_as(copy_path))
+            with RealMainWindow(titled_project) as rmw:
+                with file_dialog_returning(copy_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
             assert os.path.exists(copy_path)
             assert os.path.exists(titled_project_path)  # Original still exists
 
@@ -615,7 +615,10 @@ async def test_when_save_as_large_project_then_progress_updates_incrementally() 
         
         # TODO: Mock SaveAsProgressDialog to capture and verify incremental progress updates
         # For now, just verify the save operation completes successfully
-        await wait_for_future(project.save_as(save_path))
+        with RealMainWindow(project) as rmw:
+            with file_dialog_returning(save_path):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         assert os.path.exists(save_path)
 
 
@@ -646,7 +649,10 @@ async def test_when_save_as_project_with_many_small_files_then_progress_updates_
         
         # TODO: Mock SaveAsProgressDialog to verify progress is reported by file count
         # rather than byte count for many small files
-        await wait_for_future(project.save_as(save_path))
+        with RealMainWindow(project) as rmw:
+            with file_dialog_returning(save_path):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         assert os.path.exists(save_path)
 
 
@@ -673,7 +679,10 @@ async def test_when_save_as_project_with_few_large_files_then_progress_updates_b
         
         # TODO: Mock SaveAsProgressDialog to verify progress is reported by byte count
         # rather than file count for few large files
-        await wait_for_future(project.save_as(save_path))
+        with RealMainWindow(project) as rmw:
+            with file_dialog_returning(save_path):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         assert os.path.exists(save_path)
 
 
@@ -703,7 +712,10 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
         try:
             # In a real implementation, we'd need to mock the progress listener
             # to raise CancelSaveAs during the operation
-            await wait_for_future(project.save_as(save_path))
+            with RealMainWindow(project) as rmw:
+                with file_dialog_returning(save_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
             # If we get here, the save completed normally
             assert os.path.exists(save_path)
         except CancelSaveAs:
@@ -747,7 +759,10 @@ async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_clea
         # TODO: Mock filesystem operations to simulate disk full error
         # For now, just verify that OSError exceptions are handled gracefully
         try:
-            await wait_for_future(project.save_as(save_path))
+            with RealMainWindow(project) as rmw:
+                with file_dialog_returning(save_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
             # If successful, verify the file exists
             assert os.path.exists(save_path)
         except OSError as e:
@@ -778,7 +793,10 @@ async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpect
         # TODO: Mock filesystem operations to simulate unmounting
         # For now, just verify that filesystem errors are handled gracefully
         try:
-            await wait_for_future(project.save_as(save_path))
+            with RealMainWindow(project) as rmw:
+                with file_dialog_returning(save_path):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
             # If successful, verify the file exists
             assert os.path.exists(save_path)
         except OSError as e:
@@ -826,7 +844,10 @@ async def test_when_save_as_project_and_tasks_fail_to_unhibernate_then_handles_g
         
         # TODO: Mock task restoration to fail and verify graceful handling
         # For now, just verify that the save operation works normally
-        await wait_for_future(project.save_as(save_path))
+        with RealMainWindow(project) as rmw:
+            with file_dialog_returning(save_path):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         assert os.path.exists(save_path)
 
 
@@ -849,7 +870,10 @@ async def test_when_save_as_project_with_corrupted_database_then_fails_with_erro
         # TODO: Corrupt the database file and verify error handling
         # For now, just verify normal save operation works
         # In a real test, we'd corrupt the database and expect a ProjectFormatError
-        await wait_for_future(project.save_as(save_path))
+        with RealMainWindow(project) as rmw:
+            with file_dialog_returning(save_path):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         assert os.path.exists(save_path)
 
 
@@ -876,7 +900,10 @@ async def test_when_save_as_project_with_missing_revision_files_then_ignores_mis
         save_path = os.path.join(save_dir, 'MissingRevisionProject.crystalproj')
         
         # Save operation should complete even with missing revision files
-        await wait_for_future(project.save_as(save_path))
+        with RealMainWindow(project) as rmw:
+            with file_dialog_returning(save_path):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
         assert os.path.exists(save_path)
 
 
@@ -989,3 +1016,32 @@ def _simulate_os_logout_on_exit() -> Iterator[wx.CloseEvent]:
     logout_event = wx.CloseEvent(wx.EVT_QUERY_END_SESSION.typeId)
     yield logout_event
     app.ProcessEvent(logout_event)
+
+
+@asynccontextmanager
+async def _save_as_dialog_completed() -> AsyncIterator[None]:
+    """
+    Context that upon entry spies on SaveAsProgressDialog,
+    yields for the caller to start a Save As operation,
+    and upon exit waits for the dialog to complete.
+    """
+    patcher = None
+    spy_did_copy_files = None
+    def SaveAsProgressDialogSpy(*args, **kwargs):  # wraps real constructor
+        nonlocal patcher, spy_did_copy_files
+        assert spy_did_copy_files is None, 'Expected SaveAsProgressDialog to be created only once'
+        
+        instance = SaveAsProgressDialog(*args, **kwargs)
+        patcher = patch.object(instance, 'did_copy_files', wraps=instance.did_copy_files)
+        spy_did_copy_files = patcher.start()
+        return instance
+    
+    try:
+        with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
+            yield
+            
+            # Wait for Save As operation to complete
+            await wait_for(lambda: spy_did_copy_files and spy_did_copy_files.called or None)
+    finally:
+        if patcher is not None:
+            patcher.stop()
