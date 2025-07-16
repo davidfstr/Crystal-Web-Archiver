@@ -502,7 +502,6 @@ async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_proje
 
 
 async def test_when_save_as_titled_project_then_copies_project_and_shows_progress_dialog() -> None:
-    """Test that Save As on titled project creates a copy and shows progress dialog."""
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             tempfile.TemporaryDirectory() as tmp_dir:
@@ -522,25 +521,23 @@ async def test_when_save_as_titled_project_then_copies_project_and_shows_progres
             original_rr_body_filepath = rr._body_filepath  # capture
         
         # Reopen the project and perform Save As
-        with Project(original_project_path) as project:
+        with Project(original_project_path) as project, \
+                RealMainWindow(project) as rmw:
             copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
             
-            # TODO: Mock progress dialog to verify it's shown
-            with RealMainWindow(project) as rmw:
+            async with _wait_for_save_as_dialog_to_complete():
                 with file_dialog_returning(copy_project_path):
                     select_menuitem_now(
                         menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
             
-            # Verify original project still exists (it's a copy operation)
-            assert os.path.exists(original_project_path)
-            assert os.path.exists(copy_project_path)
-            
-            # Verify resource revisions exist in both locations
-            assert os.path.exists(original_rr_body_filepath)
-            
-            # Get the copied resource revision filepath
-            copied_rr_body_filepath = rr._body_filepath
-            assert os.path.exists(copied_rr_body_filepath)
+            # Verify project was copied, and original still exists
+            if True:
+                assert os.path.exists(original_project_path)
+                assert os.path.exists(copy_project_path)
+                
+                assert os.path.exists(original_rr_body_filepath)
+                copied_rr_body_filepath = rr._body_filepath
+                assert os.path.exists(copied_rr_body_filepath)
 
 
 async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialog() -> None:
@@ -553,6 +550,7 @@ async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialo
         
         # Test with untitled project
         with _untitled_project() as untitled_project, \
+                RealMainWindow(untitled_project) as rmw, \
                 _temporary_directory() as new_container_dirpath:
             
             # Add some data to the project
@@ -562,8 +560,7 @@ async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialo
             
             save_path = os.path.join(new_container_dirpath, 'SavedUntitled.crystalproj')
             
-            # TODO: Mock SaveAsProgressDialog to verify it's shown
-            with RealMainWindow(untitled_project) as rmw:
+            async with _wait_for_save_as_dialog_to_complete():
                 with file_dialog_returning(save_path):
                     select_menuitem_now(
                         menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
@@ -571,7 +568,8 @@ async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialo
         
         # Test with titled project
         titled_project_path = os.path.join(tmp_dir, 'TitledProject.crystalproj')
-        with Project(titled_project_path) as titled_project:
+        with Project(titled_project_path) as titled_project, \
+                RealMainWindow(titled_project) as rmw:
             # Add some data to the project
             r = Resource(titled_project, atom_feed_url)
             rr_future = r.download()
@@ -579,8 +577,7 @@ async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialo
             
             copy_path = os.path.join(tmp_dir, 'CopiedTitled.crystalproj')
             
-            # TODO: Mock SaveAsProgressDialog to verify it's shown
-            with RealMainWindow(titled_project) as rmw:
+            async with _wait_for_save_as_dialog_to_complete():
                 with file_dialog_returning(copy_path):
                     select_menuitem_now(
                         menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
@@ -593,6 +590,7 @@ async def test_when_save_as_large_project_then_progress_updates_incrementally() 
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
             _temporary_directory() as save_dir:
         
         # Create a project with multiple resources to simulate a larger project
@@ -612,9 +610,9 @@ async def test_when_save_as_large_project_then_progress_updates_incrementally() 
         
         save_path = os.path.join(save_dir, 'LargeProject.crystalproj')
         
-        # TODO: Mock SaveAsProgressDialog to capture and verify incremental progress updates
+        # TODO: Verify incremental progress updates.
         # For now, just verify the save operation completes successfully
-        with RealMainWindow(project) as rmw:
+        async with _wait_for_save_as_dialog_to_complete():
             with file_dialog_returning(save_path):
                 select_menuitem_now(
                     menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
@@ -626,6 +624,7 @@ async def test_when_save_as_project_with_many_small_files_then_progress_updates_
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
             _temporary_directory() as save_dir:
         
         # Create many small resources/files
@@ -646,9 +645,8 @@ async def test_when_save_as_project_with_many_small_files_then_progress_updates_
         
         save_path = os.path.join(save_dir, 'ManySmallFilesProject.crystalproj')
         
-        # TODO: Mock SaveAsProgressDialog to verify progress is reported by file count
-        # rather than byte count for many small files
-        with RealMainWindow(project) as rmw:
+        # TODO Verify progress is reported by file count rather than byte count.
+        async with _wait_for_save_as_dialog_to_complete():
             with file_dialog_returning(save_path):
                 select_menuitem_now(
                     menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
@@ -660,6 +658,7 @@ async def test_when_save_as_project_with_few_large_files_then_progress_updates_b
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
             _temporary_directory() as save_dir:
         
         # Create a few resources that should have larger content
@@ -676,9 +675,8 @@ async def test_when_save_as_project_with_few_large_files_then_progress_updates_b
         
         save_path = os.path.join(save_dir, 'FewLargeFilesProject.crystalproj')
         
-        # TODO: Mock SaveAsProgressDialog to verify progress is reported by byte count
-        # rather than file count for few large files
-        with RealMainWindow(project) as rmw:
+        # TODO: Verify progress is reported by byte count rather than file count.
+        async with _wait_for_save_as_dialog_to_complete():
             with file_dialog_returning(save_path):
                 select_menuitem_now(
                     menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
@@ -690,6 +688,7 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
             _temporary_directory() as save_dir:
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
@@ -702,7 +701,7 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
         save_path = os.path.join(save_dir, 'CanceledProject.crystalproj')
         partial_path = save_path.replace('.crystalproj', '.crystalproj-partial')
         
-        # TODO: Mock SaveAsProgressDialog to simulate user cancellation
+        # TODO: Also simulate user cancellation
         # For now, test that cancellation via CancelSaveAs exception works
         from crystal.progress import CancelSaveAs
         
@@ -711,7 +710,7 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
         try:
             # In a real implementation, we'd need to mock the progress listener
             # to raise CancelSaveAs during the operation
-            with RealMainWindow(project) as rmw:
+            async with _wait_for_save_as_dialog_to_complete():
                 with file_dialog_returning(save_path):
                     select_menuitem_now(
                         menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
