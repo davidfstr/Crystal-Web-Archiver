@@ -59,6 +59,11 @@ def file_dialog_returning(filepath: str) -> Iterator[None]:
         instance.GetPath.return_value = filepath
         
         yield
+        
+        if instance.ShowModal.call_count != 1:
+            raise AssertionError(
+                f'Expected wx.FileDialog.ShowModal to be called exactly once, '
+                f'but it was called {instance.ShowModal.call_count} times')
 
 
 # ------------------------------------------------------------------------------
