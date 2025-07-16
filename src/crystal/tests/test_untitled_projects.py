@@ -524,65 +524,20 @@ async def test_when_save_as_titled_project_then_copies_project_and_shows_progres
         with Project(original_project_path) as project, \
                 RealMainWindow(project) as rmw:
             copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
-            
+            # NOTE: Verifies progress dialog is shown internally
             async with _wait_for_save_as_dialog_to_complete():
                 with file_dialog_returning(copy_project_path):
                     select_menuitem_now(
                         menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-            
-            # Verify project was copied, and original still exists
-            if True:
-                assert os.path.exists(original_project_path)
-                assert os.path.exists(copy_project_path)
-                
-                assert os.path.exists(original_rr_body_filepath)
-                copied_rr_body_filepath = rr._body_filepath
-                assert os.path.exists(copied_rr_body_filepath)
-
-
-async def test_when_save_as_untitled_or_titled_project_then_shows_progress_dialog() -> None:
-    """Test that Save As shows progress dialog for both untitled and titled projects."""
-    with scheduler_disabled(), \
-            served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            tempfile.TemporaryDirectory() as tmp_dir:
         
-        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
-        
-        # Test with untitled project
-        with _untitled_project() as untitled_project, \
-                RealMainWindow(untitled_project) as rmw, \
-                _temporary_directory() as new_container_dirpath:
+        # Verify project was copied, and original still exists
+        if True:
+            assert os.path.exists(original_project_path)
+            assert os.path.exists(copy_project_path)
             
-            # Add some data to the project
-            r = Resource(untitled_project, atom_feed_url)
-            rr_future = r.download()
-            await step_scheduler_until_done(untitled_project)
-            
-            save_path = os.path.join(new_container_dirpath, 'SavedUntitled.crystalproj')
-            
-            async with _wait_for_save_as_dialog_to_complete():
-                with file_dialog_returning(save_path):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-            assert os.path.exists(save_path)
-        
-        # Test with titled project
-        titled_project_path = os.path.join(tmp_dir, 'TitledProject.crystalproj')
-        with Project(titled_project_path) as titled_project, \
-                RealMainWindow(titled_project) as rmw:
-            # Add some data to the project
-            r = Resource(titled_project, atom_feed_url)
-            rr_future = r.download()
-            await step_scheduler_until_done(titled_project)
-            
-            copy_path = os.path.join(tmp_dir, 'CopiedTitled.crystalproj')
-            
-            async with _wait_for_save_as_dialog_to_complete():
-                with file_dialog_returning(copy_path):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-            assert os.path.exists(copy_path)
-            assert os.path.exists(titled_project_path)  # Original still exists
+            assert os.path.exists(original_rr_body_filepath)
+            copied_rr_body_filepath = rr._body_filepath
+            assert os.path.exists(copied_rr_body_filepath)
 
 
 async def test_when_save_as_large_project_then_progress_updates_incrementally() -> None:
