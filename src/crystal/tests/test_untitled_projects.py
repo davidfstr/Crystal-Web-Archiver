@@ -7,7 +7,9 @@ from crystal.model import (
 from crystal.progress import SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
 from crystal.tests.util import xtempfile
-from crystal.tests.util.controls import file_dialog_returning, select_menuitem_now
+from crystal.tests.util.controls import (
+    file_dialog_returning, select_menuitem_now,
+)
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
@@ -17,13 +19,15 @@ from crystal.tests.util.tasks import (
 from crystal.tests.util.wait import wait_for, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xos import is_ci, is_linux, is_mac_os
+from dataclasses import dataclass
 from functools import cache
 import os
 import subprocess
 import tempfile
 from typing import Callable, ContextManager
 from unittest import skip, SkipTest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import warnings
 import wx
 
 
@@ -446,7 +450,7 @@ async def test_when_save_as_untitled_project_to_different_filesystem_then_copies
         new_project_dirpath = os.path.join(
             new_container_dirpath,
             os.path.basename(old_project_dirpath))
-        async with _wait_for_save_as_dialog_to_complete():
+        async with _wait_for_save_as_dialog_to_complete(project):
             with file_dialog_returning(new_project_dirpath):
                 select_menuitem_now(
                     menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
@@ -525,7 +529,7 @@ async def test_when_save_as_titled_project_then_copies_project_and_shows_progres
                 RealMainWindow(project) as rmw:
             copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
             # NOTE: Verifies progress dialog is shown internally
-            async with _wait_for_save_as_dialog_to_complete():
+            async with _wait_for_save_as_dialog_to_complete(project):
                 with file_dialog_returning(copy_project_path):
                     select_menuitem_now(
                         menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
@@ -541,101 +545,74 @@ async def test_when_save_as_titled_project_then_copies_project_and_shows_progres
 
 
 async def test_when_save_as_large_project_then_progress_updates_incrementally() -> None:
-    """Test that Save As shows incremental progress updates for large projects."""
+    # HACK: Duplicates Project._copytree_of_project_with_progress.TARGET_MAX_DELAY_BETWEEN_REPORTS
+    COPYTREE_TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5
+    
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _temporary_directory_on_new_filesystem() as save_dir, \
             _untitled_project() as project, \
-            RealMainWindow(project) as rmw, \
-            _temporary_directory() as save_dir:
+            RealMainWindow(project) as rmw:
         
-        # Create a project with multiple resources to simulate a larger project
-        base_url = sp.get_request_url('https://xkcd.com/')
-        urls = [
-            sp.get_request_url('https://xkcd.com/atom.xml'),
-            sp.get_request_url('https://xkcd.com/rss.xml'),
-            sp.get_request_url('https://xkcd.com/1/'),
-            sp.get_request_url('https://xkcd.com/2/'),
-        ]
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
-        # Download multiple resources to create a larger project
-        for url in urls:
-            r = Resource(project, url)
-            r.download()
+        # Add a resource with downloaded content to create a project with some data
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
         await step_scheduler_until_done(project)
+        rr = rr_future.result()
         
-        save_path = os.path.join(save_dir, 'LargeProject.crystalproj')
+        new_project_dirpath = os.path.join(save_dir, 'copy.crystalproj')
         
-        # TODO: Verify incremental progress updates.
-        # For now, just verify the save operation completes successfully
-        async with _wait_for_save_as_dialog_to_complete():
-            with file_dialog_returning(save_path):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-        assert os.path.exists(save_path)
-
-
-async def test_when_save_as_project_with_many_small_files_then_progress_updates_by_file_count() -> None:
-    """Test that Save As reports progress by file count for projects with many small files."""
-    with scheduler_disabled(), \
-            served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            _untitled_project() as project, \
-            RealMainWindow(project) as rmw, \
-            _temporary_directory() as save_dir:
+        # Use an infinite generator for time.monotonic to handle many progress updates
+        def time_generator():
+            t = 0.0
+            while True:
+                yield t
+                # Increment slightly above threshold to always trigger progress reports
+                t += COPYTREE_TARGET_MAX_DELAY_BETWEEN_REPORTS + 0.1
         
-        # Create many small resources/files
-        base_url = sp.get_request_url('https://xkcd.com/')
-        small_urls = [
-            sp.get_request_url('https://xkcd.com/1/'),
-            sp.get_request_url('https://xkcd.com/2/'),
-            sp.get_request_url('https://xkcd.com/3/'),
-            sp.get_request_url('https://xkcd.com/4/'),
-            sp.get_request_url('https://xkcd.com/5/'),
-        ]
-        
-        # Download multiple small resources
-        for url in small_urls:
-            r = Resource(project, url)
-            r.download()
-        await step_scheduler_until_done(project)
-        
-        save_path = os.path.join(save_dir, 'ManySmallFilesProject.crystalproj')
-        
-        # TODO Verify progress is reported by file count rather than byte count.
-        async with _wait_for_save_as_dialog_to_complete():
-            with file_dialog_returning(save_path):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-        assert os.path.exists(save_path)
-
-
-async def test_when_save_as_project_with_few_large_files_then_progress_updates_by_byte_count() -> None:
-    """Test that Save As reports progress by byte count for projects with few large files."""
-    with scheduler_disabled(), \
-            served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            _untitled_project() as project, \
-            RealMainWindow(project) as rmw, \
-            _temporary_directory() as save_dir:
-        
-        # Create a few resources that should have larger content
-        large_urls = [
-            sp.get_request_url('https://xkcd.com/atom.xml'),  # Feed files are typically larger
-            sp.get_request_url('https://xkcd.com/rss.xml'),   # Feed files are typically larger
-        ]
-        
-        # Download resources that should have larger content
-        for url in large_urls:
-            r = Resource(project, url)
-            r.download()
-        await step_scheduler_until_done(project)
-        
-        save_path = os.path.join(save_dir, 'FewLargeFilesProject.crystalproj')
-        
-        # TODO: Verify progress is reported by byte count rather than file count.
-        async with _wait_for_save_as_dialog_to_complete():
-            with file_dialog_returning(save_path):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-        assert os.path.exists(save_path)
+        # Patch COPY_BUFSIZE to a small value to force many progress updates
+        # even for our relatively small test project
+        with patch('crystal.model.COPY_BUFSIZE', 5000), \
+                patch('time.monotonic', side_effect=time_generator()):
+            
+            # Save to different filesystem (using UI)
+            async with _wait_for_save_as_dialog_to_complete(project) as spies:
+                with file_dialog_returning(new_project_dirpath):
+                    select_menuitem_now(
+                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            spy_copying = spies.copying
+            
+            # Verify the project copy operation started successfully
+            assert os.path.exists(new_project_dirpath)
+            
+            # Verify that copying() was called multiple times to show incremental progress
+            assert spy_copying is not None, 'Expected SaveAsProgressDialog to be created'
+            assert spy_copying.call_count >= 2, (
+                f'Expected copying() to be called at least 2 times for incremental progress, '
+                f'but it was called {spy_copying.call_count} times'
+            )
+            if spy_copying.call_count > 100:
+                warnings.warn(
+                    'SaveAsProgressDialog.copying() was called very many times '
+                    f'({spy_copying.call_count}), which may slow down this test. '
+                    'Consider increasing COPY_BUFSIZE or adjusting the test project size.'
+                )
+            
+            # Verify that progress increases monotonically
+            call_args_list = spy_copying.call_args_list
+            bytes_copied_values = [call.args[2] for call in call_args_list]  # 3rd argument is bytes_copied
+            for i in range(1, len(bytes_copied_values)):
+                assert bytes_copied_values[i] >= bytes_copied_values[i-1], (
+                    f'Expected bytes_copied to increase monotonically, '
+                    f'but got {bytes_copied_values[i]} after {bytes_copied_values[i-1]}'
+                )
+            
+            # Verify the final call shows completion
+            final_call = call_args_list[-1]
+            final_bytes_copied = final_call.args[2]
+            assert final_bytes_copied > 0, 'Expected final bytes_copied to be > 0'
 
 
 async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cleans_up() -> None:
@@ -659,13 +636,13 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
         # TODO: Also simulate user cancellation
         # For now, test that cancellation via CancelSaveAs exception works
         from crystal.progress import CancelSaveAs
-        
+
         # This test would need to be enhanced to actually trigger cancellation
         # during the save operation. For now, just verify the exception handling works.
         try:
             # In a real implementation, we'd need to mock the progress listener
             # to raise CancelSaveAs during the operation
-            async with _wait_for_save_as_dialog_to_complete():
+            async with _wait_for_save_as_dialog_to_complete(project):
                 with file_dialog_returning(save_path):
                     select_menuitem_now(
                         menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
@@ -971,33 +948,88 @@ def _simulate_os_logout_on_exit() -> Iterator[wx.CloseEvent]:
     app.ProcessEvent(logout_event)
 
 
+@dataclass
+class SaveAsSpies:
+    """Mutable container for spies on SaveAsProgressDialog methods."""
+    copying: MagicMock | None = None
+    did_copy_files: MagicMock | None = None
+
 @asynccontextmanager
-async def _wait_for_save_as_dialog_to_complete() -> AsyncIterator[None]:
+async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterator[SaveAsSpies]:
     """
-    Context that upon entry spies on SaveAsProgressDialog,
+    Context that upon entry spies on SaveAsProgressDialog and Project.save_as,
     yields for the caller to start a Save As operation,
-    and upon exit waits for the dialog to complete.
+    and upon exit waits for the dialog to complete AND the save_as operation to fully complete.
+    
+    The yielded spies object will be filled out upon exiting the context.
     """
-    patcher = None
+    spies_yielded = None
+    
+    patcher_copying = None
+    patcher_did_copy_files = None
+    spy_copying = None
     spy_did_copy_files = None
-    def SaveAsProgressDialogSpy(*args, **kwargs):  # wraps real constructor
-        nonlocal patcher, spy_did_copy_files
-        assert spy_did_copy_files is None, 'Expected SaveAsProgressDialog to be created only once'
+    
+    save_as_called = False
+    save_as_future = None
+    
+    def SaveAsProgressDialogSpy(*args, **kwargs) -> SaveAsProgressDialog:  # wraps real constructor
+        nonlocal patcher_copying, patcher_did_copy_files
+        nonlocal spy_did_copy_files, spy_copying
+        nonlocal spies_yielded
+        
+        assert (
+            spy_did_copy_files is None and
+            spy_copying is None
+        ), 'Expected SaveAsProgressDialog to be created only once'
+        assert spies_yielded is not None, 'Expected SaveAsSpies to already be yielded'
         
         instance = SaveAsProgressDialog(*args, **kwargs)
-        patcher = patch.object(instance, 'did_copy_files', wraps=instance.did_copy_files)
-        spy_did_copy_files = patcher.start()
+        
+        # Spy on calls to the returned SaveAsProgressDialog instance
+        patcher_copying = patch.object(instance, 'copying', wraps=instance.copying)
+        patcher_did_copy_files = patch.object(instance, 'did_copy_files', wraps=instance.did_copy_files)
+        spy_copying = patcher_copying.start()
+        spy_did_copy_files = patcher_did_copy_files.start()
+        
+        # Update the yielded spies object with spy instances
+        spies_yielded.copying = spy_copying
+        spies_yielded.did_copy_files = spy_did_copy_files
+        
         return instance
     
+    original_save_as = project.save_as  # capture
+    def save_as_wrapper(*args, **kwargs):
+        """Wrapper for Project.save_as that captures the returned Future."""
+        nonlocal save_as_future, save_as_called
+        future = original_save_as(*args, **kwargs)
+        save_as_called = True
+        save_as_future = future
+        return future
+
     try:
-        with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
-            yield
+        with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy), \
+                patch.object(project, 'save_as', save_as_wrapper):
             
-            # Wait for Save As operation to complete
+            # 1. Tell caller to start a Save As operation
+            # 2. Yield a placeholder for spies that will be updated when the dialog is created
+            yield (spies_yielded := SaveAsSpies())
+            
+            # Wait for dialog to be created and spies to be set up
+            await wait_for(lambda: (spy_did_copy_files is not None) or None)
+            
+            # Wait for Save As copy operation to complete
             await wait_for(lambda: spy_did_copy_files and spy_did_copy_files.called or None)
+            
+            # Wait for Save As operation to fully complete
+            await wait_for(lambda: save_as_called or None)
+            assert save_as_future is not None
+            await wait_for_future(save_as_future)
     finally:
-        if patcher is not None:
-            patcher.stop()
+        if patcher_did_copy_files is not None:
+            patcher_did_copy_files.stop()
+        if patcher_copying is not None:
+            patcher_copying.stop()
 
 
 @asynccontextmanager
