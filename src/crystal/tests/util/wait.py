@@ -203,6 +203,15 @@ async def wait_for_future(future: Future[_T]) -> _T:
         raise AssertionError('Expected future to be already done')
 
 
+async def wait_for_future_ignoring_result(future: Future) -> None:
+    """
+    Waits for the specified Future to be done.
+    
+    The foreground thread is released periodically while waiting.
+    """
+    await wait_for(lambda: future.done() or None, stacklevel_extra=1)
+
+
 class WaitTimedOut(Exception):
     pass
 

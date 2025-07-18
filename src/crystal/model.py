@@ -1878,7 +1878,7 @@ class Project(ListenableMixin):
                             except OSError:
                                 pass
                         bg_call_later(bg_delete_old_path, daemon=True)
-                    
+
                     self._is_untitled = False
                 else:
                     # Copy the project directory to the new path
@@ -1919,6 +1919,8 @@ class Project(ListenableMixin):
                     self.unhibernate_tasks()
             
             raise
+        else:
+            self._mark_clean_and_titled()
     
     @staticmethod
     @bg_affinity
@@ -2242,20 +2244,16 @@ class Project(ListenableMixin):
     @fg_affinity
     def _reopen(self) -> None:
         """
-        Reopens this project at self.path, which is a permanent path.
+        Reopens this project at self.path.
         
         Is the inverse of `close()`, but does not restore the state of tasks.
-        
-        Raises:
-        * ProjectReadOnlyError
-            -- if expect_writable is True and the project cannot be opened as writable
         """
         cls = type(self)
         
         # Open database at the new path
         with cls._open_database_but_close_if_raises(self.path, self._readonly, self._mark_dirty_if_untitled, expect_writable=False) as (
                 self._db, self._readonly, self._database_is_on_ssd):
-            self._mark_clean_and_titled()
+            pass
         
         # Start scheduler
         self._start_scheduler()

@@ -4,7 +4,7 @@ from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource,
 )
-from crystal.progress import SaveAsProgressDialog
+from crystal.progress import CancelSaveAs, SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
 from crystal.tests.util import xtempfile
 from crystal.tests.util.controls import (
@@ -16,7 +16,7 @@ from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks, scheduler_disabled, step_scheduler,
     step_scheduler_until_done,
 )
-from crystal.tests.util.wait import wait_for, wait_for_future
+from crystal.tests.util.wait import wait_for, wait_for_future, wait_for_future_ignoring_result
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_ci, is_linux, is_mac_os
@@ -621,11 +621,11 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
             RealMainWindow(project) as rmw, \
-            _temporary_directory() as save_dir:
+            _temporary_directory_on_new_filesystem() as save_dir:
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
-        # Add some data to the project
+        # Add some data to the project to ensure there's something to copy
         r = Resource(project, atom_feed_url)
         rr_future = r.download()
         await step_scheduler_until_done(project)
@@ -633,25 +633,22 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
         save_path = os.path.join(save_dir, 'CanceledProject.crystalproj')
         partial_path = save_path.replace('.crystalproj', '.crystalproj-partial')
         
-        # TODO: Also simulate user cancellation
-        # For now, test that cancellation via CancelSaveAs exception works
-        from crystal.progress import CancelSaveAs
-
-        # This test would need to be enhanced to actually trigger cancellation
-        # during the save operation. For now, just verify the exception handling works.
-        try:
-            # In a real implementation, we'd need to mock the progress listener
-            # to raise CancelSaveAs during the operation
+        # Run the save operation
+        with patch.object(SaveAsProgressDialog, 'copying', side_effect=CancelSaveAs) as mock_copying:
             async with _wait_for_save_as_dialog_to_complete(project):
                 with file_dialog_returning(save_path):
                     select_menuitem_now(
                         menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-            # If we get here, the save completed normally
-            assert os.path.exists(save_path)
-        except CancelSaveAs:
-            # Verify cleanup occurred
-            assert not os.path.exists(save_path)
-            assert not os.path.exists(partial_path)
+        
+        # Ensure cancellation was triggered properly
+        assert mock_copying.call_count > 0, f'copying() was never called. Call count: {mock_copying.call_count}'
+        
+        # Verify that the project is still at its original location (untitled)
+        assert project._is_untitled, 'Project should still be untitled after cancellation'
+        
+        # Verify cleanup occurred - neither the final file nor partial file should exist
+        assert not os.path.exists(save_path), f'Final save file should not exist: {save_path}'
+        assert not os.path.exists(partial_path), f'Partial save file should not exist: {partial_path}'
 
 
 @skip('fails: probably fails with an error instead of replacing')
@@ -1015,16 +1012,10 @@ async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterato
             # 2. Yield a placeholder for spies that will be updated when the dialog is created
             yield (spies_yielded := SaveAsSpies())
             
-            # Wait for dialog to be created and spies to be set up
-            await wait_for(lambda: (spy_did_copy_files is not None) or None)
-            
-            # Wait for Save As copy operation to complete
-            await wait_for(lambda: spy_did_copy_files and spy_did_copy_files.called or None)
-            
             # Wait for Save As operation to fully complete
             await wait_for(lambda: save_as_called or None)
             assert save_as_future is not None
-            await wait_for_future(save_as_future)
+            await wait_for_future_ignoring_result(save_as_future)
     finally:
         if patcher_did_copy_files is not None:
             patcher_did_copy_files.stop()
