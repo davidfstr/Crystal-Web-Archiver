@@ -18,6 +18,7 @@ from crystal.tests.util.tasks import (
 )
 from crystal.tests.util.wait import wait_for, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_ci, is_linux, is_mac_os
 from dataclasses import dataclass
 from functools import cache
@@ -262,12 +263,10 @@ async def test_when_dirty_untitled_project_closed_then_prompts_to_save() -> None
                 assert mw.main_window.OSXIsModified()
 
             # Close the project, expect a prompt to save, and save to the specified path
-            with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_YES), \
-                    patch('wx.FileDialog.ShowModal', return_value=wx.ID_OK), \
-                    patch('wx.FileDialog.GetPath', return_value=save_path):
+            with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)), \
+                    file_dialog_returning(save_path):
                 await mw.close()
                 assert os.path.exists(save_path)
-
 
 async def test_when_clean_untitled_project_closed_then_does_not_prompt_to_save() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
@@ -275,7 +274,7 @@ async def test_when_clean_untitled_project_closed_then_does_not_prompt_to_save()
         assert not project.is_dirty
 
         # Close project. Ensure no prompt to save.
-        with patch('wx.MessageDialog.ShowModal') as mock_show_modal:
+        with patch('crystal.browser.ShowModal') as mock_show_modal:
             await mw.close()
             mock_show_modal.assert_not_called()
 
@@ -335,15 +334,16 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
             r = Resource(project, 'https://example.com/')
             assert project.is_dirty
 
-            def _ensure_logout_vetoed_and_return_yes(*args, **kwargs) -> int:
+            def _ensure_logout_vetoed_and_return_yes(dialog: wx.Dialog) -> int:
                 assert logout_event.GetVeto(), \
                     'Logout should be vetoed before showing any user prompts'
                 return wx.ID_YES
 
             # Start logout. Expect a prompt to save. Save.
-            with patch('wx.MessageDialog.ShowModal', _ensure_logout_vetoed_and_return_yes), \
-                    patch('wx.FileDialog.ShowModal', return_value=wx.ID_OK), \
-                    patch('wx.FileDialog.GetPath', return_value=save_path):
+            with patch('crystal.browser.ShowModal', mocked_show_modal(
+                        'cr-save-changes-dialog',
+                        _ensure_logout_vetoed_and_return_yes)), \
+                    file_dialog_returning(save_path):
                 
                 # Simulate OS logout
                 with _simulate_os_logout_on_exit() as logout_event:
@@ -368,7 +368,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
         assert project.is_dirty
         
         # Start logout. Expect a prompt to save. Cancel.
-        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_CANCEL):
+        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)):
             logout_event = _simulate_os_logout()
 
             # Verify the logout was vetoed
@@ -379,7 +379,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
             assert project.is_untitled
         
         # Now close the project without saving
-        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_NO):
+        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             await mw.close()
 
 
@@ -393,7 +393,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
         assert project.is_dirty
         
         # Start logout. Expect a prompt to save. Do not save.
-        with patch('wx.MessageDialog.ShowModal', return_value=wx.ID_NO):
+        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             _simulate_os_logout()
             
             # Ensure project was closed
