@@ -19,13 +19,14 @@ from crystal.tests.util.tasks import (
 from crystal.tests.util.wait import wait_for, wait_for_future, wait_for_future_ignoring_result
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal
-from crystal.util.xos import is_ci, is_linux, is_mac_os
+from crystal.util.xos import is_ci, is_linux, is_mac_os, is_windows
 from dataclasses import dataclass
+import errno
 from functools import cache
 import os
 import subprocess
 import tempfile
-from typing import Callable, ContextManager
+from typing import Callable, ContextManager, Never
 from unittest import skip, SkipTest
 from unittest.mock import MagicMock, patch
 import warnings
@@ -616,7 +617,6 @@ async def test_when_save_as_large_project_then_progress_updates_incrementally() 
 
 
 async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cleans_up() -> None:
-    """Test that Save As can be canceled and cleans up partial files."""
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
@@ -631,24 +631,16 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
         await step_scheduler_until_done(project)
         
         save_path = os.path.join(save_dir, 'CanceledProject.crystalproj')
-        partial_path = save_path.replace('.crystalproj', '.crystalproj-partial')
-        
-        # Run the save operation
-        with patch.object(SaveAsProgressDialog, 'copying', side_effect=CancelSaveAs) as mock_copying:
-            async with _wait_for_save_as_dialog_to_complete(project):
-                with file_dialog_returning(save_path):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-        
-        # Ensure cancellation was triggered properly
-        assert mock_copying.call_count > 0, f'copying() was never called. Call count: {mock_copying.call_count}'
-        
-        # Verify that the project is still at its original location (untitled)
-        assert project._is_untitled, 'Project should still be untitled after cancellation'
-        
-        # Verify cleanup occurred - neither the final file nor partial file should exist
-        assert not os.path.exists(save_path), f'Final save file should not exist: {save_path}'
-        assert not os.path.exists(partial_path), f'Partial save file should not exist: {partial_path}'
+        with _assert_project_not_copied(project, save_path):
+            # Run the save operation
+            with patch.object(SaveAsProgressDialog, 'copying', side_effect=CancelSaveAs) as mock_copying:
+                async with _wait_for_save_as_dialog_to_complete(project):
+                    with file_dialog_returning(save_path):
+                        select_menuitem_now(
+                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            
+            # Ensure cancellation was triggered properly
+            assert mock_copying.call_count > 0, f'copying() was never called. Call count: {mock_copying.call_count}'
 
 
 @skip('fails: probably fails with an error instead of replacing')
@@ -667,37 +659,52 @@ async def test_when_save_as_project_and_destination_filesystem_writable_generall
 
 
 async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_cleans_up() -> None:
-    """Test that Save As handles disk full errors and cleans up partial files."""
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
-            _temporary_directory() as save_dir:
+            RealMainWindow(project) as rmw, \
+            _temporary_directory_on_new_filesystem() as save_dir:
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
-        # Add some data to the project
+        # Add some data to the project to ensure there's something to copy
         r = Resource(project, atom_feed_url)
         rr_future = r.download()
         await step_scheduler_until_done(project)
         
         save_path = os.path.join(save_dir, 'DiskFullProject.crystalproj')
-        partial_path = save_path.replace('.crystalproj', '.crystalproj-partial')
-        
-        # TODO: Mock filesystem operations to simulate disk full error
-        # For now, just verify that OSError exceptions are handled gracefully
-        try:
-            with RealMainWindow(project) as rmw:
-                with file_dialog_returning(save_path):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-            # If successful, verify the file exists
-            assert os.path.exists(save_path)
-        except OSError as e:
-            # Verify that partial files are cleaned up on error
-            assert not os.path.exists(partial_path)
-            # Re-raise to maintain test behavior for now
-            # In future, we might want to catch specific disk full errors
-            pass
+        with _assert_project_not_copied(project, save_path):
+            def raise_disk_full_error() -> Never:
+                if is_windows():
+                    raise OSError(errno.ENOSPC, 'There is not enough space on the disk')
+                elif is_linux() or is_mac_os():
+                    raise OSError(errno.ENOSPC, 'No space left on device')
+                else:
+                    raise AssertionError('Unsupported OS for disk full simulation')
+            
+            real_open = open  # capture
+            mock_write_call_count = 0
+            def fake_open(file, mode='r', *args, **kwargs):
+                file_obj = real_open(file, mode, *args, **kwargs)
+                if 'w' in mode:
+                    def mock_write(*args, **kwargs) -> Never:
+                        nonlocal mock_write_call_count
+                        mock_write_call_count += 1
+                        raise_disk_full_error()
+                    file_obj.write = mock_write
+                return file_obj
+
+            # Run the save operation
+            with patch('builtins.open', fake_open), \
+                    patch('crystal.browser.ShowModal', mocked_show_modal(
+                        'cr-save-error-dialog', wx.ID_OK)):
+                async with _wait_for_save_as_dialog_to_complete(project):
+                    with file_dialog_returning(save_path):
+                        select_menuitem_now(
+                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            
+            # Ensure disk full was triggered properly
+            assert mock_write_call_count > 0, f'write() was never called. Call count: {mock_write_call_count}'
 
 
 async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpectedly_then_fails_with_error_and_cleans_up() -> None:
@@ -1057,3 +1064,20 @@ async def _assert_save_as_dialog_not_shown(old_project_dirpath: str) -> AsyncIte
     finally:
         if patcher is not None:
             patcher.stop()
+
+
+@contextmanager
+def _assert_project_not_copied(project: Project, save_path: str) -> Iterator[None]:
+    """Ensure that the project is not copied on exit."""
+    partial_path = save_path.replace('.crystalproj', '.crystalproj-partial')
+    
+    assert project._is_untitled, 'Expected project to start as untitled'
+    
+    yield
+    
+    # Verify that the project is still at its original location (untitled)
+    assert project._is_untitled, 'Project should still be untitled after cancellation'
+    
+    # Verify cleanup occurred - neither the final file nor partial file should exist
+    assert not os.path.exists(save_path), f'Final save file should not exist: {save_path}'
+    assert not os.path.exists(partial_path), f'Partial save file should not exist: {partial_path}'
