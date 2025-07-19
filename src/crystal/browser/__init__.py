@@ -47,7 +47,7 @@ from crystal.util.xsqlite3 import (
     is_database_closed_error, is_database_gone_error,
 )
 from crystal.util.xthreading import (
-    bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, fg_wait_for,
+    bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, fg_trampoline, fg_wait_for,
     set_is_quitting,
 )
 from functools import partial
@@ -526,6 +526,7 @@ class MainWindow:
     
     # === Project: Events ===
     
+    # TODO: Use @fg_trampoline here to simplify the implementation
     @capture_crashes_to_stderr
     def project_is_dirty_did_change(self) -> None:
         if is_mac_os():
@@ -534,6 +535,15 @@ class MainWindow:
             def fg_task() -> None:
                 self._frame.OSXSetModified(self.project.is_dirty)
             fg_call_later(fg_task)
+    
+    @fg_trampoline
+    @capture_crashes_to_stderr
+    def project_root_task_did_change(self, old_root_task: 'RootTask', new_root_task: 'RootTask') -> None:
+        """
+        Called when the project gets a new RootTask (e.g., during Save As reopen).
+        Updates the TaskTree to connect to the new RootTask.
+        """
+        self.task_tree.change_root_task(new_root_task)
     
     # === File Menu: Events ===
     

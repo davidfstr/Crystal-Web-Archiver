@@ -96,7 +96,7 @@ if TYPE_CHECKING:
     from crystal.doc.html import HtmlParserType
     from crystal.task import (
         DownloadResourceBodyTask, DownloadResourceGroupTask,
-        DownloadResourceTask, Task,
+        DownloadResourceTask, RootTask, Task,
     )
 
 
@@ -435,10 +435,18 @@ class Project(ListenableMixin):
         Effects of this method are reversed by `_stop_scheduler()`.
         """
         import crystal.task
+        
+        # Capture old root task if it exists (for reopen scenarios)
+        old_root_task = getattr(self, 'root_task', None)  # capture
+        
         self.root_task = crystal.task.RootTask()
         self._scheduler_thread = (
             crystal.task.start_scheduler_thread(self.root_task)
         )  # type: threading.Thread | None
+        
+        # Notify listeners if this is a root task change (not initial creation)
+        if old_root_task is not None:
+            self._root_task_did_change(old_root_task, self.root_task)
     
     # --- Load: Validity ---
     
@@ -1787,6 +1795,14 @@ class Project(ListenableMixin):
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_forget'):
                 run_bulkhead_call(lis.resource_group_did_forget, group)  # type: ignore[attr-defined]
+    
+    # === Events: Root Task Lifecycle ===
+    
+    def _root_task_did_change(self, old_root_task: 'RootTask', new_root_task: 'RootTask') -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'project_root_task_did_change'):
+                run_bulkhead_call(lis.project_root_task_did_change, old_root_task, new_root_task)  # type: ignore[attr-defined]
     
     # === Save As ===
     

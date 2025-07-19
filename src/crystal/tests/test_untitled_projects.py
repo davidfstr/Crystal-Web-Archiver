@@ -8,7 +8,7 @@ from crystal.progress import CancelSaveAs, SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
 from crystal.tests.util import xtempfile
 from crystal.tests.util.controls import (
-    file_dialog_returning, select_menuitem_now,
+    TreeItem, file_dialog_returning, select_menuitem_now,
 )
 from crystal.tests.util.save_as import wait_for_save_as_to_complete as _wait_for_save_as_to_complete
 from crystal.tests.util.server import served_project
@@ -433,6 +433,52 @@ async def test_when_save_as_menu_item_selected_for_titled_or_untitled_project_th
         # Test with titled project
         with subtests.test(project_type='titled'):
             await run_save_as_case(lambda: Project(titled_project_path), save_as_path2)
+
+
+async def test_when_save_as_project_then_new_tasks_started_continue_to_show_in_task_tree_ui() -> None:
+    """
+    During a Save As operation the RootTask of the Project is replaced
+    and the TaskTree UI needs to specially update itself to reflect this change.
+    In particular the root TaskTreeNode must be updated/replaced to point
+    to the new RootTask after Save As.
+    """
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            tempfile.TemporaryDirectory() as tmp_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        save_path = os.path.join(tmp_dir, 'SavedProject.crystalproj')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create initial project content
+            r = Resource(project, atom_feed_url)
+            rr_future = r.download()
+            append_deferred_top_level_tasks(project)
+            assert len(project.root_task.children) > 0
+            
+            # Get initial task tree state
+            task_root_ti = TreeItem.GetRootItem(mw.task_tree)
+            initial_task_count = len(task_root_ti.Children)
+            assert initial_task_count > 0
+            
+            # Perform Save As
+            future = project.save_as(save_path)
+            await wait_for_future(future)
+            
+            # Verify project path changed
+            assert project.path == save_path
+            
+            # Add a new task after Save As
+            r2 = Resource(project, sp.get_request_url('https://xkcd.com/1/'))
+            r2_future = r2.download()
+            append_deferred_top_level_tasks(project)
+            
+            # Verify TaskTree shows the new task (this would fail without our fix)
+            task_root_ti = TreeItem.GetRootItem(mw.task_tree)
+            final_task_count = len(task_root_ti.Children)
+            assert final_task_count > initial_task_count, \
+                f"TaskTree should show new task after Save As. " \
+                f"Initial: {initial_task_count}, Final: {final_task_count}"
 
 
 async def test_when_save_as_untitled_project_to_different_filesystem_then_copies_project_and_shows_progress_dialog() -> None:
