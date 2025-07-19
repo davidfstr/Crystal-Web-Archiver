@@ -608,15 +608,8 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
             from threading import Thread
             #
             async def create_new_project():
-                # Create named temporary directory that won't be deleted automatically
-                with tempfile.NamedTemporaryFile(suffix='.crystalproj', delete=False) as project_td:
-                    pass
-                os.remove(project_td.name)
-                os.mkdir(project_td.name)
-                project_dirpath = project_td.name
-                #
                 ocd = await OpenOrCreateDialog.wait_for()
-                mw = await ocd.create_and_leave_open(project_dirpath)
+                mw = await ocd.create_and_leave_open()
                 #
                 return mw
             #

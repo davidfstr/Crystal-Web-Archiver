@@ -10,6 +10,7 @@ from crystal.task import is_synced_with_scheduler_thread
 from crystal.tests.util.controls import (
     click_button, file_dialog_returning, select_menuitem_now, TreeItem,
 )
+from crystal.tests.util.save_as import wait_for_save_as_to_complete
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
     not_condition, or_condition, tree_has_no_children_condition, wait_for,
@@ -69,17 +70,18 @@ class OpenOrCreateDialog:
             *, autoclose: bool=True,
             delete: bool | None=None,
             wait_for_tasks_to_complete_on_close: bool | None=None,
+            _is_untitled: bool=False,
             ) -> AsyncIterator[tuple[MainWindow, Project]]:
         """
         Creates a new project.
         
-        If no project_dirpath is provided (i.e. the default) then a project
+        If no project_dirpath is provided (i.e. the default) then an untitled project
         will be created in a new temporary directory. That temporary directory
         will be deleted when the project is closed unless delete=False.
         
         If a project_dirpath is provided to an existing empty directory,
-        a project will be created in that directory. That directory will
-        not be deleted when the project is closed.
+        an empty titled project will be created in that directory.
+        That directory will not be deleted when the project is closed.
         
         The project will be automatically closed when exiting the
         returned context, unless autoclose=False, which leaves the
@@ -89,21 +91,22 @@ class OpenOrCreateDialog:
             if delete is None:
                 delete = True
             
-            # TODO: After upgrading to Python 3.12+, just use the
-            #       "delete" parameter of TemporaryDirectory
-            tmpdir_context = (
-                xtempfile.TemporaryDirectory(  # type: ignore[assignment]
-                    suffix='.crystalproj',
-                ) if delete
-                else nullcontext(tempfile.mkdtemp(suffix='.crystalproj'))
-            )  # type: AbstractContextManager[str]
-            
-            with tmpdir_context as project_dirpath:
-                assert project_dirpath is not None
+            if delete:
+                async with self.create(
+                            '__ignored__',
+                            autoclose=autoclose,
+                            wait_for_tasks_to_complete_on_close=wait_for_tasks_to_complete_on_close,
+                            # Untitled projects delete themselves
+                            _is_untitled=True,
+                        ) as (mw, project2):
+                    yield (mw, project2)
+            else:
+                project_dirpath = tempfile.mkdtemp(suffix='.crystalproj')
                 async with self.create(
                             project_dirpath,
                             autoclose=autoclose,
-                            wait_for_tasks_to_complete_on_close=wait_for_tasks_to_complete_on_close
+                            wait_for_tasks_to_complete_on_close=wait_for_tasks_to_complete_on_close,
+                            _is_untitled=False,
                         ) as (mw, project2):
                     yield (mw, project2)
             return
@@ -113,10 +116,20 @@ class OpenOrCreateDialog:
                     'When creating a project in an existing directory, '
                     'the "delete" option should not be used.')
         
-        mw = await self.create_and_leave_open(project_dirpath)
+        mw = await self.create_and_leave_open()
         
         project = Project._last_opened_project
         assert project is not None
+        
+        if not _is_untitled:
+            # HACK: Support legacy tests that precreate an empty project directory manually
+            if os.path.exists(project_dirpath):
+                os.rmdir(project_dirpath)
+            
+            async with wait_for_save_as_to_complete(project):
+                with file_dialog_returning(project_dirpath):
+                    select_menuitem_now(
+                        menuitem=mw.main_window.MenuBar.FindItemById(wx.ID_SAVEAS))
         
         exc_info_while_close = None
         try:
@@ -126,18 +139,21 @@ class OpenOrCreateDialog:
             raise
         finally:
             if autoclose:
+                # HACK: Suppress prompt to save changes upon close
+                if project.is_untitled:
+                    project._is_dirty = False
+                
                 await mw.close(
                     exc_info_while_close,
                     wait_for_tasks_to_complete=wait_for_tasks_to_complete_on_close)
     
-    async def create_and_leave_open(self, project_dirpath: str) -> MainWindow:
+    async def create_and_leave_open(self) -> MainWindow:
         old_opened_project = Project._last_opened_project  # capture
         try:
-            with file_dialog_returning(project_dirpath):
-                click_button(self.create_button)
-                
-                mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
-                return mw
+            click_button(self.create_button)
+            
+            mw = await MainWindow.wait_for(timeout=self._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
+            return mw
         except:
             # Close any project that was opened
             new_opened_project = Project._last_opened_project  # capture
@@ -366,16 +382,6 @@ class MainWindow:
         await OpenOrCreateDialog.wait_for(
             timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
         )
-    
-    @asynccontextmanager
-    async def temporarily_closed(self, project_dirpath: str) -> AsyncIterator[None]:
-        await self.close()
-        try:
-            yield
-        finally:
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, autoclose=False):
-                pass
-            await self._connect()  # reconnect self
     
     async def open_preferences_with_menuitem(self) -> PreferencesDialog:
         prefs_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_PREFERENCES)

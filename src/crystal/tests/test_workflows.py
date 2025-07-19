@@ -58,7 +58,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
         with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
             # 1. Test can create project
             # 2. Test can quit
-            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, _):
+            async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 assert False == mw.readonly
                 
                 # Test can create root resource
@@ -232,7 +232,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 # Test can update members of resource group, when other resource group is source
                 if True:
                     # Undownload all members of the feed group
-                    await _undownload_url([atom_feed_url, rss_feed_url], mw, project_dirpath)
+                    await _undownload_url([atom_feed_url, rss_feed_url], project)
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     
@@ -448,7 +448,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 assert True == (await is_url_not_in_archive(target_url))
                 
                 # Undiscover the target
-                await _undiscover_url(target_url, mw, project_dirpath)
+                await _undiscover_url(target_url, project)
                 start_server_again()
                 
                 # Add resource group matching target
@@ -481,7 +481,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 assert False == (await is_url_not_in_archive(target_url))
                 
                 # Undownload target
-                await _undownload_url(target_url, mw, project_dirpath)
+                await _undownload_url(target_url, project)
                 start_server_again()
             
             # Test will dynamically download an existing resource group member upon request
@@ -514,7 +514,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 click_button(mw.forget_button)
                 
                 # Undownload target
-                await _undownload_url(target_url, mw, project_dirpath)
+                await _undownload_url(target_url, project)
                 start_server_again()
             
             # Test will dynamically download a root resource upon request
@@ -558,7 +558,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 click_button(mw.forget_button)
                 
                 # Undownload target
-                await _undownload_url(target_url, mw, project_dirpath)
+                await _undownload_url(target_url, project)
 
 
 async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() -> None:
@@ -1048,51 +1048,39 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
 
 async def _undownload_url(
         url_or_urls: str | list[str],
-        mw: MainWindow,
-        project_dirpath: str
+        project: Project
         ) -> None:
     """
     Deletes the default revision of the specified resource(s).
-    
-    Note that the prior main window will need to be temporarily closed
-    and later reopened to perform the deletion.
     """
     if isinstance(url_or_urls, str):
         url_or_urls = [url_or_urls]  # reinterpret
     
     # TODO: Make it possible to do this from the UI:
     #       https://github.com/davidfstr/Crystal-Web-Archiver/issues/73
-    async with mw.temporarily_closed(project_dirpath):
-        with Project(project_dirpath) as project:
-            for url in url_or_urls:
-                resource = project.get_resource(url)
-                assert resource is not None
-                revision = resource.default_revision()
-                assert revision is not None
-                revision.delete(); del revision
-                assert resource.default_revision() is None
+    for url in url_or_urls:
+        resource = project.get_resource(url)
+        assert resource is not None
+        revision = resource.default_revision()
+        assert revision is not None
+        revision.delete(); del revision
+        assert resource.default_revision() is None
 
 
 async def _undiscover_url(
         url_or_urls: str | list[str],
-        mw: MainWindow,
-        project_dirpath: str
+        project: Project
         ) -> None:
     """
     Deletes the specified resource(s), along with any related resource revisions.
-    
-    Note that the prior main window will need to be temporarily closed
-    and later reopened to perform the deletion.
     """
     if isinstance(url_or_urls, str):
         url_or_urls = [url_or_urls]  # reinterpret
     
-    async with mw.temporarily_closed(project_dirpath):
-        with Project(project_dirpath) as project:
-            for url in url_or_urls:
-                resource = project.get_resource(url)
-                assert resource is not None
-                resource.delete(); del resource
+    for url in url_or_urls:
+        resource = project.get_resource(url)
+        assert resource is not None
+        resource.delete(); del resource
 
 
 # NOTE: Only for use with tree items in EntityTree

@@ -10,14 +10,14 @@ from crystal.tests.util import xtempfile
 from crystal.tests.util.controls import (
     file_dialog_returning, select_menuitem_now,
 )
-from crystal.tests.util.runner import pump_wx_events
+from crystal.tests.util.save_as import wait_for_save_as_to_complete as _wait_for_save_as_to_complete
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks, scheduler_disabled, step_scheduler,
     step_scheduler_until_done,
 )
-from crystal.tests.util.wait import wait_for, wait_for_future, wait_for_future_ignoring_result
+from crystal.tests.util.wait import wait_for_future
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
@@ -1112,40 +1112,6 @@ async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterato
             patcher_did_copy_files.stop()
         if patcher_copying is not None:
             patcher_copying.stop()
-
-
-@asynccontextmanager
-async def _wait_for_save_as_to_complete(project: Project) -> AsyncIterator[None]:
-    """
-    Context that upon entry spies on Project.save_as,
-    yields for the caller to start a Save As operation,
-    and upon exit waits for the save_as operation to fully complete.
-    """
-    save_as_called = False
-    save_as_future = None
-    
-    original_save_as = project.save_as  # capture
-    def save_as_wrapper(*args, **kwargs):
-        """Wrapper for Project.save_as that captures the returned Future."""
-        nonlocal save_as_future, save_as_called
-        future = original_save_as(*args, **kwargs)
-        save_as_called = True
-        save_as_future = future
-        return future
-    
-    with patch.object(project, 'save_as', save_as_wrapper):
-        # Tell caller to start a Save As operation
-        yield
-        
-        # Wait for Save As operation to fully complete
-        await wait_for(lambda: save_as_called or None)
-        assert save_as_future is not None
-        await wait_for_future_ignoring_result(save_as_future)
-        
-        # Sleep 1 event loop iteration for other observers of the Future
-        # to finish their actions, notably MainWindow.on_save_complete
-        # HACK: An actual wait would be more reliable than a sleep
-        await pump_wx_events()
 
 
 @asynccontextmanager
