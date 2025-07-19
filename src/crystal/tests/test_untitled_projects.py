@@ -753,13 +753,48 @@ async def test_when_save_as_project_with_active_tasks_then_hibernates_and_restor
 
 # NOTE: This can happen if a very large resource revision is being downloaded
 #       and Project._stop_scheduler() times out waiting for the scheduler thread to stop.
-@skip('fails: the project is left in a closed state but the MainWindow is left open')
-async def test_when_save_as_project_and_tasks_fail_to_hibernate_then_handles_gracefully() -> None:
-    pass
+async def test_when_save_as_project_and_old_project_fails_to_close_then_handles_gracefully() -> None:
+    with scheduler_disabled(simulate_thread_never_dies=True), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
+            _temporary_directory_on_new_filesystem() as save_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Add some data to the project to ensure there's something to save
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        rr = rr_future.result()
+        
+        save_path = os.path.join(save_dir, 'FailedSaveProject.crystalproj')
+        old_path = project.path  # capture original path
+        
+        with _assert_project_not_copied(project, save_path):
+            # Patch the scheduler join timeout to 0 to force immediate timeout
+            with patch.object(Project, '_SCHEDULER_JOIN_TIMEOUT', 0):
+                # Mock error dialog to acknowledge the timeout error
+                with patch('crystal.browser.ShowModal', mocked_show_modal(
+                        'cr-save-error-dialog', wx.ID_OK)):
+                    async with _wait_for_save_as_dialog_to_complete(project):
+                        with file_dialog_returning(save_path):
+                            select_menuitem_now(
+                                menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        
+        # Verify project is still at original path and remains functional
+        assert project.path == old_path
+        assert project._is_untitled
+        assert os.path.exists(old_path)
+        
+        # Verify the resource and data are still accessible
+        assert rr._body_filepath
+        assert os.path.exists(rr._body_filepath)
 
 
-@skip('not yet automated: not valuable to automate: no realistic way to trigger this')
-async def test_when_save_as_project_and_tasks_fail_to_unhibernate_then_handles_gracefully() -> None:
+# NOTE: Related to scenario: test_when_save_as_project_and_destination_filesystem_writable_generally_but_not_writable_by_sqlite_then_fails_with_error
+@skip('not yet automated')
+async def test_when_save_as_project_and_new_project_fails_to_open_then_handles_gracefully() -> None:
     pass
 
 

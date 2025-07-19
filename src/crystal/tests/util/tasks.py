@@ -159,12 +159,18 @@ def append_deferred_top_level_tasks(project: Project) -> None:
 # Utility: Scheduler Manual Control
 
 @contextmanager
-def scheduler_disabled() -> Iterator[DisabledScheduler]:
+def scheduler_disabled(*, simulate_thread_never_dies: bool = False) -> Iterator[DisabledScheduler]:
     """
     Context where the scheduler thread is disabled for any Projects that are opened.
     
     Projects opened before entering this context will continue to have active
     scheduler threads.
+    
+    Arguments:
+    * simulate_thread_never_dies --
+        If True, the fake scheduler thread will always
+        report that it's alive, simulating a stuck scheduler thread that never
+        stops. This is useful for testing timeout scenarios.
     """
     start_call_count = 0
     stop_call_count = 0
@@ -172,10 +178,15 @@ def scheduler_disabled() -> Iterator[DisabledScheduler]:
     class FakeSchedulerThread:
         def __init__(self, root_task: RootTask) -> None:
             self._root_task = root_task
+            # Fake ident, to prevent AttributeError when get_thread_stack() is called
+            self.ident = None
         
         def join(self, timeout: float | None = None) -> None:
             nonlocal stop_call_count
             stop_call_count += 1
+            
+            if simulate_thread_never_dies:
+                return
             
             if self._root_task.complete:
                 # Scheduler thread is already stopped or stopping
@@ -203,6 +214,8 @@ def scheduler_disabled() -> Iterator[DisabledScheduler]:
                 raise AssertionError('Expected the scheduler thread to be stopping')
         
         def is_alive(self) -> bool:
+            if simulate_thread_never_dies:
+                return True
             return not self._root_task.complete
     
     def start_fake_scheduler_thread(root_task: RootTask) -> FakeSchedulerThread:

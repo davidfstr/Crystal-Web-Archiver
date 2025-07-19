@@ -1842,12 +1842,16 @@ class Project(ListenableMixin):
         if not self.readonly:
             self.hibernate_tasks()
         
-        # - Stop and destroy tasks
-        # - Stop scheduler
-        # - Close database
-        # TODO: Handle failures during close in a sensible way
-        self.close(capture_crashes=False)
         try:
+            # - Stop and destroy tasks
+            # - Stop scheduler
+            # - Close database
+            # NOTE: Failures during close may indicate that the in-memory
+            #       Project state is somehow inconsistent. Thus when the
+            #       recovery code below attempts to reopen using the same
+            #       Project state it may fail again.
+            self.close(capture_crashes=False)
+            
             # Move/copy the project directory to the new path.
             # - If the project is untitled, it will be renamed.
             # - If the project is titled, it will be copied.
