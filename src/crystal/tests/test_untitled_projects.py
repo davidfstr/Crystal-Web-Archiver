@@ -682,62 +682,63 @@ async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_clea
                 else:
                     raise AssertionError('Unsupported OS for disk full simulation')
             
-            real_open = open  # capture
-            mock_write_call_count = 0
-            def fake_open(file, mode='r', *args, **kwargs):
-                file_obj = real_open(file, mode, *args, **kwargs)
-                if 'w' in mode:
-                    def mock_write(*args, **kwargs) -> Never:
-                        nonlocal mock_write_call_count
-                        mock_write_call_count += 1
-                        raise_disk_full_error()
-                    file_obj.write = mock_write
-                return file_obj
-
             # Run the save operation
-            with patch('builtins.open', fake_open), \
+            with _file_object_write_mocked_to(raise_disk_full_error), \
                     patch('crystal.browser.ShowModal', mocked_show_modal(
                         'cr-save-error-dialog', wx.ID_OK)):
                 async with _wait_for_save_as_dialog_to_complete(project):
                     with file_dialog_returning(save_path):
                         select_menuitem_now(
                             menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-            
-            # Ensure disk full was triggered properly
-            assert mock_write_call_count > 0, f'write() was never called. Call count: {mock_write_call_count}'
 
 
-async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpectedly_then_fails_with_error_and_cleans_up() -> None:
-    """Test that Save As handles filesystem unmounting and cleans up partial files."""
+@awith_subtests
+async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpectedly_then_fails_with_error_and_cleans_up(subtests: SubtestsContext) -> None:
+    if is_windows():
+        fs_gone_errors = [
+            OSError(errno.ENOENT, 'No such file or directory'),  # mount point disappears
+            OSError(errno.EIO, 'Input/output error'),  # device is suddenly unavailable
+            OSError(55, 'The specified network resource or device is no longer available'),
+            OSError(15, 'The system cannot find the drive specified'),
+        ]
+    elif is_linux() or is_mac_os():
+        fs_gone_errors = [
+            OSError(errno.ENOENT, 'No such file or directory'),  # mount point disappears
+            OSError(errno.EIO, 'Input/output error'),  # device is suddenly unavailable
+            OSError(errno.ENODEV, 'No such device'),  # device removal
+            OSError(errno.ESTALE, 'Stale file handle'),  # NFS or network filesystems
+        ]
+    else:
+        raise AssertionError('Unsupported OS for filesystem unmount simulation')
+    
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            _untitled_project() as project, \
-            _temporary_directory() as save_dir:
-        
-        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
-        
-        # Add some data to the project
-        r = Resource(project, atom_feed_url)
-        rr_future = r.download()
-        await step_scheduler_until_done(project)
-        
-        save_path = os.path.join(save_dir, 'UnmountedProject.crystalproj')
-        partial_path = save_path.replace('.crystalproj', '.crystalproj-partial')
-        
-        # TODO: Mock filesystem operations to simulate unmounting
-        # For now, just verify that filesystem errors are handled gracefully
-        try:
-            with RealMainWindow(project) as rmw:
-                with file_dialog_returning(save_path):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-            # If successful, verify the file exists
-            assert os.path.exists(save_path)
-        except OSError as e:
-            # Verify that partial files are cleaned up on error
-            assert not os.path.exists(partial_path)
-            # This would typically be a "device not found" or similar error
-            pass
+            _temporary_directory_on_new_filesystem() as save_dir:
+        for error in fs_gone_errors:
+            with subtests.test(error=error), \
+                    _untitled_project() as project, \
+                    RealMainWindow(project) as rmw:
+                
+                atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+                
+                # Add some data to the project to ensure there's something to copy
+                r = Resource(project, atom_feed_url)
+                rr_future = r.download()
+                await step_scheduler_until_done(project)
+                
+                save_path = os.path.join(save_dir, 'DiskFullProject.crystalproj')
+                with _assert_project_not_copied(project, save_path):
+                    def raise_destination_filesystem_gone_error() -> Never:
+                        raise error
+                    
+                    # Run the save operation
+                    with _file_object_write_mocked_to(raise_destination_filesystem_gone_error), \
+                            patch('crystal.browser.ShowModal', mocked_show_modal(
+                                'cr-save-error-dialog', wx.ID_OK)):
+                        async with _wait_for_save_as_dialog_to_complete(project):
+                            with file_dialog_returning(save_path):
+                                select_menuitem_now(
+                                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
 
 
 @skip('partially fails: a writeable copy is created but it is opened as read-only rather than as writable')
@@ -1012,3 +1013,27 @@ def _assert_project_not_copied(project: Project, save_path: str) -> Iterator[Non
     # Verify cleanup occurred - neither the final file nor partial file should exist
     assert not os.path.exists(save_path), f'Final save file should not exist: {save_path}'
     assert not os.path.exists(partial_path), f'Partial save file should not exist: {partial_path}'
+
+
+@contextmanager
+def _file_object_write_mocked_to(raise_func: Callable[[], Never]) -> Iterator[None]:
+    """
+    Context manager that mocks the file object write() method to raise an error.
+    """
+    real_open = open  # capture
+    mock_write_call_count = 0
+    def fake_open(file, mode='r', *args, **kwargs):
+        file_obj = real_open(file, mode, *args, **kwargs)
+        if 'w' in mode:
+            def mock_write(*args, **kwargs) -> Never:
+                nonlocal mock_write_call_count
+                mock_write_call_count += 1
+                raise_func()
+            file_obj.write = mock_write
+        return file_obj
+    
+    with patch('builtins.open', fake_open):
+        yield
+    
+    # Ensure write() was actually called
+    assert mock_write_call_count > 0, f'write() was never called. Call count: {mock_write_call_count}'

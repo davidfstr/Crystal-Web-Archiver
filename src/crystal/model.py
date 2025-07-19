@@ -1906,9 +1906,6 @@ class Project(ListenableMixin):
             # Restore the state of tasks
             if not self.readonly:
                 self.unhibernate_tasks()
-        
-            assert self._is_untitled == False
-            assert self._is_dirty == False
         except:
             # Try to reopen the project at the old path
             if os.path.exists(old_path):
@@ -1921,6 +1918,8 @@ class Project(ListenableMixin):
             raise
         else:
             self._mark_clean_and_titled()
+            assert self._is_untitled == False
+            assert self._is_dirty == False
     
     @staticmethod
     @bg_affinity

@@ -719,7 +719,10 @@ class MainWindow:
 
     @fg_affinity
     def _show_save_error_dialog(self, e: Exception) -> None:
-        traceback.print_exception(e, file=sys.stderr)
+        # Show error information on stderr
+        # HACK: Suppress while tests are running to keep the output clean
+        if not tests_are_running():
+            traceback.print_exception(e, file=sys.stderr)
         
         error_dialog = wx.MessageDialog(
             self._frame,
