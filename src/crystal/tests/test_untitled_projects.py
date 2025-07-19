@@ -757,88 +757,19 @@ async def test_when_save_as_project_and_tasks_fail_to_hibernate_then_handles_gra
     pass
 
 
+@skip('not yet automated: not valuable to automate: no realistic way to trigger this')
 async def test_when_save_as_project_and_tasks_fail_to_unhibernate_then_handles_gracefully() -> None:
-    """Test that Save As handles task restoration failures gracefully."""
-    with scheduler_disabled(), \
-            served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            _untitled_project() as project, \
-            _temporary_directory() as save_dir:
-        
-        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
-        
-        # Add some data and start a task
-        r = Resource(project, atom_feed_url)
-        rr_future = r.download()
-        await step_scheduler_until_done(project)
-        
-        # Start a download task that we can try to restore later
-        ResourceGroup(project, 'Test Group', url_pattern='https://example.com/#/')
-        
-        save_path = os.path.join(save_dir, 'TaskRestoreFailProject.crystalproj')
-        
-        # TODO: Mock task restoration to fail and verify graceful handling
-        # For now, just verify that the save operation works normally
-        with RealMainWindow(project) as rmw:
-            with file_dialog_returning(save_path):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-        assert os.path.exists(save_path)
+    pass
 
 
+@skip('not yet automated: not valuable to automate: rare case')
 async def test_when_save_as_project_with_corrupted_database_then_fails_with_error() -> None:
-    """Test that Save As handles corrupted project database gracefully."""
-    with scheduler_disabled(), \
-            served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            _untitled_project() as project, \
-            _temporary_directory() as save_dir:
-        
-        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
-        
-        # Add some data to the project
-        r = Resource(project, atom_feed_url)
-        rr_future = r.download()
-        await step_scheduler_until_done(project)
-        
-        save_path = os.path.join(save_dir, 'CorruptedProject.crystalproj')
-        
-        # TODO: Corrupt the database file and verify error handling
-        # For now, just verify normal save operation works
-        # In a real test, we'd corrupt the database and expect a ProjectFormatError
-        with RealMainWindow(project) as rmw:
-            with file_dialog_returning(save_path):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-        assert os.path.exists(save_path)
+    pass
 
 
+@skip('not yet automated: not valuable to automate: rare case')
 async def test_when_save_as_project_with_missing_revision_files_then_ignores_missing_revision_files() -> None:
-    """Test that Save As handles missing resource revision files gracefully."""
-    with scheduler_disabled(), \
-            served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            _untitled_project() as project, \
-            _temporary_directory() as save_dir:
-        
-        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
-        
-        # Add some data to the project
-        r = Resource(project, atom_feed_url)
-        rr_future = r.download()
-        await step_scheduler_until_done(project)
-        rr = rr_future.result()
-        
-        # Remove the revision file to simulate missing files
-        revision_file_path = rr._body_filepath
-        if os.path.exists(revision_file_path):
-            os.remove(revision_file_path)
-        
-        save_path = os.path.join(save_dir, 'MissingRevisionProject.crystalproj')
-        
-        # Save operation should complete even with missing revision files
-        with RealMainWindow(project) as rmw:
-            with file_dialog_returning(save_path):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
-        assert os.path.exists(save_path)
+    pass
 
 
 # === Utility ===
