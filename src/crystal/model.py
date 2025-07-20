@@ -1913,7 +1913,11 @@ class Project(ListenableMixin):
                     except (TrashPermissionError, OSError, Exception):
                         # Give up. Leave the partial copy in place
                         # for the user to delete manually.
-                        pass
+                        if tests_are_running():
+                            print(
+                                f'*** send2trash failed. Partial copy left at: {new_partial_path!r} '
+                                f'Consider using _rmtree_fallback_for_send2trash().',
+                                file=sys.stderr)
                 
                 raise
             

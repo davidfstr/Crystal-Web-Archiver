@@ -14,7 +14,7 @@ from crystal.tests.util.save_as import wait_for_save_as_to_complete
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
     not_condition, or_condition, tree_has_no_children_condition, wait_for,
-    WaitTimedOut, window_condition,
+    WaitTimedOut, window_condition, window_disposed_condition,
 )
 import crystal.tests.util.xtempfile as xtempfile
 from crystal.util.xos import is_mac_os
@@ -372,15 +372,30 @@ class MainWindow:
         await self.wait_for_close()
     
     async def wait_for_close(self) -> None:
-        await wait_for(lambda: self.main_window.IsBeingDeleted)
-        await wait_for(lambda: not self.main_window.IsShown)
-        await wait_for(
-            not_condition(window_condition('cr-main-window')),
-            timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
-            stacklevel_extra=1,
-        )
+        """
+        Waits for the main window to be closed normally.
+        
+        See also: wait_for_dispose()
+        """
+        await self.wait_for_dispose(stacklevel_extra=1)
         await OpenOrCreateDialog.wait_for(
             timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+        )
+    
+    async def wait_for_dispose(self, stacklevel_extra: int=0) -> None:
+        """
+        Waits for the main window to be disposed.
+        
+        This is different from wait_for_close() in that it waits for the
+        window to be disposed only, but the OpenOrCreateDialog might not reappear,
+        such as when the application is quitting.
+        
+        See also: wait_for_close()
+        """
+        await wait_for(
+            window_disposed_condition('cr-main-window'),
+            timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            stacklevel_extra=1 + stacklevel_extra,
         )
     
     async def open_preferences_with_menuitem(self) -> PreferencesDialog:

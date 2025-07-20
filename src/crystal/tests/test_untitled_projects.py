@@ -10,14 +10,17 @@ from crystal.tests.util import xtempfile
 from crystal.tests.util.controls import (
     TreeItem, file_dialog_returning, select_menuitem_now,
 )
-from crystal.tests.util.save_as import wait_for_save_as_to_complete as _wait_for_save_as_to_complete
+from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
+from crystal.tests.util.save_as import (
+    save_as,
+    wait_for_save_as_to_complete as _wait_for_save_as_to_complete,
+)
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks, scheduler_disabled, step_scheduler,
     step_scheduler_until_done,
 )
-from crystal.tests.util.wait import wait_for_future
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
@@ -26,9 +29,10 @@ from dataclasses import dataclass
 import errno
 from functools import cache
 import os
+import send2trash
 import sqlite3
-import subprocess
 import tempfile
+import shutil
 from typing import Callable, ContextManager, Never
 from unittest import skip, SkipTest
 from unittest.mock import MagicMock, patch
@@ -126,7 +130,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
                 'Expected old_project_dirpath and new_project_dirpath to be on the same filesystem: '
                 f'{old_project_dirpath=}, {new_container_dirpath=}'
             )
-            await wait_for_future(project.save_as(new_project_dirpath))
+            await save_as(project, new_project_dirpath)
             
             assert False == project.is_dirty
             assert False == project.is_untitled
@@ -178,7 +182,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
                 f'{old_project_dirpath=}, {new_container_dirpath=}'
             )
             try:
-                await wait_for_future(project.save_as(new_project_dirpath))
+                await save_as(project, new_project_dirpath)
             except ProjectReadOnlyError as e:
                 raise SkipTest(
                     'cannot create a temporary directory on a new filesystem '
@@ -221,7 +225,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
             new_project_dirpath = os.path.join(
                 new_container_dirpath,
                 os.path.basename(old_project_dirpath))
-            await wait_for_future(project.save_as(new_project_dirpath))
+            await save_as(project, new_project_dirpath)
             append_deferred_top_level_tasks(project)
             
             # Ensure tasks are restored
@@ -252,7 +256,7 @@ async def test_given_prompt_to_create_or_save_project_dialog_visible_when_create
 # === Untitled Project: Close Tests ===
 
 async def test_when_dirty_untitled_project_closed_then_prompts_to_save() -> None:
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with xtempfile.TemporaryDirectory() as tmp_dir:
         save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
         
         async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
@@ -286,7 +290,7 @@ async def test_when_clean_untitled_project_closed_then_does_not_prompt_to_save()
 # === Titled Project: Clean/Dirty State Tests ===
 
 async def test_when_titled_project_modified_then_remains_clean() -> None:
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with xtempfile.TemporaryDirectory() as tmp_dir:
         project_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
         with Project(project_path) as project:
             assert not project.is_untitled
@@ -303,7 +307,7 @@ async def test_when_titled_project_modified_then_remains_clean() -> None:
 # === Titled Project: Save Tests ===
 
 async def test_when_titled_project_explicitly_saved_then_does_nothing() -> None:
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with xtempfile.TemporaryDirectory() as tmp_dir:
         project_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
         with Project(project_path) as project:
             main_window = RealMainWindow(project)
@@ -327,7 +331,7 @@ async def test_when_titled_project_explicitly_saved_then_does_nothing() -> None:
 # === Untitled Project: Logout Tests ===
 
 async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_when_save_pressed_then_saves_and_closes_project() -> None:
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with xtempfile.TemporaryDirectory() as tmp_dir:
         save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
         
         async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
@@ -401,7 +405,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
             _simulate_os_logout()
             
             # Ensure project was closed
-            assert not mw.main_window.IsShown()
+            await mw.wait_for_dispose()
 
 
 # === Save As Tests + Progress Dialog Tests ===
@@ -444,41 +448,45 @@ async def test_when_save_as_project_then_new_tasks_started_continue_to_show_in_t
     """
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            tempfile.TemporaryDirectory() as tmp_dir:
+            xtempfile.TemporaryDirectory() as tmp_dir, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw:
+        mw = await MainWindow.wait_for()
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         save_path = os.path.join(tmp_dir, 'SavedProject.crystalproj')
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            # Create initial project content
-            r = Resource(project, atom_feed_url)
-            rr_future = r.download()
-            append_deferred_top_level_tasks(project)
-            assert len(project.root_task.children) > 0
-            
-            # Get initial task tree state
-            task_root_ti = TreeItem.GetRootItem(mw.task_tree)
-            initial_task_count = len(task_root_ti.Children)
-            assert initial_task_count > 0
-            
-            # Perform Save As
-            future = project.save_as(save_path)
-            await wait_for_future(future)
-            
-            # Verify project path changed
-            assert project.path == save_path
-            
-            # Add a new task after Save As
-            r2 = Resource(project, sp.get_request_url('https://xkcd.com/1/'))
-            r2_future = r2.download()
-            append_deferred_top_level_tasks(project)
-            
-            # Verify TaskTree shows the new task (this would fail without our fix)
-            task_root_ti = TreeItem.GetRootItem(mw.task_tree)
-            final_task_count = len(task_root_ti.Children)
-            assert final_task_count > initial_task_count, \
-                f"TaskTree should show new task after Save As. " \
-                f"Initial: {initial_task_count}, Final: {final_task_count}"
+        # Create initial project content
+        r = Resource(project, atom_feed_url)
+        rr_future = r.download()
+        append_deferred_top_level_tasks(project)
+        assert len(project.root_task.children) > 0
+        
+        # Get initial task tree state
+        task_root_ti = TreeItem.GetRootItem(mw.task_tree)
+        initial_task_count = len(task_root_ti.Children)
+        assert initial_task_count > 0
+        
+        # Perform Save As
+        async with _wait_for_save_as_dialog_to_complete(project):
+            with file_dialog_returning(save_path):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        
+        # Verify project path changed
+        assert project.path == save_path
+        
+        # Add a new task after Save As
+        r2 = Resource(project, sp.get_request_url('https://xkcd.com/1/'))
+        r2_future = r2.download()
+        append_deferred_top_level_tasks(project)
+        
+        # Verify TaskTree shows the new task (this would fail without our fix)
+        task_root_ti = TreeItem.GetRootItem(mw.task_tree)
+        final_task_count = len(task_root_ti.Children)
+        assert final_task_count > initial_task_count, \
+            f"TaskTree should show new task after Save As. " \
+            f"Initial: {initial_task_count}, Final: {final_task_count}"
 
 
 async def test_when_save_as_untitled_project_to_different_filesystem_then_copies_project_and_shows_progress_dialog() -> None:
@@ -559,7 +567,7 @@ async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_proje
 async def test_when_save_as_titled_project_then_copies_project_and_shows_progress_dialog() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            tempfile.TemporaryDirectory() as tmp_dir:
+            xtempfile.TemporaryDirectory() as tmp_dir:
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
@@ -681,7 +689,8 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
         await step_scheduler_until_done(project)
         
         save_path = os.path.join(save_dir, 'CanceledProject.crystalproj')
-        with _assert_project_not_copied(project, save_path):
+        with _assert_project_not_copied(project, save_path), \
+                _rmtree_fallback_for_send2trash('crystal.model.send2trash'):
             # Run the save operation
             with patch.object(SaveAsProgressDialog, 'copying', side_effect=CancelSaveAs) as mock_copying:
                 async with _wait_for_save_as_dialog_to_complete(project):
@@ -752,7 +761,8 @@ async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_clea
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
             RealMainWindow(project) as rmw, \
-            _temporary_directory_on_new_filesystem() as save_dir:
+            _temporary_directory_on_new_filesystem() as save_dir, \
+            _rmtree_fallback_for_send2trash('crystal.model.send2trash'):
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
@@ -802,7 +812,8 @@ async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpect
     
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            _temporary_directory_on_new_filesystem() as save_dir:
+            _temporary_directory_on_new_filesystem() as save_dir, \
+            _rmtree_fallback_for_send2trash('crystal.model.send2trash'):
         for error in fs_gone_errors:
             with subtests.test(error=error), \
                     _untitled_project() as project, \
@@ -834,7 +845,7 @@ async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpect
 async def test_when_save_as_readonly_project_then_creates_writable_copy_but_opens_as_readonly() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            tempfile.TemporaryDirectory() as tmp_dir:
+            xtempfile.TemporaryDirectory() as tmp_dir:
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
@@ -1000,15 +1011,8 @@ def _untitled_project() -> Iterator[Project]:
             yield project
 
 
-# TODO: Use xtempfile.TemporaryDirectory instead of this function,
-#       and instead of all direct uses of tempfile.TemporaryDirectory
 def _temporary_directory():
-    return tempfile.TemporaryDirectory(
-        # NOTE: If a file inside the temporary directory is still open,
-        #       ignore_cleanup_errors=True will prevent Windows from raising,
-        #       at the cost of leaving the temporary directory around
-        ignore_cleanup_errors=True
-    )
+    return xtempfile.TemporaryDirectory()
 
 
 @contextmanager
@@ -1024,59 +1028,29 @@ def _temporary_directory_on_new_filesystem() -> Iterator[str]:
     * SkipTest -- if cannot create a temporary directory on a new filesystem on this OS
     """
     if is_mac_os():
-        with tempfile.TemporaryDirectory(prefix='tmpfs_', ignore_cleanup_errors=True) as tmp_root:
-            image_path = os.path.join(tmp_root, 'volume.sparseimage')
-            mount_point = os.path.join(tmp_root, 'mnt')
-            os.makedirs(mount_point, exist_ok=True)
-
-            # Create the sparse image
-            subprocess.run([
-                'hdiutil', 'create',
-                '-size', '16m',
-                '-fs', 'HFS+',
-                '-type', 'SPARSE',
-                '-volname', 'TemporaryFS',
-                image_path
-            ], check=True, stdout=subprocess.DEVNULL)
-
-            # Attach (mount) it without showing in Finder
-            subprocess.run([
-                'hdiutil', 'attach',
-                '-mountpoint', mount_point,
-                '-nobrowse',
-                image_path
-            ], check=True, stdout=subprocess.DEVNULL)
-
-            try:
-                yield mount_point
-            finally:
-                # Detach the volume (force if necessary)
-                try:
-                    subprocess.run([
-                        'hdiutil', 'detach',
-                        mount_point,
-                        '-force'
-                    ], check=True, stdout=subprocess.DEVNULL)
-                except subprocess.CalledProcessError:
-                    pass
+        with hdiutil_disk_image_mounted() as mount_point:
+            yield mount_point
     elif is_linux() and is_ci():
         # NOTE: It is not possible to mount a disk image in GitHub Actions CI runners
         #       because the runner user does not have mount permissions.
         #       Therefore we cannot create a temporary directory on a new
         #       filesystem in this environment.
         raise SkipTest(
-            'cannot create temp directory on a new filesystem '
-            'in GitHub Actions CI runner'
+            'Cannot create temp directory on a new filesystem '
+            'on a Linux GitHub Actions CI runner'
         )
     else:
-        assert os.stat('.').st_dev != _filesystem_of_temporary_directory(), (
-            'Expected the current directory to be on a different filesystem '
-            'than the system\'s temporary directory'
-        )
+        # Fallback: Try to use a temp directory on the same filesystem
+        if os.stat('.').st_dev == _filesystem_of_temporary_directory():
+            raise SkipTest(
+                'Cannot create temp directory on a new filesystem '
+                'because the current directory is on the same filesystem '
+                'as the system\'s temporary directory and no other methods '
+                'for creating a new filesystem are available.'
+            )
         
-        with tempfile.TemporaryDirectory(prefix='tmpdir_', dir='.', ignore_cleanup_errors=True) as tmp_dirpath:
+        with xtempfile.TemporaryDirectory(prefix='tmpdir_', dir='.') as tmp_dirpath:
             yield tmp_dirpath
-        return
 
 
 @cache
@@ -1236,3 +1210,30 @@ def _file_object_write_mocked_to(raise_func: Callable[[], Never]) -> Iterator[No
     
     # Ensure write() was actually called
     assert mock_write_call_count > 0, f'write() was never called. Call count: {mock_write_call_count}'
+
+
+@contextmanager
+def _rmtree_fallback_for_send2trash(send2trash_location: str, *, linux_only: bool=True) -> Iterator[None]:
+    """
+    Context manager that provides a fallback for send2trash.rmtree() to use shutil.rmtree()
+    if send2trash fails.
+    
+    Defaults to only applying this fallback on Linux systems because send2trash
+    is less reliable on Linux and often requires additional permissions.
+    
+    Arguments:
+    * send2trash_location -- the import path for send2trash, e.g. 'send2trash.send2trash'
+    """
+    if linux_only and not is_linux():
+        yield
+        return
+    
+    real_send2trash = send2trash.send2trash  # capture
+    def wrapped_send2trash(path: str) -> None:
+        try:
+            real_send2trash(path)
+        except (send2trash.TrashPermissionError, OSError, Exception):
+            # If send2trash fails, fall back to shutil.rmtree
+            shutil.rmtree(path, ignore_errors=False)
+    with patch(send2trash_location, wrapped_send2trash):
+        yield

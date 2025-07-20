@@ -4,8 +4,30 @@ from crystal.model import (
     Project,
 )
 from crystal.tests.util.runner import pump_wx_events
-from crystal.tests.util.wait import wait_for, wait_for_future_ignoring_result
+from crystal.tests.util.wait import wait_for, wait_for_future, wait_for_future_ignoring_result
 from unittest.mock import patch
+
+
+_SAVE_AS_TIMEOUT = 32.0  # have observed 30.7s on build-macos
+
+
+async def save_as(project: Project, new_project_dirpath: str) -> None:
+    """
+    Performs a Save As operation on a project, waiting for it to complete.
+    
+    Only use this if there is no MainWindow.
+    If you have a MainWindow then instead use the pattern:
+    
+        async with _wait_for_save_as_dialog_to_complete(project):
+            with file_dialog_returning(save_path):
+                select_menuitem_now(
+                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+    """
+    await wait_for_future(
+        project.save_as(new_project_dirpath),
+        _SAVE_AS_TIMEOUT,
+        message=lambda: f'Timed out waiting {_SAVE_AS_TIMEOUT}s for save_as operation to complete for project {project!r}'
+    )
 
 
 @asynccontextmanager
@@ -14,7 +36,12 @@ async def wait_for_save_as_to_complete(project: Project) -> AsyncIterator[None]:
     Context that upon entry spies on Project.save_as,
     yields for the caller to start a Save As operation,
     and upon exit waits for the save_as operation to fully complete.
+    
+    Only use this if there is a MainWindow.
+    If there is no MainWindow then instead use the save_as() function above.
     """
+    timeout = _SAVE_AS_TIMEOUT
+    
     save_as_called = False
     save_as_future = None
     
@@ -34,7 +61,11 @@ async def wait_for_save_as_to_complete(project: Project) -> AsyncIterator[None]:
         # Wait for Save As operation to fully complete
         await wait_for(lambda: save_as_called or None)
         assert save_as_future is not None
-        await wait_for_future_ignoring_result(save_as_future)
+        await wait_for_future_ignoring_result(
+            save_as_future,
+            timeout,
+            message=lambda: f'Timed out waiting {timeout}s for save_as operation to complete for project {project!r}',
+            stacklevel_extra=1)
         
         # Sleep 1 event loop iteration for other observers of the Future
         # to finish their actions, notably MainWindow.on_save_complete

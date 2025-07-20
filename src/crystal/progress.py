@@ -3,6 +3,7 @@ from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.sizes import format_byte_size
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 from crystal.util.xfunctools import partial2
+from crystal.util.xos import is_wx_gtk, is_windows
 from crystal.util.xthreading import fg_affinity, fg_call_later, is_foreground_thread
 from functools import wraps
 import time
@@ -762,7 +763,17 @@ class DeferredProgressDialog:
         self._dialog = wx.ProgressDialog(*self._calls[0][1], **self._calls[0][2])
         self._shown = True
         if self._window_modal:
-            self._dialog.ShowWindowModal()
+            if is_wx_gtk() or is_windows():
+                # 1. GTK warns when showing a dialog as modal (or window-modal), so don't
+                # 2. Windows tries to run its own event loop when showing a modal dialog
+                #    and expects to be able call Exit() during that event loop.
+                #    However Crystal does not run model dialogs in a "real" model loop,
+                #    so that Exit() call will cause an assertion failure like:
+                #    > C++ assertion ""IsRunning()"" failed at ..\..\src\common\evtloopcmn.cpp(92) in wxEventLoopBase::Exit(): Use ScheduleExit() on not running loop
+                self._dialog.Show()
+            else:
+                # macOS fully supports window-modal dialogs
+                self._dialog.ShowWindowModal()
         for call in self._calls[1:]:
             self._call(call)
         self._calls.clear()

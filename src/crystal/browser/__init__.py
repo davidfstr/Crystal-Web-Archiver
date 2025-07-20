@@ -184,6 +184,9 @@ class MainWindow:
             if project.is_untitled:
                 # Never show extension for untitled projects
                 extension_visible = False
+            elif not os.path.exists(project.path):
+                print(f'*** Tried to calculate frame title for project not on disk: {project.path}', file=sys.stderr)
+                extension_visible = False
             else:
                 extension_visible = (
                     not get_hide_file_extension(project.path) if is_mac_os()
