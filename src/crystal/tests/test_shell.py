@@ -34,6 +34,7 @@ _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
 _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'FILE_EXTENSION',
     'OPENER_FILE_EXTENSION',
+    'PARTIAL_FILE_EXTENSION',
     'add_task',
     'close',
     'default_url_prefix',
@@ -69,8 +70,11 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
     'close',
     'entity_tree',
     'project',
+    'project_is_dirty_did_change',
+    'project_root_task_did_change',
     'start_server',
-    'task_tree'
+    'task_tree',
+    'try_close',
 ]
 
 # ------------------------------------------------------------------------------
