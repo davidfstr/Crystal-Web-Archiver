@@ -73,3 +73,4 @@ Error Handling:
 
 * For files over 1000 lines Copilot should provide a diff for manual application instead of editing directly with a tool. Copilot's editing tools do not work reliably on files more than 1000 lines long.
     * In particular `crystal/model.py` and `crystal/task.py` are over 1000 lines long and should not be edited directly.
+* Be sure to activate the Python virtual environment before running any `python` or `crystal` commands: `source venv3.12/bin/activate`
