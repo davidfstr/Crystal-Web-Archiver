@@ -1,4 +1,5 @@
 from collections.abc import Callable, Iterator
+from concurrent.futures import Future
 from contextlib import contextmanager
 from crystal.tests import (
     test_bulkheads, test_disk_io_errors, test_do_not_download_groups,
@@ -15,7 +16,7 @@ from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
-from crystal.util.xthreading import bg_affinity, has_foreground_thread
+from crystal.util.xthreading import bg_affinity, has_foreground_thread, is_foreground_thread
 from crystal.util.xtime import sleep_profiled
 from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
 import gc
@@ -89,7 +90,7 @@ def run_tests(test_names: list[str]) -> bool:
     The format of the summary report is designed to be similar
     to that used by Python's unittest module.
     """
-    with delay_between_downloads_minimized(), sleep_profiled():
+    with delay_between_downloads_minimized(), sleep_profiled(), _future_result_deadlock_detection():
         return _run_tests(test_names)
 
 
@@ -241,6 +242,34 @@ def _run_tests(test_names: list[str]) -> bool:
     print('\a', end='', flush=True)
     
     return is_ok
+
+# === Utility ===
+
+@contextmanager
+def _future_result_deadlock_detection():
+    """
+    Patch Future.result() to raise a RuntimeError if called from the foreground thread during tests.
+    
+    This helps catch deadlocks caused by waiting on a Future synchronously in the foreground thread.
+    """
+    original_result = Future.result
+    def patched_result(self, timeout=None):
+        if is_foreground_thread():
+            # HACK: Permit timeout=None when self.done() to accomodate existing
+            #       code that unsafely calls Future.result(timeout=None)
+            #       in a context it believes the Future will always be done.
+            if timeout is None and not self.done() and not getattr(self, '_cr_declare_no_deadlocks', False):
+                raise AssertionError(
+                    "Calling Future.result() from the foreground thread will cause a deadlock. "
+                    "Use 'await wait_for_future(future)' instead."
+                )
+        return original_result(self, timeout)
+
+    Future.result = patched_result
+    try:
+        yield
+    finally:
+        Future.result = original_result
 
 
 @contextmanager
