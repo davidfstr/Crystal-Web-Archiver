@@ -8,8 +8,9 @@ This thread is responsible for:
 """
 
 from collections import deque
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterator
 from concurrent.futures import Future
+from contextlib import contextmanager
 from crystal.util.bulkheads import (
     capture_crashes_to_stderr, ensure_is_bulkhead_call,
 )
@@ -25,6 +26,8 @@ import traceback
 from typing import Any, assert_never, cast, Deque, Optional, Protocol, TypeVar
 from typing_extensions import ParamSpec
 import wx
+
+from crystal.util.xos import is_windows
 
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.
@@ -368,9 +371,29 @@ def bg_call_later(
     """
     if _DEFERRED_BG_CALLS_MUST_CAPTURE_CRASHES:
         ensure_is_bulkhead_call(callable)
+    
+    # On Windows, initialize COM on every thread so that finalizers
+    # interacting with wxPython COM objects do not print the warning
+    # "Windows fatal exception: code 0x800401f0"
+    if is_windows():
+        callable = _com_initialized()(partial2(callable, *args))  # reinterpret
+        args = ()  # reinterpret
+    
     thread = threading.Thread(target=callable, args=args, daemon=daemon)
     thread.start()
     return thread
+
+
+@contextmanager
+def _com_initialized() -> Iterator[None]:
+    assert is_windows(), 'COM initialization is only needed on Windows'
+    import ctypes
+    ole32 = ctypes.CDLL('ole32.dll')
+    ole32.CoInitialize(None)
+    try:
+        yield
+    finally:
+        ole32.CoUninitialize()
 
 
 # ------------------------------------------------------------------------------

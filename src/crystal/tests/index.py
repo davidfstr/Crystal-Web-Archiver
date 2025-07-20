@@ -16,7 +16,8 @@ from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
-from crystal.util.xthreading import bg_affinity, has_foreground_thread, is_foreground_thread
+from crystal.util.xos import is_windows
+from crystal.util.xthreading import bg_affinity, fg_call_and_wait, has_foreground_thread, is_foreground_thread
 from crystal.util.xtime import sleep_profiled
 from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
 import gc
@@ -258,14 +259,24 @@ def _run_tests(test_names: list[str]) -> bool:
                 print('OK')
             print()
             
-            # Garbage collect, running any finalizers in __del__() early,
-            # such as the warnings printed by ListenableMixin
-            gc.collect()
-            
             if not has_foreground_thread():
                 print('FATAL ERROR: Foreground thread is not running')
                 print()
                 break
+
+            # Garbage collect, running any finalizers in __del__() early,
+            # such as the warnings printed by ListenableMixin
+            # 
+            # However skip forced garbage collection on Windows,
+            # because it is suspected to be related to hang of the test
+            # test_when_save_as_menu_item_selected_for_titled_or_untitled_project_then_shows_save_as_dialog.
+            # 
+            # If garbage collection is really needed on Windows,
+            # then it should probably be run on the foreground thread
+            # with fg_call_and_wait(), since wxPython Windows seems to
+            # implicitly assume that it will be.
+            if not is_windows():
+                gc.collect()
     
     end_time = time.time()  # capture
     delta_time = end_time - start_time
