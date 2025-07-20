@@ -193,8 +193,14 @@ def fg_call_later(
         )
         args=()
     
+    is_fg_thread_now = is_foreground_thread()
+    if is_fg_thread_now != is_fg_thread:
+        print(
+            f'*** Thread type changed unexpectedly: '
+            f'was fg_thread={is_fg_thread}, now fg_thread={is_fg_thread_now}', file=sys.stderr)
+        is_fg_thread = is_fg_thread_now  # reinterpret
     if is_fg_thread and not force_later:
-        callable(*args)
+        callable(*args)  # type: ignore[call-arg]
         return
     
     if len(args) != 0:
