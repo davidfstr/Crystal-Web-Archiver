@@ -351,13 +351,16 @@ def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False, fix_tb:
     # Print traceback to assist in debugging in the terminal,
     # including ancestor callers of bulkhead_call
     err_file = sys.stderr
-    print(
-        cli.TERMINAL_FG_RED if is_error else cli.TERMINAL_FG_YELLOW,
-        end='', file=err_file)
+    
     full_tb_summary = getattr(e, '__full_traceback__', Ellipsis)
     if full_tb_summary is Ellipsis:
         full_tb_summary = _extract_bulkhead_traceback(
             e, fix_tb=fix_tb, extra_stacklevel=1)
+    
+    print(
+        cli.TERMINAL_FG_RED if is_error else cli.TERMINAL_FG_YELLOW,
+        end='', file=err_file)
+    
     if full_tb_summary is not None:
         print('Exception in bulkhead:', file=err_file)
         print('Traceback (most recent call last):', file=err_file)
@@ -367,8 +370,24 @@ def _print_bulkhead_exception(e: BaseException, *, is_error: bool=False, fix_tb:
         else:
             for x in traceback.format_list(full_tb_summary):
                 print(x, end='', file=err_file)
+    
     for x in traceback.format_exception_only(type(e), e):
         print(x, end='', file=err_file)
+    
+    # Print exception chaining context (cause or context) with full traceback
+    if getattr(e, '__cause__', None) is not None:
+        cause = e.__cause__
+        assert cause is not None
+        print('\nThe above exception was the direct cause of the following exception:\n', file=err_file)
+        for line in traceback.format_exception(type(cause), cause, cause.__traceback__):  # type: ignore[attr-defined]
+            print(line, end='', file=err_file)
+    elif getattr(e, '__context__', None) is not None and not getattr(e, '__suppress_context__', False):
+        ctx = e.__context__
+        assert ctx is not None
+        print('\nDuring handling of the above exception, another exception occurred:\n', file=err_file)
+        for line in traceback.format_exception(type(ctx), ctx, ctx.__traceback__):  # type: ignore[attr-defined]
+            print(line, end='', file=err_file)
+    
     print(cli.TERMINAL_RESET, end='', file=err_file)
     err_file.flush()
 
