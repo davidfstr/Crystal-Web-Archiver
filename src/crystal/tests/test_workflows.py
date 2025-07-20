@@ -22,6 +22,7 @@ from crystal.tests.util.windows import (
     OpenOrCreateDialog, PreferencesDialog,
 )
 import crystal.tests.util.xtempfile as xtempfile
+from crystal.tests.util.xtzutils import localtime_fallback_for_get_localzone
 from crystal.util.xos import is_windows
 import datetime
 import re
@@ -781,6 +782,7 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 assert True == (await is_url_not_in_archive(comic1_url))
 
 
+@localtime_fallback_for_get_localzone('crystal.browser.preferences.get_localzone')
 async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
     # Define original URLs
     home_original_url = 'https://xkcd.com/'
