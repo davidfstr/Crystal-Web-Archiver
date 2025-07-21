@@ -14,6 +14,7 @@ from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.save_as import (
     save_as_with_ui,
     save_as_without_ui,
+    start_save_as_with_ui,
     wait_for_save_as_to_complete,
 )
 from crystal.tests.util.server import served_project
@@ -540,9 +541,7 @@ async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_proje
         )
         
         async with _assert_save_as_dialog_not_shown_during_save_as(project):
-            with file_dialog_returning(new_project_dirpath):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            start_save_as_with_ui(rmw, new_project_dirpath)
         
         # Verify project was moved (original no longer exists)
         if True:
@@ -625,9 +624,7 @@ async def test_when_save_as_large_project_then_progress_updates_incrementally() 
             
             # Save to different filesystem (using UI)
             async with _wait_for_save_as_dialog_to_complete(project) as spies:
-                with file_dialog_returning(new_project_dirpath):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+                start_save_as_with_ui(rmw, new_project_dirpath)
             spy_copying = spies.copying
             
             # Verify the project copy operation started successfully

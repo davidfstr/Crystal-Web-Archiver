@@ -16,6 +16,8 @@ import wx
 _SAVE_AS_TIMEOUT = 32.0  # have observed 30.7s on build-macos
 
 
+# === Save As (High Level) ===
+
 async def save_as_without_ui(project: Project, new_project_dirpath: str) -> None:
     """
     Performs a Save As operation on a project, waiting for it to complete, without using the UI.
@@ -39,9 +41,21 @@ async def save_as_with_ui(rmw: RealMainWindow, new_project_dirpath: str) -> None
     """
     project = rmw.project
     async with wait_for_save_as_to_complete(project):
-        with file_dialog_returning(new_project_dirpath):
-            select_menuitem_now(
-                menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        start_save_as_with_ui(rmw, new_project_dirpath)
+
+
+# === Save As (Low Level) ===
+
+def start_save_as_with_ui(rmw: RealMainWindow, new_project_dirpath: str) -> None:
+    """
+    Starts a Save As operation on a project using the UI,
+    but does NOT wait for it to complete.
+    
+    See also: save_as_with_ui()
+    """
+    with file_dialog_returning(new_project_dirpath):
+        select_menuitem_now(
+            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
 
 
 @asynccontextmanager
