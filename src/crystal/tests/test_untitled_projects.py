@@ -1040,7 +1040,6 @@ def _simulate_os_logout_on_exit() -> Iterator[wx.CloseEvent]:
 class SaveAsSpies:
     """Mutable container for spies on SaveAsProgressDialog methods."""
     copying: MagicMock | None = None
-    did_copy_files: MagicMock | None = None
 
 @asynccontextmanager
 async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterator[SaveAsSpies]:
@@ -1054,17 +1053,14 @@ async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterato
     spies_yielded = None
     
     patcher_copying = None
-    patcher_did_copy_files = None
     spy_copying = None
-    spy_did_copy_files = None
     
     def SaveAsProgressDialogSpy(*args, **kwargs) -> SaveAsProgressDialog:  # wraps real constructor
-        nonlocal patcher_copying, patcher_did_copy_files
-        nonlocal spy_did_copy_files, spy_copying
+        nonlocal patcher_copying
+        nonlocal spy_copying
         nonlocal spies_yielded
         
         assert (
-            spy_did_copy_files is None and
             spy_copying is None
         ), 'Expected SaveAsProgressDialog to be created only once'
         assert spies_yielded is not None, 'Expected SaveAsSpies to already be yielded'
@@ -1073,13 +1069,10 @@ async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterato
         
         # Spy on calls to the returned SaveAsProgressDialog instance
         patcher_copying = patch.object(instance, 'copying', wraps=instance.copying)
-        patcher_did_copy_files = patch.object(instance, 'did_copy_files', wraps=instance.did_copy_files)
         spy_copying = patcher_copying.start()
-        spy_did_copy_files = patcher_did_copy_files.start()
         
         # Update the yielded spies object with spy instances
         spies_yielded.copying = spy_copying
-        spies_yielded.did_copy_files = spy_did_copy_files
         
         return instance
     
@@ -1090,8 +1083,6 @@ async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterato
                 # 2. Yield a placeholder for spies that will be updated when the dialog is created
                 yield (spies_yielded := SaveAsSpies())
     finally:
-        if patcher_did_copy_files is not None:
-            patcher_did_copy_files.stop()
         if patcher_copying is not None:
             patcher_copying.stop()
 
