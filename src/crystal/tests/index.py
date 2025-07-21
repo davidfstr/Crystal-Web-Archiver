@@ -413,7 +413,7 @@ def _tqdm_locks_disabled() -> Iterator[None]:
     from tqdm.std import TqdmDefaultWriteLock  # type: ignore[attr-defined]
     from unittest.mock import patch
     
-    @classmethod
+    @classmethod  # type: ignore[misc]
     def create_mp_lock_disabled(cls):
         if not hasattr(cls, 'mp_lock'):
             cls.mp_lock = None
