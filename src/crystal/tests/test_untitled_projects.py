@@ -12,8 +12,9 @@ from crystal.tests.util.controls import (
 )
 from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.save_as import (
-    save_as,
-    wait_for_save_as_to_complete as _wait_for_save_as_to_complete,
+    save_as_with_ui,
+    save_as_without_ui,
+    wait_for_save_as_to_complete,
 )
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
@@ -130,7 +131,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
                 'Expected old_project_dirpath and new_project_dirpath to be on the same filesystem: '
                 f'{old_project_dirpath=}, {new_container_dirpath=}'
             )
-            await save_as(project, new_project_dirpath)
+            await save_as_without_ui(project, new_project_dirpath)
             
             assert False == project.is_dirty
             assert False == project.is_untitled
@@ -182,7 +183,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
                 f'{old_project_dirpath=}, {new_container_dirpath=}'
             )
             try:
-                await save_as(project, new_project_dirpath)
+                await save_as_without_ui(project, new_project_dirpath)
             except ProjectReadOnlyError as e:
                 raise SkipTest(
                     'cannot create a temporary directory on a new filesystem '
@@ -225,7 +226,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
             new_project_dirpath = os.path.join(
                 new_container_dirpath,
                 os.path.basename(old_project_dirpath))
-            await save_as(project, new_project_dirpath)
+            await save_as_without_ui(project, new_project_dirpath)
             append_deferred_top_level_tasks(project)
             
             # Ensure tasks are restored
@@ -423,12 +424,7 @@ async def test_when_save_as_menu_item_selected_for_titled_or_untitled_project_th
                 ) -> None:
             with project_context_factory() as project, \
                     RealMainWindow(project) as rmw:
-                async with _wait_for_save_as_to_complete(project):
-                    # NOTE: Internally asserts that file dialog is shown
-                    with file_dialog_returning(target_path):
-                        # NOTE: Internally asserts that menuitem is enabled
-                        select_menuitem_now(
-                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+                await save_as_with_ui(rmw, target_path)
 
         # Test with untitled project
         with subtests.test(project_type='untitled'):
@@ -468,10 +464,7 @@ async def test_when_save_as_project_then_new_tasks_started_continue_to_show_in_t
         assert initial_task_count > 0
         
         # Perform Save As
-        async with _wait_for_save_as_dialog_to_complete(project):
-            with file_dialog_returning(save_path):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        await save_as_with_ui(rmw, save_path)
         
         # Verify project path changed
         assert project.path == save_path
@@ -509,10 +502,7 @@ async def test_when_save_as_untitled_project_to_different_filesystem_then_copies
         new_project_dirpath = os.path.join(
             new_container_dirpath,
             os.path.basename(old_project_dirpath))
-        async with _wait_for_save_as_dialog_to_complete(project):
-            with file_dialog_returning(new_project_dirpath):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+        await save_as_with_ui(rmw, new_project_dirpath)
         
         # Verify project was copied
         if True:
@@ -588,10 +578,7 @@ async def test_when_save_as_titled_project_then_copies_project_and_shows_progres
                 RealMainWindow(project) as rmw:
             copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
             # NOTE: Verifies progress dialog is shown internally
-            async with _wait_for_save_as_dialog_to_complete(project):
-                with file_dialog_returning(copy_project_path):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            await save_as_with_ui(rmw, copy_project_path)
         
         # Verify project was copied, and original still exists
         if True:
@@ -693,10 +680,7 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
                 _rmtree_fallback_for_send2trash('crystal.model.send2trash'):
             # Run the save operation
             with patch.object(SaveAsProgressDialog, 'copying', side_effect=CancelSaveAs) as mock_copying:
-                async with _wait_for_save_as_dialog_to_complete(project):
-                    with file_dialog_returning(save_path):
-                        select_menuitem_now(
-                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+                await save_as_with_ui(rmw, save_path)
             
             # Ensure cancellation was triggered properly
             assert mock_copying.call_count > 0, f'copying() was never called. Call count: {mock_copying.call_count}'
@@ -744,10 +728,7 @@ async def test_when_save_as_project_and_destination_filesystem_writable_generall
         with patch.object(DatabaseCursor, 'execute', spy_execute), \
                 patch('crystal.browser.ShowModal', mocked_show_modal(
                     'cr-save-error-dialog', wx.ID_OK)):
-            async with _wait_for_save_as_dialog_to_complete(project):
-                with file_dialog_returning(save_path):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            await save_as_with_ui(rmw, save_path)
         
         assert project.readonly, \
             'Expected project to be reopened as read-only after SQLite error'
@@ -785,10 +766,7 @@ async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_clea
             with _file_object_write_mocked_to(raise_disk_full_error), \
                     patch('crystal.browser.ShowModal', mocked_show_modal(
                         'cr-save-error-dialog', wx.ID_OK)):
-                async with _wait_for_save_as_dialog_to_complete(project):
-                    with file_dialog_returning(save_path):
-                        select_menuitem_now(
-                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+                await save_as_with_ui(rmw, save_path)
 
 
 @awith_subtests
@@ -835,10 +813,7 @@ async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpect
                     with _file_object_write_mocked_to(raise_destination_filesystem_gone_error), \
                             patch('crystal.browser.ShowModal', mocked_show_modal(
                                 'cr-save-error-dialog', wx.ID_OK)):
-                        async with _wait_for_save_as_dialog_to_complete(project):
-                            with file_dialog_returning(save_path):
-                                select_menuitem_now(
-                                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+                        await save_as_with_ui(rmw, save_path)
 
 
 # TODO: Consider altering the behavior such that the copy is opened as writable rather than readonly
@@ -867,10 +842,7 @@ async def test_when_save_as_readonly_project_then_creates_writable_copy_but_open
             
             # Perform Save As
             copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
-            async with _wait_for_save_as_dialog_to_complete(readonly_project):
-                with file_dialog_returning(copy_project_path):
-                    select_menuitem_now(
-                        menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+            await save_as_with_ui(rmw, copy_project_path)
             
             # Verify project was copied to new location
             assert os.path.exists(copy_project_path)
@@ -924,10 +896,7 @@ async def test_when_save_as_project_and_old_project_fails_to_close_then_handles_
                 # Mock error dialog to acknowledge the timeout error
                 with patch('crystal.browser.ShowModal', mocked_show_modal(
                         'cr-save-error-dialog', wx.ID_OK)):
-                    async with _wait_for_save_as_dialog_to_complete(project):
-                        with file_dialog_returning(save_path):
-                            select_menuitem_now(
-                                menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+                    await save_as_with_ui(rmw, save_path)
         
         # Verify project is still at original path and remains functional
         assert project.path == old_path
@@ -975,10 +944,7 @@ async def test_when_save_as_project_and_new_project_fails_to_open_then_handles_g
             with patch('sqlite3.connect', side_effect=raise_database_corruption_error), \
                     patch('crystal.browser.ShowModal', mocked_show_modal(
                         'cr-save-error-dialog', wx.ID_OK)):
-                async with _wait_for_save_as_dialog_to_complete(project):
-                    with file_dialog_returning(save_path):
-                        select_menuitem_now(
-                            menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+                await save_as_with_ui(rmw, save_path)
         
         # Verify project is still at original path and remains functional
         assert project.path == old_path
@@ -1119,7 +1085,7 @@ async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterato
     
     try:
         with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
-            async with _wait_for_save_as_to_complete(project):
+            async with wait_for_save_as_to_complete(project):
                 # 1. Tell caller to start a Save As operation
                 # 2. Yield a placeholder for spies that will be updated when the dialog is created
                 yield (spies_yielded := SaveAsSpies())
@@ -1152,7 +1118,7 @@ async def _assert_save_as_dialog_not_shown_during_save_as(project: Project) -> A
         old_project_dirpath = project.path  # capture
         assert os.path.exists(old_project_dirpath)
         with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
-            async with _wait_for_save_as_to_complete(project):
+            async with wait_for_save_as_to_complete(project):
                 yield
             
             assert not os.path.exists(old_project_dirpath)

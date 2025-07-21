@@ -1,33 +1,47 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from crystal.model import (
-    Project,
+from crystal.browser import MainWindow as RealMainWindow
+from crystal.model import Project
+from crystal.tests.util.controls import (
+    file_dialog_returning, select_menuitem_now,
 )
 from crystal.tests.util.runner import pump_wx_events
-from crystal.tests.util.wait import wait_for, wait_for_future, wait_for_future_ignoring_result
+from crystal.tests.util.wait import (
+    wait_for, wait_for_future, wait_for_future_ignoring_result,
+)
 from unittest.mock import patch
+import wx
 
 
 _SAVE_AS_TIMEOUT = 32.0  # have observed 30.7s on build-macos
 
 
-async def save_as(project: Project, new_project_dirpath: str) -> None:
+async def save_as_without_ui(project: Project, new_project_dirpath: str) -> None:
     """
-    Performs a Save As operation on a project, waiting for it to complete.
+    Performs a Save As operation on a project, waiting for it to complete, without using the UI.
     
     Only use this if there is no MainWindow.
-    If you have a MainWindow then instead use the pattern:
-    
-        async with _wait_for_save_as_dialog_to_complete(project):
-            with file_dialog_returning(save_path):
-                select_menuitem_now(
-                    menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
+    If you have a MainWindow then instead use save_as_with_ui().
     """
     await wait_for_future(
         project.save_as(new_project_dirpath),
         _SAVE_AS_TIMEOUT,
         message=lambda: f'Timed out waiting {_SAVE_AS_TIMEOUT}s for save_as operation to complete for project {project!r}'
     )
+
+
+async def save_as_with_ui(rmw: RealMainWindow, new_project_dirpath: str) -> None:
+    """
+    Performs a Save As operation on a project, waiting for it to complete, using the UI.
+
+    Only use this if there is a MainWindow.
+    If there is no MainWindow then instead use save_as_without_ui().
+    """
+    project = rmw.project
+    async with wait_for_save_as_to_complete(project):
+        with file_dialog_returning(new_project_dirpath):
+            select_menuitem_now(
+                menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
 
 
 @asynccontextmanager
@@ -37,8 +51,7 @@ async def wait_for_save_as_to_complete(project: Project) -> AsyncIterator[None]:
     yields for the caller to start a Save As operation,
     and upon exit waits for the save_as operation to fully complete.
     
-    Only use this if there is a MainWindow.
-    If there is no MainWindow then instead use the save_as() function above.
+    See also: save_as_with_ui()
     """
     timeout = _SAVE_AS_TIMEOUT
     
