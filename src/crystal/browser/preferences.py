@@ -190,6 +190,10 @@ class PreferencesDialog:
                 year=stale_before_wdt.year,
                 month=stale_before_wdt.month + 1,
                 day=stale_before_wdt.day)
+            # TODO: Gracefully handle situation where get_localzone() fails with an error like:
+            #       tzlocal.utils.ZoneInfoNotFoundError: 'Multiple conflicting time zone configurations found:\n/etc/timezone: Etc/UTC\n/etc/localtime is a symlink to: America/New_York\nFix the configuration, or set the time zone in a TZ environment variable.\n'
+            #       This has been observed to happen on Ubuntu 22 when run in Parallels Desktop 20.
+            #       Fix with: $ readlink -f /etc/localtime | sed 's|.*/zoneinfo/||' | sudo tee /etc/timezone
             stale_before_dt_local = stale_before_dt.replace(tzinfo=get_localzone())
             self._project.min_fetch_date = stale_before_dt_local
         else:

@@ -1,4 +1,11 @@
+from collections.abc import Callable
+from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.sizes import format_byte_size
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
+from crystal.util.xfunctools import partial2
+from crystal.util.xos import is_wx_gtk, is_windows
+from crystal.util.xthreading import fg_affinity, fg_call_later, is_foreground_thread
+from functools import wraps
 import time
 from typing import List, Optional, overload, Self, TypeVar
 from typing_extensions import override
@@ -17,9 +24,11 @@ class _AbstractProgressDialog:
     _dialog_style: int | None
     _dialog: 'Optional[DeferredProgressDialog]'
     
-    def __init__(self) -> None:
+    def __init__(self, parent: Optional[wx.Window]=None, *, window_modal: bool=False) -> None:
         self._dialog_style = None
         self._dialog = None
+        self._parent = parent
+        self._window_modal = window_modal
         self.reset()
     
     def reset(self) -> None:
@@ -35,9 +44,16 @@ class _AbstractProgressDialog:
             self._dialog.Destroy()
             self._dialog = None  # very important; avoids segfaults
     
-    # === Utility ===
+    def __enter__(self) -> Self:
+        return self
     
+    def __exit__(self, tp, value, tb) -> None:
+        self.reset()
+    
+    # === Utility ===
+
     # protected
+    @fg_affinity
     def _update_can_cancel(self, can_cancel: bool, new_message: str) -> None:
         """
         Updates whether the visible progress dialog shows a cancel button or not,
@@ -70,9 +86,11 @@ class _AbstractProgressDialog:
                 # TODO: Shouldn't the maximum of the previous dialog version,
                 #       if any, be preserved here?
                 maximum=1,
+                parent=self._parent,
                 style=new_style,
                 # Show dialog soon, only if it didn't complete in the meantime
                 show_after=_DELAY_UNTIL_PROGRESS_DIALOG_SHOWS,
+                window_modal=self._window_modal,
             )
             self._dialog.Name = new_name
         else:
@@ -84,6 +102,7 @@ class _AbstractProgressDialog:
                 pass
     
     # protected
+    @fg_affinity
     def _update(self, new_value: int, new_message: str='') -> None:
         """
         Updates the value of the progress bar in the visible progress dialog.
@@ -99,6 +118,7 @@ class _AbstractProgressDialog:
             raise self._CancelException()
     
     # protected
+    @fg_affinity
     def _pulse(self, new_message: str='') -> None:
         """
         Changes the progress bar in the visible progress dialog
@@ -188,11 +208,6 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         self._root_resource_count = None
         self._resource_group_count = None
         self._entity_tree_node_count = None
-    
-    # === Enter ===
-    
-    def __enter__(self) -> Self:
-        return self
     
     # === Phase 0 ===
     
@@ -404,11 +419,6 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         self._update(
             4,
             f'Creating {entity_tree_node_count} entity tree nodes...')
-    
-    # === Exit ===
-    
-    def __exit__(self, tp, value, tb) -> None:
-        self.reset()
 
 
 # ------------------------------------------------------------------------------
@@ -494,6 +504,165 @@ class LoadUrlsProgressDialog(_AbstractProgressDialog, LoadUrlsProgressListener):
 
 
 # ------------------------------------------------------------------------------
+# SaveAsProgressListener
+
+class CancelSaveAs(Exception):
+    """Raised when a save operation is canceled by the user."""
+    pass
+
+
+# NOTE: See subclass SaveAsProgressDialog for the documentation of
+#       the various methods in this interface.
+class SaveAsProgressListener:
+    def calculating_total_size(self, message: str) -> None:
+        pass
+    
+    def total_size_calculated(self, total_file_count: int, total_byte_count: int) -> None:
+        pass
+    
+    def copying(self, file_index: int, filename: str, bytes_copied: int, bytes_per_second: float) -> None:
+        pass
+    
+    def did_copy_files(self) -> None:
+        pass
+    
+    def reset(self) -> None:
+        pass
+
+
+DummySaveAsProgressListener = SaveAsProgressListener
+
+
+def _cancel_or_fg_trampoline(func: Callable[..., None]) -> Callable[..., None]:
+    """
+    Alters the decorated function to raise CancelSaveAs if the user requested
+    cancel. Otherwise runs the decorated function soon on the foreground thread.
+    
+    See also: @fg_trampoline
+    """
+    @wraps(func)
+    def wrapped_func(self: 'SaveAsProgressDialog', *args, **kwargs) -> None:
+        """
+        Raises:
+        * CancelSaveAs
+        """
+        if self._cancel_requested:
+            # If the user has requested to cancel the operation,
+            # raise CancelSaveAs to stop the operation.
+            raise CancelSaveAs()
+        if is_foreground_thread():
+            func(self, *args, **kwargs)
+        else:
+            fg_call_later(partial2(func, self, *args, **kwargs))
+    return wrapped_func
+
+
+class SaveAsProgressDialog(_AbstractProgressDialog, SaveAsProgressListener):
+    """
+    Dialog that shows progress while saving a project to a new location.
+    """
+    _dialog_title = 'Saving Project...'
+    _CancelException = CancelSaveAs
+    
+    def __init__(self, parent: wx.Window) -> None:
+        super().__init__(parent, window_modal=True)
+        self._total_byte_count = 0
+        self._total_file_count = 0
+        self._value_shift = 0
+        self._cancel_requested = False
+    
+    @_cancel_or_fg_trampoline
+    @capture_crashes_to_stderr
+    @override
+    def calculating_total_size(self, message: str) -> None:
+        """
+        Called when starting to calculate the total size of files to copy.
+        
+        Raises:
+        * CancelSaveAs
+        """
+        self._update_can_cancel(True, message)
+        
+        assert self._dialog is not None
+        self._dialog.Show()  # show immediately
+        self._pulse(message)
+    
+    @_cancel_or_fg_trampoline
+    @capture_crashes_to_stderr
+    @override
+    def total_size_calculated(self, total_file_count: int, total_byte_count: int) -> None:
+        """
+        Called when the total file and byte count have been calculated.
+
+        Raises:
+        * CancelSaveAs
+        """
+        self._total_byte_count = total_byte_count
+        self._total_file_count = total_file_count
+        
+        # Calculate how much to down-shift values so that they fit in a C int
+        # (a 32-bit signed integer on most platforms)
+        max_value = total_byte_count
+        value_shift = 0
+        while max_value > 2**31 - 1:
+            max_value >>= 1
+            value_shift += 1
+        self._value_shift = value_shift
+
+        assert self._dialog is not None
+        self._dialog.SetRange(total_byte_count >> self._value_shift)
+    
+    @_cancel_or_fg_trampoline
+    @capture_crashes_to_stderr
+    @override
+    def copying(self, file_index: int, filename: str, bytes_copied: int, bytes_per_second: float) -> None:
+        """
+        Called periodically during the copy operation, reporting progress.
+        
+        Raises:
+        * CancelSaveAs
+        """
+        assert self._dialog is not None
+        self._update(
+            bytes_copied >> self._value_shift,
+            f'Copying {format_byte_size(bytes_copied)} of about {format_byte_size(self._total_byte_count)} ' +
+            f'({format_byte_size(int(bytes_per_second))}/s)')
+    
+    @_cancel_or_fg_trampoline
+    @capture_crashes_to_stderr
+    @override
+    def did_copy_files(self) -> None:
+        """
+        Called when all files have been copied.
+        
+        Raises:
+        * CancelSaveAs
+        """
+        assert self._dialog is not None
+        self._update(
+            self._dialog.GetRange(),
+            'Copy complete')
+    
+    # === Utility ===
+    
+    @override
+    def _update(self, *args, **kwargs) -> None:
+        try:
+            super()._update(*args, **kwargs)
+        except CancelSaveAs:
+            # Tell the next-called @_cancel_or_fg_trampoline method to raise CancelSaveAs
+            self._cancel_requested = True
+    
+    @override
+    def _pulse(self, *args, **kwargs) -> None:
+        try:
+            super()._pulse(*args, **kwargs)
+        except CancelSaveAs:
+            # Tell the next-called @_cancel_or_fg_trampoline method to raise CancelSaveAs
+            self._cancel_requested = True
+
+
+# ------------------------------------------------------------------------------
 # DeferredProgressDialog
 
 _R = TypeVar('_R')
@@ -518,6 +687,7 @@ class DeferredProgressDialog:
             
             # DeferredProgressDialog parameters
             show_after: float | None=None,
+            window_modal: bool=False,
             
             # Unknown parameters
             *args,
@@ -531,7 +701,8 @@ class DeferredProgressDialog:
             (title, message, maximum, parent, style) + args,
             kwargs
         )]  # type: List[_Call]
-        self._show_at = time.time() + show_after
+        self._show_at = time.monotonic() + show_after
+        self._window_modal = window_modal
         
         self._shown = False
         self._name = None  # type: Optional[str]
@@ -573,7 +744,16 @@ class DeferredProgressDialog:
     
     # === Operations ===
     
+    def IsShown(self) -> bool:
+        return self._shown
+    
     def Show(self) -> None:
+        """
+        Shows this progress dialog.
+        
+        If configured to show as window modal, then it will
+        be shown as a window modal dialog.
+        """
         if self._shown:
             return
         
@@ -582,6 +762,18 @@ class DeferredProgressDialog:
         assert self._calls[0][0] == '__init__'
         self._dialog = wx.ProgressDialog(*self._calls[0][1], **self._calls[0][2])
         self._shown = True
+        if self._window_modal:
+            if is_wx_gtk() or is_windows():
+                # 1. GTK warns when showing a dialog as modal (or window-modal), so don't
+                # 2. Windows tries to run its own event loop when showing a modal dialog
+                #    and expects to be able call Exit() during that event loop.
+                #    However Crystal does not run model dialogs in a "real" model loop,
+                #    so that Exit() call will cause an assertion failure like:
+                #    > C++ assertion ""IsRunning()"" failed at ..\..\src\common\evtloopcmn.cpp(92) in wxEventLoopBase::Exit(): Use ScheduleExit() on not running loop
+                self._dialog.Show()
+            else:
+                # macOS fully supports window-modal dialogs
+                self._dialog.ShowWindowModal()
         for call in self._calls[1:]:
             self._call(call)
         self._calls.clear()
@@ -596,7 +788,7 @@ class DeferredProgressDialog:
     
     def Update(self, value: int, newmsg: str='') -> tuple[bool, bool]:
         # Show self if show_at time has passed
-        if not self._shown and time.time() >= self._show_at:
+        if not self._shown and time.monotonic() >= self._show_at:
             self.Show()
         
         # Defer/apply operation
@@ -605,7 +797,7 @@ class DeferredProgressDialog:
     
     def Pulse(self, newmsg: str) -> tuple[bool, bool]:
         # Show self if show_at time has passed
-        if not self._shown and time.time() >= self._show_at:
+        if not self._shown and time.monotonic() >= self._show_at:
             self.Show()
         
         # Defer/apply operation

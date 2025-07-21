@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.model import Project
+from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.windows import OpenOrCreateDialog
@@ -47,34 +48,12 @@ async def test_project_opens_as_readonly_when_project_is_on_readonly_filesystem(
         async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
             pass
 
-        # Create disk image with project on it
-        dmg_filepath = os.path.join(working_dirpath, 'Project.dmg')
-        subprocess.run([
-            'hdiutil',
-            'create',
-            '-srcfolder', volume_src_dirpath,
-            dmg_filepath,
-        ], check=True, stdout=subprocess.DEVNULL)
-        
-        # Mount disk image as readonly
-        subprocess.run([
-            'hdiutil',
-            'attach',
-            dmg_filepath,
-            '-readonly',
-        ], check=True, stdout=subprocess.DEVNULL)
-        volume_dirpath = '/Volumes/Project'
-        assert os.path.exists(volume_dirpath)
-        try:
+        # Create disk image with the project on it. Mount it as read-only.
+        with hdiutil_disk_image_mounted(srcfolder=volume_src_dirpath, readonly=True) as volume_dirpath:
+            assert os.path.exists(volume_dirpath)
             mounted_project_dirpath = os.path.join(volume_dirpath, 'Project.crystalproj')
             async with (await OpenOrCreateDialog.wait_for()).open(mounted_project_dirpath) as (mw, _):
                 assert True == mw.readonly
-        finally:
-            subprocess.run([
-                'umount',
-                '-f',
-                volume_dirpath,
-            ], check=True)
 
 
 @awith_subtests

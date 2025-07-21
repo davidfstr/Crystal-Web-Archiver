@@ -1,0 +1,13 @@
+{
+    "search.exclude": {
+        "setup/build/**": true,
+        "setup/dist/**": true
+    },
+    "python.analysis.exclude": [
+        "**/__pycache__",
+        ".git",
+        "*venv*/**",
+        "setup/build",
+        "setup/dist"
+    ]
+}

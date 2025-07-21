@@ -1,5 +1,6 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
+import sys
 from crystal import __version__ as crystal_version
 from crystal import APP_NAME
 from crystal.browser.entitytree import (
@@ -11,11 +12,11 @@ from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree
 from crystal.model import (
-    Project, Resource, ResourceGroup, ResourceGroupSource, RootResource,
+    Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
 from crystal.progress import (
-    CancelLoadUrls, DummyOpenProjectProgressListener,
-    OpenProjectProgressListener,
+    CancelLoadUrls, CancelSaveAs, DummyOpenProjectProgressListener,
+    OpenProjectProgressListener, SaveAsProgressDialog,
 )
 from crystal.server import ProjectServer
 from crystal.task import DownloadResourceGroupMembersTask, RootTask
@@ -46,13 +47,14 @@ from crystal.util.xsqlite3 import (
     is_database_closed_error, is_database_gone_error,
 )
 from crystal.util.xthreading import (
-    bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
+    bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, fg_trampoline, fg_wait_for,
     set_is_quitting,
 )
 from functools import partial
 import os
 import sqlite3
 import time
+import traceback
 from typing import Optional
 import webbrowser
 import wx
@@ -96,20 +98,7 @@ class MainWindow:
         try:
             self._create_actions()
             
-            frame_title: str
-            filename_with_ext = os.path.basename(project.path)
-            (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
-            if is_windows() or is_kde_or_non_gnome():
-                frame_title = f'{filename_without_ext} - {APP_NAME}'
-            else:  # is_mac_os(); other
-                extension_visible = (
-                    not get_hide_file_extension(project.path) if is_mac_os()
-                    else True
-                )
-                if extension_visible:
-                    frame_title = filename_with_ext
-                else:
-                    frame_title = filename_without_ext
+            frame_title = self._calculate_frame_title(project)
             
             # TODO: Rename: raw_frame -> frame,
             #               frame -> frame_content
@@ -163,6 +152,9 @@ class MainWindow:
                 raw_frame.Destroy()
                 raise
             
+            # Start listening to project events
+            project.listeners.append(self)
+            
             self._unhibernate()
             
             # Auto-hibernate every few minutes, in case Crystal crashes
@@ -178,6 +170,33 @@ class MainWindow:
         except:
             project.close()
             raise
+    
+    @staticmethod
+    def _calculate_frame_title(project) -> str:
+        frame_title: str
+        filename_with_ext = os.path.basename(project.path)
+        (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
+        if project.is_untitled:
+            filename_without_ext = 'Untitled Project'  # reinterpret
+        if is_windows() or is_kde_or_non_gnome():
+            frame_title = f'{filename_without_ext} - {APP_NAME}'
+        else:  # is_mac_os(); other
+            if project.is_untitled:
+                # Never show extension for untitled projects
+                extension_visible = False
+            elif not os.path.exists(project.path):
+                print(f'*** Tried to calculate frame title for project not on disk: {project.path}', file=sys.stderr)
+                extension_visible = False
+            else:
+                extension_visible = (
+                    not get_hide_file_extension(project.path) if is_mac_os()
+                    else True
+                )
+            if extension_visible:
+                frame_title = filename_with_ext
+            else:
+                frame_title = filename_without_ext
+        return frame_title
     
     @property
     def _readonly(self) -> bool:
@@ -207,13 +226,19 @@ class MainWindow:
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W')),
             action_func=self._on_close_window,
             enabled=True)
+        (s_label, s_enabled, s_action_func) = self._calculate_save_action_properties()
         self._save_project_action = Action(
             wx.ID_SAVE,
-            '',
+            s_label,
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('S')),
-            # TODO: Support untitled projects (that require an initial save)
-            action_func=None,
-            enabled=False)
+            action_func=s_action_func,
+            enabled=s_enabled)
+        self._save_as_project_action = Action(
+            wx.ID_SAVEAS,
+            '',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('S')),
+            action_func=self._on_save_as_project,
+            enabled=True)
         self._quit_action = Action(
             wx.ID_EXIT,
             '',
@@ -291,6 +316,12 @@ class MainWindow:
         # HACK: Gather all actions indirectly by inspecting fields
         self._actions = [a for a in self.__dict__.values() if isinstance(a, Action)]
     
+    def _calculate_save_action_properties(self) -> tuple[str, bool, Callable[[wx.MenuEvent], None] | None]:
+        label = '&Save...' if self.project.is_untitled else ''
+        enabled = self.project.is_untitled
+        action_func = self._on_save_as_project if self.project.is_untitled else None
+        return (label, enabled, action_func)
+    
     # === Menubar ===
     
     def _create_menu_bar(self, raw_frame: wx.Frame) -> wx.MenuBar:
@@ -300,6 +331,7 @@ class MainWindow:
         file_menu.AppendSeparator()
         self._close_project_action.append_menuitem_to(file_menu)
         self._save_project_action.append_menuitem_to(file_menu)
+        self._save_as_project_action.append_menuitem_to(file_menu)
         # Append Quit menuitem
         if True:
             self._quit_action.append_menuitem_to(file_menu)
@@ -427,8 +459,6 @@ class MainWindow:
         return self.entity_tree.peer
     
     def _create_button_bar(self, parent: wx.Window):
-        readonly = self._readonly  # cache
-        
         new_root_url_button = self._new_root_url_action.create_button(parent, name='cr-add-url-button')
         new_group_button = self._new_group_action.create_button(parent, name='cr-add-group-button')
         edit_entity_button = self._edit_action.create_button(parent, name='cr-edit-button')
@@ -479,14 +509,17 @@ class MainWindow:
     
     # === Operations ===
     
-    def close(self) -> None:
+    @fg_affinity
+    def close(self, *, prompt_to_save_untitled: bool = False) -> None:
         """
-        Closes this window.
+        Closes this window, disposing any related resources.
         
-        The caller is still responsible for closing the underlying Project.
+        Does NOT prompt to save the project if it is untitled, by default,
+        to ensure the close operation is not cancelled.
+        
+        See also: MainWindow.try_close()
         """
-        dummy_event = wx.CommandEvent()
-        self._on_close_window(dummy_event)
+        self._on_close_frame(prompt_to_save_untitled=prompt_to_save_untitled)
     
     def __enter__(self) -> 'MainWindow':
         return self
@@ -494,7 +527,82 @@ class MainWindow:
     def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
         self.close()
     
+    # === Project: Events ===
+    
+    # TODO: Use @fg_trampoline here to simplify the implementation
+    @capture_crashes_to_stderr
+    def project_is_dirty_did_change(self) -> None:
+        if is_mac_os():
+            @capture_crashes_to_stderr
+            @fg_affinity
+            def fg_task() -> None:
+                self._frame.OSXSetModified(self.project.is_dirty)
+            fg_call_later(fg_task)
+    
+    @fg_trampoline
+    @capture_crashes_to_stderr
+    def project_root_task_did_change(self, old_root_task: 'RootTask', new_root_task: 'RootTask') -> None:
+        """
+        Called when the project gets a new RootTask (e.g., during Save As reopen).
+        Updates the TaskTree to connect to the new RootTask.
+        """
+        self.task_tree.change_root_task(new_root_task)
+    
     # === File Menu: Events ===
+    
+    def _on_save_as_project(self, event: wx.MenuEvent) -> None:
+        """
+        1. Handle Save menu item for untitled projects.
+        2. Handle Save As menu item for all projects.
+        """
+        # Prompt for a save location
+        dialog = wx.FileDialog(self._frame,
+            message='',
+            wildcard='*' + Project.FILE_EXTENSION,
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+        with dialog:
+            if dialog.ShowModal() != wx.ID_OK:
+                return
+            
+            new_project_path = dialog.GetPath()  # capture
+            if not new_project_path.endswith(self.project.FILE_EXTENSION):
+                new_project_path += self.project.FILE_EXTENSION
+        
+        # Save the project
+        progress_dialog = SaveAsProgressDialog(self._frame)
+        future = self.project.save_as(new_project_path, progress_dialog)
+        
+        # Update the window title and proxy icon
+        @capture_crashes_to_stderr
+        @fg_affinity
+        def on_save_complete() -> None:
+            # Check whether save succeeded
+            try:
+                future.result(timeout=0)
+            except FileExistsError:
+                raise AssertionError()
+            except CancelSaveAs:
+                return
+            # TODO: Handle ProjectReadOnlyError more gracefully,
+            #       by providing a more-targeted error message
+            except (ProjectReadOnlyError, Exception) as e:
+                self._show_save_error_dialog(e)
+                return
+            finally:
+                progress_dialog.reset()
+            
+            # Update window title
+            self._frame.SetTitle(self._calculate_frame_title(self.project))
+            
+            # Update proxy icon
+            self._frame.SetRepresentedFilename(new_project_path)
+            
+            # Update Save menu item
+            (s_label, s_enabled, s_action_func) = self._calculate_save_action_properties()
+            self._save_project_action.label = s_label
+            self._save_project_action.enabled = s_enabled
+            self._save_project_action.action_func = s_action_func
+        future.add_done_callback(lambda _: fg_call_later(on_save_complete))
     
     def _on_close_window(self, event: wx.CommandEvent) -> None:
         self._frame.Close()  # will trigger call to _on_close_frame()
@@ -506,11 +614,92 @@ class MainWindow:
         else:
             event.Skip()
     
+    # TODO: Move this method adjacent to close()
     @fg_affinity
-    def _on_close_frame(self, event: wx.CloseEvent) -> None:
+    def _on_close_frame(self,
+            event: wx.CloseEvent | None = None,
+            *, prompt_to_save_untitled: bool = True,
+            ) -> None:
         """
-        Closes this window, disposing any related resources.
+        Tries to close this window, disposing any related resources.
+        
+        If the project is untitled and dirty, prompts to save it unless prompt_to_save_untitled=False.
+        If the user cancels the prompt the close event is vetoed.
         """
+        did_not_cancel = self.try_close(prompt_to_save_untitled=prompt_to_save_untitled)
+        if not did_not_cancel and event is not None:
+            # Cancel the close
+            event.Veto()
+    
+    # TODO: Move this method adjacent to close()
+    @fg_affinity
+    def try_close(self,
+            *, prompt_to_save_untitled: bool = True,
+            will_prompt_to_save: Callable[[], None] | None = None,
+            ) -> bool:
+        """
+        Tries to close this window, disposing any related resources.
+        
+        If the project is untitled and dirty, prompts to save it unless prompt_to_save_untitled=False.
+        If the user cancels the prompt, the window is not closed, and returns False.
+        
+        In all other situations, the project is closed and returns True.
+        
+        See also: MainWindow.close()
+        """
+        # If the project is untitled and dirty, prompt to save it
+        if self.project.is_untitled and self.project.is_dirty and prompt_to_save_untitled:
+            if will_prompt_to_save is not None:
+                will_prompt_to_save()
+            
+            dialog = wx.MessageDialog(
+                self._frame,
+                message='Do you want to save the changes you made to this project?',
+                caption='Save Changes',
+                style=wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION
+            )
+            dialog.Name = 'cr-save-changes-dialog'
+            with dialog:
+                result = ShowModal(dialog)
+            if result == wx.ID_CANCEL:
+                return False
+            elif result == wx.ID_YES:
+                # Prompt for a save location
+                file_dialog = wx.FileDialog(self._frame,
+                    message='',
+                    wildcard='*' + Project.FILE_EXTENSION,
+                    style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+                with file_dialog:
+                    if file_dialog.ShowModal() != wx.ID_OK:
+                        return False
+                    
+                    new_project_path = file_dialog.GetPath()
+                    if not new_project_path.endswith(self.project.FILE_EXTENSION):
+                        new_project_path += self.project.FILE_EXTENSION
+                    
+                    # Save the project
+                    progress_dialog = SaveAsProgressDialog(self._frame)
+                    future = self.project.save_as(new_project_path, progress_dialog)
+                    
+                    # Wait for save to complete
+                    try:
+                        fg_wait_for(lambda: future.done(), timeout=None, poll_interval=0.1)
+                        future.result()
+                    except CancelSaveAs:
+                        return False
+                    # TODO: Handle ProjectReadOnlyError more gracefully,
+                    #       by providing a more-targeted error message
+                    except (ProjectReadOnlyError, Exception) as e:
+                        self._show_save_error_dialog(e)
+                        return False
+                    finally:
+                        progress_dialog.reset()
+            elif result == wx.ID_NO:
+                # Do not save, just close
+                pass
+            else:
+                raise AssertionError(f'Unexpected dialog result: {result}')
+        
         if self._autohibernate_timer is not None:
             self._autohibernate_timer.stop()
         
@@ -532,10 +721,34 @@ class MainWindow:
             for a in self._actions:
                 a.dispose()
             
+            self.project.listeners.remove(self)
             self.project.close()
         
         # Destroy self, since we did not Veto() the close event
         self._frame.Destroy()
+        
+        # Clear reference to self if we're the last created MainWindow
+        if MainWindow._last_created is self:
+            MainWindow._last_created = None
+        
+        return True
+
+    @fg_affinity
+    def _show_save_error_dialog(self, e: Exception) -> None:
+        # Show error information on stderr
+        # HACK: Suppress while tests are running to keep the output clean
+        if not tests_are_running():
+            traceback.print_exception(e, file=sys.stderr)
+        
+        error_dialog = wx.MessageDialog(
+            self._frame,
+            message=f'Error saving project: {str(e) or type(e).__name__}',
+            caption='Save Error',
+            style=wx.ICON_ERROR|wx.OK
+        )
+        error_dialog.Name = 'cr-save-error-dialog'
+        with error_dialog:
+            ShowModal(error_dialog)
     
     # === Entity Pane: New/Edit Root Url ===
     

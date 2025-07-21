@@ -23,3 +23,6 @@ venv*
 
 # Local startup file
 startup.py
+
+# Temporary directories not cleaned up correctly
+tmpdir_*

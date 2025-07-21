@@ -34,6 +34,7 @@ _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
 _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'FILE_EXTENSION',
     'OPENER_FILE_EXTENSION',
+    'PARTIAL_FILE_EXTENSION',
     'add_task',
     'close',
     'default_url_prefix',
@@ -43,6 +44,8 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'get_root_resource',
     'hibernate_tasks',
     'html_parser_type',
+    'is_dirty',
+    'is_untitled',
     'is_valid',
     'listeners',
     'load_urls',
@@ -58,6 +61,7 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'resources_matching_pattern',
     'root_resources',
     'root_task',
+    'save_as',
     'unhibernate_tasks',
     'urls_matching_pattern',
 ]
@@ -66,8 +70,11 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
     'close',
     'entity_tree',
     'project',
+    'project_is_dirty_did_change',
+    'project_root_task_did_change',
     'start_server',
-    'task_tree'
+    'task_tree',
+    'try_close',
 ]
 
 # ------------------------------------------------------------------------------
@@ -605,15 +612,8 @@ def _create_new_empty_project(crystal: subprocess.Popen) -> None:
             from threading import Thread
             #
             async def create_new_project():
-                # Create named temporary directory that won't be deleted automatically
-                with tempfile.NamedTemporaryFile(suffix='.crystalproj', delete=False) as project_td:
-                    pass
-                os.remove(project_td.name)
-                os.mkdir(project_td.name)
-                project_dirpath = project_td.name
-                #
                 ocd = await OpenOrCreateDialog.wait_for()
-                mw = await ocd.create_and_leave_open(project_dirpath)
+                mw = await ocd.create_and_leave_open()
                 #
                 return mw
             #

@@ -246,6 +246,43 @@ async def test_capture_crashes_to_stderr_decorator_with_custom_return_value_work
     assert cli.TERMINAL_FG_RED in captured_stderr.getvalue()
 
 
+async def test_capture_crashes_to_stderr_prints_exception_cause() -> None:
+    @capture_crashes_to_stderr
+    def func_with_cause() -> None:
+        try:
+            raise ValueError('inner error')
+        except Exception as e:
+            raise TypeError('outer error') from e
+
+    with redirect_stderr(StringIO()) as stderr:
+        func_with_cause()
+    output = stderr.getvalue()
+    
+    # Should include outer exception and its cause
+    assert 'TypeError: outer error' in output
+    assert '\nThe above exception was the direct cause of the following exception:\n' in output
+    assert 'ValueError: inner error' in output
+    
+
+async def test_capture_crashes_to_stderr_prints_exception_context() -> None:
+    @capture_crashes_to_stderr
+    def func_with_context() -> None:
+        try:
+            raise ValueError('inner ctx error')
+        except Exception:
+            # Raising without 'from' sets __context__ but no __cause__
+            raise TypeError('outer ctx error')
+
+    with redirect_stderr(StringIO()) as stderr:
+        func_with_context()
+    output = stderr.getvalue()
+    
+    # Should include outer exception and its context
+    assert 'TypeError: outer ctx error' in output
+    assert '\nDuring handling of the above exception, another exception occurred:\n' in output
+    assert 'ValueError: inner ctx error' in output
+
+
 async def test_given_callable_decorated_by_capture_crashes_to_star_decorator_when_run_bulkhead_call_used_then_calls_callable() -> None:
     @capture_crashes_to_stderr
     def protected_method():

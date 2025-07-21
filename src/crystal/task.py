@@ -1024,6 +1024,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
             abstract_resource: Resource | RootResource,
             *, needs_result: bool=True,
             is_embedded: bool=False,
+            ignore_already_downloaded_this_session: bool=False,
             ) -> None:
         """
         Arguments:
@@ -1037,15 +1038,20 @@ class DownloadResourceTask(Task['ResourceRevision']):
         
         resource = abstract_resource.resource  # cache
         
+        was_already_downloaded_this_session = (
+            resource.already_downloaded_this_session and
+            not ignore_already_downloaded_this_session
+        )
+        
         self._download_body_task = (
             None
-            if resource.already_downloaded_this_session and not needs_result
+            if was_already_downloaded_this_session and not needs_result
             else resource.create_download_body_task()
         )  # type: Optional[DownloadResourceBodyTask]
         self._parse_links_task = None  # type: Optional[ParseResourceRevisionLinks]
         self._already_downloaded_task = (
             _ALREADY_DOWNLOADED_PLACEHOLDER_TASK
-            if resource.already_downloaded_this_session
+            if was_already_downloaded_this_session
             else None
         )
         

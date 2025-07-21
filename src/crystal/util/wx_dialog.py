@@ -8,6 +8,7 @@ from types import coroutine
 from typing import Protocol
 import warnings
 import wx
+from wx import FileDialog as UnpatchedFileDialog
 
 
 # ------------------------------------------------------------------------------
@@ -15,8 +16,11 @@ import wx
 
 def ShowModal(dialog: wx.Dialog) -> int:
     """
-    Replacement for wx.Dialog.ShowModel() that works properly even when
+    Replacement for wx.Dialog.ShowModal() that works properly even when
     running automated tests.
+    
+    Automated tests should patch this function to replace it with a
+    `mocked_show_modal()` function rather than setting a return value directly.
     """
     is_running_tests = tests_are_running()  # cache
     
@@ -28,14 +32,21 @@ def ShowModal(dialog: wx.Dialog) -> int:
             stacklevel=2
         )
     
+    if is_running_tests and isinstance(dialog, UnpatchedFileDialog):
+        raise AssertionError(
+            f'Attempted to call ShowModal utility on wx.FileDialog {dialog.Name!r} '
+            f'but the real wx.FileDialog.ShowModal() should be used instead '
+            f'because file_dialog_returning() patches the real ShowModal().')
+    
     if is_running_tests and isinstance(dialog, wx.MessageDialog):
         # A wx.MessageDialog opened with ShowModal cannot be interacted
         # with via wx.FindWindowByName() and similar functions on macOS.
         # So don't allow such a dialog to be shown while tests are running.
         raise AssertionError(
-            f'Attempted to call ShowModal on wx.MessageDialog {dialog.Name!r} '
+            f'Attempted to call ShowModal utility on wx.MessageDialog {dialog.Name!r} '
             f'while running an automated test, which would hang the test. '
-            f'Please patch ShowModal to return an appropriate result.')
+            f'Please patch ShowModal to return an appropriate result. '
+            f'Caption={dialog.Caption!r}, Message={dialog.Message!r}')
     
     # HACK: ShowModal sometimes hangs on macOS while running automated tests,
     #       as admitted by the wxPython test suite in test_dialog.py.
@@ -71,7 +82,9 @@ def mocked_show_modal(
     """
     ShowModal: ShowModalFunc
     def ShowModal(dialog: wx.Dialog) -> int:  # type: ignore[no-redef]
-        assert dialog_name == dialog.Name
+        assert dialog_name == dialog.Name, (
+            f'Expected dialog with name {dialog_name!r}, got {dialog.Name!r}. '
+            f'Caption={dialog.Caption!r}, Message={dialog.Message!r}')
         ShowModal.call_count += 1
         if callable(return_code):
             return return_code(dialog)

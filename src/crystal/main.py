@@ -25,12 +25,8 @@ import sys
 import threading
 import time
 import traceback
-from typing import ParamSpec, TypeVar
-
-try:
-    from typing import TYPE_CHECKING
-except ImportError:
-    TYPE_CHECKING = False
+from typing import ParamSpec, TypeVar, TYPE_CHECKING
+from typing_extensions import override
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -253,15 +249,17 @@ def _main(args: list[str]) -> None:
         # or other cleanup processes that can take a long time
         os._exit(getattr(os, 'EX_OK', 0))
     
-    last_project = None  # type: Optional[Project]
+    last_window = None  # type: Optional[MainWindow]
     did_quit_during_first_launch = False
     
     # 1. Create wx.App and call app.OnInit(), opening the initial dialog
     # 2. Initialize the foreground thread
     from crystal.util.bulkheads import capture_crashes_to_stderr
+    from crystal.util.xthreading import fg_affinity
     class MyApp(wx.App):
         def __init__(self, *args, **kwargs):
             from crystal import APP_NAME
+            from crystal.util.wx_bind import bind
             
             self._keepalive_frame = None
             self._did_finish_launch = False
@@ -269,12 +267,18 @@ def _main(args: list[str]) -> None:
             
             # macOS: Define app name used by the "Quit X" and "Hide X" menuitems
             self.SetAppDisplayName(APP_NAME)
+            
+            # Listen for OS logout
+            bind(self, wx.EVT_QUERY_END_SESSION, self._on_query_end_session)
+            bind(self, wx.EVT_END_SESSION, self._on_end_session)
         
+        @override
         def OnPreInit(self):
             # (May insert debugging code here in the future)
             pass
         
         @capture_crashes_to_stderr
+        @override
         def OnInit(self):
             # If running as Mac .app, LC_CTYPE may be set to the default locale
             # instead of LANG. So copy any such locale to LANG.
@@ -312,6 +316,7 @@ def _main(args: list[str]) -> None:
             return True
         
         @capture_crashes_to_stderr
+        @override
         def MacOpenFile(self, filepath):
             if self._did_finish_launch:
                 # Ignore attempts to open additional projects if one is already open
@@ -330,8 +335,8 @@ def _main(args: list[str]) -> None:
             self._did_finish_launch = True
             
             try:
-                nonlocal last_project
-                last_project = await _did_launch(parsed_args, shell, filepath)
+                nonlocal last_window
+                last_window = await _did_launch(parsed_args, shell, filepath)
             except SystemExit:
                 nonlocal did_quit_during_first_launch
                 did_quit_during_first_launch = True
@@ -345,6 +350,40 @@ def _main(args: list[str]) -> None:
             finally:
                 # Deactivate wx keepalive
                 self._keepalive_frame.Destroy()
+        
+        @capture_crashes_to_stderr
+        @fg_affinity
+        def _on_query_end_session(self, event: wx.CloseEvent) -> None:
+            """
+            Called when the OS is about to log out the user or shut down the system.
+            Can veto the event to prevent logout/shutdown.
+            """
+            current_window = last_window  # capture
+            if current_window is not None:
+                # 1. Try to close the window
+                # 2. Prompt to save the project if untitled and dirty
+                did_not_cancel = current_window.try_close(
+                    # If must prompt to save, then cancel logout/shutdown
+                    will_prompt_to_save=lambda: event.Veto()
+                )
+                if not did_not_cancel:
+                    # User cancelled the prompt to save, so don't allow logout/shutdown
+                    # NOTE: This veto is probably redundant with the earlier veto
+                    event.Veto()
+                    return
+            
+            # Allow the logout/shutdown to proceed
+            event.Skip()
+        
+        @capture_crashes_to_stderr
+        @fg_affinity
+        def _on_end_session(self, event: wx.CloseEvent) -> None:
+            """
+            Called when the session is ending and can't be stopped.
+            Cleans up resources but does not try to prevent log out or shut down.
+            """
+            # Allow the logout/shutdown to proceed
+            event.Skip()
     
     app = None  # type: Optional[wx.App]
     from crystal.util.xthreading import is_quitting, set_foreground_thread
@@ -410,13 +449,13 @@ def _main(args: list[str]) -> None:
             # Clean up
             if shell is not None:
                 shell.detach()
-            if last_project is not None:
+            if last_window is not None:
                 # TODO: Implement Project.closed so that this assertion can be checked
-                #assert last_project.closed, (
+                #assert last_window.project.closed, (
                 #    'Expected project to already be fully closed '
                 #    'during the MainLoop by MainWindow'
                 #)
-                last_project = None
+                last_window = None
             
             # Quit?
             if is_quitting():
@@ -428,8 +467,8 @@ def _main(args: list[str]) -> None:
             # Re-launch, reopening the initial dialog
             from crystal.util.xthreading import start_fg_coroutine
             async def relaunch():
-                nonlocal last_project
-                last_project = await _did_launch(parsed_args, shell)  # can raise SystemExit
+                nonlocal last_window
+                last_window = await _did_launch(parsed_args, shell)  # can raise SystemExit
             start_fg_coroutine(
                 relaunch(),
                 _capture_crashes_to_stderr_and_capture_systemexit_to_quit)
@@ -456,13 +495,15 @@ async def _did_launch(
         parsed_args,
         shell: Shell | None,
         filepath: str | None=None
-        ) -> Project:
+        ) -> MainWindow:
     """
     Raises:
     * SystemExit -- if the user quits
     """
-    from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
+    from crystal.model import Project
+    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog, OpenProjectProgressDialog
     from crystal.util.test_mode import tests_are_running
+    import tempfile
 
     # If project to open was passed on the command-line, use it
     if parsed_args.filepath is not None:
@@ -516,7 +557,7 @@ async def _did_launch(
     if parsed_args.serve:
         window.start_server()
     
-    return project
+    return window
 
 
 async def _prompt_for_project(
@@ -569,7 +610,7 @@ async def _prompt_for_project(
             
             try:
                 if choice == wx.ID_YES:
-                    return _prompt_to_create_project(dialog, progress_listener, **project_kwargs)
+                    return _create_untitled_project(dialog, progress_listener, **project_kwargs)
                 elif choice == wx.ID_NO:
                     return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
                 elif choice == wx.ID_CANCEL:
@@ -581,34 +622,29 @@ async def _prompt_for_project(
                 continue
 
 
-def _prompt_to_create_project(
+def _create_untitled_project(
         parent: wx.Window,
         progress_listener: OpenProjectProgressListener,
         **project_kwargs: object
         ) -> Project:
-    """
-    Raises:
-    * CancelOpenProject -- if the user cancels the prompt early
-    """
     from crystal.model import Project
-    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog
-    import wx
+    from crystal.progress import LoadUrlsProgressDialog
+    import tempfile
     
-    dialog = wx.FileDialog(parent,
-        message='',
-        wildcard='*' + Project.FILE_EXTENSION,
-        style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
-    with dialog:
-        if not dialog.ShowModal() == wx.ID_OK:
-            raise CancelOpenProject()
-        
-        project_path = dialog.GetPath()
-        if not project_path.endswith(Project.FILE_EXTENSION):
-            project_path += Project.FILE_EXTENSION
+    # Create an untitled project
     
-    if os.path.exists(project_path):
-        shutil.rmtree(project_path)
-    return Project(project_path, progress_listener, LoadUrlsProgressDialog(), **project_kwargs)  # type: ignore[arg-type]
+    # TODO: Alter Project.__init__ to create path internally
+    #       when is_untitled=True
+    untitled_project_dirpath = tempfile.mkdtemp(suffix=Project.FILE_EXTENSION)
+    os.rmdir(untitled_project_dirpath)
+    
+    return Project(
+        untitled_project_dirpath,
+        progress_listener, 
+        LoadUrlsProgressDialog(), 
+        is_untitled=True, 
+        **project_kwargs  # type: ignore[arg-type]
+    )
 
 
 def _prompt_to_open_project(
@@ -711,7 +747,7 @@ def _load_project(
     Raises:
     * CancelOpenProject
     """
-    from crystal.model import Project, ProjectFormatError, ProjectTooNewError
+    from crystal.model import Project, ProjectFormatError, ProjectReadOnlyError, ProjectTooNewError
     from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog
     from crystal.util.wx_dialog import position_dialog_initially
     import wx
@@ -722,7 +758,7 @@ def _load_project(
     
     try:
         return Project(project_path, progress_listener, LoadUrlsProgressDialog(), **project_kwargs)  # type: ignore[arg-type]
-    except FileNotFoundError:
+    except ProjectReadOnlyError:
         # TODO: Present this error to the user nicely
         raise
     except ProjectFormatError:

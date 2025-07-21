@@ -189,18 +189,43 @@ def wait_for_sync(condition: Callable[[], _T | None], *args, **kwargs) -> _T:
         time.sleep(command.delay)
 
 
-async def wait_for_future(future: Future[_T]) -> _T:
+async def wait_for_future(
+        future: Future[_T],
+        timeout: float | None=None,
+        *, message: Callable[[], str] | None=None,
+        stacklevel_extra: int=0) -> _T:
     """
     Waits for the specified Future to be done, returning the future's result
     or raising its exception.
     
     The foreground thread is released periodically while waiting.
     """
-    await wait_for(lambda: future.done() or None, stacklevel_extra=1)
+    await wait_for_future_ignoring_result(
+        future,
+        timeout,
+        message=message,
+        stacklevel_extra=1 + stacklevel_extra)
     try:
         return future.result(timeout=0)
     except TimeoutError:
         raise AssertionError('Expected future to be already done')
+
+
+async def wait_for_future_ignoring_result(
+        future: Future,
+        timeout: float | None=None,
+        *, message: Callable[[], str] | None=None,
+        stacklevel_extra: int=0) -> None:
+    """
+    Waits for the specified Future to be done.
+    
+    The foreground thread is released periodically while waiting.
+    """
+    await wait_for(
+        lambda: future.done() or None,
+        timeout,
+        message=message or (lambda: f'Timed out waiting for future {future!r} to be done'),
+        stacklevel_extra=1 + stacklevel_extra)
 
 
 class WaitTimedOut(Exception):
@@ -227,6 +252,13 @@ def window_condition(
         else f'window {name!r} to be created'
     )
     return window
+
+
+def window_disposed_condition(name: str) -> Callable[[], Literal[True] | None]:
+    """
+    Whether the named window does not exist.
+    """
+    return not_condition(window_condition(name, hidden_ok=True))
 
 
 def first_child_of_tree_item_is_not_loading_condition(

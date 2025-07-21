@@ -1,0 +1,14 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Remove Unused Imports (autoflake)",
+            "type": "shell",
+            "command": "${workspaceFolder}/venv3.12/bin/autoflake --remove-all-unused-imports -i ${file}",
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

@@ -135,6 +135,21 @@ class TaskTree:
             return None
         return node.tooltip
     
+    # === Root Task Management ===
+    
+    def change_root_task(self, new_root_task: Task) -> None:
+        """
+        Changes the root task that this TaskTree is connected to.
+        
+        This is used when the project gets a new RootTask (e.g., during Save As reopen).
+        """
+        # Dispose the old root TaskTreeNode
+        self.root.dispose()
+        
+        # Create new root TaskTreeNode for the new root task
+        self.root = TaskTreeNode(new_root_task)
+        self.tree.root = self.root.tree_node
+    
     # === Dispose ===
     
     def dispose(self) -> None:
