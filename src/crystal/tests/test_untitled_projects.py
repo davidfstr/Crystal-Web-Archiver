@@ -103,7 +103,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
         # Test saving an untitled project to a new location on the same filesystem
         with subtests.test(filesystem='same'), \
                 _untitled_project() as project, \
-                _temporary_directory() as new_container_dirpath:
+                xtempfile.TemporaryDirectory() as new_container_dirpath:
             assert False == project.is_dirty
             assert True == project.is_untitled
             assert 2 == disabled_scheduler.start_count
@@ -204,7 +204,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
         # AKA: test_when_save_as_project_with_active_tasks_then_hibernates_and_restores_tasks
         with subtests.test(tasks_running=True), \
                 _untitled_project() as project, \
-                _temporary_directory() as new_container_dirpath:
+                xtempfile.TemporaryDirectory() as new_container_dirpath:
             # Download a resource revision, so that comic URLs are discovered
             r = Resource(project, home_url)
             rr_future = r.download()
@@ -526,7 +526,7 @@ async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_proje
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _untitled_project() as project, \
-            _temporary_directory() as new_container_dirpath, \
+            xtempfile.TemporaryDirectory() as new_container_dirpath, \
             RealMainWindow(project) as rmw:
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
@@ -1005,14 +1005,10 @@ async def test_when_save_as_project_with_missing_revision_files_then_ignores_mis
 @contextmanager
 def _untitled_project() -> Iterator[Project]:
     """Creates an untitled project in a temporary directory."""
-    with _temporary_directory() as container_dirpath:
+    with xtempfile.TemporaryDirectory() as container_dirpath:
         untitled_project_dirpath = os.path.join(container_dirpath, 'Untitled.crystalproj')
         with Project(untitled_project_dirpath, is_untitled=True) as project:
             yield project
-
-
-def _temporary_directory():
-    return xtempfile.TemporaryDirectory()
 
 
 @contextmanager
