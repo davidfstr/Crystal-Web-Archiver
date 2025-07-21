@@ -1009,7 +1009,8 @@ class Project(ListenableMixin):
         """
         Marks this project as dirty if it is untitled.
         
-        This method should be called after any change is made to a project,
+        This method is called after any change is made to a project,
+        automatically whenever a database write is performed,
         so that if it is an untitled project then it will later be saved to
         a permanent location.
         """
