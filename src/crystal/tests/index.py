@@ -91,7 +91,8 @@ def run_tests(test_names: list[str]) -> bool:
     The format of the summary report is designed to be similar
     to that used by Python's unittest module.
     """
-    with delay_between_downloads_minimized(), sleep_profiled(), _future_result_deadlock_detection():
+    with delay_between_downloads_minimized(), sleep_profiled(), \
+            _future_result_deadlock_detection(), _tqdm_locks_disabled():
         # 1. Normalize test names to handle various input formats
         # 2. Error if a test name cannot be resolved to a valid module or function
         try:
@@ -399,6 +400,26 @@ def _future_result_deadlock_detection():
         yield
     finally:
         Future.result = original_result
+
+
+@contextmanager
+def _tqdm_locks_disabled() -> Iterator[None]:
+    """
+    Context manager to ensure TqdmDefaultWriteLock.mp_lock (an RLock) is never created.
+    
+    This is useful to avoid warnings like:
+        multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+    """
+    from tqdm.std import TqdmDefaultWriteLock  # type: ignore[attr-defined]
+    from unittest.mock import patch
+    
+    @classmethod
+    def create_mp_lock_disabled(cls):
+        if not hasattr(cls, 'mp_lock'):
+            cls.mp_lock = None
+    
+    with patch.object(TqdmDefaultWriteLock, 'create_mp_lock', create_mp_lock_disabled):
+        yield
 
 
 @contextmanager
