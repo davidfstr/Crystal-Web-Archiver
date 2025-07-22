@@ -226,12 +226,12 @@ class MainWindow:
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W')),
             action_func=self._on_close_window,
             enabled=True)
-        (s_label, s_enabled, s_action_func) = self._calculate_save_action_properties()
+        (s_label, s_enabled) = self._calculate_save_action_properties()
         self._save_project_action = Action(
             wx.ID_SAVE,
             s_label,
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('S')),
-            action_func=s_action_func,
+            action_func=self._on_save_as_project,
             enabled=s_enabled)
         self._save_as_project_action = Action(
             wx.ID_SAVEAS,
@@ -316,11 +316,10 @@ class MainWindow:
         # HACK: Gather all actions indirectly by inspecting fields
         self._actions = [a for a in self.__dict__.values() if isinstance(a, Action)]
     
-    def _calculate_save_action_properties(self) -> tuple[str, bool, Callable[[wx.MenuEvent], None] | None]:
+    def _calculate_save_action_properties(self) -> tuple[str, bool]:
         label = '&Save...' if self.project.is_untitled else ''
         enabled = self.project.is_untitled
-        action_func = self._on_save_as_project if self.project.is_untitled else None
-        return (label, enabled, action_func)
+        return (label, enabled)
     
     # === Menubar ===
     
@@ -598,10 +597,9 @@ class MainWindow:
             self._frame.SetRepresentedFilename(new_project_path)
             
             # Update Save menu item
-            (s_label, s_enabled, s_action_func) = self._calculate_save_action_properties()
+            (s_label, s_enabled) = self._calculate_save_action_properties()
             self._save_project_action.label = s_label
             self._save_project_action.enabled = s_enabled
-            self._save_project_action.action_func = s_action_func
         future.add_done_callback(lambda _: fg_call_later(on_save_complete))
     
     def _on_close_window(self, event: wx.CommandEvent) -> None:
