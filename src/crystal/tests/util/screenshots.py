@@ -43,9 +43,13 @@ def take_error_screenshot() -> None:
     screenshot_filename = os.environ.get('CRYSTAL_SCREENSHOT_ID', 'screenshot') + '.png'
     screenshot_filepath = os.path.abspath(os.path.join(screenshots_dirpath, screenshot_filename))
     print('*** Saving screenshot to: ' + screenshot_filepath, file=sys.stderr)
-    pyscreeze.screenshot(screenshot_filepath)
-    if not os.path.exists(screenshot_filepath):
-        print('*** Screenshot not saved. Is this macOS and the Screen Recording permission has not been granted?', file=sys.stderr)
+    try:
+        pyscreeze.screenshot(screenshot_filepath)
+    except Exception as e:
+        print(f'*** Failed to save screenshot: {e}', file=sys.stderr)
+    else:
+        if not os.path.exists(screenshot_filepath):
+            print('*** Screenshot not saved. Is this macOS and the Screen Recording permission has not been granted?', file=sys.stderr)
 
 
 @contextmanager
