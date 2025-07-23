@@ -598,6 +598,9 @@ class MainWindow:
             #       by providing a more-targeted error message
             except (ProjectReadOnlyError, Exception) as e:
                 self._show_save_error_dialog(e)
+                # TODO: Introduce public read-only `project.is_closed` property
+                if self.project._closed:
+                    self.close()
                 return
             finally:
                 progress_dialog.reset()

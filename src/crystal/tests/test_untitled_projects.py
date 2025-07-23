@@ -946,9 +946,99 @@ async def test_when_save_as_project_and_new_project_fails_to_open_then_handles_g
         assert os.path.exists(rr._body_filepath)
 
 
-@skip('not yet automated: not valuable to automate: rare case')
-async def test_when_save_as_project_with_corrupted_database_then_fails_with_error() -> None:
-    pass
+# TODO: Alter the error handling behavior to preserve the original project
+#       and reopen it instead. Currently only the new project with the
+#       corrupted database is preserved!
+async def test_when_save_as_untitled_project_with_corrupted_database_then_fails_with_error_and_closes_project() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            xtempfile.TemporaryDirectory() as tmp_dir:
+        rmw = RealMainWindow(project)
+        mw = await MainWindow.wait_for(timeout=0)
+        
+        # Download a resource revision to have some data
+        url = sp.get_request_url('https://xkcd.com/atom.xml')
+        r = Resource(project, url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        rr = rr_future.result(timeout=0)
+        
+        save_path = os.path.join(tmp_dir, 'CorruptedDBProject.crystalproj')
+        
+        # Patch reopen to corrupt the copied DB file before opening
+        original_reopen = Project._reopen
+        def fake_reopen(self):
+            if self.path == save_path:
+                # Corrupt the database file before allowing reopen to proceed
+                db_file = os.path.join(self.path, Project._DB_FILENAME)
+                size = os.path.getsize(db_file)
+                with open(db_file, 'r+b') as f:
+                    f.truncate(size // 2)
+            return original_reopen(self)
+        with patch.object(Project, '_reopen', fake_reopen), \
+                patch('crystal.browser.ShowModal', mocked_show_modal(
+                    'cr-save-error-dialog', wx.ID_OK)) as show_modal_method:
+            await save_as_with_ui(rmw, save_path)
+            assert 1 == show_modal_method.call_count, \
+                'Expected error dialog to be shown due to database corruption'
+
+        # Ensure project and its main window are closed
+        assert project._closed
+        await mw.wait_for_dispose()
+
+
+async def test_when_save_as_titled_project_with_corrupted_database_then_fails_with_error_and_reopens_original_project() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            xtempfile.TemporaryDirectory() as tmp_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Create a titled project with some data
+        original_project_path = os.path.join(tmp_dir, 'OriginalProject.crystalproj')
+        with Project(original_project_path) as project:
+            assert not project.is_untitled
+            
+            # Download a resource revision
+            r = Resource(project, atom_feed_url)
+            rr_future = r.download()
+            await step_scheduler_until_done(project)
+            rr = rr_future.result()
+        
+        # Reopen the project and perform Save As with corruption
+        with Project(original_project_path) as project, \
+                RealMainWindow(project) as rmw:
+            mw = await MainWindow.wait_for(timeout=0)
+            
+            save_path = os.path.join(tmp_dir, 'CorruptedDBProject.crystalproj')
+            
+            # Patch reopen to corrupt the copied DB file before opening
+            original_reopen = Project._reopen
+            def fake_reopen(self):
+                if self.path == save_path:
+                    # Corrupt the database file before allowing reopen to proceed
+                    db_file = os.path.join(self.path, Project._DB_FILENAME)
+                    size = os.path.getsize(db_file)
+                    with open(db_file, 'r+b') as f:
+                        f.truncate(size // 2)
+                return original_reopen(self)
+            
+            with patch.object(Project, '_reopen', fake_reopen), \
+                    patch('crystal.browser.ShowModal', mocked_show_modal(
+                        'cr-save-error-dialog', wx.ID_OK)) as show_modal_method:
+                await save_as_with_ui(rmw, save_path)
+                assert 1 == show_modal_method.call_count, \
+                    'Expected error dialog to be shown due to database corruption'
+            
+            # Verify original project is reopened and functional
+            assert project.path == original_project_path
+            assert not project.is_untitled
+            assert not project._closed
+            
+            # Verify the original resource and data are still accessible
+            assert rr._body_filepath
+            assert os.path.exists(rr._body_filepath)
 
 
 async def test_when_save_as_project_with_missing_revision_files_then_ignores_missing_revision_files() -> None:
