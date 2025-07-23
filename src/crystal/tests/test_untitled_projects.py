@@ -951,9 +951,36 @@ async def test_when_save_as_project_with_corrupted_database_then_fails_with_erro
     pass
 
 
-@skip('not yet automated: not valuable to automate: rare case')
 async def test_when_save_as_project_with_missing_revision_files_then_ignores_missing_revision_files() -> None:
-    pass
+    """
+    When saving a project that has resource revisions whose body files are missing on disk,
+    the save operation should ignore missing files and complete successfully.
+    """
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            xtempfile.TemporaryDirectory() as tmp_dir:
+        # Download a resource revision to generate a body file
+        url = sp.get_request_url('https://xkcd.com/atom.xml')
+        r = Resource(project, url)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        rr = rr_future.result(timeout=0)
+        
+        # Simulate missing revision body file
+        os.remove(rr._body_filepath)
+        
+        # Save project without UI - should ignore missing files and succeed
+        new_path = os.path.join(tmp_dir, os.path.basename(project.path))
+        await save_as_without_ui(project, new_path)
+        
+        # Verify new project exists and project updated
+        assert os.path.exists(new_path)
+        assert project.path == new_path
+        
+        # Should become titled and clean
+        assert not project._is_untitled
+        assert not project.is_dirty
 
 
 # === Utility ===
