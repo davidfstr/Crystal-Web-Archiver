@@ -412,6 +412,9 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
 
 # === Save As Tests + Progress Dialog Tests ===
 
+# TODO: For every situation where a save error dialog is shown ('cr-save-error-dialog'),
+#       verify that the error message is easy to understand and actionable.
+
 @awith_subtests
 async def test_when_save_as_menu_item_selected_for_titled_or_untitled_project_then_shows_save_as_dialog(subtests: SubtestsContext) -> None:
     with xtempfile.TemporaryDirectory() as tmp_dir:
