@@ -123,11 +123,13 @@ async def wait_for(
     
     start_time = time.time()  # capture
     hard_timeout_exceeded = False
+    succeeded_after_one_check = True
     try:
         while True:
             condition_result = condition()
             if condition_result is not None:
                 return condition_result
+            succeeded_after_one_check = False
             
             # Raise if hard timeout exceeded
             delta_time = time.time() - start_time
@@ -149,9 +151,12 @@ async def wait_for(
                 raise WaitTimedOut(message_str)
             
             await bg_sleep(period)
+    except:
+        succeeded_after_one_check = False
+        raise
     finally:
         # Warn if soft timeout exceeded
-        if not hard_timeout_exceeded:
+        if not hard_timeout_exceeded and not succeeded_after_one_check:
             delta_time = time.time() - start_time
             if delta_time > soft_timeout:
                 message_suffix_str = None
