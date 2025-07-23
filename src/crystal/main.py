@@ -629,20 +629,11 @@ def _create_untitled_project(
         ) -> Project:
     from crystal.model import Project
     from crystal.progress import LoadUrlsProgressDialog
-    import tempfile
-    
-    # Create an untitled project
-    
-    # TODO: Alter Project.__init__ to create path internally
-    #       when is_untitled=True
-    untitled_project_dirpath = tempfile.mkdtemp(suffix=Project.FILE_EXTENSION)
-    os.rmdir(untitled_project_dirpath)
     
     return Project(
-        untitled_project_dirpath,
+        None,  # untitled
         progress_listener, 
-        LoadUrlsProgressDialog(), 
-        is_untitled=True, 
+        LoadUrlsProgressDialog(),
         **project_kwargs  # type: ignore[arg-type]
     )
 

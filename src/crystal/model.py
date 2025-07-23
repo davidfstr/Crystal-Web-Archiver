@@ -75,7 +75,7 @@ from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 from sortedcontainers import SortedList
 import sqlite3
 import sys
-from tempfile import NamedTemporaryFile
+from tempfile import mkdtemp, NamedTemporaryFile
 from textwrap import dedent
 import threading
 import time
@@ -187,7 +187,7 @@ class Project(ListenableMixin):
     
     @fg_affinity
     def __init__(self,
-            path: str,
+            path: str | None=None,
             progress_listener: OpenProjectProgressListener | None=None,
             load_urls_progress_listener: LoadUrlsProgressListener | None=None,
             *, readonly: bool=False,
@@ -199,6 +199,7 @@ class Project(ListenableMixin):
         * path -- 
             path to a project directory (ending with `FILE_EXTENSION`)
             or to a project opener (ending with `OPENER_FILE_EXTENSION`).
+            Or None to create a new untitled project in a temporary directory.
         * progress_listener --
             receives progress updates while the project is being opened.
         * load_urls_progress_listener --
@@ -209,7 +210,11 @@ class Project(ListenableMixin):
             If True, the project must already exist at the specified path.
             Note that a project on read-only media (such as a DVD-R) will
             always be opened in read-only mode, regardless of this argument.
-        
+        * is_untitled --
+            if True then the project is considered untitled even if it has a path.
+            It is usually easier to pass None for `path` and let the constructor
+            create a temporary directory for the path internally.
+
         Raises:
         * ProjectReadOnlyError --
             if a new project could not be created because the path is 
@@ -228,6 +233,14 @@ class Project(ListenableMixin):
             load_urls_progress_listener = DummyLoadUrlsProgressListener()
         self._load_urls_progress_listener = load_urls_progress_listener
         readonly_requested = readonly  # rename for clarity
+        
+        # If path is missing then prepare to create an untitled project
+        if path is None:
+            untitled_project_dirpath = mkdtemp(suffix=Project.FILE_EXTENSION)
+            os.rmdir(untitled_project_dirpath)
+            
+            path = untitled_project_dirpath  # reinterpret
+            is_untitled = True  # reinterpret
         
         # Remove any trailing slash from the path
         (head, tail) = os.path.split(path)
