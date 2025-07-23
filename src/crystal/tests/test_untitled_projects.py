@@ -729,9 +729,8 @@ async def test_when_save_as_project_and_destination_filesystem_writable_generall
         
         assert project.readonly, \
             'Expected project to be reopened as read-only after SQLite error'
-        # TODO: Add UI support for readonly status of project changing
-        #assert mw.readonly, \
-        #    'Expected UI to show that project was reopened as read-only'
+        assert mw.readonly, \
+            'Expected UI to show that project was reopened as read-only'
 
 
 async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_cleans_up() -> None:
@@ -813,8 +812,7 @@ async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpect
                         await save_as_with_ui(rmw, save_path)
 
 
-# TODO: Consider altering the behavior such that the copy is opened as writable rather than readonly
-async def test_when_save_as_readonly_project_then_creates_writable_copy_but_opens_as_readonly() -> None:
+async def test_when_save_as_readonly_project_then_creates_writable_copy_and_opens_as_writable() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             xtempfile.TemporaryDirectory() as tmp_dir:
@@ -850,15 +848,10 @@ async def test_when_save_as_readonly_project_then_creates_writable_copy_but_open
             assert os.access(copy_project_path, os.W_OK), 'Copied project directory should be writable'
             assert os.access(db_filepath, os.W_OK), 'Copied database file should be writable'
             
-            # But the project object should still be readonly (preserving original state)
-            assert readonly_project.readonly, \
-                'Project should remain readonly after save_as, preserving original readonly state'
+            # And the project object should now be writable
+            assert not readonly_project.readonly, \
+                'Project should be writable after save_as'
             assert readonly_project.path == copy_project_path, 'Project should be at new path'
-        
-        # Verify that opening the copied project normally (without readonly=True) makes it writable
-        with Project(copy_project_path) as reopened_project:
-            assert not reopened_project.readonly, \
-                'Copied project should be writable when opened normally, proving files are actually writable'
 
 
 @skip('covered by: test_when_untitled_project_saved_then_becomes_clean_and_titled')

@@ -2274,26 +2274,24 @@ class Project(ListenableMixin):
     @fg_affinity
     def _reopen(self) -> None:
         """
-        Reopens this project at self.path.
+        Reopens this project at self.path, attempting to open as writable.
         
         Is the inverse of `close()`, but does not restore the state of tasks.
         """
         try:
             cls = type(self)
             
-            # Open database at the new path
+            # Open database at the new path, attempting to open as writable
             old_readonly = self._readonly
-            with cls._open_database_but_close_if_raises(self.path, old_readonly, self._mark_dirty_if_untitled, expect_writable=False) as (
+            with cls._open_database_but_close_if_raises(self.path, False, self._mark_dirty_if_untitled, expect_writable=False) as (
                     self._db, new_readonly, self._database_is_on_ssd):
                 if new_readonly != old_readonly:
                     self._readonly = new_readonly
                     
-                    # TODO: Add UI support for readonly status of project changing
-                    if not tests_are_running():
-                        warnings.warn(
-                            'Project readonly status changed, but UI does not yet '
-                            'know how to update appropriately in response.'
-                        )
+                    # Notify if readonly status changed
+                    for lis in self.listeners:
+                        if hasattr(lis, 'project_readonly_did_change'):
+                            run_bulkhead_call(lis.project_readonly_did_change)
             
             # Start scheduler
             self._start_scheduler()

@@ -71,6 +71,7 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
     'entity_tree',
     'project',
     'project_is_dirty_did_change',
+    'project_readonly_did_change',
     'project_root_task_did_change',
     'start_server',
     'task_tree',

@@ -541,6 +541,17 @@ class MainWindow:
     
     @fg_trampoline
     @capture_crashes_to_stderr
+    def project_readonly_did_change(self) -> None:
+        # Update actions
+        self._new_root_url_action.enabled = not self._readonly
+        self._new_group_action.enabled = not self._readonly
+        self._on_selected_entity_changed()
+        
+        # Update status bar
+        self._update_read_write_icon_for_readonly_status()
+    
+    @fg_trampoline
+    @capture_crashes_to_stderr
     def project_root_task_did_change(self, old_root_task: 'RootTask', new_root_task: 'RootTask') -> None:
         """
         Called when the project gets a new RootTask (e.g., during Save As reopen).
@@ -1200,25 +1211,18 @@ class MainWindow:
     
     # === Status Bar: Init ===
     
-    def _create_status_bar(self, parent: wx.Window) -> wx.Sizer:
-        readonly = self._readonly  # cache
-        
-        pane = parent
+    def _create_status_bar(self, parent: wx.Window) -> wx.Window:
+        pane = wx.Panel(parent)
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        pane.SetSizer(pane_sizer)
         
         version_label = wx.StaticText(pane, label=f'Crystal v{crystal_version}')
         
         preferences_button = self._preferences_action.create_button(pane, name='cr-preferences-button')
         bind(preferences_button, wx.EVT_BUTTON, self._on_preferences)
         
-        if readonly:
-            rwi_label = '🔒' if not is_windows() else 'Read only'
-            rwi_tooltip = 'Read only project'  # type: str
-        else:
-            rwi_label = '✏️' if not is_windows() else 'Writable'
-            rwi_tooltip = 'Writable project'
-        read_write_icon = wx.StaticText(pane, label=rwi_label, name='cr-read-write-icon')
-        read_write_icon.SetToolTip(rwi_tooltip)
+        self._read_write_icon = read_write_icon = wx.StaticText(pane, name='cr-read-write-icon')
+        self._update_read_write_icon_for_readonly_status()
         
         pane_sizer.Add(
             version_label,
@@ -1234,7 +1238,19 @@ class MainWindow:
             flag=wx.CENTER|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         
-        return pane_sizer
+        return pane
+    
+    def _update_read_write_icon_for_readonly_status(self) -> None:
+        readonly = self._readonly  # cache
+        
+        if readonly:
+            rwi_label = '🔒' if not is_windows() else 'Read only'
+            rwi_tooltip = 'Read only project'  # type: str
+        else:
+            rwi_label = '✏️' if not is_windows() else 'Writable'
+            rwi_tooltip = 'Writable project'
+        self._read_write_icon.SetLabel(rwi_label)
+        self._read_write_icon.SetToolTip(rwi_tooltip)
     
     # === Status Bar: Events ===
     
