@@ -100,6 +100,8 @@ flameprof = "^0.4"
 # Version >=70,<71 is necessary for make-mac.sh and py2app to build successfully.
 setuptools = ">=70,<71"
 isort = "^6.0.1"
+# Pillow >=9.2.0 is needed by PyScreeze for screenshot support on Linux.
+pillow = { version = ">=9.2.0", markers = "sys_platform == 'linux'" }
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -346,8 +346,9 @@ jobs:
         run: sudo apt-get install -y at-spi2-core
       
       # NOTE: Needed for screenshot support while running tests
-      - name: Install scrot
-        run: sudo apt-get install scrot
+      # TODO: Is scrot actually still needed? gnome-screenshot definitely is.
+      - name: Install scrot and gnome-screenshot
+        run: sudo apt-get install scrot gnome-screenshot
 
       - name: Install wxPython dependencies
         run: sudo apt-get install -y libgtk-3-dev
