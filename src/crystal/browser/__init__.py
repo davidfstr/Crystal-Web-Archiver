@@ -91,6 +91,7 @@ class MainWindow:
         if progress_listener is None:
             progress_listener = DummyOpenProjectProgressListener()
         
+        self._closed = False
         self.project = project
         self._log_drawer = None  # type: Optional[LogDrawer]
         self._project_server = None  # type: Optional[ProjectServer]
@@ -643,8 +644,29 @@ class MainWindow:
         
         In all other situations, the project is closed and returns True.
         
+        It is safe to call this method multiple times, even after the project has closed.
+        
         See also: MainWindow.close()
         """
+        if self._closed:
+            # Already closed
+            return True
+        try:
+            did_not_cancel = self._do_try_close(
+                prompt_to_save_untitled=prompt_to_save_untitled,
+                will_prompt_to_save=will_prompt_to_save)
+            return did_not_cancel
+        except:
+            did_not_cancel = True
+            raise
+        finally:
+            if did_not_cancel:
+                self._closed = True
+    
+    def _do_try_close(self,
+            *, prompt_to_save_untitled: bool = True,
+            will_prompt_to_save: Callable[[], None] | None = None,
+            ) -> bool:
         # If the project is untitled and dirty, prompt to save it
         if self.project.is_untitled and self.project.is_dirty and prompt_to_save_untitled:
             if will_prompt_to_save is not None:
