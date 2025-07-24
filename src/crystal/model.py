@@ -2077,6 +2077,10 @@ class Project(ListenableMixin):
         os.mkdir(dst_project_dirpath)
         for (src_parent_dirpath, dst_parent_dirpath, dirnames, filenames) in walkzip(
                 src_project_dirpath, dst_project_dirpath, topdown=True):
+            # Ensure files and directories are copied in a deterministic lexicographic order
+            filenames.sort()
+            dirnames.sort()
+
             # Copy files to the current destination directory
             for filename in filenames:
                 src_filepath = os.path.join(src_parent_dirpath, filename)
