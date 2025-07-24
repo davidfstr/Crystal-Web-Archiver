@@ -26,6 +26,35 @@ files = [
 ]
 
 [[package]]
+name = "autocommand"
+version = "2.2.2"
+description = "A library to create a command-line program from a function"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "autocommand-2.2.2-py3-none-any.whl", hash = "sha256:710afe251075e038e19e815e25f8155cabe02196cfb545b2185e0d9c8b2b0459"},
+    {file = "autocommand-2.2.2.tar.gz", hash = "sha256:878de9423c5596491167225c2a455043c3130fb5b7286ac83443d45e74955f34"},
+]
+
+[[package]]
+name = "backports-tarfile"
+version = "1.2.0"
+description = "Backport of CPython tarfile module"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "python_version == \"3.11\""
+files = [
+    {file = "backports.tarfile-1.2.0-py3-none-any.whl", hash = "sha256:77e284d754527b01fb1e6fa8a1afe577858ebe4e9dad8919e34c862cb399bc34"},
+    {file = "backports_tarfile-1.2.0.tar.gz", hash = "sha256:d75e02c268746e1b8144c278978b6e98e85de6ad16f8e4b0844a154557eca991"},
+]
+
+[package.extras]
+docs = ["furo", "jaraco.packaging (>=9.3)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
+testing = ["jaraco.test", "pytest (!=8.0.*)", "pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)"]
+
+[[package]]
 name = "beautifulsoup4"
 version = "4.13.4"
 description = "Screen-scraping library"
@@ -55,7 +84,7 @@ description = "Extensible memoizing collections and decorators"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "sys_platform == \"win32\" and python_version == \"3.11\""
+markers = "python_version == \"3.11\" and sys_platform == \"win32\""
 files = [
     {file = "cachetools-6.0.0-py3-none-any.whl", hash = "sha256:82e73ba88f7b30228b5507dce1a1f878498fc669d972aef2dde4f3a3c24f103e"},
     {file = "cachetools-6.0.0.tar.gz", hash = "sha256:f225782b84438f828328fc2ad74346522f27e5b1440f4e9fd18b20ebfd1aa2cf"},
@@ -295,6 +324,71 @@ colors = ["colorama"]
 plugins = ["setuptools"]
 
 [[package]]
+name = "jaraco-context"
+version = "6.0.1"
+description = "Useful decorators and context managers"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "jaraco.context-6.0.1-py3-none-any.whl", hash = "sha256:f797fc481b490edb305122c9181830a3a5b76d84ef6d1aef2fb9b47ab956f9e4"},
+    {file = "jaraco_context-6.0.1.tar.gz", hash = "sha256:9bae4ea555cf0b14938dc0aee7c9f32ed303aa20a3b73e7dc80111628792d1b3"},
+]
+
+[package.dependencies]
+"backports.tarfile" = {version = "*", markers = "python_version < \"3.12\""}
+
+[package.extras]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
+test = ["portend", "pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-mypy", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
+
+[[package]]
+name = "jaraco-functools"
+version = "4.2.1"
+description = "Functools like those found in stdlib"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "jaraco_functools-4.2.1-py3-none-any.whl", hash = "sha256:590486285803805f4b1f99c60ca9e94ed348d4added84b74c7a12885561e524e"},
+    {file = "jaraco_functools-4.2.1.tar.gz", hash = "sha256:be634abfccabce56fa3053f8c7ebe37b682683a4ee7793670ced17bab0087353"},
+]
+
+[package.dependencies]
+more_itertools = "*"
+
+[package.extras]
+check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
+cover = ["pytest-cov"]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
+enabler = ["pytest-enabler (>=2.2)"]
+test = ["jaraco.classes", "pytest (>=6,!=8.1.*)"]
+type = ["pytest-mypy"]
+
+[[package]]
+name = "jaraco-text"
+version = "4.0.0"
+description = "Module for text manipulation"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "jaraco.text-4.0.0-py3-none-any.whl", hash = "sha256:08de508939b5e681b14cdac2f1f73036cd97f6f8d7b25e96b8911a9a428ca0d1"},
+    {file = "jaraco_text-4.0.0.tar.gz", hash = "sha256:5b71fecea69ab6f939d4c906c04fee1eda76500d1641117df6ec45b865f10db0"},
+]
+
+[package.dependencies]
+autocommand = "*"
+"jaraco.context" = ">=4.1"
+"jaraco.functools" = "*"
+more-itertools = "*"
+
+[package.extras]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
+inflect = ["inflect"]
+test = ["pathlib2 ; python_version < \"3.10\"", "pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-mypy", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
+
+[[package]]
 name = "lxml"
 version = "5.4.0"
 description = "Powerful and Pythonic XML processing library combining libxml2/libxslt with the ElementTree API."
@@ -477,6 +571,18 @@ altgraph = ">=0.15"
 setuptools = "*"
 
 [[package]]
+name = "more-itertools"
+version = "10.7.0"
+description = "More routines for operating on iterables, beyond itertools"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "more_itertools-10.7.0-py3-none-any.whl", hash = "sha256:d43980384673cb07d2f7d2d918c616b30c659c089ee23953f601d6609c67510e"},
+    {file = "more_itertools-10.7.0.tar.gz", hash = "sha256:9fddd5403be01a94b204faadcff459ec3568cf110265d3c54323e1e866ad29d3"},
+]
+
+[[package]]
 name = "mypy"
 version = "1.6.1"
 description = "Optional static typing for Python"
@@ -616,7 +722,7 @@ description = "Python PE parsing module"
 optional = false
 python-versions = ">=3.6.0"
 groups = ["main"]
-markers = "sys_platform == \"win32\" and python_version == \"3.11\""
+markers = "python_version == \"3.11\" and sys_platform == \"win32\""
 files = [
     {file = "pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"},
     {file = "pefile-2024.8.26.tar.gz", hash = "sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632"},
@@ -629,7 +735,7 @@ description = "Python Imaging Library (Fork)"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
-markers = "python_version == \"3.11\" or sys_platform == \"linux\""
+markers = "sys_platform == \"linux\" or python_version == \"3.11\""
 files = [
     {file = "pillow-11.3.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:1b9c17fd4ace828b3003dfd1e30bff24863e0eb59b535e8f80194d9cc7ecf860"},
     {file = "pillow-11.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:65dc69160114cdd0ca0f35cb434633c75e8e7fad4cf855177a05bf38678f73ad"},
@@ -820,7 +926,7 @@ description = "Build standalone executables for Windows"
 optional = false
 python-versions = "<3.12,>=3.8"
 groups = ["main"]
-markers = "sys_platform == \"win32\" and python_version == \"3.11\""
+markers = "python_version == \"3.11\" and sys_platform == \"win32\""
 files = [
     {file = "py2exe-0.13.0.2-cp310-cp310-win32.whl", hash = "sha256:c7f4629ebb966d5d8757d9c1a137260891c55c2e0eafc6d9ffa39e0442d34e46"},
     {file = "py2exe-0.13.0.2-cp310-cp310-win_amd64.whl", hash = "sha256:6ba94392e3ea252c441d7008f14e3a3bf5738ef424bf8546a6e083fdd84569d0"},
@@ -950,6 +1056,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = false
 python-versions = ">=3.8"
 groups = ["main", "dev"]
+markers = "python_version == \"3.11\""
 files = [
     {file = "setuptools-70.3.0-py3-none-any.whl", hash = "sha256:fe384da74336c398e0d956d1cae0669bc02eed936cdb1d49b57de1990dc11ffc"},
     {file = "setuptools-70.3.0.tar.gz", hash = "sha256:f171bab1dfbc86b132997f26a119f6056a57950d058587841a0082e8830f9dc5"},
@@ -958,6 +1065,28 @@ files = [
 [package.extras]
 doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "pygments-github-lexers (==0.0.5)", "pyproject-hooks (!=1.1)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-favicon", "sphinx-inline-tabs", "sphinx-lint", "sphinx-notfound-page (>=1,<2)", "sphinx-reredirects", "sphinxcontrib-towncrier"]
 test = ["build[virtualenv] (>=1.0.3)", "filelock (>=3.4.0)", "importlib-metadata", "ini2toml[lite] (>=0.14)", "jaraco.develop (>=7.21) ; python_version >= \"3.9\" and sys_platform != \"cygwin\"", "jaraco.envs (>=2.2)", "jaraco.path (>=3.2.0)", "jaraco.test", "mypy (==1.10.0)", "packaging (>=23.2)", "pip (>=19.1)", "pyproject-hooks (!=1.1)", "pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-home (>=0.5)", "pytest-mypy", "pytest-perf ; sys_platform != \"cygwin\"", "pytest-ruff (>=0.3.2) ; sys_platform != \"cygwin\"", "pytest-subprocess", "pytest-timeout", "pytest-xdist (>=3)", "tomli", "tomli-w (>=1.0.0)", "virtualenv (>=13.0.0)", "wheel"]
+
+[[package]]
+name = "setuptools"
+version = "80.9.0"
+description = "Easily download, build, install, upgrade, and uninstall Python packages"
+optional = false
+python-versions = ">=3.9"
+groups = ["main", "dev"]
+markers = "python_version >= \"3.12\""
+files = [
+    {file = "setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"},
+    {file = "setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c"},
+]
+
+[package.extras]
+check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\"", "ruff (>=0.8.0) ; sys_platform != \"cygwin\""]
+core = ["importlib_metadata (>=6) ; python_version < \"3.10\"", "jaraco.functools (>=4)", "jaraco.text (>=3.7)", "more_itertools", "more_itertools (>=8.8)", "packaging (>=24.2)", "platformdirs (>=4.2.2)", "tomli (>=2.0.1) ; python_version < \"3.11\"", "wheel (>=0.43.0)"]
+cover = ["pytest-cov"]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "pygments-github-lexers (==0.0.5)", "pyproject-hooks (!=1.1)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-favicon", "sphinx-inline-tabs", "sphinx-lint", "sphinx-notfound-page (>=1,<2)", "sphinx-reredirects", "sphinxcontrib-towncrier", "towncrier (<24.7)"]
+enabler = ["pytest-enabler (>=2.2)"]
+test = ["build[virtualenv] (>=1.0.3)", "filelock (>=3.4.0)", "ini2toml[lite] (>=0.14)", "jaraco.develop (>=7.21) ; python_version >= \"3.9\" and sys_platform != \"cygwin\"", "jaraco.envs (>=2.2)", "jaraco.path (>=3.7.2)", "jaraco.test (>=5.5)", "packaging (>=24.2)", "pip (>=19.1)", "pyproject-hooks (!=1.1)", "pytest (>=6,!=8.1.*)", "pytest-home (>=0.5)", "pytest-perf ; sys_platform != \"cygwin\"", "pytest-subprocess", "pytest-timeout", "pytest-xdist (>=3)", "tomli-w (>=1.0.0)", "virtualenv (>=13.0.0)", "wheel (>=0.44.0)"]
+type = ["importlib_metadata (>=7.0.2) ; python_version < \"3.10\"", "jaraco.develop (>=7.21) ; sys_platform != \"cygwin\"", "mypy (==1.14.*)", "pytest-mypy"]
 
 [[package]]
 name = "sortedcontainers"
@@ -1313,4 +1442,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "5c99607fd10e87fbf30bef903ecd9d06e52facfb43b5e3a69c727e228a12b510"
+content-hash = "117dfcc0d3c880838e23f643fb36596580e979a7ee3b3b20ff60d016ea2e5758"

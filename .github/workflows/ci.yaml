@@ -208,6 +208,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "" build.keychain > /dev/null
 
       - name: Build .app and disk image
+        id: build_app_and_disk_image
         working-directory: "./setup"
         env:
           # ex: "Developer ID Application: John Smith (##########)"
@@ -237,6 +238,17 @@ jobs:
             export CRYSTAL_SUPPORT_SCREENSHOTS=True
           fi
           poetry run ./make-mac.sh $MAKE_POST_ARGS
+
+      # Upload py2app logs on .app build failure
+      - name: Upload py2app logs
+        if: failure() && steps.build_app_and_disk_image.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: py2app-logs-${{ matrix.os }}-${{ matrix.python-version }}
+          path: |
+            setup/py2app.stderr.log
+            setup/py2app.stdout.log
+          if-no-files-found: ignore
       
       - name: Enable core dumps
         if: env.ENABLE_CORE_DUMPS == 'true'

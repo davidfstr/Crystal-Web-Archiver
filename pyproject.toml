@@ -89,6 +89,7 @@ typing-extensions = "^4.8.0"
 types-tqdm = "^4.66.0.20240106"
 truststore = "*"
 send2trash = "^1.8.3"
+jaraco-text = ">=4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.0,<8.0"
@@ -97,8 +98,13 @@ types-tzlocal = "^4.2.0"
 PyScreeze = "^0.1.28"
 flameprof = "^0.4"
 # Declare setuptools explicitly for setup.py and py2exe.
-# Version >=70,<71 is necessary for make-mac.sh and py2app to build successfully.
-setuptools = ">=70,<71"
+# NOTE: setuptools >= 78.1.1 avoids a security vulnerability:
+#       https://github.com/davidfstr/Crystal-Web-Archiver/security/dependabot/15
+# NOTE: setuptools 80+ has py2app conflicts with backports.tarfile in Python 3.11
+setuptools = [
+    { version = ">=70,<71", markers = "python_version < '3.12'" },
+    { version = ">=78.1.1", markers = "python_version >= '3.12'" }
+]
 isort = "^6.0.1"
 # Pillow >=9.2.0 is needed by PyScreeze for screenshot support on Linux.
 pillow = { version = ">=9.2.0", markers = "sys_platform == 'linux'" }
