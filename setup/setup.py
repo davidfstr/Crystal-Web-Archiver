@@ -132,7 +132,7 @@ if sys.platform == 'darwin':
 elif sys.platform == 'win32':
     # If run without args, build executables in quiet mode
     if len(sys.argv) == 1:
-        sys.argv.append("py2app")
+        sys.argv.append("py2exe")
         sys.argv.append("-q")
     
     # Ensure 'py2exe' package installed

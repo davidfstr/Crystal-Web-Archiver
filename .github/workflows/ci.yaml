@@ -473,7 +473,7 @@ jobs:
 
       - name: Build .exe and installer
         working-directory: ".\\setup"
-        run: "poetry run .\\make-win.bat"
+        run: "powershell -File .\\make-win.ps1"
 
       - name: Run UI tests
         working-directory: ".\\setup"
