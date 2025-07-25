@@ -19,6 +19,10 @@ Release Notes ⋮
       creating a new project, such as "New Root URL..." or "New Group..."
       no longer fails.
 
+* CLI improvements
+    * Help text printed by `crystal --help` now more clearly describes the 
+      available arguments and options.
+
 * Minor fixes
     * Rephrased the placeholder text for Name fields to more-obviously be
       placeholders, especially for environments like Windows where the

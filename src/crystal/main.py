@@ -162,26 +162,34 @@ def _main(args: list[str]) -> None:
     from crystal.util.xos import is_linux
 
     # Parse CLI arguments
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='Crystal: A tool for archiving websites in high fidelity.',
+        add_help=False,
+    )
     parser.add_argument(
-        '--shell',
-        help='Start a CLI shell after opening a project.',
-        action='store_true',
+        '--help', '-h',
+        action='help',
+        help='Show this help message and exit.'
     )
     parser.add_argument(
         '--serve',
-        help='Start serving the project immediately.',
+        help='Start serving opened projects immediately.',
+        action='store_true',
+    )
+    parser.add_argument(
+        '--shell',
+        help='Start a CLI shell when running Crystal.',
         action='store_true',
     )
     parser.add_argument(
         '--cookie',
-        help='HTTP Cookie header value when downloading resources.',
+        help='An HTTP Cookie header value to send when downloading resources.',
         type=str,
         default=None,
     )
     parser.add_argument(
         '--readonly',
-        help='Whether to open the project as read-only.',
+        help='Open projects as read-only by default rather than as writable.',
         action='store_true',
     )
     parser.add_argument(
@@ -199,20 +207,20 @@ def _main(args: list[str]) -> None:
     )
     parser.add_argument(
         '--test',
-        help='Run automated tests.',
+        help=argparse.SUPPRESS,  # 'Run automated tests.'
         action='store',
         nargs='*',
     )
     if is_linux():
         parser.add_argument(
             '--install-to-desktop',
-            help='Install this app to the desktop.',
+            help='Install this app to the Linux desktop environment.',
             action='store_true',
         )
     parser.add_argument(
         'filepath',
         # NOTE: Duplicates: Project.FILE_EXTENSION, Project.OPENER_FILE_EXTENSION
-        help='Optional. Path to a *.crystalproj or *.crystalopen to open.',
+        help='Optional. Path to a *.crystalproj or *.crystalopen to open immediately.',
         type=str,
         default=None,
         nargs='?',
