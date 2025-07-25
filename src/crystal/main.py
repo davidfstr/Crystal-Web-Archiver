@@ -234,7 +234,7 @@ def _main(args: list[str]) -> None:
             action='store_true',
         )
     parser.add_argument(
-        'filepath',
+        'project_filepath',
         # NOTE: Duplicates: Project.FILE_EXTENSION, Project.OPENER_FILE_EXTENSION
         help='Optional. Path to a *.crystalproj or *.crystalopen to open immediately.',
         type=str,
@@ -495,7 +495,7 @@ def _main(args: list[str]) -> None:
                 break
             
             # Clear first-only launch arguments
-            parsed_args.filepath = None
+            parsed_args.project_filepath = None
             
             # Re-launch, reopening the initial dialog
             from crystal.util.xthreading import start_fg_coroutine
@@ -539,8 +539,8 @@ async def _did_launch(
     import tempfile
 
     # If project to open was passed on the command-line, use it
-    if parsed_args.filepath is not None:
-        filepath = parsed_args.filepath  # reinterpret
+    if parsed_args.project_filepath is not None:
+        filepath = parsed_args.project_filepath  # reinterpret
     
     # Open/create a project
     project: Project | None = None
