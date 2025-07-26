@@ -615,18 +615,3 @@ def start_fg_coroutine(
 
 
 # ------------------------------------------------------------------------------
-# Quitting
-
-_is_quitting = False
-
-
-def is_quitting() -> bool:
-    return _is_quitting
-
-
-def set_is_quitting() -> None:
-    global _is_quitting
-    _is_quitting = True
-
-
-# ------------------------------------------------------------------------------

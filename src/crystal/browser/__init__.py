@@ -34,6 +34,7 @@ from crystal.util.unicode_labels import decorate_label
 from crystal.util.url_prefix import (
     get_url_directory_prefix_for, get_url_domain_prefix_for,
 )
+from crystal.util.quitting import set_is_quitting
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
     position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
@@ -48,7 +49,6 @@ from crystal.util.xsqlite3 import (
 )
 from crystal.util.xthreading import (
     bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, fg_trampoline, fg_wait_for,
-    set_is_quitting,
 )
 from functools import partial
 import os

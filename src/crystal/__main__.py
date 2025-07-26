@@ -19,4 +19,5 @@ functionality in the startup module. Known differences:
 from crystal.main import main
 
 if __name__ == '__main__':
+    # NOTE: Never returns
     main()
