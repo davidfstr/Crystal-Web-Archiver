@@ -450,14 +450,14 @@ def test_recognizes_javascript_with_absolute_or_site_relative_url() -> None:
                     # Ensure rewrites link 'http://' properly
                     def get_request_url(absolute_url: str) -> str:
                         if absolute_url == 'http://':
-                            return 'http://localhost:2797/_/http/'
+                            return 'http://127.0.0.1:2797/_/http/'
                         else:
                             raise NotImplementedError()
                     _RequestHandler._rewrite_links(
                         links=[link],
                         base_url='http://strangecandy.net/',
                         get_request_url=get_request_url)
-                    assert 'http://localhost:2797/_/http/' == link.relative_url
+                    assert 'http://127.0.0.1:2797/_/http/' == link.relative_url
                 
                 # <script [type="text/javascript"]>..."//**"...</script>
                 if True:
@@ -522,13 +522,13 @@ def test_when_rewrite_link_using_integrity_then_removes_integrity_attribute() ->
                     link.relative_url, link.type_title, link.title, link.embedded,
                 )
                 
-                link.relative_url = 'http://localhost:2797/_/https/example.com/script.js'
+                link.relative_url = 'http://127.0.0.1:2797/_/https/example.com/script.js'
                 
                 EXPECTED_OUTPUT_HTML_STR_CHOICES = [
                     # html.parser
-                                '''<script src="http://localhost:2797/_/https/example.com/script.js"></script>''',
+                                '''<script src="http://127.0.0.1:2797/_/https/example.com/script.js"></script>''',
                     # lxml
-                    '''<html><head><script src="http://localhost:2797/_/https/example.com/script.js"></script></head></html>''',
+                    '''<html><head><script src="http://127.0.0.1:2797/_/https/example.com/script.js"></script></head></html>''',
                 ]
                 assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
                 assert 'integrity' not in str(doc)
@@ -544,13 +544,13 @@ def test_when_rewrite_link_using_integrity_then_removes_integrity_attribute() ->
                     link.relative_url, link.type_title, link.title, link.embedded,
                 )
                 
-                link.relative_url = 'http://localhost:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css'
+                link.relative_url = 'http://127.0.0.1:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css'
                 
                 EXPECTED_OUTPUT_HTML_STR_CHOICES = [
                     # html.parser
-                                '''<link crossorigin="anonymous" href="http://localhost:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css" media="all" rel="stylesheet" type="text/css"/>''',
+                                '''<link crossorigin="anonymous" href="http://127.0.0.1:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css" media="all" rel="stylesheet" type="text/css"/>''',
                     # lxml
-                    '''<html><head><link crossorigin="anonymous" href="http://localhost:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css" media="all" rel="stylesheet" type="text/css"></head></html>''',
+                    '''<html><head><link crossorigin="anonymous" href="http://127.0.0.1:2797/_/https/use.fontawesome.com/releases/v5.12.1/css/all.css" media="all" rel="stylesheet" type="text/css"></head></html>''',
                 ]
                 assert str(doc) in EXPECTED_OUTPUT_HTML_STR_CHOICES
                 assert 'integrity' not in str(doc)

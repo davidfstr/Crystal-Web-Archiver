@@ -21,6 +21,7 @@ def is_port_in_use(port: int, hostname: str=_LOCALHOST) -> bool:
 def is_port_in_use_error(e: Exception) -> bool:
     # macOS: [Errno 48] Address already in use
     # Linux: [Errno 98] Address already in use
+    # TODO: Look for errno.EADDRINUSE instead of substring
     if isinstance(e, OSError) and 'Address already in use' in str(e):
         return True
     return False

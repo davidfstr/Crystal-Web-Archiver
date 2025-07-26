@@ -5,8 +5,17 @@ See also:
 * test_shell.py -- Tests related to the --shell option
 """
 
+from contextlib import contextmanager
+from crystal.tests.util.asserts import assertIn
+from crystal.tests.util.cli import (
+    close_open_or_create_dialog, _py_eval, _read_until,
+    wait_for_crystal_to_exit, crystal_shell, run_crystal,
+)
+from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+from io import TextIOBase
+import os
+import tempfile
 from unittest import skip
-
 
 # === Basic Launch Tests ===
 
@@ -61,9 +70,59 @@ def test_when_launched_with_multiple_filepaths_then_prints_error_and_exits() -> 
 # === Server Mode Tests (--serve) ===
 # NOTE: Detailed server tests are in test_server.py
 
-@skip('not yet automated')
 def test_when_launched_with_serve_and_project_filepath_then_opens_project_and_serves_immediately() -> None:
-    pass
+    with _temp_project() as project_path:
+        with _crystal_shell_with_serve(project_path) as server_start_message:
+            assertIn('Server started at: http://127.0.0.1:2797', server_start_message)
+
+
+def test_when_launched_with_serve_and_port_then_binds_to_specified_port() -> None:
+    with _temp_project() as project_path:
+        with _crystal_shell_with_serve(project_path, port=8080) as server_start_message:
+            assertIn('Server started at: http://127.0.0.1:8080', server_start_message)
+
+
+def test_when_launched_with_serve_and_host_then_binds_to_specified_host() -> None:
+    with _temp_project() as project_path:
+        with _crystal_shell_with_serve(project_path, host='0.0.0.0') as server_start_message:
+            assertIn('Server started at: http://0.0.0.0:2797', server_start_message)
+
+
+def test_when_launched_with_port_but_no_serve_then_prints_error_and_exits() -> None:
+    result = run_crystal(['--port', '8080'])
+    assert result.returncode != 0
+    assertIn('--port and --host can only be used with --serve', result.stderr)
+
+
+def test_when_launched_with_host_but_no_serve_then_prints_error_and_exits() -> None:
+    result = run_crystal(['--host', '0.0.0.0'])
+    assert result.returncode != 0
+    assertIn('--port and --host can only be used with --serve', result.stderr)
+
+
+def test_when_launched_with_serve_and_port_already_in_use_then_fails_immediately() -> None:
+    import socket
+    from contextlib import closing
+    
+    # Find a free port for testing
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        sock.bind(('127.0.0.1', 0))  # bind to any free port
+        test_port = sock.getsockname()[1]
+    
+    # Create a simple server on the test port to create a conflict
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as conflicting_server:
+        conflicting_server.bind(('127.0.0.1', test_port))
+        conflicting_server.listen(1)  # Start listening to reserve the port
+        
+        with _temp_project() as project_path:
+            # Try to start Crystal server on the same port - should fail
+            result = run_crystal(['--serve', '--port', str(test_port), project_path])
+            assert result.returncode != 0
+            # Check for common error messages that indicate port conflict
+            error_output = result.stderr.lower()
+            assert ('address already in use' in error_output or 
+                    'bind' in error_output or 
+                    'port' in error_output), f"Expected port conflict error, got: {result.stderr}"
 
 
 # === Shell Mode Tests (--shell) ===
@@ -138,3 +197,51 @@ def test_when_launched_on_non_linux_with_install_to_desktop_then_argument_not_vi
 @skip('not yet automated')
 def test_when_crystal_receives_ctrl_c_or_sigint_then_exits_cleanly() -> None:
     pass
+
+
+# === Utility Functions ===
+
+@contextmanager
+def _temp_project():
+    """Create a temporary project file for testing."""
+    with tempfile.NamedTemporaryFile(suffix='.crystalproj', delete=False) as temp_file:
+        project_path = temp_file.name
+    
+    try:
+        # Remove the temporary file so Crystal can create the project
+        os.remove(project_path)
+        yield project_path
+    finally:
+        # Clean up the project directory if it was created
+        if os.path.exists(project_path):
+            import shutil
+            shutil.rmtree(project_path)
+
+
+@contextmanager
+def _crystal_shell_with_serve(project_path: str, port: int | None = None, host: str | None = None):
+    """
+    Context which starts "crystal --serve [--port PORT] [--host HOST] PROJECT_PATH --shell"
+    and cleans up the associated process upon exit.
+    """
+    # Build arguments
+    args = ['--serve']
+    if port is not None:
+        args.extend(['--port', str(port)])
+    if host is not None:
+        args.extend(['--host', host])
+    args.extend([project_path])
+    
+    with crystal_shell(args=args) as (crystal, banner):
+        assert isinstance(crystal.stdout, TextIOBase)
+        (server_start_message, _) = _read_until(crystal.stdout, '\n')
+        yield server_start_message
+        
+        # TODO: Consider quitting using Ctrl-C instead,
+        #       which would probably be easier and more reliable
+        _py_eval(crystal, 'window.close()')
+        close_open_or_create_dialog(crystal)
+        _py_eval(crystal, 'exit()', stop_suffix='')
+        wait_for_crystal_to_exit(
+            crystal,
+            timeout=DEFAULT_WAIT_TIMEOUT)

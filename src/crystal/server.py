@@ -32,7 +32,9 @@ from typing import Literal, Optional
 from typing_extensions import override
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
+
 _DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
+_DEFAULT_SERVER_HOST = '127.0.0.1'
 
 
 Verbosity = Literal['normal', 'indent']
@@ -47,16 +49,24 @@ class ProjectServer:
     def __init__(self,
             project: Project,
             port: int | None=None,
+            host: str | None=None,
             *, verbosity: Verbosity='normal',
             stdout: TextIOBase | None=None,
             ) -> None:
+        """
+        Raises:
+        * OSError (errno.EADDRINUSE) -- if the host:port combination is already in use.
+        """
         if port is None:
             port = _DEFAULT_SERVER_PORT
             try_other_ports = True
         else:
             try_other_ports = False
+        if host is None:
+            host = _DEFAULT_SERVER_HOST
         
         self._project = project
+        self._host = host
         self._verbosity = verbosity
         self._stdout = stdout
         
@@ -65,11 +75,11 @@ class ProjectServer:
             # NOTE: Must explicitly check whether port in use because Windows
             #       appears not to raise an exception when opening a _HttpServer
             #       on a port that is in use, unlike macOS and Linux
-            if try_other_ports and is_port_in_use(port):
+            if try_other_ports and is_port_in_use(port, host):
                 pass
             else:
                 try:
-                    address = ('', port)
+                    address = (host, port)
                     server = _HttpServer(address, _RequestHandler)
                 except Exception as e:
                     if try_other_ports and is_port_in_use_error(e):
@@ -98,7 +108,7 @@ class ProjectServer:
         def bg_task() -> None:
             try:
                 if verbosity == 'normal':
-                    print_success('Server started on port %s.' % port, file=self._stdout)
+                    print_success(f'Server started at: http://{host}:{port}', file=self._stdout)
                 self._server.serve_forever()
             finally:
                 self._server.server_close()
@@ -121,6 +131,10 @@ class ProjectServer:
     def port(self) -> int:
         return self._port
     
+    @property
+    def host(self) -> str:
+        return self._host
+    
     # === Utility ===
     
     def get_request_url(self, archive_url: str) -> str:
@@ -128,13 +142,18 @@ class ProjectServer:
         Given the absolute URL of a resource, returns the URL that should be used to
         request it from the project server.
         """
-        return get_request_url(archive_url, self._port, self._project.default_url_prefix)
+        return get_request_url(
+            archive_url,
+            self._port,
+            self._host,
+            project_default_url_prefix=self._project.default_url_prefix)
 
 
 def get_request_url(
         archive_url: str,
         port: int | None=None,
-        project_default_url_prefix: str | None=None,
+        host: str | None=None,
+        *, project_default_url_prefix: str | None=None,
         ) -> str:
     """
     Given the absolute URL of a resource, returns the URL that should be used to
@@ -142,8 +161,10 @@ def get_request_url(
     """
     if port is None:
         port = _DEFAULT_SERVER_PORT
+    if host is None:
+        host = _DEFAULT_SERVER_HOST
     
-    request_host = 'localhost:%s' % port
+    request_host = f'{host}:{port}'
     return _RequestHandler.get_request_url_with_host(
         archive_url, request_host, project_default_url_prefix)
 
@@ -335,7 +356,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @property
     def _server_host(self) -> str:
-        return 'localhost:%s' % self.server.server_port  # type: ignore[attr-defined]
+        server = self.server
+        assert isinstance(server, _HttpServer)
+        (host, port) = server.server_address
+        assert isinstance(host, str) and isinstance(port, int)
+        return f'{host}:{port}'
     
     # === Request Properties ===
     
