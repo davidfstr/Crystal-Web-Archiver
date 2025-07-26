@@ -1105,15 +1105,18 @@ class MainWindow:
         finally:
             os.chdir(old_cwd)
     
-    def start_server(self) -> 'ProjectServer':
+    def start_server(self, port: int | None=None, host: str | None=None) -> 'ProjectServer':
         """
         Starts an HTTP server that serves pages from this project.
         
         If an HTTP server is already running, does nothing.
+        
+        Raises:
+        * OSError (errno.EADDRINUSE) -- if the host:port combination is already in use.
         """
         if self._project_server is None:
             self._log_drawer = LogDrawer(parent=self._frame)
-            self._project_server = ProjectServer(self.project, stdout=self._log_drawer.writer)
+            self._project_server = ProjectServer(self.project, port=port, host=host, stdout=self._log_drawer.writer)
         
         return self._project_server
     

@@ -82,7 +82,7 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 home_ti.SelectItem()
                 home_request_url = get_request_url(home_url)
                 expected_home_request_url = (
-                    f"http://localhost:{_DEFAULT_SERVER_PORT}/_/{home_url.replace('://', '/')}"
+                    f"http://127.0.0.1:{_DEFAULT_SERVER_PORT}/_/{home_url.replace('://', '/')}"
                 )
                 assert expected_home_request_url == home_request_url
                 with assert_does_open_webbrowser_to(home_request_url):

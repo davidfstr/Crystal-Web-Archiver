@@ -79,6 +79,7 @@ def served_project_from_filepath(
         # Start server
         project_server = ProjectServer(project,
             port=(port or 2798),  # CRYT on telephone keypad
+            host='127.0.0.1',
             verbosity='indent',
         )
         yield project_server
@@ -143,7 +144,7 @@ class MockHttpServer:
         bg_call_later(bg_task, daemon=True)
     
     def get_url(self, path: str) -> str:
-        return f'http://localhost:{self._port}' + path
+        return f'http://127.0.0.1:{self._port}' + path
     
     def close(self) -> None:
         self._server.shutdown()

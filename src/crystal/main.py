@@ -20,7 +20,6 @@ import datetime
 import locale
 import os
 import os.path
-import shutil
 import sys
 import threading
 import time
@@ -175,6 +174,7 @@ def _main(args: list[str]) -> None:
     # binary downloaded from the internet.
     args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
     
+    from crystal.server import _DEFAULT_SERVER_HOST, _DEFAULT_SERVER_PORT
     from crystal.util.xos import is_linux
 
     # Parse CLI arguments
@@ -191,6 +191,18 @@ def _main(args: list[str]) -> None:
         '--serve',
         help='Start serving opened projects immediately.',
         action='store_true',
+    )
+    parser.add_argument(
+        '--port', '-p',
+        help=f'Specify the port to bind to when using --serve (default: {_DEFAULT_SERVER_PORT}).',
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        '--host',
+        help=f'Specify the host to bind to when using --serve (default: {_DEFAULT_SERVER_HOST}).',
+        type=str,
+        default=None,
     )
     parser.add_argument(
         '--shell',
@@ -242,6 +254,12 @@ def _main(args: list[str]) -> None:
         nargs='?',
     )
     parsed_args = parser.parse_args(args)  # may raise SystemExit
+    
+    # Validate CLI arguments
+    if (parsed_args.port is not None or parsed_args.host is not None) and not parsed_args.serve:
+        # NOTE: Error message format and exit code are similar to those used by argparse
+        print('error: --port and --host can only be used with --serve', file=sys.stderr)
+        sys.exit(2)
     
     # Interpret --stale-before datetime as in local timezone if no UTC offset specified
     if parsed_args.stale_before is not None:
@@ -534,9 +552,10 @@ async def _did_launch(
     * SystemExit -- if the user quits
     """
     from crystal.model import Project
-    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog, OpenProjectProgressDialog
+    from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
+    from crystal.server import _DEFAULT_SERVER_HOST, _DEFAULT_SERVER_PORT
+    from crystal.util.ports import is_port_in_use_error
     from crystal.util.test_mode import tests_are_running
-    import tempfile
 
     # If project to open was passed on the command-line, use it
     if parsed_args.project_filepath is not None:
@@ -588,7 +607,18 @@ async def _did_launch(
     
     # Start serving immediately if requested
     if parsed_args.serve:
-        window.start_server()
+        try:
+            window.start_server(port=parsed_args.port, host=parsed_args.host)
+        except Exception as e:
+            window.close()
+            
+            if is_port_in_use_error(e):
+                port = parsed_args.port or _DEFAULT_SERVER_PORT
+                host = parsed_args.host or _DEFAULT_SERVER_HOST
+                print(f'*** Cannot start server on {host}:{port} - address already in use', file=sys.stderr)
+            else:
+                print(f'*** Cannot start server - {e}', file=sys.stderr)
+            raise SystemExit(1)
     
     return window
 
