@@ -183,11 +183,6 @@ def _main(args: list[str]) -> None:
         add_help=False,
     )
     parser.add_argument(
-        '--help', '-h',
-        action='help',
-        help='Show this help message and exit.'
-    )
-    parser.add_argument(
         '--readonly',
         help='Open projects as read-only by default rather than as writable.',
         action='store_true',
@@ -221,18 +216,23 @@ def _main(args: list[str]) -> None:
         type=datetime.datetime.fromisoformat,
         default=None,
     )
-    parser.add_argument(
-        '--test',
-        help=argparse.SUPPRESS,  # 'Run automated tests.'
-        action='store',
-        nargs='*',
-    )
     if is_linux():
         parser.add_argument(
             '--install-to-desktop',
             help='Install this app to the Linux desktop environment.',
             action='store_true',
         )
+    parser.add_argument(
+        '--help', '-h',
+        action='help',
+        help='Show this help message and exit.'
+    )
+    parser.add_argument(
+        '--test',
+        help=argparse.SUPPRESS,  # 'Run automated tests.'
+        action='store',
+        nargs='*',
+    )
     parser.add_argument(
         'project_filepath',
         # NOTE: Duplicates: Project.FILE_EXTENSION, Project.OPENER_FILE_EXTENSION
