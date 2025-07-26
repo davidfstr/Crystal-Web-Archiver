@@ -10,7 +10,7 @@ This thread is responsible for:
 from collections import deque
 from collections.abc import Callable, Generator, Iterator
 from concurrent.futures import Future
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from crystal.util.bulkheads import (
     capture_crashes_to_stderr, ensure_is_bulkhead_call,
 )
@@ -412,7 +412,9 @@ def fg_wait_for(condition_func: Callable[[], bool], *, timeout: float | None, po
     * TimeoutError -- if the condition does not become true within the specified timeout
     """
     start_time = time.monotonic()  # capture
-    with wx.EventLoopActivator(loop := wx.GetApp().GetTraits().CreateEventLoop()):
+    app = wx.GetApp()
+    loop = app.GetTraits().CreateEventLoop() if app is not None else None
+    with (wx.EventLoopActivator(loop) if app is not None else nullcontext()):
         while True:
             if condition_func():
                 break
@@ -426,7 +428,7 @@ def fg_wait_for(condition_func: Callable[[], bool], *, timeout: float | None, po
             #       while there are pending events because some OS 
             #       event loops always appear to have pending events.
             #       Therefore we only process one event per iteration.
-            if loop.Pending():
+            if loop is not None and loop.Pending():
                 loop.Dispatch()
             if poll_interval > 0:
                 time.sleep(poll_interval)
