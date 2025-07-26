@@ -188,6 +188,11 @@ def _main(args: list[str]) -> None:
         help='Show this help message and exit.'
     )
     parser.add_argument(
+        '--readonly',
+        help='Open projects as read-only by default rather than as writable.',
+        action='store_true',
+    )
+    parser.add_argument(
         '--serve',
         help='Start serving opened projects immediately.',
         action='store_true',
@@ -202,11 +207,6 @@ def _main(args: list[str]) -> None:
         help='An HTTP Cookie header value to send when downloading resources.',
         type=str,
         default=None,
-    )
-    parser.add_argument(
-        '--readonly',
-        help='Open projects as read-only by default rather than as writable.',
-        action='store_true',
     )
     parser.add_argument(
         '--stale-before',
