@@ -1,5 +1,5 @@
-from crystal.tests.test_shell import (  # TODO: Extract methods to shared module rather than importing private functions
-    _create_new_empty_project, _OK_THREAD_STOP_SUFFIX, _py_eval, crystal_shell,
+from crystal.tests.util.cli import (
+    create_new_empty_project, _py_eval, crystal_shell,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
 import textwrap
@@ -12,7 +12,7 @@ async def test_can_close_project_with_menuitem() -> None:
 
 async def test_can_quit_with_menuitem() -> None:
     with crystal_shell() as (crystal, _):
-        _create_new_empty_project(crystal)
+        create_new_empty_project(crystal)
         
         _py_eval(crystal,
             textwrap.dedent(f'''\
