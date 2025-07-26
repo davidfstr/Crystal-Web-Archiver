@@ -235,7 +235,11 @@ def _crystal_shell_with_serve(project_path: str, port: int | None = None, host: 
     with crystal_shell(args=args) as (crystal, banner):
         assert isinstance(crystal.stdout, TextIOBase)
         (server_start_message, _) = _read_until(crystal.stdout, '\n')
-        yield server_start_message
+        try:
+            yield server_start_message
+        except:
+            print(f'FIXME: {banner=}')
+            raise
         
         # TODO: Consider quitting using Ctrl-C instead,
         #       which would probably be easier and more reliable
