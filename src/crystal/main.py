@@ -25,7 +25,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import ParamSpec, TypeVar, TYPE_CHECKING
+from typing import Never, ParamSpec, TypeVar, TYPE_CHECKING
 from typing_extensions import override
 
 if TYPE_CHECKING:
@@ -42,11 +42,27 @@ _P = ParamSpec('_P')
 _RT = TypeVar('_RT')
 
 
-def main() -> None:
+def main() -> Never:
     """
     Main function. Starts the program.
     """
-    _main(sys.argv[1:])
+    try:
+        _main(sys.argv[1:])
+    except SystemExit as e:
+        exit_command = e
+    else:
+        exit_command = SystemExit()
+    finally:
+        if exit_command.code is None:
+            exit_code = getattr(os, 'EX_OK', 0)  # success
+        elif isinstance(exit_command.code, int):
+            exit_code = exit_command.code  # specific exit code
+        else:
+            exit_code = 1  # default error exit code
+        
+        # Exit process immediately, without bothering to run garbage collection
+        # or other cleanup processes that can take a long time
+        os._exit(exit_code)
 
 
 def _main(args: list[str]) -> None:
@@ -251,14 +267,8 @@ def _main(args: list[str]) -> None:
     import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
     import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
     
-    @atexit.register
-    def on_atexit() -> None:
-        # Exit process immediately, without bothering to run garbage collection
-        # or other cleanup processes that can take a long time
-        os._exit(getattr(os, 'EX_OK', 0))
-    
     last_window = None  # type: Optional[MainWindow]
-    did_quit_during_first_launch = False
+    systemexit_during_first_launch = None  # type: Optional[SystemExit]
     
     # 1. Create wx.App and call app.OnInit(), opening the initial dialog
     # 2. Initialize the foreground thread
@@ -345,9 +355,9 @@ def _main(args: list[str]) -> None:
             try:
                 nonlocal last_window
                 last_window = await _did_launch(parsed_args, shell, filepath)
-            except SystemExit:
-                nonlocal did_quit_during_first_launch
-                did_quit_during_first_launch = True
+            except SystemExit as e:
+                nonlocal systemexit_during_first_launch
+                systemexit_during_first_launch = e
                 return
             except Exception:
                 # wx doesn't like it when exceptions escape functions invoked
@@ -451,8 +461,8 @@ def _main(args: list[str]) -> None:
         while True:
             # Process main loop until no more windows or dialogs are open
             app.MainLoop()
-            if did_quit_during_first_launch:
-                break
+            if systemexit_during_first_launch is not None:
+                raise systemexit_during_first_launch
             
             # Clean up
             if shell is not None:
