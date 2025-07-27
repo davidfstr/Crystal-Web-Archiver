@@ -183,9 +183,9 @@ def _main(args: list[str]) -> None:
         add_help=False,
     )
     parser.add_argument(
-        '--help', '-h',
-        action='help',
-        help='Show this help message and exit.'
+        '--readonly',
+        help='Open projects as read-only by default rather than as writable.',
+        action='store_true',
     )
     parser.add_argument(
         '--serve',
@@ -204,11 +204,6 @@ def _main(args: list[str]) -> None:
         default=None,
     )
     parser.add_argument(
-        '--readonly',
-        help='Open projects as read-only by default rather than as writable.',
-        action='store_true',
-    )
-    parser.add_argument(
         '--stale-before',
         help=(
             'If specified then any resource revision older than this datetime '
@@ -221,12 +216,6 @@ def _main(args: list[str]) -> None:
         type=datetime.datetime.fromisoformat,
         default=None,
     )
-    parser.add_argument(
-        '--test',
-        help=argparse.SUPPRESS,  # 'Run automated tests.'
-        action='store',
-        nargs='*',
-    )
     if is_linux():
         parser.add_argument(
             '--install-to-desktop',
@@ -234,7 +223,18 @@ def _main(args: list[str]) -> None:
             action='store_true',
         )
     parser.add_argument(
-        'filepath',
+        '--help', '-h',
+        action='help',
+        help='Show this help message and exit.'
+    )
+    parser.add_argument(
+        '--test',
+        help=argparse.SUPPRESS,  # 'Run automated tests.'
+        action='store',
+        nargs='*',
+    )
+    parser.add_argument(
+        'project_filepath',
         # NOTE: Duplicates: Project.FILE_EXTENSION, Project.OPENER_FILE_EXTENSION
         help='Optional. Path to a *.crystalproj or *.crystalopen to open immediately.',
         type=str,
@@ -495,7 +495,7 @@ def _main(args: list[str]) -> None:
                 break
             
             # Clear first-only launch arguments
-            parsed_args.filepath = None
+            parsed_args.project_filepath = None
             
             # Re-launch, reopening the initial dialog
             from crystal.util.xthreading import start_fg_coroutine
@@ -539,8 +539,8 @@ async def _did_launch(
     import tempfile
 
     # If project to open was passed on the command-line, use it
-    if parsed_args.filepath is not None:
-        filepath = parsed_args.filepath  # reinterpret
+    if parsed_args.project_filepath is not None:
+        filepath = parsed_args.project_filepath  # reinterpret
     
     # Open/create a project
     project: Project | None = None
