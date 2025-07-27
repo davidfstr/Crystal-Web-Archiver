@@ -166,7 +166,9 @@ def read_until(
         stop_suffix: str | tuple[str, ...],
         timeout: float | None=None,
         *, period: float | None=None,
-        stacklevel_extra: int=0
+        stacklevel_extra: int=0,
+        _expect_timeout: bool=False,
+        _drain_diagnostic: bool=True,
         ) -> tuple[str, str]:
     """
     Reads from the specified stream until the provided `stop_suffix`
@@ -175,6 +177,24 @@ def read_until(
     Raises:
     * ReadUntilTimedOut -- if the timeout expires before `stop_suffix` is read
     """
+    try:
+        return _read_until_inner(
+            stream, stop_suffix, timeout=timeout, period=period,
+            stacklevel_extra=stacklevel_extra, _expect_timeout=_expect_timeout)
+    except ReadUntilTimedOut as e:
+        if _drain_diagnostic:
+            raise e.plus(f' Trailing output: {drain(stream)!r}') from None
+        else:
+            raise
+
+def _read_until_inner(
+        stream: TextIOBase,
+        stop_suffix: str | tuple[str, ...],
+        timeout: float | None=None,
+        *, period: float | None=None,
+        stacklevel_extra: int=0,
+        _expect_timeout: bool=False,
+        ) -> tuple[str, str]:
     if isinstance(stop_suffix, str):
         stop_suffix = (stop_suffix,)
     if timeout is None:
@@ -228,8 +248,9 @@ def read_until(
             # If hard timeout exceeded then raise
             delta_time = time.time() - start_time
             if did_time_out or delta_time >= hard_timeout:
-                # Screenshot the timeout error
-                take_error_screenshot()
+                if not _expect_timeout:
+                    # Screenshot the timeout error
+                    take_error_screenshot()
                 
                 hard_timeout_exceeded = True
                 read_so_far = read_buffer.decode(stream.encoding)
@@ -259,6 +280,15 @@ class ReadUntilTimedOut(WaitTimedOut):
     def __init__(self, message: str, read_so_far: str) -> None:
         super().__init__(message)
         self.read_so_far = read_so_far
+    
+    @property
+    def message(self) -> str:
+        return self.args[0]
+    
+    def plus(self, message_suffix: str) -> 'ReadUntilTimedOut':
+        return ReadUntilTimedOut(
+            f'{self.message} {message_suffix}',
+            self.read_so_far)
 
 
 _DEFAULT_DRAIN_TTL = min(DEFAULT_WAIT_TIMEOUT, 2.0)
@@ -280,7 +310,7 @@ def drain(stream: TextIOBase | subprocess.Popen, ttl: float | None=None) -> str:
     
     EOT = '\4'  # End of Transmission; an unlikely character to occur in the wild
     try:
-        read_until(stream, EOT, ttl)
+        read_until(stream, EOT, ttl, _expect_timeout=True, _drain_diagnostic=False)
     except ReadUntilTimedOut as e:
         return e.read_so_far
     else:
