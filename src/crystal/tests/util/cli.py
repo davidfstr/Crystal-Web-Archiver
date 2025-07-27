@@ -1,7 +1,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.screenshots import take_error_screenshot
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER, WaitTimedOut
 from crystal.tests.util.windows import MainWindow
@@ -135,6 +135,7 @@ def crystal_shell(*, args=[], env_extra={}) -> Iterator[tuple[subprocess.Popen, 
             crystal.stdout, '\n>>> ',
             timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
         )
+        assertIn('Crystal', banner)
         yield (crystal, banner)
 
 

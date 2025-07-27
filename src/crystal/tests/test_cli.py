@@ -197,18 +197,48 @@ def test_when_launched_with_serve_and_port_already_in_use_then_fails_immediately
 # NOTE: Detailed shell tests are in test_shell.py
 
 # NOTE: Also covered by: test_can_launch_with_shell
-@skip('not yet automated')
 def test_when_launched_with_shell_and_no_project_filepath_then_shell_starts_with_no_project() -> None:
     # ...and `project` variable is an unset proxy
     # ...and `window` variable is an unset proxy
-    pass
+    with crystal_shell() as (crystal, banner):
+        # Verify project and window variables are unset proxies (not real objects)
+        result = py_eval(crystal, 'project')
+        assertIn('<unset crystal.model.Project proxy>', result)
+        
+        result = py_eval(crystal, 'window')
+        assertIn('<unset crystal.browser.MainWindow proxy>', result)
+        
+        # Clean up by closing the open/create dialog
+        close_open_or_create_dialog(crystal)
 
 
-@skip('not yet automated')
 def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_opened_project() -> None:
     # ...and `project` variable is set to a Project
     # ...and `window` variable is set to a MainWindow
-    pass
+    with _temporary_project() as project_path:
+        # First create the project
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            quit_crystal(crystal)
+        
+        # Now test opening the project with shell
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify project variable is set to a real Project object
+            result = py_eval(crystal, 'project')
+            assertIn('<crystal.model.Project object at 0x', result)
+            
+            # Verify window variable is set to a real MainWindow object
+            result = py_eval(crystal, 'window')
+            assertIn('<crystal.browser.MainWindow object at 0x', result)
+            
+            # Verify the project path is correct
+            result = py_eval(crystal, 'project.path')
+            assertIn(project_path, result)
+            
+            quit_crystal(crystal)
 
 
 # === Cookie Configuration Tests (--cookie) ===
