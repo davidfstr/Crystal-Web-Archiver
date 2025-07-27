@@ -7,14 +7,18 @@ See also:
 
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
-from crystal.model import Project
+from crystal.model import Project, Resource
 from crystal.tests.util.asserts import assertIn
 from crystal.tests.util.cli import (
     close_open_or_create_dialog, py_eval, quit_crystal, read_until,
     wait_for_crystal_to_exit, crystal_shell, run_crystal, wait_for_main_window,
 )
+from crystal.tests.util.server import served_project
+from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
+from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 from io import TextIOBase
+import datetime
 import os
 import socket
 import tempfile
@@ -255,27 +259,102 @@ def test_when_cookie_argument_missing_value_then_prints_error_and_exits() -> Non
 
 # === Stale Date Configuration Tests (--stale-before) ===
 
-@skip('not yet automated')
-def test_when_project_opened_with_stale_before_then_old_revisions_considered_stale() -> None:
-    pass
+@awith_subtests
+async def test_when_project_opened_with_stale_before_then_old_revisions_considered_stale(subtests: SubtestsContext) -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _temporary_project() as project_path:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Create and populate a project with a resource revision
+        with Project(project_path) as project:
+            r = Resource(project, atom_feed_url)
+            rr_future = r.download()
+            await step_scheduler_until_done(project)
+            rr = rr_future.result(timeout=0)
+            
+            # Verify the revision is not initially stale
+            assert not rr.is_stale, "Resource revision should not be stale initially"
+        
+        with subtests.test(msg='reopen with past date - revision should NOT be stale'):
+            past_date = '1900-01-01T00:00:00+00:00'
+            with crystal_shell(args=['--stale-before', past_date, project_path]) as (crystal, banner):
+                wait_for_main_window(crystal)
+                
+                # Get the resource revision and verify it's NOT stale
+                py_eval(crystal, f'r = project.get_resource({atom_feed_url!r})')
+                py_eval(crystal, 'rr = r.default_revision()')
+                result = py_eval(crystal, 'rr.is_stale')
+                assert 'False' in result, f"Expected resource revision to NOT be stale with past min_fetch_date, got: {result}"
+                
+                quit_crystal(crystal)
+        
+        with subtests.test(msg='reopen with future date - revision should be stale'):
+            future_date = '2099-01-01T00:00:00+00:00'
+            with crystal_shell(args=['--stale-before', future_date, project_path]) as (crystal, banner):
+                wait_for_main_window(crystal)
+                
+                # Verify the project's min_fetch_date is set correctly
+                result = py_eval(crystal, 'project.min_fetch_date')
+                assert 'datetime.datetime(2099, 1, 1' in result, f"Expected min_fetch_date to be set to 2099, got: {result}"
+                
+                # Get the resource and its revision
+                result = py_eval(crystal, f'r = project.get_resource({atom_feed_url!r}); r')
+                assert 'Resource(' in result, f"Expected to find resource, got: {result}"
+                
+                result = py_eval(crystal, 'rr = r.default_revision(); rr')
+                assert 'ResourceRevision' in result, f"Expected to find resource revision, got: {result}"
+                
+                # Verify the revision is now considered stale
+                result = py_eval(crystal, 'rr.is_stale')
+                assert 'True' in result, f"Expected resource revision to be stale with future min_fetch_date, got: {result}"
+                
+                quit_crystal(crystal)
 
 
-@skip('not yet automated')
-def test_stale_before_option_recognizes_many_date_formats() -> None:
-    # iso_date: ISO date format like "2022-07-17"
-    # iso_datetime: ISO datetime format like "2022-07-17T12:47:42", interpreted with local timezone
-    # iso_datetime_with_timezone: ISO datetime with timezone like "2022-07-17T12:47:42+00:00"
-    pass
+@with_subtests
+def test_stale_before_option_recognizes_many_date_formats(subtests: SubtestsContext) -> None:
+    with _temporary_project() as project_path:
+        with subtests.test(format='ISO date'):
+            result = run_crystal(['--stale-before', '2022-07-17', '--help'])
+            assert result.returncode == 0, f"ISO date format failed: {result.stderr}"
+        
+        with subtests.test(format='ISO datetime without timezone'):
+            result = run_crystal(['--stale-before', '2022-07-17T12:47:42', '--help'])
+            assert result.returncode == 0, f"ISO datetime format failed: {result.stderr}"
+        
+        with subtests.test(format='ISO datetime with UTC timezone'):
+            result = run_crystal(['--stale-before', '2022-07-17T12:47:42+00:00', '--help'])
+            assert result.returncode == 0, f"ISO datetime with timezone format failed: {result.stderr}"
+        
+        with subtests.test(format='ISO datetime with negative timezone offset'):
+            result = run_crystal(['--stale-before', '2022-07-17T12:47:42-05:00', '--help'])
+            assert result.returncode == 0, f"ISO datetime with negative timezone offset failed: {result.stderr}"
 
 
-@skip('not yet automated')
-def test_when_stale_before_has_invalid_format_then_prints_error_and_exits() -> None:
-    pass
+@with_subtests
+def test_when_stale_before_has_invalid_format_then_prints_error_and_exits(subtests: SubtestsContext) -> None:
+    with subtests.test(case='completely invalid date format'):
+        result = run_crystal(['--stale-before', 'invalid-date-format'])
+        assert result.returncode != 0
+        assertIn('invalid', result.stderr.lower())
+    
+    with subtests.test(case='invalid month and day'):
+        result = run_crystal(['--stale-before', '2022-13-45'])  # invalid month and day
+        assert result.returncode != 0
+        assertIn('invalid', result.stderr.lower())
+    
+    with subtests.test(case='malformed datetime'):
+        result = run_crystal(['--stale-before', '2022-07-17T25:99:99'])  # invalid time
+        assert result.returncode != 0
+        assertIn('invalid', result.stderr.lower())
 
 
-@skip('not yet automated')
 def test_when_stale_before_argument_missing_value_then_prints_error_and_exits() -> None:
-    pass
+    result = run_crystal(['--stale-before'])
+    assert result.returncode != 0
+    assertIn('expected one argument', result.stderr)
 
 
 # === Platform-Specific Options Tests ===
