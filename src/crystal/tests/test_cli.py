@@ -7,13 +7,18 @@ See also:
 
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
+from crystal.model import Project, Resource
 from crystal.tests.util.asserts import assertIn
 from crystal.tests.util.cli import (
-    close_open_or_create_dialog, py_eval, read_until,
-    wait_for_crystal_to_exit, crystal_shell, run_crystal,
+    close_open_or_create_dialog, py_eval, quit_crystal, read_until,
+    wait_for_crystal_to_exit, crystal_shell, run_crystal, wait_for_main_window,
 )
+from crystal.tests.util.server import served_project
+from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
+from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 from io import TextIOBase
+import datetime
 import os
 import socket
 import tempfile
@@ -21,42 +26,116 @@ from unittest import skip
 
 # === Basic Launch Tests ===
 
-@skip('not yet automated')
 def test_when_launched_with_no_arguments_then_shows_open_or_create_project_dialog() -> None:
-    pass
+    with crystal_shell() as (crystal, banner):
+        # When Crystal launches with no arguments, it should show the open/create dialog
+        # The shell should start successfully, indicating the GUI started
+        assertIn('Crystal', banner)
+        
+        # Clean up by closing the dialog
+        close_open_or_create_dialog(crystal)
 
 
-@skip('not yet automated')
 def test_when_launched_with_help_argument_then_prints_help_and_exits() -> None:
-    pass
+    result = run_crystal(['--help'])
+    assert result.returncode == 0
+    assertIn('Crystal: A tool for archiving websites in high fidelity.', result.stdout)
+    assertIn('usage:', result.stdout)
+    assertIn('--shell', result.stdout)
+    assertIn('--serve', result.stdout)
+    assertIn('project_filepath', result.stdout)
 
 
-@skip('not yet automated')
 def test_when_launched_with_invalid_argument_then_prints_error_and_exits() -> None:
-    pass
+    result = run_crystal(['--invalid-argument'])
+    assert result.returncode != 0
+    assertIn('error: unrecognized arguments: --invalid-argument', result.stderr)
+    assertIn('usage:', result.stderr)
 
 
 # === Project Open & Create Tests (project_filepath, --readonly) ===
 
-@skip('not yet automated')
 def test_can_open_project_as_writable() -> None:
-    pass
+    with _temporary_project() as project_path:
+        # First create the project by running Crystal with the path
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            quit_crystal(crystal)
+        
+        # Now test opening the existing project as writable (default)
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify project is writable by checking readonly property
+            result = py_eval(crystal, 'project.readonly')
+            assertIn('False', result)
+            
+            quit_crystal(crystal)
 
 
-@skip('not yet automated')
 def test_can_open_project_as_readonly() -> None:
-    pass
+    with _temporary_project() as project_path:
+        # First create the project
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            quit_crystal(crystal)
+        
+        # Now test opening the project as readonly
+        with crystal_shell(args=['--readonly', project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify project is readonly
+            result = py_eval(crystal, 'project.readonly')
+            assertIn('True', result)
+            
+            quit_crystal(crystal)
 
 
-@skip('not yet automated')
 def test_when_opened_project_filepath_does_not_exist_then_creates_new_project_at_filepath() -> None:
-    pass
+    with _temporary_project() as project_path:
+        # Project path doesn't exist yet. Crystal should create it.
+        assert not os.path.exists(project_path)
+        
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify the project was created at the specified path
+            result = py_eval(crystal, 'project.path')
+            assertIn(project_path, result)
+            
+            # Verify it's a new project (writable by default)
+            result = py_eval(crystal, 'project.readonly')
+            assertIn('False', result)
+            
+            quit_crystal(crystal)
+        
+        # Verify the project directory was actually created on disk
+        assert os.path.exists(project_path)
 
 
-@skip('not yet automated')
 def test_can_open_crystalopen_file() -> None:
-    # ...in addition to .crystalproj files
-    pass
+    with _temporary_project() as project_path:
+        # Create the project
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            quit_crystal(crystal)
+        
+        # Locate the project's .crystalopen file
+        crystalopen_path = os.path.join(project_path, Project._OPENER_DEFAULT_FILENAME)
+        assert os.path.exists(crystalopen_path)
+        
+        # Test opening the .crystalopen file
+        with crystal_shell(args=[crystalopen_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify it opened the underlying project
+            result = py_eval(crystal, 'project.path')
+            assertIn(project_path, result)
+            
+            quit_crystal(crystal)
 
 
 @skip('fails: see https://github.com/davidfstr/Crystal-Web-Archiver/issues/63')
@@ -64,9 +143,11 @@ def test_when_launched_with_readonly_and_no_project_filepath_then_open_or_create
     pass
 
 
-@skip('not yet automated')
 def test_when_launched_with_multiple_filepaths_then_prints_error_and_exits() -> None:
-    pass
+    result = run_crystal(['first.crystalproj', 'second.crystalproj'])
+    assert result.returncode != 0
+    assertIn('error: unrecognized arguments: second.crystalproj', result.stderr)
+    assertIn('usage:', result.stderr)
 
 
 # === Server Mode Tests (--serve) ===
@@ -120,18 +201,48 @@ def test_when_launched_with_serve_and_port_already_in_use_then_fails_immediately
 # NOTE: Detailed shell tests are in test_shell.py
 
 # NOTE: Also covered by: test_can_launch_with_shell
-@skip('not yet automated')
 def test_when_launched_with_shell_and_no_project_filepath_then_shell_starts_with_no_project() -> None:
     # ...and `project` variable is an unset proxy
     # ...and `window` variable is an unset proxy
-    pass
+    with crystal_shell() as (crystal, banner):
+        # Verify project and window variables are unset proxies (not real objects)
+        result = py_eval(crystal, 'project')
+        assertIn('<unset crystal.model.Project proxy>', result)
+        
+        result = py_eval(crystal, 'window')
+        assertIn('<unset crystal.browser.MainWindow proxy>', result)
+        
+        # Clean up by closing the open/create dialog
+        close_open_or_create_dialog(crystal)
 
 
-@skip('not yet automated')
 def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_opened_project() -> None:
     # ...and `project` variable is set to a Project
     # ...and `window` variable is set to a MainWindow
-    pass
+    with _temporary_project() as project_path:
+        # First create the project
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            quit_crystal(crystal)
+        
+        # Now test opening the project with shell
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify project variable is set to a real Project object
+            result = py_eval(crystal, 'project')
+            assertIn('<crystal.model.Project object at 0x', result)
+            
+            # Verify window variable is set to a real MainWindow object
+            result = py_eval(crystal, 'window')
+            assertIn('<crystal.browser.MainWindow object at 0x', result)
+            
+            # Verify the project path is correct
+            result = py_eval(crystal, 'project.path')
+            assertIn(project_path, result)
+            
+            quit_crystal(crystal)
 
 
 # === Cookie Configuration Tests (--cookie) ===
@@ -148,27 +259,102 @@ def test_when_cookie_argument_missing_value_then_prints_error_and_exits() -> Non
 
 # === Stale Date Configuration Tests (--stale-before) ===
 
-@skip('not yet automated')
-def test_when_project_opened_with_stale_before_then_old_revisions_considered_stale() -> None:
-    pass
+@awith_subtests
+async def test_when_project_opened_with_stale_before_then_old_revisions_considered_stale(subtests: SubtestsContext) -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _temporary_project() as project_path:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Create and populate a project with a resource revision
+        with Project(project_path) as project:
+            r = Resource(project, atom_feed_url)
+            rr_future = r.download()
+            await step_scheduler_until_done(project)
+            rr = rr_future.result(timeout=0)
+            
+            # Verify the revision is not initially stale
+            assert not rr.is_stale, "Resource revision should not be stale initially"
+        
+        with subtests.test(msg='reopen with past date - revision should NOT be stale'):
+            past_date = '1900-01-01T00:00:00+00:00'
+            with crystal_shell(args=['--stale-before', past_date, project_path]) as (crystal, banner):
+                wait_for_main_window(crystal)
+                
+                # Get the resource revision and verify it's NOT stale
+                py_eval(crystal, f'r = project.get_resource({atom_feed_url!r})')
+                py_eval(crystal, 'rr = r.default_revision()')
+                result = py_eval(crystal, 'rr.is_stale')
+                assert 'False' in result, f"Expected resource revision to NOT be stale with past min_fetch_date, got: {result}"
+                
+                quit_crystal(crystal)
+        
+        with subtests.test(msg='reopen with future date - revision should be stale'):
+            future_date = '2099-01-01T00:00:00+00:00'
+            with crystal_shell(args=['--stale-before', future_date, project_path]) as (crystal, banner):
+                wait_for_main_window(crystal)
+                
+                # Verify the project's min_fetch_date is set correctly
+                result = py_eval(crystal, 'project.min_fetch_date')
+                assert 'datetime.datetime(2099, 1, 1' in result, f"Expected min_fetch_date to be set to 2099, got: {result}"
+                
+                # Get the resource and its revision
+                result = py_eval(crystal, f'r = project.get_resource({atom_feed_url!r}); r')
+                assert 'Resource(' in result, f"Expected to find resource, got: {result}"
+                
+                result = py_eval(crystal, 'rr = r.default_revision(); rr')
+                assert 'ResourceRevision' in result, f"Expected to find resource revision, got: {result}"
+                
+                # Verify the revision is now considered stale
+                result = py_eval(crystal, 'rr.is_stale')
+                assert 'True' in result, f"Expected resource revision to be stale with future min_fetch_date, got: {result}"
+                
+                quit_crystal(crystal)
 
 
-@skip('not yet automated')
-def test_stale_before_option_recognizes_many_date_formats() -> None:
-    # iso_date: ISO date format like "2022-07-17"
-    # iso_datetime: ISO datetime format like "2022-07-17T12:47:42", interpreted with local timezone
-    # iso_datetime_with_timezone: ISO datetime with timezone like "2022-07-17T12:47:42+00:00"
-    pass
+@with_subtests
+def test_stale_before_option_recognizes_many_date_formats(subtests: SubtestsContext) -> None:
+    with _temporary_project() as project_path:
+        with subtests.test(format='ISO date'):
+            result = run_crystal(['--stale-before', '2022-07-17', '--help'])
+            assert result.returncode == 0, f"ISO date format failed: {result.stderr}"
+        
+        with subtests.test(format='ISO datetime without timezone'):
+            result = run_crystal(['--stale-before', '2022-07-17T12:47:42', '--help'])
+            assert result.returncode == 0, f"ISO datetime format failed: {result.stderr}"
+        
+        with subtests.test(format='ISO datetime with UTC timezone'):
+            result = run_crystal(['--stale-before', '2022-07-17T12:47:42+00:00', '--help'])
+            assert result.returncode == 0, f"ISO datetime with timezone format failed: {result.stderr}"
+        
+        with subtests.test(format='ISO datetime with negative timezone offset'):
+            result = run_crystal(['--stale-before', '2022-07-17T12:47:42-05:00', '--help'])
+            assert result.returncode == 0, f"ISO datetime with negative timezone offset failed: {result.stderr}"
 
 
-@skip('not yet automated')
-def test_when_stale_before_has_invalid_format_then_prints_error_and_exits() -> None:
-    pass
+@with_subtests
+def test_when_stale_before_has_invalid_format_then_prints_error_and_exits(subtests: SubtestsContext) -> None:
+    with subtests.test(case='completely invalid date format'):
+        result = run_crystal(['--stale-before', 'invalid-date-format'])
+        assert result.returncode != 0
+        assertIn('invalid', result.stderr.lower())
+    
+    with subtests.test(case='invalid month and day'):
+        result = run_crystal(['--stale-before', '2022-13-45'])  # invalid month and day
+        assert result.returncode != 0
+        assertIn('invalid', result.stderr.lower())
+    
+    with subtests.test(case='malformed datetime'):
+        result = run_crystal(['--stale-before', '2022-07-17T25:99:99'])  # invalid time
+        assert result.returncode != 0
+        assertIn('invalid', result.stderr.lower())
 
 
-@skip('not yet automated')
 def test_when_stale_before_argument_missing_value_then_prints_error_and_exits() -> None:
-    pass
+    result = run_crystal(['--stale-before'])
+    assert result.returncode != 0
+    assertIn('expected one argument', result.stderr)
 
 
 # === Platform-Specific Options Tests ===
@@ -226,12 +412,4 @@ def _crystal_shell_with_serve(
         assert isinstance(crystal.stdout, TextIOBase)
         (server_start_message, _) = read_until(crystal.stdout, '\n', timeout=banner_timeout)
         yield server_start_message
-        
-        # TODO: Consider quitting using Ctrl-C instead,
-        #       which would probably be easier and more reliable
-        py_eval(crystal, 'window.close()')
-        close_open_or_create_dialog(crystal)
-        py_eval(crystal, 'exit()', stop_suffix='')
-        wait_for_crystal_to_exit(
-            crystal,
-            timeout=DEFAULT_WAIT_TIMEOUT)
+        quit_crystal(crystal)

@@ -1,7 +1,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.screenshots import take_error_screenshot
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER, WaitTimedOut
 from crystal.tests.util.windows import MainWindow
@@ -135,6 +135,7 @@ def crystal_shell(*, args=[], env_extra={}) -> Iterator[tuple[subprocess.Popen, 
             crystal.stdout, '\n>>> ',
             timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
         )
+        assertIn('Crystal', banner)
         yield (crystal, banner)
 
 
@@ -146,10 +147,49 @@ def py_eval(
         py_code: str,
         stop_suffix: str | tuple[str, ...] | None=None,
         *, timeout: float | None=None) -> str:
+    """
+    Evaluates the provided Python code in the specified Crystal process
+    and returns the result.
+    
+    When providing multi-line `py_code`, use the following format:
+    
+        py_eval(crystal, textwrap.dedent('''\
+            if True:
+                from crystal.tests.util.runner import run_test
+                from threading import Thread
+                #
+                async def check_foobar():
+                    ocd = await OpenOrCreateDialog.wait_for()
+                    ...
+                #
+                result_cell = [Ellipsis]
+                def get_result(result_cell):
+                    result_cell[0] = run_test(lambda: check_foobar())
+                    print('OK')
+                #
+                t = Thread(target=lambda: get_result(result_cell))
+                t.start()
+        '''), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
+    
+    Key elements of the above example:
+    - `if True:` -- Prevent code from executing until all lines provided
+    - `#` -- Don't use any blank lines. Use a single `#` to simulate a blank line.
+    - `run_test` -- Run async code using test utilities
+    - `print('OK')` -- Signal that the code has finished executing
+    - `_OK_THREAD_STOP_SUFFIX` -- Wait for the code to finish executing
+    - `timeout=...` -- Pick an appropriate timeout
+    
+    Note: Some of the above precautions may no longer be necessary because
+    py_eval() now executes multi-line code as a single line.
+    """
     if '\n' in py_code and stop_suffix is None:
         raise ValueError(
             'Unsafe to use _py_eval() on multi-line py_code '
-            'unless stop_suffix is set carefully')
+            'unless stop_suffix is set carefully and other precautions are taken. '
+            'See the py_eval() docstring for details.')
+    if '\n' in py_code:
+        # Execute multi-line code as a single line
+        py_code = f'exec({py_code!r})'  # reinterpret
     if stop_suffix is None:
         stop_suffix = '>>> '
     
@@ -385,6 +425,27 @@ def close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: float
         '''), stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '')
 
 
+def wait_for_main_window(crystal: subprocess.Popen) -> None:
+    # NOTE: Uses private API, including the entire crystal.tests package
+    py_eval(crystal, textwrap.dedent(f'''\
+        if True:
+            from crystal.tests.util.runner import run_test
+            from crystal.tests.util.windows import MainWindow
+            from threading import Thread
+            #
+            async def wait_for_main_window():
+                mw = await MainWindow.wait_for()
+                #
+                print('OK')
+            #
+            t = Thread(target=lambda: run_test(wait_for_main_window))
+            t.start()
+        '''),
+        stop_suffix=_OK_THREAD_STOP_SUFFIX,
+        timeout=MainWindow.CLOSE_TIMEOUT,
+    )
+
+
 def close_main_window(crystal: subprocess.Popen, *, after_delay: float | None=None) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     py_eval(crystal, textwrap.dedent(f'''\
@@ -423,6 +484,18 @@ def delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[Non
 
 # ------------------------------------------------------------------------------
 # Exit
+
+def quit_crystal(crystal: subprocess.Popen) -> None:
+    # TODO: Consider quitting using Ctrl-C instead,
+    #       which would probably be easier and more reliable
+    #py_eval(crystal, 'window.close()')
+    #close_open_or_create_dialog(crystal)
+    #py_eval(crystal, 'exit()', stop_suffix='')
+    crystal.terminate()  # simulate Ctrl-C
+    wait_for_crystal_to_exit(
+        crystal,
+        timeout=DEFAULT_WAIT_TIMEOUT)
+
 
 def wait_for_crystal_to_exit(
         crystal: subprocess.Popen,
