@@ -8,7 +8,7 @@ See also:
 from contextlib import contextmanager
 from crystal.tests.util.asserts import assertIn
 from crystal.tests.util.cli import (
-    close_open_or_create_dialog, _py_eval, _read_until,
+    close_open_or_create_dialog, _py_eval, _read_until, drain,
     wait_for_crystal_to_exit, crystal_shell, run_crystal,
 )
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
@@ -234,11 +234,12 @@ def _crystal_shell_with_serve(project_path: str, port: int | None = None, host: 
     
     with crystal_shell(args=args) as (crystal, banner):
         assert isinstance(crystal.stdout, TextIOBase)
-        (server_start_message, _) = _read_until(crystal.stdout, '\n')
         try:
+            (server_start_message, _) = _read_until(crystal.stdout, '\n')
             yield server_start_message
         except:
             print(f'FIXME: {banner=}')
+            print(f'FIXME: {drain(crystal.stdout)=}')
             raise
         
         # TODO: Consider quitting using Ctrl-C instead,
