@@ -178,12 +178,18 @@ def py_eval(
     - `print('OK')` -- Signal that the code has finished executing
     - `_OK_THREAD_STOP_SUFFIX` -- Wait for the code to finish executing
     - `timeout=...` -- Pick an appropriate timeout
+    
+    Note: Some of the above precautions may no longer be necessary because
+    py_eval() now executes multi-line code as a single line.
     """
     if '\n' in py_code and stop_suffix is None:
         raise ValueError(
             'Unsafe to use _py_eval() on multi-line py_code '
             'unless stop_suffix is set carefully and other precautions are taken. '
             'See the py_eval() docstring for details.')
+    if '\n' in py_code:
+        # Execute multi-line code as a single line
+        py_code = f'exec({py_code!r})'  # reinterpret
     if stop_suffix is None:
         stop_suffix = '>>> '
     
