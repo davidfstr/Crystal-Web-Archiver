@@ -20,6 +20,7 @@ class BetterMessageDialog(wx.Dialog):
             title: str, 
             style,
             *, checkbox_label: str | None=None,
+            checkbox_checked: bool=False,
             on_checkbox_clicked: Callable[[wx.CommandEvent], None] | None=None,
             yes_label: str | None=None, 
             no_label: str | None=None, 
@@ -32,6 +33,9 @@ class BetterMessageDialog(wx.Dialog):
         * message -- the message displayed in the dialog.
         * title -- the title displayed in the dialog's titlebar.
         * style -- the set of buttons to display. See wx.Dialog.CreateButtonSizer() for all options.
+        * checkbox_label -- label for the optional checkbox. If None, no checkbox is shown.
+        * checkbox_checked -- initial state of the checkbox (True=checked, False=unchecked).
+        * on_checkbox_clicked -- callback function when checkbox is clicked.
         * yes_label -- label for the wx.YES button.
         * no_label -- label for the wx.NO button.
         """
@@ -57,6 +61,7 @@ class BetterMessageDialog(wx.Dialog):
             self._checkbox = wx.CheckBox(
                 self, label=checkbox_label,
                 **(dict(name=f'{name}__checkbox') if name else dict()))
+            self._checkbox.Value = checkbox_checked  # Set initial checkbox state
             if on_checkbox_clicked is not None:
                 bind(self._checkbox, wx.EVT_CHECKBOX, on_checkbox_clicked)
             self_sizer.Add(

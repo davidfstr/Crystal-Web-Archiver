@@ -635,7 +635,9 @@ async def _prompt_for_project(
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     import wx
     
-    def on_checkbox_clicked(event: wx.CommandEvent) -> None:
+    readonly_default = bool(project_kwargs.get('readonly', False))
+    
+    def on_checkbox_clicked(event: wx.CommandEvent | None = None) -> None:
         readonly_checkbox_checked = dialog.IsCheckBoxChecked()
         create_button = dialog.FindWindow(id=wx.ID_YES)
         create_button.Enabled = not readonly_checkbox_checked
@@ -647,6 +649,7 @@ async def _prompt_for_project(
         #       and draw underline under R letter to signal that such a
         #       keyboard shortcut exists
         checkbox_label='Open as &read only',
+        checkbox_checked=readonly_default,
         on_checkbox_clicked=on_checkbox_clicked,
         style=wx.YES_NO,
         yes_label='&New Project',
@@ -654,6 +657,9 @@ async def _prompt_for_project(
         escape_is_cancel=True,
         name='cr-open-or-create-project')
     with dialog:
+        # Set initial state of Create button based on checkbox state
+        on_checkbox_clicked()
+        
         dialog.SetAcceleratorTable(wx.AcceleratorTable([
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O'), wx.ID_NO),

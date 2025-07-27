@@ -10,7 +10,7 @@ from contextlib import closing, contextmanager
 from crystal.model import Project, Resource
 from crystal.tests.util.asserts import assertIn
 from crystal.tests.util.cli import (
-    close_open_or_create_dialog, py_eval, quit_crystal, read_until,
+    _OK_THREAD_STOP_SUFFIX, close_open_or_create_dialog, py_eval, quit_crystal, read_until,
     wait_for_crystal_to_exit, crystal_shell, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import served_project
@@ -22,6 +22,7 @@ import datetime
 import os
 import socket
 import tempfile
+import textwrap
 from unittest import skip
 
 # === Basic Launch Tests ===
@@ -138,9 +139,35 @@ def test_can_open_crystalopen_file() -> None:
             quit_crystal(crystal)
 
 
-@skip('fails: see https://github.com/davidfstr/Crystal-Web-Archiver/issues/63')
 def test_when_launched_with_readonly_and_no_project_filepath_then_open_or_create_dialog_defaults_to_readonly_checked() -> None:
-    pass
+    with crystal_shell(args=['--readonly']) as (crystal, banner):
+        # Check readonly checkbox state
+        result = py_eval(crystal, textwrap.dedent('''\
+            if True:
+                from crystal.tests.util.runner import run_test
+                from crystal.tests.util.windows import OpenOrCreateDialog
+                from threading import Thread
+                #
+                async def check_readonly_state():
+                    ocd = await OpenOrCreateDialog.wait_for()
+                    readonly_checked = ocd.open_as_readonly.Value
+                    create_enabled = ocd.create_button.Enabled
+                    print(f"readonly_checked={readonly_checked}")
+                    print(f"create_enabled={create_enabled}")
+                #
+                result_cell = [Ellipsis]
+                def get_result(result_cell):
+                    result_cell[0] = run_test(lambda: check_readonly_state())
+                    print('OK')
+                #
+                t = Thread(target=lambda: get_result(result_cell))
+                t.start()
+        '''), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
+        assertIn('readonly_checked=True', result)
+        assertIn('create_enabled=False', result)
+        
+        # Clean up by closing the dialog
+        close_open_or_create_dialog(crystal)
 
 
 def test_when_launched_with_multiple_filepaths_then_prints_error_and_exits() -> None:

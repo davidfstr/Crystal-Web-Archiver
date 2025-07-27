@@ -22,6 +22,9 @@ Release Notes ⋮
 * CLI improvements
     * Help text printed by `crystal --help` now more clearly describes the 
       available arguments and options.
+    * When Crystal is launched with `--readonly` but no project path,
+      the Open/Create Project Dialog now pre-checks the "Open as read only" checkbox
+      to reflect the command-line option that was specified.
 
 * Minor fixes
     * Rephrased the placeholder text for Name fields to more-obviously be
