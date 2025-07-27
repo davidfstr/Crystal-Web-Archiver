@@ -21,19 +21,31 @@ from unittest import skip
 
 # === Basic Launch Tests ===
 
-@skip('not yet automated')
 def test_when_launched_with_no_arguments_then_shows_open_or_create_project_dialog() -> None:
-    pass
+    with crystal_shell() as (crystal, banner):
+        # When Crystal launches with no arguments, it should show the open/create dialog
+        # The shell should start successfully, indicating the GUI started
+        assertIn('Crystal', banner)
+        
+        # Clean up by closing the dialog
+        close_open_or_create_dialog(crystal)
 
 
-@skip('not yet automated')
 def test_when_launched_with_help_argument_then_prints_help_and_exits() -> None:
-    pass
+    result = run_crystal(['--help'])
+    assert result.returncode == 0
+    assertIn('Crystal: A tool for archiving websites in high fidelity.', result.stdout)
+    assertIn('usage:', result.stdout)
+    assertIn('--shell', result.stdout)
+    assertIn('--serve', result.stdout)
+    assertIn('project_filepath', result.stdout)
 
 
-@skip('not yet automated')
 def test_when_launched_with_invalid_argument_then_prints_error_and_exits() -> None:
-    pass
+    result = run_crystal(['--invalid-argument'])
+    assert result.returncode != 0
+    assertIn('error: unrecognized arguments: --invalid-argument', result.stderr)
+    assertIn('usage:', result.stderr)
 
 
 # === Project Open & Create Tests (project_filepath, --readonly) ===
