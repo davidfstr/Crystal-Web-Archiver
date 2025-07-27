@@ -147,10 +147,43 @@ def py_eval(
         py_code: str,
         stop_suffix: str | tuple[str, ...] | None=None,
         *, timeout: float | None=None) -> str:
+    """
+    Evaluates the provided Python code in the specified Crystal process
+    and returns the result.
+    
+    When providing multi-line `py_code`, use the following format:
+    
+        py_eval(crystal, textwrap.dedent('''\
+            if True:
+                from crystal.tests.util.runner import run_test
+                from threading import Thread
+                #
+                async def check_foobar():
+                    ocd = await OpenOrCreateDialog.wait_for()
+                    ...
+                #
+                result_cell = [Ellipsis]
+                def get_result(result_cell):
+                    result_cell[0] = run_test(lambda: check_foobar())
+                    print('OK')
+                #
+                t = Thread(target=lambda: get_result(result_cell))
+                t.start()
+        '''), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
+    
+    Key elements of the above example:
+    - `if True:` -- Prevent code from executing until all lines provided
+    - `#` -- Don't use any blank lines. Use a single `#` to simulate a blank line.
+    - `run_test` -- Run async code using test utilities
+    - `print('OK')` -- Signal that the code has finished executing
+    - `_OK_THREAD_STOP_SUFFIX` -- Wait for the code to finish executing
+    - `timeout=...` -- Pick an appropriate timeout
+    """
     if '\n' in py_code and stop_suffix is None:
         raise ValueError(
             'Unsafe to use _py_eval() on multi-line py_code '
-            'unless stop_suffix is set carefully')
+            'unless stop_suffix is set carefully and other precautions are taken. '
+            'See the py_eval() docstring for details.')
     if stop_suffix is None:
         stop_suffix = '>>> '
     
