@@ -385,6 +385,27 @@ def close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: float
         '''), stop_suffix=_OK_THREAD_STOP_SUFFIX if after_delay is None else '')
 
 
+def wait_for_main_window(crystal: subprocess.Popen) -> None:
+    # NOTE: Uses private API, including the entire crystal.tests package
+    py_eval(crystal, textwrap.dedent(f'''\
+        if True:
+            from crystal.tests.util.runner import run_test
+            from crystal.tests.util.windows import MainWindow
+            from threading import Thread
+            #
+            async def wait_for_main_window():
+                mw = await MainWindow.wait_for()
+                #
+                print('OK')
+            #
+            t = Thread(target=lambda: run_test(wait_for_main_window))
+            t.start()
+        '''),
+        stop_suffix=_OK_THREAD_STOP_SUFFIX,
+        timeout=MainWindow.CLOSE_TIMEOUT,
+    )
+
+
 def close_main_window(crystal: subprocess.Popen, *, after_delay: float | None=None) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
     py_eval(crystal, textwrap.dedent(f'''\
@@ -423,6 +444,18 @@ def delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[Non
 
 # ------------------------------------------------------------------------------
 # Exit
+
+def quit_crystal(crystal: subprocess.Popen) -> None:
+    # TODO: Consider quitting using Ctrl-C instead,
+    #       which would probably be easier and more reliable
+    #py_eval(crystal, 'window.close()')
+    #close_open_or_create_dialog(crystal)
+    #py_eval(crystal, 'exit()', stop_suffix='')
+    crystal.terminate()  # simulate Ctrl-C
+    wait_for_crystal_to_exit(
+        crystal,
+        timeout=DEFAULT_WAIT_TIMEOUT)
+
 
 def wait_for_crystal_to_exit(
         crystal: subprocess.Popen,

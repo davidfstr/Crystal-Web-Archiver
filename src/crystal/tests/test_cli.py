@@ -7,10 +7,11 @@ See also:
 
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
+from crystal.model import Project
 from crystal.tests.util.asserts import assertIn
 from crystal.tests.util.cli import (
-    close_open_or_create_dialog, py_eval, read_until,
-    wait_for_crystal_to_exit, crystal_shell, run_crystal,
+    close_open_or_create_dialog, py_eval, quit_crystal, read_until,
+    wait_for_crystal_to_exit, crystal_shell, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 from io import TextIOBase
@@ -50,25 +51,87 @@ def test_when_launched_with_invalid_argument_then_prints_error_and_exits() -> No
 
 # === Project Open & Create Tests (project_filepath, --readonly) ===
 
-@skip('not yet automated')
 def test_can_open_project_as_writable() -> None:
-    pass
+    with _temporary_project() as project_path:
+        # First create the project by running Crystal with the path
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            quit_crystal(crystal)
+        
+        # Now test opening the existing project as writable (default)
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify project is writable by checking readonly property
+            result = py_eval(crystal, 'project.readonly')
+            assertIn('False', result)
+            
+            quit_crystal(crystal)
 
 
-@skip('not yet automated')
 def test_can_open_project_as_readonly() -> None:
-    pass
+    with _temporary_project() as project_path:
+        # First create the project
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            quit_crystal(crystal)
+        
+        # Now test opening the project as readonly
+        with crystal_shell(args=['--readonly', project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify project is readonly
+            result = py_eval(crystal, 'project.readonly')
+            assertIn('True', result)
+            
+            quit_crystal(crystal)
 
 
-@skip('not yet automated')
 def test_when_opened_project_filepath_does_not_exist_then_creates_new_project_at_filepath() -> None:
-    pass
+    with _temporary_project() as project_path:
+        # Project path doesn't exist yet. Crystal should create it.
+        assert not os.path.exists(project_path)
+        
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify the project was created at the specified path
+            result = py_eval(crystal, 'project.path')
+            assertIn(project_path, result)
+            
+            # Verify it's a new project (writable by default)
+            result = py_eval(crystal, 'project.readonly')
+            assertIn('False', result)
+            
+            quit_crystal(crystal)
+        
+        # Verify the project directory was actually created on disk
+        assert os.path.exists(project_path)
 
 
-@skip('not yet automated')
 def test_can_open_crystalopen_file() -> None:
-    # ...in addition to .crystalproj files
-    pass
+    with _temporary_project() as project_path:
+        # Create the project
+        with crystal_shell(args=[project_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            quit_crystal(crystal)
+        
+        # Locate the project's .crystalopen file
+        crystalopen_path = os.path.join(project_path, Project._OPENER_DEFAULT_FILENAME)
+        assert os.path.exists(crystalopen_path)
+        
+        # Test opening the .crystalopen file
+        with crystal_shell(args=[crystalopen_path]) as (crystal, banner):
+            wait_for_main_window(crystal)
+            
+            # Verify it opened the underlying project
+            result = py_eval(crystal, 'project.path')
+            assertIn(project_path, result)
+            
+            quit_crystal(crystal)
 
 
 @skip('fails: see https://github.com/davidfstr/Crystal-Web-Archiver/issues/63')
@@ -76,9 +139,11 @@ def test_when_launched_with_readonly_and_no_project_filepath_then_open_or_create
     pass
 
 
-@skip('not yet automated')
 def test_when_launched_with_multiple_filepaths_then_prints_error_and_exits() -> None:
-    pass
+    result = run_crystal(['first.crystalproj', 'second.crystalproj'])
+    assert result.returncode != 0
+    assertIn('error: unrecognized arguments: second.crystalproj', result.stderr)
+    assertIn('usage:', result.stderr)
 
 
 # === Server Mode Tests (--serve) ===
@@ -238,12 +303,4 @@ def _crystal_shell_with_serve(
         assert isinstance(crystal.stdout, TextIOBase)
         (server_start_message, _) = read_until(crystal.stdout, '\n', timeout=banner_timeout)
         yield server_start_message
-        
-        # TODO: Consider quitting using Ctrl-C instead,
-        #       which would probably be easier and more reliable
-        py_eval(crystal, 'window.close()')
-        close_open_or_create_dialog(crystal)
-        py_eval(crystal, 'exit()', stop_suffix='')
-        wait_for_crystal_to_exit(
-            crystal,
-            timeout=DEFAULT_WAIT_TIMEOUT)
+        quit_crystal(crystal)
