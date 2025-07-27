@@ -96,7 +96,18 @@ class BetterMessageDialog(wx.Dialog):
         if self._checkbox is None:
             raise ValueError()
         return self._checkbox.Value
-    
+    def SetCheckBoxChecked(self, checked: bool) -> None:
+        if self._checkbox is None:
+            raise ValueError()
+        if self._checkbox.Value == checked:
+            return
+        self._checkbox.Value = checked
+        self._checkbox.ProcessEvent(wx.CommandEvent(
+            wx.wxEVT_CHECKBOX, self._checkbox.GetId()))
+    CheckBoxChecked = property(
+        IsCheckBoxChecked, SetCheckBoxChecked,
+        doc="Whether the checkbox is checked (True) or not (False).")
+
     def _on_button(self, event: wx.CommandEvent) -> None:
         self.EndModal(event.GetId())
         self.Hide()

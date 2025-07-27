@@ -117,7 +117,7 @@ def ShowModalAsync(dialog: wx.Dialog) -> Generator[FgCommand, ContinueSoonFunc |
     assert callable(continue_soon_func)  # is a ContinueSoonFunc
     
     def on_button(event: wx.CommandEvent) -> None:
-        dialog.SetReturnCode(event.EventObject.Id)
+        dialog.SetReturnCode(event.GetId())
         on_close()
 
     def on_char_hook(event: wx.KeyEvent) -> None:

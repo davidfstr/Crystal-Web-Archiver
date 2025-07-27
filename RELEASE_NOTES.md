@@ -19,6 +19,11 @@ Release Notes ⋮
       creating a new project, such as "New Root URL..." or "New Group..."
       no longer fails.
 
+* Accessibility improvements
+    * In the Open/Create Project Dialog you can now press Ctrl/Alt/Cmd+R key to toggle 
+      the "Open as read only" checkbox. The R key is underlined in the checkbox 
+      label on Windows to indicate this keyboard shortcut.
+
 * CLI improvements
     * Help text printed by `crystal --help` now more clearly describes the 
       available arguments and options.

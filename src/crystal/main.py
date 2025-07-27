@@ -633,6 +633,8 @@ async def _prompt_for_project(
     """
     from crystal.progress import CancelOpenProject
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
+    from crystal.util.wx_bind import bind
+    from crystal.util.xos import is_mac_os
     import wx
     
     readonly_default = bool(project_kwargs.get('readonly', False))
@@ -642,12 +644,24 @@ async def _prompt_for_project(
         create_button = dialog.FindWindow(id=wx.ID_YES)
         create_button.Enabled = not readonly_checkbox_checked
     
+    def on_char_hook(event: wx.KeyEvent) -> None:
+        key_code = event.GetKeyCode()
+        if (key_code == ord('R') or key_code == ord('r')) and \
+                event.GetModifiers() in (wx.MOD_ALT, wx.MOD_CONTROL):
+            # Toggle the checkbox when Alt+R or Ctrl+R is pressed
+            assert dialog._checkbox is not None
+            # NOTE: Calls on_checkbox_clicked() internally
+            dialog.CheckBoxChecked = not dialog.CheckBoxChecked
+            
+            # Focus the checkbox manually on macOS to prevent dialog from losing focus
+            if is_mac_os():
+                dialog._checkbox.SetFocus()
+        else:
+            event.Skip()
+    
     dialog = BetterMessageDialog(None,
         message='Create a new project or open an existing project?',
         title='Select a Project',
-        # TODO: Make it possible to check/uncheck this box by pressing the R key,
-        #       and draw underline under R letter to signal that such a
-        #       keyboard shortcut exists
         checkbox_label='Open as &read only',
         checkbox_checked=readonly_default,
         on_checkbox_clicked=on_checkbox_clicked,
@@ -660,12 +674,14 @@ async def _prompt_for_project(
         # Set initial state of Create button based on checkbox state
         on_checkbox_clicked()
         
+        # Configure Ctrl+R (and Alt+R) key to toggle readonly checkbox.
+        # NOTE: Use wx.EVT_CHAR_HOOK rather than wx.EVT_KEY_DOWN so that
+        #       works on macOS where wx.EVT_KEY_DOWN does not work in dialogs.
+        dialog.Bind(wx.EVT_CHAR_HOOK, on_char_hook)
+
         dialog.SetAcceleratorTable(wx.AcceleratorTable([
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O'), wx.ID_NO),
-            # TODO: Cannot use a normal accelerator to toggle a checkbox.
-            #       Workaround.
-            #wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('R'), dialog._checkbox.Id),
         ]))
         
         while True:
