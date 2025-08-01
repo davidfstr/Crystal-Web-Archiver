@@ -19,6 +19,11 @@ Release Notes ⋮
       creating a new project, such as "New Root URL..." or "New Group..."
       no longer fails.
 
+* Distribution improvements
+    * The macOS app is now a Universal 2 binary, running at full speed on
+      both ARM and Intel Macs. There is no longer a need to install Rosetta 2
+      to run Crystal on ARM Macs.
+
 * Accessibility improvements
     * In the Open/Create Project Dialog you can now press Ctrl/Alt/Cmd+R key to toggle 
       the "Open as read only" checkbox. The R key is underlined in the checkbox 

@@ -13,7 +13,7 @@ else
     #          the calculated module dependency graph
     GRAPH_OPT="--graph"
 fi
-poetry run python setup.py py2app $GRAPH_OPT > py2app.stdout.log 2> py2app.stderr.log
+python setup.py py2app $GRAPH_OPT > py2app.stdout.log 2> py2app.stderr.log
 if [ $? -ne 0 ]; then
     echo "ERROR: py2app build failed. Aborting. See py2app.stderr.log and py2app.stdout.log for details."
     exit 1

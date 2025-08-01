@@ -10,6 +10,7 @@ venv*
 
 # Poetry
 /dist
+/.uwheels
 
 # GitHub Actions
 /setup/arguments.txt
@@ -29,5 +30,3 @@ tmpdir_*
 
 # AI Coding
 /plan
-/PLAN
-

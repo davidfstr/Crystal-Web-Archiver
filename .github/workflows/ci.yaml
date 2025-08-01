@@ -159,21 +159,30 @@ jobs:
         run: |
           python -m pip install -U pip setuptools
           python -m pip install -U "poetry==2.1.1"
+      
+      - name: Download dependencies as universal2 wheels
+        run: |
+          poetry self add poetry-plugin-export==1.9.0
+          python -m pip install -U delocate==0.13.0 packaging==25.0
+          setup/download_universal2_wheels.sh
 
-      - name: Install dependencies with Poetry
-        # If build takes a very long time, then it's likely that the version
-        # of wxPython installed does not offer a precompiled wheel for this
-        # version of Python. Check the wxPython PyPI page to confirm.
+      - name: Install dependencies and Crystal
         timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
-        run: poetry install
+        run: |
+          # Install dependencies
+          pip install --no-deps --force-reinstall .uwheels/*.whl .uwheels/*.tar.gz
+          # Install Crystal module as editable
+          pip install --no-deps -e .
+          # Install the "crystal" script entry point
+          poetry install --only-root
 
       - name: Display SQLite version and JSON support
         run: |
-          python3 -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
-          poetry run python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
+          python -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
+          python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
 
       - name: Run non-UI tests
-        run: poetry run python -m pytest
+        run: python -m pytest
 
       - name: Import Developer ID certificate
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_dist_artifact == 'true' }}
@@ -232,7 +241,12 @@ jobs:
             # 2. Don't build the disk image because it takes a long time.
             MAKE_POST_ARGS="--app-only"
           fi
-          poetry run ./make-mac.sh $MAKE_POST_ARGS
+          ./make-mac.sh $MAKE_POST_ARGS
+
+      - name: Verify universal2 build
+        working-directory: "./setup"
+        run: |
+          ./verify_universal2.sh dist/Crystal.app
 
       # Upload py2app logs on .app build failure
       - name: Upload py2app logs
@@ -389,7 +403,7 @@ jobs:
  
       - name: Display SQLite version and JSON support
         run: |
-          python3 -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
+          poetry run python -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
           poetry run python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
 
       - name: Run non-UI tests
@@ -450,7 +464,7 @@ jobs:
 
       - name: Display SQLite version and JSON support
         run: |
-          python3 -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
+          poetry run python -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
           poetry run python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
 
       - name: Run non-UI tests

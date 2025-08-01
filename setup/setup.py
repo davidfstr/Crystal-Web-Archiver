@@ -82,16 +82,6 @@ if sys.platform == 'darwin':
         'CFBundleSignature': 'CrWA',  # Crystal (Web Archiver)
         'CFBundleVersion': env['VERSION_STRING'],
         'NSHumanReadableCopyright': env['COPYRIGHT_STRING'],
-        'LSArchitecturePriority': [
-            # Force the built application to run on the same architecture as the
-            # machine it was built on, because the build process does not yet
-            # build versions of some extensions (like PIL) for architectures
-            # other than the one it is built on.
-            # 
-            # TODO: Tell py2app to build for both 'x86_64' and 'arm64'
-            #       architectures using the --arch option.
-            arch,
-        ],
     }
 
     extra_setup_options = dict(
@@ -102,6 +92,9 @@ if sys.platform == 'darwin':
             'media/OpenerIcon.icns',
         ],
         options={'py2app': {
+            # Build universal2 binary for both Intel and ARM Macs.
+            # This requires universal2 wheels to be installed for all dependencies.
+            'arch': 'universal2',
             # Cannot use argv_emulation=True in latest version of py2app
             # because of: https://github.com/ronaldoussoren/py2app/issues/340
             'argv_emulation': False,
