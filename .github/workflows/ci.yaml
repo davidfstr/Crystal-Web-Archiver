@@ -14,10 +14,20 @@ on:
   workflow_dispatch:
     inputs:
       build_dist_artifact:
-        description: 'Build distribution artifact'
+        description: 'Build distribution artifact for macOS and Windows'
         required: false
         default: false
         type: boolean
+      build_arch_macos:
+        description: 'Build architecture for macOS'
+        required: false
+        # NOTE: It is faster to build a single architecture only
+        default: 'x86_64'
+        type: choice
+        options:
+          - 'x86_64'
+          # NOTE: Required for building the distribution artifact
+          - 'universal2'
       show_notarization_log:
         description: 'Show notarization log for macOS'
         required: false
@@ -161,13 +171,15 @@ jobs:
           python -m pip install -U "poetry==2.1.1"
       
       - name: Download dependencies as universal2 wheels
+        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_dist_artifact == 'true' || github.event.inputs.build_arch_macos == 'universal2') }}
         run: |
           poetry self add poetry-plugin-export==1.9.0
           python -m pip install -U delocate==0.13.0 packaging==25.0
           setup/download_universal2_wheels.sh
 
-      - name: Install dependencies and Crystal
-        timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
+      - name: Install dependencies and Crystal (universal2 architecture)
+        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_dist_artifact == 'true' || github.event.inputs.build_arch_macos == 'universal2') }}
+        timeout-minutes: 2  # normally takes 15s, as of 2025-08-02
         run: |
           # Install dependencies
           pip install --no-deps --force-reinstall .uwheels/*.whl .uwheels/*.tar.gz
@@ -176,13 +188,30 @@ jobs:
           # Install the "crystal" script entry point
           poetry install --only-root
 
+      - name: Install dependencies and Crystal (x86_64 architecture)
+        if: ${{ github.event_name != 'workflow_dispatch' || !(github.event.inputs.build_dist_artifact == 'true' || github.event.inputs.build_arch_macos == 'universal2') }}
+        # If build takes a very long time, then it's likely that the version
+        # of wxPython installed does not offer a precompiled wheel for this
+        # version of Python. Check the wxPython PyPI page to confirm.
+        timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
+        run: poetry install
+
+      - name: Determine how to run python in virtual environment
+        run: |
+          # Determine if we should use poetry run prefix
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ("${{ github.event.inputs.build_dist_artifact }}" == "true" || "${{ github.event.inputs.build_arch_macos }}" == "universal2") ]]; then
+            echo "POETRY_RUN=" >> $GITHUB_ENV
+          else
+            echo "POETRY_RUN=poetry run " >> $GITHUB_ENV
+          fi
+
       - name: Display SQLite version and JSON support
         run: |
-          python -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
-          python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
+          ${POETRY_RUN}python -c "import sqlite3; print('SQLite %s' % sqlite3.sqlite_version)"
+          ${POETRY_RUN}python -c "from crystal.util.xsqlite3 import sqlite_has_json_support; print('JSON Support: ' + ('yes' if sqlite_has_json_support else 'NO'))"
 
       - name: Run non-UI tests
-        run: python -m pytest
+        run: ${POETRY_RUN}python -m pytest
 
       - name: Import Developer ID certificate
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_dist_artifact == 'true' }}
@@ -241,9 +270,10 @@ jobs:
             # 2. Don't build the disk image because it takes a long time.
             MAKE_POST_ARGS="--app-only"
           fi
-          ./make-mac.sh $MAKE_POST_ARGS
+          ${POETRY_RUN}./make-mac.sh $MAKE_POST_ARGS
 
       - name: Verify universal2 build
+        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_dist_artifact == 'true' || github.event.inputs.build_arch_macos == 'universal2') }}
         working-directory: "./setup"
         run: |
           ./verify_universal2.sh dist/Crystal.app
