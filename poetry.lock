@@ -735,7 +735,7 @@ description = "Python Imaging Library (Fork)"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
-markers = "sys_platform == \"linux\" or python_version == \"3.11\""
+markers = "python_version == \"3.11\" and sys_platform != \"darwin\" or sys_platform == \"linux\""
 files = [
     {file = "pillow-11.3.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:1b9c17fd4ace828b3003dfd1e30bff24863e0eb59b535e8f80194d9cc7ecf860"},
     {file = "pillow-11.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:65dc69160114cdd0ca0f35cb434633c75e8e7fad4cf855177a05bf38678f73ad"},
@@ -962,6 +962,7 @@ description = "A simple, cross-platform screenshot module for Python 2 and 3."
 optional = false
 python-versions = "*"
 groups = ["dev"]
+markers = "sys_platform != \"darwin\""
 files = [
     {file = "PyScreeze-0.1.30.tar.gz", hash = "sha256:74098ad048e76a6231dcfa6243343af94459b8c829f9ccb7a44a5d3b147a67d1"},
 ]
@@ -1442,4 +1443,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "117dfcc0d3c880838e23f643fb36596580e979a7ee3b3b20ff60d016ea2e5758"
+content-hash = "6c0b0d30a1de22f6bbe2d43612b8b7a23062eef4901ed89e6fa8614c825f920a"

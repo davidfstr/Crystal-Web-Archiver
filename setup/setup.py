@@ -93,12 +93,6 @@ if sys.platform == 'darwin':
             arch,
         ],
     }
-    
-    # Exclude PIL unless $CRYSTAL_SUPPORT_SCREENSHOTS is True
-    extra_excludes = (
-        [] if os.environ.get('CRYSTAL_SUPPORT_SCREENSHOTS', 'False') == 'True'
-        else ['PIL']
-    )
 
     extra_setup_options = dict(
         setup_requires=['py2app'],
@@ -119,8 +113,9 @@ if sys.platform == 'darwin':
             ],
             'excludes': [
                 'numpy',
+                'PIL',
                 'test',  # CPython test data
-            ] + extra_excludes,
+            ],
             # Workaround for py2app + Python 3.13 dylib signing issue
             # https://github.com/ronaldoussoren/py2app/issues/546
             'dylib_excludes': [

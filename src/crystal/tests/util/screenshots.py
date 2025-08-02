@@ -3,7 +3,9 @@ from contextlib import contextmanager
 from crystal.util.xos import is_mac_os
 from functools import wraps
 import os
+import subprocess
 import sys
+import tempfile
 from typing import TypeVar
 from typing_extensions import ParamSpec
 
@@ -21,30 +23,32 @@ def take_error_screenshot() -> None:
     if screenshots_dirpath is None:
         return
     
-    # Try import and configure screenshot-related libraries
-    try:
-        import PIL
-    except ImportError:
-        print('*** Unable to save screenshot because PIL is not available, which pyscreeze depends on.', file=sys.stderr)
-        return
-    try:
-        import pyscreeze
-    except ImportError:
-        print('*** Unable to save screenshot because pyscreeze is not available.', file=sys.stderr)
-        return
-    # HACK: Force pyscreeze to use 'screencapture' tool on macOS
-    # in _screenshot_osx() rather than ImageGrab.grab(),
-    # which doesn't seem to work on macOS 12+
-    if is_mac_os():
-        pyscreeze.PIL__version__ = [1, 0, 0]  # pretend PIL is old version
-    
     os.makedirs(screenshots_dirpath, exist_ok=True)
     
     screenshot_filename = os.environ.get('CRYSTAL_SCREENSHOT_ID', 'screenshot') + '.png'
     screenshot_filepath = os.path.abspath(os.path.join(screenshots_dirpath, screenshot_filename))
     print('*** Saving screenshot to: ' + screenshot_filepath, file=sys.stderr)
+    
     try:
-        pyscreeze.screenshot(screenshot_filepath)
+        if is_mac_os():
+            # Use screencapture directly on macOS
+            result = subprocess.call(['screencapture', '-x', screenshot_filepath])
+            if result != 0:
+                print(f'*** screencapture command failed with exit code: {result}', file=sys.stderr)
+        else:
+            # Use PIL/pyscreeze on other platforms
+            try:
+                import PIL
+            except ImportError:
+                print('*** Unable to save screenshot because PIL is not available, which pyscreeze depends on.', file=sys.stderr)
+                return
+            try:
+                import pyscreeze
+            except ImportError:
+                print('*** Unable to save screenshot because pyscreeze is not available.', file=sys.stderr)
+                return
+            
+            pyscreeze.screenshot(screenshot_filepath)
     except Exception as e:
         print(f'*** Failed to save screenshot: {e}', file=sys.stderr)
     else:

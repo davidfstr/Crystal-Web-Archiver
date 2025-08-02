@@ -225,17 +225,12 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.build_dist_artifact }}" == "true" ]]; then
             # If building a distribution artifact then also build the disk image
             MAKE_POST_ARGS=""
-            # If building a distribution artifact then omit screenshot support to save space
-            export CRYSTAL_SUPPORT_SCREENSHOTS=False
           else
             # --app-only:
             # 1. Don't build the disk image because it intermittently fails
             #    with "hdiutil create failed - Resource busy" in CI.
             # 2. Don't build the disk image because it takes a long time.
             MAKE_POST_ARGS="--app-only"
-            # If not building a distribution artifact then include
-            # screenshot support for better debugging
-            export CRYSTAL_SUPPORT_SCREENSHOTS=True
           fi
           poetry run ./make-mac.sh $MAKE_POST_ARGS
 
