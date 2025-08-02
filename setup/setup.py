@@ -115,6 +115,8 @@ if sys.platform == 'darwin':
                 'numpy',
                 'PIL',
                 'test',  # CPython test data
+                'tkinter', 'tk',  # unused; hard to build universal2 version
+                'zstandard',  # unused; hard to build universal2 version; optional urllib3 dependency
             ],
             # Workaround for py2app + Python 3.13 dylib signing issue
             # https://github.com/ronaldoussoren/py2app/issues/546
