@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.headless import is_headless_mode
 from crystal.util.sizes import format_byte_size
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 from crystal.util.xfunctools import partial2
@@ -755,6 +756,10 @@ class DeferredProgressDialog:
         be shown as a window modal dialog.
         """
         if self._shown:
+            return
+        
+        # Silently refuse to show if running in headless mode
+        if is_headless_mode():
             return
         
         # Show now. Apply deferred operations.

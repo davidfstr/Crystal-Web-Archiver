@@ -4,22 +4,28 @@ import code
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
+from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.headless import is_headless_mode
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
-    bg_affinity, fg_call_and_wait, has_foreground_thread,
+    bg_affinity, bg_call_later, fg_call_and_wait, has_foreground_thread,
     NoForegroundThreadError,
 )
 import os
+import signal
 import sys
-import threading
 from typing import Optional
 from typing_extensions import override
 
 
 class Shell:
     def __init__(self) -> None:
-        if not has_foreground_thread():
-            raise ValueError('Expected there to be a foreground thread when starting a Shell')
+        """
+        Creates a new shell but does not start it.
+        
+        Start the shell by calling start().
+        """
+        self._started = False
         
         # Setup proxy variables for shell
         _Proxy._patch_help()
@@ -32,8 +38,6 @@ class Shell:
         site.setquit()  # quit, exit
         
         self._ensure_guppy_available()
-        
-        threading.Thread(target=self._run, daemon=False).start()
     
     @staticmethod
     def _ensure_guppy_available() -> None:
@@ -56,6 +60,21 @@ class Shell:
         except ImportError:
             pass
     
+    def start(self) -> None:
+        """
+        Starts the shell in a separate thread.
+        """
+        if self._started:
+            return
+        
+        if not has_foreground_thread():
+            raise ValueError('Expected there to be a foreground thread when starting a Shell')
+        
+        # NOTE: Keep the process alive while the shell is running
+        bg_call_later(self._run, daemon=False)
+        self._started = True
+    
+    @capture_crashes_to_stderr
     def _run(self) -> None:
         # Define exit instructions,
         # based on site.setquit()'s definition in Python 3.8
@@ -83,11 +102,17 @@ class Shell:
         except SystemExit:
             pass
     
-    def attach(self, project: Project, window: MainWindow) -> None:
-        self._project_proxy._initialize_proxy(project, reinit_okay=True)
-        self._window_proxy._initialize_proxy(window, reinit_okay=True)
+    def attach(self, project: Project | None, window: MainWindow | None) -> None:
+        """
+        Initializes the "project" and "window" variables in the shell.
+        """
+        self._project_proxy._initialize_proxy(project, reinit_okay=True, unset_okay=True)
+        self._window_proxy._initialize_proxy(window, reinit_okay=True, unset_okay=True)
     
     def detach(self) -> None:
+        """
+        Uninitializes the "project" and "window" variables in the shell.
+        """
         self._project_proxy._initialize_proxy(None, reinit_okay=True, unset_okay=True)
         self._window_proxy._initialize_proxy(None, reinit_okay=True, unset_okay=True)
 
@@ -170,7 +195,11 @@ def fg_interact(banner=None, local=None, exitmsg=None):
         console.interact(banner, exitmsg='')
     finally:
         if not _main_loop_has_exited():
-            console.write('%s\n' % exitmsg)
+            if is_headless_mode():
+                # In headless mode, exit the entire process when the shell exits.
+                os.kill(os.getpid(), signal.SIGINT)  # simulate Ctrl-C
+            else:
+                console.write('%s\n' % exitmsg)
 
 
 class _FgInteractiveConsole(code.InteractiveConsole):

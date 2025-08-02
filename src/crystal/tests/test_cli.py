@@ -7,16 +7,18 @@ See also:
 
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
+import signal
 from crystal.model import Project, Resource
-from crystal.tests.util.asserts import assertIn
+from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, close_open_or_create_dialog, py_eval, quit_crystal, read_until,
-    crystal_shell, run_crystal, wait_for_main_window,
+    _OK_THREAD_STOP_SUFFIX, close_open_or_create_dialog, py_eval, read_until,
+    crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
-from crystal.tests.util.server import served_project
+from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
 from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xos import is_mac_os
 from io import TextIOBase
 import datetime
@@ -25,8 +27,10 @@ import socket
 import tempfile
 import textwrap
 from unittest import skip
+import urllib.request
 
-# === Basic Launch Tests ===
+
+# === Basic Launch Tests (<nothing>, --help) ===
 
 def test_when_launched_with_no_arguments_then_shows_open_or_create_project_dialog() -> None:
     with crystal_shell() as (crystal, banner):
@@ -62,8 +66,6 @@ def test_can_open_project_as_writable() -> None:
         # First create the project by running Crystal with the path
         with crystal_shell(args=[project_path]) as (crystal, banner):
             wait_for_main_window(crystal)
-            
-            quit_crystal(crystal)
         
         # Now test opening the existing project as writable (default)
         with crystal_shell(args=[project_path]) as (crystal, banner):
@@ -72,8 +74,6 @@ def test_can_open_project_as_writable() -> None:
             # Verify project is writable by checking readonly property
             result = py_eval(crystal, 'project.readonly')
             assertIn('False', result)
-            
-            quit_crystal(crystal)
 
 
 def test_can_open_project_as_readonly() -> None:
@@ -81,8 +81,6 @@ def test_can_open_project_as_readonly() -> None:
         # First create the project
         with crystal_shell(args=[project_path]) as (crystal, banner):
             wait_for_main_window(crystal)
-            
-            quit_crystal(crystal)
         
         # Now test opening the project as readonly
         with crystal_shell(args=['--readonly', project_path]) as (crystal, banner):
@@ -91,8 +89,6 @@ def test_can_open_project_as_readonly() -> None:
             # Verify project is readonly
             result = py_eval(crystal, 'project.readonly')
             assertIn('True', result)
-            
-            quit_crystal(crystal)
 
 
 def test_when_opened_project_filepath_does_not_exist_then_creates_new_project_at_filepath() -> None:
@@ -110,8 +106,6 @@ def test_when_opened_project_filepath_does_not_exist_then_creates_new_project_at
             # Verify it's a new project (writable by default)
             result = py_eval(crystal, 'project.readonly')
             assertIn('False', result)
-            
-            quit_crystal(crystal)
         
         # Verify the project directory was actually created on disk
         assert os.path.exists(project_path)
@@ -122,8 +116,6 @@ def test_can_open_crystalopen_file() -> None:
         # Create the project
         with crystal_shell(args=[project_path]) as (crystal, banner):
             wait_for_main_window(crystal)
-            
-            quit_crystal(crystal)
         
         # Locate the project's .crystalopen file
         crystalopen_path = os.path.join(project_path, Project._OPENER_DEFAULT_FILENAME)
@@ -136,8 +128,6 @@ def test_can_open_crystalopen_file() -> None:
             # Verify it opened the underlying project
             result = py_eval(crystal, 'project.path')
             assertIn(project_path, result)
-            
-            quit_crystal(crystal)
 
 
 def test_when_launched_with_readonly_and_no_project_filepath_then_open_or_create_dialog_defaults_to_readonly_checked() -> None:
@@ -347,8 +337,6 @@ def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_op
         # First create the project
         with crystal_shell(args=[project_path]) as (crystal, banner):
             wait_for_main_window(crystal)
-            
-            quit_crystal(crystal)
         
         # Now test opening the project with shell
         with crystal_shell(args=[project_path]) as (crystal, banner):
@@ -365,8 +353,136 @@ def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_op
             # Verify the project path is correct
             result = py_eval(crystal, 'project.path')
             assertIn(project_path, result)
+
+
+async def test_when_launched_with_shell_and_ctrl_d_pressed_then_exits() -> None:
+    with crystal_shell() as (crystal, banner):
+        await OpenOrCreateDialog.wait_for()
+        
+        # Simulate Ctrl-D to exit the shell
+        assert crystal.stdin is not None
+        crystal.stdin.close()
+        assert isinstance(crystal.stdout, TextIOBase)
+        read_until(crystal.stdout, 'now waiting for all windows to close...\n')
+        
+        # TODO: Simulate this case. Difficult because stdin is already closed
+        #       so close_open_or_create_dialog() won't work.
+        ## Close last window to quit the process
+        #close_open_or_create_dialog`(crystal)
+        #crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+
+
+async def test_when_launched_with_shell_and_ctrl_c_pressed_then_exits() -> None:
+    with crystal_shell() as (crystal, banner):
+        await OpenOrCreateDialog.wait_for()
+        
+        # Simulate Ctrl-C to quit the process
+        os.kill(crystal.pid, signal.SIGINT)
+        crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+
+
+# === Headless Mode Tests (---headless) ===
+
+def test_when_headless_used_without_serve_or_shell_then_prints_error_and_exits() -> None:
+    result = run_crystal(['--headless'])
+    assert result.returncode == 2
+    assertIn('error: --headless must be combined with --serve or --shell', result.stderr)
+
+
+def test_when_headless_used_without_project_filepath_then_prints_error_and_exits() -> None:
+    result = run_crystal(['--headless', '--serve'])
+    assert result.returncode == 2
+    assertIn('error: --headless --serve requires a project file path', result.stderr)
+
+
+def test_when_headless_serve_with_project_then_starts_server_without_gui() -> None:
+    # ...and pressing Ctrl-C quits the process
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        with crystal_running_with_banner(
+            args=['--headless', '--serve', project_dirpath],
+            expects=['server_started', 'ctrl_c']
+        ) as (crystal, banner_metadata):
+            assert banner_metadata.server_url is not None
+            _ensure_server_is_accessible(banner_metadata.server_url)
+
+            # Simulate Ctrl-C to quit the process
+            os.kill(crystal.pid, signal.SIGINT)
+            crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+
+
+def test_when_headless_serve_with_custom_port_then_starts_server_on_custom_port() -> None:
+    custom_port = 8765  # arbitrary
+    
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_path:
+        with crystal_running_with_banner(
+            args=['--headless', '--serve', '--port', str(custom_port), project_path],
+            expects=['server_started', 'ctrl_c']
+        ) as (crystal, banner_metadata):
+            assert banner_metadata.server_url is not None
+            assertIn(f':{custom_port}', banner_metadata.server_url)
+            _ensure_server_is_accessible(banner_metadata.server_url)
+
+
+def test_when_headless_serve_with_project_then_prints_server_url_and_ctrl_c_instruction() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_path:
+        with crystal_running_with_banner(
+            args=['--headless', '--serve', project_path],
+            expects=['server_started', 'ctrl_c']
+        ) as (crystal, banner_metadata):
+            assert banner_metadata.server_url is not None
+            _ensure_server_is_accessible(banner_metadata.server_url)
+
+
+def test_when_headless_shell_with_project_then_starts_shell_without_gui() -> None:
+    # ...and project variable is available in shell
+    # ...and window variable is not available in shell
+    # ...and Ctrl-D quits the process
+    
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_path:
+        with crystal_running_with_banner(
+            args=['--headless', '--shell', project_path],
+            expects=['version', 'help', 'variables', 'exit', 'prompt']
+        ) as (crystal, banner_metadata):
+            assertIn('<crystal.model.Project object at 0x', py_eval(crystal, 'project'))
+            assertIn(project_path, py_eval(crystal, 'project.path'))
+            assertIn('<unset crystal.browser.MainWindow proxy>', py_eval(crystal, 'window'))
             
-            quit_crystal(crystal)
+            # Simulate Ctrl-D to exit the shell
+            assert crystal.stdin is not None
+            crystal.stdin.close()
+            crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+
+
+def test_when_headless_shell_without_project_then_starts_shell_without_gui() -> None:
+    # ...and project variable is not available in shell
+    # ...and window variable is not available in shell
+    
+    # Start headless shell without a project
+    with crystal_running_with_banner(
+        args=['--headless', '--shell'],
+        expects=[
+            'version', 'help', 'variables', 'exit', 'prompt'
+        ]
+    ) as (crystal, banner_metadata):
+        assertIn('<unset crystal.model.Project proxy>', py_eval(crystal, 'project'))
+        assertIn('<unset crystal.browser.MainWindow proxy>', py_eval(crystal, 'window'))
+
+
+def test_when_headless_serve_shell_with_project_then_starts_both_server_and_shell() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_path:
+        with crystal_running_with_banner(
+            args=['--headless', '--serve', '--shell', project_path],
+            expects=[
+                'version', 'help', 'variables', 'exit', 'prompt',
+                'server_started', 'ctrl_c',
+            ]
+        ) as (crystal, banner_metadata):
+            assertIn('<crystal.model.Project object at 0x', py_eval(crystal, 'project'))
+            assertIn(project_path, py_eval(crystal, 'project.path'))
+            assertIn('<unset crystal.browser.MainWindow proxy>', py_eval(crystal, 'window'))
+            
+            assert banner_metadata.server_url is not None
+            _ensure_server_is_accessible(banner_metadata.server_url)
 
 
 # === Cookie Configuration Tests (--cookie) ===
@@ -411,8 +527,6 @@ async def test_when_project_opened_with_stale_before_then_old_revisions_consider
                 py_eval(crystal, 'rr = r.default_revision()')
                 result = py_eval(crystal, 'rr.is_stale')
                 assert 'False' in result, f"Expected resource revision to NOT be stale with past min_fetch_date, got: {result}"
-                
-                quit_crystal(crystal)
         
         with subtests.test(msg='reopen with future date - revision should be stale'):
             future_date = '2099-01-01T00:00:00+00:00'
@@ -433,8 +547,6 @@ async def test_when_project_opened_with_stale_before_then_old_revisions_consider
                 # Verify the revision is now considered stale
                 result = py_eval(crystal, 'rr.is_stale')
                 assert 'True' in result, f"Expected resource revision to be stale with future min_fetch_date, got: {result}"
-                
-                quit_crystal(crystal)
 
 
 @with_subtests
@@ -500,7 +612,7 @@ def test_when_crystal_receives_ctrl_c_or_sigint_then_exits_cleanly() -> None:
     pass
 
 
-# === Utility Functions ===
+# === Utility ===
 
 @contextmanager
 def _temporary_project() -> Iterator[str]:
@@ -520,6 +632,8 @@ def _crystal_shell_with_serve(
     """
     Context which starts "crystal --serve [--port PORT] [--host HOST] PROJECT_PATH --shell"
     and cleans up the associated process upon exit.
+    
+    See also: crystal_running_with_banner()
     """
     if banner_timeout is None:
         banner_timeout = 4.0  # currently (2 * DEFAULT_WAIT_TIMEOUT)
@@ -536,4 +650,18 @@ def _crystal_shell_with_serve(
         assert isinstance(crystal.stdout, TextIOBase)
         (server_start_message, _) = read_until(crystal.stdout, '\n', timeout=banner_timeout)
         yield server_start_message
-        quit_crystal(crystal)
+
+
+def _ensure_server_is_accessible(server_url: str) -> None:
+    """
+    Verify that the server at the given URL is accessible.
+    
+    Arguments:
+    * server_url -- 
+        Server URL (e.g., "http://127.0.0.1:8080")
+        
+    Raises:
+    * AssertionError -- If server is not accessible.
+    """
+    with urllib.request.urlopen(server_url) as response:
+        assert response.status == 200

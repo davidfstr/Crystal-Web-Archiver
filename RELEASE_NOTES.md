@@ -18,9 +18,9 @@ location to save the empty project at; the macOS app no longer requires
 installing Rosetta 2 on Intel Macs; and there is no firewall warning dialog
 on Windows when viewing a downloaded project.
 
-Additionally Crystal's command-line interface (CLI) has improved help text,
-automated test coverage, and new `--port`/`--host` options for controlling
-how projects are served.
+Additionally Crystal's command-line interface (CLI) supports running
+`--headless`, has improved help text, automated test coverage, 
+and new `--port`/`--host` options for controlling how projects are served.
 
 * Workflow improvements
     * Crystal now creates new projects as untitled by default instead of immediately
@@ -28,7 +28,7 @@ how projects are served.
     * On Windows selecting any item in the Entity menu immediately after
       creating a new project, such as "New Root URL..." or "New Group..."
       no longer fails.
-    * Save As can be used to efficient save a copy of a project.
+    * Save As can be used to efficiently save a copy of a project.
 
 * Distribution improvements
     * The macOS app is now a Universal 2 binary, running at full speed on
@@ -45,6 +45,9 @@ how projects are served.
       label on Windows to indicate this keyboard shortcut.
 
 * CLI improvements
+    * Crystal can now be run without a graphical user interface with `--headless`,
+      allowing efficient use as a server with `--serve` or as a project-aware
+      Python shell with `--shell`.
     * Help text printed by `crystal --help` now more clearly describes the 
       available arguments and options.
     * When Crystal is launched with `--readonly` but no project path,

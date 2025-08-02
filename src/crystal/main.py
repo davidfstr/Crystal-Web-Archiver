@@ -16,7 +16,9 @@ from __future__ import annotations
 #       Therefore many imports in this file should occur directly within functions.
 import argparse
 import atexit
+from collections.abc import Callable
 import datetime
+from io import TextIOBase
 import locale
 import os
 import os.path
@@ -24,16 +26,14 @@ import sys
 import threading
 import time
 import traceback
-from typing import Never, ParamSpec, TypeVar, TYPE_CHECKING
+from typing import cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
 from typing_extensions import override
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from crystal.browser import MainWindow
     from crystal.model import Project
     from crystal.progress import OpenProjectProgressListener
     from crystal.shell import Shell
-    from typing import Optional
     import wx
 
 
@@ -215,6 +215,11 @@ def _main(args: list[str]) -> None:
         action='store_true',
     )
     parser.add_argument(
+        '--headless',
+        help='Avoid showing any GUI. Must be combined with --serve or --shell.',
+        action='store_true',
+    )
+    parser.add_argument(
         '--cookie',
         help='An HTTP Cookie header value to send when downloading resources.',
         type=str,
@@ -266,6 +271,16 @@ def _main(args: list[str]) -> None:
         print('error: --port and --host can only be used with --serve', file=sys.stderr)
         sys.exit(2)
     
+    if parsed_args.headless and not (parsed_args.serve or parsed_args.shell):
+        # NOTE: Error message format and exit code are similar to those used by argparse
+        print('error: --headless must be combined with --serve or --shell', file=sys.stderr)
+        sys.exit(2)
+    
+    if parsed_args.headless and parsed_args.serve and parsed_args.project_filepath is None:
+        # NOTE: Error message format and exit code are similar to those used by argparse
+        print('error: --headless --serve requires a project file path', file=sys.stderr)
+        sys.exit(2)
+    
     # Interpret --stale-before datetime as in local timezone if no UTC offset specified
     if parsed_args.stale_before is not None:
         from crystal.util.xdatetime import datetime_is_aware
@@ -303,6 +318,17 @@ def _main(args: list[str]) -> None:
         # Exit process immediately, without bothering to run garbage collection
         # or other cleanup processes that can take a long time
         os._exit(exit_code)
+    
+    # Set headless mode, before anybody tries to call fg_call_later
+    from crystal.util.headless import set_headless_mode
+    set_headless_mode(parsed_args.headless)
+    
+    # Create shell if requested. But don't start it yet.
+    if parsed_args.shell:
+        from crystal.shell import Shell
+        shell = Shell()
+    else:
+        shell = None
     
     last_window = None  # type: Optional[MainWindow]
     systemexit_during_first_launch = None  # type: Optional[SystemExit]
@@ -446,19 +472,25 @@ def _main(args: list[str]) -> None:
     set_foreground_thread(threading.current_thread())
     try:
         # (Don't insert anything between set_foreground_thread() and MyApp())
-        app = MyApp(redirect=False)
+        if not parsed_args.headless:
+            # Queue call of app.OnInit() and _did_launch() after main loop starts
+            # NOTE: Shows the dock icon on macOS
+            app = MyApp(redirect=False)
+        else:
+            # Queue call of _did_launch() after main loop starts
+            from crystal.util.xthreading import start_fg_coroutine
+            start_fg_coroutine(
+                _did_launch(parsed_args, shell),  # type: ignore[arg-type]
+                _capture_crashes_to_stderr_and_capture_systemexit_to_quit)
         
         # Start shell if requested
-        if parsed_args.shell:
-            from crystal.shell import Shell
-            shell = Shell()
-        else:
-            shell = None
+        if shell is not None:
+            shell.start()
         
         # Starts tests if requested
         if parsed_args.test is not None:
             from crystal.util.xthreading import (
-                bg_call_later, fg_call_later, has_foreground_thread,
+                bg_call_later, has_foreground_thread,
             )
             assert has_foreground_thread(), (
                 'Expected foreground thread to be running before starting tests, '
@@ -495,39 +527,59 @@ def _main(args: list[str]) -> None:
                     os._exit(exit_code)
             bg_call_later(bg_task)
         
-        # Run GUI
-        while True:
-            # Process main loop until no more windows or dialogs are open
-            app.MainLoop()
+        # 1. Run main loop
+        # 2. Clean up
+        # 3. Repeat if not is_quitting()
+        if parsed_args.headless:  # headless mode
+            # Run main loop until is_quitting() or no more fg calls are left
+            from crystal.util.xthreading import run_headless_main_loop
+            # NOTE: If Ctrl-C is pressed while this loop is running,
+            #       then the process will exit immediately with code 130,
+            #       without calling atexit handlers.
+            run_headless_main_loop()
             if systemexit_during_first_launch is not None:
                 raise systemexit_during_first_launch
             
             # Clean up
             if shell is not None:
                 shell.detach()
-            if last_window is not None:
-                # TODO: Implement Project.closed so that this assertion can be checked
-                #assert last_window.project.closed, (
-                #    'Expected project to already be fully closed '
-                #    'during the MainLoop by MainWindow'
-                #)
-                last_window = None
-            
-            # Quit?
-            if is_quitting():
-                break
-            
-            # Clear first-only launch arguments
-            parsed_args.project_filepath = None
-            
-            # Re-launch, reopening the initial dialog
-            from crystal.util.xthreading import start_fg_coroutine
-            async def relaunch():
-                nonlocal last_window
-                last_window = await _did_launch(parsed_args, shell)  # can raise SystemExit
-            start_fg_coroutine(
-                relaunch(),
-                _capture_crashes_to_stderr_and_capture_systemexit_to_quit)
+        else:  # not headless mode
+            assert app is not None
+            while True:
+                # Run main loop until no more windows or dialogs are open
+                # NOTE: If Ctrl-C is pressed while this loop is running,
+                #       then the process will exit immediately with code 130,
+                #       without calling atexit handlers.
+                app.MainLoop()
+                if systemexit_during_first_launch is not None:
+                    raise systemexit_during_first_launch
+                
+                # Clean up
+                if shell is not None:
+                    shell.detach()
+                if last_window is not None:
+                    # TODO: Implement Project.closed so that this assertion can be checked
+                    #assert last_window.project.closed, (
+                    #    'Expected project to already be fully closed '
+                    #    'during the MainLoop by MainWindow'
+                    #)
+                    last_window = None
+                
+                # Quit?
+                if is_quitting():
+                    break
+                
+                # Clear first-only launch arguments
+                parsed_args.project_filepath = None
+                
+                # Re-launch, reopening the initial dialog
+                from crystal.util.xthreading import start_fg_coroutine
+                async def relaunch():
+                    nonlocal last_window
+                    last_window = await _did_launch(parsed_args, shell)  # can raise SystemExit
+                start_fg_coroutine(
+                    relaunch(),
+                    _capture_crashes_to_stderr_and_capture_systemexit_to_quit)
     except SystemExit as e:
         if e.code not in [None, 0]:
             # Exit with error
@@ -551,7 +603,7 @@ async def _did_launch(
         parsed_args,
         shell: Shell | None,
         filepath: str | None=None
-        ) -> MainWindow:
+        ) -> MainWindow | None:
     """
     Raises:
     * SystemExit -- if the user quits
@@ -568,37 +620,42 @@ async def _did_launch(
     
     # Open/create a project
     project: Project | None = None
-    window: MainWindow
+    window: MainWindow | None = None
     try:
-        with OpenProjectProgressDialog() as progress_listener:
-            # Export reference to progress_listener, if running tests
-            if tests_are_running():
-                from crystal import progress
-                progress._active_progress_listener = progress_listener
-            
-            # Get a project
-            project_kwargs = dict(
-                readonly=parsed_args.readonly,
-            )
-            if filepath is None:
-                # NOTE: Can raise SystemExit
-                retry_on_cancel = True
-                project = await _prompt_for_project(progress_listener, **project_kwargs)
-            else:
-                # NOTE: Can raise CancelOpenProject
-                retry_on_cancel = False
-                project = _load_project(filepath, progress_listener, **project_kwargs)
-            assert project is not None
-            
-            # Configure project
-            project.request_cookie = parsed_args.cookie
-            project.min_fetch_date = parsed_args.stale_before
-            
-            # Create main window
-            from crystal.browser import MainWindow
-
-            # NOTE: Can raise CancelOpenProject
-            window = MainWindow(project, progress_listener)
+        # In headless mode without a project, skip project operations
+        if parsed_args.headless and filepath is None:
+            # No project to open in headless shell mode
+            project = None
+        else:
+            with OpenProjectProgressDialog() as progress_listener:
+                # Export reference to progress_listener, if running tests
+                if tests_are_running():
+                    from crystal import progress
+                    progress._active_progress_listener = progress_listener
+                
+                # Get a project
+                project_kwargs = dict(
+                    readonly=parsed_args.readonly,
+                )
+                if filepath is None:
+                    # NOTE: Can raise SystemExit
+                    retry_on_cancel = True
+                    project = await _prompt_for_project(progress_listener, **project_kwargs)
+                else:
+                    # NOTE: Can raise CancelOpenProject
+                    retry_on_cancel = False
+                    project = _load_project(filepath, progress_listener, **project_kwargs)
+                assert project is not None
+                
+                # Configure project
+                project.request_cookie = parsed_args.cookie
+                project.min_fetch_date = parsed_args.stale_before
+                
+                # Create main window (unless in headless mode)
+                if not parsed_args.headless:
+                    from crystal.browser import MainWindow
+                    # NOTE: Can raise CancelOpenProject
+                    window = MainWindow(project, progress_listener)
     except CancelOpenProject:
         if project is not None:
             project.close()
@@ -609,20 +666,43 @@ async def _did_launch(
     
     if shell is not None:
         shell.attach(project, window)
-    
+
     # Start serving immediately if requested
     if parsed_args.serve:
+        if project is None:
+            # NOTE: Error message format and exit code are similar to those used by argparse
+            print('error: --serve requires a project to be opened', file=sys.stderr)
+            sys.exit(2)
+        
         try:
-            window.start_server(port=parsed_args.port, host=parsed_args.host)
+            if window is not None:  # not headless mode
+                window.start_server(port=parsed_args.port, host=parsed_args.host)
+            else:  # headless mode
+                from crystal.server import ProjectServer
+                project_server = ProjectServer(
+                    project,
+                    port=parsed_args.port,
+                    host=parsed_args.host,
+                    # TODO: Alter ProjectServer to accept the more-general TextIO
+                    #       instead of insisting on a TextIOBase
+                    stdout=cast(TextIOBase, sys.stdout),
+                    # NOTE: Print special exit instruction in headless mode
+                    exit_instruction='Press Ctrl-C to stop.',
+                )
         except Exception as e:
-            window.close()
+            if window is not None:
+                # NOTE: Also closes the project it manages
+                window.close()
+            elif project is not None:
+                project.close()
             
             if is_port_in_use_error(e):
                 port = parsed_args.port or _DEFAULT_SERVER_PORT
                 host = parsed_args.host or _DEFAULT_SERVER_HOST
                 print(f'*** Cannot start server on {host}:{port} - address already in use', file=sys.stderr)
             else:
-                print(f'*** Cannot start server - {e}', file=sys.stderr)
+                print(f'*** Cannot start server', file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
             raise SystemExit(1)
     
     return window

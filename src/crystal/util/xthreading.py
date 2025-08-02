@@ -15,10 +15,12 @@ from crystal.util.bulkheads import (
     capture_crashes_to_stderr, ensure_is_bulkhead_call,
 )
 from crystal.util.profile import create_profiled_callable
+from crystal.util.quitting import is_quitting
 from crystal.util.xfunctools import partial2
 from enum import Enum
 from functools import wraps
 import os
+import signal
 import sys
 import threading
 import time
@@ -209,6 +211,13 @@ def fg_call_later(
     if len(args) != 0:
         (callable, args) = (partial2(callable, *args), ())  # reinterpret
     _deferred_fg_calls.append(callable)
+    
+    # In headless mode, don't use wx.CallAfter since there's no wx main loop.
+    # The headless main loop will call _run_deferred_fg_calls() periodically.
+    from crystal.util.headless import is_headless_mode
+    if is_headless_mode():
+        return
+    
     try:
         wx.CallAfter(_run_deferred_fg_calls)
     except Exception as e:
@@ -230,7 +239,7 @@ _deferred_fg_calls = deque()  # type: Deque[Callable[[], None]]
 
 
 @capture_crashes_to_stderr
-def _run_deferred_fg_calls() -> None:
+def _run_deferred_fg_calls() -> bool:
     """
     Runs all deferred foreground callables that were scheduled by fg_call_later().
     Returns whether any callables were run.
@@ -254,6 +263,7 @@ def _run_deferred_fg_calls() -> None:
             except Exception:
                 traceback.print_exc()
                 # (keep running other calls)
+    return max_calls_to_run > 0
 
 
 def fg_call_and_wait(
@@ -612,6 +622,28 @@ def start_fg_coroutine(
         else:
             assert_never(command)
     step(None)
+
+
+# ------------------------------------------------------------------------------
+# Headless Main Loop
+
+@capture_crashes_to_stderr
+def run_headless_main_loop() -> None:
+    """
+    Runs a headless main loop that processes foreground calls without
+    using wx's MainLoop().
+    """
+    # Simulate wx MainLoop()'s handling of Ctrl-C:
+    # Exit the process with exit code 130.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    
+    while True:
+        _run_deferred_fg_calls()  # if there are any
+        if is_quitting():
+            break
+        
+        # Sleep briefly to avoid busy-waiting
+        time.sleep(10 / 1000)
 
 
 # ------------------------------------------------------------------------------

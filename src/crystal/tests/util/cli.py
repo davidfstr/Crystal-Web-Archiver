@@ -1,6 +1,8 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
+import re
 from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.screenshots import take_error_screenshot
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT, HARD_TIMEOUT_MULTIPLIER, WaitTimedOut
@@ -9,7 +11,7 @@ from crystal.util.xos import is_asan, is_windows
 from select import select
 import textwrap
 import time
-from typing import Optional
+from typing import Literal, Optional
 import warnings
 from io import TextIOBase
 import os
@@ -27,6 +29,9 @@ def run_crystal(args: list[str]) -> subprocess.CompletedProcess[str]:
     
     Raises:
     * SkipTest -- if Crystal CLI cannot be used in the current environment
+    
+    See also:
+    * crystal_running() -- Use when Crystal is not expected to exit immediately.
     """
     with crystal_running(args=args, discrete_stderr=True) as crystal:
         (stdout_data, stderr_data) = crystal.communicate()
@@ -54,6 +59,10 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> It
     
     Raises:
     * SkipTest -- if Crystal CLI cannot be used in the current environment
+    
+    See also:
+    * run_crystal() -- Use when Crystal is expected to exit immediately.
+    * crystal_running_with_banner() -- Use when detailed verification of banner lines is needed.
     """
     _ensure_can_use_crystal_cli()
     
@@ -101,6 +110,121 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> It
         crystal.stdout.close()
         crystal.kill()
         crystal.wait()
+
+
+BannerLineType = Literal[
+    # --shell
+    "version",
+    "help",
+    "variables",
+    "exit",
+    "prompt",
+
+    # --serve
+    "server_started",
+    "ctrl_c"
+]
+
+@dataclass
+class BannerMetadata:
+    server_url: str | None = None
+
+# Matches lines ending with '\n' or not
+_LINE_RE = re.compile(r'.*?\n|.+$')
+
+@contextmanager
+def crystal_running_with_banner(
+        *, args=[],
+        expects=list[BannerLineType],
+        ) -> Iterator[tuple[subprocess.Popen, BannerMetadata]]:
+    """
+    Context which starts "crystal" upon enter
+    and cleans up the associated process upon exit.
+    
+    Additionally, reads the banner lines which Crystal prints when it starts
+    and checks that they match the expected lines.
+    
+    Raises:
+    * SkipTest -- if Crystal CLI cannot be used in the current environment
+    
+    See also:
+    * crystal_running_with_banner() -- Use when detailed verification of banner lines is NOT needed.
+    """
+    banner_metadata = BannerMetadata()
+    
+    with crystal_running(args=args) as crystal:
+        assert isinstance(crystal.stdout, TextIOBase)
+        
+        lines_found = []  # type: list[str]
+        expects_found = []  # type: list[BannerLineType]
+        expects_remaining = list(expects)
+        def found(expect: BannerLineType | None, line: str) -> None:
+            if expect is not None:
+                try:
+                    expects_remaining.remove(expect)
+                except ValueError:
+                    raise AssertionError(
+                        f'Unexpected banner line: {line!r} (type={expect!r}). '
+                        f'Read before: {"".join(lines_found)!r}. '
+                        f'Trailing output: {drain(crystal.stdout)!r} '
+                        f'Still expecting: {expects_remaining!r}'
+                    ) from None
+                expects_found.append(expect)
+            lines_found.append(line)
+            
+            if expect == "server_started":
+                url_match = re.search(r'http://[\d.:]+', line)
+                assert url_match is not None, f"Could not find server URL in: {line!r}"
+                banner_metadata.server_url = url_match.group(0)
+
+        next_lines = []
+        while True:
+            if len(expects_remaining) == 0:
+                break
+            
+            if len(next_lines) == 0:
+                try:
+                    (lines_str, _) = read_until(crystal.stdout, ('\n', '>>> '), _drain_diagnostic=False)
+                except ReadUntilTimedOut as e:
+                    raise e.plus(
+                        f' Read before: {"".join(lines_found)!r} '
+                        f'Trailing output: {drain(crystal.stdout)!r} '
+                        f'Still expecting: {expects_remaining!r}'
+                    ) from None
+                
+                # Split lines_str after each '\n', retaining the '\n' at the end of each line
+                lines = re.findall(_LINE_RE, lines_str)
+                assert len(lines) > 0, "Expected read_until() to return at least one line"
+                next_lines.extend(lines)
+            line = next_lines.pop(0)
+            
+            # ex: 'Crystal 1.10.0 (Python 3.12.2)'
+            if line.startswith('Crystal '):
+                found("version", line)
+            # ex: 'Type "help" for more information.'
+            elif '"help"' in line:
+                found("help", line)
+            # ex: 'Variables "project" and "window" are available.'
+            elif '"project"' in line and '"window"' in line:
+                found("variables", line)
+            # ex: 'Use exit() or Ctrl-D (i.e. EOF) to exit.'
+            elif 'exit()' in line:
+                found("exit", line)
+            elif line == '>>> ':
+                found("prompt", line)
+            # ex: 'Server started at: http://127.0.0.1:2797'
+            elif line.startswith('Server started at: '):
+                found("server_started", line)
+            # ex: 'Press Ctrl-C to stop.'
+            elif 'Ctrl-C' in line:
+                found("ctrl_c", line)
+            elif 'Traceback (most recent call last):' in line:
+                raise AssertionError(f"Unexpected error in output:\n{line + drain(crystal.stdout)}")
+            else:
+                # Unknown line
+                found(None, line)
+
+        yield (crystal, banner_metadata)
 
 
 def _ensure_can_use_crystal_cli() -> None:
@@ -213,6 +337,10 @@ def read_until(
     """
     Reads from the specified stream until the provided `stop_suffix`
     is read at the end of the stream or the timeout expires.
+    
+    Note that this method will read until SOME occurrence of the stop suffix
+    is read, not necessarily the FIRST occurrence. So the returned read buffer
+    may actually contain multiple occurrences of the stop suffix.
     
     Raises:
     * ReadUntilTimedOut -- if the timeout expires before `stop_suffix` is read
@@ -484,18 +612,6 @@ def delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[Non
 
 # ------------------------------------------------------------------------------
 # Exit
-
-def quit_crystal(crystal: subprocess.Popen) -> None:
-    # TODO: Consider quitting using Ctrl-C instead,
-    #       which would probably be easier and more reliable
-    #py_eval(crystal, 'window.close()')
-    #close_open_or_create_dialog(crystal)
-    #py_eval(crystal, 'exit()', stop_suffix='')
-    crystal.terminate()  # simulate Ctrl-C
-    wait_for_crystal_to_exit(
-        crystal,
-        timeout=DEFAULT_WAIT_TIMEOUT)
-
 
 def wait_for_crystal_to_exit(
         crystal: subprocess.Popen,

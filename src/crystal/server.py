@@ -52,6 +52,7 @@ class ProjectServer:
             host: str | None=None,
             *, verbosity: Verbosity='normal',
             stdout: TextIOBase | None=None,
+            exit_instruction: str | None=None,
             ) -> None:
         """
         Raises:
@@ -109,6 +110,8 @@ class ProjectServer:
             try:
                 if verbosity == 'normal':
                     print_success(f'Server started at: http://{host}:{port}', file=self._stdout)
+                    if exit_instruction:
+                        print_info(exit_instruction, file=self._stdout)
                 self._server.serve_forever()
             finally:
                 self._server.server_close()
