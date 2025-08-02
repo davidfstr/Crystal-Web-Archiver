@@ -220,7 +220,7 @@ def read_until(
     try:
         return _read_until_inner(
             stream, stop_suffix, timeout=timeout, period=period,
-            stacklevel_extra=stacklevel_extra, _expect_timeout=_expect_timeout)
+            stacklevel_extra=1 + stacklevel_extra, _expect_timeout=_expect_timeout)
     except ReadUntilTimedOut as e:
         if _drain_diagnostic:
             raise e.plus(f' Trailing output: {drain(stream)!r}') from None
