@@ -12,17 +12,32 @@ Release Notes ⋮
 
 ### main
 
+This release contains many improvements to the first-run experience:
+Projects are opened as untitled rather than immediately asking for a name and
+location to save the empty project at; the macOS app no longer requires
+installing Rosetta 2 on Intel Macs; and there is no firewall warning dialog
+on Windows when viewing a downloaded project.
+
+Additionally Crystal's command-line interface (CLI) has improved help text,
+automated test coverage, and new `--port`/`--host` options for controlling
+how projects are served.
+
 * Workflow improvements
     * Crystal now creates new projects as untitled by default instead of immediately
       asking for a name and location to save the empty project at.
     * On Windows selecting any item in the Entity menu immediately after
       creating a new project, such as "New Root URL..." or "New Group..."
       no longer fails.
+    * Save As can be used to efficient save a copy of a project.
 
 * Distribution improvements
     * The macOS app is now a Universal 2 binary, running at full speed on
       both ARM and Intel Macs. There is no longer a need to install Rosetta 2
       to run Crystal on ARM Macs.
+
+* Serving improvements
+    * The `--port` and `--host` CLI options can be used to control which port
+      and address Crystal serves projects from.
 
 * Accessibility improvements
     * In the Open/Create Project Dialog you can now press Ctrl/Alt/Cmd+R key to toggle 
@@ -40,6 +55,12 @@ Release Notes ⋮
     * Rephrased the placeholder text for Name fields to more-obviously be
       placeholders, especially for environments like Windows where the
       placeholder text color is similar to the regular text color.
+    * On filesystems that SQLite cannot write to, such as GVFS/SFTP in Linux,
+      projects are opened as readonly.
+
+* Development improvements
+    * GitHub Copilot Agent now has a comprehensive set of AI instructions
+      to refer to when making autonomous changes to Crystal.
 
 ### v1.10.0 (June 21, 2025)
 
