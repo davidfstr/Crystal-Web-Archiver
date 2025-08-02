@@ -297,7 +297,7 @@ def test_when_launched_with_host_but_no_serve_then_prints_error_and_exits() -> N
     assertIn('--port and --host can only be used with --serve', result.stderr)
 
 
-def test_when_launched_with_serve_and_port_already_in_use_then_fails_immediately() -> None:
+def test_given_launched_with_serve_and_port_when_port_already_in_use_then_fails_immediately() -> None:
     # Reserve a port
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as conflicting_server:
         conflicting_server.bind(('127.0.0.1', 0))  # bind to any free port
@@ -309,6 +309,16 @@ def test_when_launched_with_serve_and_port_already_in_use_then_fails_immediately
             result = run_crystal(['--serve', '--port', str(conflicting_port), project_path])
             assert result.returncode != 0
             assertIn('address already in use', result.stderr)
+
+
+def test_given_launched_with_serve_and_no_port_and_default_port_in_use_then_uses_next_higher_open_port() -> None:
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as conflicting_server:
+        conflicting_server.bind(('127.0.0.1', 2797))  # bind to any free port
+        conflicting_server.listen(1)
+        
+        with _temporary_project() as project_path:
+            with _crystal_shell_with_serve(project_path) as server_start_message:
+                assertIn('Server started at: http://127.0.0.1:2798', server_start_message)
 
 
 # === Shell Mode Tests (--shell) ===
