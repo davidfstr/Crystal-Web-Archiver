@@ -46,22 +46,27 @@ def main() -> Never:
     Main function. Starts the program.
     """
     try:
-        _main(sys.argv[1:])
-    except SystemExit as e:
-        exit_command = e
-    else:
-        exit_command = SystemExit()
-    finally:
+        try:
+            _main(sys.argv[1:])
+        except SystemExit:
+            raise
+        except:
+            # Bubble up other kinds of uncaught exceptions
+            raise
+        else:
+            raise SystemExit()  # success
+    except SystemExit as exit_command:
+        # Record exit code
+        from crystal.util.quitting import set_exit_code
         if exit_command.code is None:
             exit_code = getattr(os, 'EX_OK', 0)  # success
         elif isinstance(exit_command.code, int):
             exit_code = exit_command.code  # specific exit code
         else:
             exit_code = 1  # default error exit code
-        
-        from crystal.util.quitting import set_exit_code
         set_exit_code(exit_code)
-        raise SystemExit(exit_code)
+        
+        raise
 
 
 def _main(args: list[str]) -> None:
