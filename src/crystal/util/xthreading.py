@@ -211,6 +211,8 @@ def fg_call_later(
     if len(args) != 0:
         (callable, args) = (partial2(callable, *args), ())  # reinterpret
     _deferred_fg_calls.append(callable)
+    with is_quitting_or_has_deferred_fg_calls_condition:
+        is_quitting_or_has_deferred_fg_calls_condition.notify_all()
     
     # In headless mode, don't use wx.CallAfter since there's no wx main loop.
     # The headless main loop will call _run_deferred_fg_calls() periodically.
@@ -627,6 +629,8 @@ def start_fg_coroutine(
 # ------------------------------------------------------------------------------
 # Headless Main Loop
 
+is_quitting_or_has_deferred_fg_calls_condition = threading.Condition()
+
 @capture_crashes_to_stderr
 def run_headless_main_loop() -> None:
     """
@@ -637,13 +641,16 @@ def run_headless_main_loop() -> None:
     # Exit the process with exit code 130.
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     
-    while True:
-        _run_deferred_fg_calls()  # if there are any
-        if is_quitting():
-            break
-        
-        # Sleep briefly to avoid busy-waiting
-        time.sleep(10 / 1000)
+    with is_quitting_or_has_deferred_fg_calls_condition:
+        while True:
+            is_quitting_or_has_deferred_fg_calls_condition.wait_for(
+                lambda: is_quitting() or len(_deferred_fg_calls) > 0,
+                timeout=None,  # infinite
+            )
+            
+            _run_deferred_fg_calls()  # if there are any
+            if is_quitting():
+                break
 
 
 # ------------------------------------------------------------------------------

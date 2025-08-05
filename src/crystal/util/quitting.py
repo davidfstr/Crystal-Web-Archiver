@@ -16,6 +16,10 @@ def is_quitting() -> bool:
 def set_is_quitting() -> None:
     global _is_quitting
     _is_quitting = True
+    
+    from crystal.util.xthreading import is_quitting_or_has_deferred_fg_calls_condition
+    with is_quitting_or_has_deferred_fg_calls_condition:
+        is_quitting_or_has_deferred_fg_calls_condition.notify_all()
 
 
 def set_exit_code(exit_code: int) -> None:
