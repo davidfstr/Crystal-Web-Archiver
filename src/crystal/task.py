@@ -34,7 +34,6 @@ import shutil
 import sys
 import threading
 from time import sleep
-from time import sleep as scheduler_sleep
 import traceback
 from typing import Any, cast, final, Generic, List, Literal
 from typing import NoReturn as Never
@@ -1863,6 +1862,7 @@ class RootTask(_PureContainerTask):
         self._children_to_add_soon = []  # type: List[Tuple[Task, bool]]
         self._cancel_tree_soon = False
         self._paused = False
+        self.scheduler_should_wake_event = threading.Event()
     
     # === Bulkhead ===
     
@@ -1879,6 +1879,7 @@ class RootTask(_PureContainerTask):
                 # Ignore subsequent crashes until the first one is cleared
                 return
             self._crash_reason = reason
+            self.scheduler_should_wake_event.set()
             
             # Try to mark all preexisting tasks with "scheduler crashed" subtitle
             try:
@@ -1889,7 +1890,6 @@ class RootTask(_PureContainerTask):
                 pass
             
             # Report crash to Task Tree
-            
             crash_reason_view = CrashedTask(
                 'Scheduler crashed',
                 reason,
@@ -1991,6 +1991,7 @@ class RootTask(_PureContainerTask):
             # Defer append child until next call to RootTask.try_get_next_task_unit(),
             # which will have a lock on the scheduler thread (and access to Task.children)
             self._children_to_add_soon.append((child, already_complete_ok))
+            self.scheduler_should_wake_event.set()
         # NOTE: Must synchronize access to {self.children,
         #       self._children_to_add_soon, self.complete} with foreground thread
         fg_call_and_wait(fg_task)
@@ -2071,6 +2072,7 @@ class RootTask(_PureContainerTask):
         Cancels all descendent tasks and self soon, on the scheduler thread.
         """
         self._cancel_tree_soon = True
+        self.scheduler_should_wake_event.set()
     
     # TODO: Move this to the Task class and make it public.
     #       Several classes need this functionality.
@@ -2103,11 +2105,6 @@ class RootTask(_PureContainerTask):
 # ------------------------------------------------------------------------------
 # Scheduler
 
-# TODO: Eliminate polling by adding logic to sleep appropriately until the
-#       root task has more children to process.
-_ROOT_TASK_POLL_INTERVAL = .1 # secs
-
-
 def start_scheduler_thread(root_task: RootTask) -> threading.Thread:
     """
     Asynchronously runs the specified RootTask until it completes,
@@ -2131,10 +2128,6 @@ def start_scheduler_thread(root_task: RootTask) -> threading.Thread:
         try:
             with profiling_context as profiler:
                 while True:
-                    # NOTE: Use enter_if_crashed=True so that the usual
-                    #       `sleep(_ROOT_TASK_POLL_INTERVAL)` logic will be
-                    #       used to poll until the root task becomes uncrashed
-                    #       or complete
                     with crashes_captured_to(root_task, enter_if_crashed=True):
                         if root_task.crash_reason is None:
                             # NOTE: Some decorators omitted as a (speculative) performance optimization
@@ -2142,10 +2135,12 @@ def start_scheduler_thread(root_task: RootTask) -> threading.Thread:
                             #@fg_affinity
                             #@scheduler_affinity
                             def fg_task() -> tuple[Callable[[], None] | None, bool]:
-                                return (
+                                result = (
                                     run_bulkhead_call(root_task.try_get_next_task_unit),
                                     root_task.complete
                                 )
+                                root_task.scheduler_should_wake_event.clear()
+                                return result
                             try:
                                 (unit, task_complete) = fg_call_and_wait(fg_task)
                             except NoForegroundThreadError:
@@ -2172,7 +2167,8 @@ def start_scheduler_thread(root_task: RootTask) -> threading.Thread:
                             if task_complete:
                                 return
                             else:
-                                scheduler_sleep(_ROOT_TASK_POLL_INTERVAL)
+                                _scheduler_may_sleep()
+                                root_task.scheduler_should_wake_event.wait()
                                 continue
                         run_bulkhead_call(unit)  # Run unit directly on this scheduler thread
         finally:
@@ -2180,6 +2176,11 @@ def start_scheduler_thread(root_task: RootTask) -> threading.Thread:
                 assert profiler is not None
                 profiler.dump_stats('scheduler.prof')
     return bg_call_later(bg_daemon_task, daemon=True)
+
+
+# Automated tests may patch this function
+def _scheduler_may_sleep() -> None:
+    pass
 
 
 def is_synced_with_scheduler_thread() -> bool:

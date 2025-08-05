@@ -1489,17 +1489,17 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
             root_task = project.root_task
             
             # Crash the scheduler event loop, for project
-            super_scheduler_sleep = crystal.task.scheduler_sleep
-            def scheduler_sleep(*args, **kwargs) -> None:
+            super_scheduler_may_sleep = crystal.task._scheduler_may_sleep
+            def scheduler_may_sleep(*args, **kwargs) -> None:
                 f = sys._getframe(1)
                 root_task_of_caller = f.f_locals['root_task']
-                if root_task_of_caller == root_task and not scheduler_sleep.called:  # type: ignore[attr-defined]
-                    scheduler_sleep.called = True  # type: ignore[attr-defined]
+                if root_task_of_caller == root_task and not scheduler_may_sleep.called:  # type: ignore[attr-defined]
+                    scheduler_may_sleep.called = True  # type: ignore[attr-defined]
                     raise _CRASH
                 else:
-                    super_scheduler_sleep(*args, **kwargs)
-            scheduler_sleep.called = False  # type: ignore[attr-defined]
-            with patch('crystal.task.scheduler_sleep', scheduler_sleep):
+                    super_scheduler_may_sleep(*args, **kwargs)
+            scheduler_may_sleep.called = False  # type: ignore[attr-defined]
+            with patch('crystal.task._scheduler_may_sleep', scheduler_may_sleep):
                 # Create DownloadResourceTask
                 home_r = Resource(project, home_url)
                 home_r.download()
@@ -1525,7 +1525,7 @@ async def test_when_scheduler_thread_event_loop_crashes_then_RT_marked_as_crashe
                     progress_timeout=MAX_DOWNLOAD_DURATION_PER_ITEM)
             
             # Postconditions
-            assert scheduler_sleep.called  # type: ignore[attr-defined]
+            assert scheduler_may_sleep.called  # type: ignore[attr-defined]
             assert root_task.crash_reason is not None
             (*_, scheduler_crashed_task) = root_task.children
             assert isinstance(scheduler_crashed_task, CrashedTask)
