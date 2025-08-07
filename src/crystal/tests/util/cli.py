@@ -198,7 +198,7 @@ def crystal_running_with_banner(
                 next_lines.extend(lines)
             line = next_lines.pop(0)
             
-            # ex: 'Crystal 1.10.0 (Python 3.12.2)'
+            # ex: 'Crystal 1.11.0 (Python 3.12.2)'
             if line.startswith('Crystal '):
                 found("version", line)
             # ex: 'Type "help" for more information.'

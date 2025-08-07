@@ -10,7 +10,7 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### v1.11.0 (August 6, 2025)
 
 This release contains many improvements to the first-run experience:
 Projects are opened as untitled rather than immediately asking for a name and
