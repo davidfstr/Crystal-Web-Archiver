@@ -38,6 +38,9 @@ and new `--port`/`--host` options for controlling how projects are served.
 * Serving improvements
     * The `--port` and `--host` CLI options can be used to control which port
       and address Crystal serves projects from.
+    * No longer is an unnecessary
+      'Allow "Crystal" to find devices on local networks?' security prompt 
+      shown on macOS when viewing a downloaded page after opening the app.
 
 * Accessibility improvements
     * In the Open/Create Project Dialog you can now press Ctrl/Alt/Cmd+R key to toggle 

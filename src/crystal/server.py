@@ -27,6 +27,8 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import TextIOBase
 import re
+import socket
+import socketserver
 from textwrap import dedent
 from typing import Literal, Optional
 from typing_extensions import override
@@ -343,6 +345,26 @@ class _HttpServer(HTTPServer):
         # Print to stderr a message starting with
         # 'Exception occurred during processing of request from'
         return super().handle_error(request, client_address)
+    
+    @override
+    def server_bind(self):
+        """
+        Overrides server_bind to assume the server name is "localhost"
+        when bound to 127.0.0.1.
+        
+        The default implementation of HTTPServer.server_bind() uses
+        `socket.getfqdn(host)` to determine the server name, which shows an
+        unwanted 'Allow "Crystal" to find devices on local networks?'
+        security prompt on macOS.
+        """
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        if host == '127.0.0.1':
+            # Avoid mDNS lookup on macOS
+            self.server_name = 'localhost'
+        else:
+            self.server_name = socket.getfqdn(host)
+        self.server_port = port
 
 
 class _RequestHandler(BaseHTTPRequestHandler):
