@@ -702,7 +702,7 @@ async def test_when_save_as_project_and_destination_filesystem_writable_generall
             _untitled_project() as project, \
             RealMainWindow(project) as rmw, \
             _temporary_directory_on_new_filesystem() as save_dir:
-        mw = await MainWindow.wait_for(timeout=0)
+        mw = await MainWindow.wait_for(timeout=1)
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
@@ -958,7 +958,7 @@ async def test_when_save_as_untitled_project_with_corrupted_database_then_fails_
             _untitled_project() as project, \
             xtempfile.TemporaryDirectory() as tmp_dir:
         rmw = RealMainWindow(project)
-        mw = await MainWindow.wait_for(timeout=0)
+        mw = await MainWindow.wait_for(timeout=1)
         
         # Download a resource revision to have some data
         url = sp.get_request_url('https://xkcd.com/atom.xml')
@@ -1012,7 +1012,7 @@ async def test_when_save_as_titled_project_with_corrupted_database_then_fails_wi
         # Reopen the project and perform Save As with corruption
         with Project(original_project_path) as project, \
                 RealMainWindow(project) as rmw:
-            mw = await MainWindow.wait_for(timeout=0)
+            mw = await MainWindow.wait_for(timeout=1)
             
             save_path = os.path.join(tmp_dir, 'CorruptedDBProject.crystalproj')
             
