@@ -60,6 +60,45 @@ wget https://bootstrap.pypa.io/get-pip.py
 python3.11 get-pip.py
 ```
 
+* Install Python 3.12, if appropriate for this .wgn
+
+```bash
+# Install Python 3.12 (from source)
+apt-get update
+apt-get install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libsqlite3-dev libreadline-dev libffi-dev curl libbz2-dev wget
+curl -O https://www.python.org/ftp/python/3.12.9/Python-3.12.9.tar.xz
+tar -xf Python-3.12.9.tar.xz
+cd Python-3.12.9
+time ./configure
+    # real  0m28.451s
+time make -j4
+    # real  1m11.544s
+make install
+python3.12 --version
+# Install pip for Python 3.12
+wget https://bootstrap.pypa.io/get-pip.py
+python3.12 get-pip.py
+```
+
+* Install Python 3.13, if appropriate for this .wgn
+
+```bash
+# Install Python 3.13.5 (from source)
+apt-get update
+apt-get install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libsqlite3-dev libreadline-dev libffi-dev curl libbz2-dev wget
+curl -O https://www.python.org/ftp/python/3.13.5/Python-3.13.5.tar.xz
+tar -xf Python-3.13.5.tar.xz
+cd Python-3.13.5
+time ./configure
+    # real  9m55.020s
+time make -j4
+    # real  13m31.239s
+./python --version
+# Install pip for Python 3.13
+wget https://bootstrap.pypa.io/get-pip.py
+./python get-pip.py
+```
+
 * Install wxPython dependencies and wagon
 
 ```bash
@@ -79,7 +118,15 @@ python3 -m pip install wagon[dist]  # or: python3.x -m pip install wagon[dist]
 # Compile wagon
 cd /usr/src  # shared folder with Docker host
 time wagon create wxPython==4.2.3  # use version from pyproject.toml
-    # real  81m6.382s
+    # real  81m6.382s (Python 3.9)
+    # real  ~80m+ (Python 3.12.9)
+    # real  ~80m+ (Python 3.13.5)
+```
+
+If using a locally built Python from source:
+
+```bash
+time ./python -m wagon create wxPython==4.2.3  # use version from pyproject.toml
 ```
 
 * Upload the .wgn file as a release artifact to a release tag on GitHub,
