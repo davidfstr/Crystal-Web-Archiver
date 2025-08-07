@@ -69,6 +69,10 @@ and new `--port`/`--host` options for controlling how projects are served.
       to refer to when making autonomous changes to Crystal.
     * Decrease average cost of CI runs by running fewer macOS jobs by default.
 
+* Testing improvements
+    * Automated tests will now recover gracefully if a previous failed test
+      left a MainWindow open.
+
 ### v1.10.0 (June 21, 2025)
 
 This release contains significant usability improvements: Reopening a project

@@ -17,6 +17,7 @@ from crystal.tests.util.wait import (
     WaitTimedOut, window_condition, window_disposed_condition,
 )
 import crystal.tests.util.xtempfile as xtempfile
+from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_mac_os
 import os.path
 import re
@@ -24,6 +25,7 @@ import sys
 import tempfile
 import traceback
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 import wx
 
 if TYPE_CHECKING:
@@ -43,13 +45,55 @@ class OpenOrCreateDialog:
     create_button: wx.Button
     
     @staticmethod
-    async def wait_for(timeout: float | None=None) -> OpenOrCreateDialog:
+    async def wait_for(timeout: float | None=None, *, _attempt_recovery: bool=True) -> OpenOrCreateDialog:
         self = OpenOrCreateDialog(ready=True)
-        open_or_create_project_dialog = await wait_for(
-            window_condition('cr-open-or-create-project'),
-            timeout=timeout,
-            stacklevel_extra=1,
-        )  # type: wx.Window
+        try:
+            open_or_create_project_dialog = await wait_for(
+                window_condition('cr-open-or-create-project'),
+                timeout=timeout,
+                stacklevel_extra=1,
+            )  # type: wx.Window
+        except WaitTimedOut as e:
+            if _attempt_recovery:
+                # Check if a MainWindow is open from a previous failed test
+                try:
+                    main_window: wx.Window = await wait_for(
+                        window_condition('cr-main-window'),
+                        # Short timeout. Check whether a MainWindow is open.
+                        timeout=0.1,
+                        # Attribute failure to this recovery logic
+                        stacklevel_extra=0,
+                    )
+                    assert isinstance(main_window, wx.Frame)
+                    
+                    print(
+                        'WARNING: OpenOrCreateDialog.wait_for() noticed that '
+                        'a MainWindow was left open. '
+                        'Did a previous test fail to close it?',
+                        file=sys.stderr
+                    )
+
+                    # 1. Try to close MainWindow that is open
+                    # 2. If prompted whether to save the project, answer no
+                    with patch('crystal.browser.ShowModal',
+                            mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
+                        main_window.Close()
+                        
+                        await wait_for(
+                            window_disposed_condition('cr-main-window'),
+                            timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+                            # Attribute failure to this recovery logic
+                            stacklevel_extra=0,
+                        )
+                    
+                    # Try again to wait for the OpenOrCreateDialog
+                    return await OpenOrCreateDialog.wait_for(timeout=timeout, _attempt_recovery=False)
+                except WaitTimedOut:
+                    # Recovery failed
+                    pass
+            # Raise original timeout
+            raise e from None
+        
         assert isinstance(open_or_create_project_dialog, wx.Dialog)
         self.open_or_create_project_dialog = open_or_create_project_dialog
         self.open_as_readonly = self.open_or_create_project_dialog.FindWindow(name=
