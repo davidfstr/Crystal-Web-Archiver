@@ -57,7 +57,7 @@ order_by_type = false  # don't sort constants specially
 crystal = 'crystal.__main__:main'
 
 [tool.poetry.dependencies]
-# NOTE: Python 3.11 is the latest Python supported by py2exe 0.13.0.2
+# NOTE: Python 3.13 is the latest Python supported by py2exe 0.14.0.0
 python = ">=3.11,<3.14"
 # NOTE: When changing the version of wxPython to Y, you'll need to make sure
 #       there is a precompiled wheel for {Python 3.X, wxPython Y, OS}
@@ -69,9 +69,8 @@ python = ">=3.11,<3.14"
 wxPython = "4.2.3"
 beautifulsoup4 = "^4.9.3"
 py2app = { version = "^0.28", markers = "sys_platform == 'darwin'" }
-# NOTE: py2exe 0.13.0.2 only supports Python 3.11, so we use a marker to
-#       ensure it is only installed on Windows with Python 3.11.
-py2exe = { version = "^0.13.0.2", markers = "sys_platform == 'win32' and python_version >= '3.11' and python_version < '3.12'" }
+# NOTE: py2exe 0.14.0.0 supports Python 3.11, 3.12, and 3.13.
+py2exe = { version = "^0.14.0.0", markers = "sys_platform == 'win32' and python_version >= '3.11'" }
 tinycss2 = "^1.1.0"
 appdirs = "^1.4.4"
 colorama = "^0.4.4"

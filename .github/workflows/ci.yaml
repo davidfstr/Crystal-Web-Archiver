@@ -28,6 +28,11 @@ on:
           - 'x86_64'
           # NOTE: Required for building the distribution artifact
           - 'universal2'
+      run_macos_asan_tests:
+        description: 'Run macOS Address Sanitizer tests'
+        required: false
+        default: false
+        type: boolean
       show_notarization_log:
         description: 'Show notarization log for macOS'
         required: false
@@ -49,10 +54,13 @@ env:
 #    because segfaults more common on macOS
 jobs:
   
+  # CAUTION: macOS runners cost 10x a Linux runner and 5x a Windows runner.
+  #          Keep the matrix small to avoid high costs.
   build-macos-asan:
+    # Only run this expensive job when explicitly requested or when building distribution artifacts
+    if: ${{ github.event.inputs.run_macos_asan_tests == 'true' || github.event.inputs.build_dist_artifact == 'true' }}
     strategy:
       matrix:
-        # NOTE: Test lots of Python versions to look for segfaults
         python-version:
           - "3.11.9"
       fail-fast: false
@@ -125,6 +133,8 @@ jobs:
         run: |
           crystal --test ${TEST_NAMES}
 
+  # CAUTION: macOS runners cost 10x a Linux runner and 5x a Windows runner.
+  #          Keep the matrix small to avoid high costs.
   build-macos:
     strategy:
       matrix:
@@ -136,16 +146,7 @@ jobs:
           #- macos-15  # ARM-based
         # Test the earliest supported Python version only
         python-version:
-          # Test earliest to latest Python versions supported by Crystal,
-          # on at least one OS.
-          # 
-          # NOTE: Testing all Python versions on Linux would be faster
-          #       than on macOS because Linux runners are faster than 
-          #       every other OS. However macOS is the second fastest OS,
-          #       and doesn't require precompiled wxPython .wgn files.
           - "3.11.9"
-          - "3.12.9"
-          - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 31  # 150% of normal time: 21 min, as of 2025-07-21
@@ -465,7 +466,16 @@ jobs:
           # NOTE: Earliest Windows supported by Crystal is Windows 11 (from the README)
           - windows-2025  # based on Windows 11 version 24H2 (Germanium)
         python-version:
+          # Test earliest to latest Python versions supported by Crystal,
+          # on at least one OS.
+          # 
+          # NOTE: Testing all Python versions on Linux would be faster
+          #       than on Windows because Linux runners are faster than 
+          #       every other OS. However Windows is the second fastest OS,
+          #       and doesn't require precompiled wxPython .wgn files.
           - "3.11.9"
+          - "3.12.9"
+          - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 43  # 150% of normal time: 29 min, as of 2025-07-21

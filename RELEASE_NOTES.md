@@ -64,6 +64,7 @@ and new `--port`/`--host` options for controlling how projects are served.
 * Development improvements
     * GitHub Copilot Agent now has a comprehensive set of AI instructions
       to refer to when making autonomous changes to Crystal.
+    * Decrease average cost of CI runs by running fewer macOS jobs by default.
 
 ### v1.10.0 (June 21, 2025)
 
