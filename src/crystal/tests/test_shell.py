@@ -2,7 +2,7 @@ from ast import literal_eval
 from typing import List
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.cli import close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, read_until, wait_for_crystal_to_exit, crystal_shell
+from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, read_until, wait_for_crystal_to_exit, crystal_shell
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
@@ -93,8 +93,8 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
             ), banner
         
         with subtests.test(msg='and {project, window} can be used as placeholders, before main window appears'):
-            assertEqual('<unset crystal.model.Project proxy>\n', py_eval(crystal, 'project'))
-            assertEqual('<unset crystal.browser.MainWindow proxy>\n', py_eval(crystal, 'window'))
+            assertEqual(PROJECT_PROXY_REPR_STR, py_eval(crystal, 'project'))
+            assertEqual(WINDOW_PROXY_REPR_STR, py_eval(crystal, 'window'))
             
             assertIn('Help on _Proxy in module ', py_eval(crystal, 'help(project)'))
             assertIn('Help on _Proxy in module ', py_eval(crystal, 'help(window)'))

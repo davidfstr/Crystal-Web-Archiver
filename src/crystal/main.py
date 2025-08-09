@@ -79,11 +79,9 @@ def _main(args: list[str]) -> None:
         (getattr(sys, 'frozen', None) == 'windows_exe')
     )
     if log_to_file:
-        from appdirs import user_log_dir
-        from crystal import APP_AUTHOR, APP_NAME
-        
-        log_dirpath = user_log_dir(APP_NAME, APP_AUTHOR)
-        os.makedirs(log_dirpath, exist_ok=True)
+        from crystal.util.xappdirs import user_log_dir
+        log_dirpath = user_log_dir()
+        assert os.path.exists(log_dirpath)
         
         sys.stdout = sys.stderr = open(
             os.path.join(log_dirpath, 'stdouterr.log'), 
@@ -638,9 +636,30 @@ async def _did_launch(
                     readonly=parsed_args.readonly,
                 )
                 if filepath is None:
-                    # NOTE: Can raise SystemExit
-                    retry_on_cancel = True
-                    project = await _prompt_for_project(progress_listener, **project_kwargs)
+                    from crystal.util.unsaved_project import get_unsaved_untitled_project_path
+                    last_untitled_project_path = get_unsaved_untitled_project_path()
+                    reopen_projects_disabled = os.environ.get('CRYSTAL_NO_REOPEN_PROJECTS', 'False') == 'True'
+                    if (last_untitled_project_path is not None and 
+                            os.path.exists(last_untitled_project_path) and
+                            not reopen_projects_disabled):
+                        # Try to open the last untitled project
+                        try:
+                            # NOTE: Can raise CancelOpenProject
+                            retry_on_cancel = True
+                            project = _load_project(last_untitled_project_path, progress_listener, is_untitled=True, **project_kwargs)
+                        except:
+                            # If user cancels opening the untitled project,
+                            # or if the project fails to open for any other reason
+                            # (like corruption on disk), clear the record of
+                            # the untitled project so the user can open
+                            # something else
+                            from crystal.util.unsaved_project import clear_unsaved_untitled_project_path
+                            clear_unsaved_untitled_project_path()
+                            raise
+                    else:
+                        # NOTE: Can raise SystemExit
+                        retry_on_cancel = True
+                        project = await _prompt_for_project(progress_listener, **project_kwargs)
                 else:
                     # NOTE: Can raise CancelOpenProject
                     retry_on_cancel = False

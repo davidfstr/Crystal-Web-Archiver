@@ -46,8 +46,12 @@ from crystal.util.progress import DevNullFile
 from crystal.util.ssd import is_ssd
 from crystal.util.test_mode import tests_are_running
 from crystal.util.thread_debug import get_thread_stack
+from crystal.util.unsaved_project import (
+    set_unsaved_untitled_project_path, clear_unsaved_untitled_project_path
+)
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
+from crystal.util.xappdirs import user_untitled_projects_dir
 from crystal.util.xbisect import bisect_key_right
 from crystal.util.xcollections.ordereddict import as_ordereddict
 from crystal.util.xcollections.sortedlist import BLACK_HOLE_SORTED_LIST
@@ -75,6 +79,7 @@ from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 from sortedcontainers import SortedList
 import sqlite3
 import sys
+import tempfile
 from tempfile import mkdtemp, NamedTemporaryFile
 from textwrap import dedent
 import threading
@@ -88,6 +93,7 @@ from typing import (
 from typing_extensions import deprecated, override
 from urllib.parse import quote as url_quote
 from urllib.parse import urlparse, urlunparse
+import uuid
 import warnings
 from weakref import WeakValueDictionary
 
@@ -236,8 +242,12 @@ class Project(ListenableMixin):
         
         # If path is missing then prepare to create an untitled project
         if path is None:
-            untitled_project_dirpath = mkdtemp(suffix=Project.FILE_EXTENSION)
-            os.rmdir(untitled_project_dirpath)
+            # Create an untitled project in a permanent but hidden directory
+            untitled_projects_dir = user_untitled_projects_dir()
+            assert os.path.exists(untitled_projects_dir)
+            project_name = f"Untitled-{uuid.uuid4().hex[:8]}{Project.FILE_EXTENSION}"
+            untitled_project_dirpath = os.path.join(untitled_projects_dir, project_name)
+            assert not os.path.exists(untitled_project_dirpath)
             
             path = untitled_project_dirpath  # reinterpret
             is_untitled = True  # reinterpret
@@ -316,6 +326,9 @@ class Project(ListenableMixin):
         self._request_cookie = None  # type: Optional[str]
         
         self._check_url_collection_invariants()
+        
+        if is_untitled:
+            set_unsaved_untitled_project_path(self.path)
         
         # Export reference to self, if running tests
         if tests_are_running():
@@ -1045,6 +1058,7 @@ class Project(ListenableMixin):
         so that it is no longer considered dirty.
         """
         if self._is_untitled:
+            clear_unsaved_untitled_project_path()
             self._is_untitled = False
         
         if self._is_dirty:
@@ -1867,6 +1881,7 @@ class Project(ListenableMixin):
         )
         
         old_path = self.path  # capture
+        was_untitled = self._is_untitled  # capture
         
         # Save the current state of tasks
         if not self.readonly:
@@ -1880,7 +1895,7 @@ class Project(ListenableMixin):
             #       Project state is somehow inconsistent. Thus when the
             #       recovery code below attempts to reopen using the same
             #       Project state it may fail again.
-            self.close(capture_crashes=False)
+            self.close(capture_crashes=False, _will_reopen=True)
             
             # Move/copy the project directory to the new path.
             # - If the project is untitled, it will be renamed.
@@ -1900,18 +1915,9 @@ class Project(ListenableMixin):
                             old_path, new_partial_path, progress_listener)
                         os.rename(new_partial_path, new_path)
                         
-                        # Delete, on a best-effort basis, in the background
-                        # NOTE: If the delete fails or is interrupted the
-                        #       old path should be pointing to a 
-                        #       temporary directory that will eventually
-                        #       be cleaned up by the OS later.
-                        @capture_crashes_to_stderr
-                        def bg_delete_old_path() -> None:
-                            try:
-                                shutil.rmtree(old_path)
-                            except OSError:
-                                pass
-                        bg_call_later(bg_delete_old_path, daemon=True)
+                        # Delete
+                        # (Later in this method,
+                        #  at call to Project._delete_in_background)
 
                     self._is_untitled = False
                 else:
@@ -1958,6 +1964,10 @@ class Project(ListenableMixin):
             self._mark_clean_and_titled()
             assert self._is_untitled == False
             assert self._is_dirty == False
+
+            # Delete old project if it was untitled and is still present
+            if was_untitled and os.path.exists(old_path):
+                Project._delete_in_background(old_path)
     
     @staticmethod
     @bg_affinity
@@ -2150,10 +2160,40 @@ class Project(ListenableMixin):
             
             progress_listener.did_copy_files()
     
+    @staticmethod
+    def _delete_in_background(old_path: str) -> None:
+        # Try to send the project to the
+        # OS temporary directory, where it will
+        # be deleted when the computer restarts
+        try:
+            temp_dirpath = tempfile.gettempdir()
+            old_path_in_temp = os.path.join(temp_dirpath, os.path.basename(old_path))
+            if old_path_in_temp != old_path:
+                os.rename(old_path, old_path_in_temp)
+        except:
+            # Give up
+            pass
+        else:
+            old_path = old_path_in_temp  # reinterpret
+
+        # Delete, on a best-effort basis, in the background
+        # NOTE: If the delete fails or is interrupted the
+        #       old path should be pointing to a 
+        #       temporary directory that will eventually
+        #       be cleaned up by the OS later.
+        @capture_crashes_to_stderr
+        def bg_delete_old_path() -> None:
+            try:
+                shutil.rmtree(old_path)
+            except OSError:
+                # Give up
+                pass
+        bg_call_later(bg_delete_old_path, daemon=True)
+    
     # === Close & Reopen ===
     
     @fg_affinity
-    def close(self, *, capture_crashes: bool=True) -> None:
+    def close(self, *, capture_crashes: bool=True, _will_reopen: bool=False) -> None:
         """
         Closes this project soon, stopping any tasks and closing all files.
         
@@ -2170,6 +2210,7 @@ class Project(ListenableMixin):
         if self._closed:
             # Already closed
             return
+        
         try:
             guarded = (
                 capture_crashes_to_stderr if capture_crashes else (lambda f: f)
@@ -2182,10 +2223,34 @@ class Project(ListenableMixin):
                     try:
                         self._close_database(self._db, self.readonly)
                     finally:
-                        # Unexport reference to self, if running tests
-                        if tests_are_running():
-                            if Project._last_opened_project is self:
-                                Project._last_opened_project = None
+                        try:
+                            if self.is_untitled and not _will_reopen:
+                                # Forget the untitled project during a normal close operation
+                                # so that Crystal does not attempt to reopen it later
+                                clear_unsaved_untitled_project_path()
+                                
+                                try:
+                                    # Try to send the untitled project to the trash,
+                                    # where the user can easily recover it if they change
+                                    # their mind about not saving it
+                                    send2trash(self.path)
+                                except:
+                                    try:
+                                        # Try to send the untitled project to the
+                                        # OS temporary directory, where it will
+                                        # be deleted when the computer restarts
+                                        temp_dirpath = tempfile.gettempdir()
+                                        os.rename(
+                                            self.path,
+                                            os.path.join(temp_dirpath, os.path.basename(self.path)))
+                                    except:
+                                        # Give up
+                                        pass
+                        finally:
+                            # Unexport reference to self, if running tests
+                            if tests_are_running():
+                                if Project._last_opened_project is self:
+                                    Project._last_opened_project = None
             do_close()
         finally:
             self._closed = True
@@ -2315,7 +2380,10 @@ class Project(ListenableMixin):
         except:
             # Clean up partially opened state
             self._closed = False  # allow close() to run
-            self.close()
+            # NOTE: _will_reopen=True suppresses cleanup related to closing untitled projects,
+            #       because the caller is expected to call _reopen() again during
+            #       its own error recovery.
+            self.close(_will_reopen=True)
             assert self._closed
             
             raise

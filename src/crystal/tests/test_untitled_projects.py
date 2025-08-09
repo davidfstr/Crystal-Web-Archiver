@@ -1,3 +1,4 @@
+from ast import literal_eval
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from crystal.browser import MainWindow as RealMainWindow
@@ -7,8 +8,11 @@ from crystal.model import (
 from crystal.progress import CancelSaveAs, SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
 from crystal.tests.util import xtempfile
+from crystal.tests.util.cli import (
+    PROJECT_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, crystal_shell, py_eval, wait_for_main_window, _OK_THREAD_STOP_SUFFIX,
+)
 from crystal.tests.util.controls import (
-    TreeItem, file_dialog_returning, select_menuitem_now,
+    TreeItem, file_dialog_returning,
 )
 from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.save_as import (
@@ -25,15 +29,19 @@ from crystal.tests.util.tasks import (
 )
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
+from crystal.util.unsaved_project import clear_unsaved_untitled_project_path, get_unsaved_untitled_project_path
 from crystal.util.wx_dialog import mocked_show_modal
+from crystal.util.xappdirs import user_untitled_projects_dir
 from crystal.util.xos import is_ci, is_linux, is_mac_os, is_windows
 from dataclasses import dataclass
 import errno
-from functools import cache
+from functools import cache, wraps
 import os
 import send2trash
 import sqlite3
+import subprocess
 import tempfile
+import textwrap
 import shutil
 from typing import Callable, ContextManager, Never
 from unittest import skip, SkipTest
@@ -42,8 +50,47 @@ import warnings
 import wx
 
 
-# TODO: Reorder the "===" sections in this file to be in a more logical order,
+# TODO: Reorder the test "===" sections in this file to be in a more logical order,
 #       with similar sections grouped together.
+
+# === Decorators ===
+
+def reopen_projects_enabled(test_func):
+    """
+    Decorator for tests that specifically test auto-reopen functionality.
+    
+    Temporarily disables the CRYSTAL_NO_REOPEN_PROJECTS environment variable
+    and ensures state is cleaned up before and after the test.
+    """
+    @wraps(test_func)
+    async def wrapper(*args, **kwargs):
+        # Save original environment state
+        original_env_value = os.environ.get('CRYSTAL_NO_REOPEN_PROJECTS')
+        
+        try:
+            # Enable auto-reopen functionality for this test
+            if 'CRYSTAL_NO_REOPEN_PROJECTS' in os.environ:
+                del os.environ['CRYSTAL_NO_REOPEN_PROJECTS']
+            
+            # Clean up state before test
+            clear_unsaved_untitled_project_path()
+            _cleanup_untitled_projects()
+            
+            # Run the test
+            return await test_func(*args, **kwargs)
+        finally:
+            # Restore original environment state
+            if original_env_value is not None:
+                os.environ['CRYSTAL_NO_REOPEN_PROJECTS'] = original_env_value
+            elif 'CRYSTAL_NO_REOPEN_PROJECTS' in os.environ:
+                del os.environ['CRYSTAL_NO_REOPEN_PROJECTS']
+            
+            # Clean up state after test
+            clear_unsaved_untitled_project_path()
+            _cleanup_untitled_projects()
+    
+    return wrapper
+
 
 # === Untitled Project: Clean/Dirty State Tests ===
 
@@ -408,6 +455,42 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
             
             # Ensure project was closed
             await mw.wait_for_dispose()
+
+
+# === Untitled Project: Cleanup Tests ===
+
+async def test_when_close_untitled_prompt_and_user_does_not_save_then_project_moved_to_trash_so_that_user_can_easily_recover_later_if_desired() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, project):
+        assert project.is_untitled
+        old_project_dirpath = project.path  # capture
+
+        with patch('crystal.model.send2trash', wraps=send2trash.send2trash) as send2trash_spy, \
+                patch(
+                    'crystal.browser.ShowModal',
+                    mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
+            await mw.close()
+        
+        assert send2trash_spy.call_count == 1
+        assert not os.path.exists(old_project_dirpath)
+
+
+async def test_when_close_untitled_prompt_and_user_does_save_to_different_filesystem_then_old_project_deleted_in_background() -> None:
+    with _temporary_directory_on_new_filesystem() as new_container_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            rmw = RealMainWindow._last_created
+            assert rmw is not None
+            
+            # Save to different filesystem (using UI)
+            old_project_dirpath = project.path  # capture
+            new_project_dirpath = os.path.join(
+                new_container_dirpath,
+                os.path.basename(old_project_dirpath))
+            with patch(
+                    'crystal.model.Project._delete_in_background',
+                    wraps=Project._delete_in_background
+                    ) as delete_spy:
+                await save_as_with_ui(rmw, new_project_dirpath)
+            assert delete_spy.call_count == 1
 
 
 # === Save As Tests + Progress Dialog Tests ===
@@ -1076,15 +1159,242 @@ async def test_when_save_as_project_with_missing_revision_files_then_ignores_mis
         assert not project.is_dirty
 
 
+# === Untitled Project: Auto-Reopen Tests ===
+# TODO: Move this section after the "=== Untitled Project: Logout Tests ==="
+
+@reopen_projects_enabled
+@awith_subtests
+async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_then_untitled_project_reopened(subtests: SubtestsContext) -> None:
+    with subtests.test('mark for reopen'):
+        with _untitled_project(in_default_nonisolated_location=True) as project:
+            # Should track this untitled project
+            tracked_path = get_unsaved_untitled_project_path()
+            assert tracked_path is not None
+            assert tracked_path == project.path
+            
+            # Should be in permanent directory, not temp
+            untitled_dir = user_untitled_projects_dir()
+            assert project.path.startswith(untitled_dir)
+            
+            # Verify directory structure exists
+            assert os.path.exists(untitled_dir)
+            assert os.path.exists(project.path)
+        
+        # After closing, state should be cleared
+        assert get_unsaved_untitled_project_path() is None
+    
+    with subtests.test('actually reopen'):
+        # Create untitled project in subprocess to simulate unexpected quit
+        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+            # Create an untitled project through the UI
+            create_new_empty_project(crystal)
+            
+            # Verify project is tracked for reopen
+            tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
+                from crystal.util.unsaved_project import get_unsaved_untitled_project_path
+                print(repr(get_unsaved_untitled_project_path()))
+                '''
+            )))
+            assert tracked_path and 'UntitledProjects' in tracked_path
+            
+            # Capture the project path for later verification
+            project_path = literal_eval(py_eval(crystal, 'project.path'))
+            
+            # Simulate unexpected quit
+            crystal.kill()
+            crystal.wait()
+        
+        # Now start Crystal again and verify it reopens the untitled project
+        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+            # Ensure project was auto-opened
+            # TODO: Eliminate race condition that requires this wait
+            import time; time.sleep(0.5)
+            project_available = _project_is_available(crystal)
+            assert project_available, "Expected project to be auto-reopened but none was found"
+            
+            # Ensure we have a main window
+            wait_for_main_window(crystal)
+            
+            # Verify the untitled project was automatically reopened
+            reopened_path = literal_eval(py_eval(crystal, 'project.path'))
+            assert reopened_path == project_path
+            
+            # Verify it's still untitled
+            is_untitled = literal_eval(py_eval(crystal, 'project.is_untitled'))
+            assert is_untitled == True
+            
+            # Clean up - close the project properly
+            close_main_window(crystal)
+
+
+@reopen_projects_enabled
+@awith_subtests
+async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then_no_project_reopened(subtests: SubtestsContext) -> None:
+    with subtests.test('mark for reopen'):
+        with _untitled_project(in_default_nonisolated_location=True) as project, \
+                xtempfile.TemporaryDirectory() as tmp_dir:
+            # Should initially track this untitled project
+            assert get_unsaved_untitled_project_path() == project.path
+            
+            # Save the project (make it titled)
+            new_project_path = os.path.join(tmp_dir, 'SavedProject.crystalproj')
+            await save_as_without_ui(project, new_project_path)
+            
+            # State should be cleared since project is no longer untitled
+            assert get_unsaved_untitled_project_path() is None
+            assert not project.is_untitled
+    
+    with subtests.test('actually reopen'):
+        # Create untitled project in subprocess, save it, then simulate unexpected quit
+        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+            # Create an untitled project through the UI
+            create_new_empty_project(crystal)
+            
+            # Prepare save location
+            py_eval(crystal, textwrap.dedent('''\
+                import tempfile
+                import os
+                tmp_dir = tempfile.mkdtemp()
+                saved_path = os.path.join(tmp_dir, 'SavedProject.crystalproj')
+                '''
+            ))
+            
+            # Save the untitled project using the UI
+            py_eval(crystal, textwrap.dedent('''\
+                from crystal.tests.util.runner import run_test
+                from crystal.tests.util.save_as import save_as_with_ui
+                from threading import Thread
+
+                async def perform_save():
+                    # Use the window directly (it's a RealMainWindow)
+                    await save_as_with_ui(window, saved_path)
+
+                result_cell = [None]
+                def get_result():
+                    result_cell[0] = run_test(perform_save)
+                    print("OK")
+
+                t = Thread(target=get_result)
+                t.start()
+                '''
+            ), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
+            
+            # Verify state is cleared after saving
+            tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
+                from crystal.util.unsaved_project import get_unsaved_untitled_project_path
+                print(repr(get_unsaved_untitled_project_path()))
+                '''
+            )))
+            assert tracked_path == None, f"Expected 'None' but got {repr(tracked_path)}"
+            
+            # Simulate unexpected quit
+            crystal.kill()
+            crystal.wait()
+        
+        # Now start Crystal again and verify no project is reopened
+        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+            # Should show open/create dialog, not auto-reopen any project
+            close_open_or_create_dialog(crystal)
+            
+            # Verify no project is automatically available
+            assert not _project_is_available(crystal)
+
+
+@reopen_projects_enabled
+@awith_subtests
+async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_reopened(subtests: SubtestsContext) -> None:
+    with subtests.test('mark for reopen'):
+        with _untitled_project(in_default_nonisolated_location=True) as project:
+            # Should be tracked
+            assert get_unsaved_untitled_project_path() == project.path
+        
+        # After closing, state should be cleared automatically
+        assert get_unsaved_untitled_project_path() is None
+    
+    with subtests.test('actually reopen'):
+        # Create untitled project in subprocess and close it cleanly
+        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+            # Create an untitled project through the UI
+            create_new_empty_project(crystal)
+            
+            # Verify project is tracked
+            tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
+                from crystal.util.unsaved_project import get_unsaved_untitled_project_path
+                print(repr(get_unsaved_untitled_project_path()))
+                '''
+            )))
+            assert 'UntitledProjects' in tracked_path
+            
+            # Close the project cleanly through the UI (this should clear the reopen state)
+            close_main_window(crystal)
+
+        # Ensure no longer tracking project
+        assert get_unsaved_untitled_project_path() is None
+
+        # Now start Crystal again and verify no project is reopened
+        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+            # Should show open/create dialog, not auto-reopen any project
+            close_open_or_create_dialog(crystal)
+            
+            # Verify no project is automatically available
+            assert not _project_is_available(crystal)
+
+
+# NOTE: Crystal isn't currently designed to handle multiple open projects gracefully.
+#       So this behavior may be changed when prompt multiple projects support is
+#       added, as part of: https://github.com/davidfstr/Crystal-Web-Archiver/issues/101
+@reopen_projects_enabled
+async def test_given_multiple_untitled_projects_when_crystal_unexpectedly_quits_then_only_reopen_last_untitled_project() -> None:
+    project1 = None
+    project2 = None
+    try:
+        # Create first untitled project
+        project1 = Project()
+        path1 = project1.path
+        
+        # Should track first project
+        assert get_unsaved_untitled_project_path() == path1
+        
+        # Create second untitled project
+        project2 = Project()
+        path2 = project2.path
+        
+        # Should now track second project (most recent)
+        assert get_unsaved_untitled_project_path() == path2
+        
+        # Close first project - state should be cleared because ANY untitled project close clears state
+        # (This is the intended behavior: manual close indicates user intent to not auto-reopen)
+        project1.close()
+        project1 = None
+        assert get_unsaved_untitled_project_path() is None
+        
+        # Second project should still be open but no longer tracked
+        assert not project2._closed
+        
+        # Close second project - state should remain cleared
+        project2.close()
+        project2 = None
+        assert get_unsaved_untitled_project_path() is None
+    finally:
+        if project1 is not None:
+            project1.close()
+        if project2 is not None:
+            project2.close()
+
+
 # === Utility ===
 
 @contextmanager
-def _untitled_project() -> Iterator[Project]:
-    """Creates an untitled project in a temporary directory."""
-    with xtempfile.TemporaryDirectory() as container_dirpath:
-        untitled_project_dirpath = os.path.join(container_dirpath, 'Untitled.crystalproj')
-        with Project(untitled_project_dirpath, is_untitled=True) as project:
+def _untitled_project(in_default_nonisolated_location: bool=False) -> Iterator[Project]:
+    """Creates an untitled project, by default in an isolated temporary directory."""
+    if in_default_nonisolated_location:
+        with Project() as project:
             yield project
+    else:
+        with xtempfile.TemporaryDirectory() as container_dirpath:
+            untitled_project_dirpath = os.path.join(container_dirpath, 'Untitled.crystalproj')
+            with Project(untitled_project_dirpath, is_untitled=True) as project:
+                yield project
 
 
 @contextmanager
@@ -1278,7 +1588,7 @@ def _file_object_write_mocked_to(raise_func: Callable[[], Never]) -> Iterator[No
 @contextmanager
 def _rmtree_fallback_for_send2trash(send2trash_location: str, *, linux_only: bool=True) -> Iterator[None]:
     """
-    Context manager that provides a fallback for send2trash.rmtree() to use shutil.rmtree()
+    Context manager that provides a fallback for send2trash() to use shutil.rmtree()
     if send2trash fails.
     
     Defaults to only applying this fallback on Linux systems because send2trash
@@ -1300,3 +1610,14 @@ def _rmtree_fallback_for_send2trash(send2trash_location: str, *, linux_only: boo
             shutil.rmtree(path, ignore_errors=False)
     with patch(send2trash_location, wrapped_send2trash):
         yield
+
+
+def _cleanup_untitled_projects() -> None:
+    """Clean up untitled projects directory."""
+    untitled_dir = user_untitled_projects_dir()
+    if os.path.exists(untitled_dir):
+        shutil.rmtree(untitled_dir)
+
+
+def _project_is_available(crystal: subprocess.Popen) -> bool:
+    return py_eval(crystal, 'project') != PROJECT_PROXY_REPR_STR

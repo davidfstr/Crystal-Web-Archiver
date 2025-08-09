@@ -20,6 +20,10 @@ import sys
 from unittest import SkipTest
 
 
+PROJECT_PROXY_REPR_STR = '<unset crystal.model.Project proxy>\n'
+WINDOW_PROXY_REPR_STR = '<unset crystal.browser.MainWindow proxy>\n'
+
+
 # ------------------------------------------------------------------------------
 # Run CLI
 
@@ -47,7 +51,7 @@ def run_crystal(args: list[str]) -> subprocess.CompletedProcess[str]:
 # Start CLI
 
 @contextmanager
-def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> Iterator[subprocess.Popen]:
+def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, reopen_projects_enabled: bool=False) -> Iterator[subprocess.Popen]:
     """
     Context which starts "crystal" upon enter
     and cleans up the associated process upon exit.
@@ -56,6 +60,9 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> It
     * discrete_stderr --
         if True, stderr is kept separate from stdout;
         if False, stderr is merged into stdout.
+    * reopen_projects_enabled --
+        if True, allows auto-reopening of untitled projects;
+        if False, disables auto-reopening (default for subprocess tests).
     
     Raises:
     * SkipTest -- if Crystal CLI cannot be used in the current environment
@@ -96,6 +103,10 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> It
                 'CRYSTAL_NO_PROFILE_FG_TASKS': 'True',
                 'CRYSTAL_NO_PROFILE_GC': 'True',
                 'CRYSTAL_NO_PROFILE_RECORD_LINKS': 'True',
+                
+                # Disable auto-reopening of untitled projects during subprocess tests
+                # unless explicitly enabled for testing the reopen functionality
+                **({} if reopen_projects_enabled else {'CRYSTAL_NO_REOPEN_PROJECTS': 'True'}),
             },
             **env_extra
         })
@@ -136,6 +147,7 @@ _LINE_RE = re.compile(r'.*?\n|.+$')
 def crystal_running_with_banner(
         *, args=[],
         expects=list[BannerLineType],
+        reopen_projects_enabled: bool=False,
         ) -> Iterator[tuple[subprocess.Popen, BannerMetadata]]:
     """
     Context which starts "crystal" upon enter
@@ -143,6 +155,11 @@ def crystal_running_with_banner(
     
     Additionally, reads the banner lines which Crystal prints when it starts
     and checks that they match the expected lines.
+    
+    Arguments:
+    * reopen_projects_enabled --
+        if True, allows auto-reopening of untitled projects;
+        if False, disables auto-reopening (default for subprocess tests).
     
     Raises:
     * SkipTest -- if Crystal CLI cannot be used in the current environment
@@ -152,7 +169,7 @@ def crystal_running_with_banner(
     """
     banner_metadata = BannerMetadata()
     
-    with crystal_running(args=args) as crystal:
+    with crystal_running(args=args, reopen_projects_enabled=reopen_projects_enabled) as crystal:
         assert isinstance(crystal.stdout, TextIOBase)
         
         lines_found = []  # type: list[str]
@@ -245,15 +262,20 @@ def _ensure_can_use_crystal_cli() -> None:
 
 
 @contextmanager
-def crystal_shell(*, args=[], env_extra={}) -> Iterator[tuple[subprocess.Popen, str]]:
+def crystal_shell(*, args=[], env_extra={}, reopen_projects_enabled: bool=False) -> Iterator[tuple[subprocess.Popen, str]]:
     """
     Context which starts "crystal --shell" upon enter
     and cleans up the associated process upon exit.
     
+    Arguments:
+    * reopen_projects_enabled --
+        if True, allows auto-reopening of untitled projects;
+        if False, disables auto-reopening (default for subprocess tests).
+    
     Raises:
     * SkipTest -- if Crystal CLI cannot be used in the current environment
     """
-    with crystal_running(args=['--shell', *args], env_extra=env_extra) as crystal:
+    with crystal_running(args=['--shell', *args], env_extra=env_extra, reopen_projects_enabled=reopen_projects_enabled) as crystal:
         assert isinstance(crystal.stdout, TextIOBase)
         (banner, _) = read_until(
             crystal.stdout, '\n>>> ',

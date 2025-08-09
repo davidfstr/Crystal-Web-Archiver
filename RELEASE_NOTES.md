@@ -10,6 +10,14 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Workflow improvements
+    * Untitled projects are automatically reopened after an unexpected quit.
+    * Untitled projects are now saved to a permanent hidden directory instead of
+      the system temporary directory, preventing data loss after unexpected
+      logout, restart, or shutdown.
+
 ### v1.11.0 (August 6, 2025)
 
 This release contains many improvements to the first-run experience:
