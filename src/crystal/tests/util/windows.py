@@ -291,33 +291,53 @@ class MainWindow:
         return self
     
     async def _connect(self) -> None:
-        self.main_window = await wait_for(
+        mw_frame: wx.Window = await wait_for(
             window_condition('cr-main-window'),
             timeout=self._connect_timeout,
             stacklevel_extra=1)
+        assert isinstance(mw_frame, wx.Frame)
+
+        mw_frames = [
+            frame
+            for frame in wx.GetTopLevelWindows()
+            if isinstance(frame, wx.Frame) and
+            frame.Name == 'cr-main-window'
+        ]
+        if len(mw_frames) >= 2:
+            print(
+                'WARNING: MainWindow._connect() noticed that '
+                'a MainWindow was left open. '
+                'Did a previous test fail to close it?',
+                file=sys.stderr
+            )
+            # Assume that the most recently opened MainWindow is the one
+            # the caller wants to connect to
+            mw_frame = mw_frames[-1]  # reinterpret
+        
+        self.main_window = mw_frame
         assert isinstance(self.main_window, wx.Frame)
-        entity_tree_window = self.main_window.FindWindow(name='cr-entity-tree')
+        entity_tree_window = mw_frame.FindWindow(name='cr-entity-tree')
         assert isinstance(entity_tree_window, wx.TreeCtrl)
         self.entity_tree = EntityTree(entity_tree_window)
-        self.new_root_url_button = self.main_window.FindWindow(name='cr-add-url-button')
+        self.new_root_url_button = mw_frame.FindWindow(name='cr-add-url-button')
         assert isinstance(self.new_root_url_button, wx.Button)
-        self.new_group_button = self.main_window.FindWindow(name='cr-add-group-button')
+        self.new_group_button = mw_frame.FindWindow(name='cr-add-group-button')
         assert isinstance(self.new_group_button, wx.Button)
-        self.edit_button = self.main_window.FindWindow(name='cr-edit-button')
+        self.edit_button = mw_frame.FindWindow(name='cr-edit-button')
         assert isinstance(self.edit_button, wx.Button)
-        self.forget_button = self.main_window.FindWindow(name='cr-forget-button')
+        self.forget_button = mw_frame.FindWindow(name='cr-forget-button')
         assert isinstance(self.forget_button, wx.Button)
-        self.download_button = self.main_window.FindWindow(name='cr-download-button')
+        self.download_button = mw_frame.FindWindow(name='cr-download-button')
         assert isinstance(self.download_button, wx.Button)
-        self.update_members_button = self.main_window.FindWindow(name='cr-update-members-button')
+        self.update_members_button = mw_frame.FindWindow(name='cr-update-members-button')
         assert isinstance(self.update_members_button, wx.Button)
-        self.view_button = self.main_window.FindWindow(name='cr-view-button')
+        self.view_button = mw_frame.FindWindow(name='cr-view-button')
         assert isinstance(self.view_button, wx.Button)
-        self.task_tree = self.main_window.FindWindow(name='cr-task-tree')
+        self.task_tree = mw_frame.FindWindow(name='cr-task-tree')
         assert isinstance(self.task_tree, wx.TreeCtrl)
-        self.preferences_button = self.main_window.FindWindow(name='cr-preferences-button')
+        self.preferences_button = mw_frame.FindWindow(name='cr-preferences-button')
         assert isinstance(self.preferences_button, wx.Button)
-        self.read_write_icon = self.main_window.FindWindow(name='cr-read-write-icon')
+        self.read_write_icon = mw_frame.FindWindow(name='cr-read-write-icon')
         assert isinstance(self.read_write_icon, wx.StaticText)
     
     def __init__(self, *, ready: bool=False) -> None:
