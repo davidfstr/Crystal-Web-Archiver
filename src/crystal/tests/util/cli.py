@@ -140,8 +140,8 @@ BannerLineType = Literal[
 class BannerMetadata:
     server_url: str | None = None
 
-# Matches lines ending with '\n' or not
-_LINE_RE = re.compile(r'.*?\n|.+$')
+# Matches lines ending with '\n' or not, or the fragment '>>> '
+_LINE_OR_PROMPT_RE = re.compile(r'.*?\n|>>> |.+$')
 
 @contextmanager
 def crystal_running_with_banner(
@@ -209,8 +209,9 @@ def crystal_running_with_banner(
                         f'Still expecting: {expects_remaining!r}'
                     ) from None
                 
-                # Split lines_str after each '\n', retaining the '\n' at the end of each line
-                lines = re.findall(_LINE_RE, lines_str)
+                # 1. Split lines_str after each '\n', retaining the '\n' at the end of each line
+                # 2. Split lines_str at each '>>> '
+                lines = re.findall(_LINE_OR_PROMPT_RE, lines_str)
                 assert len(lines) > 0, "Expected read_until() to return at least one line"
                 next_lines.extend(lines)
             line = next_lines.pop(0)
