@@ -273,44 +273,48 @@ def py_eval(
         *, timeout: float | None=None) -> str:
     """
     Evaluates the provided Python code in the specified Crystal process
-    and returns the result.
+    and returns anything printed to stdout.
     
-    When providing multi-line `py_code`, use the following format:
+    A single line of code with an expression will implicitly print its repr().
+    
+    If you run multiple lines of code and you need to read the result of an
+    expression, remember to wrap the expression in a print() statement.
+    For example:
+    
+        untitled_project_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
+            from crystal.util.unsaved_project import get_unsaved_untitled_project_path
+            print(repr(get_unsaved_untitled_project_path()))
+            '''
+        )))
+
+    If you need to execute any code that waits on parts of the user interface,
+    you'll need to run the waits in a separate thread. Use the following
+    pattern:
     
         py_eval(crystal, textwrap.dedent('''\
-            if True:
-                from crystal.tests.util.runner import run_test
-                from threading import Thread
-                #
-                async def check_foobar():
-                    ocd = await OpenOrCreateDialog.wait_for()
-                    ...
-                #
-                result_cell = [Ellipsis]
-                def get_result(result_cell):
-                    result_cell[0] = run_test(lambda: check_foobar())
-                    print('OK')
-                #
-                t = Thread(target=lambda: get_result(result_cell))
-                t.start()
-        '''), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
+            from crystal.tests.util.runner import run_test
+            from threading import Thread
+            
+            async def check_foobar():
+                ocd = await OpenOrCreateDialog.wait_for()
+                ...
+            
+            result_cell = [Ellipsis]
+            def get_result(result_cell):
+                result_cell[0] = run_test(lambda: check_foobar())
+                print('OK')
+            
+            t = Thread(target=lambda: get_result(result_cell))
+            t.start()
+            '''
+        ), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
     
     Key elements of the above example:
-    - `if True:` -- Prevent code from executing until all lines provided
-    - `#` -- Don't use any blank lines. Use a single `#` to simulate a blank line.
     - `run_test` -- Run async code using test utilities
     - `print('OK')` -- Signal that the code has finished executing
     - `_OK_THREAD_STOP_SUFFIX` -- Wait for the code to finish executing
     - `timeout=...` -- Pick an appropriate timeout
-    
-    Note: Some of the above precautions may no longer be necessary because
-    py_eval() now executes multi-line code as a single line.
     """
-    if '\n' in py_code and stop_suffix is None:
-        raise ValueError(
-            'Unsafe to use _py_eval() on multi-line py_code '
-            'unless stop_suffix is set carefully and other precautions are taken. '
-            'See the py_eval() docstring for details.')
     if '\n' in py_code:
         # Execute multi-line code as a single line
         py_code = f'exec({py_code!r})'  # reinterpret
