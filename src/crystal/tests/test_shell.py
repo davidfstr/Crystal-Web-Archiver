@@ -177,9 +177,14 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
             close_open_or_create_dialog(crystal)
             
             try:
+                result_str = py_eval(crystal, '2 + 2', timeout=5.0)  # took >4.0s in Linux CI
+                if result_str == '':
+                    # HACK: Try again
+                    assert isinstance(crystal.stdout, TextIOBase)
+                    result_str = read_until(crystal.stdout, '>>> ', timeout=5.0)
                 assertEqual(
                     '4\n',
-                    py_eval(crystal, '2 + 2', timeout=5.0))  # took >4.0s in Linux CI
+                    result_str)
             except AssertionError as e:
                 raise AssertionError(f'{e} Trailing output: {drain(crystal)!r}')
     
