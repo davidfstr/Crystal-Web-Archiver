@@ -1216,7 +1216,11 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             wait_for_main_window(crystal)
             
             # Verify the untitled project was automatically reopened
-            reopened_path = literal_eval(py_eval(crystal, 'project.path'))
+            reopened_path_str = py_eval(crystal, 'project.path')
+            try:
+                reopened_path = literal_eval(reopened_path_str)
+            except SyntaxError:
+                raise AssertionError(f'Failed to parse reopened project path: {reopened_path_str!r}')
             assert reopened_path == project_path
             
             # Verify it's still untitled
