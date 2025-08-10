@@ -311,7 +311,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
-          path: ${{ github.workspace }}/screenshots/**/*
+          path: screenshots
           if-no-files-found: ignore
       
       # If test failure then upload a core dump and the related Python binaries
@@ -465,6 +465,7 @@ jobs:
         run: poetry run python -m pytest
 
       - name: Run UI tests
+        id: run_ui_tests
         env:
           CRYSTAL_FAULTHANDLER: 'True'
           # Enable a version of malloc() that looks for heap corruption specially:
@@ -476,10 +477,10 @@ jobs:
             crystal --test ${TEST_NAMES}
 
       - name: Upload screenshot if test failure
-        if: failure()
+        if: failure() && steps.run_ui_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
+          name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: screenshots
           if-no-files-found: ignore
 
@@ -540,6 +541,7 @@ jobs:
         run: "powershell -File .\\make-win.ps1"
 
       - name: Run UI tests
+        id: run_ui_tests
         working-directory: ".\\setup"
         run: |
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal\Logs"
@@ -549,10 +551,10 @@ jobs:
             "dist\Crystal.exe" "---" "--test" ${env:TEST_NAMES}
 
       - name: Upload screenshot if test failure
-        if: failure()
+        if: failure() && steps.run_ui_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
+          name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: screenshots
           if-no-files-found: ignore
       
