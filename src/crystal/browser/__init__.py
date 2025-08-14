@@ -1,8 +1,8 @@
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import sys
-from crystal import __version__ as crystal_version
-from crystal import APP_NAME
+from crystal import __version__ as CRYSTAL_VERSION
+from crystal import APP_NAME, resources
 from crystal.browser.entitytree import (
     EntityTree, ResourceGroupNode, RootResourceNode,
 )
@@ -22,6 +22,7 @@ from crystal.server import ProjectServer
 from crystal.task import DownloadResourceGroupMembersTask, RootTask
 from crystal.ui.actions import Action
 from crystal.ui.BetterMessageDialog import BetterMessageDialog
+from crystal.ui.clickable_text import ClickableText
 from crystal.ui.log_drawer import LogDrawer
 from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
 from crystal.util.bulkheads import (
@@ -1222,8 +1223,6 @@ class MainWindow:
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
         pane.SetSizer(pane_sizer)
         
-        version_label = wx.StaticText(pane, label=f'Crystal v{crystal_version}')
-        
         preferences_button = self._preferences_action.create_button(pane, name='cr-preferences-button')
         bind(preferences_button, wx.EVT_BUTTON, self._on_preferences)
         
@@ -1231,7 +1230,7 @@ class MainWindow:
         self._update_read_write_icon_for_readonly_status()
         
         pane_sizer.Add(
-            version_label,
+            self._create_branding_area(pane),
             proportion=1,
             flag=wx.CENTER|wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
@@ -1245,6 +1244,133 @@ class MainWindow:
             border=_WINDOW_INNER_PADDING)
         
         return pane
+    
+    def _create_branding_area(self, parent: wx.Window) -> wx.Window:
+        """Create the branding area with Crystal icon, program name, version, and authors."""
+        PROGRAM_NAME = 'Crystal'
+        PROGRAM_VERSION = f'v{CRYSTAL_VERSION}'
+        AUTHORS_1_TEXT = 'By David Foster and '
+        AUTHORS_2_TEXT = 'contributors'
+        AUTHORS_2_URL = 'https://github.com/davidfstr/Crystal-Web-Archiver/graphs/contributors'
+
+        # Create branding area with icon and text
+        branding_area = wx.Panel(parent)
+        branding_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        branding_area.SetSizer(branding_sizer)
+        
+        # Program icon (32x32)
+        try:
+            app_icon = self._load_app_icon()
+            # Scale to 32x32 if needed
+            if app_icon.GetSize() != (32, 32):
+                image = app_icon.ConvertToImage()
+                image = image.Scale(32, 32, wx.IMAGE_QUALITY_HIGH)
+                app_icon = wx.Bitmap(image)
+            
+            icon_ctrl = wx.StaticBitmap(branding_area, bitmap=app_icon)
+            branding_sizer.Add(
+                icon_ctrl,
+                flag=wx.CENTER|wx.RIGHT,
+                border=8)
+        except Exception:
+            # If icon loading fails, continue without icon
+            pass
+        
+        # Text area for program name, version, and authors
+        text_area = wx.Panel(branding_area)
+        if True:
+            text_sizer = wx.BoxSizer(wx.VERTICAL)
+            text_area.SetSizer(text_sizer)
+            
+            # Program name and version on same line
+            program_line = wx.Panel(text_area)
+            if True:
+                program_line_sizer = wx.BoxSizer(wx.HORIZONTAL)
+                program_line.SetSizer(program_line_sizer)
+                
+                # Program name
+                program_name = wx.StaticText(program_line, label=PROGRAM_NAME)
+                program_name_font = self._load_app_name_font(18)
+                program_name.SetFont(program_name_font)
+                program_line_sizer.Add(program_name, flag=wx.ALIGN_BOTTOM)
+                
+                # Space between name and version
+                program_line_sizer.AddSpacer(8)
+                
+                # Version, with precise baseline alignment
+                version_label = wx.StaticText(program_line, label=PROGRAM_VERSION)
+                if True:
+                    version_font = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                    version_label.SetFont(version_font)
+                    version_label.SetForegroundColour(wx.Colour(128, 128, 128))  # gray
+                    
+                    # Calculate precise baseline offset using font descent values
+                    dc = wx.ClientDC(program_line)
+                    dc.SetFont(program_name_font)
+                    _, _, program_descent, _ = dc.GetFullTextExtent(PROGRAM_NAME)
+                    dc.SetFont(version_font)
+                    _, _, version_descent, _ = dc.GetFullTextExtent(PROGRAM_VERSION)
+                baseline_offset = program_descent - version_descent
+                program_line_sizer.Add(
+                    version_label,
+                    # Use bottom border for baseline alignment
+                    flag=wx.ALIGN_BOTTOM|wx.BOTTOM,
+                    border=max(0, baseline_offset)
+                )
+            text_sizer.Add(program_line, flag=wx.BOTTOM, border=2)
+            
+            # Authors line with clickable "contributors" link
+            authors_area = wx.Panel(text_area)
+            if True:
+                authors_sizer = wx.BoxSizer(wx.HORIZONTAL)
+                authors_area.SetSizer(authors_sizer)
+                
+                # "By David Foster and " part
+                by_text = wx.StaticText(authors_area, label=AUTHORS_1_TEXT)
+                by_text_font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                by_text.SetFont(by_text_font)
+                authors_sizer.Add(by_text)
+                
+                # "contributors" clickable link
+                contributors_link = ClickableText(
+                    authors_area, 
+                    label=AUTHORS_2_TEXT, 
+                    url=AUTHORS_2_URL
+                )
+                contributors_font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                contributors_link.SetFont(contributors_font)
+                authors_sizer.Add(contributors_link)
+            text_sizer.Add(authors_area, flag=wx.BOTTOM, border=2)
+        branding_sizer.Add(text_area, flag=wx.CENTER)
+        
+        return branding_area
+    
+    @staticmethod
+    def _load_app_icon() -> wx.Bitmap:
+        """Load the Crystal application icon from resources."""
+        with resources.open_binary('appicon.png') as f:
+            bitmap = wx.Bitmap.FromPNGData(f.read())
+        if not bitmap.IsOk():
+            raise Exception('Failed to load app icon')
+        return bitmap
+    
+    @staticmethod
+    def _load_app_name_font(base_size: int) -> wx.Font:
+        """Create a Futura Medium font with fallback to system fonts."""
+        # Try Futura Medium first
+        font = wx.Font(base_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_MEDIUM, faceName='Futura')
+        if font.IsOk() and font.GetFaceName() == 'Futura' and font.GetWeight() == wx.FONTWEIGHT_MEDIUM:
+            return font
+        
+        # Try Futura Normal
+        font = wx.Font(base_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, faceName='Futura')
+        if font.IsOk() and font.GetFaceName() == 'Futura':
+            return font
+         
+        # Fallback to System Bold
+        font = wx.Font(base_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        assert font.IsOk(), 'Failed to create fallback font'
+        return font
     
     def _update_read_write_icon_for_readonly_status(self) -> None:
         readonly = self._readonly  # cache

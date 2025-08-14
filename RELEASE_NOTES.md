@@ -18,6 +18,10 @@ Release Notes ⋮
       the system temporary directory, preventing data loss after unexpected
       logout, restart, or shutdown.
 
+* Branding changes
+    * Crystal's logo and contributor information is now displayed in the
+      main window, alongside its version number.
+
 ### v1.11.0 (August 6, 2025)
 
 This release contains many improvements to the first-run experience:
