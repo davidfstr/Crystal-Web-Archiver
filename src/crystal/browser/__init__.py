@@ -1248,11 +1248,21 @@ class MainWindow:
     def _create_branding_area(self, parent: wx.Window) -> wx.Window:
         """Create the branding area with Crystal icon, program name, version, and authors."""
         PROGRAM_NAME = 'Crystal'
+        PROGRAM_NAME_USES_BITMAP = True
         PROGRAM_VERSION = f'v{CRYSTAL_VERSION}'
         AUTHORS_1_TEXT = 'By David Foster and '
         AUTHORS_2_TEXT = 'contributors'
         AUTHORS_2_URL = 'https://github.com/davidfstr/Crystal-Web-Archiver/graphs/contributors'
-
+        
+        if is_mac_os():
+            font_size_scale = 1.0
+        elif is_windows() or is_linux():
+            font_size_scale = 72 / 96
+        else:
+            raise AssertionError('Unknown operating system')
+        
+        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        
         # Create branding area with icon and text
         branding_area = wx.Panel(parent)
         branding_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -1290,7 +1300,10 @@ class MainWindow:
                 
                 # Program name (bitmap logotext for consistent cross-platform rendering)
                 try:
-                    logotext_bundle = self._load_logotext_bitmap()
+                    if not PROGRAM_NAME_USES_BITMAP:
+                        # TODO: Avoid using exceptions purely for control flow
+                        raise Exception('Forcing text fallback for logotext bitmap')
+                    logotext_bundle = self._load_logotext_bitmap(is_dark_mode)
                     if logotext_bundle:
                         program_name = wx.StaticBitmap(program_line, bitmap=logotext_bundle)
                         logotext_height = program_name.Size.Height
@@ -1300,7 +1313,7 @@ class MainWindow:
                     # Fallback to text if bitmap loading fails
                     print(f"Warning: Failed to load logotext bitmap, using text fallback: {e}")
                     program_name = wx.StaticText(program_line, label=PROGRAM_NAME)
-                    program_name_font = self._load_app_name_font(23)
+                    program_name_font = self._load_app_name_font(int(23 * font_size_scale))
                     program_name.SetFont(program_name_font)
                     logotext_height = program_name.GetTextExtent(PROGRAM_NAME)[1]
                 
@@ -1313,7 +1326,9 @@ class MainWindow:
                 # Version, with precise baseline alignment
                 version_label = wx.StaticText(program_line, label=PROGRAM_VERSION)
                 if True:
-                    version_font = wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                    # TODO: Increase to 14pt, to match authors_font.
+                    #       May need to tweak descent calculation in response.
+                    version_font = wx.Font(int(13 * font_size_scale), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
                     version_label.SetFont(version_font)
                     version_label.SetForegroundColour(wx.Colour(128, 128, 128))  # gray
                     
@@ -1346,11 +1361,15 @@ class MainWindow:
             if True:
                 authors_sizer = wx.BoxSizer(wx.HORIZONTAL)
                 authors_area.SetSizer(authors_sizer)
+                authors_font = wx.Font(int(14 * font_size_scale), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
                 
                 # "By David Foster and " part
                 by_text = wx.StaticText(authors_area, label=AUTHORS_1_TEXT)
-                by_text_font = wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-                by_text.SetFont(by_text_font)
+                by_text.SetFont(authors_font)
+                if is_dark_mode:
+                    by_text.SetForegroundColour(wx.Colour(0xD8, 0xD8, 0xD8))
+                else:
+                    by_text.SetForegroundColour(wx.Colour(0x1D, 0x1D, 0x1D))
                 authors_sizer.Add(by_text)
                 
                 # "contributors" clickable link
@@ -1359,8 +1378,7 @@ class MainWindow:
                     label=AUTHORS_2_TEXT, 
                     url=AUTHORS_2_URL
                 )
-                contributors_font = wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-                contributors_link.SetFont(contributors_font)
+                contributors_link.SetFont(authors_font)
                 authors_sizer.Add(contributors_link)
             text_sizer.Add(
                 authors_area,
@@ -1381,13 +1399,21 @@ class MainWindow:
         return bitmap
     
     @staticmethod
-    def _load_logotext_bitmap() -> wx.BitmapBundle:
+    def _load_logotext_bitmap(is_dark_mode: bool = False) -> wx.BitmapBundle:
         """Load the Crystal logotext bitmap bundle with 1x and 2x versions."""
         bitmaps = []
         
+        # Choose filenames based on mode
+        if is_dark_mode:
+            filename_1x = 'logotext-dark.png'
+            filename_2x = 'logotext-dark@2x.png'
+        else:
+            filename_1x = 'logotext.png'
+            filename_2x = 'logotext@2x.png'
+        
         # Load 1x version
         try:
-            with resources.open_binary('logotext.png') as f:
+            with resources.open_binary(filename_1x) as f:
                 bitmap_1x = wx.Bitmap.FromPNGData(f.read())
             if bitmap_1x.IsOk():
                 bitmaps.append(bitmap_1x)
@@ -1396,7 +1422,7 @@ class MainWindow:
         
         # Load 2x version
         try:
-            with resources.open_binary('logotext@2x.png') as f:
+            with resources.open_binary(filename_2x) as f:
                 bitmap_2x = wx.Bitmap.FromPNGData(f.read())
             if bitmap_2x.IsOk():
                 bitmaps.append(bitmap_2x)
