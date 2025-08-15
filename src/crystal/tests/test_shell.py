@@ -181,7 +181,8 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 if result_str == '':
                     # HACK: Try again
                     assert isinstance(crystal.stdout, TextIOBase)
-                    result_str = read_until(crystal.stdout, '>>> ', timeout=5.0)
+                    (result_str, _) = read_until(crystal.stdout, '>>> ', timeout=5.0)
+                    result_str = result_str.removesuffix('>>> ')
                 assertEqual(
                     '4\n',
                     result_str)
