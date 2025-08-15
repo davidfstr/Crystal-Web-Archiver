@@ -1326,9 +1326,7 @@ class MainWindow:
                 # Version, with precise baseline alignment
                 version_label = wx.StaticText(program_line, label=PROGRAM_VERSION)
                 if True:
-                    # TODO: Increase to 14pt, to match authors_font.
-                    #       May need to tweak descent calculation in response.
-                    version_font = wx.Font(int(13 * font_size_scale), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                    version_font = wx.Font(int(14 * font_size_scale), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
                     version_label.SetFont(version_font)
                     version_label.SetForegroundColour(wx.Colour(128, 128, 128))  # gray
                     
@@ -1340,7 +1338,15 @@ class MainWindow:
                     # For bitmap logotext, approximate baseline as 80% of height (typical for text)
                     # For text logotext, use actual measured descent
                     if isinstance(program_name, wx.StaticBitmap):
-                        logotext_baseline_from_bottom = int(logotext_height * 0.2) + 1
+                        if is_mac_os():
+                            fudge_offset = +2
+                        elif is_windows():
+                            fudge_offset = +0
+                        elif is_linux():
+                            fudge_offset = +1
+                        else:
+                            raise AssertionError('Unknown operating system')
+                        logotext_baseline_from_bottom = int(logotext_height * 0.2) + fudge_offset
                     else:
                         dc.SetFont(program_name_font)
                         _, _, program_descent, _ = dc.GetFullTextExtent(PROGRAM_NAME)
