@@ -1288,10 +1288,23 @@ class MainWindow:
                 program_line_sizer = wx.BoxSizer(wx.HORIZONTAL)
                 program_line.SetSizer(program_line_sizer)
                 
-                # Program name
-                program_name = wx.StaticText(program_line, label=PROGRAM_NAME)
-                program_name_font = self._load_app_name_font(23)
-                program_name.SetFont(program_name_font)
+                # Program name (bitmap logotext for consistent cross-platform rendering)
+                try:
+                    logotext_bundle = self._load_logotext_bitmap()
+                    if logotext_bundle:
+                        program_name = wx.StaticBitmap(program_line, bitmap=logotext_bundle)
+                        logotext_height = program_name.Size.Height
+                    else:
+                        raise RuntimeError("Failed to create logotext bundle")
+                except Exception as e:
+                    # Fallback to text if bitmap loading fails
+                    print(f"Warning: Failed to load logotext bitmap, using text fallback: {e}")
+                    program_name = wx.StaticText(program_line, label=PROGRAM_NAME)
+                    program_name_font = self._load_app_name_font(23)
+                    program_name.SetFont(program_name_font)
+                    logotext_height = program_name.GetTextExtent(PROGRAM_NAME)[1]
+                
+                # Add program name to sizer
                 program_line_sizer.Add(program_name, flag=wx.ALIGN_BOTTOM)
                 
                 # Space between name and version
@@ -1304,13 +1317,22 @@ class MainWindow:
                     version_label.SetFont(version_font)
                     version_label.SetForegroundColour(wx.Colour(128, 128, 128))  # gray
                     
-                    # Calculate precise baseline offset using font descent values
+                    # Calculate baseline offset for version text alignment
                     dc = wx.ClientDC(program_line)
-                    dc.SetFont(program_name_font)
-                    _, _, program_descent, _ = dc.GetFullTextExtent(PROGRAM_NAME)
                     dc.SetFont(version_font)
-                    _, _, version_descent, _ = dc.GetFullTextExtent(PROGRAM_VERSION)
-                baseline_offset = program_descent - version_descent
+                    (_, _, version_descent, _) = dc.GetFullTextExtent(PROGRAM_VERSION)
+                    
+                    # For bitmap logotext, approximate baseline as 80% of height (typical for text)
+                    # For text logotext, use actual measured descent
+                    if isinstance(program_name, wx.StaticBitmap):
+                        logotext_baseline_from_bottom = int(logotext_height * 0.2) + 1
+                    else:
+                        dc.SetFont(program_name_font)
+                        _, _, program_descent, _ = dc.GetFullTextExtent(PROGRAM_NAME)
+                        logotext_baseline_from_bottom = program_descent
+                    
+                    # Calculate offset to align version baseline with logotext baseline
+                    baseline_offset = max(0, logotext_baseline_from_bottom - version_descent)
                 program_line_sizer.Add(
                     version_label,
                     # Use bottom border for baseline alignment
@@ -1357,6 +1379,35 @@ class MainWindow:
         if not bitmap.IsOk():
             raise Exception('Failed to load app icon')
         return bitmap
+    
+    @staticmethod
+    def _load_logotext_bitmap() -> wx.BitmapBundle:
+        """Load the Crystal logotext bitmap bundle with 1x and 2x versions."""
+        bitmaps = []
+        
+        # Load 1x version
+        try:
+            with resources.open_binary('logotext.png') as f:
+                bitmap_1x = wx.Bitmap.FromPNGData(f.read())
+            if bitmap_1x.IsOk():
+                bitmaps.append(bitmap_1x)
+        except Exception:
+            pass
+        
+        # Load 2x version
+        try:
+            with resources.open_binary('logotext@2x.png') as f:
+                bitmap_2x = wx.Bitmap.FromPNGData(f.read())
+            if bitmap_2x.IsOk():
+                bitmaps.append(bitmap_2x)
+        except Exception:
+            pass
+        
+        if not bitmaps:
+            raise Exception('Failed to load logotext bitmaps')
+        
+        # Create bitmap bundle from available bitmaps
+        return wx.BitmapBundle.FromBitmaps(bitmaps)
     
     @staticmethod
     def _load_app_name_font(base_size: int) -> wx.Font:
