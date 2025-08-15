@@ -27,6 +27,11 @@ Release Notes ⋮
     * Crystal's logo and contributor information is now displayed in the
       main window, alongside its version number.
 
+* Minor fixes
+    * Most dialogs are now shown as window-modal rather than modeless to
+      prevent certain types of concurrent edits to a project that Crystal
+      isn't designed to handle.
+
 ### v1.11.0 (August 6, 2025)
 
 This release contains many improvements to the first-run experience:

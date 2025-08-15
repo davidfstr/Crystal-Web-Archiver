@@ -5,7 +5,7 @@ from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.test_mode import tests_are_running
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
-    CreateButtonSizer, position_dialog_initially, ShowModal,
+    CreateButtonSizer, position_dialog_initially, ShowModal, ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_windows, is_wx_gtk
@@ -143,15 +143,9 @@ class NewRootUrlDialog:
                 self._name_field.SetFocus()
         
         position_dialog_initially(dialog)
-        # TODO: Verify that the wxGTK-specific logic here is actually necessary
-        if not is_wx_gtk():
-            dialog.Fit()
-            self._on_advanced_options_toggle()  # collapse options initially
-            dialog.Show(True)
-        else:
-            dialog.Show(True)
-            dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
-            self._on_advanced_options_toggle()  # collapse options initially
+        dialog.Fit()
+        self._on_advanced_options_toggle()  # collapse options initially
+        ShowWindowModal(dialog)
         
         dialog.MinSize = dialog.Size
         # TODO: Clamp height to fixed value, but still allow

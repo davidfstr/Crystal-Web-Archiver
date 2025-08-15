@@ -768,7 +768,11 @@ class DeferredProgressDialog:
         self._dialog = wx.ProgressDialog(*self._calls[0][1], **self._calls[0][2])
         self._shown = True
         if self._window_modal:
+            # NOTE: Not using ShowWindowModal() from util/wx_dialog.py here
+            #       because it does not properly handle the special cases for
+            #       wx.ProgressDialog.
             if is_wx_gtk() or is_windows():
+                # For ProgressDialog:
                 # 1. GTK warns when showing a dialog as modal (or window-modal), so don't
                 # 2. Windows tries to run its own event loop when showing a modal dialog
                 #    and expects to be able call Exit() during that event loop.

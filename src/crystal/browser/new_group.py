@@ -9,7 +9,7 @@ from crystal.progress import CancelLoadUrls
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
-    CreateButtonSizer, position_dialog_initially, ShowModal,
+    CreateButtonSizer, position_dialog_initially, ShowModal, ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_mac_os, is_windows
@@ -121,7 +121,7 @@ class NewGroupDialog:
         position_dialog_initially(dialog)
         dialog.Fit()
         self._on_options_toggle()  # collapse options initially
-        dialog.Show(True)
+        ShowWindowModal(dialog)
         
         dialog.MinSize = dialog.Size
         # TODO: Clamp height to fixed value, but still allow

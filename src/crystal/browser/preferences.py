@@ -1,8 +1,8 @@
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
-from crystal.util.wx_dialog import position_dialog_initially
+from crystal.util.wx_dialog import position_dialog_initially, ShowWindowModal
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
-from crystal.util.xos import is_linux, is_mac_os, is_windows
+from crystal.util.xos import is_windows
 import datetime
 from typing import Dict, TYPE_CHECKING
 from tzlocal import get_localzone
@@ -63,8 +63,10 @@ class PreferencesDialog:
             border=_WINDOW_INNER_PADDING)
         
         position_dialog_initially(dialog)
-        dialog.Show(True)
-        dialog.Fit()  # NOTE: Must Fit() after Show() here so that wxGTK actually fits correctly
+        # NOTE: Must call Fit before ShowWindowModal on macOS to avoid
+        #       awkward window resize animation after show
+        dialog.Fit()
+        ShowWindowModal(dialog)
     
     def _create_project_fields(self, parent: wx.Window) -> wx.Sizer:
         fields_sizer = wx.GridBagSizer(

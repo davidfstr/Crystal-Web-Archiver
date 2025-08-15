@@ -2,7 +2,7 @@ from collections.abc import Callable, Generator
 from crystal import resources
 from crystal.util.test_mode import tests_are_running
 from crystal.util.wx_bind import bind
-from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows
+from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows, is_wx_gtk
 from crystal.util.xthreading import ContinueSoonFunc, FgCommand, fg_affinity
 from types import coroutine
 from typing import Protocol
@@ -157,6 +157,37 @@ def ShowModalAsync(dialog: wx.Dialog) -> Generator[FgCommand, ContinueSoonFunc |
     return_code = yield FgCommand.SUSPEND_UNTIL_CONTINUE
     assert isinstance(return_code, int)
     return return_code
+
+
+# ------------------------------------------------------------------------------
+# ShowWindowModal
+
+def ShowWindowModal(dialog: wx.Dialog) -> None:
+    """
+    Shows a dialog as window-modal, preventing interaction with the parent window
+    but allowing interaction with other application windows.
+    
+    This is a cross-platform wrapper that:
+    - Uses ShowWindowModal() on macOS and Windows
+    - Falls back to Show() on Linux (due to platform limitations)
+    
+    Window-modal dialogs prevent the user from interacting with the parent
+    window until the dialog is closed, but still allow interaction with other
+    application windows and the system.
+    """
+    if is_wx_gtk() or (is_windows() and tests_are_running()):
+        # 1. GTK sometimes segfaults when closing a dialog displayed as window-modal.
+        #    So don't use ShowWindowModal() on GTK.
+        # 2. Windows won't process wx events properly when a window-modal
+        #    dialog is open, which blocks automated tests from executing.
+        #    So don't use ShowWindowModal() on Windows during tests.
+        dialog.Show()
+    else:
+        # 1. macOS fully supports window-modal dialogs
+        # 2. Windows partially supports window-modal dialogs,
+        #    disabling interactions on the parent window,
+        #    but NOT visually disabling any controls.
+        dialog.ShowWindowModal()
 
 
 # ------------------------------------------------------------------------------
