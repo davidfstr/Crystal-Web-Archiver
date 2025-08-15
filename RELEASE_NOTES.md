@@ -18,6 +18,11 @@ Release Notes ⋮
       the system temporary directory, preventing data loss after unexpected
       logout, restart, or shutdown.
 
+* Downloading improvements
+    * While long downloads are running the system will be kept awake
+      ("caffeinated") on Linux. macOS and Windows support for caffeination
+      already existed.
+
 * Branding changes
     * Crystal's logo and contributor information is now displayed in the
       main window, alongside its version number.

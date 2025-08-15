@@ -389,6 +389,23 @@ inflect = ["inflect"]
 test = ["pathlib2 ; python_version < \"3.10\"", "pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-mypy", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
 
 [[package]]
+name = "jeepney"
+version = "0.9.0"
+description = "Low-level, pure Python DBus protocol wrapper."
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+markers = "sys_platform == \"linux\""
+files = [
+    {file = "jeepney-0.9.0-py3-none-any.whl", hash = "sha256:97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683"},
+    {file = "jeepney-0.9.0.tar.gz", hash = "sha256:cf0e9e845622b81e4a28df94c40345400256ec608d0e55bb8a3feaa9163f5732"},
+]
+
+[package.extras]
+test = ["async-timeout ; python_version < \"3.11\"", "pytest", "pytest-asyncio (>=0.17)", "pytest-trio", "testpath", "trio"]
+trio = ["trio"]
+
+[[package]]
 name = "lxml"
 version = "5.4.0"
 description = "Powerful and Pythonic XML processing library combining libxml2/libxslt with the ElementTree API."
@@ -1287,6 +1304,21 @@ socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
 zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
+name = "wakepy"
+version = "0.9.1"
+description = "wakelock / keep-awake / stay-awake"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "wakepy-0.9.1-py3-none-any.whl", hash = "sha256:fee0722b554a859724f6f47ec28db1d513f15097f235b09ebb1b58f545f90db2"},
+    {file = "wakepy-0.9.1.tar.gz", hash = "sha256:4e7e820512e0e69f9aa5fdded2d3225e6f7c9f000814300e8c37d1fa88fe1664"},
+]
+
+[package.dependencies]
+jeepney = {version = ">=0.7.1", markers = "sys_platform == \"linux\""}
+
+[[package]]
 name = "webencodings"
 version = "0.5.1"
 description = "Character encoding aliases for legacy web content"
@@ -1445,4 +1477,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "0cae0a60b6addde7465b09d2b108c997d7eb4fd4b3d5ab4c61bb0e409c1cc35d"
+content-hash = "d5119747854aa118dd1a29bbb132b2acd8e5ca08564d5e0f2013143cd2754854"

@@ -1,13 +1,8 @@
-from crystal.util.xos import is_mac_os, is_windows
-import ctypes
-import os
-import subprocess
+import contextlib
 import threading
-from typing import Optional
-
-_ES_CONTINUOUS = 0x80000000
-_ES_SYSTEM_REQUIRED = 0x00000001  # prevents idle sleep
-_ES_DISPLAY_REQUIRED = 0x00000002  # prevents screen sleep
+from typing import Any, Optional
+import wakepy
+import warnings
 
 
 class Caffeination:
@@ -19,7 +14,8 @@ class Caffeination:
     _lock = threading.Lock()
     _caffeine_count = 0
     _caffeinated = False
-    _caffeinator = None  # type: Optional[subprocess.Popen]
+    _wakepy_keeper = None  # type: Optional[Any]
+    _caffeination_unavailable = False
     
     @classmethod
     def add_caffeine(cls) -> None:
@@ -42,40 +38,26 @@ class Caffeination:
     def _set_caffeinated(cls, caffeinated: bool) -> None:
         if caffeinated == cls._caffeinated:
             return
-        if is_mac_os():
-            if caffeinated:
-                assert cls._caffeinator is None
-                cls._caffeinator = subprocess.Popen(
-                    [
-                        'caffeinate',
-                        # Wait for Crystal process to terminate
-                        '-w', str(os.getpid()),
-                        # No idle sleep
-                        '-i',
-                        # No sleep while on A/C power
-                        '-s'
-                    ],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL)
-                assert cls._caffeinator.poll() is None, \
-                    'caffeinate process terminated immediately unexpectedly'
+        
+        if caffeinated:
+            assert cls._wakepy_keeper is None
+            if cls._caffeination_unavailable:
+                cls._wakepy_keeper = contextlib.nullcontext()
             else:
-                assert cls._caffeinator is not None
-                cls._caffeinator.terminate()
-                cls._caffeinator.wait()
-                cls._caffeinator = None
-        elif is_windows():
-            # See: https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadexecutionstate
-            if caffeinated:
-                ctypes.windll.kernel32.SetThreadExecutionState(  # type: ignore[attr-defined]
-                    _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED)
-            else:
-                ctypes.windll.kernel32.SetThreadExecutionState(  # type: ignore[attr-defined]
-                    _ES_CONTINUOUS)
+                cls._wakepy_keeper = wakepy.keep.running()
+            try:
+                cls._wakepy_keeper.__enter__()  # type: ignore[attr-defined]
+            except Exception as e:
+                warnings.warn(
+                    f'Unable to caffeinate: {e}. '
+                    f'Will no longer try to caffeinate until quit.')
+                cls._caffeination_unavailable = True
+                
+                cls._wakepy_keeper = contextlib.nullcontext()
+                cls._wakepy_keeper.__enter__()
         else:
-            # TODO: Support on Linux.
-            #       See the wakepy library for an example implementation.
-            # 
-            # Not supported
-            return
+            assert cls._wakepy_keeper is not None
+            cls._wakepy_keeper.__exit__(None, None, None)
+            cls._wakepy_keeper = None
+        
         cls._caffeinated = caffeinated
