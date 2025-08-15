@@ -1258,13 +1258,13 @@ class MainWindow:
         branding_sizer = wx.BoxSizer(wx.HORIZONTAL)
         branding_area.SetSizer(branding_sizer)
         
-        # Program icon (32x32)
+        # Program icon (42x42)
         try:
             app_icon = self._load_app_icon()
-            # Scale to 32x32 if needed
-            if app_icon.GetSize() != (32, 32):
+            # Scale to 42x42 if needed
+            if app_icon.GetSize() != (42, 42):
                 image = app_icon.ConvertToImage()
-                image = image.Scale(32, 32, wx.IMAGE_QUALITY_HIGH)
+                image = image.Scale(42, 42, wx.IMAGE_QUALITY_HIGH)
                 app_icon = wx.Bitmap(image)
             
             icon_ctrl = wx.StaticBitmap(branding_area, bitmap=app_icon)
@@ -1290,7 +1290,7 @@ class MainWindow:
                 
                 # Program name
                 program_name = wx.StaticText(program_line, label=PROGRAM_NAME)
-                program_name_font = self._load_app_name_font(18)
+                program_name_font = self._load_app_name_font(23)
                 program_name.SetFont(program_name_font)
                 program_line_sizer.Add(program_name, flag=wx.ALIGN_BOTTOM)
                 
@@ -1300,7 +1300,7 @@ class MainWindow:
                 # Version, with precise baseline alignment
                 version_label = wx.StaticText(program_line, label=PROGRAM_VERSION)
                 if True:
-                    version_font = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                    version_font = wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
                     version_label.SetFont(version_font)
                     version_label.SetForegroundColour(wx.Colour(128, 128, 128))  # gray
                     
@@ -1327,7 +1327,7 @@ class MainWindow:
                 
                 # "By David Foster and " part
                 by_text = wx.StaticText(authors_area, label=AUTHORS_1_TEXT)
-                by_text_font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                by_text_font = wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
                 by_text.SetFont(by_text_font)
                 authors_sizer.Add(by_text)
                 
@@ -1337,10 +1337,14 @@ class MainWindow:
                     label=AUTHORS_2_TEXT, 
                     url=AUTHORS_2_URL
                 )
-                contributors_font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                contributors_font = wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
                 contributors_link.SetFont(contributors_font)
                 authors_sizer.Add(contributors_link)
-            text_sizer.Add(authors_area, flag=wx.BOTTOM, border=2)
+            text_sizer.Add(
+                authors_area,
+                flag=wx.TOP|wx.BOTTOM,
+                border=2,
+            )
         branding_sizer.Add(text_area, flag=wx.CENTER)
         
         return branding_area
