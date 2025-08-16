@@ -1032,9 +1032,6 @@ async def test_when_save_as_project_and_new_project_fails_to_open_then_handles_g
         assert os.path.exists(rr._body_filepath)
 
 
-# TODO: Alter the error handling behavior to preserve the original project
-#       and reopen it instead. Currently only the new project with the
-#       corrupted database is preserved!
 async def test_when_save_as_untitled_project_with_corrupted_database_then_fails_with_error_and_closes_project() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
