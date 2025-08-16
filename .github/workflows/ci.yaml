@@ -119,6 +119,17 @@ jobs:
         # version of Python. Check the wxPython PyPI page to confirm.
         timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
         run: poetry install
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        run: poetry run playwright install chromium
       
       - name: Run non-UI tests
         run: poetry run python -m pytest
@@ -205,6 +216,17 @@ jobs:
           else
             echo "POETRY_RUN=poetry run " >> $GITHUB_ENV
           fi
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        run: ${POETRY_RUN}playwright install chromium
 
       - name: Display SQLite version and JSON support
         run: |
@@ -455,6 +477,17 @@ jobs:
         # instructions from: doc/how_to_make_wxpython_wagon.md
         timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
         run: poetry install
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        run: poetry run playwright install chromium
  
       - name: Display SQLite version and JSON support
         run: |
@@ -517,6 +550,17 @@ jobs:
         # version of Python. Check the wxPython PyPI page to confirm.
         timeout-minutes: 2  # normally takes 15s, as of 2023-03-03
         run: poetry install
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        run: poetry run playwright install chromium
 
       - name: Display SQLite version and JSON support
         run: |

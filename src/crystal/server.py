@@ -26,13 +26,18 @@ from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import TextIOBase
+import json
 import re
 import socket
 import socketserver
 from textwrap import dedent
-from typing import Literal, Optional
+import time
+from typing import Literal, Optional, TYPE_CHECKING
 from typing_extensions import override
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
+
+if TYPE_CHECKING:
+    from crystal.task import Task
 
 
 _DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
@@ -397,7 +402,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def referer(self) -> str | None:
         return self.headers.get('Referer')
     
-    # === Handle Incoming Request ===
+    # === Handle ===
     
     def parse_request(self):  # override
         # If we receive a request line with clearly binary data,
@@ -428,10 +433,20 @@ class _RequestHandler(BaseHTTPRequestHandler):
             # Browser did drop connection before did finish sending response
             pass
     
+    def do_POST(self) -> None:  # override
+        try:
+            # TODO: No need to use run_thread_switching_coroutine() for such
+            #       a simple _do_POST() implementation
+            run_thread_switching_coroutine(
+                SwitchToThread.BACKGROUND,
+                self._do_POST())
+        except BrokenPipeError:
+            # Browser did drop connection before did finish sending response
+            pass
+    
+    # --- Handle: GET or POST ---
+    
     def _do_GET(self) -> Generator[SwitchToThread, None, None]:
-        readonly = self.project.readonly  # cache
-        dynamic_ok = (self.headers.get('X-Crystal-Dynamic', 'True') == 'True')
-        
         # Parse self.path using RFC 2616 rules,
         # which in particular allows it to be an absolute URI!
         if self.path == '*':
@@ -466,141 +481,21 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(_pin_date_js(timestamp).encode('utf-8'))
             return
         
+        # Handle download progress SSE endpoint
+        if self.path.startswith('/_/crystal/download-progress'):
+            yield SwitchToThread.BACKGROUND
+            self._handle_get_download_progress()
+            return
+        
         # Serve resource revision in archive
         archive_url = self.get_archive_url(self.path)
         if archive_url is not None:
-            yield SwitchToThread.FOREGROUND
-            
-            # If URL not in archive in its original form,
-            # see whether it exists in the archive in a different form,
-            # or whether it should be created in a different form
-            resource = self.project.get_resource(archive_url)
-            if resource is None:
-                archive_url_alternatives = Resource.resource_url_alternatives(
-                    self.project, archive_url)
-                if len(archive_url_alternatives) >= 2:
-                    assert archive_url_alternatives[0] == archive_url
-                    # TODO: Optimize to use a bulk version of Project.get_resource()
-                    #       rather than making several individual queries
-                    for urla in archive_url_alternatives[1:]:
-                        if self.project.get_resource(urla) is not None:
-                            # Redirect to existing URL in archive
-                            yield SwitchToThread.BACKGROUND
-                            self.send_redirect(self.get_request_url(urla))
-                            return
-                    
-                    # Redirect to canonical form of URL in archive
-                    yield SwitchToThread.BACKGROUND
-                    self.send_redirect(self.get_request_url(archive_url_alternatives[-1]))
-                    return
-            # (Either resource exists at archive_url, or archive_url is in canonical form)
-            
-            if resource is None:
-                # If the previously undiscovered resource is a member of an
-                # existing resource group, presume that the user is interested 
-                # in downloading it immediately upon access
-                matching_rg = self._find_group_matching_archive_url(archive_url)
-                if matching_rg is not None and not readonly and dynamic_ok:
-                    self._print_warning('*** Dynamically downloading new resource in group {!r}: {}'.format(
-                        matching_rg.display_name,
-                        archive_url,
-                    ))
-                    
-                    # Try download resource immediately
-                    def download_resource() -> Resource:
-                        assert archive_url is not None
-                        return Resource(self.project, archive_url)
-                    resource = fg_call_and_wait(download_resource)
-                    yield SwitchToThread.BACKGROUND
-                    self._try_download_revision_dynamically(resource, needs_result=False)
-                    # (continue to serve downloaded resource revision)
-                else:
-                    yield SwitchToThread.BACKGROUND
-                    self.send_resource_not_in_archive(archive_url)
-                    return
-            
-            if resource.definitely_has_no_revisions:
-                revision = None  # type: Optional[ResourceRevision]
-            else:
-                def get_default_revision() -> ResourceRevision | None:
-                    assert resource is not None
-                    return resource.default_revision(
-                        stale_ok=True if self.project.readonly else False
-                    )
-                revision = fg_call_and_wait(get_default_revision)
-            
-            yield SwitchToThread.BACKGROUND
-            
-            if revision is None:
-                if not readonly and dynamic_ok:
-                    # If the existing resource is also a root resource,
-                    # presume that the user is interested 
-                    # in downloading it immediately upon access
-                    matching_rr = self._find_root_resource_matching_archive_url(archive_url)
-                    if matching_rr is not None:
-                        self._print_warning('*** Dynamically downloading root resource {!r}: {}'.format(
-                            matching_rr.display_name,
-                            archive_url,
-                        ))
-                    
-                    # If the existing resource is a member of an
-                    # existing resource group, presume that the user is interested 
-                    # in downloading it immediately upon access
-                    matching_rg = self._find_group_matching_archive_url(archive_url)
-                    if matching_rg is not None:
-                        self._print_warning('*** Dynamically downloading existing resource in group {!r}: {}'.format(
-                            matching_rg.display_name,
-                            archive_url,
-                        ))
-                    
-                    if matching_rr is not None or matching_rg is not None:
-                        # Try download resource immediately
-                        revision = self._try_download_revision_dynamically(resource, needs_result=True)
-                        # (continue to serve downloaded resource revision)
-                
-                if revision is None:
-                    self.send_resource_not_in_archive(archive_url)
-                    return
-            
-            # If client did make a conditional request which did match the revision,
-            # send a short HTTP 304 response rather than the whole revision
-            if_none_match = self.headers['If-None-Match']
-            if if_none_match is not None:
-                etag = revision.etag
-                # NOTE: Only an If-None-Match containing a single ETag is supported for now
-                if etag is not None and etag == if_none_match:
-                    self.send_response(304)
-                    self.end_headers()
-                    return
-            
-            self.send_revision(revision, archive_url)
+            yield from self._serve_archive_url(archive_url)
             return
         
         # Dynamically rewrite incoming link from archived resource revision
-        referer = self.referer  # cache
-        if referer is not None and dynamic_ok:
-            referer_urlparts = urlparse(referer)
-            if ((referer_urlparts.netloc == '' and referer_urlparts.path.startswith('/')) or 
-                    referer_urlparts.netloc == self._server_host):
-                referer_archive_url = self.get_archive_url(referer_urlparts.path)
-                if referer_archive_url is not None:
-                    referer_archive_urlparts = urlparse(referer_archive_url)
-                    assert isinstance(referer_archive_urlparts.scheme, str)
-                    assert isinstance(referer_archive_urlparts.netloc, str)
-                    requested_archive_url = '{}://{}{}'.format(
-                        referer_archive_urlparts.scheme,
-                        referer_archive_urlparts.netloc,
-                        self.path,
-                    )
-                    redirect_url = self.get_request_url(requested_archive_url)
-                    
-                    self._print_warning('*** Dynamically rewriting link from {}: {}'.format(
-                        referer_archive_url,
-                        requested_archive_url,
-                    ))
-                    
-                    self.send_redirect(redirect_url, vary_referer=True)
-                    return
+        if self._redirect_to_archive_url_if_referer_is_self():
+            return
         
         # Serve Welcome page
         path_parts = urlparse(self.path)
@@ -612,6 +507,136 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_not_found_page(vary_referer=True)
         return
     
+    def _do_POST(self) -> Generator[SwitchToThread, None, None]:
+        # Handle Crystal API endpoints
+        if self.path == '/_/crystal/download-url':
+            yield SwitchToThread.BACKGROUND
+            self._handle_start_download_url()
+            return
+        elif self.path == '/_/crystal/download-progress':
+            yield SwitchToThread.BACKGROUND
+            self._handle_get_download_progress()
+            return
+        
+        # For all other POST requests, return 405 Method Not Allowed
+        self.send_response(405)
+        self.send_header('Allow', 'GET')
+        self.end_headers()
+        return
+    
+    # --- Handle: Archive URL ---
+    
+    def _serve_archive_url(self, archive_url: str) -> Generator[SwitchToThread, None, None]:
+        readonly = self.project.readonly  # cache
+        dynamic_ok = self._dynamic_ok()  # cache
+
+        yield SwitchToThread.FOREGROUND
+        
+        # If URL not in archive in its original form,
+        # see whether it exists in the archive in a different form,
+        # or whether it should be created in a different form
+        resource = self.project.get_resource(archive_url)
+        if resource is None:
+            archive_url_alternatives = Resource.resource_url_alternatives(
+                self.project, archive_url)
+            if len(archive_url_alternatives) >= 2:
+                assert archive_url_alternatives[0] == archive_url
+                # TODO: Optimize to use a bulk version of Project.get_resource()
+                #       rather than making several individual queries
+                for urla in archive_url_alternatives[1:]:
+                    if self.project.get_resource(urla) is not None:
+                        # Redirect to existing URL in archive
+                        yield SwitchToThread.BACKGROUND
+                        self.send_redirect(self.get_request_url(urla))
+                        return
+                
+                # Redirect to canonical form of URL in archive
+                yield SwitchToThread.BACKGROUND
+                self.send_redirect(self.get_request_url(archive_url_alternatives[-1]))
+                return
+        # (Either resource exists at archive_url, or archive_url is in canonical form)
+        
+        if resource is None:
+            # If the previously undiscovered resource is a member of an
+            # existing resource group, presume that the user is interested 
+            # in downloading it immediately upon access
+            matching_rg = self._find_group_matching_archive_url(archive_url)
+            if matching_rg is not None and not readonly and dynamic_ok:
+                self._print_warning('*** Dynamically downloading new resource in group {!r}: {}'.format(
+                    matching_rg.display_name,
+                    archive_url,
+                ))
+                
+                # Try download resource immediately
+                def download_resource() -> Resource:
+                    assert archive_url is not None
+                    return Resource(self.project, archive_url)
+                resource = fg_call_and_wait(download_resource)
+                yield SwitchToThread.BACKGROUND
+                self._try_download_revision_dynamically(resource, needs_result=False)
+                # (continue to serve downloaded resource revision)
+            else:
+                yield SwitchToThread.BACKGROUND
+                self.send_resource_not_in_archive(archive_url)
+                return
+        
+        if resource.definitely_has_no_revisions:
+            revision = None  # type: Optional[ResourceRevision]
+        else:
+            def get_default_revision() -> ResourceRevision | None:
+                assert resource is not None
+                return resource.default_revision(
+                    stale_ok=True if self.project.readonly else False
+                )
+            revision = fg_call_and_wait(get_default_revision)
+        
+        yield SwitchToThread.BACKGROUND
+        
+        if revision is None:
+            if not readonly and dynamic_ok:
+                # If the existing resource is also a root resource,
+                # presume that the user is interested 
+                # in downloading it immediately upon access
+                matching_rr = self._find_root_resource_matching_archive_url(archive_url)
+                if matching_rr is not None:
+                    self._print_warning('*** Dynamically downloading root resource {!r}: {}'.format(
+                        matching_rr.display_name,
+                        archive_url,
+                    ))
+                
+                # If the existing resource is a member of an
+                # existing resource group, presume that the user is interested 
+                # in downloading it immediately upon access
+                matching_rg = self._find_group_matching_archive_url(archive_url)
+                if matching_rg is not None:
+                    self._print_warning('*** Dynamically downloading existing resource in group {!r}: {}'.format(
+                        matching_rg.display_name,
+                        archive_url,
+                    ))
+                
+                if matching_rr is not None or matching_rg is not None:
+                    # Try download resource immediately
+                    revision = self._try_download_revision_dynamically(resource, needs_result=True)
+                    # (continue to serve downloaded resource revision)
+            
+            if revision is None:
+                self.send_resource_not_in_archive(archive_url)
+                return
+        
+        # If client did make a conditional request which did match the revision,
+        # send a short HTTP 304 response rather than the whole revision
+        if_none_match = self.headers['If-None-Match']
+        if if_none_match is not None:
+            etag = revision.etag
+            # NOTE: Only an If-None-Match containing a single ETag is supported for now
+            if etag is not None and etag == if_none_match:
+                self.send_response(304)
+                self.end_headers()
+                return
+        
+        self.send_revision(revision, archive_url)
+        return
+
     def _find_root_resource_matching_archive_url(self, archive_url: str) -> RootResource | None:
         for rr in self.project.root_resources:
             if rr.resource.url == archive_url:
@@ -647,6 +672,193 @@ class _RequestHandler(BaseHTTPRequestHandler):
         except Exception:
             # Don't care if there was an error downloading
             return None
+    
+    # --- Handle: Redirect to Archive URL ---
+    
+    @bg_affinity
+    def _redirect_to_archive_url_if_referer_is_self(self) -> bool:
+        dynamic_ok = self._dynamic_ok()  # cache
+        
+        referer = self.referer  # cache
+        if referer is not None and dynamic_ok:
+            referer_urlparts = urlparse(referer)
+            if ((referer_urlparts.netloc == '' and referer_urlparts.path.startswith('/')) or 
+                    referer_urlparts.netloc == self._server_host):
+                referer_archive_url = self.get_archive_url(referer_urlparts.path)
+                if referer_archive_url is not None:
+                    referer_archive_urlparts = urlparse(referer_archive_url)
+                    assert isinstance(referer_archive_urlparts.scheme, str)
+                    assert isinstance(referer_archive_urlparts.netloc, str)
+                    requested_archive_url = '{}://{}{}'.format(
+                        referer_archive_urlparts.scheme,
+                        referer_archive_urlparts.netloc,
+                        self.path,
+                    )
+                    redirect_url = self.get_request_url(requested_archive_url)
+                    
+                    self._print_warning('*** Dynamically rewriting link from {}: {}'.format(
+                        referer_archive_url,
+                        requested_archive_url,
+                    ))
+                    
+                    self.send_redirect(redirect_url, vary_referer=True)
+                    return True
+        
+        return False
+    
+    # --- Handle: Download Request ---
+    
+    @bg_affinity
+    def _handle_start_download_url(self) -> None:
+        try:
+            # Ensure project is not readonly
+            if self.project.readonly:
+                self._send_json_response(403, {"error": "Project is read-only"})
+                return
+            
+            # Parse arguments
+            content_length = int(self.headers.get('Content-Length', -1))
+            if content_length > 0:
+                post_data = self.rfile.read(content_length).decode('utf-8')
+            else:
+                post_data = self.rfile.read().decode('utf-8')
+            if not post_data:
+                self._send_json_response(400, {"error": "Missing request body"})
+                return
+            try:
+                request_data = json.loads(post_data)
+                url = request_data.get('url')
+            except json.JSONDecodeError:
+                self._send_json_response(400, {"error": "Invalid JSON"})
+                return
+            if not url:
+                self._send_json_response(400, {"error": "Missing URL parameter"})
+                return
+            
+            def create_and_start_download_task() -> str:
+                # Get or create a Resource for the URL
+                r = Resource(self.project, url)
+                
+                # Get or create RootResource for the URL
+                rr = self.project.get_root_resource(r)
+                if rr is None:
+                    rr = RootResource(self.project, '', r)
+                
+                # Create download task and start downloading
+                (task, created) = r.get_or_create_download_task(
+                    needs_result=True, is_embedded=False)
+                if created and not task.complete:
+                    self.project.add_task(task)
+                
+                # Return task ID for progress tracking
+                # TODO: Consider using a different format for the task ID
+                #       that doesn't expose the memory address of the Task
+                return str(id(task))
+            task_id = fg_call_and_wait(create_and_start_download_task)
+            
+            # Send success response with task ID
+            self._send_json_response(200, {
+                "status": "success", 
+                "message": "Download started",
+                "task_id": task_id
+            })
+
+        except Exception as e:
+            self._print_error(f'Error handling download request: {str(e)}')
+            self._send_json_response(500, {
+                "error": f"Internal server error: {str(e)}"
+            })
+    
+    @bg_affinity
+    def _handle_get_download_progress(self) -> None:
+        REPORT_MAX_DURATION = 300  # 5 minutes
+        REPORT_PERIOD = 0.5
+        
+        # Parse arguments
+        query_params = parse_qs(urlparse(self.path).query)
+        if 'task_id' not in query_params:
+            self.send_response(400)
+            self.end_headers()
+            return
+        task_id = query_params['task_id'][0]
+        
+        self._start_sse_stream()
+        
+        # Find the task to report on
+        def find_task_by_id() -> Task | None:
+            for child in self.project.root_task.children:
+                if str(id(child)) == task_id:
+                    return child
+            return None
+        task = fg_call_and_wait(find_task_by_id)
+        if task is None:
+            self._send_sse_data({'error': 'Task not found'})
+            return
+        
+        # Send periodic progress updates
+        start_time = time.monotonic()
+        try:
+            while (time.monotonic() - start_time) < REPORT_MAX_DURATION:
+                def get_task_status() -> dict:
+                    if task.complete:
+                        return {
+                            'status': 'complete',
+                            'progress': 100,
+                            'message': 'Download completed'
+                        }
+                    
+                    completed = task.num_children_complete
+                    # TODO: Check whether this condition is correct.
+                    #       Probably waits for resource body to download,
+                    #       but likely does not wait for parse links to finish.
+                    if completed == 0:
+                        return {
+                            'status': 'in_progress',
+                            'progress': 0,
+                            'message': 'Starting download...'
+                        }
+                    total = len(task.children_unsynchronized)
+                    progress = int((completed / total) * 100) if total > 0 else 0
+                    return {
+                        'status': 'in_progress',
+                        'progress': progress,
+                        'message': f'{completed} of {total} items downloaded',
+                        'completed': completed,
+                        'total': total
+                    }
+                status = fg_call_and_wait(get_task_status)
+                self._send_sse_data(status)
+                
+                if status['status'] == 'complete':
+                    break
+                
+                time.sleep(REPORT_PERIOD)
+        except BrokenPipeError:
+            # Client disconnected
+            pass
+        except Exception as e:
+            self._send_sse_data({'error': f'Progress tracking error: {str(e)}'})
+
+    def _start_sse_stream(self) -> None:
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('Connection', 'keep-alive')
+        self.end_headers()
+
+    def _send_sse_data(self, data: dict) -> None:
+        try:
+            sse_data = f"data: {json.dumps(data)}\n\n"
+            self.wfile.write(sse_data.encode('utf-8'))
+            self.wfile.flush()
+        except BrokenPipeError:
+            pass
+    
+    def _send_json_response(self, status_code: int, content: dict) -> None:
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(content).encode('utf-8'))
     
     # === Send Page ===
     
@@ -714,23 +926,18 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
         
-        self.wfile.write((dedent(
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8" />
-                <title>Not in Archive | Crystal</title>
-            </head>
-            <body>
-                <p>The requested resource was not found in the archive.</p>
-                <p>The original resource is located here: <a href="%(archive_url)s">%(archive_url)s</a></p>
-            </body>
-            </html>
-            """
-        ).lstrip('\n') % {
-            # TODO: Shouldn't this be HTML-escaped?
-            'archive_url': archive_url
+        readonly = self.project.readonly  # cache
+        
+        self.wfile.write((_NOT_IN_ARCHIVE_HTML_TEMPLATE % {
+            'archive_url_html_attr': archive_url,
+            'archive_url_html': html_escape(archive_url),
+            'archive_url_json': json.dumps(archive_url),
+            
+            'readonly_warning_html': (
+                '<div class="readonly-notice">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
+                if readonly else ''
+            ),
+            'download_button_disabled_html': ('disabled ' if readonly else '')
         }).encode('utf-8'))
         
         self._print_error('*** Requested resource not in archive: ' + archive_url)
@@ -1007,7 +1214,20 @@ class _RequestHandler(BaseHTTPRequestHandler):
         request_url = urlunparse(request_url_parts)
         return request_url
     
-    # === Logging ===
+    # === Utility: Request Accessors ===
+    
+    def _dynamic_ok(self) -> bool:
+        """
+        Returns whether the request is allowed to:
+        1. dynamically download resources or
+        2. dynamically rewrite links based on referer.
+        
+        Note that dynamic downloads also require the project to be writable
+        (i.e. not readonly).
+        """
+        return (self.headers.get('X-Crystal-Dynamic', 'True') == 'True')
+    
+    # === Utility: Logging ===
     
     def log_error(self, format, *args):  # override
         self._print_error(format % args)
@@ -1015,7 +1235,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):  # override
         self._print_info(format % args)
     
-    # === Print ===
+    # === Utility: Print ===
     
     def _print_info(self, message: str) -> None:
         if self._verbosity == 'indent':
@@ -1068,5 +1288,373 @@ _PIN_DATE_JS_TEMPLATE = dedent(
 def _pin_date_js(timestamp: int) -> str:
     return _PIN_DATE_JS_TEMPLATE % timestamp
 
+
+# ------------------------------------------------------------------------------
+# HTML Templates
+
+_NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
+    """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Not in Archive | Crystal</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                margin: 0;
+                padding: 40px 20px;
+                background: linear-gradient(135deg, #f5f7fa 0%%, #c3cfe2 100%%);
+                min-height: 100vh;
+                box-sizing: border-box;
+                color: #333;
+            }
+            
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 12px;
+                padding: 40px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            }
+            
+            .header {
+                display: flex;
+                align-items: center;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 2px solid #e9ecef;
+            }
+            
+            .logo {
+                width: 48px;
+                height: 48px;
+                background: linear-gradient(45deg, #4A90E2, #357ABD);
+                border-radius: 8px;
+                margin-right: 16px;
+                flex-shrink: 0;
+                position: relative;
+                box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+            }
+            
+            .logo::after {
+                content: '';
+                position: absolute;
+                top: 50%%;
+                left: 50%%;
+                width: 24px;
+                height: 24px;
+                background: rgba(255, 255, 255, 0.9);
+                border-radius: 4px;
+                transform: translate(-50%%, -50%%) rotateX(15deg) rotateY(-15deg);
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            
+            .brand-text {
+                flex: 1;
+            }
+            
+            .brand-title {
+                font-size: 24px;
+                font-weight: 500;
+                color: #2c3e50;
+                margin: 0;
+                font-family: 'Futura', -apple-system, BlinkMacSystemFont, sans-serif;
+            }
+            
+            .brand-subtitle {
+                font-size: 14px;
+                color: #6c757d;
+                margin: 0;
+            }
+            
+            .error-icon {
+                font-size: 64px;
+                color: #e74c3c;
+                text-align: center;
+                margin: 20px 0;
+            }
+            
+            .error-message {
+                font-size: 18px;
+                color: #2c3e50;
+                text-align: center;
+                margin: 20px 0;
+            }
+            
+            .url-info {
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 8px;
+                border-left: 4px solid #4A90E2;
+                margin: 20px 0;
+            }
+            
+            .url-label {
+                font-size: 12px;
+                color: #6c757d;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 5px;
+                font-weight: 600;
+            }
+            
+            .url-link {
+                color: #4A90E2;
+                text-decoration: none;
+                word-break: break-all;
+                font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+                font-size: 14px;
+            }
+            
+            .url-link:hover {
+                text-decoration: underline;
+            }
+            
+            .readonly-notice {
+                background: #fff3cd;
+                border: 1px solid #ffeaa7;
+                color: #856404;
+                padding: 12px 16px;
+                border-radius: 8px;
+                margin: 20px 0;
+                font-size: 14px;
+            }
+            
+            .actions {
+                margin: 30px 0;
+            }
+            
+            .action-button {
+                display: inline-block;
+                padding: 12px 24px;
+                margin: 8px 8px 8px 0;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: 500;
+                cursor: pointer;
+                text-decoration: none;
+                transition: all 0.2s ease;
+                min-width: 120px;
+                text-align: center;
+            }
+            
+            .primary-button {
+                background: #4A90E2;
+                color: white;
+            }
+            
+            .primary-button:hover {
+                background: #357ABD;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+            }
+            
+            .primary-button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                pointer-events: none;
+            }
+            
+            .primary-button:disabled:hover {
+                background: #4A90E2;
+                transform: none;
+                box-shadow: none;
+            }
+            
+            .secondary-button {
+                background: #6c757d;
+                color: white;
+            }
+            
+            .secondary-button:hover {
+                background: #5a6268;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+            }
+            
+            .download-progress {
+                display: none;
+                margin-top: 15px;
+            }
+            
+            .progress-bar {
+                width: 100%%;
+                height: 8px;
+                background: #e9ecef;
+                border-radius: 4px;
+                overflow: hidden;
+            }
+            
+            .progress-fill {
+                height: 100%%;
+                background: #4A90E2;
+                width: 0%%;
+                transition: width 0.3s ease;
+            }
+            
+            .progress-text {
+                font-size: 14px;
+                margin-top: 8px;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo"></div>
+                <div class="brand-text">
+                    <h1 class="brand-title">Crystal</h1>
+                    <p class="brand-subtitle">Website Archiver</p>
+                </div>
+            </div>
+            
+            <div class="error-icon">🚫</div>
+            
+            <div class="error-message">
+                <strong>Page Not in Archive</strong>
+            </div>
+            
+            <p>The requested page was not found in this archive.</p>
+            <p>The page has not been downloaded yet.</p>
+            
+            <div class="url-info">
+                <div class="url-label">Original URL</div>
+                <a href="%(archive_url_html_attr)s" class="url-link" target="_blank" rel="noopener">%(archive_url_html)s</a>
+            </div>
+            
+            %(readonly_warning_html)s
+            
+            <div class="actions">
+                <button onclick="history.back()" class="action-button secondary-button">
+                    ← Go Back
+                </button>
+                <button id="download-button" %(download_button_disabled_html)sonclick="startDownload()" class="action-button primary-button">⬇ Download</button>
+            </div>
+            
+            <div id="download-progress" class="download-progress">
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <div id="progress-text" class="progress-text">Preparing download...</div>
+            </div>
+        </div>
+        
+        <script>
+            let eventSource = null;
+            
+            async function startDownload() {
+                const downloadButton = document.getElementById('download-button');
+                const progressDiv = document.getElementById('download-progress');
+                const progressFill = document.getElementById('progress-fill');
+                const progressText = document.getElementById('progress-text');
+                
+                // Disable the download button
+                downloadButton.disabled = true;
+                downloadButton.textContent = '⬇ Downloading...';
+                
+                // Show progress
+                progressDiv.style.display = 'block';
+                progressFill.style.width = '0%%';
+                progressText.textContent = 'Starting download...';
+                
+                try {
+                    // Start the download
+                    const downloadUrl = '/_/crystal/download-url';
+                    const response = await fetch(downloadUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url: %(archive_url_json)s })
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to start download');
+                    }
+                    
+                    const result = await response.json();
+                    const taskId = result.task_id;
+                    
+                    // Listening for download progress updates
+                    const progressUrl = `/_/crystal/download-progress?task_id=${encodeURIComponent(taskId)}`;
+                    eventSource = new EventSource(progressUrl);
+                    
+                    eventSource.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.error) {
+                            // Update progress with error
+                            progressFill.style.width = '0%%';
+                            progressText.textContent = `Error: ${data.error}`;
+                            
+                            eventSource.close();
+                            
+                            // Enable the download button
+                            downloadButton.disabled = false;
+                            downloadButton.textContent = '⬇ Download';
+                            
+                            return;
+                        }
+                        
+                        if (data.status === 'complete') {
+                            // Update progress with success
+                            progressFill.style.width = '100%%';
+                            progressText.textContent = 'Download completed! Reloading page...';
+                            
+                            eventSource.close();
+                            
+                            // Reload the page ASAP
+                            window.location.reload();
+                        } else if (data.status === 'in_progress') {
+                            progressFill.style.width = `${data.progress}%%`;
+                            progressText.textContent = data.message;
+                        }
+                    };
+                    
+                    eventSource.onerror = function(event) {
+                        // Update progress with error
+                        progressFill.style.width = '0%%';
+                        progressText.textContent = 'Connection error. Download may still be in progress.';
+                        
+                        eventSource.close();
+                        
+                        // Enable the download button
+                        downloadButton.disabled = false;
+                        downloadButton.textContent = '⬇ Download';
+                    };
+                } catch (error) {
+                    console.error('Download error:', error);
+                    
+                    // Update progress with error
+                    progressFill.style.width = '0%%';
+                    progressText.textContent = `Download failed: ${error.message}`;
+                    
+                    if (eventSource) {
+                        eventSource.close();
+                    }
+                    
+                    // Enable the download button
+                    downloadButton.disabled = false;
+                    downloadButton.textContent = '⬇ Download';
+                }
+            }
+            
+            // Close event source when page unloads
+            window.addEventListener('beforeunload', function() {
+                if (eventSource) {
+                    eventSource.close();
+                }
+            });
+        </script>
+    </body>
+    </html>
+    """
+)
 
 # ------------------------------------------------------------------------------

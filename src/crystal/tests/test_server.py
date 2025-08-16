@@ -1,23 +1,30 @@
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager, redirect_stdout
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
 from crystal import server
-from crystal.model import Project, Resource, ResourceRevision, RootResource
+from crystal.model import Resource, ResourceRevision
 from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
+from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.controls import click_button, TreeItem
-from crystal.tests.util.runner import bg_sleep
+from crystal.tests.util.downloads import network_down
+from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, extracted_project, fetch_archive_url,
     served_project, WebPage,
 )
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
+from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, wait_for_future
 from crystal.tests.util.windows import (
     MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
 )
 from crystal.util.ports import is_port_in_use
+from crystal.util.xos import is_linux
 from io import StringIO
+import json
+import sys
+from unittest import skip
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
 #       in test_workflows.py. Write stubs for all such behaviors
@@ -72,6 +79,399 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
             # Ensure can fetch the revision through the server
             server_page = await fetch_archive_url(home_url, expected_port)
             assert 200 == server_page.status
+
+
+# ------------------------------------------------------------------------------
+# Test: "Welcome" Page
+
+# (TODO: Add test stubs)
+
+
+# ------------------------------------------------------------------------------
+# Test: "Not Found" Page
+
+# (TODO: Add test stubs)
+
+
+# ------------------------------------------------------------------------------
+# Test: "Not in Archive" Page
+
+async def test_given_nia_page_visible_then_crystal_branding_and_error_message_and_url_is_visible() -> None:
+    async with _not_in_archive_page_visible() as server_page:
+        # Verify Crystal branding is visible
+        content = server_page.content
+        assert 'Crystal' in content, \
+            "Crystal branding should be visible in page content"
+        
+        # Verify the missing URL is displayed in the error message
+        missing_url = 'https://xkcd.com/missing-page/'
+        assert missing_url in content, \
+            f"Missing URL {missing_url} should be visible in the error message"
+        
+        # Verify basic error message content
+        assert '<strong>Page Not in Archive</strong>' in content, \
+            "Error message should indicate the page is not in archive"
+
+
+async def test_given_nia_page_visible_when_press_go_back_button_then_navigates_to_previous_page() -> None:
+    async with _not_in_archive_page_visible() as server_page:
+        # Verify a go back button/link is present in the content
+        content = server_page.content
+        assert '← Go Back' in content and 'onclick="history.back()"' in content, \
+            "Go back button should be present on NIA page"
+
+
+async def test_given_nia_page_visible_and_project_is_readonly_then_download_button_is_disabled_and_readonly_warning_visible() -> None:
+    async with _not_in_archive_page_visible(readonly=True) as server_page:
+        content = server_page.content
+        
+        # Should show readonly warning
+        assert '<div class="readonly-notice">' in content, \
+            "Readonly warning should be visible when project is readonly"
+        
+        # Download button should be present but disabled
+        assert '<button id="download-button" ' in content, \
+            "Download button should be present in readonly mode"
+        assert '<button id="download-button" disabled ' in content, \
+            "Download button should be disabled in readonly mode"
+
+
+async def test_given_nia_page_visible_and_project_is_writable_then_download_button_is_enabled_and_readonly_warning_is_not_visible() -> None:
+    async with _not_in_archive_page_visible(readonly=False) as server_page:
+        content = server_page.content
+        
+        # Should NOT show readonly warning
+        assert '<div class="readonly-notice">' not in content, \
+            "Readonly warning should NOT be visible when project is writable"
+        
+        # Download button should be present and enabled
+        assert '<button id="download-button" ' in content, \
+            "Download button should be present when project is writable"
+        assert '<button id="download-button" disabled ' not in content, \
+            "Download button should NOT be disabled when project is writable"
+
+
+async def test_given_nia_page_visible_when_download_button_pressed_then_download_starts_and_runs_with_progress_bar() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        comic1_url = sp.get_request_url('https://xkcd.com/1/')
+        
+        # Create a new project in the UI
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the home page
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti.GetFirstChild() is None  # no entities
+                
+                # Add home URL as root resource
+                click_button(mw.new_root_url_button)
+                if True:
+                    nud = await NewRootUrlDialog.wait_for()
+                    
+                    nud.name_field.Value = 'Home'
+                    nud.url_field.Value = home_url
+                    nud.do_not_download_immediately()
+                    await nud.ok()
+                (home_ti,) = root_ti.Children
+                
+                # Download the home page
+                home_ti.SelectItem()
+                await mw.click_download_button()
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            server_port = _DEFAULT_SERVER_PORT + 1
+            home_url_in_archive = get_request_url(
+                home_url,
+                server_port,
+                project_default_url_prefix=project.default_url_prefix)
+            
+            # Start the project server by clicking View button
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(home_url_in_archive):
+                click_button(mw.view_button)
+            
+            # Verify that the home page is NOT a "Not in Archive" page
+            home_page = await fetch_archive_url(home_url, server_port)
+            assert not home_page.is_not_in_archive
+            assert home_page.status == 200
+            
+            # Verify the home page contains a "|<" button (first comic link)
+            home_content = home_page.content
+            assert '|&lt;</a>' in home_content, \
+                "Home page should contain the '|<' (first comic) link"
+            
+            # Simulate press of that button by fetching the first comic page
+            first_comic_page = await fetch_archive_url(comic1_url, server_port)
+            
+            # Ensure that page IS a "Not in Archive" page
+            assert first_comic_page.is_not_in_archive
+            
+            # Simulate press of the "Download" button on the "Not in Archive" page
+            # by directly querying the related endpoint
+            download_response = await bg_fetch_url(
+                f'http://127.0.0.1:{server_port}/_/crystal/download-url',
+                method='POST',
+                data=json.dumps({'url': comic1_url}).encode('utf-8'),
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            # Ensure the download started successfully
+            assert download_response.status == 200
+            download_result = json.loads(download_response.content)
+            assert download_result['status'] == 'success'
+            assert 'task_id' in download_result
+            task_id = download_result['task_id']
+            
+            # Wait for the download task to complete
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            # Simulate the page reload after download completion
+            # by re-fetching the first comic page
+            reloaded_comic_page = await fetch_archive_url(comic1_url, server_port)
+            
+            # Ensure that the fetched page is now no longer a "Not In Archive" page
+            assert reloaded_comic_page.status == 200
+            assert not reloaded_comic_page.is_not_in_archive
+
+
+@skip('covered by: test_given_nia_page_visible_when_download_button_pressed_then_download_starts_and_runs_with_progress_bar')
+async def test_when_download_complete_and_successful_download_with_content_then_page_reloads_to_reveal_downloaded_page() -> None:
+    pass
+
+
+async def test_when_download_complete_and_successful_download_with_fetch_error_then_page_reloads_to_reveal_error_page() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        comic1_url = sp.get_request_url('https://xkcd.com/1/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the home page
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti.GetFirstChild() is None  # no entities
+                
+                # Add home URL as root resource
+                click_button(mw.new_root_url_button)
+                if True:
+                    nud = await NewRootUrlDialog.wait_for()
+                    
+                    nud.name_field.Value = 'Home'
+                    nud.url_field.Value = home_url
+                    nud.do_not_download_immediately()
+                    await nud.ok()
+                (home_ti,) = root_ti.Children
+                
+                # Download the home page
+                home_ti.SelectItem()
+                await mw.click_download_button()
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            server_port = _DEFAULT_SERVER_PORT + 1
+            home_url_in_archive = get_request_url(
+                home_url,
+                server_port,
+                project_default_url_prefix=project.default_url_prefix)
+            
+            # Start the project server by clicking View button
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(home_url_in_archive):
+                click_button(mw.view_button)
+            
+            # Verify that the home page is NOT a "Not in Archive" page
+            home_page = await fetch_archive_url(home_url, server_port)
+            assert not home_page.is_not_in_archive
+            assert home_page.status == 200
+            
+            # Verify the home page contains a "|<" button (first comic link)
+            home_content = home_page.content
+            assert '|&lt;</a>' in home_content, \
+                "Home page should contain the '|<' (first comic) link"
+            
+            # Simulate press of that button by fetching the first comic page
+            first_comic_page = await fetch_archive_url(comic1_url, server_port)
+            
+            # Ensure that page IS a "Not in Archive" page
+            assert first_comic_page.is_not_in_archive
+            
+            # Simulate press of the "Download" button with network down
+            # by directly querying the related endpoint
+            with network_down():  # for Crystal backend
+                download_response = await bg_fetch_url(
+                    f'http://127.0.0.1:{server_port}/_/crystal/download-url',
+                    method='POST',
+                    data=json.dumps({'url': comic1_url}).encode('utf-8'),
+                    headers={'Content-Type': 'application/json'}
+                )
+                
+                # Ensure the download started successfully
+                assert download_response.status == 200
+                download_result = json.loads(download_response.content)
+                assert download_result['status'] == 'success'
+                assert 'task_id' in download_result
+                task_id = download_result['task_id']
+                
+                # Wait for the download task to complete (will fail due to network being down)
+                await wait_for_download_to_start_and_finish(
+                    mw.task_tree, immediate_finish_ok=True)
+            
+            # Simulate the page reload after download completion
+            # by re-fetching the first comic page
+            reloaded_comic_page = await fetch_archive_url(comic1_url, server_port)
+            
+            # Ensure that the fetched page shows a fetch error page (not "Not In Archive")
+            try:
+                assert reloaded_comic_page.is_fetch_error
+            except AssertionError as e:
+                raise AssertionError(
+                    f'{e} '
+                    f'Page content starts with: {reloaded_comic_page.content[:500]!r}'
+                ) from None
+
+
+async def test_when_download_fails_then_download_button_enables_and_page_does_not_reload() -> None:
+    # 1. Skip Playwright test when Crystal is bundled
+    # 2. Ensure Crystal is NOT bundled on at least one platform (Linux),
+    #    so that Playwright tests will run on at least 1 CI job
+    if is_linux():
+        assert not hasattr(sys, 'frozen')
+    if hasattr(sys, 'frozen'):
+        skipTest('Playwright not available in bundled app')
+    from playwright.sync_api import sync_playwright
+    
+    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        comic1_url = sp.get_request_url('https://xkcd.com/1/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the home page
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti.GetFirstChild() is None  # no entities
+                
+                # Add home URL as root resource
+                click_button(mw.new_root_url_button)
+                if True:
+                    nud = await NewRootUrlDialog.wait_for()
+                    
+                    nud.name_field.Value = 'Home'
+                    nud.url_field.Value = home_url
+                    nud.do_not_download_immediately()
+                    await nud.ok()
+                (home_ti,) = root_ti.Children
+                
+                # Download the home page
+                home_ti.SelectItem()
+                await mw.click_download_button()
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            server_port = _DEFAULT_SERVER_PORT + 1
+            home_url_in_archive = get_request_url(
+                home_url,
+                server_port,
+                project_default_url_prefix=project.default_url_prefix)
+            comic1_url_in_archive = get_request_url(
+                comic1_url,
+                server_port,
+                project_default_url_prefix=project.default_url_prefix)
+            
+            # Start the project server by clicking View button
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(home_url_in_archive):
+                click_button(mw.view_button)
+
+            # Test the download button behavior in a real browser
+            # 
+            # 1. Run all Playwright operations in a background thread to
+            #    avoid locking the foreground thread.
+            # 2. Run all Playwright operations on a single consistent thread
+            #    to comply with Playwright's threading requirements.
+            # 
+            # NOTE: This is the only automated test that uses Playwright,
+            #       at the time of writing. When there are multiple tests
+            #       that use Playwright, recommend enhancing testing
+            #       infrastructure to support sharing a single Playwright,
+            #       BrowserContext, and Browser instance between multiple
+            #       test functions, to reduce setup/teardown overhead.
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                def run_playwright_test():
+                    # TODO: Allow browser's headless mode to be controlled by
+                    #       an environment variable, like CRYSTAL_HEADLESS_BROWSER=False
+                    with sync_playwright() as p, \
+                            closing(p.chromium.launch(headless=True)) as browser, \
+                            closing(browser.new_context()) as context:
+                        context.set_default_timeout(int(DEFAULT_WAIT_TIMEOUT * 1000))
+                        page = context.new_page()
+                        
+                        # Navigate to comic #1, which should be a "Not in Archive" page
+                        page.goto(comic1_url_in_archive)
+                        assert page.title() == 'Not in Archive | Crystal'
+                        
+                        # Mock fetch to simulate network failure after delay
+                        # 
+                        # Patch window.fetch manually, rather than using the
+                        # route() API, since we need a delayed response without
+                        # blocking the thread that calls download_button.click()
+                        page.evaluate("""
+                            window.originalFetch = window.fetch;
+                            window.fetch = function(url, options) {
+                                if (url && typeof url === 'string' && url.includes('/_/crystal/download-url')) {
+                                    // Return a promise that rejects after 1 second
+                                    return new Promise((resolve, reject) => {
+                                        setTimeout(() => {
+                                            reject(new Error('Network connection failed'));
+                                        }, 1000);
+                                    });
+                                }
+                                // For all other requests, use the original fetch
+                                return window.originalFetch(url, options);
+                            };
+                        """)
+                        
+                        # Ensure download button is initially enabled
+                        download_button = page.locator('#download-button')
+                        assert download_button.is_enabled()
+                        assert download_button.text_content() == '⬇ Download'
+                        
+                        # Ensure progress div is initially hidden
+                        progress_div = page.locator('#download-progress')
+                        assert not progress_div.is_visible()
+                        
+                        # Start download
+                        download_button.click()
+                        page.wait_for_function('document.getElementById("download-button").disabled')
+                        assert download_button.text_content() == '⬇ Downloading...'
+                        page.wait_for_selector('#download-progress', state='visible')
+                        
+                        # Wait for download failure. Then:
+                        # 1. Ensure the page did NOT reload
+                        # 2. Wait for the download button to be re-enabled
+                        page.wait_for_function('!document.getElementById("download-button").disabled')
+                        assert download_button.is_enabled()
+                        assert download_button.text_content() == '⬇ Download'
+                        
+                        # Ensure error message is displayed
+                        progress_text = page.locator('#progress-text')
+                        progress_text_content = progress_text.text_content()
+                        assertIn('Download failed:', progress_text_content)
+                        assertIn('Network connection failed', progress_text_content)
+                playwright_future = executor.submit(run_playwright_test)
+                await wait_for_future(playwright_future, timeout=sys.maxsize)
+
+
+# ------------------------------------------------------------------------------
+# Test: "Fetch Error" Page
+
+@skip('not yet automated')
+async def test_given_fetch_error_page_visible_then_crystal_branding_and_error_message_and_url_is_visible() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_fetch_error_page_visible_when_press_go_back_button_then_navigates_to_previous_page() -> None:
+    pass
 
 
 # ------------------------------------------------------------------------------
@@ -166,6 +566,42 @@ async def test_when_serve_page_with_unknown_x_header_then_excludes_header_silent
 
 # ------------------------------------------------------------------------------
 # Utility
+
+@asynccontextmanager
+async def _not_in_archive_page_visible(*, readonly: bool=False) -> AsyncIterator[WebPage]:
+    """
+    Context manager that opens a test project, starts a server, and returns a WebPage
+    for a "Not in Archive" page by requesting a URL that doesn't exist in the archive.
+    
+    Args:
+        readonly: If True, opens the project in readonly mode
+    
+    Returns:
+        WebPage: The "Not in Archive" page response
+    """
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        # Define URLs - use a URL that is NOT in the archive to trigger NIA page
+        missing_url = 'https://xkcd.com/missing-page/'
+        
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=readonly) as (mw, project):
+            # Start server
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.GetFirstChild()
+            assert home_ti is not None
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
+                click_button(mw.view_button)
+            
+            # Try to fetch a URL that's not in the archive to get NIA page
+            server_page = await fetch_archive_url(missing_url)
+            
+            # Verify this is indeed the "Not in Archive" page
+            assert server_page.is_not_in_archive
+            assert server_page.status == 404
+            assert server_page.title == 'Not in Archive | Crystal'
+            
+            yield server_page
+
 
 @asynccontextmanager
 async def _xkcd_home_page_served(
