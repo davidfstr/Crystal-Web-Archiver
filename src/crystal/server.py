@@ -11,6 +11,7 @@ from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
     Project, Resource, ResourceGroup, ResourceRevision, RootResource,
 )
+from crystal import resources
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
     print_error, print_info, print_success, print_warning,
@@ -481,7 +482,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(_pin_date_js(timestamp).encode('utf-8'))
             return
         
-        # Handle download progress SSE endpoint
+        # Handle Crystal static resources endpoint
+        if self.path.startswith('/_/crystal/resources/'):
+            yield SwitchToThread.BACKGROUND
+            self._handle_static_resource()
+            return
+        
+        # Handle download progress endpoint
         if self.path.startswith('/_/crystal/download-progress'):
             yield SwitchToThread.BACKGROUND
             self._handle_get_download_progress()
@@ -859,6 +866,55 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps(content).encode('utf-8'))
+
+    # --- Handle: Static Resources ---
+    
+    @bg_affinity
+    def _handle_static_resource(self) -> None:
+        """Serve static resources from Crystal's "resources" directory."""
+        
+        PUBLIC_STATIC_RESOURCE_NAMES = {
+            'appicon.png',
+            'logotext.png',
+            'logotext@2x.png',
+            'logotext-dark.png',
+            'logotext-dark@2x.png'
+        }
+        
+        # Extract resource filename from path: /_/crystal/resources/filename.ext
+        if not self.path.startswith('/_/crystal/resources/'):
+            self.send_response(404)
+            self.end_headers()
+            return
+        resource_name = self.path.removeprefix('/_/crystal/resources/')
+        
+        # Security: Only allow specific resource files to prevent directory traversal
+        if resource_name not in PUBLIC_STATIC_RESOURCE_NAMES:
+            self.send_response(404)
+            self.end_headers()
+            return
+        
+        try:
+            with resources.open_binary(resource_name) as f:
+                content = f.read()
+            
+            # Set appropriate content type.
+            # All current public resources are PNG files.
+            assert resource_name.endswith('.png')
+            content_type = 'image/png'
+            
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Cache-Control', 'max-age=3600')  # cache for 1 hour
+            self.end_headers()
+            self.wfile.write(content)
+        except FileNotFoundError:
+            self.send_response(404)
+            self.end_headers()
+        except Exception as e:
+            self._print_error(f'Error serving static resource {resource_name}: {str(e)}')
+            self.send_response(500)
+            self.end_headers()
     
     # === Send Page ===
     
@@ -1332,25 +1388,9 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
             .logo {
                 width: 48px;
                 height: 48px;
-                background: linear-gradient(45deg, #4A90E2, #357ABD);
-                border-radius: 8px;
                 margin-right: 16px;
                 flex-shrink: 0;
-                position: relative;
-                box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
-            }
-            
-            .logo::after {
-                content: '';
-                position: absolute;
-                top: 50%%;
-                left: 50%%;
-                width: 24px;
-                height: 24px;
-                background: rgba(255, 255, 255, 0.9);
-                border-radius: 4px;
-                transform: translate(-50%%, -50%%) rotateX(15deg) rotateY(-15deg);
-                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+                border-radius: 8px;
             }
             
             .brand-text {
@@ -1358,11 +1398,15 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
             }
             
             .brand-title {
-                font-size: 24px;
-                font-weight: 500;
-                color: #2c3e50;
                 margin: 0;
-                font-family: 'Futura', -apple-system, BlinkMacSystemFont, sans-serif;
+                height: 32px;
+                line-height: 1;
+            }
+            
+            .brand-title img {
+                height: 32px;
+                width: auto;
+                vertical-align: baseline;
             }
             
             .brand-subtitle {
@@ -1507,9 +1551,13 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
     <body>
         <div class="container">
             <div class="header">
-                <div class="logo"></div>
+                <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="logo" />
                 <div class="brand-text">
-                    <h1 class="brand-title">Crystal</h1>
+                    <h1 class="brand-title">
+                        <img src="/_/crystal/resources/logotext.png" 
+                             srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
+                             alt="Crystal" />
+                    </h1>
                     <p class="brand-subtitle">Website Archiver</p>
                 </div>
             </div>
