@@ -9,9 +9,9 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager
 import signal
 from crystal.model import Project, Resource
-from crystal.tests.util.asserts import assertEqual, assertIn
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, close_open_or_create_dialog, py_eval, read_until,
+    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, read_until,
     crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
@@ -271,6 +271,11 @@ def test_when_launched_with_serve_and_port_then_binds_to_specified_port() -> Non
 
 def test_when_launched_with_serve_and_host_then_binds_to_specified_host() -> None:
     with _temporary_project() as project_path:
+        # Create empty project
+        with _crystal_shell_with_serve(project_path) as _:
+            pass
+        
+        # Open empty project (as --readonly by default)
         with _crystal_shell_with_serve(project_path, host='0.0.0.0') as server_start_message:
             assertIn('Server started at: http://0.0.0.0:2797', server_start_message)
 
@@ -309,6 +314,58 @@ def test_given_launched_with_serve_and_no_port_and_default_port_in_use_then_uses
         with _temporary_project() as project_path:
             with _crystal_shell_with_serve(project_path) as server_start_message:
                 assertIn('Server started at: http://127.0.0.1:2798', server_start_message)
+
+
+def test_when_launched_with_serve_and_without_readonly_then_serves_as_writable() -> None:
+    with _temporary_project() as project_path:
+        with _crystal_shell_with_serve(project_path) as server_start_message:
+            assertIn('Server started at: http://127.0.0.1:2797', server_start_message)
+            
+            # Should not contain readonly messages for default 127.0.0.1 host
+            assertNotIn('Read-only mode automatically enabled', server_start_message)
+            assertNotIn('To allow remote modifications', server_start_message)
+
+
+def test_when_launched_with_serve_and_host_equal_to_127_0_0_1_and_without_readonly_then_serves_as_writable() -> None:
+    with _temporary_project() as project_path:
+        with _crystal_shell_with_serve(project_path, host='127.0.0.1') as server_start_message:
+            assertIn('Server started at: http://127.0.0.1:2797', server_start_message)
+            
+            # Should not contain readonly messages for explicit 127.0.0.1 host
+            assertNotIn('Read-only mode automatically enabled', server_start_message)
+            assertNotIn('To allow remote modifications', server_start_message)
+
+
+def test_when_launched_with_serve_and_host_other_than_127_0_0_1_and_without_no_readonly_then_serves_as_readonly() -> None:
+    with _temporary_project() as project_path:
+        # Create empty project
+        with _crystal_shell_with_serve(project_path) as _:
+            pass
+        
+        # Open empty project (as --readonly by default for remote host)
+        with _crystal_shell_with_serve(project_path, host='0.0.0.0') as server_start_message:
+            assertIn('Server started at: http://0.0.0.0:2797', server_start_message)
+            
+            # Should contain readonly messages for remote host
+            assertIn('Read-only mode automatically enabled for remote access (--host 0.0.0.0)', server_start_message)
+            assertIn('To allow remote modifications, restart with --no-readonly', server_start_message)
+
+
+def test_when_launched_with_serve_and_host_other_than_127_0_0_1_and_with_no_readonly_then_serves_as_writable() -> None:
+    with _temporary_project() as project_path:
+        # Create empty project
+        with _crystal_shell_with_serve(project_path) as _:
+            pass
+        
+        # Open empty project with --no-readonly to override auto-readonly for remote host
+        with _crystal_shell_with_serve(
+                project_path, host='0.0.0.0', extra_args=['--no-readonly']
+                ) as server_start_message:
+            assertIn('Server started at: http://0.0.0.0:2797', server_start_message)
+            
+            # Should not contain readonly messages when --no-readonly is specified
+            assertNotIn('Read-only mode automatically enabled', server_start_message)
+            assertNotIn('To allow remote modifications', server_start_message)
 
 
 # === Shell Mode Tests (--shell) ===
@@ -627,16 +684,19 @@ def _crystal_shell_with_serve(
         project_path: str,
         port: int | None = None,
         host: str | None = None,
-        *, banner_timeout: float | None = None
+        *, banner_timeout: float | None = None,
+        extra_args: list[str] | None = None
         ) -> Iterator[str]:
     """
-    Context which starts "crystal --serve [--port PORT] [--host HOST] PROJECT_PATH --shell"
+    Context which starts "crystal --serve [--port PORT] [--host HOST] [extra_args] PROJECT_PATH --shell"
     and cleans up the associated process upon exit.
     
     See also: crystal_running_with_banner()
     """
     if banner_timeout is None:
         banner_timeout = 4.0  # currently (2 * DEFAULT_WAIT_TIMEOUT)
+    if extra_args is None:
+        extra_args = []
     
     # Build arguments
     args = ['--serve']
@@ -644,12 +704,35 @@ def _crystal_shell_with_serve(
         args.extend(['--port', str(port)])
     if host is not None:
         args.extend(['--host', host])
+    args.extend(extra_args)
     args.extend([project_path])
     
     with crystal_shell(args=args) as (crystal, banner):
         assert isinstance(crystal.stdout, TextIOBase)
         (server_start_message, _) = read_until(crystal.stdout, '\n', timeout=banner_timeout)
-        yield server_start_message
+        if 'Traceback ' in server_start_message:
+            raise AssertionError(
+                f'Crystal raised exception immediately after launch:\n\n'
+                f'{server_start_message}{drain(crystal.stdout)}')
+        
+        # Read any additional lines:
+        # - server URL -- already read above
+        # - readonly messages (if any)
+        # - Ctrl-C instruction (optional)
+        additional_lines = []
+        try:
+            # Read more lines with a short timeout,
+            # until we see the Ctrl-C instruction or reach a reasonable line limit
+            while True:
+                (line, _) = read_until(
+                    crystal.stdout, '\n', timeout=0.5, _drain_diagnostic=False)
+                additional_lines.append(line)
+                if 'Press Ctrl-C to stop' in line or len(additional_lines) >= 3:
+                    break
+        except ReadUntilTimedOut:
+            pass  # OK
+        
+        yield (server_start_message + ''.join(additional_lines))
 
 
 def _ensure_server_is_accessible(server_url: str) -> None:

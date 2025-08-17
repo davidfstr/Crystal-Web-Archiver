@@ -25,6 +25,11 @@ Release Notes ⋮
       ("caffeinated") on Linux. macOS and Windows support for caffeination
       already existed.
 
+* Serving improvements
+    * When serving from a remote `--host`, projects are opened in `--readonly`
+      mode by default so that remote users cannot modify a served project.
+      Remote modifications can be explicitly enabled with `--no-readonly`.
+
 * Branding changes
     * Crystal's logo and contributor information is now displayed in the
       main window, alongside its version number.

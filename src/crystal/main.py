@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
+from typing import Any, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
 from typing_extensions import override
 
 if TYPE_CHECKING:
@@ -188,6 +188,11 @@ def _main(args: list[str]) -> None:
     parser.add_argument(
         '--readonly',
         help='Open projects as read-only by default rather than as writable.',
+        action='store_true',
+    )
+    parser.add_argument(
+        '--no-readonly',
+        help='Open projects as writable by default rather than as read-only.',
         action='store_true',
     )
     parser.add_argument(
@@ -631,10 +636,27 @@ async def _did_launch(
                     from crystal import progress
                     progress._active_progress_listener = progress_listener
                 
+                # Calculate whether to open as readonly
+                effective_readonly: bool
+                if parsed_args.readonly:
+                    # Explicitly --readonly
+                    effective_readonly = True
+                elif parsed_args.no_readonly:
+                    # Explicitly --no-readonly
+                    effective_readonly = False
+                else:
+                    host = parsed_args.host or _DEFAULT_SERVER_HOST
+                    if host == '127.0.0.1':
+                        # Serving to localhost. Default to writable.
+                        effective_readonly = False
+                    else:
+                        # Serving to a remote host. Default to read-only.
+                        effective_readonly = True
+                
                 # Get a project
                 project_kwargs = dict(
-                    readonly=parsed_args.readonly,
-                )
+                    readonly=effective_readonly,
+                )  # type: dict[str, Any]
                 if filepath is None:
                     from crystal.util.unsaved_project import get_unsaved_untitled_project_path
                     last_untitled_project_path = get_unsaved_untitled_project_path()

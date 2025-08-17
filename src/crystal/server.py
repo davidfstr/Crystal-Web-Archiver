@@ -49,7 +49,19 @@ Verbosity = Literal['normal', 'indent']
 
 
 class ProjectServer:
-    """Runs the archive server on a thread."""
+    """
+    Runs the project server on a thread. The server can be accessed via HTTP,
+    and allows archived pages in a project to be viewed in a web browser.
+    
+    The server limits who can connect to it using `--host`. It does not perform
+    any additional authentication/authorization to limit access.
+    
+    Secure-by-default policies:
+    - The default host is 127.0.0.1, which only allows connections from the same
+      computer the server is running on.
+    - When a remote host is specified, projects will be served as read-only
+      by default, unless --no-readonly is specified.
+    """
     
     # NOTE: Only changed when tests are running
     _last_created: Optional[ProjectServer]=None
@@ -118,6 +130,12 @@ class ProjectServer:
             try:
                 if verbosity == 'normal':
                     print_success(f'Server started at: http://{host}:{port}', file=self._stdout)
+                    
+                    # Show readonly mode info if applicable
+                    if project.readonly and host != '127.0.0.1':
+                        print_info(f'Read-only mode automatically enabled for remote access (--host {host}).', file=self._stdout)
+                        print_info('To allow remote modifications, restart with --no-readonly.', file=self._stdout)
+                    
                     if exit_instruction:
                         print_info(exit_instruction, file=self._stdout)
                 self._server.serve_forever()

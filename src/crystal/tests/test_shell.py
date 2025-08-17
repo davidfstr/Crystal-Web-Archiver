@@ -167,7 +167,7 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
             try:
                 assertEqual('4\n', py_eval(crystal, '2 + 2'))
             except AssertionError as e:
-                raise AssertionError(f'{e} Trailing output: {drain(crystal)!r}')
+                raise AssertionError(f'{e} Trailing output: {drain(crystal)!r}') from None
     
     with subtests.test(case='test when main window or non-first open/create dialog is closed given shell is running then shell remains running'):
         with crystal_shell() as (crystal, _):
