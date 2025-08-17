@@ -27,8 +27,8 @@ import sys
 from unittest import skip
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
-#       in test_workflows.py. Write stubs for all such behaviors
-#       and link them to the covering test.
+#       in test_workflows.py. Link stubs for such behaviors
+#       to any preexisting covering test.
 
 # ------------------------------------------------------------------------------
 # Test: Start Server
@@ -82,19 +82,43 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
 
 
 # ------------------------------------------------------------------------------
-# Test: "Welcome" Page
+# Test: Serve Archive URL (_serve_archive_url)
+
+# (TODO: Add tests, for at least the following cases)
+# - Decide between response outcomes:
+#   - send_redirect
+#   - send_resource_not_in_archive -- covered below
+#   - send_revision -- NOT covered elsewhere yet
+#     - send_http_revision
+#     - send_generic_revision
+# - Dynamically modify project:
+#   - '*** Dynamically downloading new resource in group ...'
+#   - '*** Dynamically downloading root resource ...'
+#   - '*** Dynamically downloading existing resource in group ...'
+# - Dynamically take action:
+#   - '*** Dynamically rewriting link from ...'
+
+
+# ------------------------------------------------------------------------------
+# Test: Redirect to Archive URL (_redirect_to_archive_url_if_referer_is_self)
 
 # (TODO: Add test stubs)
 
 
 # ------------------------------------------------------------------------------
-# Test: "Not Found" Page
+# Test: "Welcome" Page (send_welcome_page)
 
 # (TODO: Add test stubs)
 
 
 # ------------------------------------------------------------------------------
-# Test: "Not in Archive" Page
+# Test: "Not Found" Page (send_not_found_page)
+
+# (TODO: Add test stubs)
+
+
+# ------------------------------------------------------------------------------
+# Test: "Not in Archive" Page (send_resource_not_in_archive)
 
 async def test_given_nia_page_visible_then_crystal_branding_and_error_message_and_url_is_visible() -> None:
     async with _not_in_archive_page_visible() as server_page:
@@ -462,7 +486,7 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
 
 
 # ------------------------------------------------------------------------------
-# Test: "Fetch Error" Page
+# Test: "Fetch Error" Page (send_resource_error)
 
 @skip('not yet automated')
 async def test_given_fetch_error_page_visible_then_crystal_branding_and_error_message_and_url_is_visible() -> None:
@@ -475,7 +499,7 @@ async def test_given_fetch_error_page_visible_when_press_go_back_button_then_nav
 
 
 # ------------------------------------------------------------------------------
-# Test: Header Inclusion & Exclusion
+# Test: Header Inclusion & Exclusion (_HEADER_ALLOWLIST, _HEADER_DENYLIST)
 
 async def test_when_serve_page_then_safe_headers_included() -> None:
     SAFE_HEADER_NAME = 'Date'
@@ -562,6 +586,17 @@ async def test_when_serve_page_with_unknown_x_header_then_excludes_header_silent
             f'*** Ignoring unknown header in archive: {UNKNOWN_X_HEADER_NAME}: '
             not in captured_stdout
         )
+
+
+# ------------------------------------------------------------------------------
+# Test: Misc Functionality (in _do_GET and _do_POST)
+
+@skip('not yet automated')
+async def test_js_date_always_returns_datetime_that_resource_was_downloaded() -> None:
+    # Case 1: new Date()
+    # Case 2: Date()
+    # Case 3: Date.now()
+    pass
 
 
 # ------------------------------------------------------------------------------
