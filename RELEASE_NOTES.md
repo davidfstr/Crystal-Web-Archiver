@@ -17,6 +17,8 @@ Release Notes ⋮
     * Untitled projects are now saved to a permanent hidden directory instead of
       the system temporary directory, preventing data loss after unexpected
       logout, restart, or shutdown.
+    * Missing pages can be immediately downloaded with 1 click when browsing
+      a downloaded website.
 
 * Downloading improvements
     * While long downloads are running the system will be kept awake
@@ -26,6 +28,8 @@ Release Notes ⋮
 * Branding changes
     * Crystal's logo and contributor information is now displayed in the
       main window, alongside its version number.
+    * Browser error pages are now appropriately styled and include
+      Crystal's branding elements.
 
 * Minor fixes
     * Most dialogs are now shown as window-modal rather than modeless to
