@@ -1385,6 +1385,23 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
                 border-bottom: 2px solid #e9ecef;
             }
             
+            /* Dark mode styles for top of page */
+            @media (prefers-color-scheme: dark) {
+                body {
+                    background: linear-gradient(135deg, #1a1a1a 0%%, #2d2d30 100%%);
+                    color: #e0e0e0;
+                }
+                
+                .container {
+                    background: #2d2d30;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+                }
+                
+                .header {
+                    border-bottom: 2px solid #404040;
+                }
+            }
+            
             .logo {
                 width: 48px;
                 height: 48px;
@@ -1407,6 +1424,14 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
                 height: 32px;
                 width: auto;
                 vertical-align: baseline;
+            }
+            
+            /* Default to light logotext */
+            .logotext-light {
+                display: inline;
+            }
+            .logotext-dark {
+                display: none;
             }
             
             .brand-subtitle {
@@ -1446,6 +1471,34 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
                 font-weight: 600;
             }
             
+            /* Dark mode styles for brand and content */
+            @media (prefers-color-scheme: dark) {
+                .brand-subtitle {
+                    color: #a0a0a0;
+                }
+                
+                .error-message {
+                    color: #e0e0e0;
+                }
+                
+                .url-info {
+                    background: #404040;
+                    border-left: 4px solid #6BB6FF;
+                }
+                
+                .url-label {
+                    color: #a0a0a0;
+                }
+                
+                /* Switch to dark logotext */
+                .logotext-light {
+                    display: none;
+                }
+                .logotext-dark {
+                    display: inline;
+                }
+            }
+            
             .url-link {
                 color: #4A90E2;
                 text-decoration: none;
@@ -1466,6 +1519,19 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
                 border-radius: 8px;
                 margin: 20px 0;
                 font-size: 14px;
+            }
+            
+            /* Dark mode styles for URL and notices */
+            @media (prefers-color-scheme: dark) {
+                .url-link {
+                    color: #6BB6FF;
+                }
+                
+                .readonly-notice {
+                    background: #5a4a2d;
+                    border: 1px solid #8b7355;
+                    color: #f4d03f;
+                }
             }
             
             .actions {
@@ -1546,6 +1612,17 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
                 margin-top: 8px;
                 text-align: center;
             }
+            
+            /* Dark mode styles for progress */
+            @media (prefers-color-scheme: dark) {
+                .progress-bar {
+                    background: #404040;
+                }
+                
+                .progress-fill {
+                    background: #6BB6FF;
+                }
+            }
         </style>
     </head>
     <body>
@@ -1554,9 +1631,18 @@ _NOT_IN_ARCHIVE_HTML_TEMPLATE = dedent(
                 <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="logo" />
                 <div class="brand-text">
                     <h1 class="brand-title">
-                        <img src="/_/crystal/resources/logotext.png" 
-                             srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
-                             alt="Crystal" />
+                        <img
+                            src="/_/crystal/resources/logotext.png" 
+                            srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
+                            alt="Crystal"
+                            class="logotext-light"
+                        />
+                        <img
+                            src="/_/crystal/resources/logotext-dark.png" 
+                            srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
+                            alt="Crystal"
+                            class="logotext-dark"
+                        />
                     </h1>
                     <p class="brand-subtitle">Website Archiver</p>
                 </div>
