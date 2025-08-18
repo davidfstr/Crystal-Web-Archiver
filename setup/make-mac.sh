@@ -6,12 +6,14 @@ rm -rf build dist dist-mac
 
 # Build .app
 echo "Building .app..."
-if [ "$1" != "--app-only" ]; then
-    GRAPH_OPT=""
-else
+if [ "$1" == "--app-only" ]; then
     # --graph: Generates a GraphViz .dot file in the build directory that shows
     #          the calculated module dependency graph
-    GRAPH_OPT="--graph"
+    # --xref: Generates an .html file in the build directory that shows
+    #         the calculated module dependency graph
+    GRAPH_OPT="--graph --xref"
+else
+    GRAPH_OPT=""
 fi
 python setup.py py2app $GRAPH_OPT > py2app.stdout.log 2> py2app.stderr.log
 if [ $? -ne 0 ]; then
