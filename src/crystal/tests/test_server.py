@@ -488,14 +488,28 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
 # ------------------------------------------------------------------------------
 # Test: "Fetch Error" Page (send_resource_error)
 
-@skip('not yet automated')
 async def test_given_fetch_error_page_visible_then_crystal_branding_and_error_message_and_url_is_visible() -> None:
-    pass
+    async with _fetch_error_page_visible() as (server_page, failing_url):
+        # Verify Crystal branding is visible
+        content = server_page.content
+        assert 'Crystal' in content, \
+            "Crystal branding should be visible in page content"
+        
+        # Verify the failing URL is displayed in the error message
+        assert failing_url in content, \
+            f"Failing URL {failing_url} should be visible in the error message"
+        
+        # Verify basic error message content
+        assert '<strong>Fetch Error</strong>' in content, \
+            "Error message should indicate there was a fetch error"
 
 
-@skip('not yet automated')
 async def test_given_fetch_error_page_visible_when_press_go_back_button_then_navigates_to_previous_page() -> None:
-    pass
+    async with _fetch_error_page_visible() as (server_page, failing_url):
+        # Verify a go back button/link is present in the content
+        content = server_page.content
+        assert '← Go Back' in content and 'onclick="history.back()"' in content, \
+            "Go back button should be present on fetch error page"
 
 
 # ------------------------------------------------------------------------------
@@ -608,11 +622,8 @@ async def _not_in_archive_page_visible(*, readonly: bool=False) -> AsyncIterator
     Context manager that opens a test project, starts a server, and returns a WebPage
     for a "Not in Archive" page by requesting a URL that doesn't exist in the archive.
     
-    Args:
-        readonly: If True, opens the project in readonly mode
-    
-    Returns:
-        WebPage: The "Not in Archive" page response
+    Arguments:
+    * readonly -- Whether to open the project in readonly mode
     """
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Define URLs - use a URL that is NOT in the archive to trigger NIA page
@@ -627,15 +638,66 @@ async def _not_in_archive_page_visible(*, readonly: bool=False) -> AsyncIterator
             with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
                 click_button(mw.view_button)
             
-            # Try to fetch a URL that's not in the archive to get NIA page
-            server_page = await fetch_archive_url(missing_url)
+            # Verify that "Not in Archive" page reached
+            nia_page = await fetch_archive_url(missing_url)
+            assert nia_page.is_not_in_archive
+            assert nia_page.title == 'Not in Archive | Crystal'
+            assert nia_page.status == 404
             
-            # Verify this is indeed the "Not in Archive" page
-            assert server_page.is_not_in_archive
-            assert server_page.status == 404
-            assert server_page.title == 'Not in Archive | Crystal'
+            yield nia_page
+
+
+@asynccontextmanager
+async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
+    """
+    Context manager that opens a test project, starts a server, and returns a WebPage
+    for a "Fetch Error" page by requesting a URL that exists while the network is down.
+    """
+    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the home page when network is down to cause fetch error
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti.GetFirstChild() is None  # no entities
+                
+                # Add home URL as root resource
+                click_button(mw.new_root_url_button)
+                if True:
+                    nud = await NewRootUrlDialog.wait_for()
+                    
+                    nud.name_field.Value = 'Home'
+                    nud.url_field.Value = home_url
+                    nud.do_not_download_immediately()
+                    await nud.ok()
+                (home_ti,) = root_ti.Children
+                
+                # Download the home page, when network is down
+                with network_down():
+                    home_ti.SelectItem()
+                    await mw.click_download_button()
+                    await wait_for_download_to_start_and_finish(mw.task_tree)
             
-            yield server_page
+            server_port = _DEFAULT_SERVER_PORT + 1
+            home_url_in_archive = get_request_url(
+                home_url,
+                server_port,
+                project_default_url_prefix=project.default_url_prefix)
+            
+            # Start the project server by clicking View button
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(home_url_in_archive):
+                click_button(mw.view_button)
+            
+            # Verify that "Fetch Error" page reached
+            fetch_error_page = await fetch_archive_url(home_url, server_port)
+            assert fetch_error_page.is_fetch_error
+            assert fetch_error_page.title == 'Fetch Error | Crystal'
+            assert fetch_error_page.status == 400
+            
+            yield (fetch_error_page, home_url)
 
 
 @asynccontextmanager
