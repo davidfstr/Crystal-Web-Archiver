@@ -108,13 +108,80 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
 # ------------------------------------------------------------------------------
 # Test: "Welcome" Page (send_welcome_page)
 
-# (TODO: Add test stubs)
+async def test_given_welcome_page_visible_then_crystal_branding_and_url_input_is_visible() -> None:
+    async with _welcome_page_visible() as server_page:
+        # Verify Crystal branding is visible
+        content = server_page.content
+        assert 'Crystal' in content, \
+            "Crystal branding should be visible in page content"
+        
+        # Verify URL input is visible
+        assert 'Enter the URL of a page' in content, \
+            "URL input should be visible on the welcome page"
+        
+        # Verify form elements are present
+        assert '<form action="/">' in content, \
+            "Form should be present on welcome page"
+        assert 'name="url"' in content, \
+            "URL input field should be present"
+        assert 'type="submit"' in content, \
+            "Submit button should be present"
+
+
+async def test_given_welcome_page_visible_when_enter_url_then_navigates_to_url_in_archive() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+            # Start server
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.GetFirstChild()
+            assert home_ti is not None
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
+                click_button(mw.view_button)
+            
+            target_url = 'https://xkcd.com/'
+            target_url_in_archive = get_request_url(
+                target_url,
+                _DEFAULT_SERVER_PORT,
+                project_default_url_prefix=project.default_url_prefix)
+            
+            # Simulate form submit of target_url. Expect redirect.
+            redirect_response = await bg_fetch_url(
+                f'http://127.0.0.1:{_DEFAULT_SERVER_PORT}/?url={target_url}',
+                follow_redirects=False
+            )
+            assertEqual(307, redirect_response.status)
+            location_header = redirect_response.headers.get('Location')
+            assertEqual(target_url_in_archive, location_header)
+            
+            # Follow the redirect. Expect archived page.
+            final_response = await bg_fetch_url(target_url_in_archive)
+            assertEqual(200, final_response.status)
+            assertIn('<title>xkcd:', final_response.content, \
+                "Response should contain the archived xkcd title")
 
 
 # ------------------------------------------------------------------------------
 # Test: "Not Found" Page (send_not_found_page)
 
-# (TODO: Add test stubs)
+async def test_given_not_found_page_visible_then_crystal_branding_and_exit_button_is_visible() -> None:
+    async with _not_found_page_visible() as server_page:
+        # Verify Crystal branding is visible
+        content = server_page.content
+        assert 'Crystal' in content, \
+            "Crystal branding should be visible in page content"
+        
+        # Verify error message is present
+        assert 'Page Not Found' in content, \
+            "Error message should indicate the page was not found"
+        
+        # Verify go back button is visible 
+        assert '← Go Back' in content and 'onclick="history.back()"' in content, \
+            "Go Back button should be visible on the not found page"
+
+        # Verify return home button is visible
+        assert 'Return to Home' in content, \
+            "Return to Home button should be visible on the not found page"
 
 
 # ------------------------------------------------------------------------------
@@ -139,7 +206,7 @@ async def test_given_nia_page_visible_then_crystal_branding_and_error_message_an
 
 async def test_given_nia_page_visible_when_press_go_back_button_then_navigates_to_previous_page() -> None:
     async with _not_in_archive_page_visible() as server_page:
-        # Verify a go back button/link is present in the content
+        # Verify a go back button is present in the content
         content = server_page.content
         assert '← Go Back' in content and 'onclick="history.back()"' in content, \
             "Go back button should be present on NIA page"
@@ -506,7 +573,7 @@ async def test_given_fetch_error_page_visible_then_crystal_branding_and_error_me
 
 async def test_given_fetch_error_page_visible_when_press_go_back_button_then_navigates_to_previous_page() -> None:
     async with _fetch_error_page_visible() as (server_page, failing_url):
-        # Verify a go back button/link is present in the content
+        # Verify a go back button is present in the content
         content = server_page.content
         assert '← Go Back' in content and 'onclick="history.back()"' in content, \
             "Go back button should be present on fetch error page"
@@ -615,6 +682,60 @@ async def test_js_date_always_returns_datetime_that_resource_was_downloaded() ->
 
 # ------------------------------------------------------------------------------
 # Utility
+
+@asynccontextmanager
+async def _welcome_page_visible(*, readonly: bool=False) -> AsyncIterator[WebPage]:
+    """
+    Context manager that opens a test project, starts a server, and returns a WebPage
+    for the welcome page by requesting the root path "/".
+    
+    Arguments:
+    * readonly -- Whether to open the project in readonly mode
+    """
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=readonly) as (mw, project):
+            # Start server
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.GetFirstChild()
+            assert home_ti is not None
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
+                click_button(mw.view_button)
+            
+            # Fetch the welcome page by requesting the root path directly
+            welcome_page = await bg_fetch_url(f'http://127.0.0.1:{_DEFAULT_SERVER_PORT}/')
+            assert welcome_page.title == 'Welcome | Crystal'
+            assert welcome_page.status == 200
+            
+            yield welcome_page
+
+
+@asynccontextmanager
+async def _not_found_page_visible(*, readonly: bool=False) -> AsyncIterator[WebPage]:
+    """
+    Context manager that opens a test project, starts a server, and returns a WebPage
+    for a "Not Found" page by requesting a non-existent path that isn't a URL.
+    
+    Arguments:
+    * readonly -- Whether to open the project in readonly mode (not used for this page type)
+    """
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=readonly) as (mw, project):
+            # Start server
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.GetFirstChild()
+            assert home_ti is not None
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
+                click_button(mw.view_button)
+            
+            # Fetch a not found page by requesting a non-existent path directly
+            not_found_page = await bg_fetch_url(f'http://127.0.0.1:{_DEFAULT_SERVER_PORT}/non-existent-path')
+            assert not_found_page.title == 'Not Found | Crystal'
+            assert not_found_page.status == 404
+            
+            yield not_found_page
+
 
 @asynccontextmanager
 async def _not_in_archive_page_visible(*, readonly: bool=False) -> AsyncIterator[WebPage]:

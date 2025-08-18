@@ -920,7 +920,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @bg_affinity
     def send_welcome_page(self, query_params: dict[str, list[str]], *, vary_referer: bool) -> None:
-        # TODO: Is this /?url=** path used anywhere anymore?
         if 'url' in query_params:
             archive_url = query_params['url'][0]
             redirect_url = self.get_request_url(archive_url)
@@ -934,23 +933,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Vary', 'Referer')
         self.end_headers()
         
-        self.wfile.write(dedent(
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8" />
-                <title>Welcome | Crystal</title>
-            </head>
-            <body>
-                <p>Enter the URL of a page to load from the archive:</p>
-                <form action="/">
-                    URL: <input type="text" name="url" value="http://" /><input type="submit" value="Go" />
-                </form>
-            </body>
-            </html>
-            """
-        ).lstrip('\n').encode('utf-8'))
+        html_content = _welcome_page_html()
+        self.wfile.write(html_content.encode('utf-8'))
     
     @bg_affinity
     def send_not_found_page(self, *, vary_referer: bool) -> None:
@@ -960,21 +944,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Vary', 'Referer')
         self.end_headers()
         
-        self.wfile.write(dedent(
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8" />
-                <title>Not Found | Crystal</title>
-            </head>
-            <body>
-                <p>There is no page here.</>
-                <p>Return to <a href="/">home page</a>?</p>
-            </body>
-            </html>
-            """
-        ).lstrip('\n').encode('utf-8'))
+        html_content = _not_found_page_html()
+        self.wfile.write(html_content.encode('utf-8'))
     
     @bg_affinity
     def send_resource_not_in_archive(self, archive_url: str) -> None:
@@ -1334,6 +1305,149 @@ def _pin_date_js(timestamp: int) -> str:
 
 # ------------------------------------------------------------------------------
 # HTML Templates
+
+def _welcome_page_html() -> str:
+    welcome_styles = dedent(
+        """
+        .welcome-form {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #4A90E2;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-label {
+            font-size: 14px;
+            color: #495057;
+            margin-bottom: 8px;
+            display: block;
+            font-weight: 500;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            box-sizing: border-box;
+            transition: border-color 0.2s ease;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #4A90E2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+        
+        .form-submit {
+            background: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 80px;
+        }
+        
+        .form-submit:hover {
+            background: #357ABD;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+        }
+        
+        /* Dark mode styles for welcome form */
+        @media (prefers-color-scheme: dark) {
+            .welcome-form {
+                background: #404040;
+                border-left: 4px solid #6BB6FF;
+            }
+            
+            .form-label {
+                color: #e0e0e0;
+            }
+            
+            .form-input {
+                background: #2d2d30;
+                border: 2px solid #555;
+                color: #e0e0e0;
+            }
+            
+            .form-input:focus {
+                border-color: #6BB6FF;
+                box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
+            }
+        }
+        """
+    ).strip()
+    
+    content_html = dedent(
+        """
+        <div class="error-icon">🏠</div>
+        
+        <div class="error-message">
+            <strong>Welcome to Crystal</strong>
+        </div>
+        
+        <p>Enter the URL of a page to load from the archive:</p>
+        
+        <div class="welcome-form">
+            <form action="/">
+                <div class="form-group">
+                    <label for="url-input" class="form-label">URL</label>
+                    <input type="text" id="url-input" name="url" value="http://" class="form-input" />
+                </div>
+                <input type="submit" value="Go" class="form-submit" />
+            </form>
+        </div>
+        """
+    ).strip()
+    
+    return _base_page_html(
+        title_html='Welcome | Crystal',
+        style_html=welcome_styles,
+        content_html=content_html,
+        script_html='',
+    )
+
+
+def _not_found_page_html() -> str:
+    content_html = dedent(
+        """
+        <div class="error-icon">❓</div>
+        
+        <div class="error-message">
+            <strong>Page Not Found</strong>
+        </div>
+        
+        <p>There is no page here.</p>
+        <p>The requested path was not found in this archive.</p>
+        
+        <div class="actions">
+            <button onclick="history.back()" class="action-button secondary-button">
+                ← Go Back
+            </button>
+            <a href="/" class="action-button primary-button">🏠 Return to Home</a>
+        </div>
+        """
+    ).strip()
+    
+    return _base_page_html(
+        title_html='Not Found | Crystal',
+        style_html='',
+        content_html=content_html,
+        script_html='',
+    )
+
 
 def _not_in_archive_html(
         *, archive_url_html_attr: str,

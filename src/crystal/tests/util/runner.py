@@ -78,6 +78,7 @@ def bg_fetch_url(
         timeout: float | None=None,
         method: str='GET',
         data: bytes | None=None,
+        follow_redirects: bool=True,
         ) -> Generator[Command, object, WebPage]:
     """
     Switch to a background thread, fetch the specified URL, and
@@ -89,7 +90,7 @@ def bg_fetch_url(
     if timeout is None:
         timeout = DEFAULT_WAIT_TIMEOUT
     
-    page_or_error = yield FetchUrlCommand(url, headers, timeout, method, data)
+    page_or_error = yield FetchUrlCommand(url, headers, timeout, method, data, follow_redirects)
     if isinstance(page_or_error, WebPage):
         return page_or_error
     elif isinstance(page_or_error, Exception):
@@ -140,12 +141,20 @@ class SleepCommand(Command[None]):
 
 
 class FetchUrlCommand(Command['WebPage']):
-    def __init__(self, url: str, headers: dict[str, str] | None, timeout: float, method: str='GET', data: bytes | None=None) -> None:
+    def __init__(self,
+            url: str,
+            headers: dict[str, str] | None,
+            timeout: float,
+            method: str='GET',
+            data: bytes | None=None,
+            follow_redirects: bool=True
+            ) -> None:
         self._url = url
         self._headers = headers
         self._timeout = timeout
         self._method = method
         self._data = data
+        self._follow_redirects = follow_redirects
     
     @bg_affinity
     def run(self) -> WebPage:
@@ -158,7 +167,18 @@ class FetchUrlCommand(Command['WebPage']):
                 headers=(self._headers or {}),
                 method=self._method
             )
-            response_stream = urllib.request.urlopen(request, timeout=self._timeout)
+            
+            if self._follow_redirects:
+                # Use default behavior (follows redirects)
+                response_stream = urllib.request.urlopen(request, timeout=self._timeout)
+            else:
+                # Create opener that doesn't follow redirects
+                class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, req, fp, code, msg, headers, newurl):
+                        return None  # Don't follow redirects
+                
+                opener = urllib.request.build_opener(NoRedirectHandler)
+                response_stream = opener.open(request, timeout=self._timeout)
         except urllib.error.HTTPError as e:
             response_stream = e
         with response_stream as response:
