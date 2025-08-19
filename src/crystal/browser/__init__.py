@@ -695,6 +695,7 @@ class MainWindow:
             )
             dialog.Name = 'cr-save-changes-dialog'
             with dialog:
+                dialog.SetYesNoLabels(wx.ID_SAVE, "&Don't Save")
                 result = ShowModal(dialog)
             if result == wx.ID_CANCEL:
                 return False

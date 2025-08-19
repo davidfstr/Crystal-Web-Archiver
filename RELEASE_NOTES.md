@@ -37,6 +37,8 @@ Release Notes ⋮
       Crystal's branding elements.
 
 * Minor fixes
+    * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
+      instead of generic "Yes" and "No" buttons, following platform conventions.
     * Most dialogs are now shown as window-modal rather than modeless to
       prevent certain types of concurrent edits to a project that Crystal
       isn't designed to handle.
