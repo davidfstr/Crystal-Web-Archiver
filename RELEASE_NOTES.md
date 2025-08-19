@@ -12,13 +12,19 @@ Release Notes ⋮
 
 ### main
 
+* Branding changes
+    * Crystal's logo and contributor information is now displayed in the
+      main window, alongside its version number.
+    * Browser error pages are now appropriately styled and include
+      Crystal's branding elements.
+
 * Workflow improvements
+    * Missing pages can be immediately downloaded with 1 click when browsing
+      a downloaded website.
     * Untitled projects are automatically reopened after an unexpected quit.
     * Untitled projects are now saved to a permanent hidden directory instead of
       the system temporary directory, preventing data loss after unexpected
       logout, restart, or shutdown.
-    * Missing pages can be immediately downloaded with 1 click when browsing
-      a downloaded website.
 
 * Downloading improvements
     * While long downloads are running the system will be kept awake
@@ -29,12 +35,6 @@ Release Notes ⋮
     * When serving from a remote `--host`, projects are opened in `--readonly`
       mode by default so that remote users cannot modify a served project.
       Remote modifications can be explicitly enabled with `--no-readonly`.
-
-* Branding changes
-    * Crystal's logo and contributor information is now displayed in the
-      main window, alongside its version number.
-    * Browser error pages are now appropriately styled and include
-      Crystal's branding elements.
 
 * Minor fixes
     * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
