@@ -108,6 +108,8 @@ setuptools = [
 isort = "^6.0.1"
 # Pillow >=9.2.0 is needed by PyScreeze for screenshot support on Linux.
 pillow = { version = ">=9.2.0", markers = "sys_platform == 'linux'" }
+# For browser automation tests
+playwright = "^1.48.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

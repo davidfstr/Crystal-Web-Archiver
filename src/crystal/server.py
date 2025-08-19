@@ -11,6 +11,7 @@ from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
     Project, Resource, ResourceGroup, ResourceRevision, RootResource,
 )
+from crystal import resources
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
     print_error, print_info, print_success, print_warning,
@@ -26,13 +27,18 @@ from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import TextIOBase
+import json
 import re
 import socket
 import socketserver
 from textwrap import dedent
-from typing import Literal, Optional
+import time
+from typing import Literal, Optional, TYPE_CHECKING
 from typing_extensions import override
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
+
+if TYPE_CHECKING:
+    from crystal.task import Task
 
 
 _DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
@@ -397,7 +403,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def referer(self) -> str | None:
         return self.headers.get('Referer')
     
-    # === Handle Incoming Request ===
+    # === Handle ===
     
     def parse_request(self):  # override
         # If we receive a request line with clearly binary data,
@@ -428,10 +434,20 @@ class _RequestHandler(BaseHTTPRequestHandler):
             # Browser did drop connection before did finish sending response
             pass
     
+    def do_POST(self) -> None:  # override
+        try:
+            # TODO: No need to use run_thread_switching_coroutine() for such
+            #       a simple _do_POST() implementation
+            run_thread_switching_coroutine(
+                SwitchToThread.BACKGROUND,
+                self._do_POST())
+        except BrokenPipeError:
+            # Browser did drop connection before did finish sending response
+            pass
+    
+    # --- Handle: GET or POST ---
+    
     def _do_GET(self) -> Generator[SwitchToThread, None, None]:
-        readonly = self.project.readonly  # cache
-        dynamic_ok = (self.headers.get('X-Crystal-Dynamic', 'True') == 'True')
-        
         # Parse self.path using RFC 2616 rules,
         # which in particular allows it to be an absolute URI!
         if self.path == '*':
@@ -466,141 +482,27 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(_pin_date_js(timestamp).encode('utf-8'))
             return
         
+        # Handle Crystal static resources endpoint
+        if self.path.startswith('/_/crystal/resources/'):
+            yield SwitchToThread.BACKGROUND
+            self._handle_static_resource()
+            return
+        
+        # Handle download progress endpoint
+        if self.path.startswith('/_/crystal/download-progress'):
+            yield SwitchToThread.BACKGROUND
+            self._handle_get_download_progress()
+            return
+        
         # Serve resource revision in archive
         archive_url = self.get_archive_url(self.path)
         if archive_url is not None:
-            yield SwitchToThread.FOREGROUND
-            
-            # If URL not in archive in its original form,
-            # see whether it exists in the archive in a different form,
-            # or whether it should be created in a different form
-            resource = self.project.get_resource(archive_url)
-            if resource is None:
-                archive_url_alternatives = Resource.resource_url_alternatives(
-                    self.project, archive_url)
-                if len(archive_url_alternatives) >= 2:
-                    assert archive_url_alternatives[0] == archive_url
-                    # TODO: Optimize to use a bulk version of Project.get_resource()
-                    #       rather than making several individual queries
-                    for urla in archive_url_alternatives[1:]:
-                        if self.project.get_resource(urla) is not None:
-                            # Redirect to existing URL in archive
-                            yield SwitchToThread.BACKGROUND
-                            self.send_redirect(self.get_request_url(urla))
-                            return
-                    
-                    # Redirect to canonical form of URL in archive
-                    yield SwitchToThread.BACKGROUND
-                    self.send_redirect(self.get_request_url(archive_url_alternatives[-1]))
-                    return
-            # (Either resource exists at archive_url, or archive_url is in canonical form)
-            
-            if resource is None:
-                # If the previously undiscovered resource is a member of an
-                # existing resource group, presume that the user is interested 
-                # in downloading it immediately upon access
-                matching_rg = self._find_group_matching_archive_url(archive_url)
-                if matching_rg is not None and not readonly and dynamic_ok:
-                    self._print_warning('*** Dynamically downloading new resource in group {!r}: {}'.format(
-                        matching_rg.display_name,
-                        archive_url,
-                    ))
-                    
-                    # Try download resource immediately
-                    def download_resource() -> Resource:
-                        assert archive_url is not None
-                        return Resource(self.project, archive_url)
-                    resource = fg_call_and_wait(download_resource)
-                    yield SwitchToThread.BACKGROUND
-                    self._try_download_revision_dynamically(resource, needs_result=False)
-                    # (continue to serve downloaded resource revision)
-                else:
-                    yield SwitchToThread.BACKGROUND
-                    self.send_resource_not_in_archive(archive_url)
-                    return
-            
-            if resource.definitely_has_no_revisions:
-                revision = None  # type: Optional[ResourceRevision]
-            else:
-                def get_default_revision() -> ResourceRevision | None:
-                    assert resource is not None
-                    return resource.default_revision(
-                        stale_ok=True if self.project.readonly else False
-                    )
-                revision = fg_call_and_wait(get_default_revision)
-            
-            yield SwitchToThread.BACKGROUND
-            
-            if revision is None:
-                if not readonly and dynamic_ok:
-                    # If the existing resource is also a root resource,
-                    # presume that the user is interested 
-                    # in downloading it immediately upon access
-                    matching_rr = self._find_root_resource_matching_archive_url(archive_url)
-                    if matching_rr is not None:
-                        self._print_warning('*** Dynamically downloading root resource {!r}: {}'.format(
-                            matching_rr.display_name,
-                            archive_url,
-                        ))
-                    
-                    # If the existing resource is a member of an
-                    # existing resource group, presume that the user is interested 
-                    # in downloading it immediately upon access
-                    matching_rg = self._find_group_matching_archive_url(archive_url)
-                    if matching_rg is not None:
-                        self._print_warning('*** Dynamically downloading existing resource in group {!r}: {}'.format(
-                            matching_rg.display_name,
-                            archive_url,
-                        ))
-                    
-                    if matching_rr is not None or matching_rg is not None:
-                        # Try download resource immediately
-                        revision = self._try_download_revision_dynamically(resource, needs_result=True)
-                        # (continue to serve downloaded resource revision)
-                
-                if revision is None:
-                    self.send_resource_not_in_archive(archive_url)
-                    return
-            
-            # If client did make a conditional request which did match the revision,
-            # send a short HTTP 304 response rather than the whole revision
-            if_none_match = self.headers['If-None-Match']
-            if if_none_match is not None:
-                etag = revision.etag
-                # NOTE: Only an If-None-Match containing a single ETag is supported for now
-                if etag is not None and etag == if_none_match:
-                    self.send_response(304)
-                    self.end_headers()
-                    return
-            
-            self.send_revision(revision, archive_url)
+            yield from self._serve_archive_url(archive_url)
             return
         
         # Dynamically rewrite incoming link from archived resource revision
-        referer = self.referer  # cache
-        if referer is not None and dynamic_ok:
-            referer_urlparts = urlparse(referer)
-            if ((referer_urlparts.netloc == '' and referer_urlparts.path.startswith('/')) or 
-                    referer_urlparts.netloc == self._server_host):
-                referer_archive_url = self.get_archive_url(referer_urlparts.path)
-                if referer_archive_url is not None:
-                    referer_archive_urlparts = urlparse(referer_archive_url)
-                    assert isinstance(referer_archive_urlparts.scheme, str)
-                    assert isinstance(referer_archive_urlparts.netloc, str)
-                    requested_archive_url = '{}://{}{}'.format(
-                        referer_archive_urlparts.scheme,
-                        referer_archive_urlparts.netloc,
-                        self.path,
-                    )
-                    redirect_url = self.get_request_url(requested_archive_url)
-                    
-                    self._print_warning('*** Dynamically rewriting link from {}: {}'.format(
-                        referer_archive_url,
-                        requested_archive_url,
-                    ))
-                    
-                    self.send_redirect(redirect_url, vary_referer=True)
-                    return
+        if self._redirect_to_archive_url_if_referer_is_self():
+            return
         
         # Serve Welcome page
         path_parts = urlparse(self.path)
@@ -612,6 +514,136 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_not_found_page(vary_referer=True)
         return
     
+    def _do_POST(self) -> Generator[SwitchToThread, None, None]:
+        # Handle Crystal API endpoints
+        if self.path == '/_/crystal/download-url':
+            yield SwitchToThread.BACKGROUND
+            self._handle_start_download_url()
+            return
+        elif self.path == '/_/crystal/download-progress':
+            yield SwitchToThread.BACKGROUND
+            self._handle_get_download_progress()
+            return
+        
+        # For all other POST requests, return 405 Method Not Allowed
+        self.send_response(405)
+        self.send_header('Allow', 'GET')
+        self.end_headers()
+        return
+    
+    # --- Handle: Archive URL ---
+    
+    def _serve_archive_url(self, archive_url: str) -> Generator[SwitchToThread, None, None]:
+        readonly = self.project.readonly  # cache
+        dynamic_ok = self._dynamic_ok()  # cache
+
+        yield SwitchToThread.FOREGROUND
+        
+        # If URL not in archive in its original form,
+        # see whether it exists in the archive in a different form,
+        # or whether it should be created in a different form
+        resource = self.project.get_resource(archive_url)
+        if resource is None:
+            archive_url_alternatives = Resource.resource_url_alternatives(
+                self.project, archive_url)
+            if len(archive_url_alternatives) >= 2:
+                assert archive_url_alternatives[0] == archive_url
+                # TODO: Optimize to use a bulk version of Project.get_resource()
+                #       rather than making several individual queries
+                for urla in archive_url_alternatives[1:]:
+                    if self.project.get_resource(urla) is not None:
+                        # Redirect to existing URL in archive
+                        yield SwitchToThread.BACKGROUND
+                        self.send_redirect(self.get_request_url(urla))
+                        return
+                
+                # Redirect to canonical form of URL in archive
+                yield SwitchToThread.BACKGROUND
+                self.send_redirect(self.get_request_url(archive_url_alternatives[-1]))
+                return
+        # (Either resource exists at archive_url, or archive_url is in canonical form)
+        
+        if resource is None:
+            # If the previously undiscovered resource is a member of an
+            # existing resource group, presume that the user is interested 
+            # in downloading it immediately upon access
+            matching_rg = self._find_group_matching_archive_url(archive_url)
+            if matching_rg is not None and not readonly and dynamic_ok:
+                self._print_warning('*** Dynamically downloading new resource in group {!r}: {}'.format(
+                    matching_rg.display_name,
+                    archive_url,
+                ))
+                
+                # Try download resource immediately
+                def download_resource() -> Resource:
+                    assert archive_url is not None
+                    return Resource(self.project, archive_url)
+                resource = fg_call_and_wait(download_resource)
+                yield SwitchToThread.BACKGROUND
+                self._try_download_revision_dynamically(resource, needs_result=False)
+                # (continue to serve downloaded resource revision)
+            else:
+                yield SwitchToThread.BACKGROUND
+                self.send_resource_not_in_archive(archive_url)
+                return
+        
+        if resource.definitely_has_no_revisions:
+            revision = None  # type: Optional[ResourceRevision]
+        else:
+            def get_default_revision() -> ResourceRevision | None:
+                assert resource is not None
+                return resource.default_revision(
+                    stale_ok=True if self.project.readonly else False
+                )
+            revision = fg_call_and_wait(get_default_revision)
+        
+        yield SwitchToThread.BACKGROUND
+        
+        if revision is None:
+            if not readonly and dynamic_ok:
+                # If the existing resource is also a root resource,
+                # presume that the user is interested 
+                # in downloading it immediately upon access
+                matching_rr = self._find_root_resource_matching_archive_url(archive_url)
+                if matching_rr is not None:
+                    self._print_warning('*** Dynamically downloading root resource {!r}: {}'.format(
+                        matching_rr.display_name,
+                        archive_url,
+                    ))
+                
+                # If the existing resource is a member of an
+                # existing resource group, presume that the user is interested 
+                # in downloading it immediately upon access
+                matching_rg = self._find_group_matching_archive_url(archive_url)
+                if matching_rg is not None:
+                    self._print_warning('*** Dynamically downloading existing resource in group {!r}: {}'.format(
+                        matching_rg.display_name,
+                        archive_url,
+                    ))
+                
+                if matching_rr is not None or matching_rg is not None:
+                    # Try download resource immediately
+                    revision = self._try_download_revision_dynamically(resource, needs_result=True)
+                    # (continue to serve downloaded resource revision)
+            
+            if revision is None:
+                self.send_resource_not_in_archive(archive_url)
+                return
+        
+        # If client did make a conditional request which did match the revision,
+        # send a short HTTP 304 response rather than the whole revision
+        if_none_match = self.headers['If-None-Match']
+        if if_none_match is not None:
+            etag = revision.etag
+            # NOTE: Only an If-None-Match containing a single ETag is supported for now
+            if etag is not None and etag == if_none_match:
+                self.send_response(304)
+                self.end_headers()
+                return
+        
+        self.send_revision(revision, archive_url)
+        return
+
     def _find_root_resource_matching_archive_url(self, archive_url: str) -> RootResource | None:
         for rr in self.project.root_resources:
             if rr.resource.url == archive_url:
@@ -648,11 +680,246 @@ class _RequestHandler(BaseHTTPRequestHandler):
             # Don't care if there was an error downloading
             return None
     
+    # --- Handle: Redirect to Archive URL ---
+    
+    @bg_affinity
+    def _redirect_to_archive_url_if_referer_is_self(self) -> bool:
+        dynamic_ok = self._dynamic_ok()  # cache
+        
+        referer = self.referer  # cache
+        if referer is not None and dynamic_ok:
+            referer_urlparts = urlparse(referer)
+            if ((referer_urlparts.netloc == '' and referer_urlparts.path.startswith('/')) or 
+                    referer_urlparts.netloc == self._server_host):
+                referer_archive_url = self.get_archive_url(referer_urlparts.path)
+                if referer_archive_url is not None:
+                    referer_archive_urlparts = urlparse(referer_archive_url)
+                    assert isinstance(referer_archive_urlparts.scheme, str)
+                    assert isinstance(referer_archive_urlparts.netloc, str)
+                    requested_archive_url = '{}://{}{}'.format(
+                        referer_archive_urlparts.scheme,
+                        referer_archive_urlparts.netloc,
+                        self.path,
+                    )
+                    redirect_url = self.get_request_url(requested_archive_url)
+                    
+                    self._print_warning('*** Dynamically rewriting link from {}: {}'.format(
+                        referer_archive_url,
+                        requested_archive_url,
+                    ))
+                    
+                    self.send_redirect(redirect_url, vary_referer=True)
+                    return True
+        
+        return False
+    
+    # --- Handle: Download Request ---
+    
+    @bg_affinity
+    def _handle_start_download_url(self) -> None:
+        try:
+            # Ensure project is not readonly
+            if self.project.readonly:
+                self._send_json_response(403, {"error": "Project is read-only"})
+                return
+            
+            # Parse arguments
+            content_length = int(self.headers.get('Content-Length', -1))
+            if content_length > 0:
+                post_data = self.rfile.read(content_length).decode('utf-8')
+            else:
+                post_data = self.rfile.read().decode('utf-8')
+            if not post_data:
+                self._send_json_response(400, {"error": "Missing request body"})
+                return
+            try:
+                request_data = json.loads(post_data)
+                url = request_data.get('url')
+            except json.JSONDecodeError:
+                self._send_json_response(400, {"error": "Invalid JSON"})
+                return
+            if not url:
+                self._send_json_response(400, {"error": "Missing URL parameter"})
+                return
+            
+            def create_and_start_download_task() -> str:
+                # Get or create a Resource for the URL
+                r = Resource(self.project, url)
+                
+                # Get or create RootResource for the URL
+                rr = self.project.get_root_resource(r)
+                if rr is None:
+                    rr = RootResource(self.project, '', r)
+                
+                # Create download task and start downloading
+                (task, created) = r.get_or_create_download_task(
+                    needs_result=True, is_embedded=False)
+                if created and not task.complete:
+                    self.project.add_task(task)
+                
+                # Return task ID for progress tracking
+                # TODO: Consider using a different format for the task ID
+                #       that doesn't expose the memory address of the Task
+                return str(id(task))
+            task_id = fg_call_and_wait(create_and_start_download_task)
+            
+            # Send success response with task ID
+            self._send_json_response(200, {
+                "status": "success", 
+                "message": "Download started",
+                "task_id": task_id
+            })
+
+        except Exception as e:
+            self._print_error(f'Error handling download request: {str(e)}')
+            self._send_json_response(500, {
+                "error": f"Internal server error: {str(e)}"
+            })
+    
+    @bg_affinity
+    def _handle_get_download_progress(self) -> None:
+        REPORT_MAX_DURATION = 300  # 5 minutes
+        REPORT_PERIOD = 0.5
+        
+        # Parse arguments
+        query_params = parse_qs(urlparse(self.path).query)
+        if 'task_id' not in query_params:
+            self.send_response(400)
+            self.end_headers()
+            return
+        task_id = query_params['task_id'][0]
+        
+        self._start_sse_stream()
+        
+        # Find the task to report on
+        def find_task_by_id() -> Task | None:
+            for child in self.project.root_task.children:
+                if str(id(child)) == task_id:
+                    return child
+            return None
+        task = fg_call_and_wait(find_task_by_id)
+        if task is None:
+            self._send_sse_data({'error': 'Task not found'})
+            return
+        
+        # Send periodic progress updates
+        start_time = time.monotonic()
+        try:
+            while (time.monotonic() - start_time) < REPORT_MAX_DURATION:
+                def get_task_status() -> dict:
+                    if task.complete:
+                        return {
+                            'status': 'complete',
+                            'progress': 100,
+                            'message': 'Download completed'
+                        }
+                    
+                    completed = task.num_children_complete
+                    # TODO: Check whether this condition is correct.
+                    #       Probably waits for resource body to download,
+                    #       but likely does not wait for parse links to finish.
+                    if completed == 0:
+                        return {
+                            'status': 'in_progress',
+                            'progress': 0,
+                            'message': 'Starting download...'
+                        }
+                    total = len(task.children_unsynchronized)
+                    progress = int((completed / total) * 100) if total > 0 else 0
+                    return {
+                        'status': 'in_progress',
+                        'progress': progress,
+                        'message': f'{completed} of {total} items downloaded',
+                        'completed': completed,
+                        'total': total
+                    }
+                status = fg_call_and_wait(get_task_status)
+                self._send_sse_data(status)
+                
+                if status['status'] == 'complete':
+                    break
+                
+                time.sleep(REPORT_PERIOD)
+        except BrokenPipeError:
+            # Client disconnected
+            pass
+        except Exception as e:
+            self._send_sse_data({'error': f'Progress tracking error: {str(e)}'})
+
+    def _start_sse_stream(self) -> None:
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('Connection', 'keep-alive')
+        self.end_headers()
+
+    def _send_sse_data(self, data: dict) -> None:
+        try:
+            sse_data = f"data: {json.dumps(data)}\n\n"
+            self.wfile.write(sse_data.encode('utf-8'))
+            self.wfile.flush()
+        except BrokenPipeError:
+            pass
+    
+    def _send_json_response(self, status_code: int, content: dict) -> None:
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(content).encode('utf-8'))
+
+    # --- Handle: Static Resources ---
+    
+    @bg_affinity
+    def _handle_static_resource(self) -> None:
+        """Serve static resources from Crystal's "resources" directory."""
+        
+        PUBLIC_STATIC_RESOURCE_NAMES = {
+            'appicon.png',
+            'logotext.png',
+            'logotext@2x.png',
+            'logotext-dark.png',
+            'logotext-dark@2x.png'
+        }
+        
+        # Extract resource filename from path: /_/crystal/resources/filename.ext
+        if not self.path.startswith('/_/crystal/resources/'):
+            self.send_response(404)
+            self.end_headers()
+            return
+        resource_name = self.path.removeprefix('/_/crystal/resources/')
+        
+        # Security: Only allow specific resource files to prevent directory traversal
+        if resource_name not in PUBLIC_STATIC_RESOURCE_NAMES:
+            self.send_response(404)
+            self.end_headers()
+            return
+        
+        try:
+            with resources.open_binary(resource_name) as f:
+                content = f.read()
+            
+            # Set appropriate content type.
+            # All current public resources are PNG files.
+            assert resource_name.endswith('.png')
+            content_type = 'image/png'
+            
+            self.send_response(200)
+            self.send_header('Content-Type', content_type)
+            self.send_header('Cache-Control', 'max-age=3600')  # cache for 1 hour
+            self.end_headers()
+            self.wfile.write(content)
+        except FileNotFoundError:
+            self.send_response(404)
+            self.end_headers()
+        except Exception as e:
+            self._print_error(f'Error serving static resource {resource_name}: {str(e)}')
+            self.send_response(500)
+            self.end_headers()
+    
     # === Send Page ===
     
     @bg_affinity
     def send_welcome_page(self, query_params: dict[str, list[str]], *, vary_referer: bool) -> None:
-        # TODO: Is this /?url=** path used anywhere anymore?
         if 'url' in query_params:
             archive_url = query_params['url'][0]
             redirect_url = self.get_request_url(archive_url)
@@ -666,23 +933,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Vary', 'Referer')
         self.end_headers()
         
-        self.wfile.write(dedent(
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8" />
-                <title>Welcome | Crystal</title>
-            </head>
-            <body>
-                <p>Enter the URL of a page to load from the archive:</p>
-                <form action="/">
-                    URL: <input type="text" name="url" value="http://" /><input type="submit" value="Go" />
-                </form>
-            </body>
-            </html>
-            """
-        ).lstrip('\n').encode('utf-8'))
+        html_content = _welcome_page_html()
+        self.wfile.write(html_content.encode('utf-8'))
     
     @bg_affinity
     def send_not_found_page(self, *, vary_referer: bool) -> None:
@@ -692,21 +944,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Vary', 'Referer')
         self.end_headers()
         
-        self.wfile.write(dedent(
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8" />
-                <title>Not Found | Crystal</title>
-            </head>
-            <body>
-                <p>There is no page here.</>
-                <p>Return to <a href="/">home page</a>?</p>
-            </body>
-            </html>
-            """
-        ).lstrip('\n').encode('utf-8'))
+        html_content = _not_found_page_html()
+        self.wfile.write(html_content.encode('utf-8'))
     
     @bg_affinity
     def send_resource_not_in_archive(self, archive_url: str) -> None:
@@ -714,24 +953,19 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
         
-        self.wfile.write((dedent(
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8" />
-                <title>Not in Archive | Crystal</title>
-            </head>
-            <body>
-                <p>The requested resource was not found in the archive.</p>
-                <p>The original resource is located here: <a href="%(archive_url)s">%(archive_url)s</a></p>
-            </body>
-            </html>
-            """
-        ).lstrip('\n') % {
-            # TODO: Shouldn't this be HTML-escaped?
-            'archive_url': archive_url
-        }).encode('utf-8'))
+        readonly = self.project.readonly  # cache
+        
+        html_content = _not_in_archive_html(
+            archive_url_html_attr=archive_url,
+            archive_url_html=html_escape(archive_url),
+            archive_url_json=json.dumps(archive_url),
+            readonly_warning_html=(
+                '<div class="readonly-notice">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
+                if readonly else ''
+            ),
+            download_button_disabled_html=('disabled ' if readonly else '')
+        )
+        self.wfile.write(html_content.encode('utf-8'))
         
         self._print_error('*** Requested resource not in archive: ' + archive_url)
     
@@ -762,41 +996,28 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_response(400)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
+
+        # Determine error details
+        error_type_html = (
+            html_escape(error_dict['type'])
+            if error_dict is not None
+            else 'unknown'
+        )
+        error_message_html = (
+            html_escape(error_dict['message'])
+            if error_dict is not None and error_dict['message'] is not None
+            else 'unknown'
+        )
         
-        self.wfile.write((dedent(
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8" />
-                <title>Fetch Error | Crystal</title>
-            </head>
-            <body>
-                <p>
-                    A <tt>%(error_type)s</tt> error with message <tt>%(error_message)s</tt>
-                    was encountered when fetching this resource.
-                </p>
-                <p>The original resource is located here: <a href="%(archive_url)s">%(archive_url)s</a></p>
-            </body>
-            </html>
-            """
-        ).lstrip('\n') % {
-            'error_type': (
-                html_escape(error_dict['type'])
-                if error_dict is not None
-                else 'unknown'
-            ),
-            'error_message': (
-                html_escape(error_dict['message'])
-                if error_dict is not None and error_dict['message'] is not None
-                else 'unknown'
-            ),
-            # TODO: Shouldn't this be HTML-escaped?
-            'archive_url': archive_url
-        }).encode('utf-8'))
-        
+        html_content = _fetch_error_html(
+            archive_url=archive_url,
+            error_type_html=error_type_html,
+            error_message_html=error_message_html
+        )
+        self.wfile.write(html_content.encode('utf-8'))
+
         self._print_error('*** Requested resource was fetched with error: ' + archive_url)
-    
+
     @bg_affinity
     def send_http_revision(self, revision: ResourceRevision) -> None:
         if revision.is_http_304:
@@ -1007,7 +1228,20 @@ class _RequestHandler(BaseHTTPRequestHandler):
         request_url = urlunparse(request_url_parts)
         return request_url
     
-    # === Logging ===
+    # === Utility: Request Accessors ===
+    
+    def _dynamic_ok(self) -> bool:
+        """
+        Returns whether the request is allowed to:
+        1. dynamically download resources or
+        2. dynamically rewrite links based on referer.
+        
+        Note that dynamic downloads also require the project to be writable
+        (i.e. not readonly).
+        """
+        return (self.headers.get('X-Crystal-Dynamic', 'True') == 'True')
+    
+    # === Utility: Logging ===
     
     def log_error(self, format, *args):  # override
         self._print_error(format % args)
@@ -1015,7 +1249,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):  # override
         self._print_info(format % args)
     
-    # === Print ===
+    # === Utility: Print ===
     
     def _print_info(self, message: str) -> None:
         if self._verbosity == 'indent':
@@ -1067,6 +1301,724 @@ _PIN_DATE_JS_TEMPLATE = dedent(
 
 def _pin_date_js(timestamp: int) -> str:
     return _PIN_DATE_JS_TEMPLATE % timestamp
+
+
+# ------------------------------------------------------------------------------
+# HTML Templates
+
+def _welcome_page_html() -> str:
+    welcome_styles = dedent(
+        """
+        .welcome-form {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #4A90E2;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-label {
+            font-size: 14px;
+            color: #495057;
+            margin-bottom: 8px;
+            display: block;
+            font-weight: 500;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            box-sizing: border-box;
+            transition: border-color 0.2s ease;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #4A90E2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+        
+        .form-submit {
+            background: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 80px;
+        }
+        
+        .form-submit:hover {
+            background: #357ABD;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+        }
+        
+        /* Dark mode styles for welcome form */
+        @media (prefers-color-scheme: dark) {
+            .welcome-form {
+                background: #404040;
+                border-left: 4px solid #6BB6FF;
+            }
+            
+            .form-label {
+                color: #e0e0e0;
+            }
+            
+            .form-input {
+                background: #2d2d30;
+                border: 2px solid #555;
+                color: #e0e0e0;
+            }
+            
+            .form-input:focus {
+                border-color: #6BB6FF;
+                box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
+            }
+        }
+        """
+    ).strip()
+    
+    content_html = dedent(
+        """
+        <div class="error-icon">🏠</div>
+        
+        <div class="error-message">
+            <strong>Welcome to Crystal</strong>
+        </div>
+        
+        <p>Enter the URL of a page to load from the archive:</p>
+        
+        <div class="welcome-form">
+            <form action="/">
+                <div class="form-group">
+                    <label for="url-input" class="form-label">URL</label>
+                    <input type="text" id="url-input" name="url" value="http://" class="form-input" />
+                </div>
+                <input type="submit" value="Go" class="form-submit" />
+            </form>
+        </div>
+        """
+    ).strip()
+    
+    return _base_page_html(
+        title_html='Welcome | Crystal',
+        style_html=welcome_styles,
+        content_html=content_html,
+        script_html='',
+    )
+
+
+def _not_found_page_html() -> str:
+    content_html = dedent(
+        """
+        <div class="error-icon">❓</div>
+        
+        <div class="error-message">
+            <strong>Page Not Found</strong>
+        </div>
+        
+        <p>There is no page here.</p>
+        <p>The requested path was not found in this archive.</p>
+        
+        <div class="actions">
+            <button onclick="history.back()" class="action-button secondary-button">
+                ← Go Back
+            </button>
+            <a href="/" class="action-button primary-button">🏠 Return to Home</a>
+        </div>
+        """
+    ).strip()
+    
+    return _base_page_html(
+        title_html='Not Found | Crystal',
+        style_html='',
+        content_html=content_html,
+        script_html='',
+    )
+
+
+def _not_in_archive_html(
+        *, archive_url_html_attr: str,
+        archive_url_html: str,
+        archive_url_json: str,
+        readonly_warning_html: str,
+        download_button_disabled_html: str
+        ) -> str:
+    not_in_archive_styles = dedent(
+        """
+        .readonly-notice {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        
+        .download-progress {
+            display: none;
+            margin-top: 15px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #4A90E2;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            font-size: 14px;
+            margin-top: 8px;
+            text-align: center;
+        }
+        
+        /* Dark mode styles for readonly notice and progress */
+        @media (prefers-color-scheme: dark) {
+            .readonly-notice {
+                background: #5a4a2d;
+                border: 1px solid #8b7355;
+                color: #f4d03f;
+            }
+            
+            .progress-bar {
+                background: #404040;
+            }
+            
+            .progress-fill {
+                background: #6BB6FF;
+            }
+        }
+        """
+    ).strip()
+    
+    content_html = dedent(
+        f"""
+        <div class="error-icon">🚫</div>
+        
+        <div class="error-message">
+            <strong>Page Not in Archive</strong>
+        </div>
+        
+        <p>The requested page was not found in this archive.</p>
+        <p>The page has not been downloaded yet.</p>
+        
+        {_URL_INFO_HTML_TEMPLATE % {
+            'label_html': 'Original URL',
+            'url_html_attr': archive_url_html_attr,
+            'url_html': archive_url_html
+        }}
+        
+        {readonly_warning_html}
+        
+        <div class="actions">
+            <button onclick="history.back()" class="action-button secondary-button">
+                ← Go Back
+            </button>
+            <button id="download-button" {download_button_disabled_html}onclick="startDownload()" class="action-button primary-button">⬇ Download</button>
+        </div>
+        
+        <div id="download-progress" class="download-progress">
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <div id="progress-text" class="progress-text">Preparing download...</div>
+        </div>
+        """
+    ).strip()
+    
+    script_html = dedent(
+        """
+        <script>
+            let eventSource = null;
+            
+            async function startDownload() {
+                const downloadButton = document.getElementById('download-button');
+                const progressDiv = document.getElementById('download-progress');
+                const progressFill = document.getElementById('progress-fill');
+                const progressText = document.getElementById('progress-text');
+                
+                // Disable the download button
+                downloadButton.disabled = true;
+                downloadButton.textContent = '⬇ Downloading...';
+                
+                // Show progress
+                progressDiv.style.display = 'block';
+                progressFill.style.width = '0%%';
+                progressText.textContent = 'Starting download...';
+                
+                try {
+                    // Start the download
+                    const downloadUrl = '/_/crystal/download-url';
+                    const response = await fetch(downloadUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url: %(archive_url_json)s })
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to start download');
+                    }
+                    
+                    const result = await response.json();
+                    const taskId = result.task_id;
+                    
+                    // Listening for download progress updates
+                    const progressUrl = `/_/crystal/download-progress?task_id=${encodeURIComponent(taskId)}`;
+                    eventSource = new EventSource(progressUrl);
+                    
+                    eventSource.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.error) {
+                            // Update progress with error
+                            progressFill.style.width = '0%%';
+                            progressText.textContent = `Error: ${data.error}`;
+                            
+                            eventSource.close();
+                            
+                            // Enable the download button
+                            downloadButton.disabled = false;
+                            downloadButton.textContent = '⬇ Download';
+                            
+                            return;
+                        }
+                        
+                        if (data.status === 'complete') {
+                            // Update progress with success
+                            progressFill.style.width = '100%%';
+                            progressText.textContent = 'Download completed! Reloading page...';
+                            
+                            eventSource.close();
+                            
+                            // Reload the page ASAP
+                            window.location.reload();
+                        } else if (data.status === 'in_progress') {
+                            progressFill.style.width = `${data.progress}%%`;
+                            progressText.textContent = data.message;
+                        }
+                    };
+                    
+                    eventSource.onerror = function(event) {
+                        // Update progress with error
+                        progressFill.style.width = '0%%';
+                        progressText.textContent = 'Connection error. Download may still be in progress.';
+                        
+                        eventSource.close();
+                        
+                        // Enable the download button
+                        downloadButton.disabled = false;
+                        downloadButton.textContent = '⬇ Download';
+                    };
+                } catch (error) {
+                    console.error('Download error:', error);
+                    
+                    // Update progress with error
+                    progressFill.style.width = '0%%';
+                    progressText.textContent = `Download failed: ${error.message}`;
+                    
+                    if (eventSource) {
+                        eventSource.close();
+                    }
+                    
+                    // Enable the download button
+                    downloadButton.disabled = false;
+                    downloadButton.textContent = '⬇ Download';
+                }
+            }
+            
+            // Close event source when page unloads
+            window.addEventListener('beforeunload', function() {
+                if (eventSource) {
+                    eventSource.close();
+                }
+            });
+        </script>
+        """ % {
+            'archive_url_json': archive_url_json
+        }
+    ).strip()
+    
+    return _base_page_html(
+        title_html='Not in Archive | Crystal',
+        style_html=(
+            _URL_INFO_STYLE_TEMPLATE + '\n' + 
+            not_in_archive_styles
+        ),
+        content_html=content_html,
+        script_html=script_html
+    )
+
+
+def _fetch_error_html(
+        *, archive_url: str,
+        error_type_html: str,
+        error_message_html: str,
+        ) -> str:    
+    content_html = dedent(
+        f"""
+        <div class="error-icon">⚠️</div>
+        
+        <div class="error-message">
+            <strong>Fetch Error</strong>
+        </div>
+        
+        <p>
+            A <code>{error_type_html}</code> error with message <code>{error_message_html}</code>
+            was encountered when fetching this resource.
+        </p>
+        
+        {_URL_INFO_HTML_TEMPLATE % {
+            'label_html': 'Original URL',
+            'url_html_attr': archive_url,
+            'url_html': html_escape(archive_url)
+        } }
+        
+        <div class="actions">
+            <button onclick="history.back()" class="action-button secondary-button">
+                ← Go Back
+            </button>
+        </div>
+        """
+    ).strip()
+    
+    return _base_page_html(
+        title_html='Fetch Error | Crystal',
+        style_html=(
+            _URL_INFO_STYLE_TEMPLATE
+        ),
+        content_html=content_html,
+        script_html='',
+    )
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# HTML Templates: Base Page
+
+def _base_page_html(
+        *, title_html: str,
+        style_html: str,
+        content_html: str,
+        script_html: str,
+        ) -> str:
+    page_html = _BASE_PAGE_HTML_TEMPLATE % {
+        'title_html': title_html,
+        'style_html': (
+            _BASE_PAGE_STYLE_TEMPLATE + '\n' + 
+            style_html
+        ),
+        'content_html': content_html,
+        'script_html': script_html
+    }
+    if '%%' in page_html:
+        offset = page_html.index('%%')
+        raise ValueError(f'Unescaped % in HTML template. Near: {page_html[offset-20:offset+20]!r}')
+    return page_html
+
+
+_BASE_PAGE_STYLE_TEMPLATE = dedent(
+    """
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+        box-sizing: border-box;
+        color: #333;
+    }
+    
+    .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        padding: 40px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+    
+    .header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e9ecef;
+    }
+    
+    /* Dark mode styles for top of page */
+    @media (prefers-color-scheme: dark) {
+        body {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d30 100%);
+            color: #e0e0e0;
+        }
+        
+        .container {
+            background: #2d2d30;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        
+        .header {
+            border-bottom: 2px solid #404040;
+        }
+    }
+    
+    .logo {
+        width: 48px;
+        height: 48px;
+        margin-right: 16px;
+        flex-shrink: 0;
+        border-radius: 8px;
+    }
+    
+    .brand-text {
+        flex: 1;
+    }
+    
+    .brand-title {
+        margin: 0;
+        height: 32px;
+        line-height: 1;
+    }
+    
+    .brand-title img {
+        height: 32px;
+        width: auto;
+        vertical-align: baseline;
+    }
+    
+    /* Default to light logotext */
+    .logotext-light {
+        display: inline;
+    }
+    .logotext-dark {
+        display: none;
+    }
+    
+    .brand-subtitle {
+        font-size: 14px;
+        color: #6c757d;
+        margin: 0;
+    }
+    
+    .error-icon {
+        font-size: 64px;
+        color: #e74c3c;
+        text-align: center;
+        margin: 20px 0;
+    }
+    
+    .error-message {
+        font-size: 18px;
+        color: #2c3e50;
+        text-align: center;
+        margin: 20px 0;
+    }
+    
+    /* Dark mode styles for brand and content */
+    @media (prefers-color-scheme: dark) {
+        .brand-subtitle {
+            color: #a0a0a0;
+        }
+        
+        .error-message {
+            color: #e0e0e0;
+        }
+        
+        /* Switch to dark logotext */
+        .logotext-light {
+            display: none;
+        }
+        .logotext-dark {
+            display: inline;
+        }
+    }
+    
+    .actions {
+        margin: 30px 0;
+    }
+    
+    .action-button {
+        display: inline-block;
+        padding: 12px 24px;
+        margin: 8px 8px 8px 0;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        min-width: 120px;
+        text-align: center;
+    }
+    
+    .primary-button {
+        background: #4A90E2;
+        color: white;
+    }
+    
+    .primary-button:hover {
+        background: #357ABD;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+    }
+    
+    .primary-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    
+    .primary-button:disabled:hover {
+        background: #4A90E2;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .secondary-button {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .secondary-button:hover {
+        background: #5a6268;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    """
+).lstrip()  # type: str
+
+
+_BASE_PAGE_HTML_TEMPLATE = dedent(
+    """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8" />
+        <title>%(title_html)s</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            %(style_html)s
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="logo" />
+                <div class="brand-text">
+                    <h1 class="brand-title">
+                        <img
+                            src="/_/crystal/resources/logotext.png" 
+                            srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
+                            alt="Crystal"
+                            class="logotext-light"
+                        />
+                        <img
+                            src="/_/crystal/resources/logotext-dark.png" 
+                            srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
+                            alt="Crystal"
+                            class="logotext-dark"
+                        />
+                    </h1>
+                    <p class="brand-subtitle">Website Archiver</p>
+                </div>
+            </div>
+            
+            %(content_html)s
+        </div>
+        
+        %(script_html)s
+    </body>
+    </html>
+    """
+).lstrip()  # type: str
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# HTML Templates: URL Info Box
+
+_URL_INFO_STYLE_TEMPLATE = dedent(
+    """
+    .url-info {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #4A90E2;
+        margin: 20px 0;
+    }
+    
+    .url-label {
+        font-size: 12px;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 5px;
+        font-weight: 600;
+    }
+    
+    .url-link {
+        color: #4A90E2;
+        text-decoration: none;
+        word-break: break-all;
+        font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+        font-size: 14px;
+    }
+    
+    .url-link:hover {
+        text-decoration: underline;
+    }
+    
+    /* Dark mode styles for URL */
+    @media (prefers-color-scheme: dark) {
+        .url-info {
+            background: #404040;
+            border-left: 4px solid #6BB6FF;
+        }
+        
+        .url-label {
+            color: #a0a0a0;
+        }
+        
+        .url-link {
+            color: #6BB6FF;
+        }
+    }
+    """
+).lstrip()  # type: str
+
+
+_URL_INFO_HTML_TEMPLATE = dedent(
+    """
+    <div class="url-info">
+        <div class="url-label">%(label_html)s</div>
+        <a href="%(url_html_attr)s" class="url-link" target="_blank" rel="noopener">%(url_html)s</a>
+    </div>
+    """
+).strip()  # type: str
 
 
 # ------------------------------------------------------------------------------

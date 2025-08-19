@@ -110,6 +110,7 @@ if sys.platform == 'darwin':
                 'test',  # CPython test data
                 'tkinter', 'tk',  # unused; hard to build universal2 version
                 'zstandard',  # unused; hard to build universal2 version; optional urllib3 dependency
+                'playwright',  # large test dependency
             ],
             # Workaround for py2app + Python 3.13 dylib signing issue
             # https://github.com/ronaldoussoren/py2app/issues/546
@@ -171,6 +172,8 @@ elif sys.platform == 'win32':
                 'win32api', 'win32con', 'win32pipe',
                 # Other junk
                 '_scproxy', 'chardet', 'cjkcodecs.aliases', 'iconv_codec',
+                # Large test dependencies
+                'playwright',
             ],
             # Would love to use mode '1' to put everything into a single exe,
             # but it breaks wxPython's default tree node icons. Don't know why.

@@ -219,8 +219,15 @@ class WebPage:
     @property
     def is_not_in_archive(self) -> bool:
         return (
-            self._status == 404 and
-            self.title == 'Not in Archive | Crystal'
+            self.title == 'Not in Archive | Crystal' and
+            self._status == 404
+        )
+    
+    @property
+    def is_fetch_error(self) -> bool:
+        return (
+            self.title == 'Fetch Error | Crystal' and
+            self._status == 400
         )
     
     @property
