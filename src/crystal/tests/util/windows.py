@@ -25,7 +25,7 @@ import sys
 import tempfile
 import traceback
 from typing import TYPE_CHECKING
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 import wx
 
 if TYPE_CHECKING:
@@ -318,7 +318,9 @@ class MainWindow:
         assert isinstance(self.main_window, wx.Frame)
         entity_tree_window = mw_frame.FindWindow(name='cr-entity-tree')
         assert isinstance(entity_tree_window, wx.TreeCtrl)
-        self.entity_tree = EntityTree(entity_tree_window)
+        et_nru_button = mw_frame.FindWindow(name='cr-empty-state-new-root-url-button')
+        assert isinstance(et_nru_button, wx.Button)
+        self.entity_tree = EntityTree(entity_tree_window, et_nru_button)
         self.new_root_url_button = mw_frame.FindWindow(name='cr-add-url-button')
         assert isinstance(self.new_root_url_button, wx.Button)
         self.new_group_button = mw_frame.FindWindow(name='cr-add-group-button')
@@ -762,8 +764,22 @@ class PreferencesDialog:
 # Panel Abstractions
 
 class EntityTree:
-    def __init__(self, window: wx.TreeCtrl) -> None:
+    def __init__(self, window: wx.TreeCtrl, et_nru_button: wx.Button) -> None:
         self.window = window
+        self._empty_state_nru_button = et_nru_button
+    
+    def is_empty_state_visible(self) -> bool:
+        """Returns whether the entity tree is showing the empty state."""
+        empty_state_button = self._empty_state_nru_button
+        entity_tree = self.window
+        
+        empty_state_visible = empty_state_button.IsShownOnScreen()
+        entity_tree_visible = entity_tree.IsShown()
+        if empty_state_visible and entity_tree_visible:
+            raise AssertionError('Both empty state and entity tree are visible')
+        if not empty_state_visible and not entity_tree_visible:
+            raise AssertionError('Neither empty state nor entity tree are visible')
+        return empty_state_visible
     
     async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> str | None:
         if tree_item.tree != self.window:
@@ -772,7 +788,7 @@ class EntityTree:
     
     @staticmethod
     async def assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
-        tooltip = await (EntityTree(ti.tree).get_tree_item_icon_tooltip(ti))
+        tooltip = await (EntityTree(ti.tree, ANY).get_tree_item_icon_tooltip(ti))
         assert tooltip is not None and value in tooltip, \
             f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
     

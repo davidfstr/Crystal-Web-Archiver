@@ -18,6 +18,10 @@ Release Notes ⋮
     * Browser error pages are now appropriately styled and include
       Crystal's branding elements.
 
+* First-time-run experience improvements
+    * After creating an empty project a call-to-action appears to create
+      the first root URL.
+
 * Workflow improvements
     * Missing pages can be immediately downloaded with 1 click when browsing
       a downloaded website.

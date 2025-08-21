@@ -5,7 +5,7 @@ from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.runner import bg_sleep
-from crystal.tests.util.server import served_project
+from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
@@ -19,6 +19,65 @@ import locale
 import os
 from unittest import skip
 import wx
+
+# ------------------------------------------------------------------------------
+# Test: Entity Tree Empty State
+
+async def test_when_create_empty_project_then_entity_tree_empty_state_is_visible() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        assert mw.entity_tree.is_empty_state_visible(), \
+            'Empty state should be visible in empty project'
+
+
+async def test_when_open_non_empty_project_then_entity_tree_non_empty_state_is_visible() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+            assert not mw.entity_tree.is_empty_state_visible(), \
+                'Entity tree should be visible in non-empty project'
+
+
+async def test_given_entity_tree_in_empty_state_when_create_root_resource_then_entity_tree_enters_non_empty_state() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        assert mw.entity_tree.is_empty_state_visible(), \
+            'Should start in empty state'
+        
+        # Create a root resource
+        home_r = Resource(project, 'https://example.com/')
+        home_rr = RootResource(project, 'Home', home_r)
+        
+        assert not mw.entity_tree.is_empty_state_visible(), \
+            'Should enter non-empty state after adding root resource'
+
+
+async def test_given_entity_tree_in_empty_state_when_create_resource_group_then_entity_tree_enters_non_empty_state() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        assert mw.entity_tree.is_empty_state_visible(), \
+            'Should start in empty state'
+        
+        # Create a resource group
+        comic_g = ResourceGroup(project, 'Comics', 'https://example.com/comic/#/')
+        
+        assert not mw.entity_tree.is_empty_state_visible(), \
+            'Should enter non-empty state after adding resource group'
+
+
+async def test_given_entity_tree_in_non_empty_state_when_forget_all_root_resources_and_resource_groups_then_entity_tree_enters_empty_state() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Create some entities to start with
+        home_r = Resource(project, 'https://example.com/')
+        home_rr = RootResource(project, 'Home', home_r)
+        comic_g = ResourceGroup(project, 'Comics', 'https://example.com/comic/#/')
+        
+        assert not mw.entity_tree.is_empty_state_visible(), \
+            'Should be in non-empty state with entities'
+        
+        # Remove all entities
+        home_rr.delete()
+        comic_g.delete()
+        
+        assert mw.entity_tree.is_empty_state_visible(), \
+            'Should return to empty state after removing all entities'
+
 
 # ------------------------------------------------------------------------------
 # Test: EntityTree: Default Domain/Directory

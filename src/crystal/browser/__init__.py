@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import sys
 from crystal import __version__ as CRYSTAL_VERSION
@@ -439,14 +439,74 @@ class MainWindow:
         Raises:
         * CancelOpenProject
         """
-        content_sizer = wx.BoxSizer(wx.VERTICAL)
-        content_sizer.Add(
-            self._create_entity_tree(parent, progress_listener),
-            proportion=1,
-            flag=wx.EXPAND)
-        content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(self._create_button_bar(parent), flag=wx.EXPAND)
-        return content_sizer
+        self._entity_pane_content_sizer = wx.BoxSizer(wx.VERTICAL)
+        # NOTE: Minimum vertical size chosen so that empty state is about the
+        #       same height as the non-empty state
+        self._entity_pane_content_sizer.SetMinSize(0, 300)
+        
+        self._entity_tree_empty_state = self._create_empty_state_panel(parent)
+        self._entity_tree_nonempty_state = self._create_entity_tree(parent, progress_listener)
+        self._entity_pane_content_sizer.Add(self._entity_tree_empty_state, proportion=1, flag=wx.EXPAND)
+        
+        self._entity_pane_content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
+        self._entity_pane_content_sizer.Add(self._create_button_bar(parent), flag=wx.EXPAND)
+        
+        # Update visibility based on whether project initially empty or not
+        self._update_entity_pane_empty_state_visibility()
+        
+        return self._entity_pane_content_sizer
+    
+    def _create_empty_state_panel(self, parent: wx.Window) -> wx.Panel:
+        """Create the empty state panel with message and call-to-action button."""
+        
+        panel = wx.Panel(parent)
+        panel_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Center vertically
+        panel_sizer.AddStretchSpacer()
+        
+        # Create message text, large and centered
+        message = wx.StaticText(panel, 
+            label="Download your first page by defining a root URL for the page.",
+            style=wx.ALIGN_CENTER)
+        if True:
+            message.Wrap(400)  # wrap text at 400px
+            
+            # Make message text larger
+            font = message.GetFont()
+            font.SetPointSize(font.GetPointSize() + 2)
+            message.SetFont(font)
+        panel_sizer.Add(message, flag=wx.ALIGN_CENTER)
+        
+        # Add spacing between message and button
+        panel_sizer.AddSpacer(20)
+        
+        # Create primary call-to-action button
+        cta_button = self._new_root_url_action.create_button(
+            panel,
+            name='cr-empty-state-new-root-url-button'
+        )
+        if True:
+            # Use primary button styling
+            cta_button.SetDefault()
+            
+            # Make title text larger and bold
+            button_font = cta_button.GetFont()
+            button_font.SetPointSize(button_font.GetPointSize() + 1)
+            button_font.SetWeight(wx.FONTWEIGHT_BOLD)
+            cta_button.SetFont(button_font)
+            
+            # Set a larger minimum height for the button
+            # NOTE: cta_button.MinWidth does not return a sensible value
+            #       on at least macOS
+            cta_button.SetMinSize((cta_button.MinWidth, 40))
+        panel_sizer.Add(cta_button, flag=wx.ALIGN_CENTER)
+        
+        # Center vertically
+        panel_sizer.AddStretchSpacer()
+        
+        panel.SetSizer(panel_sizer)
+        return panel
     
     def _create_entity_tree(self, parent: wx.Window, progress_listener: OpenProjectProgressListener):
         """
@@ -454,10 +514,40 @@ class MainWindow:
         * CancelOpenProject
         """
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
+        self.entity_tree.peer.Hide()
         bind(self.entity_tree.peer, wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
         self._on_selected_entity_changed()
         
         return self.entity_tree.peer
+    
+    def _update_entity_pane_empty_state_visibility(self) -> None:
+        """Show entity tree or its empty state based on project content."""
+        def is_iterable_empty(i: Iterable) -> bool:
+            try:
+                next(iter(i))
+            except StopIteration:
+                return True
+            else:
+                return False
+        
+        is_project_empty = (
+            is_iterable_empty(self.project.root_resources) and
+            is_iterable_empty(self.project.resource_groups)
+        )
+        
+        current_window = self._entity_pane_content_sizer.GetItem(0).GetWindow()
+        desired_window = (
+            self._entity_tree_empty_state
+            if is_project_empty
+            else self._entity_tree_nonempty_state
+        )
+        if current_window != desired_window:
+            current_window.Hide()
+            desired_window.Show()
+            
+            self._entity_pane_content_sizer.Detach(0)
+            self._entity_pane_content_sizer.Insert(0, desired_window, proportion=1, flag=wx.EXPAND)
+            self._entity_pane_content_sizer.Layout()
     
     def _create_button_bar(self, parent: wx.Window):
         new_root_url_button = self._new_root_url_action.create_button(parent, name='cr-add-url-button')
@@ -1123,6 +1213,26 @@ class MainWindow:
         return self._project_server
     
     # === Entity Pane: Events ===
+    
+    # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
+    @capture_crashes_to_stderr
+    def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
+        self._update_entity_pane_empty_state_visibility()
+    
+    # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
+    @capture_crashes_to_stderr
+    def root_resource_did_forget(self, root_resource: RootResource) -> None:
+        self._update_entity_pane_empty_state_visibility()
+    
+    # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
+    @capture_crashes_to_stderr
+    def resource_group_did_instantiate(self, group: ResourceGroup) -> None:
+        self._update_entity_pane_empty_state_visibility()
+    
+    # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
+    @capture_crashes_to_stderr
+    def resource_group_did_forget(self, group: ResourceGroup) -> None:
+        self._update_entity_pane_empty_state_visibility()
     
     def _on_selected_entity_changed(self, event: wx.TreeEvent | None=None) -> None:
         selected_entity = self.entity_tree.selected_entity  # cache
