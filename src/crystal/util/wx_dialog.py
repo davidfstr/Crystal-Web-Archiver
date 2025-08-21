@@ -193,6 +193,33 @@ def ShowWindowModal(dialog: wx.Dialog) -> None:
 # ------------------------------------------------------------------------------
 # Misc Utilities
 
+def add_title_heading_to_dialog_if_needed(
+        dialog: wx.Dialog,
+        dialog_sizer: wx.Sizer,
+        border: int,
+        ) -> None:
+    """
+    Adds a title heading to a window-modal dialog on macOS where window-modal dialogs
+    don't show title bars. On other platforms, this is a no-op.
+    
+    Arguments:
+    * dialog -- the dialog to add the title heading to
+    * dialog_sizer -- the main vertical sizer for the dialog content
+    * border -- the border/padding to use around the title heading
+    """
+    if not is_mac_os():
+        return
+    
+    title_text = wx.StaticText(dialog, label=dialog.Title)
+    title_font = title_text.GetFont()
+    title_font = title_font.MakeBold().MakeLarger()
+    title_text.SetFont(title_font)
+    dialog_sizer.Add(
+        title_text,
+        flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP,
+        border=border)
+
+
 def position_dialog_initially(dialog: wx.Dialog) -> None:
     """
     Reposition the specified dialog by a default offset relative to

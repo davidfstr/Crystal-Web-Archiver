@@ -595,6 +595,7 @@ class NewGroupDialog:
     _NONE_SOURCE_TITLE = 'none'
     _SOURCE_TITLE_RE = re.compile(r'^(?:[^a-zA-Z0-9]+ )?(.*?)(?: - (.*?))? *$')
     
+    _dialog: wx.Dialog
     name_field: wx.TextCtrl
     pattern_field: wx.TextCtrl
     source_field: wx.Choice
@@ -608,32 +609,33 @@ class NewGroupDialog:
     @staticmethod
     async def wait_for() -> NewGroupDialog:
         self = NewGroupDialog(ready=True)
-        add_group_dialog = await wait_for(
+        self._dialog = await wait_for(
             NewGroupDialog.window_condition(),
             timeout=5.0,  # 4.2s observed for macOS test runners on GitHub Actions
             stacklevel_extra=1,
-        )  # type: wx.Window
-        self.name_field = add_group_dialog.FindWindow(name='cr-new-group-dialog__name-field')
+        )
+        assert isinstance(self._dialog, wx.Dialog)
+        self.name_field = self._dialog.FindWindow(name='cr-new-group-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
-        self.pattern_field = add_group_dialog.FindWindow(name='cr-new-group-dialog__pattern-field')
+        self.pattern_field = self._dialog.FindWindow(name='cr-new-group-dialog__pattern-field')
         assert isinstance(self.pattern_field, wx.TextCtrl)
-        self.source_field = add_group_dialog.FindWindow(name='cr-new-group-dialog__source-field')
+        self.source_field = self._dialog.FindWindow(name='cr-new-group-dialog__source-field')
         assert isinstance(self.source_field, wx.Choice)
-        self.preview_members_pane = add_group_dialog.FindWindow(name='cr-new-group-dialog__preview-members')
+        self.preview_members_pane = self._dialog.FindWindow(name='cr-new-group-dialog__preview-members')
         assert (
             self.preview_members_pane is None or
             isinstance(self.preview_members_pane, wx.CollapsiblePane)
         )
-        self.preview_members_list = add_group_dialog.FindWindow(name='cr-new-group-dialog__preview-members__list')
+        self.preview_members_list = self._dialog.FindWindow(name='cr-new-group-dialog__preview-members__list')
         assert isinstance(self.preview_members_list, wx.ListBox)
-        self.cancel_button = add_group_dialog.FindWindow(id=wx.ID_CANCEL)
+        self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
         assert isinstance(self.cancel_button, wx.Button)
-        self.ok_button = add_group_dialog.FindWindow(id=wx.ID_NEW)
+        self.ok_button = self._dialog.FindWindow(id=wx.ID_NEW)
         if self.ok_button is None:
-            self.ok_button = add_group_dialog.FindWindow(id=wx.ID_SAVE)
+            self.ok_button = self._dialog.FindWindow(id=wx.ID_SAVE)
         assert isinstance(self.ok_button, wx.Button)
         
-        self.download_immediately_checkbox = add_group_dialog.FindWindow(name='cr-new-group-dialog__download-immediately-checkbox')
+        self.download_immediately_checkbox = self._dialog.FindWindow(name='cr-new-group-dialog__download-immediately-checkbox')
         assert (
             self.download_immediately_checkbox is None or
             isinstance(self.download_immediately_checkbox, wx.CheckBox)
@@ -707,10 +709,12 @@ class NewGroupDialog:
 
 
 class PreferencesDialog:
+    _dialog: wx.Dialog
     html_parser_field: wx.Choice
     stale_before_checkbox: wx.CheckBox
     stale_before_date_picker: wx.adv.DatePickerCtrl
     cookie_field: wx.ComboBox
+    cancel_button: wx.Button
     ok_button: wx.Button
     
     @staticmethod
@@ -718,24 +722,27 @@ class PreferencesDialog:
         import wx.adv
         
         self = PreferencesDialog(ready=True)
-        preferences_dialog = await wait_for(
+        self._dialog = await wait_for(
             window_condition('cr-preferences-dialog'),
             timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
             stacklevel_extra=1,
-        )  # type: wx.Window
-        self.html_parser_field = preferences_dialog.FindWindow(name=
+        )
+        assert isinstance(self._dialog, wx.Dialog)
+        self.html_parser_field = self._dialog.FindWindow(name=
             'cr-preferences-dialog__html-parser-field')
         assert isinstance(self.html_parser_field, wx.Choice)
-        self.stale_before_checkbox = preferences_dialog.FindWindow(name=
+        self.stale_before_checkbox = self._dialog.FindWindow(name=
             'cr-preferences-dialog__stale-before-checkbox')
         assert isinstance(self.stale_before_checkbox, wx.CheckBox)
-        self.stale_before_date_picker = preferences_dialog.FindWindow(name=
+        self.stale_before_date_picker = self._dialog.FindWindow(name=
             'cr-preferences-dialog__stale-before-date-picker')
         assert isinstance(self.stale_before_date_picker, wx.adv.DatePickerCtrl)
-        self.cookie_field = preferences_dialog.FindWindow(name=
+        self.cookie_field = self._dialog.FindWindow(name=
             'cr-preferences-dialog__cookie-field')
         assert isinstance(self.cookie_field, wx.ComboBox)
-        self.ok_button = preferences_dialog.FindWindow(id=wx.ID_OK)
+        self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
+        assert isinstance(self.cancel_button, wx.Button)
+        self.ok_button = self._dialog.FindWindow(id=wx.ID_OK)
         assert isinstance(self.ok_button, wx.Button)
         return self
     
@@ -744,6 +751,10 @@ class PreferencesDialog:
     
     async def ok(self) -> None:
         click_button(self.ok_button)
+        await wait_for(not_condition(window_condition('cr-preferences-dialog')), stacklevel_extra=1)
+
+    async def cancel(self) -> None:
+        click_button(self.cancel_button)
         await wait_for(not_condition(window_condition('cr-preferences-dialog')), stacklevel_extra=1)
 
 

@@ -1,6 +1,9 @@
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
-from crystal.util.wx_dialog import position_dialog_initially, ShowWindowModal
+from crystal.util.wx_dialog import (
+    add_title_heading_to_dialog_if_needed, position_dialog_initially, 
+    ShowWindowModal,
+)
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_windows
 import datetime
@@ -47,6 +50,12 @@ class PreferencesDialog:
         bind(dialog, wx.EVT_BUTTON, self._on_button)
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         
+        add_title_heading_to_dialog_if_needed(
+            dialog,
+            dialog_sizer,
+            border=_WINDOW_INNER_PADDING
+        )
+
         project_box_sizer = wx.StaticBoxSizer(wx.VERTICAL, dialog, label='Project')
         project_box_sizer.Add(wrap_static_box_sizer_child(
             self._create_project_fields(project_box_sizer.GetStaticBox())))

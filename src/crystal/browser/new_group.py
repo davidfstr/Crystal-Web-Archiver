@@ -9,7 +9,8 @@ from crystal.progress import CancelLoadUrls
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
-    CreateButtonSizer, position_dialog_initially, ShowModal, ShowWindowModal,
+    CreateButtonSizer, add_title_heading_to_dialog_if_needed, 
+    position_dialog_initially, ShowModal, ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_mac_os, is_windows
@@ -105,6 +106,11 @@ class NewGroupDialog:
             flag=wx.EXPAND|wx.TOP,
             border=_ABOVE_OPTIONS_PADDING)
         
+        add_title_heading_to_dialog_if_needed(
+            dialog,
+            dialog_sizer,
+            border=_WINDOW_INNER_PADDING
+        )
         dialog_sizer.Add(content_sizer, proportion=1, flag=wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         dialog_sizer.Add(self._create_buttons(dialog, is_edit), flag=wx.EXPAND|wx.BOTTOM,

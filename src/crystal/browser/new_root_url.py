@@ -5,10 +5,11 @@ from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.test_mode import tests_are_running
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
-    CreateButtonSizer, position_dialog_initially, ShowModal, ShowWindowModal,
+    CreateButtonSizer, add_title_heading_to_dialog_if_needed, 
+    position_dialog_initially, ShowModal, ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
-from crystal.util.xos import is_linux, is_windows, is_wx_gtk
+from crystal.util.xos import is_linux, is_mac_os, is_windows, is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
 from typing import Literal, Optional, Union
 import wx
@@ -89,7 +90,7 @@ class NewRootUrlDialog:
         self._url_cleaner = None  # type: Optional[UrlCleaner]
         self._was_ok_pressed = False
         self._is_destroying_or_destroyed = False
-        
+
         dialog = self.dialog = wx.Dialog(
             parent,
             title=('New Root URL' if not is_edit else 'Edit Root URL'),
@@ -101,10 +102,21 @@ class NewRootUrlDialog:
         bind(dialog, wx.EVT_CLOSE, self._on_close)
         bind(dialog, wx.EVT_WINDOW_DESTROY, self._on_destroyed)
         
+        add_title_heading_to_dialog_if_needed(
+            dialog,
+            dialog_sizer,
+            border=self._assert_same(
+                _WINDOW_INNER_PADDING,  # wx.LEFT|wx.RIGHT|wx.TOP
+                _BESIDE_OPTIONS_PADDING,  # wx.BOTTOM
+            ))
+        
         dialog_sizer.Add(
             self._create_fields(dialog, initial_url, initial_name, is_edit),
             flag=wx.EXPAND|wx.ALL,
-            border=_WINDOW_INNER_PADDING)
+            border=self._assert_same(
+                _WINDOW_INNER_PADDING,  # wx.LEFT|wx.RIGHT|wx.TOP (Windows, Linux) or wx.LEFT|wx.RIGHT (macOS)
+                _BESIDE_OPTIONS_PADDING,  # wx.BOTTOM (Windows, Linux) or wx.TOP|wx.BOTTOM (macOS)
+            ))
         
         if not is_edit:
             new_options_sizer = self._create_new_options(dialog)
