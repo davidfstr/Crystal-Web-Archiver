@@ -46,9 +46,7 @@ from crystal.util.progress import DevNullFile
 from crystal.util.ssd import is_ssd
 from crystal.util.test_mode import tests_are_running
 from crystal.util.thread_debug import get_thread_stack
-from crystal.util.unsaved_project import (
-    set_unsaved_untitled_project_path, clear_unsaved_untitled_project_path
-)
+from crystal.app_preferences import app_prefs
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
 from crystal.util.xappdirs import user_untitled_projects_dir
@@ -328,7 +326,7 @@ class Project(ListenableMixin):
         self._check_url_collection_invariants()
         
         if is_untitled:
-            set_unsaved_untitled_project_path(self.path)
+            app_prefs.unsaved_untitled_project_path = self.path
         
         # Export reference to self, if running tests
         if tests_are_running():
@@ -1058,7 +1056,7 @@ class Project(ListenableMixin):
         so that it is no longer considered dirty.
         """
         if self._is_untitled:
-            clear_unsaved_untitled_project_path()
+            del app_prefs.unsaved_untitled_project_path
             self._is_untitled = False
         
         if self._is_dirty:
@@ -2227,7 +2225,7 @@ class Project(ListenableMixin):
                             if self.is_untitled and not _will_reopen:
                                 # Forget the untitled project during a normal close operation
                                 # so that Crystal does not attempt to reopen it later
-                                clear_unsaved_untitled_project_path()
+                                del app_prefs.unsaved_untitled_project_path
                                 
                                 try:
                                     # Try to send the untitled project to the trash,

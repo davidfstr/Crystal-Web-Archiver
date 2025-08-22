@@ -29,7 +29,7 @@ from crystal.tests.util.tasks import (
 )
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
-from crystal.util.unsaved_project import clear_unsaved_untitled_project_path, get_unsaved_untitled_project_path
+from crystal.app_preferences import app_prefs
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xappdirs import user_untitled_projects_dir
 from crystal.util.xos import is_ci, is_linux, is_mac_os, is_windows
@@ -73,7 +73,7 @@ def reopen_projects_enabled(test_func):
                 del os.environ['CRYSTAL_NO_REOPEN_PROJECTS']
             
             # Clean up state before test
-            clear_unsaved_untitled_project_path()
+            del app_prefs.unsaved_untitled_project_path
             _cleanup_untitled_projects()
             
             # Run the test
@@ -86,7 +86,7 @@ def reopen_projects_enabled(test_func):
                 del os.environ['CRYSTAL_NO_REOPEN_PROJECTS']
             
             # Clean up state after test
-            clear_unsaved_untitled_project_path()
+            del app_prefs.unsaved_untitled_project_path
             _cleanup_untitled_projects()
     
     return wrapper
@@ -1165,7 +1165,7 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
     with subtests.test('mark for reopen'):
         with _untitled_project(in_default_nonisolated_location=True) as project:
             # Should track this untitled project
-            tracked_path = get_unsaved_untitled_project_path()
+            tracked_path = app_prefs.unsaved_untitled_project_path
             assert tracked_path is not None
             assert tracked_path == project.path
             
@@ -1178,7 +1178,7 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             assert os.path.exists(project.path)
         
         # After closing, state should be cleared
-        assert get_unsaved_untitled_project_path() is None
+        assert app_prefs.unsaved_untitled_project_path is None
     
     with subtests.test('actually reopen'):
         # Create untitled project in subprocess to simulate unexpected quit
@@ -1188,8 +1188,8 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             
             # Verify project is tracked for reopen
             tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
-                from crystal.util.unsaved_project import get_unsaved_untitled_project_path
-                print(repr(get_unsaved_untitled_project_path()))
+                from crystal.app_preferences import app_prefs
+                print(repr(app_prefs.unsaved_untitled_project_path))
                 '''
             )))
             assert tracked_path and 'UntitledProjects' in tracked_path
@@ -1235,14 +1235,14 @@ async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then
         with _untitled_project(in_default_nonisolated_location=True) as project, \
                 xtempfile.TemporaryDirectory() as tmp_dir:
             # Should initially track this untitled project
-            assert get_unsaved_untitled_project_path() == project.path
+            assert app_prefs.unsaved_untitled_project_path == project.path
             
             # Save the project (make it titled)
             new_project_path = os.path.join(tmp_dir, 'SavedProject.crystalproj')
             await save_as_without_ui(project, new_project_path)
             
             # State should be cleared since project is no longer untitled
-            assert get_unsaved_untitled_project_path() is None
+            assert app_prefs.unsaved_untitled_project_path is None
             assert not project.is_untitled
     
     with subtests.test('actually reopen'):
@@ -1282,8 +1282,8 @@ async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then
             
             # Verify state is cleared after saving
             tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
-                from crystal.util.unsaved_project import get_unsaved_untitled_project_path
-                print(repr(get_unsaved_untitled_project_path()))
+                from crystal.app_preferences import app_prefs
+                print(repr(app_prefs.unsaved_untitled_project_path))
                 '''
             )))
             assert tracked_path == None, f"Expected 'None' but got {repr(tracked_path)}"
@@ -1307,10 +1307,10 @@ async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_
     with subtests.test('mark for reopen'):
         with _untitled_project(in_default_nonisolated_location=True) as project:
             # Should be tracked
-            assert get_unsaved_untitled_project_path() == project.path
+            assert app_prefs.unsaved_untitled_project_path == project.path
         
         # After closing, state should be cleared automatically
-        assert get_unsaved_untitled_project_path() is None
+        assert app_prefs.unsaved_untitled_project_path is None
     
     with subtests.test('actually reopen'):
         # Create untitled project in subprocess and close it cleanly
@@ -1320,8 +1320,8 @@ async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_
             
             # Verify project is tracked
             tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
-                from crystal.util.unsaved_project import get_unsaved_untitled_project_path
-                print(repr(get_unsaved_untitled_project_path()))
+                from crystal.app_preferences import app_prefs
+                print(repr(app_prefs.unsaved_untitled_project_path))
                 '''
             )))
             assert 'UntitledProjects' in tracked_path
@@ -1330,7 +1330,7 @@ async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_
             close_main_window(crystal)
 
         # Ensure no longer tracking project
-        assert get_unsaved_untitled_project_path() is None
+        assert app_prefs.unsaved_untitled_project_path is None
 
         # Now start Crystal again and verify no project is reopened
         with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
@@ -1354,20 +1354,20 @@ async def test_given_multiple_untitled_projects_when_crystal_unexpectedly_quits_
         path1 = project1.path
         
         # Should track first project
-        assert get_unsaved_untitled_project_path() == path1
+        assert app_prefs.unsaved_untitled_project_path == path1
         
         # Create second untitled project
         project2 = Project()
         path2 = project2.path
         
         # Should now track second project (most recent)
-        assert get_unsaved_untitled_project_path() == path2
+        assert app_prefs.unsaved_untitled_project_path == path2
         
         # Close first project - state should be cleared because ANY untitled project close clears state
         # (This is the intended behavior: manual close indicates user intent to not auto-reopen)
         project1.close()
         project1 = None
-        assert get_unsaved_untitled_project_path() is None
+        assert app_prefs.unsaved_untitled_project_path is None
         
         # Second project should still be open but no longer tracked
         assert not project2._closed
@@ -1375,7 +1375,7 @@ async def test_given_multiple_untitled_projects_when_crystal_unexpectedly_quits_
         # Close second project - state should remain cleared
         project2.close()
         project2 = None
-        assert get_unsaved_untitled_project_path() is None
+        assert app_prefs.unsaved_untitled_project_path is None
     finally:
         if project1 is not None:
             project1.close()

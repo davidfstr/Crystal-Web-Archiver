@@ -658,8 +658,8 @@ async def _did_launch(
                     readonly=effective_readonly,
                 )  # type: dict[str, Any]
                 if filepath is None:
-                    from crystal.util.unsaved_project import get_unsaved_untitled_project_path
-                    last_untitled_project_path = get_unsaved_untitled_project_path()
+                    from crystal.app_preferences import app_prefs
+                    last_untitled_project_path = app_prefs.unsaved_untitled_project_path
                     reopen_projects_disabled = os.environ.get('CRYSTAL_NO_REOPEN_PROJECTS', 'False') == 'True'
                     if (last_untitled_project_path is not None and 
                             os.path.exists(last_untitled_project_path) and
@@ -675,8 +675,8 @@ async def _did_launch(
                             # (like corruption on disk), clear the record of
                             # the untitled project so the user can open
                             # something else
-                            from crystal.util.unsaved_project import clear_unsaved_untitled_project_path
-                            clear_unsaved_untitled_project_path()
+                            from crystal.app_preferences import app_prefs
+                            del app_prefs.unsaved_untitled_project_path
                             raise
                     else:
                         # NOTE: Can raise SystemExit
