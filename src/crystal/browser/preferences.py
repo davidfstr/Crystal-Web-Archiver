@@ -1,3 +1,4 @@
+from crystal.app_preferences import app_prefs
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
 from crystal.util.wx_dialog import (
@@ -7,7 +8,7 @@ from crystal.util.wx_dialog import (
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_windows
 import datetime
-from typing import Dict, TYPE_CHECKING
+from typing import Callable, Dict, TYPE_CHECKING
 from tzlocal import get_localzone
 import wx
 
@@ -37,12 +38,19 @@ class PreferencesDialog:
     
     # === Init ===
     
-    def __init__(self, parent: wx.Window, project: 'Project') -> None:
+    def __init__(self,
+            parent: wx.Window,
+            project: 'Project', 
+            on_close: Callable[[], None] | None = None,
+            ) -> None:
         """
         Arguments:
         * parent -- parent wx.Window that this dialog is attached to.
+        * project -- the project whose preferences are being edited.
+        * on_close -- optional callback called when dialog is closed (OK or Cancel).
         """
         self._project = project
+        self._on_close_callback = on_close or (lambda: None)
         
         dialog = self.dialog = wx.Dialog(parent, title='Preferences', name='cr-preferences-dialog')
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -66,6 +74,12 @@ class PreferencesDialog:
         session_box_sizer.Add(wrap_static_box_sizer_child(
             self._create_session_fields(session_box_sizer.GetStaticBox())))
         dialog_sizer.Add(session_box_sizer, flag=wx.EXPAND|(wx.ALL & ~wx.TOP),
+            border=_WINDOW_INNER_PADDING)
+        
+        app_box_sizer = wx.StaticBoxSizer(wx.VERTICAL, dialog, label='Application')
+        app_box_sizer.Add(wrap_static_box_sizer_child(
+            self._create_app_fields(app_box_sizer.GetStaticBox())))
+        dialog_sizer.Add(app_box_sizer, flag=wx.EXPAND|(wx.ALL & ~wx.TOP),
             border=_WINDOW_INNER_PADDING)
         
         dialog_sizer.Add(dialog.CreateButtonSizer(wx.OK|wx.CANCEL), flag=wx.EXPAND|wx.BOTTOM,
@@ -102,6 +116,27 @@ class PreferencesDialog:
         fields_sizer.Add(
             self.html_parser_field,
             flag=wx.EXPAND, pos=wx.GBPosition(1, 1))
+        
+        return fields_sizer
+    
+    def _create_app_fields(self, parent: wx.Window) -> wx.Sizer:
+        fields_sizer = wx.GridBagSizer(
+            vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
+        
+        fields_sizer.Add(
+            wx.StaticText(parent, label='These preferences apply to all projects.'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
+            border=5 if is_windows() else 0)
+        
+        # Reset dismissed callouts button
+        self.reset_callouts_button = wx.Button(
+            parent, 
+            label='Reset Dismissed Help Messages',
+            name='cr-preferences-dialog__reset-callouts-button')
+        bind(self.reset_callouts_button, wx.EVT_BUTTON, self._on_reset_callouts)
+        fields_sizer.Add(
+            self.reset_callouts_button,
+            flag=0, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2))
         
         return fields_sizer
     
@@ -175,6 +210,13 @@ class PreferencesDialog:
     def _update_stale_before_date_picker_enabled(self, event: wx.CommandEvent | None=None) -> None:
         self.stale_before_date_picker.Enabled = self.stale_before_checkbox.Value
     
+    def _on_reset_callouts(self, event: wx.CommandEvent) -> None:
+        # Reset all dismissed help callouts so they will appear again
+        del app_prefs.view_button_callout_dismissed
+        
+        # Signal action performed by disabling the button
+        self.reset_callouts_button.Enabled = False
+    
     def _on_button(self, event: wx.CommandEvent) -> None:
         btn_id = event.GetEventObject().GetId()
         if btn_id == wx.ID_OK:
@@ -211,6 +253,8 @@ class PreferencesDialog:
             self._project.min_fetch_date = None
         
         self.dialog.Destroy()
+        self._on_close_callback()
     
     def _on_cancel(self, event: wx.Event) -> None:
         self.dialog.Destroy()
+        self._on_close_callback()

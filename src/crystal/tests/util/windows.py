@@ -320,7 +320,7 @@ class MainWindow:
         assert isinstance(entity_tree_window, wx.TreeCtrl)
         et_nru_button = mw_frame.FindWindow(name='cr-empty-state-new-root-url-button')
         assert isinstance(et_nru_button, wx.Button)
-        self.entity_tree = EntityTree(entity_tree_window, et_nru_button)
+        self.entity_tree = EntityTree(entity_tree_window, et_nru_button, mw_frame)
         self.new_root_url_button = mw_frame.FindWindow(name='cr-add-url-button')
         assert isinstance(self.new_root_url_button, wx.Button)
         self.new_group_button = mw_frame.FindWindow(name='cr-add-group-button')
@@ -716,6 +716,7 @@ class PreferencesDialog:
     stale_before_checkbox: wx.CheckBox
     stale_before_date_picker: wx.adv.DatePickerCtrl
     cookie_field: wx.ComboBox
+    reset_callouts_button: wx.Button
     cancel_button: wx.Button
     ok_button: wx.Button
     
@@ -742,6 +743,9 @@ class PreferencesDialog:
         self.cookie_field = self._dialog.FindWindow(name=
             'cr-preferences-dialog__cookie-field')
         assert isinstance(self.cookie_field, wx.ComboBox)
+        self.reset_callouts_button = self._dialog.FindWindow(name=
+            'cr-preferences-dialog__reset-callouts-button')
+        assert isinstance(self.reset_callouts_button, wx.Button)
         self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
         assert isinstance(self.cancel_button, wx.Button)
         self.ok_button = self._dialog.FindWindow(id=wx.ID_OK)
@@ -764,9 +768,10 @@ class PreferencesDialog:
 # Panel Abstractions
 
 class EntityTree:
-    def __init__(self, window: wx.TreeCtrl, et_nru_button: wx.Button) -> None:
+    def __init__(self, window: wx.TreeCtrl, et_nru_button: wx.Button, main_window: wx.Frame) -> None:
         self.window = window
         self._empty_state_nru_button = et_nru_button
+        self._main_window = main_window
     
     def is_empty_state_visible(self) -> bool:
         """Returns whether the entity tree is showing the empty state."""
@@ -781,6 +786,10 @@ class EntityTree:
             raise AssertionError('Neither empty state nor entity tree are visible')
         return empty_state_visible
     
+    @property
+    def view_button_callout(self) -> wx.Window:
+        return self._main_window.FindWindow(name='cr-view-button-callout')
+    
     async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> str | None:
         if tree_item.tree != self.window:
             raise ValueError()
@@ -788,7 +797,7 @@ class EntityTree:
     
     @staticmethod
     async def assert_tree_item_icon_tooltip_contains(ti: TreeItem, value: str) -> None:
-        tooltip = await (EntityTree(ti.tree, ANY).get_tree_item_icon_tooltip(ti))
+        tooltip = await (EntityTree(ti.tree, ANY, ANY).get_tree_item_icon_tooltip(ti))
         assert tooltip is not None and value in tooltip, \
             f'Expected tooltip to contain {value!r}, but it was: {tooltip!r}'
     

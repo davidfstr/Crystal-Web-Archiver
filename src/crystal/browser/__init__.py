@@ -1,8 +1,9 @@
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import sys
 from crystal import __version__ as CRYSTAL_VERSION
 from crystal import APP_NAME, resources
+from crystal.app_preferences import app_prefs
 from crystal.browser.entitytree import (
     EntityTree, ResourceGroupNode, RootResourceNode,
 )
@@ -21,7 +22,7 @@ from crystal.progress import (
 from crystal.server import ProjectServer
 from crystal.task import DownloadResourceGroupMembersTask, RootTask
 from crystal.ui.actions import Action
-from crystal.ui.BetterMessageDialog import BetterMessageDialog
+from crystal.ui.callout import Callout
 from crystal.ui.clickable_text import ClickableText
 from crystal.ui.log_drawer import LogDrawer
 from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
@@ -42,6 +43,7 @@ from crystal.util.wx_dialog import (
     ShowModal,
 )
 from crystal.util.wx_timer import Timer, TimerError
+from crystal.util.xcollections.iterables import is_iterable_empty, is_iterable_len_1
 from crystal.util.xos import (
     is_kde_or_non_gnome, is_linux, is_mac_os, is_windows, mac_version,
 )
@@ -454,6 +456,9 @@ class MainWindow:
         # Update visibility based on whether project initially empty or not
         self._update_entity_pane_empty_state_visibility()
         
+        # Defer callout visibility update until after layout is complete
+        fg_call_later(self._update_view_button_callout_visibility, force_later=True)
+        
         return self._entity_pane_content_sizer
     
     def _create_empty_state_panel(self, parent: wx.Window) -> wx.Panel:
@@ -516,20 +521,17 @@ class MainWindow:
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
         self.entity_tree.peer.Hide()
         bind(self.entity_tree.peer, wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
+        if is_windows():
+            # On Windows, repaint callout when tree is scrolled or repainted,
+            # because tree draws over callout despite its z-order position
+            bind(self.entity_tree.peer, wx.EVT_PAINT, self._on_tree_paint)
+            bind(self.entity_tree.peer, wx.EVT_SCROLLWIN, self._on_tree_scroll)
         self._on_selected_entity_changed()
         
         return self.entity_tree.peer
     
     def _update_entity_pane_empty_state_visibility(self) -> None:
         """Show entity tree or its empty state based on project content."""
-        def is_iterable_empty(i: Iterable) -> bool:
-            try:
-                next(iter(i))
-            except StopIteration:
-                return True
-            else:
-                return False
-        
         is_project_empty = (
             is_iterable_empty(self.project.root_resources) and
             is_iterable_empty(self.project.resource_groups)
@@ -559,6 +561,15 @@ class MainWindow:
             parent, name='cr-update-members-button')
         
         view_button = self._view_action.create_button(parent, name='cr-view-button')
+        self._view_button_callout_dismissed_temporarily = False
+        self._view_button_callout = Callout(  # initially hidden
+            parent=parent,
+            target_control=view_button,
+            message='View your first downloaded page in a browser by pressing "View"',
+            on_temporary_dismiss=self._on_view_callout_temporary_dismiss,
+            on_permanent_dismiss=self._on_view_callout_permanent_dismiss,
+            name='cr-view-button-callout'
+        )
         
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
         content_sizer.Add(new_root_url_button)
@@ -577,6 +588,28 @@ class MainWindow:
         content_sizer.Add(view_button)
         return content_sizer
     
+    # === Entity Pane: View Button Callout ===
+    
+    @capture_crashes_to_stderr
+    def _update_view_button_callout_visibility(self) -> None:
+        should_show_callout = (
+            not self._view_button_callout_dismissed_temporarily and
+            not (app_prefs.view_button_callout_dismissed or False) and
+            (has_exactly_one_root_resource := is_iterable_len_1(self.project.root_resources))
+        )
+        if should_show_callout:
+            self._view_button_callout.show_callout()
+        else:
+            self._view_button_callout.hide_callout()
+
+    def _on_view_callout_temporary_dismiss(self) -> None:
+        self._view_button_callout_dismissed_temporarily = True
+        self._view_button_callout.hide_callout()
+
+    def _on_view_callout_permanent_dismiss(self) -> None:
+        app_prefs.view_button_callout_dismissed = True
+        self._view_button_callout.hide_callout()
+
     # === Entity Pane: Properties ===
     
     @property
@@ -1218,11 +1251,13 @@ class MainWindow:
     @capture_crashes_to_stderr
     def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
         self._update_entity_pane_empty_state_visibility()
+        self._update_view_button_callout_visibility()
     
     # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
     @capture_crashes_to_stderr
     def root_resource_did_forget(self, root_resource: RootResource) -> None:
         self._update_entity_pane_empty_state_visibility()
+        self._update_view_button_callout_visibility()
     
     # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
     @capture_crashes_to_stderr
@@ -1252,6 +1287,34 @@ class MainWindow:
             isinstance(selected_entity, ResourceGroup))
         self._view_action.enabled = (
             isinstance(selected_entity, (Resource, RootResource)))
+    
+    @capture_crashes_to_stderr
+    def _on_tree_paint(self, event: wx.PaintEvent) -> None:
+        if is_windows():
+            # Repaint callout after the tree finishes repainting
+            if hasattr(self, '_view_button_callout') and self._view_button_callout.IsShown():
+                @capture_crashes_to_stderr
+                def repaint_callout() -> None:
+                    self._view_button_callout.Refresh()
+                fg_call_later(repaint_callout, force_later=True)
+        
+        # Keep processing the event normally
+        event.Skip()
+    
+    @capture_crashes_to_stderr
+    def _on_tree_scroll(self, event: wx.ScrollWinEvent) -> None:
+        """Handle tree scroll events to fix Windows callout artifacts during scrolling."""
+        if is_windows():
+            # Repaint callout after tree scrolling to fix visual artifacts
+            if hasattr(self, '_view_button_callout') and self._view_button_callout.IsShown():
+                @capture_crashes_to_stderr
+                def repaint_tree_and_callout() -> None:
+                    self.entity_tree.peer.Refresh()
+                    self._view_button_callout.Refresh()
+                fg_call_later(repaint_tree_and_callout, force_later=True)
+        
+        # Keep processing the event normally
+        event.Skip()
     
     # === Task Pane: Init ===
     
@@ -1586,6 +1649,11 @@ class MainWindow:
     
     def _on_preferences(self, event: wx.MenuEvent | wx.CommandEvent) -> None:
         if event.Id == wx.ID_PREFERENCES or isinstance(event.EventObject, wx.Button):
-            PreferencesDialog(self._frame, self.project)
+            PreferencesDialog(self._frame, self.project, self._on_preferences_dialog_close)
         else:
             event.Skip()
+    
+    @fg_affinity
+    def _on_preferences_dialog_close(self) -> None:
+        # Update callout visibility in callout were reset in app preferences
+        self._update_view_button_callout_visibility()

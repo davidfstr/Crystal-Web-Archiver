@@ -21,6 +21,8 @@ Release Notes ⋮
 * First-time-run experience improvements
     * After creating an empty project a call-to-action appears to create
       the first root URL.
+    * After creating the first root URL a call-to-action appears to view
+      the downloaded root URL in a web browser.
 
 * Workflow improvements
     * Missing pages can be immediately downloaded with 1 click when browsing

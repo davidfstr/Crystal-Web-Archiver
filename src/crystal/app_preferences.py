@@ -23,6 +23,11 @@ class AppPreferences:
     # === State Management ===
     
     def _get_state_filepath(self) -> str:
+        # During tests, optionally disable persistence to avoid interfering with real app preferences
+        if os.environ.get('CRYSTAL_NO_PERSIST_APP_PREFS', 'False') == 'True':
+            # Return a temporary file path that won't affect real preferences
+            import tempfile
+            return os.path.join(tempfile.gettempdir(), 'crystal_test_app_preferences.json')
         return os.path.join(user_state_dir(), 'app_preferences.json')
     
     def _load_state(self) -> dict[str, Any]:
@@ -105,6 +110,18 @@ class AppPreferences:
             Will be reopened automatically if Crystall unexpectedly quits.
             
             Returns None if Crystal was cleanly shut down.
+            """
+        )
+    ))
+    
+    view_button_callout_dismissed = cast(bool, _define_property(
+        'view_button_callout_dismissed',
+        doc=(
+            """
+            Whether the View button callout has been permanently dismissed.
+            
+            The callout appears when there is exactly one root resource in a project
+            to help users discover the View button functionality.
             """
         )
     ))

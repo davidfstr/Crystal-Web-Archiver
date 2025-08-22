@@ -1,8 +1,9 @@
 from crystal.model import (
     DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
 )
+from crystal.app_preferences import app_prefs
 from crystal.tests.util.asserts import assertEqual, assertIn
-from crystal.tests.util.controls import TreeItem
+from crystal.tests.util.controls import TreeItem, click_button
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project, served_project
@@ -12,13 +13,42 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import (
-    MainWindow, MenuitemMissingError, OpenOrCreateDialog,
+    MainWindow, MenuitemMissingError, OpenOrCreateDialog, PreferencesDialog,
 )
+from functools import wraps
+import os
+import tempfile
+from unittest import skip
+from unittest.mock import patch
+import wx
+
 import crystal.tests.util.xtempfile as xtempfile
 import locale
 import os
-from unittest import skip
-import wx
+
+
+# ------------------------------------------------------------------------------
+# Decorators
+
+def isolated_app_prefs(test_func):
+    """
+    Decorator for tests that need to modify app preferences without interfering
+    with the real Crystal app's preferences.
+    
+    Uses a temporary file for app preferences storage during the test.
+    """
+    @wraps(test_func)
+    async def wrapper(*args, **kwargs):
+        # Create a temporary file for test preferences
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+            temp_prefs_path = temp_file.name
+            
+            # Patch the app preferences to use the temporary file
+            with patch.object(app_prefs, '_get_state_filepath', return_value=temp_prefs_path):
+                # Run the test
+                return await test_func(*args, **kwargs)
+    return wrapper
+
 
 # ------------------------------------------------------------------------------
 # Test: Entity Tree Empty State
@@ -77,6 +107,188 @@ async def test_given_entity_tree_in_non_empty_state_when_forget_all_root_resourc
         
         assert mw.entity_tree.is_empty_state_visible(), \
             'Should return to empty state after removing all entities'
+
+
+# ------------------------------------------------------------------------------
+# Test: View Button Callout
+
+@skip('covered by: test_when_multiple_root_resources_then_view_button_callout_is_hidden')
+async def test_when_no_root_resources_then_view_button_callout_is_hidden() -> None:
+    pass
+
+
+@skip('covered by: test_when_multiple_root_resources_then_view_button_callout_is_hidden')
+async def test_when_exactly_one_root_resource_exists_then_view_button_callout_is_shown() -> None:
+    pass
+
+
+async def test_when_multiple_root_resources_then_view_button_callout_is_hidden() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+        archive_url = sp.get_request_url('https://xkcd.com/archive/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Initially no callout should be visible (empty project)
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is None or not view_callout.IsShown(), \
+                'Callout should not be visible in empty project'
+            
+            # Add first root resource
+            home_r = Resource(project, home_url)
+            home_rr = RootResource(project, 'Home', home_r)
+            
+            # Callout should be visible with 1 resource
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is not None, \
+                'Callout should be created'
+            assert view_callout.IsShown(), \
+                'Callout should be visible with exactly 1 root resource'
+            
+            # Add second root resource
+            archive_r = Resource(project, archive_url)
+            archive_rr = RootResource(project, 'Archive', archive_r)
+            
+            # Now callout should be hidden
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is None or not view_callout.IsShown(), \
+                'Callout should be hidden with multiple root resources'
+
+
+async def test_when_view_callout_temporarily_dismissed_then_stays_hidden() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+        archive_url = sp.get_request_url('https://xkcd.com/archive/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Add root resource to trigger callout
+            home_r = Resource(project, home_url)
+            home_rr = RootResource(project, 'Home', home_r)
+            
+            # Find and dismiss the callout
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is not None, \
+                'Callout should be created'
+            assert view_callout.IsShown(), \
+                'Callout should be visible'
+            close_button = view_callout.FindWindow(name='cr-view-button-callout__close-button')
+            assert close_button is not None, \
+                'Close button should exist'
+            click_button(close_button)
+            assert not view_callout.IsShown(), \
+                'Callout should be hidden after dismissal'
+            
+            # Add a second resource
+            archive_r = Resource(project, archive_url)
+            archive_rr = RootResource(project, 'Archive', archive_r)
+            
+            # Remove second resource to get back to 1 resource
+            archive_rr.delete()
+            
+            # Callout should still remain hidden (temporarily dismissed)
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is None or not view_callout.IsShown(), \
+                'Callout should remain hidden after temporary dismissal'
+
+
+@isolated_app_prefs
+async def test_when_view_callout_permanently_dismissed_then_stays_hidden() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Add root resource to trigger callout
+            home_r = Resource(project, home_url)
+            home_rr = RootResource(project, 'Home', home_r)
+            
+            # Find and permanently dismiss the callout
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is not None, \
+                'Callout should be created'
+            assert view_callout.IsShown(), \
+                'Callout should be visible'
+            
+            # Check the "Don't show this message again" checkbox
+            dismiss_checkbox = view_callout.FindWindow(name='cr-view-button-callout__dismiss-checkbox')
+            assert dismiss_checkbox is not None, \
+                'Dismiss checkbox should exist'
+            dismiss_checkbox.SetValue(True)
+            
+            # Close the callout
+            close_button = view_callout.FindWindow(name='cr-view-button-callout__close-button')
+            assert close_button is not None, \
+                'Close button should exist'
+            click_button(close_button)
+            assert not view_callout.IsShown(), \
+                'Callout should be hidden after permanent dismissal'
+            
+            # Verify the preference was saved
+            assert app_prefs.view_button_callout_dismissed == True, \
+                'App preference should be set to permanently dismissed'
+            
+            # Add a second resource
+            archive_url = sp.get_request_url('https://xkcd.com/archive/')
+            archive_r = Resource(project, archive_url)
+            archive_rr = RootResource(project, 'Archive', archive_r)
+            
+            # Remove second resource to get back to 1 resource
+            archive_rr.delete()
+            
+            # Callout should remain hidden (permanently dismissed)
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is None or not view_callout.IsShown(), \
+                'Callout should remain hidden after permanent dismissal'
+        
+        # Test that dismissal persists across "sessions" by creating a new main window
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw2, project2):
+            # Add root resource to trigger callout
+            home_r2 = Resource(project2, home_url)
+            home_rr2 = RootResource(project2, 'Home', home_r2)
+            
+            # Callout should remain hidden due to permanent dismissal
+            view_callout2 = mw2.entity_tree.view_button_callout
+            assert view_callout2 is None or not view_callout2.IsShown(), \
+                'Callout should remain hidden in new session after permanent dismissal'
+
+
+@isolated_app_prefs
+async def test_can_reset_permanent_dismissal_from_preferences_dialog() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        # Set up initial state: callout has been permanently dismissed
+        app_prefs.view_button_callout_dismissed = True
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Add root resource 
+            home_r = Resource(project, home_url)
+            home_rr = RootResource(project, 'Home', home_r)
+            
+            # Callout should be hidden due to permanent dismissal
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is None or not view_callout.IsShown(), \
+                'Callout should be hidden when permanently dismissed'
+            
+            # Open preferences dialog
+            click_button(mw.preferences_button)
+            prefs_dialog = await PreferencesDialog.wait_for()
+            try:
+                # Click the reset callouts button
+                click_button(prefs_dialog.reset_callouts_button)
+                assert prefs_dialog.reset_callouts_button.Enabled == False
+                
+                # Verify the preference was reset
+                assert app_prefs.view_button_callout_dismissed == None, \
+                    'App preference should be reset to None'
+            finally:
+                # Close preferences dialog
+                await prefs_dialog.ok()
+                
+            # Now callout should be visible again
+            view_callout = mw.entity_tree.view_button_callout
+            assert view_callout is not None, \
+                'Callout should be created after reset'
+            assert view_callout.IsShown(), \
+                'Callout should be visible after resetting dismissal'
 
 
 # ------------------------------------------------------------------------------
