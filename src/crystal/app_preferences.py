@@ -14,8 +14,6 @@ from typing import Any, Dict, Optional, cast
 # NOTE: Use the `app_prefs` singleton instance rather than attempting
 #       to instantiate this class directly.
 class AppPreferences:
-    _STATE_FILENAME = 'unsaved_project.json'
-    
     def __init__(self, _ready: bool = False) -> None:
         if not _ready:
             raise ValueError(
@@ -25,9 +23,9 @@ class AppPreferences:
     # === State Management ===
     
     def _get_state_filepath(self) -> str:
-        return os.path.join(user_state_dir(), self._STATE_FILENAME)
+        return os.path.join(user_state_dir(), 'app_preferences.json')
     
-    def _load_state(self) -> Dict:
+    def _load_state(self) -> dict[str, Any]:
         state_filepath = self._get_state_filepath()
         if not os.path.exists(state_filepath):
             return {}
@@ -39,7 +37,7 @@ class AppPreferences:
             # If state file is corrupted or unreadable, start fresh
             return {}
     
-    def _save_state(self, state: Dict) -> None:
+    def _save_state(self, state: dict[str, Any]) -> None:
         state_filepath = self._get_state_filepath()
         try:
             with open(state_filepath, 'w', encoding='utf-8') as f:
