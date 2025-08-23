@@ -29,6 +29,7 @@ from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
 from crystal.util.bulkheads import (
     capture_crashes_to, capture_crashes_to_stderr,
 )
+from crystal.util.cloak import CloakMixin, cloak
 from crystal.util.ellipsis import EllipsisType
 from crystal.util.finderinfo import get_hide_file_extension
 from crystal.util.test_mode import tests_are_running
@@ -65,7 +66,7 @@ import wx
 _WINDOW_INNER_PADDING = 10
 
 
-class MainWindow:
+class MainWindow(CloakMixin):
     _AUTOHIBERNATE_PERIOD = 1000 * 60 * 5  # 5 min, in milliseconds
     
     project: Project
@@ -655,6 +656,7 @@ class MainWindow:
     
     # TODO: Use @fg_trampoline here to simplify the implementation
     @capture_crashes_to_stderr
+    @cloak
     def project_is_dirty_did_change(self) -> None:
         if is_mac_os():
             @capture_crashes_to_stderr
@@ -665,6 +667,7 @@ class MainWindow:
     
     @fg_trampoline
     @capture_crashes_to_stderr
+    @cloak
     def project_readonly_did_change(self) -> None:
         # Update actions
         self._new_root_url_action.enabled = not self._readonly
@@ -676,6 +679,7 @@ class MainWindow:
     
     @fg_trampoline
     @capture_crashes_to_stderr
+    @cloak
     def project_root_task_did_change(self, old_root_task: 'RootTask', new_root_task: 'RootTask') -> None:
         """
         Called when the project gets a new RootTask (e.g., during Save As reopen).
@@ -1249,23 +1253,27 @@ class MainWindow:
     
     # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
     @capture_crashes_to_stderr
+    @cloak
     def root_resource_did_instantiate(self, root_resource: RootResource) -> None:
         self._update_entity_pane_empty_state_visibility()
         self._update_view_button_callout_visibility()
     
     # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
     @capture_crashes_to_stderr
+    @cloak
     def root_resource_did_forget(self, root_resource: RootResource) -> None:
         self._update_entity_pane_empty_state_visibility()
         self._update_view_button_callout_visibility()
     
     # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
     @capture_crashes_to_stderr
+    @cloak
     def resource_group_did_instantiate(self, group: ResourceGroup) -> None:
         self._update_entity_pane_empty_state_visibility()
     
     # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
     @capture_crashes_to_stderr
+    @cloak
     def resource_group_did_forget(self, group: ResourceGroup) -> None:
         self._update_entity_pane_empty_state_visibility()
     
