@@ -128,7 +128,7 @@ Currently defined project fixtures include:
     - A mostly static site.
     - Includes a few comic and feed resources.
     - For a full list of URLs available, see the URLs defined in
-      `test_can_download_and_serve_a_static_site`
+      `test_can_download_and_serve_a_static_site_using_main_window_ui`
       in `test_workflows.py`.
 - testdata_xkcd-v2.crystalproj.zip
     - Similar to the "testdata_xkcd.crystalproj.zip" fixture,
@@ -471,7 +471,7 @@ The `test_workflows` suite is the oldest suite and performs nearly all actions
 directly through the UI, eschewing direct manipulation of the `Project` object.
 It tests high-level workflows that a user might want to perform. For example:
 
-- test_can_download_and_serve_a_static_site
+- test_can_download_and_serve_a_static_site_using_main_window_ui
 - test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting
 - test_can_download_and_serve_a_site_requiring_dynamic_url_discovery
 - test_can_download_and_serve_a_site_requiring_cookie_authentication

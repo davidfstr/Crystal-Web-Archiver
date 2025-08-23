@@ -364,13 +364,13 @@ async def test_can_download_group_with_nothing_as_source() -> None:
     pass
 
 
-@skip('covered by: test_can_download_and_serve_a_static_site')
+@skip('covered by: test_can_download_and_serve_a_static_site_using_main_window_ui')
 async def test_can_download_group_with_root_resource_as_source() -> None:
     # See section: "Test can download resource group, when root resource is source"
     pass
 
 
-@skip('covered by: test_can_download_and_serve_a_static_site')
+@skip('covered by: test_can_download_and_serve_a_static_site_using_main_window_ui')
 async def test_can_download_group_with_group_as_source() -> None:
     # See section: "Test can update membership of resource group, when other resource group is source"
     pass

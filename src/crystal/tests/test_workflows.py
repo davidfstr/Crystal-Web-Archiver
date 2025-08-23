@@ -138,14 +138,21 @@ async def test_first_time_user_can_easily_download_simple_site() -> None:
     pass
 
 
-@skip('covered by: ' + ', '.join([
-    'test_can_download_and_serve_a_static_site',
+@skip('(will be) covered by: ' + ', '.join([
+    # Static sites, that may be complex
+    'test_can_download_and_serve_a_static_site_using_main_window_ui',
+    'test_can_download_and_serve_a_static_site_using_using_browser',
+    'test_can_download_and_serve_a_static_site_using_using_keyboard',
+    
+    # Dynamic sites, that may be complex
     # TODO: This scenario logs warnings in the server console that are easy to miss.
     #       Also show a _visual_ warning - in the browser or in the main window -
     #       that suggests what resource group to add, plus a button to
     #       do so automatically.
     'test_can_download_and_serve_a_site_requiring_dynamic_url_discovery',
     'test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting',
+    
+    # Authentication-required sites, that may be complex
     # TODO: Detect when user is trying to login to a served website.
     #       Capture login cookies at that time _automatically_,
     #       with some kind of notification. Then user can keep
@@ -157,7 +164,7 @@ async def test_first_time_user_can_download_complex_site() -> None:
     pass
 
 
-async def test_can_download_and_serve_a_static_site() -> None:
+async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> None:
     """
     Test that can successfully download and serve a mostly-static site,
     using the main window UI. 
@@ -499,6 +506,29 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 
                 # Test can still view resource (that has a downloaded revision)
                 assert False == (await is_url_not_in_archive(atom_feed_url))
+
+
+# See: https://github.com/davidfstr/Crystal-Web-Archiver/issues/69
+@skip('partially implemented; not yet automated')
+async def test_can_download_and_serve_a_static_site_using_using_browser() -> None:
+    """
+    Test that can successfully download and serve a mostly-static site,
+    by clicking through the served site in a browser.
+    
+    Example site: https://xkcd.com/
+    """
+    pass
+
+
+@skip('not yet automated')
+async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> None:
+    """
+    Test that can successfully download and serve a mostly-static site,
+    using only the keyboard, proving a baseline level of accessibility support.
+    
+    Example site: https://xkcd.com/
+    """
+    pass
 
 
 async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -> None:

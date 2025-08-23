@@ -18,8 +18,8 @@ class TestNormalizeTestNames:
     
     def test_qualified_function_name(self):
         """Test that qualified function names work correctly."""
-        result = _normalize_test_names(['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site'])
-        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site']
+        result = _normalize_test_names(['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui'])
+        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
     
     def test_unqualified_module_name(self):
         """Test that unqualified module names are resolved correctly."""
@@ -33,13 +33,13 @@ class TestNormalizeTestNames:
     
     def test_pytest_style_function_notation(self):
         """Test that pytest-style function notation (::) is converted correctly."""
-        result = _normalize_test_names(['crystal.tests.test_workflows::test_can_download_and_serve_a_static_site'])
-        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site']
+        result = _normalize_test_names(['crystal.tests.test_workflows::test_can_download_and_serve_a_static_site_using_main_window_ui'])
+        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
     
     def test_unqualified_function_name(self):
         """Test that unqualified function names are resolved correctly."""
-        result = _normalize_test_names(['test_can_download_and_serve_a_static_site'])
-        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site']
+        result = _normalize_test_names(['test_can_download_and_serve_a_static_site_using_main_window_ui'])
+        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
     
     def test_multiple_test_names(self):
         """Test that multiple test names are all normalized correctly."""
