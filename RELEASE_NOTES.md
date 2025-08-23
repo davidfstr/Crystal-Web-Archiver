@@ -49,6 +49,11 @@ Release Notes ⋮
       prevent certain types of concurrent edits to a project that Crystal
       isn't designed to handle.
 
+* Testing improvements
+    * If the default server port is in use while tests are running, a warning
+      message will be printed suggesting to look for other running copies
+      of Crystal.
+
 ### v1.11.0 (August 6, 2025)
 
 This release contains many improvements to the first-run experience:

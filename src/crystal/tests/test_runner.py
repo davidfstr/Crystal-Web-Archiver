@@ -5,12 +5,17 @@ These tests verify that the test infrastructure itself works correctly,
 including error recovery mechanisms, and test utilities.
 """
 
-from contextlib import redirect_stderr
+from contextlib import closing, redirect_stderr
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import Project
+from crystal.server import _DEFAULT_SERVER_PORT
 from crystal.tests.util.asserts import assertIn
+from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.server import assert_does_open_webbrowser_to, extracted_project
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 import io
+import socket
+from unittest.mock import ANY
 
 
 # === OpenOrCreateDialog Tests ===
@@ -59,8 +64,38 @@ async def test_when_main_window_left_open_then_mw_connect_does_recover_gracefull
                 
                 ...  # remainder of simulated test
         assertIn(
-            'WARNING: MainWindow._connect() noticed that a MainWindow was left open',
-            captured_stderr.getvalue()
-        )
+                'WARNING: MainWindow._connect() noticed that a MainWindow was left open',
+                captured_stderr.getvalue()
+            )
     finally:
         await main_window.close()
+
+
+# === ProjectServer Tests ===
+
+async def test_given_default_project_server_port_in_use_when_press_view_button_then_warns_default_port_in_use() -> None:
+    # Start a simple server on the default project server port
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as conflicting_server:
+        conflicting_server.bind(('127.0.0.1', _DEFAULT_SERVER_PORT))
+        conflicting_server.listen(1)
+        
+        # Open a project 
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as \
+                    (mw, project):
+                # Select the home URL
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None
+                home_ti.SelectItem()
+                
+                # Press the "View" button to start a ProjectServer
+                with redirect_stderr(io.StringIO()) as captured_stderr:
+                    with assert_does_open_webbrowser_to(ANY):
+                        click_button(mw.view_button)
+                
+                # Ensure that a warning was printed
+                assertIn(
+                    '*** Default port for project server is in use.',
+                    captured_stderr.getvalue()
+                )
