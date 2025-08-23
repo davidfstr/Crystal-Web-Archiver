@@ -128,6 +128,35 @@ async def test_first_time_user_can_easily_download_and_view_first_url() -> None:
         'Number of actions to perform workflow changed unexpectedly')
 
 
+@skip('not yet automated')
+async def test_first_time_user_can_easily_download_simple_site() -> None:
+    # Similar to case: test_first_time_user_can_easily_download_and_view_first_url
+    # with 1 additional action:
+    #     - NewRootUrlDialog.create_group_checkbox = True
+    #         > In combination with download_immediately_checkbox = True,
+    #           the entire site will be downloaded using a domain catch-all group.
+    pass
+
+
+@skip('covered by: ' + ', '.join([
+    'test_can_download_and_serve_a_static_site',
+    # TODO: This scenario logs warnings in the server console that are easy to miss.
+    #       Also show a _visual_ warning - in the browser or in the main window -
+    #       that suggests what resource group to add, plus a button to
+    #       do so automatically.
+    'test_can_download_and_serve_a_site_requiring_dynamic_url_discovery',
+    'test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting',
+    # TODO: Detect when user is trying to login to a served website.
+    #       Capture login cookies at that time _automatically_,
+    #       with some kind of notification. Then user can keep
+    #       browsing to download the rest of the site.
+    'test_can_download_and_serve_a_site_requiring_cookie_authentication',
+]))
+async def test_first_time_user_can_download_complex_site() -> None:
+    # ...if they read the documentation and have some patience
+    pass
+
+
 async def test_can_download_and_serve_a_static_site() -> None:
     """
     Test that can successfully download and serve a mostly-static site,
