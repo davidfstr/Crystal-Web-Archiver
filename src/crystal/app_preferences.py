@@ -3,11 +3,12 @@ Persists preferences related to Crystal itself,
 independent of any particular Project, or session where a project is opened.
 """
 
+from collections.abc import Callable
 from crystal.util.xappdirs import user_state_dir
 import json
 import os
 import os.path
-from typing import Dict, Optional, cast
+from typing import Any, Dict, Optional, cast
 
 
 # NOTE: Use the `app_prefs` singleton instance rather than attempting
@@ -50,25 +51,55 @@ class AppPreferences:
     
     # === Properties ===
     
-    def _get_unsaved_untitled_project_path(self) -> Optional[str]:
-        state = self._load_state()
-        last_project_path = state.get('unsaved_untitled_project_path')
-        if last_project_path is not None and os.path.exists(last_project_path):
-            return last_project_path
-        else:
-            return None
-    def _set_unsaved_untitled_project_path(self, project_path: str) -> None:
-        state = self._load_state()
-        state['unsaved_untitled_project_path'] = project_path
-        self._save_state(state)
-    def _clear_unsaved_untitled_project_path(self) -> None:
-        state = self._load_state()
-        state.pop('unsaved_untitled_project_path', None)
-        self._save_state(state)
-    unsaved_untitled_project_path = cast(Optional[str], property(
-        fget=_get_unsaved_untitled_project_path,
-        fset=_set_unsaved_untitled_project_path,
-        fdel=_clear_unsaved_untitled_project_path,
+    @staticmethod
+    def _define_property(
+            prop_name: str,
+            *, doc: str,
+            validator: Callable[[Any], bool] | None = None,
+            ) -> property:
+        '''
+        Defines a persistent app preferences property.
+        
+        Example:
+            my_prop = cast(MyPropType, _define_property(
+                'my_prop',
+                doc=(
+                    """
+                    Documentation for my_prop.
+                    """
+                )
+            ))
+        '''
+        def _get_property_value(self) -> Any:
+            state = self._load_state()
+            prop_value = state.get(prop_name)
+            if prop_value is None:
+                return None
+            if validator is None:
+                return prop_value
+            return prop_value if validator(prop_value) else None
+        def _set_property_value(self, prop_value: Any) -> None:
+            state = self._load_state()
+            state[prop_name] = prop_value
+            self._save_state(state)
+        def _clear_property_value(self) -> None:
+            state = self._load_state()
+            state.pop(prop_name, None)
+            self._save_state(state)
+        prop = property(
+            fget=_get_property_value,
+            fset=_set_property_value,
+            fdel=_clear_property_value,
+            doc=doc
+        )
+        return prop
+    
+    unsaved_untitled_project_path = cast(Optional[str], _define_property(
+        'unsaved_untitled_project_path',
+        validator=lambda project_path: (
+            project_path is not None and 
+            os.path.exists(project_path)
+        ),
         doc=(
             """
             The path to the last untitled project that was opened
