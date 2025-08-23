@@ -45,7 +45,7 @@ Error Handling:
 
 # Development Guidelines
 
-## General
+## Features
 
 * All new features should be covered by tests. If you add a new feature, please also add a test for it.
 * All new features should be documented in the RELEASE_NOTES.md file. If you add a new feature, please also update the "main" branch section of the RELEASE_NOTES.md file to include it.
@@ -55,6 +55,9 @@ Error Handling:
     * It has been documented in the RELEASE_NOTES.md file.
     * It has been reviewed by at least one other developer.
 
+## Testing
+
+* Read `./src/crystal/tests/README.md` before writing any end-to-end tests.
 * End-to-end tests should be added to the `./src/crystal/tests` directory. See the `./src/crystal/tests/README.md` file for more information on how to write end-to-end tests.
 * Unit tests should be added to the `./tests` directory. Unit tests should cover individual components or functions in isolation.
 * Prefer writing end-to-end tests over unit tests, as they provide a more comprehensive coverage of the feature.
@@ -63,6 +66,12 @@ Error Handling:
 * Use `crystal --test crystal.tests.test_FOO` to run a specific end-to-end test file like `./src/crystal/tests/test_FOO.py`. The exit code will be 0 only if tests pass.
 * Use `crystal --test` to run all end-to-end tests. All end-to-end tests take as long as 4 minutes to run locally, so prefer running individual test files when possible.
 * Use `pytest` to run all unit tests. The exit code will be 0 only if tests pass. All unit tests take less than a second to run locally, so you can run them all at once without worrying about performance.
+
+* End-to-end tests should be named with full sentences, describing the behavior being tested. For example `test_given_entity_tree_in_empty_state_when_create_root_resource_then_entity_tree_enters_non_empty_state`.
+* End-to-end tests generally do not require a docstring, as the test name should be descriptive enough.
+* End-to-end tests should avoid accessing windows by name directly, e.g. `mw.main_window.FindWindow(name='cr-view-button-callout')`. Instead create/use functions on page object classes in `./src/crystal/tests/util/windows.py` which encapsulate how to locate and manipulate windows.
+
+* Standalone test scripts that use async testing utilities like `OpenOrCreateDialog.wait_for` will not work because they depend on the custom event loop used by `crystal --test` and a running foreground thread. In particular async testing utilities are not compatible with `asyncio.run()`. Instead write temporary scripts as an end-to-end test.
 
 ## Conventions
 
