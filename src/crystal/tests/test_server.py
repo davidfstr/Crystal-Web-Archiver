@@ -91,12 +91,31 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
 #   - send_revision -- NOT covered elsewhere yet
 #     - send_http_revision
 #     - send_generic_revision
-# - Dynamically modify project:
-#   - '*** Dynamically downloading new resource in group ...'
-#   - '*** Dynamically downloading root resource ...'
-#   - '*** Dynamically downloading existing resource in group ...'
-# - Dynamically take action:
-#   - '*** Dynamically rewriting link from ...'
+
+
+@skip('covered by: test_can_download_and_serve_a_site_requiring_dynamic_url_discovery')
+def test_when_url_requested_corresponds_to_undownloaded_resource_matching_a_defined_root_resource_then_dynamically_downloads_the_url() -> None:
+    # In particular, covers when the following warning is
+    # printed to the server console:
+    # - '*** Dynamically downloading root resource ...'
+    pass
+
+
+@skip('covered by: test_can_download_and_serve_a_site_requiring_dynamic_url_discovery')
+def test_when_url_requested_corresponds_to_undownloaded_resource_matching_a_defined_resource_group_then_dynamically_downloads_the_url() -> None:
+    # In particular, covers two cases where one of the following warnings is
+    # printed to the server console:
+    # - '*** Dynamically downloading new resource in group ...'
+    # - '*** Dynamically downloading existing resource in group ...'
+    pass
+
+
+@skip('covered by: test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting')
+def test_when_url_requested_appears_to_be_a_site_relative_url_constructed_by_javascript_then_redirects_to_corresponding_archive_url() -> None:
+    # In particular, covers when the following warning is
+    # printed to the server console:
+    # - '*** Dynamically rewriting link from ...'
+    pass
 
 
 # ------------------------------------------------------------------------------
