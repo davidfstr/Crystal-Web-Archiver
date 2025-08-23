@@ -1,3 +1,8 @@
+"""
+Tests large end-to-end user workflows that interact with many features of
+Crystal to accomplish high-level user goals.
+"""
+
 from __future__ import annotations
 
 from crystal.model import Project, Resource
@@ -35,9 +40,32 @@ from urllib.parse import urlparse
 
 async def test_can_download_and_serve_a_static_site() -> None:
     """
-    Test that can successfully download and serve a mostly-static site.
+    Test that can successfully download and serve a mostly-static site,
+    using the main window UI. 
+    
+    Also:
+    - Ensures that a downloaded project can be reopened and edited.
+    - Ensures that a downloaded project marked as read-only for archival,
+      can be reopened and viewed.
     
     Example site: https://xkcd.com/
+    
+    For historical reasons this test assumes the absense of certain
+    automatic Crystal behaviors that streamline the downloading process:
+    
+    - Projects no longer need to be given a title and saved immediately upon creation.
+      This test explicitly creates a titled project rather than using an
+      untitled project, which would be a more realistic user behavior.
+    
+    - Root resources and resource groups no longer need to have a name.
+      This test gives all such entities names explicitly.
+    
+    - Root resources now download immediately by default.
+      This behavior is disabled with `nud.do_not_download_immediately()`.
+    
+    - The default URL domain/prefix now is set to the first-downloaded
+      root resource by default.
+      This behavior is disabled with `nud.do_not_set_default_url_prefix()`.
     """
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
@@ -87,6 +115,8 @@ async def test_can_download_and_serve_a_static_site() -> None:
                 assert expected_home_request_url == home_request_url
                 with assert_does_open_webbrowser_to(home_request_url):
                     click_button(mw.view_button)
+                # NOTE: A real user browsing to the root resource would cause it
+                #       to be dynamically downloaded.
                 assert True == (await is_url_not_in_archive(home_url))
                 
                 # Test can download root resource (using download button)
@@ -219,6 +249,8 @@ async def test_can_download_and_serve_a_static_site() -> None:
                         
                         feed_group_ti.Collapse()
                     
+                    # NOTE: A real user browsing to the group members would cause them
+                    #       to be dynamically downloaded.
                     assert True == (await is_url_not_in_archive(atom_feed_url))
                     assert True == (await is_url_not_in_archive(rss_feed_url))
                     
@@ -353,8 +385,27 @@ async def test_can_download_and_serve_a_static_site() -> None:
 async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -> None:
     """
     Tests that can successfully download and serve a site containing
-    JavaScript which dynamically fetches URLs that cannot be discovered
+    JavaScript which dynamically fetches relative URLs that cannot be discovered
     statically by Crystal.
+    
+    Cases:
+    - Test will dynamically download a new resource group member upon request
+    - Test will dynamically download an existing resource group member upon request
+    - Test will dynamically download a root resource upon request
+    
+    Specifically:
+    - When the user browses to a web page downloaded by Crystal
+      and the web page makes a request to a URL dynamically constructed in JavaScript
+          that Crystal cannot identify through static analysis
+      then an error message is logged to the server console identifying
+           the resource.
+    - Given the user has created a resource group or root resource matching
+            the dynamically-constructed URL
+      when the user browses to a web page downloaded by Crystal
+      and the web page makes a request to a URL dynamically constructed in JavaScript
+      then Crystal automatically downloads the URL because it corresponds to
+           a resource group or root resource of interest explicitly created
+           by the user.
     """
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
@@ -562,6 +613,20 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
 
 
 async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() -> None:
+    """
+    Tests that can successfully download and serve a site containing
+    JavaScript which dynamically fetches site-relative URLs that cannot be discovered
+    statically by Crystal.
+    
+    Specifically:
+    - When the user browses to a web page downloaded by Crystal
+      and the web page makes a request to a URL dynamically constructed in JavaScript
+          that Crystal cannot identify through static analysis
+      and the URL is a site-relative URL
+      then Crystal recognizes that a dynamic site-relative URL is being requested
+           and redirects the URL to the appropriate archive URL corresponding
+           to the resource targeted by the original URL
+    """
     # Define original URLs
     home_original_url = 'https://bongo.cat/'
     sound1_original_url = 'https://bongo.cat/sounds/bongo0.mp3'
@@ -678,6 +743,10 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
     Test that can open project in a read-only mode. In this mode it should be
     impossible to download anything or make any kind of project change.
     Various parts of the UI should be disabled to reflect this limitation.
+    
+    Additionally dynamic downloading behavior of the project server
+    (described in test_can_download_and_serve_a_site_requiring_dynamic_url_discovery)
+    should be disabled as well.
     """
     
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -784,6 +853,15 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
 
 @localtime_fallback_for_get_localzone('crystal.browser.preferences.get_localzone')
 async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
+    """
+    Test that there exists a process for an already-downloaded resource to be
+    redownloaded with a newer revision.
+    
+    TOOD: Replace the current process with a more streamlined process that
+          doesn't require the user to futz around with dates like
+          "Stale if downloaded before today".
+    """
+    
     # Define original URLs
     home_original_url = 'https://xkcd.com/'
     comic1_original_url = 'https://xkcd.com/1/'
@@ -938,6 +1016,14 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
 
 @skip('not yet automated')
 async def test_can_download_and_serve_a_site_requiring_cookie_authentication() -> None:
+    """
+    Test that there exists a process for downloading a site that requires
+    cookies from a valid login attempt to see pages of interest.
+    
+    TOOD: Replace the current process with a more streamlined process that
+          doesn't require the user to manually extract cookie values from
+          a real browser.
+    """
     pass
 
 
