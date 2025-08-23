@@ -235,11 +235,11 @@ class WebPage:
         return self._headers.get('ETag')
     
     @property
-    def title(self) -> str | None:
+    def title(self) -> str:
         # TODO: Use an HTML parser to improve robustness
         m = re.search(r'<title>([^<]*)</title>', self.content)
         if m is None:
-            return None
+            return ''
         else:
             return m.group(1).strip()
     

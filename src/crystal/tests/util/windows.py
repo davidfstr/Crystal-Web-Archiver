@@ -320,7 +320,9 @@ class MainWindow:
         assert isinstance(entity_tree_window, wx.TreeCtrl)
         et_nru_button = mw_frame.FindWindow(name='cr-empty-state-new-root-url-button')
         assert isinstance(et_nru_button, wx.Button)
-        self.entity_tree = EntityTree(entity_tree_window, et_nru_button, mw_frame)
+        view_button_callout = mw_frame.FindWindow(name='cr-view-button-callout')
+        assert isinstance(et_nru_button, wx.Window)
+        self.entity_tree = EntityTree(entity_tree_window, et_nru_button, view_button_callout)
         self.new_root_url_button = mw_frame.FindWindow(name='cr-add-url-button')
         assert isinstance(self.new_root_url_button, wx.Button)
         self.new_group_button = mw_frame.FindWindow(name='cr-add-group-button')
@@ -768,14 +770,18 @@ class PreferencesDialog:
 # Panel Abstractions
 
 class EntityTree:
-    def __init__(self, window: wx.TreeCtrl, et_nru_button: wx.Button, main_window: wx.Frame) -> None:
+    def __init__(self,
+            window: wx.TreeCtrl,
+            et_nru_button: wx.Button,
+            view_button_callout: wx.Window,
+            ) -> None:
         self.window = window
-        self._empty_state_nru_button = et_nru_button
-        self._main_window = main_window
+        self.empty_state_new_root_url_button = et_nru_button
+        self.view_button_callout = view_button_callout
     
     def is_empty_state_visible(self) -> bool:
         """Returns whether the entity tree is showing the empty state."""
-        empty_state_button = self._empty_state_nru_button
+        empty_state_button = self.empty_state_new_root_url_button
         entity_tree = self.window
         
         empty_state_visible = empty_state_button.IsShownOnScreen()
@@ -785,10 +791,6 @@ class EntityTree:
         if not empty_state_visible and not entity_tree_visible:
             raise AssertionError('Neither empty state nor entity tree are visible')
         return empty_state_visible
-    
-    @property
-    def view_button_callout(self) -> wx.Window:
-        return self._main_window.FindWindow(name='cr-view-button-callout')
     
     async def get_tree_item_icon_tooltip(self, tree_item: TreeItem) -> str | None:
         if tree_item.tree != self.window:

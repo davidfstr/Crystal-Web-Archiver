@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from crystal.model import Project, Resource
 from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
+from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
     click_button, set_checkbox_value, TreeItem,
@@ -37,6 +38,95 @@ from urllib.parse import urlparse
 
 # ------------------------------------------------------------------------------
 # Tests
+
+async def test_first_time_user_can_easily_download_and_view_first_url() -> None:
+    """
+    Test that a first-time user can _easily_ download and view their first URL.
+    
+    Notice:
+    - The total number of actions required to accomplish the goal
+    - Any call-to-actions which appear and suggest the correct action to do next
+    """
+    action_count = 0
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        # Action 1: Open Crystal
+        action_count += 1
+        
+        # Action 2 (Click): "New Project" button, to create an empty untitled project
+        action_count += 1
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            assert root_ti.GetFirstChild() is None  # no entities
+            
+            # Test user knows to create first root resource and can easily do so
+            if True:
+                # Ensure call-to-action message visible:
+                # "Download your first page by defining a root URL for the page."
+                assert mw.entity_tree.is_empty_state_visible()
+                
+                # Action 3 (Click): "New Root URL..."
+                action_count += 1
+                click_button(mw.entity_tree.empty_state_new_root_url_button)
+                nud = await NewRootUrlDialog.wait_for()
+                
+                # Action 4 (Paste/Type): <url>
+                action_count += 1
+                nud.url_field.Value = home_url
+                assert nud.download_immediately_checkbox.IsChecked()  # no click needed
+                assert nud.set_as_default_domain_checkbox.IsChecked()  # no click needed
+                
+                # Action 5 (Click): "OK"
+                action_count += 1
+                await nud.ok()
+                (home_ti,) = root_ti.Children  # entity was created
+            
+            # Test user knows can view downloaded root resource and easily do so
+            if True:
+                # Ensure call-to-action message visible:
+                # 'View your first downloaded page in a browser by pressing "View"'
+                view_callout = mw.entity_tree.view_button_callout
+                assert view_callout is not None and view_callout.IsShown(), (
+                    'View button callout should be visible after downloading '
+                    'the first root resource'
+                )
+                
+                # Wait for home URL to finish downloading in advance
+                # so that test does not time out waiting for it to
+                # be dynamically downloaded when browsing to its
+                # URL in the archive.
+                # 
+                # TODO: When navigating to a URL that is already in the
+                #       process of being downloaded:
+                #       - Locate any existing download task for the URL, if any
+                #       - Show web page to the user with download progress
+                #         displayed in a progress bar.
+                #       - Reload page when download is complete.
+                #       See: https://github.com/davidfstr/Crystal-Web-Archiver/issues/109
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+                
+                assert home_ti.IsSelected(), \
+                    'First created root resource should already be selected'
+                home_url_in_archive = get_request_url(
+                    home_url,
+                    project_default_url_prefix=project.default_url_prefix)
+                with assert_does_open_webbrowser_to(home_url_in_archive):
+                    # Action 6 (Click): "View"
+                    action_count += 1
+                    click_button(mw.view_button)
+                
+                # Ensure downloaded page looks correct
+                page = await bg_fetch_url(home_url_in_archive)
+                assert not page.is_not_in_archive
+                assert 'xkcd' in page.title
+                assert page.status == 200
+    
+    assertEqual(6, action_count,
+        'Number of actions to perform workflow changed unexpectedly')
+
 
 async def test_can_download_and_serve_a_static_site() -> None:
     """

@@ -139,9 +139,7 @@ async def test_when_multiple_root_resources_then_view_button_callout_is_hidden()
             
             # Callout should be visible with 1 resource
             view_callout = mw.entity_tree.view_button_callout
-            assert view_callout is not None, \
-                'Callout should be created'
-            assert view_callout.IsShown(), \
+            assert view_callout is not None and view_callout.IsShown(), \
                 'Callout should be visible with exactly 1 root resource'
             
             # Add second root resource
@@ -166,9 +164,7 @@ async def test_when_view_callout_temporarily_dismissed_then_stays_hidden() -> No
             
             # Find and dismiss the callout
             view_callout = mw.entity_tree.view_button_callout
-            assert view_callout is not None, \
-                'Callout should be created'
-            assert view_callout.IsShown(), \
+            assert view_callout is not None and view_callout.IsShown(), \
                 'Callout should be visible'
             close_button = view_callout.FindWindow(name='cr-view-button-callout__close-button')
             assert close_button is not None, \
@@ -202,9 +198,7 @@ async def test_when_view_callout_permanently_dismissed_then_stays_hidden() -> No
             
             # Find and permanently dismiss the callout
             view_callout = mw.entity_tree.view_button_callout
-            assert view_callout is not None, \
-                'Callout should be created'
-            assert view_callout.IsShown(), \
+            assert view_callout is not None and view_callout.IsShown(), \
                 'Callout should be visible'
             
             # Check the "Don't show this message again" checkbox
