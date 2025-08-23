@@ -1226,7 +1226,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         # If valid default URL prefix is set, use it
         if default_url_prefix is not None and not default_url_prefix.endswith('/'):
             if archive_url.startswith(default_url_prefix + '/'):
-                return f'http://{request_host}' + archive_url[len(default_url_prefix):]
+                slash_path = archive_url[len(default_url_prefix):]
+                if slash_path.startswith('/_/'):
+                    # Don't eliminate the default URL prefix because the
+                    # resulting URL looks like a different Crystal-internal URL
+                    pass
+                else:
+                    # Eliminate the default URL prefix
+                    return f'http://{request_host}' + slash_path
         
         archive_url_parts = urlparse(archive_url)
         
