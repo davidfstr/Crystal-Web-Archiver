@@ -1,6 +1,24 @@
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 import socket
 
+
+_ANY_PORT = 0
 _LOCALHOST = '127.0.0.1'
+
+
+@contextmanager
+def port_in_use(port: int=_ANY_PORT, hostname: str=_LOCALHOST) -> Iterator[int]:
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as conflicting_server:
+        # Set SO_REUSEADDR to allow immediate reuse of the port,
+        # matching the behavior of ProjectServer's HTTPServer
+        conflicting_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        conflicting_server.bind((hostname, port))  # bind to default port
+        conflicting_server.listen(1)
+        
+        chosen_port = conflicting_server.getsockname()[1]
+        
+        yield chosen_port
 
 
 def is_port_in_use(port: int, hostname: str=_LOCALHOST) -> bool:
