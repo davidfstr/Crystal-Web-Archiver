@@ -297,18 +297,18 @@ class MainWindow(CloakMixin):
             self._on_forget_entity,
             enabled=False,
             button_label=decorate_label('✖️', '&Forget', ''))
-        self._download_action = Action(wx.ID_ANY,
-            '&Download',
-            wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_RETURN),
-            self._on_download_entity,
-            enabled=False,
-            button_label=decorate_label('⬇', '&Download', ''))
         self._update_members_action = Action(wx.ID_ANY,
             'Update &Members',
             accel=None,
             action_func=self._on_update_group_members,
             enabled=False,
             button_label=decorate_label('🔎', 'Update &Members', ' '))
+        self._download_action = Action(wx.ID_ANY,
+            '&Download',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_RETURN),
+            self._on_download_entity,
+            enabled=False,
+            button_label=decorate_label('⬇', '&Download', ''))
         self._view_action = Action(wx.ID_ANY,
             '&View',
             # TODO: Consider adding Space as a alternate accelerator
@@ -367,8 +367,8 @@ class MainWindow(CloakMixin):
         self._edit_action.append_menuitem_to(entity_menu)
         self._forget_action.append_menuitem_to(entity_menu)
         entity_menu.AppendSeparator()
-        self._download_action.append_menuitem_to(entity_menu)
         self._update_members_action.append_menuitem_to(entity_menu)
+        self._download_action.append_menuitem_to(entity_menu)
         self._view_action.append_menuitem_to(entity_menu)
         entity_menu.AppendSeparator()
         if True:
@@ -568,9 +568,9 @@ class MainWindow(CloakMixin):
         new_group_button = self._new_group_action.create_button(parent, name='cr-add-group-button')
         edit_entity_button = self._edit_action.create_button(parent, name='cr-edit-button')
         forget_entity_button = self._forget_action.create_button(parent, name='cr-forget-button')
-        download_button = self._download_action.create_button(parent, name='cr-download-button')
         update_members_button = self._update_members_action.create_button(
             parent, name='cr-update-members-button')
+        download_button = self._download_action.create_button(parent, name='cr-download-button')
         
         view_button = self._view_action.create_button(parent, name='cr-view-button')
         self._view_button_callout_dismissed_temporarily = False
@@ -593,9 +593,9 @@ class MainWindow(CloakMixin):
         content_sizer.Add(forget_entity_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING * 2)
         content_sizer.AddStretchSpacer()
-        content_sizer.Add(download_button)
-        content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
         content_sizer.Add(update_members_button)
+        content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
+        content_sizer.Add(download_button)
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
         content_sizer.Add(view_button)
         return content_sizer
@@ -1298,12 +1298,12 @@ class MainWindow(CloakMixin):
         self._forget_action.enabled = (
             (not readonly) and
             isinstance(selected_entity, (ResourceGroup, RootResource)))
-        self._download_action.enabled = (
-            (not readonly) and
-            selected_entity is not None)
         self._update_members_action.enabled = (
             (not readonly) and
             isinstance(selected_entity, ResourceGroup))
+        self._download_action.enabled = (
+            (not readonly) and
+            selected_entity is not None)
         self._view_action.enabled = (
             isinstance(selected_entity, (Resource, RootResource)))
     

@@ -27,6 +27,8 @@ Release Notes ⋮
     * Untitled projects are now saved to a permanent hidden directory instead of
       the system temporary directory, preventing data loss after unexpected
       logout, restart, or shutdown.
+    * The Download button is now closer to the View button,
+      to make them easier to use together.
 
 * Branding changes
     * Browser error pages are now appropriately styled and include
