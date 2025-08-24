@@ -17,6 +17,8 @@ Release Notes ⋮
       the first root URL.
     * After creating the first root URL a call-to-action appears to view
       the downloaded root URL in a web browser.
+    * There are new "Root URLs and Groups" and "Tasks" headings in the
+      main window to clearly identify what is in each part of the window.
 
 * Workflow improvements
     * Missing pages can be immediately downloaded with 1 click when browsing

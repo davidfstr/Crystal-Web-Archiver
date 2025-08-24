@@ -211,9 +211,7 @@ def add_title_heading_to_dialog_if_needed(
         return
     
     title_text = wx.StaticText(dialog, label=dialog.Title)
-    title_font = title_text.GetFont()
-    title_font = title_font.MakeBold().MakeLarger()
-    title_text.SetFont(title_font)
+    title_text.Font = title_text.Font.MakeBold().MakeLarger()
     dialog_sizer.Add(
         title_text,
         flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP,

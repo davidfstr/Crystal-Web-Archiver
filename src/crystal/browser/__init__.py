@@ -447,6 +447,15 @@ class MainWindow(CloakMixin):
         #       same height as the non-empty state
         self._entity_pane_content_sizer.SetMinSize(0, 300)
         
+        # Add title heading for the entity tree
+        entity_title_text = wx.StaticText(parent, label='Root URLs and Groups')
+        entity_title_text.Font = entity_title_text.Font.MakeBold().MakeLarger()
+        self._entity_pane_content_sizer.Add(
+            entity_title_text,
+            flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM,
+            border=_WINDOW_INNER_PADDING // 2)
+        
+        self._entity_tree_sizer_index = 1
         self._entity_tree_empty_state = self._create_empty_state_panel(parent)
         self._entity_tree_nonempty_state = self._create_entity_tree(parent, progress_listener)
         self._entity_pane_content_sizer.Add(self._entity_tree_empty_state, proportion=1, flag=wx.EXPAND)
@@ -538,7 +547,9 @@ class MainWindow(CloakMixin):
             is_iterable_empty(self.project.resource_groups)
         )
         
-        current_window = self._entity_pane_content_sizer.GetItem(0).GetWindow()
+        sizer_index = self._entity_tree_sizer_index  # cache
+        
+        current_window = self._entity_pane_content_sizer.GetItem(sizer_index).GetWindow()
         desired_window = (
             self._entity_tree_empty_state
             if is_project_empty
@@ -548,8 +559,8 @@ class MainWindow(CloakMixin):
             current_window.Hide()
             desired_window.Show()
             
-            self._entity_pane_content_sizer.Detach(0)
-            self._entity_pane_content_sizer.Insert(0, desired_window, proportion=1, flag=wx.EXPAND)
+            self._entity_pane_content_sizer.Detach(sizer_index)
+            self._entity_pane_content_sizer.Insert(sizer_index, desired_window, proportion=1, flag=wx.EXPAND)
             self._entity_pane_content_sizer.Layout()
     
     def _create_button_bar(self, parent: wx.Window):
@@ -1341,6 +1352,15 @@ class MainWindow(CloakMixin):
     
     def _create_task_pane_content(self, parent: wx.Window) -> wx.Window:
         content_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Add title heading for the task tree
+        task_title_text = wx.StaticText(parent, label='Tasks')
+        task_title_text.Font = task_title_text.Font.MakeBold().MakeLarger()
+        content_sizer.Add(
+            task_title_text,
+            flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM,
+            border=_WINDOW_INNER_PADDING // 2)
+        
         content_sizer.Add(self._create_task_tree(parent), proportion=1, flag=wx.EXPAND)
         return content_sizer
     
