@@ -12,12 +12,6 @@ Release Notes ⋮
 
 ### main
 
-* Branding changes
-    * Crystal's logo and contributor information is now displayed in the
-      main window, alongside its version number.
-    * Browser error pages are now appropriately styled and include
-      Crystal's branding elements.
-
 * First-time-run experience improvements
     * After creating an empty project a call-to-action appears to create
       the first root URL.
@@ -31,6 +25,12 @@ Release Notes ⋮
     * Untitled projects are now saved to a permanent hidden directory instead of
       the system temporary directory, preventing data loss after unexpected
       logout, restart, or shutdown.
+
+* Branding changes
+    * Browser error pages are now appropriately styled and include
+      Crystal's branding elements.
+    * Crystal's logo and contributor information is now displayed in the
+      main window, alongside its version number.
 
 * Downloading improvements
     * While long downloads are running the system will be kept awake
