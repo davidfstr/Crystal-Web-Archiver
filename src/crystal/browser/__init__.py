@@ -141,6 +141,7 @@ class MainWindow(CloakMixin):
                 
                 raw_frame.MenuBar = self._create_menu_bar(raw_frame)
                 
+                bind(raw_frame, wx.EVT_SYS_COLOUR_CHANGED, self._on_system_appearance_changed)
                 bind(raw_frame, wx.EVT_CLOSE, self._on_close_frame)
                 
                 frame.Fit()
@@ -699,6 +700,14 @@ class MainWindow(CloakMixin):
         self.task_tree.change_root_task(new_root_task)
     
     # === File Menu: Events ===
+    
+    @fg_affinity
+    def _on_system_appearance_changed(self, event: wx.SysColourChangedEvent) -> None:
+        """Update UI when system transitions to/from dark mode."""
+        self._refresh_branding_area()
+        
+        # Keep processing the event
+        event.Skip()
     
     def _on_save_as_project(self, event: wx.MenuEvent) -> None:
         """
@@ -1425,6 +1434,8 @@ class MainWindow(CloakMixin):
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
         pane.SetSizer(pane_sizer)
         
+        self._branding_area = self._create_branding_area(pane)
+        
         preferences_button = self._preferences_action.create_button(pane, name='cr-preferences-button')
         bind(preferences_button, wx.EVT_BUTTON, self._on_preferences)
         
@@ -1432,7 +1443,7 @@ class MainWindow(CloakMixin):
         self._update_read_write_icon_for_readonly_status()
         
         pane_sizer.Add(
-            self._create_branding_area(pane),
+            self._branding_area,
             proportion=1,
             flag=wx.CENTER|wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
@@ -1596,6 +1607,36 @@ class MainWindow(CloakMixin):
         branding_sizer.Add(text_area, flag=wx.CENTER)
         
         return branding_area
+    
+    @fg_affinity
+    def _refresh_branding_area(self) -> None:
+        """Refresh the branding area to reflect the new light/dark mode."""
+        assert hasattr(self, '_branding_area')
+        parent = self._branding_area.GetParent()
+        sizer = parent.GetSizer()
+        
+        # Find the branding area in its parent's sizer. Store its position and flags.
+        old_item = None
+        sizer_position = -1
+        for i in range(sizer.GetItemCount()):
+            item = sizer.GetItem(i)
+            if item.GetWindow() == self._branding_area:
+                old_item = item
+                sizer_position = i
+                break
+        assert old_item is not None
+        proportion = old_item.GetProportion()
+        flag = old_item.GetFlag()
+        border = old_item.GetBorder()
+        
+        # Remove the old branding area
+        sizer.Remove(sizer_position)
+        self._branding_area.Destroy()
+        
+        # Create/insert new branding area with updated appearance
+        self._branding_area = self._create_branding_area(parent)
+        sizer.Insert(sizer_position, self._branding_area, proportion, flag, border)
+        parent.Layout()
     
     @staticmethod
     def _load_app_icon() -> wx.Bitmap:

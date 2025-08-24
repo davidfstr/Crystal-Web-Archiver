@@ -2,10 +2,11 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import Future
 from contextlib import contextmanager
 from crystal.tests import (
-    test_bulkheads, test_cli, test_disk_io_errors, test_do_not_download_groups,
+    test_bulkheads, test_callout, test_cli, test_disk_io_errors, test_do_not_download_groups,
     test_download, test_download_body, test_edit_group, test_edit_root_url,
     test_entitytree, test_file_extension_visibility, test_hibernate,
     test_icons, test_install_to_desktop, test_load_urls, test_log_drawer,
+    test_main_window,
     test_menus, test_new_group, test_new_root_url, test_open_project,
     test_parse_html, test_profile, test_project_migrate, test_readonly_mode,
     test_runner, test_server, test_shell, test_ssd, test_tasks, test_tasktree,
@@ -46,6 +47,7 @@ def _test_functions_in_module(mod) -> list[Callable]:
 # TODO: Avoid the need to manually enumerate all test modules individually
 _TEST_FUNCS = (
     _test_functions_in_module(test_bulkheads) +
+    _test_functions_in_module(test_callout) +
     _test_functions_in_module(test_cli) +
     _test_functions_in_module(test_disk_io_errors) +
     _test_functions_in_module(test_do_not_download_groups) +
@@ -60,6 +62,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_install_to_desktop) +
     _test_functions_in_module(test_load_urls) +
     _test_functions_in_module(test_log_drawer) +
+    _test_functions_in_module(test_main_window) +
     _test_functions_in_module(test_menus) +
     _test_functions_in_module(test_new_group) +
     _test_functions_in_module(test_new_root_url) +
