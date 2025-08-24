@@ -526,6 +526,10 @@ async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> No
     Test that can successfully download and serve a mostly-static site,
     using only the keyboard, proving a baseline level of accessibility support.
     
+    In particular:
+    - Ensures that keyboard accelerators work
+    - Ensures that tab navigation works
+    
     Example site: https://xkcd.com/
     """
     pass
