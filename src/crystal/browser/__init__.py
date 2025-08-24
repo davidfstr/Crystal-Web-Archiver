@@ -151,6 +151,16 @@ class MainWindow(CloakMixin):
                 # Define minimum size for main window
                 min_width = entity_pane.GetBestSize().Width
                 min_height = task_pane.GetBestSize().Height * 2
+                # HACK: On Linux/wxGTK, there's a systematic ~52px discrepancy between
+                # reported widget sizes and actual visual sizes. Compensate by adding
+                # extra width on Linux to ensure buttons render at their intended size.
+                if is_linux():
+                    width_discrepancy = raw_frame.GetSize().Width - entity_pane.GetSize().Width
+                    if width_discrepancy == 0:
+                        if tests_are_running():
+                            print('*** MainWindow width hack for Linux may no longer be needed', file=sys.stderr)
+                    elif width_discrepancy > 0:
+                        min_width += width_discrepancy
                 raw_frame.MinSize = wx.Size(min_width, min_height)
                 
                 self._frame = raw_frame

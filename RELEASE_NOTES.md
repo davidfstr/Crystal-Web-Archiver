@@ -19,6 +19,7 @@ Release Notes ⋮
       the downloaded root URL in a web browser.
     * There are new "Root URLs and Groups" and "Tasks" headings in the
       main window to clearly identify what is in each part of the window.
+    * The "View" button no longer appears squished on Linux.
 
 * Workflow improvements
     * Missing pages can be immediately downloaded with 1 click when browsing
