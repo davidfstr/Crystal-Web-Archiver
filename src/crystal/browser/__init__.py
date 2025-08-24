@@ -269,7 +269,12 @@ class MainWindow(CloakMixin):
             # NOTE: Action is bound to self._on_preferences later manually
             action_func=None,
             enabled=True,
-            button_label=decorate_label('⚙️', '&Preferences...', ''))
+            button_label=decorate_label('⚙️', (
+                '&Preferences...'
+                if preferences_label in ('', 'Preferences...')
+                else preferences_label  # no mnemonic
+            ), truncation_fix='')
+        )
         
         # Entity
         self._new_root_url_action = Action(wx.ID_ANY,

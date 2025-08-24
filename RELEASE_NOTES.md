@@ -52,6 +52,8 @@ Release Notes ⋮
     * Most dialogs are now shown as window-modal rather than modeless to
       prevent certain types of concurrent edits to a project that Crystal
       isn't designed to handle.
+    * The "Preferences..." / "Settings..." button in the main window now uses
+      the correct title based on OS conventions.
 
 * Testing improvements
     * If the default server port is in use while tests are running, a warning
