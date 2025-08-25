@@ -686,6 +686,10 @@ def _crystal_shell_with_serve(
     
     See also: crystal_running_with_banner()
     """
+    # NOTE: wxGTK on Ubuntu 22 can print many warning lines in the format
+    #       "Unable to load X from the cursor theme", which should be ignored
+    MAX_ADDITIONAL_LINES = 7
+    
     if banner_timeout is None:
         banner_timeout = 4.0  # currently (2 * DEFAULT_WAIT_TIMEOUT)
     if extra_args is None:
@@ -720,7 +724,7 @@ def _crystal_shell_with_serve(
                 (line, _) = read_until(
                     crystal.stdout, '\n', timeout=0.5, _drain_diagnostic=False)
                 additional_lines.append(line)
-                if 'Press Ctrl-C to stop' in line or len(additional_lines) >= 3:
+                if 'Press Ctrl-C to stop' in line or len(additional_lines) >= MAX_ADDITIONAL_LINES:
                     break
         except ReadUntilTimedOut:
             pass  # OK
