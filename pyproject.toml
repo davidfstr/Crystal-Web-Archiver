@@ -6,7 +6,7 @@ authors = [
     { name = "David Foster", email = "david@dafoster.net" },
 ]
 readme = "README.md"
-license = "Proprietary"
+license = { text = "PolyForm-Noncommercial-1.0.0" }
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: MacOS X",

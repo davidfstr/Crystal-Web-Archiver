@@ -36,6 +36,7 @@ Release Notes ⋮
       Crystal's branding elements.
     * Crystal's logo and contributor information is now displayed in the
       main window, alongside its version number.
+    * Licensing terms have been added: PolyForm Noncommercial 1.0.0
 
 * Downloading improvements
     * While long downloads are running the system will be kept awake

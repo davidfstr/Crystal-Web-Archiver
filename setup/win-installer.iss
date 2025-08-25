@@ -1,7 +1,7 @@
 [Setup]
 AppName=Crystal
 AppVersion=1.11.0
-AppCopyright=Copyright (C) 2011-2025 David Foster. All Rights Reserved
+AppCopyright=Copyright (C) 2011-2025 David Foster. Licensed under PolyForm NC 1.0.0
 DefaultDirName={autopf}\Crystal
 DefaultGroupName=Crystal
 UninstallDisplayIcon={app}\Crystal.exe

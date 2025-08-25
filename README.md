@@ -239,3 +239,14 @@ Release Notes ⋮
 -------------
 
 See [RELEASE_NOTES.md](RELEASE_NOTES.md)
+
+
+License ⚖️
+-------
+
+Crystal is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.txt). 
+This means you may use Crystal for any noncommercial purpose, 
+but commercial use requires a separate license agreement.
+
+For commercial licensing inquiries, please contact 
+[David Foster](https://dafoster.net/contact/).

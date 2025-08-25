@@ -12,4 +12,4 @@ import datetime
 
 APP_NAME = 'Crystal'
 VERSION_STRING = __version__
-COPYRIGHT_STRING = f'Copyright © 2011-{datetime.date.today().year} David Foster. All Rights Reserved'
+COPYRIGHT_STRING = f'Copyright © 2011-{datetime.date.today().year} David Foster. Licensed under PolyForm NC 1.0.0'
