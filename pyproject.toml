@@ -1,11 +1,12 @@
-[tool.poetry]
+[project]
 name = "crystal-web"
 version = "1.11.0"
 description = "Downloads websites for long-term archival."
-authors = ["David Foster <david@dafoster.net>"]
+authors = [
+    { name = "David Foster", email = "david@dafoster.net" },
+]
 readme = "README.md"
 license = "Proprietary"
-repository = "https://github.com/davidfstr/Crystal-Web-Archiver"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: MacOS X",
@@ -29,6 +30,20 @@ classifiers = [
     "Topic :: System :: Archiving :: Backup",
     "Topic :: System :: Archiving :: Mirroring",
 ]
+
+[project.urls]
+homepage = "https://dafoster.net/projects/crystal-web-archiver/"
+"Tutorial" = "https://github.com/davidfstr/Crystal-Web-Archiver/tree/main#tutorial-"
+documentation = "https://github.com/davidfstr/Crystal-Web-Archiver/wiki"
+"Release notes" = "https://github.com/davidfstr/Crystal-Web-Archiver/blob/main/RELEASE_NOTES.md"
+repository = "https://github.com/davidfstr/Crystal-Web-Archiver"
+"Bug tracker" = "https://github.com/davidfstr/Crystal-Web-Archiver/issues"
+
+[project.scripts]
+# Install "crystal" binary as CLI command. Allow installation via "pipx".
+crystal = 'crystal.__main__:main'
+
+[tool.poetry]
 packages = [
     { include = "crystal", from = "src" },
 ]
@@ -47,14 +62,6 @@ include_trailing_comma = true
 force_alphabetical_sort = true  # don't use separate sections for stdlib vs. 3rd party vs. 1st party imports
 force_sort_within_sections = true  # combine from-imports with regular imports
 order_by_type = false  # don't sort constants specially
-
-[tool.poetry.urls]
-"Tutorial" = "https://github.com/davidfstr/Crystal-Web-Archiver/tree/main#tutorial-"
-"Release notes" = "https://github.com/davidfstr/Crystal-Web-Archiver/blob/main/RELEASE_NOTES.md"
-
-[tool.poetry.scripts]
-# Install "crystal" binary as CLI command. Allow installation via "pipx".
-crystal = 'crystal.__main__:main'
 
 [tool.poetry.dependencies]
 # NOTE: Python 3.13 is the latest Python supported by py2exe 0.14.0.0
