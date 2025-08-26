@@ -2864,6 +2864,15 @@ class Resource:
     # Soft Deprecated: Use get_or_create_download_body_task() instead,
     # which clarifies that an existing task may be returned.
     def create_download_body_task(self) -> DownloadResourceBodyTask:
+        """
+        Gets/creates a Task to download this resource's body.
+        
+        The caller is responsible for adding a returned created Task as the child of an
+        appropriate parent task so that the UI displays it.
+        
+        A created task is never complete immediately after initialization,
+        however a looked up task may be complete.
+        """
         (task, _) = self.get_or_create_download_body_task()
         return task
     
@@ -2874,7 +2883,8 @@ class Resource:
         The caller is responsible for adding a returned created Task as the child of an
         appropriate parent task so that the UI displays it.
         
-        This task is never complete immediately after initialization.
+        A created task is never complete immediately after initialization,
+        however a looked up task may be complete.
         """
         def task_factory() -> DownloadResourceBodyTask:
             from crystal.task import DownloadResourceBodyTask
@@ -2924,6 +2934,16 @@ class Resource:
     # Soft Deprecated: Use get_or_create_download_task() instead,
     # which clarifies that an existing task may be returned.
     def create_download_task(self, *args, **kwargs) -> DownloadResourceTask:
+        """
+        Gets/creates a Task to download this resource and all its embedded resources.
+        Returns the task.
+        
+        The caller is responsible for adding a returned created Task as the child of an
+        appropriate parent task so that the UI displays it.
+        
+        A created task may be complete immediately after initialization,
+        and a looked up task may be complete.
+        """
         (task, _) = self.get_or_create_download_task(*args, **kwargs)
         return task
     
@@ -2935,7 +2955,8 @@ class Resource:
         The caller is responsible for adding a returned created Task as the child of an
         appropriate parent task so that the UI displays it.
         
-        This task may be complete immediately after initialization.
+        A created task may be complete immediately after initialization,
+        and a looked up task may be complete.
         """
         def task_factory() -> DownloadResourceTask:
             from crystal.task import DownloadResourceTask
@@ -3270,9 +3291,13 @@ class RootResource:
     
     def create_download_task(self, *, needs_result: bool=True) -> Task:
         """
-        Creates a task to download this root resource.
+        Gets/creates a task to download this root resource.
         
-        This task may be complete immediately after initialization.
+        The caller is responsible for adding a returned created Task as the child of an
+        appropriate parent task so that the UI displays it.
+        
+        A created task may be complete immediately after initialization,
+        and a looked up task may be complete.
         """
         # TODO: Create the underlying task with the full RootResource
         #       so that the correct subtitle is displayed.
@@ -4531,7 +4556,7 @@ class ResourceGroup(ListenableMixin):
         The caller is responsible for adding the returned Task as the child of an
         appropriate parent task so that the UI displays it.
         
-        This task may be complete immediately after initialization.
+        The created task may be complete immediately after initialization.
         """
         if needs_result:
             raise ValueError('Download task for a group never has a result')
