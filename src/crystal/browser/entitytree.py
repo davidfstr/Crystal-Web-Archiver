@@ -108,7 +108,13 @@ class EntityTree(Bulkhead):
                 self.root.update_children()
                 
                 # Remove the CrashedTask soon
-                crash_reason_view.finish()
+                # NOTE: Pretend to be the scheduler thread so that the
+                #       task tree can be modified. This is safe because
+                #       the task being dismissed is paused and will not
+                #       run any descendent tasks.
+                from crystal.tests.util.tasks import scheduler_thread_context
+                with scheduler_thread_context():
+                    crash_reason_view.finish()
                 
                 # Clear the crash reason
                 self.crash_reason = None

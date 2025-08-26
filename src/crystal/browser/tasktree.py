@@ -97,12 +97,22 @@ class TaskTree:
             task.parent.crash_reason is None
         )
     
-    @classmethod
-    def _dismiss_top_level_task(cls, task: Task) -> None:
-        if not cls._is_dismissable_top_level_task(task):
+    def _dismiss_top_level_task(self, task: Task) -> None:
+        if not self._is_dismissable_top_level_task(task):
             raise ValueError()
-        if not task.complete:
-            task.finish()
+        
+        # NOTE: Pretend to be the scheduler thread so that the
+        #       task tree can be modified. This is safe because
+        #       the task being dismissed is paused and will not
+        #       run any descendent tasks.
+        from crystal.tests.util.tasks import scheduler_thread_context
+        with scheduler_thread_context():
+            if not task.complete:
+                task.finish()
+        
+        root_task = self.root.task
+        assert isinstance(root_task, RootTask)
+        root_task.scheduler_should_wake_event.set()
     
     # === Event: Mouse Motion, Get Tooltip ===
     

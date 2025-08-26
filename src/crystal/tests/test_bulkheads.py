@@ -23,6 +23,7 @@ from crystal.tests.util.tasks import (
     first_task_title_progression,
     MAX_DOWNLOAD_DURATION_PER_ITEM,
     scheduler_disabled,
+    scheduler_thread_context,
     step_scheduler,
     step_scheduler_now,
     ttn_for_task,
@@ -1013,7 +1014,11 @@ async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entit
                 assert refresh_menuitem.Enabled
                 
                 # test_when_click_refresh_menuitem_for_updating_entity_tree_crashed_task_then_recreates_unexpanded_top_level_entities_in_entity_tree_and_task_is_removed
-                select_menuitem_now(menu, refresh_menuitem.Id)
+                # NOTE: When the user selects this menuitem the thread
+                #       running the callback will be the UI thread
+                #       but not the scheduler thread.
+                with scheduler_thread_context(enabled=False):
+                    select_menuitem_now(menu, refresh_menuitem.Id)
                 if True:
                     assert rmw.entity_tree.crash_reason is None
                     
@@ -1142,7 +1147,11 @@ async def test_when_DRT_child_of_DRT_crashes_then_parent_DRT_displays_as_crashed
                 
                 # test_when_click_dismiss_menuitem_for_regular_top_level_crashed_task_then_task_is_removed
                 if True:
-                    select_menuitem_now(menu, dismiss_menuitem.Id)
+                    # NOTE: When the user selects this menuitem the thread
+                    #       running the callback will be the UI thread
+                    #       but not the scheduler thread.
+                    with scheduler_thread_context(enabled=False):
+                        select_menuitem_now(menu, dismiss_menuitem.Id)
                     
                     # RT -- notices all finished children; clears them
                     step_scheduler_now(project, expect_done=True)
@@ -1454,7 +1463,11 @@ async def test_when_RT_try_get_next_task_unit_crashes_then_RT_marked_as_crashed(
                 assert dismiss_all_menuitem.Enabled
                 
                 # test_when_click_dismiss_all_menuitem_for_scheduler_crashed_task_then_all_top_level_tasks_are_removed
-                select_menuitem_now(menu, dismiss_all_menuitem.Id)
+                # NOTE: When the user selects this menuitem the thread
+                #       running the callback will be the UI thread
+                #       but not the scheduler thread.
+                with scheduler_thread_context(enabled=False):
+                    select_menuitem_now(menu, dismiss_all_menuitem.Id)
                 () = root_ti.Children
             await scheduler_crashed_ti.right_click_showing_popup_menu(show_popup)
             

@@ -56,6 +56,7 @@ Release Notes ⋮
       isn't designed to handle.
     * The "Preferences..." / "Settings..." button in the main window now uses
       the correct title based on OS conventions.
+    * Fixed the "Dismiss" action on a crashed task to not itself crash!
 
 * Testing improvements
     * If the default server port is in use while tests are running, a warning

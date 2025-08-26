@@ -283,12 +283,17 @@ async def step_scheduler(
     Arguments:
     * expect_done -- Whether it's expected that no work is left.
     """
+    _ensure_scheduler_is_not_waiting_or_woke_up(project.root_task)
     unit = project.root_task.try_get_next_task_unit()
+    # NOTE: The real scheduler thread clears the wake event immediately
+    #       after fetching a task unit
+    project.root_task.scheduler_should_wake_event.clear()
     if after_get is not None:
         after_get()
     if unit is None:
         if not expect_done:
             raise AssertionError('Expected there to be no more tasks')
+        _set_scheduler_is_waiting(project.root_task, True)
         return True
     else:
         if expect_done:
@@ -321,18 +326,48 @@ def step_scheduler_now(
     
     if expect_done != True:
         raise ValueError('step_scheduler_now() only supports expect_done=True')
+    _ensure_scheduler_is_not_waiting_or_woke_up(root_task)
     unit = root_task.try_get_next_task_unit()
+    # NOTE: The real scheduler thread clears the wake event immediately
+    #       after fetching a task unit
+    root_task.scheduler_should_wake_event.clear()
     assert expect_done
     assert unit is None
+    _set_scheduler_is_waiting(root_task, True)
 
 
 @scheduler_affinity  # manual control of scheduler thread is assumed
 async def step_scheduler_until_done(project: Project) -> None:
+    _ensure_scheduler_is_not_waiting_or_woke_up(project.root_task)
     while True:
         unit = project.root_task.try_get_next_task_unit()  # step scheduler
+        # NOTE: The real scheduler thread clears the wake event immediately
+        #       after fetching a task unit
+        project.root_task.scheduler_should_wake_event.clear()
         if unit is None:
+            _set_scheduler_is_waiting(project.root_task, True)
             break
         await bg_call_and_wait(scheduler_thread_context()(unit))
+
+
+def _ensure_scheduler_is_not_waiting_or_woke_up(root_task: RootTask) -> None:
+    is_waiting = getattr(root_task.scheduler_should_wake_event, '_is_waiting', False)
+    assert isinstance(is_waiting, bool)
+    if is_waiting:
+        if root_task.scheduler_should_wake_event.is_set():
+            # Woke up
+            _set_scheduler_is_waiting(root_task, False)
+        else:
+            raise AssertionError(
+                'Caller expected scheduler to be ready to run next task unit, '
+                'but scheduler is still waiting on a wake event')
+    else:
+        # Not waiting
+        return
+
+
+def _set_scheduler_is_waiting(root_task: RootTask, value: bool) -> None:
+    root_task.scheduler_should_wake_event._is_waiting = value  # type: ignore[attr-defined]
 
 
 @scheduler_affinity  # manual control of scheduler thread is assumed
