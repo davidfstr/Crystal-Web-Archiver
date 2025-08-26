@@ -116,6 +116,9 @@ class EntityTree(Bulkhead):
                 with scheduler_thread_context():
                     crash_reason_view.finish()
                 
+                root_task = self._project.root_task
+                root_task.scheduler_should_wake_event.set()
+                
                 # Clear the crash reason
                 self.crash_reason = None
             crash_reason_view = CrashedTask(

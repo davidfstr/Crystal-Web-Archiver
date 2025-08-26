@@ -282,6 +282,9 @@ async def step_scheduler(
     
     Arguments:
     * expect_done -- Whether it's expected that no work is left.
+    
+    Raises:
+    * SchedulerIsBlockedWaiting
     """
     _ensure_scheduler_is_not_waiting_or_woke_up(project.root_task)
     unit = project.root_task.try_get_next_task_unit()
@@ -307,6 +310,7 @@ def step_scheduler_now(
         project: Project | None = None,
         *, root_task: RootTask | None = None,
         expect_done: bool=False,
+        no_progress_ok: bool=False,
         ) -> None:
     """
     Performs one unit of work from the scheduler.
@@ -315,6 +319,9 @@ def step_scheduler_now(
     
     Arguments:
     * expect_done -- Whether it's expected that no work is left. Must be True.
+    
+    Raises:
+    * SchedulerIsBlockedWaiting
     """
     if project is not None:
         if root_task is not None:
@@ -326,7 +333,13 @@ def step_scheduler_now(
     
     if expect_done != True:
         raise ValueError('step_scheduler_now() only supports expect_done=True')
-    _ensure_scheduler_is_not_waiting_or_woke_up(root_task)
+    try:
+        _ensure_scheduler_is_not_waiting_or_woke_up(root_task)
+    except SchedulerIsBlockedWaiting:
+        if no_progress_ok:
+            return
+        else:
+            raise
     unit = root_task.try_get_next_task_unit()
     # NOTE: The real scheduler thread clears the wake event immediately
     #       after fetching a task unit
@@ -338,6 +351,10 @@ def step_scheduler_now(
 
 @scheduler_affinity  # manual control of scheduler thread is assumed
 async def step_scheduler_until_done(project: Project) -> None:
+    """
+    Raises:
+    * SchedulerIsBlockedWaiting
+    """
     _ensure_scheduler_is_not_waiting_or_woke_up(project.root_task)
     while True:
         unit = project.root_task.try_get_next_task_unit()  # step scheduler
@@ -350,7 +367,12 @@ async def step_scheduler_until_done(project: Project) -> None:
         await bg_call_and_wait(scheduler_thread_context()(unit))
 
 
+@scheduler_affinity  # manual control of scheduler thread is assumed
 def _ensure_scheduler_is_not_waiting_or_woke_up(root_task: RootTask) -> None:
+    """
+    Raises:
+    * SchedulerIsBlockedWaiting
+    """
     is_waiting = getattr(root_task.scheduler_should_wake_event, '_is_waiting', False)
     assert isinstance(is_waiting, bool)
     if is_waiting:
@@ -358,7 +380,7 @@ def _ensure_scheduler_is_not_waiting_or_woke_up(root_task: RootTask) -> None:
             # Woke up
             _set_scheduler_is_waiting(root_task, False)
         else:
-            raise AssertionError(
+            raise SchedulerIsBlockedWaiting(
                 'Caller expected scheduler to be ready to run next task unit, '
                 'but scheduler is still waiting on a wake event')
     else:
@@ -366,6 +388,11 @@ def _ensure_scheduler_is_not_waiting_or_woke_up(root_task: RootTask) -> None:
         return
 
 
+class SchedulerIsBlockedWaiting(AssertionError):
+    pass
+
+
+@scheduler_affinity  # manual control of scheduler thread is assumed
 def _set_scheduler_is_waiting(root_task: RootTask, value: bool) -> None:
     root_task.scheduler_should_wake_event._is_waiting = value  # type: ignore[attr-defined]
 

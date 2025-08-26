@@ -985,12 +985,16 @@ async def test_when_ET_root_resource_did_instantiate_crashes_then_updating_entit
             rmw = RealMainWindow._last_created
             assert rmw is not None
             
+            step_scheduler_now(project, expect_done=True)
+            
             # Preconditions
             et_root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             () = et_root_ti.Children
             
             with patch('crystal.browser.entitytree.RootResourceNode', side_effect=_CRASH):
                 RootResource(project, 'Home', Resource(project, home_url))
+            
+            step_scheduler_now(project, expect_done=True, no_progress_ok=True)
             
             # Postconditions
             if True:
