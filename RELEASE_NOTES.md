@@ -48,6 +48,12 @@ Release Notes ⋮
       mode by default so that remote users cannot modify a served project.
       Remote modifications can be explicitly enabled with `--no-readonly`.
 
+* API changes
+    * `Resource.bulk_get_or_create` is added as a replacement for
+      `Resource.bulk_create`. The former function returns resources that were
+      looked up in addition to resources that were created, which is usually the
+      behavior that a caller wants. The latter function is deprecated.
+
 * Minor fixes
     * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
       instead of generic "Yes" and "No" buttons, following platform conventions.

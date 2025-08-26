@@ -1167,6 +1167,8 @@ class DownloadResourceTask(Task['ResourceRevision']):
         elif task is self._parse_links_task:
             try:
                 try:
+                    # TODO: Consider using the returned Resources (in the second output)
+                    #       to speed up lookups of Resources related to links
                     (links, _) = self._parse_links_task.future.result(timeout=0)
                 except CancelledError:
                     self.cancel()
@@ -1399,7 +1401,7 @@ class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]'])
         else:
             self.subtitle = 'Recording links...'
             def record_links() -> list[Resource]:
-                return Resource.bulk_create(r.project, urls, r.url)
+                return Resource.bulk_get_or_create(r.project, urls, r.url)
             linked_resources = fg_call_and_wait(record_links)
         
         return (links, linked_resources)

@@ -2595,33 +2595,77 @@ class Resource:
     
     # === Init (Many) ===
     
-    @staticmethod
-    @fg_affinity
-    def bulk_create(
+    @classmethod
+    def bulk_get_or_create(cls,
             project: Project,
             urls: list[str],
             origin_url: str,
             ) -> list[Resource]:
         """
-        Creates several Resources for the specified list of URLs, in bulk.
-        Returns the set of Resources created.
+        Get or creates several Resources for the specified list of URLs, in bulk.
+        Returns the set of Resources that were looked up or created.
+        
+        Note that the list of Resources returned may be shorter than the
+        input list of URLs because some of the input URLs may be normalized to
+        the same output URL.
+        
+        Note that the list of Resources returned are not guaranteed to be
+        ordered in any particular way.
         
         Arguments:
         * project -- associated `Project`.
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
         """
+        (already_created, created) = cls._bulk_get_or_create(project, urls, origin_url)
+        return already_created + created
+    
+    @classmethod
+    @deprecated('Use Resource.bulk_get_or_create() instead')
+    def bulk_create(cls,
+            project: Project,
+            urls: list[str],
+            origin_url: str,
+            ) -> list[Resource]:
+        """
+        Creates several Resources for the specified list of URLs, in bulk.
+        Returns the set of Resources that were created. Already existing
+        resources corresponding to input URLs will be ignored and not returned.
+        
+        Note that the list of Resources returned may be shorter than the
+        input list of URLs because some of the input URLs may be normalized to
+        the same output URL.
+        
+        Note that the list of Resources returned are not guaranteed to be
+        ordered in any particular way.
+        
+        Arguments:
+        * project -- associated `Project`.
+        * urls -- absolute URLs.
+        * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
+        """
+        (already_created, created) = cls._bulk_get_or_create(project, urls, origin_url)
+        return created
+    
+    @staticmethod
+    @fg_affinity
+    def _bulk_get_or_create(
+            project: Project,
+            urls: list[str],
+            origin_url: str,
+            ) -> tuple[list[Resource], list[Resource]]:
         from crystal.task import PROFILE_RECORD_LINKS
 
         # 1. Create Resources in memory initially, deferring any database INSERTs
         # 2. Identify new resources that need to be inserted in the database
         resource_for_new_url = OrderedDict()
+        resources_already_created = []
         for url in urls:
             # Get/create Resource in memory and normalize its URL
             new_r = Resource(project, url, _id=Resource._DEFER_ID)
             if new_r._is_finished_initializing:
                 # Resource with normalized URL already existed in memory
-                pass
+                resources_already_created.append(new_r)
             else:
                 # Resource with normalized URL needs to be created in database
                 if new_r.url in resource_for_new_url:
@@ -2631,32 +2675,28 @@ class Resource:
                     # Schedule resource with normalized URL to be created in database
                     resource_for_new_url[new_r.url] = new_r
         
-        # If no resources need to be created in database, abort early
-        if len(resource_for_new_url) == 0:
-            return []
+        if len(resource_for_new_url) > 0:
+            # Create many Resource rows in database with a single bulk INSERT,
+            # to optimize performance, retrieving the IDs of the inserted rows
+            message = lambda: f'{len(resource_for_new_url)} links from {origin_url}'
+            with warn_if_slow('Inserting links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
+                c = project._db.cursor()
+                placeholders = ','.join(['(?)'] * len(resource_for_new_url))
+                ids = list(c.execute(
+                    f'insert into resource (url) values {placeholders} returning id',
+                    list(resource_for_new_url.keys()))
+                )  # type: List[Tuple[int]]
+            with warn_if_slow('Committing links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
+                project._db.commit()  # end transaction
+            
+            # Populate the ID of each Resource in memory with each inserted row's ID,
+            # and finish initializing each Resource (by recording it
+            # in the Project and notifying listeners of instantiation)
+            for (new_r, (id,)) in zip(resource_for_new_url.values(), ids):
+                new_r._finish_init(id, creating=True)
         
-        # Create many Resource rows in database with a single bulk INSERT,
-        # to optimize performance, retrieving the IDs of the inserted rows
-        message = lambda: f'{len(resource_for_new_url)} links from {origin_url}'
-        with warn_if_slow('Inserting links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
-            c = project._db.cursor()
-            placeholders = ','.join(['(?)'] * len(resource_for_new_url))
-            ids = list(c.execute(
-                f'insert into resource (url) values {placeholders} returning id',
-                list(resource_for_new_url.keys()))
-            )  # type: List[Tuple[int]]
-        with warn_if_slow('Committing links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
-            project._db.commit()  # end transaction
-        
-        # Populate the ID of each Resource in memory with each inserted row's ID,
-        # and finish initializing each Resource (by recording it
-        # in the Project and notifying listeners of instantiation)
-        for (new_r, (id,)) in zip(resource_for_new_url.values(), ids):
-            new_r._finish_init(id, creating=True)
-        
-        # Return the set of Resources that were created,
-        # which may be shorter than the list of URLs to create that were provided
-        return list(resource_for_new_url.values())
+        # Return the set of Resources that were looked up or created
+        return (resources_already_created, list(resource_for_new_url.values()))
     
     # === Properties ===
     

@@ -271,7 +271,7 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
             
             # Create many resources
             max_id = max([r._id for r in project.resources])
-            resources = Resource.bulk_create(project, [
+            resources = Resource.bulk_get_or_create(project, [
                 f'https://example.com/{id}'
                 for id in range(max_id + 1, 4096 + 1)
             ], 'https://example.com/')
