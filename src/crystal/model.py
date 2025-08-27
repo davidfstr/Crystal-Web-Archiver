@@ -64,6 +64,7 @@ from crystal.util.xthreading import (
     is_foreground_thread, start_thread_switching_coroutine,
 )
 import datetime
+import itertools
 import json
 import math
 import mimetypes
@@ -270,6 +271,7 @@ class Project(ListenableMixin):
         self._properties = dict()               # type: Dict[str, Optional[str]]
         self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
         self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
+        self._unsaved_resources = []            # type: List[Resource]
         self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
@@ -1290,7 +1292,7 @@ class Project(ListenableMixin):
         INCONSISTENT_URL_COLLECTIONS = 'Project URL collections are inconsistent with each other'
         
         count1 = len(self._resource_for_url)
-        count2 = len(self._resource_for_id)
+        count2 = len(self._resource_for_id) + len(self._unsaved_resources)
         if self._sorted_resource_urls is None:
             assert count1 == count2, INCONSISTENT_URL_COLLECTIONS
         else:
@@ -1945,11 +1947,24 @@ class Project(ListenableMixin):
             # - Start scheduler
             yield SwitchToThread.FOREGROUND
             self.path = new_path
+            # NOTE: May change the readonly status of this Project
             self._reopen()
             
             # Restore the state of tasks
             if not self.readonly:
                 self.unhibernate_tasks()
+            
+            # Bulk-save any unsaved resources, populating the resource IDs
+            if not self.readonly and len(self._unsaved_resources) > 0:
+                ids = Resource._bulk_create_resource_ids_for_urls(
+                    self,
+                    [r.url for r in self._unsaved_resources],
+                    origin_url=None,  # multiple origins
+                )
+                for (r, id) in zip(self._unsaved_resources, ids, strict=True):
+                    r._finish_save(id)
+                self._unsaved_resources.clear()
+                self._check_url_collection_invariants()
         except:
             # Try to reopen the project at the old path
             if os.path.exists(old_path):
@@ -2462,10 +2477,15 @@ class Resource:
     Represents an entity, potentially downloadable.
     Either created manually or discovered through a link from another resource.
     Persisted and auto-saved.
+    
+    It is always possible to create a Resource (in memory) even if
+    its project is read-only. If/when the project transitions to
+    writable, any unsaved resources will be saved to disk.
     """
     # Special IDs, all <0
     _DEFER_ID = -1  # type: Literal[-1]
     _DELETED_ID = -2  # type: Literal[-2]
+    _UNSAVED_ID = -3  # type: Literal[-3]
     
     # Optimize per-instance memory use, since there may be very many Resource objects
     __slots__ = (
@@ -2505,6 +2525,10 @@ class Resource:
         
         Note that returned Resource will have a *normalized* URL which may
         differ from the exact URL specified in this constructor.
+        
+        It is always possible to create a Resource (in memory) even if
+        its project is read-only. If/when the project transitions to
+        writable, any unsaved resources will be saved to disk.
         
         Arguments:
         * project -- associated `Project`.
@@ -2549,12 +2573,13 @@ class Resource:
         creating = _id is None  # capture
         if creating:
             if project.readonly:
-                raise ProjectReadOnlyError()
-            c = project._db.cursor()
-            c.execute('insert into resource (url) values (?)', (normalized_url,))
-            project._db.commit()
-            assert c.lastrowid is not None
-            _id = c.lastrowid
+                _id = Resource._UNSAVED_ID
+            else:
+                c = project._db.cursor()
+                c.execute('insert into resource (url) values (?)', (normalized_url,))
+                project._db.commit()
+                assert c.lastrowid is not None
+                _id = c.lastrowid
             
             # Can't have revisions because it was just created this session
             self._definitely_has_no_revisions = True
@@ -2580,6 +2605,8 @@ class Resource:
         Arguments:
         * creating -- whether this resource is being created and did not exist in the database
         """
+        # Private API:
+        # - id may be _UNSAVED_ID
         self._id = id
         
         if creating:
@@ -2587,7 +2614,11 @@ class Resource:
             
             # Record self in Project
             project._resource_for_url[self._url] = self
-            project._resource_for_id[id] = self
+            if id == Resource._UNSAVED_ID:
+                project._unsaved_resources.append(self)
+            else:
+                assert id >= 0  # not any other kind of special ID
+                project._resource_for_id[id] = self
             if project._sorted_resource_urls is not None:
                 project._sorted_resource_urls.add(self._url)
             # NOTE: Don't check invariants here to save a little performance,
@@ -2602,6 +2633,26 @@ class Resource:
             # (Caller is responsible for updating Project._resource_for_id)
             # (Caller is responsible for updating Project._sorted_resource_urls)
             pass
+    
+    def _finish_save(self, id: int) -> None:
+        """
+        Finishes saving a Resource that was created with
+        _finish_init(id=Resource._UNSAVED_ID).
+        
+        The caller is responsible for removing this Resource
+        from project._unsaved_resources.
+        """
+        assert id >= 0  # not a special ID
+        assert self._id == Resource._UNSAVED_ID
+        
+        project = self.project  # cache
+        
+        self._id = id
+        # NOTE: Don't actually run assertion for improved performance
+        #assert self._url in project._resource_for_url
+        project._resource_for_id[id] = self
+        # NOTE: Don't actually run assertion for improved performance
+        #assert self._url in project._sorted_resource_urls
     
     # === Init (Many) ===
     
@@ -2621,6 +2672,10 @@ class Resource:
         
         Note that the list of Resources returned are not guaranteed to be
         ordered in any particular way.
+        
+        It is always possible to create a Resource (in memory) even if
+        its project is read-only. If/when the project transitions to
+        writable, any unsaved resources will be saved to disk.
         
         Arguments:
         * project -- associated `Project`.
@@ -2649,6 +2704,10 @@ class Resource:
         Note that the list of Resources returned are not guaranteed to be
         ordered in any particular way.
         
+        It is always possible to create a Resource (in memory) even if
+        its project is read-only. If/when the project transitions to
+        writable, any unsaved resources will be saved to disk.
+        
         Arguments:
         * project -- associated `Project`.
         * urls -- absolute URLs.
@@ -2657,18 +2716,16 @@ class Resource:
         (already_created, created) = cls._bulk_get_or_create(project, urls, origin_url)
         return created
     
-    @staticmethod
+    @classmethod
     @fg_affinity
-    def _bulk_get_or_create(
+    def _bulk_get_or_create(cls,
             project: Project,
             urls: list[str],
             origin_url: str,
             ) -> tuple[list[Resource], list[Resource]]:
-        from crystal.task import PROFILE_RECORD_LINKS
-
         # 1. Create Resources in memory initially, deferring any database INSERTs
         # 2. Identify new resources that need to be inserted in the database
-        resource_for_new_url = OrderedDict()
+        resource_for_new_url = OrderedDict()  # type: Dict[str, Resource]
         resources_already_created = []
         for url in urls:
             # Get/create Resource in memory and normalize its URL
@@ -2686,27 +2743,51 @@ class Resource:
                     resource_for_new_url[new_r.url] = new_r
         
         if len(resource_for_new_url) > 0:
-            # Create many Resource rows in database with a single bulk INSERT,
-            # to optimize performance, retrieving the IDs of the inserted rows
-            message = lambda: f'{len(resource_for_new_url)} links from {origin_url}'
-            with warn_if_slow('Inserting links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
-                c = project._db.cursor()
-                placeholders = ','.join(['(?)'] * len(resource_for_new_url))
-                ids = list(c.execute(
-                    f'insert into resource (url) values {placeholders} returning id',
-                    list(resource_for_new_url.keys()))
-                )  # type: List[Tuple[int]]
-            with warn_if_slow('Committing links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
-                project._db.commit()  # end transaction
+            if project.readonly:
+                # Defer until project becomes writable:
+                # Insert resources into the database
+                ids = itertools.repeat(Resource._UNSAVED_ID)  # type: Iterable[int]
+            else:
+                # Insert resources into the database
+                ids = cls._bulk_create_resource_ids_for_urls(
+                    project,
+                    list(resource_for_new_url.keys()),
+                    origin_url,
+                )
             
-            # Populate the ID of each Resource in memory with each inserted row's ID,
+            # Populate the ID of each Resource in memory (possibly _UNSAVED_ID),
             # and finish initializing each Resource (by recording it
             # in the Project and notifying listeners of instantiation)
-            for (new_r, (id,)) in zip(resource_for_new_url.values(), ids):
+            for (new_r, id) in zip(resource_for_new_url.values(), ids):
                 new_r._finish_init(id, creating=True)
         
         # Return the set of Resources that were looked up or created
         return (resources_already_created, list(resource_for_new_url.values()))
+    
+    @staticmethod
+    def _bulk_create_resource_ids_for_urls(
+            project: Project,
+            normalized_urls: list[str],
+            origin_url: str | None,
+            ) -> list[int]:
+        from crystal.task import PROFILE_RECORD_LINKS
+        
+        # Create many Resource rows in database with a single bulk INSERT,
+        # to optimize performance, retrieving the IDs of the inserted rows
+        if origin_url is None:
+            message = lambda: f'{len(normalized_urls)} links'
+        else:
+            message = lambda: f'{len(normalized_urls)} links from {origin_url!r}'
+        with warn_if_slow('Inserting links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
+            c = project._db.cursor()
+            placeholders = ','.join(['(?)'] * len(normalized_urls))
+            rows = list(c.execute(
+                f'insert into resource (url) values {placeholders} returning id',
+                normalized_urls)
+            )  # type: List[Tuple[int]]
+        with warn_if_slow('Committing links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
+            project._db.commit()  # end transaction
+        return [id for (id,) in rows]
     
     # === Properties ===
     
@@ -3195,10 +3276,10 @@ class RootResource:
         * resource -- `Resource`.
         
         Raises:
+        * ProjectReadOnlyError
         * CrossProjectReferenceError -- if `resource` belongs to a different project.
         * RootResource.AlreadyExists -- 
             if there is already a `RootResource` associated with the specified resource.
-        * ProjectReadOnlyError
         """
         if not isinstance(project, Project):
             raise TypeError()
@@ -3351,6 +3432,7 @@ class ResourceRevision:
         (which is likely in a different project).
         
         Raises:
+        * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
         * Exception -- if could not write revision to disk
         """
@@ -3374,6 +3456,7 @@ class ResourceRevision:
         Creates a new revision that encapsulates the error encountered when fetching the revision.
         
         Raises:
+        * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
         * Exception -- if could not write revision to disk
         """
@@ -3401,6 +3484,7 @@ class ResourceRevision:
         * body_stream -- file-like object containing the revision body.
         
         Raises:
+        * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
         * Exception -- if could not read revision from stream or write to disk
         """
@@ -3447,6 +3531,7 @@ class ResourceRevision:
         * ResourceRevision.create_from_response()
         
         Raises:
+        * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
         * Exception -- if could not read revision from stream or write to disk
         """

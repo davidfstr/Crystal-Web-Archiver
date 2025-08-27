@@ -55,11 +55,13 @@ Release Notes ⋮
       behavior that a caller wants. The latter function is deprecated.
 
 * Minor fixes
-    * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
-      instead of generic "Yes" and "No" buttons, following platform conventions.
+    * Fix inability to browse the entity tree of some readonly projects.
+      Impact was limited primarily to very old readonly projects.
     * Most dialogs are now shown as window-modal rather than modeless to
       prevent certain types of concurrent edits to a project that Crystal
       isn't designed to handle.
+    * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
+      instead of generic "Yes" and "No" buttons, following platform conventions.
     * The "Preferences..." / "Settings..." button in the main window now uses
       the correct title based on OS conventions.
     * Fixed the "Dismiss" action on a crashed task to not itself crash!
