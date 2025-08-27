@@ -3,7 +3,7 @@ from crystal.model import (
 )
 from crystal.app_preferences import app_prefs
 from crystal.tests.util.asserts import assertEqual, assertIn
-from crystal.tests.util.controls import TreeItem, click_button
+from crystal.tests.util.controls import TreeItem, click_button, click_checkbox
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project, served_project
@@ -13,7 +13,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import (
-    MainWindow, MenuitemMissingError, OpenOrCreateDialog, PreferencesDialog,
+    MainWindow, MenuitemMissingError, NewRootUrlDialog, OpenOrCreateDialog, PreferencesDialog,
 )
 from functools import wraps
 import os
@@ -150,6 +150,51 @@ async def test_when_multiple_root_resources_then_view_button_callout_is_hidden()
             view_callout = mw.entity_tree.view_button_callout
             assert view_callout is None or not view_callout.IsShown(), \
                 'Callout should be hidden with multiple root resources'
+
+
+async def test_view_button_callout_only_shown_if_project_created_in_current_session() -> None:
+    # In particular, the View Button Callout should NOT be visible when opening
+    # an existing project. An existing project presumably has been fully populated
+    # so any "new project help hints" would be confusing/distracting.
+    
+    # Use real URLs (not served URLs) since we won't actually download anything
+    home_url = 'https://xkcd.com/'
+    
+    # Create a project with exactly 1 root resource and exactly 1 resource group
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        
+        # Create exactly 1 root resource with 1 resource group using the UI
+        # (This is a common workflow: tick "Create Group to Download Entire Site")
+        click_button(mw.new_root_url_button)
+        nud = await NewRootUrlDialog.wait_for()
+        if True:
+            nud.name_field.Value = 'Home'
+            nud.url_field.Value = home_url
+            
+            # Tick the "Create Group to Download Entire Site" checkbox
+            # This creates both a root resource and a resource group
+            assert nud.create_group_checkbox.Enabled, \
+                'Create group checkbox should be enabled for root domain URLs'
+            click_checkbox(nud.create_group_checkbox)
+            assert nud.create_group_checkbox.Value
+            
+            # Disable immediate downloading to keep test fast
+            nud.do_not_download_immediately()
+            
+            await nud.ok()
+        
+        # Ensure the View Button Callout is visible (project created this session)
+        view_callout = mw.entity_tree.view_button_callout
+        assert view_callout is not None and view_callout.IsShown(), \
+            'Callout should be visible for project created in current session'
+    
+    # Reopen the same project
+    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+        # Ensure the View Button Callout is NOT visible (project opened, not created)
+        view_callout = mw.entity_tree.view_button_callout
+        assert view_callout is None or not view_callout.IsShown(), \
+            'Callout should NOT be visible when opening existing project'
 
 
 async def test_when_view_callout_temporarily_dismissed_then_stays_hidden() -> None:

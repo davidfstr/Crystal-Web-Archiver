@@ -32,7 +32,8 @@ from unittest import skip
 # "Edit..." button -> (See test_edit_root_url.py and test_edit_group.py)
 # "View" button -> (See test_server.py)
 
-# Button callouts -> (See test_callout.py)
+# View button callout -> (See test_entitytree.py)
+# Callouts -> (See test_callout.py)
 
 # === Test: Task Tree ===
 

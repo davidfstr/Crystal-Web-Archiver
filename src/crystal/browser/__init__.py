@@ -621,6 +621,7 @@ class MainWindow(CloakMixin):
     @capture_crashes_to_stderr
     def _update_view_button_callout_visibility(self) -> None:
         should_show_callout = (
+            self.project._created_this_session and
             not self._view_button_callout_dismissed_temporarily and
             not (app_prefs.view_button_callout_dismissed or False) and
             (has_exactly_one_root_resource := is_iterable_len_1(self.project.root_resources))
@@ -629,15 +630,15 @@ class MainWindow(CloakMixin):
             self._view_button_callout.show_callout()
         else:
             self._view_button_callout.hide_callout()
-
+    
     def _on_view_callout_temporary_dismiss(self) -> None:
         self._view_button_callout_dismissed_temporarily = True
         self._view_button_callout.hide_callout()
-
+    
     def _on_view_callout_permanent_dismiss(self) -> None:
         app_prefs.view_button_callout_dismissed = True
         self._view_button_callout.hide_callout()
-
+    
     # === Entity Pane: Properties ===
     
     @property

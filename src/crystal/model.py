@@ -283,6 +283,8 @@ class Project(ListenableMixin):
             # Can't create a project if cannot write to disk
             raise ProjectReadOnlyError(
                 f'Cannot create new project at {path!r} when readonly=True')
+        # NOTE: Currently used by MainWindow only. Omitting from public API for now.
+        self._created_this_session = create
         
         self._loading = True
         try:
