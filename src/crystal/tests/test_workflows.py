@@ -7,15 +7,15 @@ from __future__ import annotations
 
 from crystal.model import Project, Resource
 from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
-from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.asserts import assertEqual, assertRegex
 from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
-    click_button, set_checkbox_value, TreeItem,
+    click_button, click_checkbox, set_checkbox_value, TreeItem,
 )
 from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url, is_url_not_in_archive,
-    served_project,
+    MockHttpServer, served_project,
 )
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
@@ -33,8 +33,9 @@ from crystal.util.xos import is_windows
 import datetime
 import re
 import tempfile
+from textwrap import dedent
 from unittest import skip
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 # ------------------------------------------------------------------------------
 # Tests
@@ -128,14 +129,171 @@ async def test_first_time_user_can_easily_download_and_view_first_url() -> None:
         'Number of actions to perform workflow changed unexpectedly')
 
 
-@skip('not yet automated')
-async def test_first_time_user_can_easily_download_simple_site() -> None:
-    # Similar to case: test_first_time_user_can_easily_download_and_view_first_url
-    # with 1 additional action:
-    #     - NewRootUrlDialog.create_group_checkbox = True
-    #         > In combination with download_immediately_checkbox = True,
-    #           the entire site will be downloaded using a domain catch-all group.
-    pass
+async def test_first_time_user_can_easily_download_and_view_simple_site() -> None:
+    """
+    Test that a first-time user can _easily_ download and view an entire simple site.
+    
+    Similar to test_first_time_user_can_easily_download_and_view_first_url
+    but downloads the entire site by ticking the "Create Group to Download Entire Site" checkbox.
+    
+    Notice:
+    - The total number of actions required to accomplish the goal
+    - Any call-to-actions which appear and suggest the correct action to do next
+    """
+    # Create a small test site with multiple resources in different directories
+    server = MockHttpServer({
+        '/': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                """
+                <!DOCTYPE html>
+                <html>
+                <head><title>Test Site Home</title></head>
+                <body>
+                    <h1>Welcome to Test Site</h1>
+                    <a href="/about/">About Us</a>
+                </body>
+                </html>
+                """
+            ).lstrip('\n').encode('utf-8')
+        ),
+        '/about/': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                """
+                <!DOCTYPE html>
+                <html>
+                <head><title>About - Test Site</title></head>
+                <body>
+                    <h1>About Us</h1>
+                    <img src="/about/profile.png" alt="Profile" />
+                    <a href="/">Home</a>
+                </body>
+                </html>
+                """
+            ).lstrip('\n').encode('utf-8')
+        ),
+        '/about/profile.png': dict(
+            status_code=200,
+            headers=[('Content-Type', 'image/png')],
+            content=b'__simulated__'
+        )
+    })
+    
+    action_count = 0
+    with server:
+        home_url = server.get_url('/')
+        
+        # Action 1: Open Crystal
+        action_count += 1
+        
+        # Action 2 (Click): "New Project" button, to create an empty untitled project
+        action_count += 1
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            assert root_ti.GetFirstChild() is None  # no entities
+            
+            # Test user knows to create first root resource and can easily do so
+            if True:
+                # Ensure call-to-action message visible:
+                # "Download your first page by defining a root URL for the page."
+                assert mw.entity_tree.is_empty_state_visible()
+                
+                # Action 3 (Click): "New Root URL..."
+                action_count += 1
+                click_button(mw.entity_tree.empty_state_new_root_url_button)
+                nud = await NewRootUrlDialog.wait_for()
+                
+                # Action 4 (Paste/Type): <url>
+                action_count += 1
+                nud.url_field.Value = home_url
+                assert nud.download_immediately_checkbox.IsChecked()  # no click needed
+                assert nud.set_as_default_domain_checkbox.IsChecked()  # no click needed
+                
+                # Action 5 (Click): "Create Group to Download Entire Site" checkbox
+                action_count += 1
+                assert nud.create_group_checkbox.Enabled, \
+                    'Create group checkbox should be enabled for root domain URLs'
+                click_checkbox(nud.create_group_checkbox)
+                assert nud.create_group_checkbox.Value
+                
+                # Action 6 (Click): "OK"
+                action_count += 1
+                await nud.ok()
+                
+                # Verify both root resource and resource group were created
+                root_children = root_ti.Children
+                assert len(root_children) == 2, \
+                    'Should have created both root resource and resource group'
+                home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+                group_ti = root_ti.find_child(home_url + '**', project.default_url_prefix)
+                assert home_ti is not None, 'Root resource should be created'
+                assert group_ti is not None, 'Resource group should be created'
+            
+            # Test user knows can view downloaded site and easily do so
+            if True:
+                # Ensure call-to-action message visible:
+                # 'View your first downloaded page in a browser by pressing "View"'
+                view_callout = mw.entity_tree.view_button_callout
+                assert view_callout is not None and view_callout.IsShown(), (
+                    'View button callout should be visible after downloading '
+                    'the first root resource'
+                )
+                
+                # Wait for site to finish downloading in advance
+                # so that test does not time out waiting for it to
+                # be dynamically downloaded when browsing to its
+                # URL in the archive.
+                # 
+                # TODO: When navigating to a URL that is already in the
+                #       process of being downloaded:
+                #       - Locate any existing download task for the URL, if any
+                #       - Show web page to the user with download progress
+                #         displayed in a progress bar.
+                #       - Reload page when download is complete.
+                #       See: https://github.com/davidfstr/Crystal-Web-Archiver/issues/109
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+                
+                assert home_ti.IsSelected(), \
+                    'First created root resource should already be selected'
+                home_url_in_archive = get_request_url(
+                    home_url,
+                    project_default_url_prefix=project.default_url_prefix)
+                with assert_does_open_webbrowser_to(home_url_in_archive):
+                    # Action 7 (Click): "View"
+                    action_count += 1
+                    click_button(mw.view_button)
+                
+                # Ensure downloaded page looks correct
+                page = await bg_fetch_url(home_url_in_archive)
+                assert not page.is_not_in_archive
+                assert 'Test Site Home' == page.title
+                assert page.status == 200
+                
+                # (NOTE: Not counting any actions from this point forward
+                #        because the goal of viewing the downloaded site is
+                #        considered complete with the visit of the first page.)
+                
+                # Ensure can navigate to second HTML page
+                assertRegex(page.content, r'<a href="[^"]+/about/">')
+                about_url_in_archive = urljoin(home_url_in_archive, '/about/')
+                page = await bg_fetch_url(about_url_in_archive)
+                assert not page.is_not_in_archive
+                assert 'About - Test Site' == page.title
+                assert page.status == 200
+                
+                # Ensure embedded image on second HTML page was also downloaded
+                assertRegex(page.content, r'<img src="[^"]+/about/profile.png"')
+                image_url_in_archive = urljoin(about_url_in_archive, '/about/profile.png')
+                page = await bg_fetch_url(image_url_in_archive)
+                assert not page.is_not_in_archive
+                assert page.status == 200
+    
+    assertEqual(7, action_count,
+        'Number of actions to perform workflow changed unexpectedly')
 
 
 @skip('(will be) covered by: ' + ', '.join([
@@ -159,7 +317,7 @@ async def test_first_time_user_can_easily_download_simple_site() -> None:
     #       browsing to download the rest of the site.
     'test_can_download_and_serve_a_site_requiring_cookie_authentication',
 ]))
-async def test_first_time_user_can_download_complex_site() -> None:
+async def test_first_time_user_can_download_and_view_complex_site() -> None:
     # ...if they read the documentation and have some patience
     pass
 
