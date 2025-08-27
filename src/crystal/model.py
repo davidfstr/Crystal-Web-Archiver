@@ -2463,7 +2463,9 @@ class Resource:
     Either created manually or discovered through a link from another resource.
     Persisted and auto-saved.
     """
-    _DEFER_ID = sys.intern('__defer__')  # type: Literal['__defer__']  # type: ignore[assignment]
+    # Special IDs, all <0
+    _DEFER_ID = -1  # type: Literal[-1]
+    _DELETED_ID = -2  # type: Literal[-2]
     
     # Optimize per-instance memory use, since there may be very many Resource objects
     __slots__ = (
@@ -2495,7 +2497,7 @@ class Resource:
     def __new__(cls, 
             project: Project,
             url: str,
-            _id: Union[None, int, Literal["__defer__"]]=None,
+            _id: Union[None, int]=None,
             ) -> Resource:
         """
         Looks up an existing resource with the specified URL or creates a new
@@ -2508,8 +2510,14 @@ class Resource:
         * project -- associated `Project`.
         * url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
         """
+        # Private API:
+        # - If _id == Resource._DEFER_ID, and there is no existing resource
+        #   corresponding to the URL in the project, the returned Resource
+        #   will not have a valid ID and report _is_finished_initializing() == False.
+        #   The caller will then be responsible for populating the ID later
+        #   using _finish_init().
         
-        if _id is None or _id is Resource._DEFER_ID:
+        if _id is None or _id == Resource._DEFER_ID:
             url_alternatives = cls.resource_url_alternatives(project, url)
             
             # Find first matching existing alternative URL, to provide
@@ -2551,7 +2559,7 @@ class Resource:
             # Can't have revisions because it was just created this session
             self._definitely_has_no_revisions = True
         
-        if _id is Resource._DEFER_ID:
+        if _id == Resource._DEFER_ID:
             self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         else:
             assert isinstance(_id, int)
@@ -3156,7 +3164,7 @@ class Resource:
         c = project._db.cursor()
         c.execute('delete from resource where id=?', (self._id,))
         project._db.commit()
-        self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
+        self._id = Resource._DELETED_ID
     
     # === Utility ===
     
