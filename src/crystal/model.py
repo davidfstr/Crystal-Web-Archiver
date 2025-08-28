@@ -1183,10 +1183,17 @@ class Project(ListenableMixin):
         ordering = 'desc' if most_recent_first else 'asc'
         
         c = self._db.cursor()
-        return [
-            rc for (rc,) in
-            c.execute(f'select distinct request_cookie from resource_revision where request_cookie is not null order by id {ordering}')
-        ]
+        try:
+            return [
+                rc for (rc,) in
+                c.execute(f'select distinct request_cookie from resource_revision where request_cookie is not null order by id {ordering}')
+            ]
+        except Exception as e:
+            if is_no_such_column_error_for('request_cookie', e):
+                # Fetch from <=1.2.0 database schema
+                return []
+            else:
+                raise
     
     def _get_min_fetch_date(self) -> datetime.datetime | None:
         return self._min_fetch_date

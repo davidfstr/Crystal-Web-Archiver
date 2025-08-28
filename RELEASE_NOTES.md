@@ -57,6 +57,8 @@ Release Notes ⋮
 * Minor fixes
     * Fix inability to browse the entity tree of some readonly projects.
       Impact was limited primarily to very old readonly projects.
+    * Fix inability to open preferences/settings dialog of readonly projects
+      created with Crystal <=1.2.0.
     * Most dialogs are now shown as window-modal rather than modeless to
       prevent certain types of concurrent edits to a project that Crystal
       isn't designed to handle.
