@@ -196,12 +196,12 @@ Code contributions to Crystal from users are welcome, particularly if you want
 to add specialized support for downloading a site you care about that Crystal
 doesn't already well-support.
 
-**Note on Licensing:** While Crystal uses a noncommercial license rather than 
-a traditional open source license, this does not prevent you from 
+**Note on Licensing:** Crystal uses a noncommercial license rather than 
+a traditional open source license, but this does not prevent you from 
 contributing code. Contributors retain full rights to their contributions and 
-can use their contributed code in other projects under any license they choose. 
+can use their contributed code in other projects under any license they choose.
 See the [License FAQ](https://github.com/davidfstr/Crystal-Web-Archiver/wiki/License-FAQ) 
-for more details about Crystal's license.
+for more details.
 
 If you'd like to request a feature, report a bug, or ask a question, please create
 [a new GitHub Issue](https://github.com/davidfstr/Crystal-Web-Archiver/issues/new),
@@ -210,6 +210,8 @@ with either the `type-feature`, `type-bug`, or `type-question` tag.
 If you'd like to help work on coding new features, please see
 the [code contributor workflow]. If you'd like to help moderate the community
 please see the [maintainer workflow].
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
 
 [code contributor workflow]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Contributor-Workflows#code-contributors
 [maintainer workflow]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Contributor-Workflows#maintainers
@@ -225,7 +227,7 @@ To **run the code locally**,
 run `poetry install` once in Terminal (Mac) or in Command Prompt (Windows), and
 `poetry run python -m crystal` thereafter.
 
-To **build new binaries** for Mac or Windows, follow the instructions at [COMPILING.txt].
+To **build new binaries** for Mac or Windows, follow the instructions at [COMPILING.txt](COMPILING.txt).
 
 To **run non-UI tests**, run `poetry run pytest` in Terminal (Mac) or in Command Prompt (Windows).
 
@@ -234,8 +236,6 @@ To **run UI tests**, run `poetry run python -m crystal --test` in Terminal (Mac)
 To **typecheck**, run `poetry run mypy` in Terminal (Mac) or in Command Prompt (Windows).
 
 To **sort imports**, run `poetry run isort .` in Terminal (Mac) or in Command Prompt (Windows).
-
-[COMPILING.txt]: COMPILING.txt
 
 
 Related Projects ⎋
