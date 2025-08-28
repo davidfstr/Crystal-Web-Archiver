@@ -46,7 +46,8 @@ from crystal.util.wx_dialog import (
 from crystal.util.wx_timer import Timer, TimerError
 from crystal.util.xcollections.iterables import is_iterable_empty, is_iterable_len_1
 from crystal.util.xos import (
-    is_kde_or_non_gnome, is_linux, is_mac_os, is_windows, mac_version,
+    is_kde_or_non_gnome, is_linux, is_mac_os, is_windows,
+    preferences_are_called_settings_in_this_os,
 )
 from crystal.util.xsqlite3 import (
     is_database_closed_error, is_database_gone_error,
@@ -264,14 +265,10 @@ class MainWindow(CloakMixin):
             enabled=True)
         
         # Edit
-        if is_mac_os():
-            mv = mac_version()
-            if mv is not None and mv >= [13]:
-                preferences_label = 'Settings...'
-            else:
-                preferences_label = 'Preferences...'
+        if preferences_are_called_settings_in_this_os():
+            preferences_label = 'Settings...'
         else:
-            preferences_label = ''  # OS default
+            preferences_label = ''  # 'Preferences...' (or OS default)
         self._preferences_action = Action(
             wx.ID_PREFERENCES,
             preferences_label,
@@ -281,7 +278,7 @@ class MainWindow(CloakMixin):
             enabled=True,
             button_label=decorate_label('⚙️', (
                 '&Preferences...'
-                if preferences_label in ('', 'Preferences...')
+                if preferences_label == ''
                 else preferences_label  # no mnemonic
             ), truncation_fix='')
         )

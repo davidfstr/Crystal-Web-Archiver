@@ -65,7 +65,8 @@ Release Notes ⋮
     * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
       instead of generic "Yes" and "No" buttons, following platform conventions.
     * The "Preferences..." / "Settings..." button in the main window now uses
-      the correct title based on OS conventions.
+      the correct title based on OS conventions. And the dialog which appears
+      after pressing the button uses a consistent title.
     * Fixed the "Dismiss" action on a crashed task to not itself crash!
 
 * Testing improvements

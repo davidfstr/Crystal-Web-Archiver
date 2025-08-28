@@ -6,7 +6,7 @@ from crystal.util.wx_dialog import (
     ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
-from crystal.util.xos import is_windows
+from crystal.util.xos import is_windows, preferences_are_called_settings_in_this_os
 import datetime
 from typing import Callable, Dict, TYPE_CHECKING
 from tzlocal import get_localzone
@@ -52,7 +52,15 @@ class PreferencesDialog:
         self._project = project
         self._on_close_callback = on_close or (lambda: None)
         
-        dialog = self.dialog = wx.Dialog(parent, title='Preferences', name='cr-preferences-dialog')
+        dialog = self.dialog = wx.Dialog(
+            parent,
+            title=(
+                'Settings'
+                if preferences_are_called_settings_in_this_os()
+                else 'Preferences'
+            ),
+            name='cr-preferences-dialog',
+        )
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
         dialog.SetSizer(dialog_sizer)
         bind(dialog, wx.EVT_BUTTON, self._on_button)

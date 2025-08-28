@@ -89,3 +89,16 @@ def is_ci() -> bool:
 
 def is_asan() -> bool:
     return os.environ.get('CRYSTAL_ADDRESS_SANITIZER') == 'True'
+
+
+# === Misc ===
+
+def preferences_are_called_settings_in_this_os() -> bool:
+    if is_mac_os():
+        mv = mac_version()
+        if mv is not None and mv >= [13]:
+            return True
+        else:
+            return False
+    else:
+        return False

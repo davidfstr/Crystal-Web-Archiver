@@ -135,7 +135,8 @@ Final testing:
 * Scroll down to see the "Request Headers" section and look for a "cookie" request header.
 * Copy the value of the "cookie" request header to a text file for safekeeping.
 * Open Crystal, either creating a new project or opening an existing project.
-* Click the "Preferences..." button, paste the cookie value in the text box, and click "OK".
+* Click the "Preferences..." / "Settings..." button,
+  paste the cookie value in the text box, and click "OK".
     * This cookie value will be remembered only while the project remains open.
       If you reopen Crystal again later you'll need to paste the cookie value in again.
 * Now download pages using Crystal as you would normally. The specified cookie
