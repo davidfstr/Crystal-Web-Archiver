@@ -192,6 +192,17 @@ The design is intended for the future addition of the following features:
 Contributing ⚒
 ------------
 
+Code contributions to Crystal from users are welcome, particularly if you want
+to add specialized support for downloading a site you care about that Crystal
+doesn't already well-support.
+
+**Note on Licensing:** While Crystal uses a noncommercial license rather than 
+a traditional open source license, this does not prevent you from 
+contributing code. Contributors retain full rights to their contributions and 
+can use their contributed code in other projects under any license they choose. 
+See the [License FAQ](https://github.com/davidfstr/Crystal-Web-Archiver/wiki/License-FAQ) 
+for more details about Crystal's license.
+
 If you'd like to request a feature, report a bug, or ask a question, please create
 [a new GitHub Issue](https://github.com/davidfstr/Crystal-Web-Archiver/issues/new),
 with either the `type-feature`, `type-bug`, or `type-question` tag.
@@ -248,6 +259,13 @@ License ⚖️
 Crystal is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.txt). 
 This means you may use Crystal for any noncommercial purpose, 
 but commercial use requires a separate license agreement.
+
+**This license does not restrict code contributions.** 
+Contributors retain all rights to their contributions and may use their 
+contributed code in other projects under any license they choose.
+
+For more information about Crystal's license please read the
+[License FAQ](https://github.com/davidfstr/Crystal-Web-Archiver/wiki/License-FAQ).
 
 For commercial licensing inquiries, please contact 
 [David Foster](https://dafoster.net/contact/).
