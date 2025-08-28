@@ -49,6 +49,10 @@ Release Notes ⋮
       mode by default so that remote users cannot modify a served project.
       Remote modifications can be explicitly enabled with `--no-readonly`.
 
+* Documentation improvements
+    * Contributing guidelines added as CONTRIBUTING.md.
+    * License FAQ drafted.
+
 * API changes
     * `Resource.bulk_get_or_create` is added as a replacement for
       `Resource.bulk_create`. The former function returns resources that were
