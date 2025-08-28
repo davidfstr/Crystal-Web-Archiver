@@ -32,10 +32,11 @@ Release Notes ⋮
       to make them easier to use together.
 
 * Branding changes
-    * Browser error pages are now appropriately styled and include
-      Crystal's branding elements.
+    * Crystal is now known as "Crystal: A Website Archiver" in long form.
     * Crystal's logo and contributor information is now displayed in the
       main window, alongside its version number.
+    * Browser error pages are now appropriately styled and include
+      Crystal's branding elements.
     * Licensing terms have been added: PolyForm Noncommercial 1.0.0
 
 * Downloading improvements

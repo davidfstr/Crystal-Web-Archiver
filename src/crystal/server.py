@@ -1980,7 +1980,7 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
                             class="logotext-dark"
                         />
                     </h1>
-                    <p class="brand-subtitle">Website Archiver</p>
+                    <p class="brand-subtitle">A Website Archiver</p>
                 </div>
             </div>
             
