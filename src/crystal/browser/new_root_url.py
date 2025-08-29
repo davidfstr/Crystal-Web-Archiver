@@ -70,6 +70,7 @@ class NewRootUrlDialog:
             initial_set_as_default_directory: bool=False,
             allow_set_as_default_domain_or_directory: bool=True,
             is_edit: bool=False,
+            readonly: bool=False,
             ) -> None:
         """
         Arguments:
@@ -84,6 +85,7 @@ class NewRootUrlDialog:
             (initial_set_as_default_domain or initial_set_as_default_directory)
         )
         self._is_edit = is_edit
+        self._readonly = readonly
         
         self._url_field_focused = False
         self._last_cleaned_url = None  # type: Optional[str]
@@ -93,7 +95,12 @@ class NewRootUrlDialog:
 
         dialog = self.dialog = wx.Dialog(
             parent,
-            title=('New Root URL' if not is_edit else 'Edit Root URL'),
+            title=(
+                'New Root URL' if not is_edit else (
+                    'Edit Root URL' if not readonly else 
+                    'Root URL'
+                )
+            ),
             name='cr-new-root-url-dialog',
             style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -191,7 +198,7 @@ class NewRootUrlDialog:
                     name='cr-new-root-url-dialog__url-field')
                 self._url_field.Hint = 'https://example.com/'
                 self._url_field.SetSelection(-1, -1)  # select all upon focus
-                self._url_field.Enabled = not is_edit
+                self._url_field.Enabled = not is_edit and not self._readonly
                 bind(self._url_field, wx.EVT_TEXT, self._on_url_field_changed)
                 bind(self._url_field, wx.EVT_SET_FOCUS, self._on_url_field_focus)
                 bind(self._url_field, wx.EVT_KILL_FOCUS, self._on_url_field_blur)
@@ -218,6 +225,7 @@ class NewRootUrlDialog:
                     name='cr-new-root-url-dialog__name-field')
                 self._name_field.Hint = 'e.g. Home'
                 self._name_field.SetSelection(-1, -1)  # select all upon focus
+                self._name_field.Enabled = not self._readonly
                 name_field_and_space.Add(self._name_field, proportion=1, flag=wx.EXPAND)
                 
                 #name_field_and_space.Add(
@@ -245,6 +253,7 @@ class NewRootUrlDialog:
             label='Download Immediately',
             name='cr-new-root-url-dialog__download-immediately-checkbox')
         self._download_immediately_checkbox.Value = True
+        self._download_immediately_checkbox.Enabled = not self._readonly
         options_sizer.Add(self._download_immediately_checkbox,
             flag=wx.BOTTOM,
             border=_FORM_LABEL_INPUT_SPACING)
@@ -254,6 +263,7 @@ class NewRootUrlDialog:
             label='Create Group to Download Entire Site',
             name='cr-new-root-url-dialog__create-group-checkbox')
         self._create_group_checkbox.Value = False
+        self._create_group_checkbox.Enabled = not self._readonly
         options_sizer.Add(self._create_group_checkbox,
             flag=wx.BOTTOM,
             border=5)
@@ -314,7 +324,7 @@ class NewRootUrlDialog:
             label='Set As Default Domain',
             name='cr-new-root-url-dialog__set-as-default-domain-checkbox')
         self._set_as_default_domain_checkbox.Value = initial_set_as_default_domain
-        self._set_as_default_domain_checkbox.Enabled = allow_set_as_default_domain_or_directory
+        self._set_as_default_domain_checkbox.Enabled = allow_set_as_default_domain_or_directory and not self._readonly
         options_sizer.Add(self._set_as_default_domain_checkbox,
             flag=wx.BOTTOM,
             border=_FORM_LABEL_INPUT_SPACING)
@@ -324,7 +334,7 @@ class NewRootUrlDialog:
             label='Set As Default Directory',
             name='cr-new-root-url-dialog__set-as-default-directory-checkbox')
         self._set_as_default_directory_checkbox.Value = initial_set_as_default_directory
-        self._set_as_default_directory_checkbox.Enabled = allow_set_as_default_domain_or_directory
+        self._set_as_default_directory_checkbox.Enabled = allow_set_as_default_domain_or_directory and not self._readonly
         options_sizer.Add(self._set_as_default_directory_checkbox)
         
         bind(parent, wx.EVT_CHECKBOX, self._on_checkbox)
@@ -343,9 +353,12 @@ class NewRootUrlDialog:
             border=_WINDOW_INNER_PADDING)
         
         button_sizer.AddStretchSpacer()
-        button_sizer.Add(CreateButtonSizer(parent, ok_button_id, wx.ID_CANCEL), flag=wx.CENTER)
+        if self._readonly:
+            button_sizer.Add(CreateButtonSizer(parent, cancel_id=wx.ID_CANCEL), flag=wx.CENTER)
+        else:
+            button_sizer.Add(CreateButtonSizer(parent, ok_button_id, wx.ID_CANCEL), flag=wx.CENTER)
         
-        self._ok_button = parent.FindWindow(id=ok_button_id)
+        self._ok_button = parent.FindWindow(id=ok_button_id)  # possibly None
         self._cancel_button = parent.FindWindow(id=wx.ID_CANCEL)
         
         return button_sizer
@@ -481,7 +494,8 @@ class NewRootUrlDialog:
         if self._url_cleaner is not None:
             self._url_field.Enabled = False
             self._name_field.Enabled = False
-            self._ok_button.Enabled = False
+            if self._ok_button is not None:
+                self._ok_button.Enabled = False
             assert self._cancel_button.Enabled == True
             
             self._was_ok_pressed = True
@@ -503,7 +517,8 @@ class NewRootUrlDialog:
             
             self._url_field.Enabled = True
             self._name_field.Enabled = True
-            self._ok_button.Enabled = True
+            if self._ok_button is not None:
+                self._ok_button.Enabled = True
             assert self._cancel_button.Enabled == True
             return
         if self._set_as_default_domain_checkbox.Value:
@@ -589,7 +604,8 @@ class NewRootUrlDialog:
         )
     
     def _update_ok_enabled(self) -> None:
-        self._ok_button.Enabled = (self._url_field.Value != '')
+        if self._ok_button is not None:
+            self._ok_button.Enabled = (self._url_field.Value != '')
 
 
 def fields_hide_hint_when_focused() -> bool:

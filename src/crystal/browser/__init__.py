@@ -223,6 +223,12 @@ class MainWindow(CloakMixin):
     
     # === Actions ===
     
+    _EDIT_ACTION_LABEL = '&Edit...'
+    _GET_INFO_ACTION_LABEL = 'G&et Info...'
+    
+    _EDIT_ACTION_BUTTON_LABEL = decorate_label('✏️', '&Edit...', '')
+    _GET_INFO_ACTION_BUTTON_LABEL = decorate_label('🔍', 'G&et Info...', '')
+    
     def _create_actions(self) -> None:
         # File
         self._new_project_action = Action(
@@ -301,11 +307,15 @@ class MainWindow(CloakMixin):
             button_bitmap=dict(DEFAULT_FOLDER_ICON_SET())[wx.TreeItemIcon_Normal],
             button_label='New &Group...')
         self._edit_action = Action(wx.ID_ANY,
-            '&Edit...',
+            self._EDIT_ACTION_LABEL if not self._readonly else self._GET_INFO_ACTION_LABEL,
             accel=wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_RETURN),
             action_func=self._on_edit_entity,
             enabled=False,
-            button_label=decorate_label('✏️', '&Edit...', ''))
+            button_label=(
+                self._EDIT_ACTION_BUTTON_LABEL
+                if not self._readonly else
+                self._GET_INFO_ACTION_BUTTON_LABEL
+            ))
         self._forget_action = Action(wx.ID_ANY,
             '&Forget',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, wx.WXK_BACK),
@@ -699,6 +709,13 @@ class MainWindow(CloakMixin):
         # Update actions
         self._new_root_url_action.enabled = not self._readonly
         self._new_group_action.enabled = not self._readonly
+        if self._readonly:
+            self._edit_action.label = self._GET_INFO_ACTION_LABEL
+            self._edit_action.button_label = self._GET_INFO_ACTION_BUTTON_LABEL
+        else:
+            self._edit_action.label = self._EDIT_ACTION_LABEL
+            self._edit_action.button_label = self._EDIT_ACTION_BUTTON_LABEL
+        
         self._on_selected_entity_changed()
         
         # Update status bar
@@ -1124,6 +1141,7 @@ class MainWindow(CloakMixin):
                     selection_dir_prefix is not None
                 ),
                 is_edit=True,
+                readonly=self._readonly,
             )
         elif isinstance(selected_entity, ResourceGroup):
             rg = selected_entity
@@ -1138,7 +1156,9 @@ class MainWindow(CloakMixin):
                     initial_source=rg.source,
                     initial_name=rg.name,
                     initial_do_not_download=rg.do_not_download,
-                    is_edit=True)
+                    is_edit=True,
+                    readonly=self._readonly
+                )
             except CancelLoadUrls:
                 pass
         else:
@@ -1317,7 +1337,6 @@ class MainWindow(CloakMixin):
         
         readonly = self._readonly  # cache
         self._edit_action.enabled = (
-            (not readonly) and
             isinstance(selected_entity, (ResourceGroup, RootResource)))
         self._forget_action.enabled = (
             (not readonly) and
@@ -1719,7 +1738,7 @@ class MainWindow(CloakMixin):
     
     def _update_read_write_icon_for_readonly_status(self) -> None:
         readonly = self._readonly  # cache
-        
+
         if readonly:
             rwi_label = '🔒' if not is_windows() else 'Read only'
             rwi_tooltip = 'Read only project'  # type: str

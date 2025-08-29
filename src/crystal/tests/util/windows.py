@@ -484,7 +484,7 @@ class NewRootUrlDialog:
     url_field: wx.TextCtrl
     url_cleaner_spinner: wx.ActivityIndicator
     name_field: wx.TextCtrl
-    ok_button: wx.Button
+    ok_button: wx.Button  # or None
     cancel_button: wx.Button
     
     download_immediately_checkbox: wx.CheckBox  # or None
@@ -510,7 +510,11 @@ class NewRootUrlDialog:
         self.ok_button = self._dialog.FindWindow(id=wx.ID_NEW)
         if self.ok_button is None:
             self.ok_button = self._dialog.FindWindow(id=wx.ID_SAVE)
-        assert isinstance(self.ok_button, wx.Button)
+        # OK button may not exist in readonly mode
+        assert (
+            self.ok_button is None or
+            isinstance(self.ok_button, wx.Button)
+        )
         self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
         assert isinstance(self.cancel_button, wx.Button)
         
@@ -555,6 +559,8 @@ class NewRootUrlDialog:
         )
     
     async def ok(self) -> None:
+        if self.ok_button is None:
+            raise ValueError("Cannot click OK button - dialog is in readonly mode")
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-new-root-url-dialog')), stacklevel_extra=1)
     
@@ -606,9 +612,11 @@ class NewGroupDialog:
     preview_members_pane: wx.CollapsiblePane | None
     preview_members_list: wx.ListBox
     cancel_button: wx.Button
-    ok_button: wx.Button
+    ok_button: wx.Button | None
     
     download_immediately_checkbox: wx.CheckBox  # or None
+    
+    do_not_download_checkbox: wx.CheckBox
     
     @staticmethod
     async def wait_for() -> NewGroupDialog:
@@ -637,13 +645,20 @@ class NewGroupDialog:
         self.ok_button = self._dialog.FindWindow(id=wx.ID_NEW)
         if self.ok_button is None:
             self.ok_button = self._dialog.FindWindow(id=wx.ID_SAVE)
-        assert isinstance(self.ok_button, wx.Button)
+        # OK button may not exist in readonly mode
+        assert (
+            self.ok_button is None or
+            isinstance(self.ok_button, wx.Button)
+        )
         
         self.download_immediately_checkbox = self._dialog.FindWindow(name='cr-new-group-dialog__download-immediately-checkbox')
         assert (
             self.download_immediately_checkbox is None or
             isinstance(self.download_immediately_checkbox, wx.CheckBox)
         )
+        
+        self.do_not_download_checkbox = self._dialog.FindWindow(name='cr-new-group-dialog__do-not-download-checkbox')
+        assert isinstance(self.do_not_download_checkbox, wx.CheckBox)
         
         return self
     
@@ -704,6 +719,8 @@ class NewGroupDialog:
         )
     
     async def ok(self) -> None:
+        if self.ok_button is None:
+            raise ValueError("Cannot click OK button. Dialog is in readonly mode.")
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-new-group-dialog')), stacklevel_extra=1)
     

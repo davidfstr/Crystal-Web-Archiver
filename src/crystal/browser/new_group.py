@@ -44,6 +44,7 @@ class NewGroupDialog:
             initial_name: str='',
             initial_do_not_download: bool=False,
             is_edit: bool=False,
+            readonly: bool=False,
             ) -> None:
         """
         Arguments:
@@ -61,6 +62,7 @@ class NewGroupDialog:
         self._on_finish = on_finish
         self._saving_source_would_create_cycle_func = saving_source_would_create_cycle_func
         self._is_edit = is_edit
+        self._readonly = readonly
         
         # Show progress dialog in advance if will need to load all project URLs
         try:
@@ -70,7 +72,13 @@ class NewGroupDialog:
         
         dialog = self.dialog = wx.Dialog(
             parent,
-            title=('New Group' if not is_edit else 'Edit Group'),
+            title=(
+                'New Group' if not is_edit else 
+                (
+                    'Edit Group' if not readonly else 
+                    'Group'
+                )
+            ),
             name='cr-new-group-dialog',
             style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         dialog_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -153,7 +161,7 @@ class NewGroupDialog:
         bind(self.pattern_field, wx.EVT_TEXT, self._on_pattern_field_changed)
         self.pattern_field.Hint = 'https://example.com/post/*'
         self.pattern_field.SetSelection(-1, -1)  # select all upon focus
-        self.pattern_field.Enabled = not is_edit
+        self.pattern_field.Enabled = not is_edit and not self._readonly
         pattern_field_sizer.Add(self.pattern_field, flag=wx.EXPAND)
         pattern_field_sizer.Add(wx.StaticText(parent, label='# = numbers, @ = letters, * = anything but /, ** = anything'), flag=wx.EXPAND)
         
@@ -182,6 +190,7 @@ class NewGroupDialog:
                     ResourceGroupNode.ICON_TRUNCATION_FIX),
                 rg)
         self.source_choice_box.SetSelection(0)
+        self.source_choice_box.Enabled = not self._readonly
         if initial_source is not None:
             for i in range(self.source_choice_box.GetCount()):
                 cur_source = self.source_choice_box.GetClientData(i)
@@ -196,6 +205,7 @@ class NewGroupDialog:
             name='cr-new-group-dialog__name-field')
         self.name_field.Hint = 'e.g. Post'
         self.name_field.SetSelection(-1, -1)  # select all upon focus
+        self.name_field.Enabled = not self._readonly
         fields_sizer.Add(self.name_field, flag=wx.EXPAND)
         
         return fields_sizer
@@ -268,6 +278,7 @@ class NewGroupDialog:
             label='Download Group Immediately',
             name='cr-new-group-dialog__download-immediately-checkbox')
         self._download_immediately_checkbox.Value = False
+        self._download_immediately_checkbox.Enabled = not self._readonly
         options_sizer.Add(self._download_immediately_checkbox,
             flag=wx.BOTTOM,
             border=_FORM_LABEL_INPUT_SPACING)
@@ -294,6 +305,7 @@ class NewGroupDialog:
             parent, label='Do not download members when embedded',
             name='cr-new-group-dialog__do-not-download-checkbox')
         self.do_not_download_checkbox.Value = initial_do_not_download
+        self.do_not_download_checkbox.Enabled = not self._readonly
         options_sizer.Add(self.do_not_download_checkbox,
             flag=wx.BOTTOM,
             border=_FORM_LABEL_INPUT_SPACING)
@@ -405,7 +417,10 @@ class NewGroupDialog:
             border=_WINDOW_INNER_PADDING)
         
         button_sizer.AddStretchSpacer()
-        button_sizer.Add(CreateButtonSizer(parent, ok_button_id, wx.ID_CANCEL), flag=wx.CENTER)
+        if self._readonly:
+            button_sizer.Add(CreateButtonSizer(parent, cancel_id=wx.ID_CANCEL), flag=wx.CENTER)
+        else:
+            button_sizer.Add(CreateButtonSizer(parent, ok_button_id, wx.ID_CANCEL), flag=wx.CENTER)
         return button_sizer
     
     # === Operations ===

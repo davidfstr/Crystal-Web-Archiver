@@ -2,22 +2,32 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import Project, Resource, RootResource
-from crystal.tests.util.controls import TreeItem
+# TODO: Extract shared utilities to own module
+from crystal.tests.test_untitled_projects import (
+    _temporary_directory_on_new_filesystem,
+    _untitled_project,
+)
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
+from crystal.tests.util.controls import TreeItem, click_button
 from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.save_as import save_as_with_ui
-from crystal.tests.util.server import MockHttpServer, served_project
+from crystal.tests.util.server import MockHttpServer, served_project, extracted_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done, wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import wait_for, first_child_of_tree_item_is_not_loading_condition
-from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog, NewGroupDialog, NewRootUrlDialog
+from crystal.util.db import DatabaseCursor
+from crystal.util.wx_dialog import mocked_show_modal
 import crystal.tests.util.xtempfile as xtempfile
 from crystal.util.xos import is_mac_os, is_windows
 import os
+import sqlite3
 import stat
-import subprocess
 from textwrap import dedent
 from unittest import skip
+from unittest.mock import patch
+import wx
 
 # ------------------------------------------------------------------------------
 # Test: Open Project as Readonly
@@ -250,6 +260,189 @@ async def test_when_readonly_project_is_saved_then_becomes_writable_and_all_unsa
                     assert comic2_r._id != Resource._UNSAVED_ID
                     assert isinstance(comic2_r._id, int)
                     assert comic2_r._id > 0
+
+
+async def test_given_readonly_project_then_edit_button_titled_get_info_and_when_clicked_opens_readonly_dialog() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        comic_pattern = 'https://xkcd.com/#/'
+        
+        # Open project as readonly
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
+            assert mw.readonly == True
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            
+            # Test with RootResource
+            if True:
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None
+                home_ti.SelectItem()
+                
+                assert mw.edit_button.Enabled
+                assertIn('Get Info', mw.edit_button.Label)
+                
+                # Click edit button to open dialog. Verify dialog is in readonly mode.
+                click_button(mw.edit_button)
+                if True:
+                    nrud = await NewRootUrlDialog.wait_for()
+                    
+                    assertEqual('Root URL', nrud._dialog.Title)
+                    
+                    # Verify fields are disabled
+                    assert not nrud.url_field.Enabled
+                    assert not nrud.name_field.Enabled
+                    
+                    # Verify Advanced Options fields are disabled
+                    assert not nrud.set_as_default_domain_checkbox.Enabled
+                    assert not nrud.set_as_default_directory_checkbox.Enabled
+                    
+                    # Verify only Cancel button is present
+                    assert nrud.cancel_button is not None
+                    assert nrud.ok_button is None
+                    
+                    await nrud.cancel()
+            
+            # Test with ResourceGroup
+            if True:
+                comic_ti = root_ti.find_child(comic_pattern)
+                comic_ti.SelectItem()
+                
+                assert mw.edit_button.Enabled
+                assertIn('Get Info', mw.edit_button.Label)
+                
+                # Click edit button to open dialog. Verify dialog is in readonly mode.
+                click_button(mw.edit_button)
+                ngd = await NewGroupDialog.wait_for()
+                if True:
+                    assertEqual('Group', ngd._dialog.Title)
+                    
+                    # Verify fields are disabled
+                    assert not ngd.pattern_field.Enabled
+                    assert not ngd.source_field.Enabled
+                    assert not ngd.name_field.Enabled
+                    assert ngd.download_immediately_checkbox is None
+                    
+                    # Verify Advanced Options fields are disabled
+                    assert not ngd.do_not_download_checkbox.Enabled
+                    
+                    # Verify only Cancel button is present
+                    assert ngd.cancel_button is not None
+                    assert ngd.ok_button is None
+                    
+                    await ngd.cancel()
+
+
+async def test_when_writable_project_becomes_readonly_then_edit_button_becomes_get_info() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            _untitled_project() as project, \
+            RealMainWindow(project) as rmw, \
+            _temporary_directory_on_new_filesystem() as save_dir:
+        mw = await MainWindow.wait_for(timeout=1)
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Add some data to the project to ensure there's something to copy
+        r = Resource(project, atom_feed_url)
+        root_resource = RootResource(project, 'Atom Feed', r)
+        rr_future = r.download()
+        await step_scheduler_until_done(project)
+        
+        # Verify project starts as writable with "Edit" button
+        assert not project.readonly
+        assert not mw.readonly
+        
+        # Wait for entity tree to populate and select an item
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        await wait_for(lambda: len(root_ti.Children) >= 1)
+        root_ti.Children[0].SelectItem()  # Select the root resource
+        
+        # Verify initial state: button should say "Edit"
+        assert mw.edit_button.Enabled
+        assertIn('Edit', mw.edit_button.Label)
+        assertNotIn('Get Info', mw.edit_button.Label)
+        
+        save_path = os.path.join(save_dir, 'SqliteUnwritableProject.crystalproj')
+        
+        # Mock DatabaseCursor.execute to fail on the specific SQLite pragma
+        # that checks database writability
+        original_execute = DatabaseCursor.execute
+        def spy_execute(self, command: str, *args, **kwargs):
+            if command == 'pragma user_version = user_version':
+                raise sqlite3.OperationalError('attempt to write a readonly database')
+            return original_execute(self, command, *args, **kwargs)
+        
+        # Run the save operation
+        with patch.object(DatabaseCursor, 'execute', spy_execute), \
+                patch('crystal.browser.ShowModal', mocked_show_modal(
+                    'cr-save-error-dialog', wx.ID_OK)):
+            await save_as_with_ui(rmw, save_path)
+        
+        assert project.readonly, \
+            'Expected project to be reopened as read-only after SQLite error'
+        assert mw.readonly, \
+            'Expected UI to show that project was reopened as read-only'
+        
+        # Verify button text changed to "Get Info"
+        # HACK: The preceding call to save_as_with_ui() doesn't always
+        #       wait until the UI is fully updated
+        await wait_for(lambda: mw.edit_button.Enabled or None)
+        assertIn('Get Info', mw.edit_button.Label)
+        assertNotIn('Edit', mw.edit_button.Label)
+
+
+async def test_when_readonly_project_becomes_writable_then_get_info_button_becomes_edit() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            xtempfile.TemporaryDirectory() as tmp_dir:
+        
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        
+        # Create a titled project with some data, initially writable
+        original_project_path = os.path.join(tmp_dir, 'OriginalProject.crystalproj')
+        with Project(original_project_path) as project:
+            assert not project.readonly, 'Original project should be writable'
+            
+            # Download a resource revision
+            r = Resource(project, atom_feed_url)
+            root_resource = RootResource(project, 'Atom Feed', r)
+            rr_future = r.download()
+            await step_scheduler_until_done(project)
+            rr = rr_future.result()
+        
+        # Reopen the project as readonly
+        with Project(original_project_path, readonly=True) as readonly_project, \
+                RealMainWindow(readonly_project) as rmw:
+            mw = await MainWindow.wait_for(timeout=1)
+            assert readonly_project.readonly, 'Project should be opened as readonly'
+            assert mw.readonly, 'UI should show project as readonly'
+            
+            # Wait for entity tree to populate and select an item
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            await wait_for(lambda: len(root_ti.Children) >= 1)
+            root_ti.Children[0].SelectItem()  # Select the root resource
+            
+            # Verify initial state: button should say "Get Info"
+            assert mw.edit_button.Enabled
+            assertIn('Get Info', mw.edit_button.Label)
+            assertNotIn('Edit', mw.edit_button.Label)
+            
+            # Perform Save As to make the project writable
+            copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
+            await save_as_with_ui(rmw, copy_project_path)
+            
+            # Verify project is now writable
+            assert not readonly_project.readonly, \
+                'Project should be writable after save_as'
+            assert not mw.readonly, \
+                'UI should show project as writable after save_as'
+            
+            # Verify button text changed to "Edit"
+            # HACK: The preceding call to save_as_with_ui() doesn't always
+            #       wait until the UI is fully updated
+            await wait_for(lambda: mw.edit_button.Enabled or None)
+            assertIn('Edit', mw.edit_button.Label)
+            assertNotIn('Get Info', mw.edit_button.Label)
 
 
 # ------------------------------------------------------------------------------

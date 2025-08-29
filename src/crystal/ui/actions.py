@@ -48,6 +48,17 @@ class Action:
             b.Label = wx.Control.RemoveMnemonics(label)
     label = property(_get_label, _set_label)
     
+    def _get_button_label(self) -> str:
+        return self._button_label
+    def _set_button_label(self, button_label: str) -> None:
+        self._button_label = button_label
+        for b in self._buttons:
+            effective_button_label = self._button_label or self._label
+            if is_mac_os():
+                effective_button_label = wx.Control.RemoveMnemonics(effective_button_label)
+            b.Label = effective_button_label
+    button_label = property(_get_button_label, _set_button_label)
+    
     def _get_enabled(self) -> bool:
         return self._enabled
     def _set_enabled(self, enabled: bool) -> None:

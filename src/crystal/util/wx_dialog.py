@@ -250,7 +250,7 @@ def set_dialog_or_frame_icon_if_appropriate(tlw: wx.TopLevelWindow) -> None:
 
 def CreateButtonSizer(
         parent: wx.Dialog,
-        affirmative_id,
+        affirmative_id: int | None=None,
         cancel_id=wx.ID_CANCEL,
         ) -> wx.Sizer:
     """
@@ -259,9 +259,10 @@ def CreateButtonSizer(
     """
     sizer = wx.StdDialogButtonSizer()
     
-    affirmative_button = wx.Button(parent, affirmative_id)
-    affirmative_button.SetDefault()
-    sizer.SetAffirmativeButton(affirmative_button)
+    if affirmative_id is not None:
+        affirmative_button = wx.Button(parent, affirmative_id)
+        affirmative_button.SetDefault()
+        sizer.SetAffirmativeButton(affirmative_button)
     
     sizer.SetCancelButton(wx.Button(parent, cancel_id))
     
