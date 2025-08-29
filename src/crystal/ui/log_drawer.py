@@ -31,6 +31,7 @@ _COLOR_CODES = OrderedDict([
     (cli.TERMINAL_FG_RED,    _hexcolor_to_color('#C33820')),
     (cli.TERMINAL_FG_YELLOW, _hexcolor_to_color('#AEAD24')),
     (cli.TERMINAL_FG_CYAN,   _hexcolor_to_color('#33BBC7')),
+    (cli.TERMINAL_FG_PURPLE, _hexcolor_to_color('#D43BD2')),
 ])  # type: Dict[str, wx.Colour]
 _RESET_CODE = cli.TERMINAL_RESET
 

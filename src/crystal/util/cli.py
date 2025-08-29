@@ -17,26 +17,28 @@ TERMINAL_FG_CYAN =          '\033[0;36m'
 TERMINAL_FG_BOLD_CYAN =     '\033[1;36m'
 TERMINAL_FG_YELLOW =        '\033[0;33m'
 TERMINAL_FG_BOLD_YELLOW =   '\033[1;33m'
+TERMINAL_FG_PURPLE =        '\033[0;35m'
+TERMINAL_FG_BOLD_PURPLE =   '\033[1;35m'
 TERMINAL_RESET =            '\033[0m'
 
 
 def print_success(message: str, file: TextIOBase | None=None) -> None:
-    print(_colorize(TERMINAL_FG_GREEN, message), file=file)
+    print(colorize(TERMINAL_FG_GREEN, message), file=file)
 
 
 def print_error(message: str, file: TextIOBase | None=None) -> None:
-    print(_colorize(TERMINAL_FG_RED, message), file=file)
+    print(colorize(TERMINAL_FG_RED, message), file=file)
 
 
 def print_warning(message: str, file: TextIOBase | None=None) -> None:
-    print(_colorize(TERMINAL_FG_YELLOW, message), file=file)
+    print(colorize(TERMINAL_FG_YELLOW, message), file=file)
 
 
 def print_info(message: str, file: TextIOBase | None=None) -> None:
-    print(_colorize(TERMINAL_FG_CYAN, message), file=file)
+    print(colorize(TERMINAL_FG_CYAN, message), file=file)
 
 
-def _colorize(color_code: str, str_value: str) -> str:
+def colorize(color_code: str, str_value: str) -> str:
     return (color_code + str_value + TERMINAL_RESET) if _USE_COLORS else str_value
 
 

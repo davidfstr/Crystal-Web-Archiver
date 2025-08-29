@@ -9,18 +9,20 @@ from collections.abc import Callable, Generator
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
-    Project, Resource, ResourceGroup, ResourceRevision, RootResource,
+    Project, Resource, ResourceGroup, ResourceRevision,
+    RootResource,
 )
 from crystal import resources
+from crystal.predict_group import detect_regular_group, detect_sequential_groups
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
-    print_error, print_info, print_success, print_warning,
+    TERMINAL_FG_PURPLE, colorize, print_error, print_info, print_success, print_warning,
 )
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import (
-    bg_affinity, bg_call_later, fg_call_and_wait,
-    run_thread_switching_coroutine, SwitchToThread,
+    bg_affinity, bg_call_later, fg_call_and_wait, run_thread_switching_coroutine,
+    SwitchToThread,
 )
 import datetime
 from html import escape as html_escape  # type: ignore[attr-defined]
@@ -28,12 +30,14 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import TextIOBase
 import json
+import os
 import re
 import socket
 import socketserver
 import sys
 from textwrap import dedent
 import time
+import traceback
 from typing import Literal, Optional, TYPE_CHECKING
 from typing_extensions import override
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
@@ -714,33 +718,41 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @bg_affinity
     def _redirect_to_archive_url_if_referer_is_self(self) -> bool:
         dynamic_ok = self._dynamic_ok()  # cache
+        if not dynamic_ok:
+            return False
         
+        referer_archive_url = self.referer_archive_url
+        if referer_archive_url is None:
+            return False
+        
+        referer_archive_urlparts = urlparse(referer_archive_url)
+        assert isinstance(referer_archive_urlparts.scheme, str)
+        assert isinstance(referer_archive_urlparts.netloc, str)
+        requested_archive_url = '{}://{}{}'.format(
+            referer_archive_urlparts.scheme,
+            referer_archive_urlparts.netloc,
+            self.path,
+        )
+        redirect_url = self.get_request_url(requested_archive_url)
+        
+        self._print_warning('*** Dynamically rewriting link from {}: {}'.format(
+            referer_archive_url,
+            requested_archive_url,
+        ))
+        
+        self.send_redirect(redirect_url, vary_referer=True)
+        return True
+    
+    @property
+    def referer_archive_url(self) -> str | None:
         referer = self.referer  # cache
-        if referer is not None and dynamic_ok:
+        if referer is not None:
             referer_urlparts = urlparse(referer)
             if ((referer_urlparts.netloc == '' and referer_urlparts.path.startswith('/')) or 
                     referer_urlparts.netloc == self._server_host):
                 referer_archive_url = self.get_archive_url(referer_urlparts.path)
-                if referer_archive_url is not None:
-                    referer_archive_urlparts = urlparse(referer_archive_url)
-                    assert isinstance(referer_archive_urlparts.scheme, str)
-                    assert isinstance(referer_archive_urlparts.netloc, str)
-                    requested_archive_url = '{}://{}{}'.format(
-                        referer_archive_urlparts.scheme,
-                        referer_archive_urlparts.netloc,
-                        self.path,
-                    )
-                    redirect_url = self.get_request_url(requested_archive_url)
-                    
-                    self._print_warning('*** Dynamically rewriting link from {}: {}'.format(
-                        referer_archive_url,
-                        requested_archive_url,
-                    ))
-                    
-                    self.send_redirect(redirect_url, vary_referer=True)
-                    return True
-        
-        return False
+                return referer_archive_url
+        return None
     
     # --- Handle: Download Request ---
     
@@ -978,6 +990,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @bg_affinity
     def send_resource_not_in_archive(self, archive_url: str) -> None:
+        self._predict_groups(
+            archive_url=archive_url
+        )
+        
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
@@ -1079,6 +1095,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         # Try extract revision datetime from Date header
         revision_datetime = revision.date
+        
+        self._predict_groups(
+            archive_url=revision.resource.url,
+            archive_url_is_html=revision.is_html
+        )
         
         # Send status line
         self.send_response_without_extra_headers(
@@ -1264,6 +1285,76 @@ class _RequestHandler(BaseHTTPRequestHandler):
         request_url = urlunparse(request_url_parts)
         return request_url
     
+    # === Predict Groups ===
+    
+    def _predict_groups(self, archive_url: str, archive_url_is_html: bool=True) -> None:
+        """
+        Predicts the properties of the best new resource group containing the
+        archive_url, printing the properties to the terminal.
+        
+        Is only enabled when environment variable CRYSTAL_PREDICT_GROUPS=1.
+        """
+        if not (os.environ.get('CRYSTAL_PREDICT_GROUPS', '0') == '1' and archive_url_is_html):
+            return
+        
+        try:
+            # Inputs
+            #archive_url = ... (function parameter)
+            referrer_archive_url = self.referer_archive_url
+            
+            # Outputs
+            if True:
+                found_group = False
+                
+                # Look for best matching regular group
+                best_group_info = detect_regular_group(
+                    self.project, archive_url, referrer_archive_url)
+                if best_group_info is not None:
+                    found_group = True
+                    best_group = (
+                        self.project.get_resource_group(url_pattern=best_group_info.url_pattern)
+                        if best_group_info.url_pattern is not None
+                        else None
+                    )
+                    prediction_msg = (
+                        f"[PREDICT] Regular group:\n"
+                        f"    a: {referrer_archive_url!r}\n"
+                        f"    b: {archive_url!r}\n"
+                        f"    A: {best_group_info.source!r}\n"
+                        f"    B: {best_group or best_group_info.url_pattern!r}"
+                    )
+                    self._print_special(prediction_msg)
+                
+                # Look for best matching sequential groups
+                sequential_group_infos = list(detect_sequential_groups(
+                    self.project, archive_url, referrer_archive_url))
+                if len(sequential_group_infos) > 0:
+                    found_group = True
+                    for group_info in sequential_group_infos:
+                        best_group = (
+                            self.project.get_resource_group(url_pattern=group_info.url_pattern)
+                            if group_info.url_pattern is not None
+                            else None
+                        )
+                        prediction_msg = (
+                            f"[PREDICT] Sequential group {group_info.first_page_ordinal}..{group_info.last_page_ordinal}:\n"
+                            f"    a: {referrer_archive_url!r}\n"
+                            f"    b: {archive_url!r}\n"
+                            f"    A: {group_info.source!r}\n"
+                            f"    B: {best_group or group_info.url_pattern!r}"
+                        )
+                        self._print_special(prediction_msg)
+                
+                if not found_group:
+                    prediction_msg = (
+                        f"[PREDICT] No groups identified:\n"
+                        f"    a: {referrer_archive_url!r}\n"
+                        f"    b: {archive_url!r}"
+                    )
+                    self._print_special(prediction_msg)
+        except Exception as e:
+            self._print_special(f"*** [PREDICT] Error in heuristic:\n{traceback.format_exc()}")
+    
     # === Utility: Request Accessors ===
     
     def _dynamic_ok(self) -> bool:
@@ -1301,6 +1392,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
         if self._verbosity == 'indent':
             message = '    ' + message  # reinterpret
         print_error(message, file=self._stdout)
+    
+    # Useful for debugging
+    def _print_special(self, message: str) -> None:
+        if self._verbosity == 'indent':
+            message = '    ' + message  # reinterpret
+        print(colorize(TERMINAL_FG_PURPLE, message), file=self._stdout)
     
     @property
     def _verbosity(self) -> Verbosity:

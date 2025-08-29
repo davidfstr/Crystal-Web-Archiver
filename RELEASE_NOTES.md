@@ -48,6 +48,12 @@ Release Notes ⋮
     * When serving from a remote `--host`, projects are opened in `--readonly`
       mode by default so that remote users cannot modify a served project.
       Remote modifications can be explicitly enabled with `--no-readonly`.
+    * **Experimental**: Resource group pattern prediction. When enabled with
+      `CRYSTAL_PREDICT_GROUPS=1`, Crystal will analyze the current URL and
+      referrer when visiting non-archived pages to predict suitable URL patterns
+      and sources for creating resource groups. This is intended to support
+      future dynamic browsing features. Predictions are printed to the terminal
+      with special `[PREDICT]` formatting.
 
 * Documentation improvements
     * Contributing guidelines added as CONTRIBUTING.md.
