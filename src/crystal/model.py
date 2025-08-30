@@ -1485,13 +1485,29 @@ class Project(ListenableMixin):
         """Returns all resource in the project that have been loaded into memory."""
         return self._resource_for_id.values()
     
-    # TODO: Add "id" filtering kwarg, similar to get_resource_group(),
-    #       so that {_get_resource_with_id}
-    #       is unnecessary
     @fg_affinity
-    def get_resource(self, url: str) -> Resource | None:
-        """Returns the `Resource` with the specified URL or None if no such resource exists."""
-        
+    def get_resource(self,
+            # NOTE: "url" is NOT a keyword-only argument for backward compatibility
+            url: str | _Missing = _Missing.VALUE,
+            *, id: int | _Missing = _Missing.VALUE,
+            ) -> Resource | None:
+        """
+        Returns the Resource with the specified URL or ID.
+        Returns None if no matching resource exists.
+        """
+        if url != _Missing.VALUE:
+            return self._get_resource_with_url(url)
+        elif id != _Missing.VALUE:
+            return self._get_resource_with_id(id)
+        else:
+            raise ValueError('Expected url or id to be specified')
+    
+    @fg_affinity
+    def _get_resource_with_url(self, url: str) -> Resource | None:
+        """
+        Returns the Resource with the specified URL.
+        Returns None if no such resource exists.
+        """
         if self._did_load_urls:
             return self._resource_for_url.get(url)
         
@@ -1516,10 +1532,13 @@ class Project(ListenableMixin):
             return resource
     
     # Private to crystal.model classes
+    # Soft-deprecated: Use get_resource(id=...) instead.
     @fg_affinity
     def _get_resource_with_id(self, id: int) -> Resource | None:
-        """Returns the `Resource` with the specified ID or None if no such resource exists."""
-        
+        """
+        Returns the Resource with the specified ID.
+        Returns None if no such resource exists.
+        """
         if self._did_load_urls:
             return self._resource_for_id.get(id)
         

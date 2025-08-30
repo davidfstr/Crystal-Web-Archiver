@@ -54,6 +54,9 @@ Release Notes ⋮
     * License FAQ drafted.
 
 * API changes
+    * `Project.get_root_resource`, `Project.get_resource_group`, and
+      `Project.get_resource` now support kwargs for easily filtering by
+      name, URL pattern, and ID.
     * `Resource.bulk_get_or_create` is added as a replacement for
       `Resource.bulk_create`. The former function returns resources that were
       looked up in addition to resources that were created, which is usually the
