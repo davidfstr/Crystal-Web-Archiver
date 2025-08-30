@@ -64,6 +64,7 @@ from crystal.util.xthreading import (
     is_foreground_thread, start_thread_switching_coroutine,
 )
 import datetime
+from enum import Enum
 import itertools
 import json
 import math
@@ -116,6 +117,10 @@ _PROFILE_MIGRATE_REVISIONS = False
 
 _OptionalStr = TypeVar('_OptionalStr', bound=Optional[str])
 _TK = TypeVar('_TK', bound='Task')
+
+
+class _Missing(Enum):
+    VALUE = 1
 
 
 class Project(ListenableMixin):
@@ -1480,6 +1485,9 @@ class Project(ListenableMixin):
         """Returns all resource in the project that have been loaded into memory."""
         return self._resource_for_id.values()
     
+    # TODO: Add "id" filtering kwarg, similar to get_resource_group(),
+    #       so that {_get_resource_with_id}
+    #       is unnecessary
     @fg_affinity
     def get_resource(self, url: str) -> Resource | None:
         """Returns the `Resource` with the specified URL or None if no such resource exists."""
@@ -1540,6 +1548,9 @@ class Project(ListenableMixin):
         """Returns all RootResources in the project in the order they were created."""
         return self._root_resources.values()
     
+    # TODO: Add "id" and "name" filtering kwargs, similar to get_resource_group(),
+    #       so that {_get_root_resource_with_id, _get_root_resource_with_name}
+    #       is unnecessary
     def get_root_resource(self, resource: Resource) -> RootResource | None:
         """Returns the `RootResource` with the specified `Resource` or None if none exists."""
         return self._root_resources.get(resource, None)
@@ -1559,15 +1570,39 @@ class Project(ListenableMixin):
         """Returns all ResourceGroups in the project in the order they were created."""
         return self._resource_groups
     
-    def get_resource_group(self, name: str) -> ResourceGroup | None:
-        """Returns the `ResourceGroup` with the specified name or None if no such resource exists."""
+    def get_resource_group(self,
+            # NOTE: "name" is NOT a keyword-only argument for backward compatibility
+            name: str | _Missing = _Missing.VALUE,
+            *, url_pattern: str | _Missing = _Missing.VALUE,
+            id: int | _Missing = _Missing.VALUE
+            ) -> ResourceGroup | None:
+        """
+        Returns the ResourceGroup with the specified name, URL pattern, or ID.
+        Returns None if no matching group exists.
+        """
         # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
-        return next((rg for rg in self._resource_groups if rg.name == name), None)
+        if name != _Missing.VALUE:
+            for rg in self._resource_groups:
+                if rg.name == name:
+                    return rg
+            return None
+        elif url_pattern != _Missing.VALUE:
+            for rg in self._resource_groups:
+                if rg.url_pattern == url_pattern:
+                    return rg
+            return None
+        elif id != _Missing.VALUE:
+            for rg in self._resource_groups:
+                if rg._id == id:
+                    return rg
+            return None
+        else:
+            raise ValueError('Expected name, url_pattern, or id to be specified')
     
+    # Soft-deprecated: Use get_resource_group(id=...) instead.
     def _get_resource_group_with_id(self, resource_group_id) -> ResourceGroup | None:
-        """Returns the `ResourceGroup` with the specified ID or None if no such resource exists."""
-        # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
-        return next((rg for rg in self._resource_groups if rg._id == resource_group_id), None)
+        """Returns the ResourceGroup with the specified ID or None if no such group exists."""
+        return self.get_resource_group(id=resource_group_id)
     
     # NOTE: Used by tests
     def _revision_count(self) -> int:
