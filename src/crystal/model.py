@@ -1548,22 +1548,42 @@ class Project(ListenableMixin):
         """Returns all RootResources in the project in the order they were created."""
         return self._root_resources.values()
     
-    # TODO: Add "id" and "name" filtering kwargs, similar to get_resource_group(),
-    #       so that {_get_root_resource_with_id, _get_root_resource_with_name}
-    #       is unnecessary
-    def get_root_resource(self, resource: Resource) -> RootResource | None:
-        """Returns the `RootResource` with the specified `Resource` or None if none exists."""
-        return self._root_resources.get(resource, None)
+    def get_root_resource(self,
+            # NOTE: "resource" is NOT a keyword-only argument for backward compatibility
+            resource: Resource | _Missing = _Missing.VALUE,
+            *, id: int | _Missing = _Missing.VALUE,
+            name: str | _Missing = _Missing.VALUE
+            ) -> RootResource | None:
+        """
+        Returns the RootResource with the specified resource, ID, or name.
+        Returns None if no matching root resource exists.
+        """
+        if resource != _Missing.VALUE:
+            return self._root_resources.get(resource, None)
+        elif id != _Missing.VALUE:
+            # PERF: O(n) when it could be O(1), where n = # of RootResources
+            for rr in self._root_resources.values():
+                if rr._id == id:
+                    return rr
+            return None
+        elif name != _Missing.VALUE:
+            # PERF: O(n) when it could be O(1), where n = # of RootResources
+            for rr in self._root_resources.values():
+                if rr.name == name:
+                    return rr
+            return None
+        else:
+            raise ValueError('Expected resource, id, or name to be specified')
     
+    # Soft-deprecated: Use get_root_resource(id=...) instead.
     def _get_root_resource_with_id(self, root_resource_id) -> RootResource | None:
         """Returns the `RootResource` with the specified ID or None if no such root resource exists."""
-        # PERF: O(n) when it could be O(1), where n = # of RootResources
-        return next((rr for rr in self._root_resources.values() if rr._id == root_resource_id), None)
+        return self.get_root_resource(id=root_resource_id)
     
+    # Soft-deprecated: Use get_root_resource(name=...) instead.
     def _get_root_resource_with_name(self, name) -> RootResource | None:
         """Returns the `RootResource` with the specified name or None if no such root resource exists."""
-        # PERF: O(n) when it could be O(1), where n = # of RootResources
-        return next((rr for rr in self._root_resources.values() if rr.name == name), None)
+        return self.get_root_resource(name=name)
     
     @property
     def resource_groups(self) -> Iterable[ResourceGroup]:
@@ -1580,18 +1600,20 @@ class Project(ListenableMixin):
         Returns the ResourceGroup with the specified name, URL pattern, or ID.
         Returns None if no matching group exists.
         """
-        # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
         if name != _Missing.VALUE:
+            # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
             for rg in self._resource_groups:
                 if rg.name == name:
                     return rg
             return None
         elif url_pattern != _Missing.VALUE:
+            # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
             for rg in self._resource_groups:
                 if rg.url_pattern == url_pattern:
                     return rg
             return None
         elif id != _Missing.VALUE:
+            # PERF: O(n) when it could be O(1), where n = # of ResourceGroups
             for rg in self._resource_groups:
                 if rg._id == id:
                     return rg
