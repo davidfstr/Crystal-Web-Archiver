@@ -15,6 +15,7 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import (
     MainWindow, MenuitemMissingError, NewRootUrlDialog, OpenOrCreateDialog, PreferencesDialog,
 )
+from crystal.util.xos import is_mac_os
 from functools import wraps
 import os
 import tempfile
@@ -57,6 +58,11 @@ async def test_when_create_empty_project_then_entity_tree_empty_state_is_visible
     async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         assert mw.entity_tree.is_empty_state_visible(), \
             'Empty state should be visible in empty project'
+
+
+@skip('not yet automated: hard to automate: HasFocus() and FindFocus() do not work when window is in background')
+async def test_when_create_empty_project_then_entity_tree_empty_state_is_visible_and_cta_button_is_focused() -> None:
+    pass
 
 
 async def test_when_open_non_empty_project_then_entity_tree_non_empty_state_is_visible() -> None:

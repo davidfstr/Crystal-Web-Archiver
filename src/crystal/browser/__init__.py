@@ -489,7 +489,11 @@ class MainWindow(CloakMixin):
         self._entity_pane_content_sizer.Add(self._create_button_bar(parent), flag=wx.EXPAND)
         
         # Update visibility based on whether project initially empty or not
-        self._update_entity_pane_empty_state_visibility()
+        is_empty_state_visible_initially = self._update_entity_pane_empty_state_visibility()
+        if is_empty_state_visible_initially and is_mac_os():
+            # Focus CTA button, since macOS does not do so automatically
+            cta_button = parent.FindWindowByName('cr-empty-state-new-root-url-button')
+            cta_button.SetFocus()
         
         # Defer callout visibility update until after layout is complete
         fg_call_later(self._update_view_button_callout_visibility, force_later=True)
@@ -565,8 +569,12 @@ class MainWindow(CloakMixin):
         
         return self.entity_tree.peer
     
-    def _update_entity_pane_empty_state_visibility(self) -> None:
-        """Show entity tree or its empty state based on project content."""
+    def _update_entity_pane_empty_state_visibility(self) -> bool:
+        """
+        Show entity tree or its empty state based on project content.
+        
+        Returns whether project is detected as empty.
+        """
         is_project_empty = (
             is_iterable_empty(self.project.root_resources) and
             is_iterable_empty(self.project.resource_groups)
@@ -587,6 +595,8 @@ class MainWindow(CloakMixin):
             self._entity_pane_content_sizer.Detach(sizer_index)
             self._entity_pane_content_sizer.Insert(sizer_index, desired_window, proportion=1, flag=wx.EXPAND)
             self._entity_pane_content_sizer.Layout()
+        
+        return is_project_empty
     
     def _create_button_bar(self, parent: wx.Window):
         new_root_url_button = self._new_root_url_action.create_button(parent, name='cr-add-url-button')
