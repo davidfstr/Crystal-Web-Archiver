@@ -1294,6 +1294,18 @@ files = [
 ]
 
 [[package]]
+name = "trycast"
+version = "1.2.1"
+description = ""
+optional = false
+python-versions = ">=3.8.1"
+groups = ["main"]
+files = [
+    {file = "trycast-1.2.1-py3-none-any.whl", hash = "sha256:1a4a18712d82bcc358c923df96901f503d172997d7f6bb819228a7822660ac44"},
+    {file = "trycast-1.2.1.tar.gz", hash = "sha256:158b35facacefce78c0084a95a6ef12cd93be2d39d7d913d03218bae0c442ea1"},
+]
+
+[[package]]
 name = "types-pytz"
 version = "2025.2.0.20250516"
 description = "Typing stubs for pytz"
@@ -1585,4 +1597,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "8c3662c0692382f653dcee6ccd7cb4e937afe7cd3d4f4adf402c74a0b5a424c3"
+content-hash = "412afa3a79d0b9e11ba08805c451f6c3f601be729b4031b9846ca5108fb13a36"

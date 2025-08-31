@@ -568,6 +568,89 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
                 await wait_for_future(playwright_future, timeout=sys.maxsize)
 
 
+# NOTE: Current implementation is believed to entirely hide all controls related
+#       to the create group form, including the create group checkbox.
+#       It should be adjusted to match the behavior described in this test.
+@skip('not yet automated')
+async def test_given_readonly_project_then_create_group_checkbox_is_disabled() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_writable_project_when_create_group_checkbox_ticked_then_shows_create_group_form() -> None:
+    # ...and URL Pattern is populated with a suggestion
+    # ...and Source is populated with a suggestion
+    # ...and Preview Members are populated
+    # ...and Download Immediately checkbox is ticked
+    # ...and has Cancel and Download buttons
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_when_reload_page_then_is_still_on_a_nia_page() -> None:
+    # NOTE: This test verifies that the act of showing the create group form does not
+    #       automatically download the current URL. Older group prediction algorithms
+    #       could sometimes do that. Then reloading the page would show the downloaded
+    #       page rather than an NIA page, a confusing experience for a user.
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_when_download_group_checkbox_unticked_then_download_button_is_replaced_with_create_button() -> None:
+    # ...and when it is ticked, the create button is replaced with download button
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_when_cancel_button_pressed_then_hides_create_group_form() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_when_any_download_button_clicked_then_disables_form_and_creates_group_and_starts_downloading_group_and_displays_success_message_and_downloads_url_and_reloads_page() -> None:
+    # Case 1: Download button above the create group form is clicked
+    # Case 2: Download button at the bottom of the create group form
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_when_create_button_clicked_then_disables_form_and_creates_group_and_displays_success_message_and_collapses_form_with_animation() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_and_group_previously_created_when_download_button_clicked_then_downloads_url_and_reloads_page() -> None:
+    # In this scenario, the create group form remains disabled from a previously
+    # successful create group action, and the only enabled Download button is 
+    # the one above the create group form
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_when_download_or_create_button_clicked_and_create_group_fails_then_displays_failure_message_and_enables_form() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_when_type_in_url_pattern_field_then_preview_members_update_live() -> None:
+    pass
+
+
+@skip('not yet automated')
+async def test_given_create_group_form_visible_when_type_in_url_pattern_field_and_network_down_then_preview_members_show_error_message() -> None:
+    pass
+
+
+async def test_given_create_group_form_visible_and_text_field_focused_when_press_enter_then_presses_primary_button() -> None:
+    # Case 1: URL Pattern text field
+    # Case 2: Name text field
+    pass
+
+
+async def test_given_create_group_form_visible_and_text_field_focused_when_press_escape_then_presses_cancel_button() -> None:
+    pass
+
+
 # ------------------------------------------------------------------------------
 # Test: "Fetch Error" Page (send_resource_error)
 

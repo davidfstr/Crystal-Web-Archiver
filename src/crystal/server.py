@@ -9,11 +9,14 @@ from collections.abc import Callable, Generator
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
-    Project, Resource, ResourceGroup, ResourceRevision,
+    Project, Resource, ResourceGroup, ResourceGroupSource, ResourceRevision,
     RootResource,
 )
 from crystal import resources
-from crystal.predict_group import detect_regular_group, detect_sequential_groups
+from crystal.predict_group import (
+    DetectedRegularGroup, DetectedSequentialGroup, 
+    detect_regular_group, detect_sequential_groups,
+)
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
     TERMINAL_FG_PURPLE, colorize, print_error, print_info, print_success, print_warning,
@@ -21,9 +24,10 @@ from crystal.util.cli import (
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import (
-    bg_affinity, bg_call_later, fg_call_and_wait, run_thread_switching_coroutine,
-    SwitchToThread,
+    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, 
+    run_thread_switching_coroutine, SwitchToThread,
 )
+from crystal.util.xtyping import IntStr, intstr_from
 import datetime
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
@@ -38,7 +42,12 @@ import sys
 from textwrap import dedent
 import time
 import traceback
-from typing import Literal, Optional, TYPE_CHECKING
+import trycast
+from trycast import checkcast
+from typing import (
+    Literal, Mapping, Optional, TYPE_CHECKING, TypeAlias, TypedDict,
+    assert_never,
+)
 from typing_extensions import override
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
@@ -548,7 +557,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return
     
     def _do_POST(self) -> Generator[SwitchToThread, None, None]:
-        # Handle Crystal API endpoints
+        # Handle: "Not in Archive" Endpoints
         if self.path == '/_/crystal/download-url':
             yield SwitchToThread.BACKGROUND
             self._handle_start_download_url()
@@ -556,6 +565,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         elif self.path == '/_/crystal/download-progress':
             yield SwitchToThread.BACKGROUND
             self._handle_get_download_progress()
+            return
+        elif self.path == '/_/crystal/create-group':
+            yield SwitchToThread.BACKGROUND
+            self._handle_create_group()
+            return
+        elif self.path == '/_/crystal/preview-urls':
+            yield SwitchToThread.BACKGROUND
+            self._handle_preview_urls()
             return
         
         # For all other POST requests, return 405 Method Not Allowed
@@ -754,7 +771,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 return referer_archive_url
         return None
     
-    # --- Handle: Download Request ---
+    # --- Handle: "Not in Archive" Endpoints ---
     
     @bg_affinity
     def _handle_start_download_url(self) -> None:
@@ -840,7 +857,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
             return None
         task = fg_call_and_wait(find_task_by_id)
         if task is None:
-            self._send_sse_data({'error': 'Task not found'})
+            # Presumably the task completed very quickly,
+            # so report as complete immediately
+            self._send_sse_data({
+                'status': 'complete',
+                'progress': 100,
+                'message': 'Download completed'
+            })
             return
         
         # Send periodic progress updates
@@ -886,6 +909,123 @@ class _RequestHandler(BaseHTTPRequestHandler):
             pass
         except Exception as e:
             self._send_sse_data({'error': f'Progress tracking error: {str(e)}'})
+    
+    @bg_affinity
+    def _handle_create_group(self) -> None:
+        try:
+            # Ensure project is not readonly
+            if self.project.readonly:
+                self._send_json_response(403, CreateGroupErrorResponse({"error": "Project is read-only"}))
+                return
+            
+            # Parse arguments
+            content_length = int(self.headers.get('Content-Length', -1))
+            if content_length > 0:
+                post_data = self.rfile.read(content_length).decode('utf-8')
+            else:
+                post_data = self.rfile.read().decode('utf-8')
+            if not post_data:
+                self._send_json_response(400, CreateGroupErrorResponse({"error": "Missing request body"}))
+                return
+            try:
+                request_data = json.loads(post_data)
+                request = checkcast(CreateGroupRequest, request_data)
+                url_pattern = request['url_pattern']
+                source_data = request['source']
+                name = request['name']
+                download_immediately = request['download_immediately']
+            except json.JSONDecodeError:
+                self._send_json_response(400, CreateGroupErrorResponse({"error": "Invalid JSON"}))
+                return
+            except trycast.ValidationError:
+                self._send_json_response(400, CreateGroupErrorResponse({"error": "Invalid request"}))
+                return
+            
+            def parse_source_value(source_value: SourceChoiceValue | None) -> ResourceGroupSource:
+                if source_value is None:
+                    return None
+                elif source_value['type'] == 'root_resource':
+                    return self.project.get_root_resource(id=int(source_value['id']))
+                elif source_value['type'] == 'resource_group':
+                    return self.project.get_resource_group(id=int(source_value['id']))
+                else:
+                    raise ValueError(f"Invalid source type: {source_value['type']}")
+            
+            @fg_affinity
+            def create_group_and_optionally_start_download() -> CreateGroupResponse:
+                source = parse_source_value(source_data)
+                
+                # Check if group with this pattern already exists
+                existing_group = self.project.get_resource_group(url_pattern=url_pattern)
+                if existing_group is not None:
+                    return CreateGroupErrorResponse({"error": "Group with URL pattern already exists"})
+                
+                # Create the resource group
+                group = ResourceGroup(
+                    self.project,
+                    name=name,
+                    url_pattern=url_pattern,
+                    source=source,
+                    do_not_download=False
+                )
+                
+                # Start download of the group if requested
+                if download_immediately:
+                    group.download()
+                
+                result = CreateGroupSuccessResponse({
+                    "status": "success",
+                    "message": "Group created successfully",
+                    "group_id": intstr_from(group._id),
+                })
+                return result
+            result = fg_call_and_wait(create_group_and_optionally_start_download)
+            if 'error' in result:  # CreateGroupErrorResponse
+                self._send_json_response(400, result)
+            else:  # CreateGroupSuccessResponse
+                self._send_json_response(200, result)
+
+        except Exception as e:
+            self._print_error(f'Error handling create group request: {str(e)}')
+            self._send_json_response(500, CreateGroupErrorResponse({
+                "error": f"Internal server error: {str(e)}"
+            }))
+
+    @bg_affinity
+    def _handle_preview_urls(self) -> None:
+        try:
+            # Parse arguments
+            content_length = int(self.headers.get('Content-Length', -1))
+            if content_length > 0:
+                post_data = self.rfile.read(content_length).decode('utf-8')
+            else:
+                post_data = self.rfile.read().decode('utf-8')
+            if not post_data:
+                self._send_json_response(400, {"error": "Missing request body"})
+                return
+            try:
+                request_data = json.loads(post_data)
+                url_pattern = request_data.get('url_pattern')
+            except json.JSONDecodeError:
+                self._send_json_response(400, {"error": "Invalid JSON"})
+                return
+            if not url_pattern:
+                self._send_json_response(400, {"error": "Missing url_pattern parameter"})
+                return
+            
+            # NOTE: Use same algorithm as the NewGroupDialog to calculate and present URLs
+            from crystal.browser.new_group import NewGroupDialog
+            matching_urls_and_more_items = fg_call_and_wait(
+                lambda: NewGroupDialog._calculate_preview_urls(self.project, url_pattern))
+            self._send_json_response(200, {
+                "matching_urls": matching_urls_and_more_items,
+            })
+
+        except Exception as e:
+            self._print_error(f'Error handling preview URLs request: {str(e)}')
+            self._send_json_response(500, {
+                "error": f"Internal server error: {str(e)}"
+            })
 
     def _start_sse_stream(self) -> None:
         self.send_response(200)
@@ -902,7 +1042,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         except BrokenPipeError:
             pass
     
-    def _send_json_response(self, status_code: int, content: dict) -> None:
+    def _send_json_response(self, status_code: int, content: Mapping) -> None:
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
@@ -1000,6 +1140,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         readonly = self.project.readonly  # cache
         
+        create_group_form_data = self._calculate_create_group_form_data(
+            self.project, archive_url, self.referer_archive_url)
+        
         html_content = _not_in_archive_html(
             archive_url_html_attr=archive_url,
             archive_url_html=html_escape(archive_url),
@@ -1008,11 +1151,77 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 '<div class="readonly-notice">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
                 if readonly else ''
             ),
-            download_button_disabled_html=('disabled ' if readonly else '')
+            download_button_disabled_html=('disabled ' if readonly else ''),
+            create_group_form_data=create_group_form_data,
+            readonly=readonly
         )
         self.wfile.write(html_content.encode('utf-8'))
         
         self._print_error('*** Requested resource not in archive: ' + archive_url)
+    
+    @classmethod
+    @bg_affinity
+    def _calculate_create_group_form_data(cls,
+            project: Project,
+            archive_url: str,
+            referrer_archive_url: str | None,
+            ) -> CreateGroupFormData:
+        # Format Source choices,
+        # matching the choices computed for NewGroupDialog.source_choice_box
+        source_choices = [SourceChoice({
+            'display_name': 'none',
+            'value': None
+        })]
+        for rr in project.root_resources:
+            display_name = rr.display_name
+            source_choices.append(SourceChoice({
+                'display_name': display_name,
+                'value': SourceChoiceValue(
+                    {'type': 'root_resource', 'id': intstr_from(rr._id)})
+            }))
+        for rg in project.resource_groups:
+            display_name = rg.display_name
+            source_choices.append(SourceChoice({
+                'display_name': display_name,
+                'value': SourceChoiceValue(
+                    {'type': 'resource_group', 'id': intstr_from(rg._id)})
+            }))
+        
+        # Find the best predicted group
+        try:
+            # Priority 1: First detected sequential group
+            predicted_group = next(detect_sequential_groups(
+                project,
+                archive_url,
+                referrer_archive_url,
+                eager_downloads_ok=False,
+                detect_last_page_ordinals=False,
+            ))  # type: DetectedSequentialGroup | DetectedRegularGroup | None
+        except StopIteration:
+            # Priority 2: Regular group
+            predicted_group = detect_regular_group(project, archive_url, referrer_archive_url)
+        
+        predicted_url_pattern = predicted_group.url_pattern if predicted_group is not None else None
+        predicted_source = predicted_group.source if predicted_group is not None else None
+        
+        # Determine the selected source value for the dropdown
+        if predicted_source is None:
+            predicted_source_value = None  # type: SourceChoiceValue | None
+        elif isinstance(predicted_source, RootResource):
+            predicted_source_value = SourceChoiceValue(
+                {'type': 'root_resource', 'id': intstr_from(predicted_source._id)})
+        elif isinstance(predicted_source, ResourceGroup):
+            predicted_source_value = SourceChoiceValue(
+                {'type': 'resource_group', 'id': intstr_from(predicted_source._id)})
+        else:
+            assert_never(predicted_source)
+        
+        return CreateGroupFormData({
+            'source_choices': source_choices,
+            'predicted_url_pattern': predicted_url_pattern or '',
+            'predicted_source_value': predicted_source_value,
+            'predicted_name': '',
+        })
     
     @bg_affinity
     def send_redirect(self, redirect_url: str, *, vary_referer: bool=False) -> None:
@@ -1582,15 +1791,50 @@ def _not_found_page_html() -> str:
     )
 
 
+class CreateGroupFormData(TypedDict):
+    source_choices: 'list[SourceChoice]'
+    predicted_url_pattern: str
+    predicted_source_value: 'SourceChoiceValue | None'
+    predicted_name: str
+
+class SourceChoice(TypedDict):
+    display_name: str
+    value: 'SourceChoiceValue | None'
+
+class SourceChoiceValue(TypedDict):
+    type: Literal['root_resource', 'resource_group']
+    id: IntStr
+
+class CreateGroupRequest(TypedDict):
+    url_pattern: str
+    source: SourceChoiceValue | None
+    name: str
+    download_immediately: bool
+
+CreateGroupResponse: TypeAlias = 'CreateGroupErrorResponse | CreateGroupSuccessResponse'
+
+class CreateGroupErrorResponse(TypedDict):
+    error: str
+
+class CreateGroupSuccessResponse(TypedDict):
+    status: str
+    message: str
+    group_id: IntStr
+
 def _not_in_archive_html(
         *, archive_url_html_attr: str,
         archive_url_html: str,
         archive_url_json: str,
         readonly_warning_html: str,
-        download_button_disabled_html: str
+        download_button_disabled_html: str,
+        create_group_form_data: CreateGroupFormData,
+        readonly: bool
         ) -> str:
     not_in_archive_styles = dedent(
         """
+        /* ------------------------------------------------------------------ */
+        /* Readonly Notice */
+        
         .readonly-notice {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
@@ -1601,9 +1845,25 @@ def _not_in_archive_html(
             font-size: 14px;
         }
         
+        @media (prefers-color-scheme: dark) {
+            .readonly-notice {
+                background: #5a4a2d;
+                border: 1px solid #8b7355;
+                color: #f4d03f;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Download Progress Bar */
+        
         .download-progress {
             display: none;
             margin-top: 15px;
+        }
+        
+        .download-progress.show {
+            display: block;
+            animation: slideDown 0.6s ease-out;
         }
         
         .progress-bar {
@@ -1627,14 +1887,7 @@ def _not_in_archive_html(
             text-align: center;
         }
         
-        /* Dark mode styles for readonly notice and progress */
         @media (prefers-color-scheme: dark) {
-            .readonly-notice {
-                background: #5a4a2d;
-                border: 1px solid #8b7355;
-                color: #f4d03f;
-            }
-            
             .progress-bar {
                 background: #404040;
             }
@@ -1643,6 +1896,271 @@ def _not_in_archive_html(
                 background: #6BB6FF;
             }
         }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Top */
+        
+        .group-creation-section {
+            margin-top: 20px;
+            padding: 16px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+
+        .group-checkbox-section {
+            margin-bottom: 16px;
+        }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .checkbox-label input[type="checkbox"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .group-creation-section {
+                background: #2d3748;
+                border-color: #4a5568;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Form */
+        
+        .group-form {
+            border-top: 1px solid #e9ecef;
+            padding-top: 16px;
+        }
+        
+        .form-row {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            font-size: 14px;
+            color: #495057;
+        }
+        
+        .form-input-container {
+            position: relative;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.15s ease;
+            box-sizing: border-box;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #4A90E2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+        
+        .form-hint {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .group-form {
+                border-color: #4a5568;
+            }
+            
+            .form-label {
+                color: #e2e8f0;
+            }
+            
+            .form-input {
+                background: #4a5568;
+                border-color: #555;
+                color: #e0e0e0;
+            }
+            
+            .form-input:focus {
+                border-color: #6BB6FF;
+                box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
+            }
+            
+            .form-hint {
+                color: #a0aec0;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Form: Preview Members */
+        
+        .preview-section {
+            margin-top: 16px;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+        }
+        
+        .preview-header {
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .preview-label {
+            font-size: 13px;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+        
+        .preview-urls {
+            height: 136px;  /* Fixed height for ~8 URLs (8 * 16px line + padding) */
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            background: #f8f9fa;
+            padding: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 136px;
+        }
+        
+        .preview-url-item {
+            padding: 2px 0;
+            color: #495057;
+            white-space: nowrap;
+            overflow: visible;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .preview-section {
+                background: #4a5568;
+                border-color: #555;
+            }
+            
+            .preview-header {
+                color: #e2e8f0;
+            }
+            
+            .preview-label {
+                color: #a0aec0;
+            }
+            
+            .preview-urls {
+                background: #2d3748;
+                border-color: #555;
+                color: #e0e0e0;
+            }
+            
+            .preview-url-item {
+                color: #e0e0e0;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Form: New Group Options */
+        
+        .new-group-options-section {
+            margin-top: 16px;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+        }
+        
+        .section-header {
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .new-group-options-section {
+                background: #4a5568;
+                border-color: #555;
+            }
+            
+            .section-header {
+                color: #e2e8f0;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Form: Action Buttons */
+        
+        .group-form-actions {
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: margin-top 0.6s ease-out;
+        }
+        /* Remove top margin from form actions when collapsible content is collapsed */
+        .slide-up + .group-form-actions {
+            margin-top: 0;
+        }
+        
+        .action-message {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .action-message.success {
+            color: #28a745;
+        }
+        
+        .action-message.error {
+            color: #dc3545;
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Animations */
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+                margin-top: 0;
+            }
+            to {
+                opacity: 1;
+                max-height: 100px;
+                margin-top: 15px;
+            }
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 1;
+                max-height: 1000px;
+            }
+            to {
+                opacity: 0;
+                max-height: 0;
+                overflow: hidden;
+            }
+        }
+        
+        .slide-up {
+            animation: slideUp 0.6s ease-out forwards;
+        }
+        
         """
     ).strip()
     
@@ -1669,7 +2187,7 @@ def _not_in_archive_html(
             <button onclick="history.back()" class="action-button secondary-button">
                 ← Go Back
             </button>
-            <button id="download-button" {download_button_disabled_html}onclick="startDownload()" class="action-button primary-button">⬇ Download</button>
+            <button id="download-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="action-button primary-button">⬇ Download</button>
         </div>
         
         <div id="download-progress" class="download-progress">
@@ -1678,15 +2196,98 @@ def _not_in_archive_html(
             </div>
             <div id="progress-text" class="progress-text">Preparing download...</div>
         </div>
+        
+        <div class="group-creation-section" {'' if not readonly else 'style="display: none;"'}>
+            <div class="group-checkbox-section">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="create-group-checkbox" onchange="onCreateGroupCheckboxClicked()">
+                    <span class="checkbox-text">Create Group for Similar Pages</span>
+                </label>
+            </div>
+            
+            <div id="group-form" class="group-form" style="display: none;">
+                <div id="group-form-collapsible-content">
+                    <div class="form-row">
+                        <label class="form-label">URL Pattern:</label>
+                        <div class="form-input-container">
+                            <input type="text" id="group-url-pattern" class="form-input" placeholder="https://example.com/post/*" value="{html_escape(create_group_form_data['predicted_url_pattern'])}">
+                            <div class="form-hint"># = numbers, @ = letters, * = anything but /, ** = anything</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label class="form-label">Source:</label>
+                        <select id="group-source" class="form-input">
+                            <!-- Source options will be populated by JavaScript -->
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <label class="form-label">Name:</label>
+                        <input type="text" id="group-name" class="form-input" placeholder="e.g. Post" value="{html_escape(create_group_form_data['predicted_name'])}">
+                    </div>
+                    
+                    <div class="preview-section">
+                        <div class="preview-header">Preview Members</div>
+                        <div class="preview-label">Known matching URLs:</div>
+                        <div id="preview-urls" class="preview-urls">
+                            <!-- URLs will be populated by JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <div class="new-group-options-section">
+                        <div class="section-header">New Group Options</div>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="download-immediately-checkbox" checked onchange="updateDownloadOrCreateGroupButtonTitleAndStyle()">
+                            <span class="checkbox-text">Download Group Immediately</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="group-form-actions">
+                    <button id="group-cancel-button" class="action-button secondary-button" onclick="onCancelCreateGroupButtonClicked()">Cancel</button>
+                    <button id="group-action-button" class="action-button primary-button" onclick="onDownloadOrCreateGroupButtonClicked()">⬇ Download</button>
+                    <span id="group-action-message" class="action-message"></span>
+                </div>
+            </div>
+        </div>
         """
     ).strip()
     
     script_html = dedent(
         """
         <script>
+            // -----------------------------------------------------------------
+            // Download URL Button
+            
+            // Used to receive download progress updates
             let eventSource = null;
             
-            async function startDownload() {
+            async function onDownloadUrlButtonClicked() {
+                const createGroupCheckbox = document.getElementById('create-group-checkbox');
+                const groupFormIsVisibleAndEnabled = (
+                    createGroupCheckbox && createGroupCheckbox.checked &&
+                    isFormEnabled()  // form action already performed
+                );
+                if (groupFormIsVisibleAndEnabled) {
+                    const downloadImmediatelyCheckbox = document.getElementById('download-immediately-checkbox');
+                    if (downloadImmediatelyCheckbox && downloadImmediatelyCheckbox.checked) {
+                        // Press "Download" button in the group form
+                        await onDownloadOrCreateGroupButtonClicked();
+                        return;
+                    } else {
+                        // Press "Create" button in the group form,
+                        // then download the individual URL if successful
+                        await onDownloadOrCreateGroupButtonClicked(
+                            /*downloadUrlImmediately=*/true);
+                        return;
+                    }
+                } else {
+                    await startUrlDownload();
+                }
+            }
+            
+            async function startUrlDownload() {
                 const downloadButton = document.getElementById('download-button');
                 const progressDiv = document.getElementById('download-progress');
                 const progressFill = document.getElementById('progress-fill');
@@ -1696,8 +2297,11 @@ def _not_in_archive_html(
                 downloadButton.disabled = true;
                 downloadButton.textContent = '⬇ Downloading...';
                 
-                // Show progress
+                // Show progress with animation
                 progressDiv.style.display = 'block';
+                // Force a reflow to ensure display: block is applied before adding the animation class
+                progressDiv.offsetHeight;
+                progressDiv.classList.add('show');
                 progressFill.style.width = '0%%';
                 progressText.textContent = 'Starting download...';
                 
@@ -1789,9 +2393,298 @@ def _not_in_archive_html(
                     eventSource.close();
                 }
             });
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Show/Hide
+            
+            const createGroupFormData = %(create_group_form_data_json)s;
+            
+            function onCreateGroupCheckboxClicked() {
+                // (Browser already toggled the checked state of the checkbox)
+                updateCreateGroupFormVisible();
+            }
+            
+            // Shows the Create Group Form iff the Create Group checkbox is ticked.
+            function updateCreateGroupFormVisible() {
+                const checkbox = document.getElementById('create-group-checkbox');
+                const form = document.getElementById('group-form');
+                
+                if (checkbox.checked) {
+                    form.style.display = 'block';
+                    populateSourceDropdown();
+                    updatePreviewUrls();
+                    updateDownloadOrCreateGroupButtonTitleAndStyle();
+                } else {
+                    form.style.display = 'none';
+                }
+            }
+            
+            // Collapses the Create Group Form after a Create actions succeeded,
+            // leaving the success message visible.
+            function collapseCreateGroupForm() {
+                const collapsibleContent = document.getElementById('group-form-collapsible-content');
+                collapsibleContent.classList.add('slide-up');
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Fields
+            
+            // Respond to Enter/Escape keys
+            document.addEventListener('DOMContentLoaded', function() {
+                const urlPatternInput = document.getElementById('group-url-pattern');
+                urlPatternInput.addEventListener('keydown', handleFormKeydown);
+                
+                const nameInput = document.getElementById('group-name');
+                nameInput.addEventListener('keydown', handleFormKeydown);
+            });
+            
+            function handleFormKeydown(event) {
+                if (event.key === 'Enter') {
+                    // Trigger the primary button, which is always a Download button
+                    onDownloadUrlButtonClicked();
+                    
+                    event.preventDefault();
+                } else if (event.key === 'Escape') {
+                    // Trigger the cancel button
+                    onCancelCreateGroupButtonClicked();
+                    
+                    event.preventDefault();
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Source Field
+            
+            function populateSourceDropdown() {
+                const sourceSelect = document.getElementById('group-source');
+                sourceSelect.innerHTML = '';
+                
+                createGroupFormData.source_choices.forEach(choice => {
+                    const option = document.createElement('option');
+                    option.textContent = choice.display_name;
+                    option.value = JSON.stringify(choice.value);
+                    sourceSelect.appendChild(option);
+                });
+                
+                // Set predicted source if available
+                if (createGroupFormData.predicted_source_value) {
+                    const predictedValue = JSON.stringify(createGroupFormData.predicted_source_value);
+                    for (let i = 0; i < sourceSelect.options.length; i++) {
+                        if (sourceSelect.options[i].value === predictedValue) {
+                            sourceSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Preview Members Section
+            
+            // Update Preview Member URLs in real-time as URL Pattern changes
+            document.addEventListener('DOMContentLoaded', function() {
+                const urlPatternInput = document.getElementById('group-url-pattern');
+                urlPatternInput.addEventListener('input', updatePreviewUrls);
+            });
+            
+            async function updatePreviewUrls() {
+                const urlPattern = document.getElementById('group-url-pattern').value.trim();
+                const previewContainer = document.getElementById('preview-urls');
+                
+                if (!urlPattern) {
+                    previewContainer.innerHTML = '<div class="preview-url-item">Enter a URL pattern to see matching URLs</div>';
+                    return;
+                }
+                
+                // Track this request to cancel previous ones
+                const requestStartTime = Date.now();
+                updatePreviewUrls.lastRequestTime = requestStartTime;
+                
+                // Show loading state only after 200ms delay
+                const loadingTimeout = setTimeout(() => {
+                    // Only show loading if this request is still the latest
+                    if (updatePreviewUrls.lastRequestTime === requestStartTime) {
+                        previewContainer.innerHTML = '<div class="preview-url-item">Loading preview...</div>';
+                    }
+                }, 200);
+                
+                try {
+                    const response = await fetch('/_/crystal/preview-urls', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url_pattern: urlPattern })
+                    });
+                    
+                    // Clear the loading timeout since we got a response
+                    clearTimeout(loadingTimeout);
+                    
+                    // Only update UI if this request is still the latest
+                    if (updatePreviewUrls.lastRequestTime !== requestStartTime) {
+                        return;  // A newer request has started
+                    }
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to fetch preview URLs');
+                    }
+                    
+                    const result = await response.json();
+                    const matchingUrls = result.matching_urls;
+                    
+                    if (matchingUrls.length === 0) {
+                        previewContainer.innerHTML = '<div class="preview-url-item">No matching URLs found</div>';
+                    } else {
+                        // Clear container and add URLs safely
+                        previewContainer.innerHTML = '';
+                        matchingUrls.forEach(url => {
+                            const urlDiv = document.createElement('div');
+                            urlDiv.className = 'preview-url-item';
+                            urlDiv.textContent = url;
+                            previewContainer.appendChild(urlDiv);
+                        });
+                    }
+                } catch (error) {
+                    // Clear the loading timeout
+                    clearTimeout(loadingTimeout);
+                    
+                    // Only update UI if this request is still the latest
+                    if (updatePreviewUrls.lastRequestTime === requestStartTime) {
+                        console.error('Preview URLs error:', error);
+                        previewContainer.innerHTML = '<div class="preview-url-item">Error loading preview URLs</div>';
+                    }
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Cancel Button
+            
+            function onCancelCreateGroupButtonClicked() {
+                const checkbox = document.getElementById('create-group-checkbox');
+                checkbox.checked = false;
+                updateCreateGroupFormVisible();
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Download/Create Group Button
+            
+            // Initialize Download/Create button on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                updateDownloadOrCreateGroupButtonTitleAndStyle();
+            });
+            
+            // Updates the Download/Create button at the bottom of the
+            // Create Group Form to display the appropriate title,
+            // depending on whether the Download Immediately checkbox is ticked.
+            function updateDownloadOrCreateGroupButtonTitleAndStyle() {
+                const downloadImmediatelyCheckbox = document.getElementById('download-immediately-checkbox');
+                const actionButton = document.getElementById('group-action-button');
+                
+                if (downloadImmediatelyCheckbox && downloadImmediatelyCheckbox.checked) {
+                    actionButton.textContent = '⬇ Download';
+                    actionButton.className = 'action-button primary-button';
+                } else {
+                    actionButton.textContent = '✚ Create';
+                    actionButton.className = 'action-button secondary-button';
+                }
+            }
+            
+            async function onDownloadOrCreateGroupButtonClicked(downloadUrlImmediately/*=false*/) {
+                const urlPattern = document.getElementById('group-url-pattern').value.trim();
+                const sourceValue = document.getElementById('group-source').value;
+                const name = document.getElementById('group-name').value.trim();
+                const downloadGroupImmediately = document.getElementById('download-immediately-checkbox').checked;
+                
+                if (!urlPattern) {
+                    showActionMessage('✖️ Please enter a URL pattern.', /*isSuccess=*/false);
+                    return;
+                }
+                
+                clearActionMessage();
+                setFormEnabled(false);
+                
+                const actionButton = document.getElementById('group-action-button');
+                const originalText = actionButton.textContent;
+                actionButton.textContent = downloadGroupImmediately ? 'Creating & Starting Download...' : 'Creating...';
+                
+                try {
+                    const createUrl = '/_/crystal/create-group';
+                    const response = await fetch(createUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            url_pattern: urlPattern,
+                            source: sourceValue ? JSON.parse(sourceValue) : null,
+                            name: name,
+                            download_immediately: downloadGroupImmediately
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to create group');
+                    }
+                    
+                    const result = await response.json();
+                    showActionMessage('✅ Group created successfully!', /*isSuccess=*/true);
+                    
+                    // If download was requested, start individual URL download
+                    // otherwise collapse the disabled form to show only essential elements
+                    if (downloadGroupImmediately || downloadUrlImmediately) {
+                        await startUrlDownload();
+                    } else {
+                        collapseCreateGroupForm();
+                    }
+                } catch (error) {
+                    console.error('Group action error:', error);
+                    showActionMessage('✖️ Failed to create group', /*isSuccess=*/false);
+                    setFormEnabled(true);
+                } finally {
+                    actionButton.textContent = originalText;
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Action Message
+            
+            function showActionMessage(message, isSuccess) {
+                const messageElement = document.getElementById('group-action-message');
+                messageElement.textContent = message;
+                messageElement.className = `action-message ${isSuccess ? 'success' : 'error'}`;
+            }
+            
+            function clearActionMessage() {
+                const messageElement = document.getElementById('group-action-message');
+                messageElement.textContent = '';
+                messageElement.className = 'action-message';
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Enabled State
+            
+            function setFormEnabled(enabled) {
+                const inputs = document.querySelectorAll('#group-form input, #group-form select, #group-form button');
+                inputs.forEach(input => {
+                    input.disabled = !enabled;
+                });
+                
+                const createGroupCheckbox = document.getElementById('create-group-checkbox');
+                createGroupCheckbox.disabled = !enabled;
+            }
+            
+            function isFormEnabled() {
+                const createGroupCheckbox = document.getElementById('create-group-checkbox');
+                return !createGroupCheckbox.disabled;
+            }
+            
+            // -----------------------------------------------------------------
         </script>
         """ % {
-            'archive_url_json': archive_url_json
+            'archive_url_json': archive_url_json,
+            'create_group_form_data_json': json.dumps(create_group_form_data)
         }
     ).strip()
     
@@ -1883,6 +2776,8 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         min-height: 100vh;
         box-sizing: border-box;
         color: #333;
+        /* Always show vertical scrollbar to avoid layout shifts when page content changes height */
+        overflow-y: scroll;
     }
     
     .container {
@@ -2007,6 +2902,11 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         transition: all 0.2s ease;
         min-width: 120px;
         text-align: center;
+        
+        /* Use consistent height to avoid variance in height from emoji characters */
+        height: 48px;
+        box-sizing: border-box;
+        line-height: 24px;
     }
     
     .primary-button {
@@ -2041,6 +2941,18 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         background: #5a6268;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    
+    .secondary-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    
+    .secondary-button:disabled:hover {
+        background: #6c757d;
+        transform: none;
+        box-shadow: none;
     }
     """
 ).lstrip()  # type: str
