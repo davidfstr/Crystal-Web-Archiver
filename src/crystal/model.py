@@ -196,7 +196,9 @@ class Project(ListenableMixin):
             progress_listener: OpenProjectProgressListener | None=None,
             load_urls_progress_listener: LoadUrlsProgressListener | None=None,
             *, readonly: bool=False,
-            is_untitled: bool=False) -> None:
+            is_untitled: bool=False,
+            is_dirty: bool=False,
+            ) -> None:
         """
         Loads a project from the specified itempath, or creates a new one if none is found.
         
@@ -219,6 +221,8 @@ class Project(ListenableMixin):
             if True then the project is considered untitled even if it has a path.
             It is usually easier to pass None for `path` and let the constructor
             create a temporary directory for the path internally.
+        * is_dirty --
+            whether the project is considered immediately dirty
 
         Raises:
         * ProjectReadOnlyError --
@@ -267,7 +271,7 @@ class Project(ListenableMixin):
         self._closed = False
         self._readonly = True  # will reinitialize after database is located
         self._is_untitled = is_untitled
-        self._is_dirty = False
+        self._is_dirty = is_dirty
         self._properties = dict()               # type: Dict[str, Optional[str]]
         self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
         self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
@@ -314,7 +318,7 @@ class Project(ListenableMixin):
                     self._load(c, self._db, load_progress_listener)
                     
                     # Reset dirty state after loading
-                    self._is_dirty = False
+                    self._is_dirty = is_dirty
             except:
                 if create:
                     shutil.rmtree(path, ignore_errors=True)

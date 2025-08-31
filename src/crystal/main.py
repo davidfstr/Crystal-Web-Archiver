@@ -668,7 +668,13 @@ async def _did_launch(
                         try:
                             # NOTE: Can raise CancelOpenProject
                             retry_on_cancel = True
-                            project = _load_project(last_untitled_project_path, progress_listener, is_untitled=True, **project_kwargs)
+                            project = _load_project(
+                                last_untitled_project_path,
+                                progress_listener,
+                                is_untitled=True,
+                                is_dirty=True,
+                                **project_kwargs
+                            )
                         except:
                             # If user cancels opening the untitled project,
                             # or if the project fails to open for any other reason

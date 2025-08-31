@@ -1229,8 +1229,13 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             is_untitled = literal_eval(py_eval(crystal, 'project.is_untitled'))
             assert is_untitled == True
             
-            # Clean up - close the project properly
-            close_main_window(crystal)
+            # Verify it's considered immediately dirty
+            is_dirty = literal_eval(py_eval(crystal, 'project.is_dirty'))
+            assert is_dirty == True
+            
+            # Force quit, so that we don't have to respond to the "Save Changes?" dialog
+            crystal.kill()
+            crystal.wait()
 
 
 @reopen_projects_enabled

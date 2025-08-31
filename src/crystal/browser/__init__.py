@@ -114,6 +114,8 @@ class MainWindow(CloakMixin):
                 raw_frame.SetRepresentedFilename(project.path)
                 # Define frame icon, if appropriate
                 set_dialog_or_frame_icon_if_appropriate(raw_frame)
+                # macOS: Show initial dirty state
+                raw_frame.OSXSetModified(project.is_dirty)
                 
                 # 1. Define *single* child with full content of the wx.Frame,
                 #    so that LogDrawer can be created for this window later
