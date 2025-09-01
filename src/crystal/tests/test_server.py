@@ -19,6 +19,7 @@ from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, wait_for_future
 from crystal.tests.util.windows import (
     MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
 )
+from crystal.tests.util.xplaywright import Page, Playwright, awith_playwright
 from crystal.util.ports import is_port_in_use
 from crystal.util.xos import is_linux
 from io import StringIO
@@ -440,16 +441,8 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                 ) from None
 
 
-async def test_when_download_fails_then_download_button_enables_and_page_does_not_reload() -> None:
-    # 1. Skip Playwright test when Crystal is bundled
-    # 2. Ensure Crystal is NOT bundled on at least one platform (Linux),
-    #    so that Playwright tests will run on at least 1 CI job
-    if is_linux():
-        assert not hasattr(sys, 'frozen')
-    if hasattr(sys, 'frozen'):
-        skipTest('Playwright not available in bundled app')
-    from playwright.sync_api import sync_playwright
-    
+@awith_playwright
+async def test_when_download_fails_then_download_button_enables_and_page_does_not_reload(pw: Playwright) -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -489,83 +482,60 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
             with assert_does_open_webbrowser_to(home_url_in_archive):
                 click_button(mw.view_button)
 
-            # Test the download button behavior in a real browser
-            # 
-            # 1. Run all Playwright operations in a background thread to
-            #    avoid locking the foreground thread.
-            # 2. Run all Playwright operations on a single consistent thread
-            #    to comply with Playwright's threading requirements.
-            # 
-            # NOTE: This is the only automated test that uses Playwright,
-            #       at the time of writing. When there are multiple tests
-            #       that use Playwright, recommend enhancing testing
-            #       infrastructure to support sharing a single Playwright,
-            #       BrowserContext, and Browser instance between multiple
-            #       test functions, to reduce setup/teardown overhead.
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                def run_playwright_test():
-                    # TODO: Allow browser's headless mode to be controlled by
-                    #       an environment variable, like CRYSTAL_HEADLESS_BROWSER=False
-                    with sync_playwright() as p, \
-                            closing(p.chromium.launch(headless=True)) as browser, \
-                            closing(browser.new_context()) as context:
-                        context.set_default_timeout(int(DEFAULT_WAIT_TIMEOUT * 1000))
-                        page = context.new_page()
-                        
-                        # Navigate to comic #1, which should be a "Not in Archive" page
-                        page.goto(comic1_url_in_archive)
-                        assert page.title() == 'Not in Archive | Crystal'
-                        
-                        # Mock fetch to simulate network failure after delay
-                        # 
-                        # Patch window.fetch manually, rather than using the
-                        # route() API, since we need a delayed response without
-                        # blocking the thread that calls download_button.click()
-                        page.evaluate("""
-                            window.originalFetch = window.fetch;
-                            window.fetch = function(url, options) {
-                                if (url && typeof url === 'string' && url.includes('/_/crystal/download-url')) {
-                                    // Return a promise that rejects after 1 second
-                                    return new Promise((resolve, reject) => {
-                                        setTimeout(() => {
-                                            reject(new Error('Network connection failed'));
-                                        }, 1000);
-                                    });
-                                }
-                                // For all other requests, use the original fetch
-                                return window.originalFetch(url, options);
-                            };
-                        """)
-                        
-                        # Ensure download button is initially enabled
-                        download_button = page.locator('#download-button')
-                        assert download_button.is_enabled()
-                        assert download_button.text_content() == '⬇ Download'
-                        
-                        # Ensure progress div is initially hidden
-                        progress_div = page.locator('#download-progress')
-                        assert not progress_div.is_visible()
-                        
-                        # Start download
-                        download_button.click()
-                        page.wait_for_function('document.getElementById("download-button").disabled')
-                        assert download_button.text_content() == '⬇ Downloading...'
-                        page.wait_for_selector('#download-progress', state='visible')
-                        
-                        # Wait for download failure. Then:
-                        # 1. Ensure the page did NOT reload
-                        # 2. Wait for the download button to be re-enabled
-                        page.wait_for_function('!document.getElementById("download-button").disabled')
-                        assert download_button.is_enabled()
-                        assert download_button.text_content() == '⬇ Download'
-                        
-                        # Ensure error message is displayed
-                        progress_text = page.locator('#progress-text')
-                        progress_text_content = progress_text.text_content()
-                        assertIn('Download failed:', progress_text_content)
-                        assertIn('Network connection failed', progress_text_content)
-                playwright_future = executor.submit(run_playwright_test)
-                await wait_for_future(playwright_future, timeout=sys.maxsize)
+            def pw_task(page: Page, *args, **kwargs) -> None:
+                # Navigate to comic #1, which should be a "Not in Archive" page
+                page.goto(comic1_url_in_archive)
+                assert page.title() == 'Not in Archive | Crystal'
+                
+                # Mock fetch to simulate network failure after delay
+                # 
+                # Patch window.fetch manually, rather than using the
+                # route() API, since we need a delayed response without
+                # blocking the thread that calls download_button.click()
+                page.evaluate("""
+                    window.originalFetch = window.fetch;
+                    window.fetch = function(url, options) {
+                        if (url && typeof url === 'string' && url.includes('/_/crystal/download-url')) {
+                            // Return a promise that rejects after 1 second
+                            return new Promise((resolve, reject) => {
+                                setTimeout(() => {
+                                    reject(new Error('Network connection failed'));
+                                }, 1000);
+                            });
+                        }
+                        // For all other requests, use the original fetch
+                        return window.originalFetch(url, options);
+                    };
+                """)
+                
+                # Ensure download button is initially enabled
+                download_button = page.locator('#download-button')
+                assert download_button.is_enabled()
+                assert download_button.text_content() == '⬇ Download'
+                
+                # Ensure progress div is initially hidden
+                progress_div = page.locator('#download-progress')
+                assert not progress_div.is_visible()
+                
+                # Start download
+                download_button.click()
+                page.wait_for_function('document.getElementById("download-button").disabled')
+                assert download_button.text_content() == '⬇ Downloading...'
+                page.wait_for_selector('#download-progress', state='visible')
+                
+                # Wait for download failure. Then:
+                # 1. Ensure the page did NOT reload
+                # 2. Wait for the download button to be re-enabled
+                page.wait_for_function('!document.getElementById("download-button").disabled')
+                assert download_button.is_enabled()
+                assert download_button.text_content() == '⬇ Download'
+                
+                # Ensure error message is displayed
+                progress_text = page.locator('#progress-text')
+                progress_text_content = progress_text.text_content() or ''
+                assertIn('Download failed:', progress_text_content)
+                assertIn('Network connection failed', progress_text_content)
+            await pw.run(pw_task)
 
 
 # NOTE: Current implementation is believed to entirely hide all controls related
