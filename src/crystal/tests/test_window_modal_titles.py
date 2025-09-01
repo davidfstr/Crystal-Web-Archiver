@@ -79,7 +79,10 @@ async def test_preferences_dialog_has_title_heading_on_macos_only() -> None:
 
         pref = await PreferencesDialog.wait_for()
         try:
-            title_heading = _find_static_text_with_label(pref._dialog, "Preferences")
+            title_heading = (
+                _find_static_text_with_label(pref._dialog, "Preferences") or
+                _find_static_text_with_label(pref._dialog, "Settings")
+            )
             if is_mac_os():
                 assert title_heading is not None, "Title heading should be present on macOS"
             else:
