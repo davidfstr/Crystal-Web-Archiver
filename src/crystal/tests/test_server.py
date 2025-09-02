@@ -239,13 +239,13 @@ async def test_given_nia_page_visible_and_project_is_readonly_then_download_butt
         content = server_page.content
         
         # Should show readonly warning
-        assert '<div class="readonly-notice">' in content, \
+        assert '<div class="cr-readonly-warning">' in content, \
             "Readonly warning should be visible when project is readonly"
         
         # Download button should be present but disabled
-        assert '<button id="download-button" ' in content, \
+        assert '<button id="cr-download-url-button" ' in content, \
             "Download button should be present in readonly mode"
-        assert '<button id="download-button" disabled ' in content, \
+        assert '<button id="cr-download-url-button" disabled ' in content, \
             "Download button should be disabled in readonly mode"
 
 
@@ -254,13 +254,13 @@ async def test_given_nia_page_visible_and_project_is_writable_then_download_butt
         content = server_page.content
         
         # Should NOT show readonly warning
-        assert '<div class="readonly-notice">' not in content, \
+        assert '<div class="cr-readonly-warning">' not in content, \
             "Readonly warning should NOT be visible when project is writable"
         
         # Download button should be present and enabled
-        assert '<button id="download-button" ' in content, \
+        assert '<button id="cr-download-url-button" ' in content, \
             "Download button should be present when project is writable"
-        assert '<button id="download-button" disabled ' not in content, \
+        assert '<button id="cr-download-url-button" disabled ' not in content, \
             "Download button should NOT be disabled when project is writable"
 
 
@@ -509,29 +509,29 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
                 """)
                 
                 # Ensure download button is initially enabled
-                download_button = page.locator('#download-button')
+                download_button = page.locator('#cr-download-url-button')
                 assert download_button.is_enabled()
                 assert download_button.text_content() == '⬇ Download'
                 
                 # Ensure progress div is initially hidden
-                progress_div = page.locator('#download-progress')
+                progress_div = page.locator('#cr-download-progress-bar')
                 assert not progress_div.is_visible()
                 
                 # Start download
                 download_button.click()
-                page.wait_for_function('document.getElementById("download-button").disabled')
+                page.wait_for_function('document.getElementById("cr-download-url-button").disabled')
                 assert download_button.text_content() == '⬇ Downloading...'
-                page.wait_for_selector('#download-progress', state='visible')
+                page.wait_for_selector('#cr-download-progress-bar', state='visible')
                 
                 # Wait for download failure. Then:
                 # 1. Ensure the page did NOT reload
                 # 2. Wait for the download button to be re-enabled
-                page.wait_for_function('!document.getElementById("download-button").disabled')
+                page.wait_for_function('!document.getElementById("cr-download-url-button").disabled')
                 assert download_button.is_enabled()
                 assert download_button.text_content() == '⬇ Download'
                 
                 # Ensure error message is displayed
-                progress_text = page.locator('#progress-text')
+                progress_text = page.locator('#cr-download-progress-bar__message')
                 progress_text_content = progress_text.text_content() or ''
                 assertIn('Download failed:', progress_text_content)
                 assertIn('Network connection failed', progress_text_content)

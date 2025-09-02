@@ -1148,7 +1148,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             archive_url_html=html_escape(archive_url),
             archive_url_json=json.dumps(archive_url),
             readonly_warning_html=(
-                '<div class="readonly-notice">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
+                '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
                 if readonly else ''
             ),
             download_button_disabled_html=('disabled ' if readonly else ''),
@@ -1651,7 +1651,7 @@ def _pin_date_js(timestamp: int) -> str:
 def _welcome_page_html() -> str:
     welcome_styles = dedent(
         """
-        .welcome-form {
+        .cr-welcome-form {
             margin: 30px 0;
             padding: 20px;
             background: #f8f9fa;
@@ -1659,72 +1659,63 @@ def _welcome_page_html() -> str:
             border-left: 4px solid #4A90E2;
         }
         
-        .form-group {
-            margin-bottom: 15px;
+        .cr-form-row {
+            margin-bottom: 16px;
         }
         
-        .form-label {
+        .cr-form-row__label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
             font-size: 14px;
             color: #495057;
-            margin-bottom: 8px;
-            display: block;
-            font-weight: 500;
         }
         
-        .form-input {
+        .cr-form-row__input {
             width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 16px;
-            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            padding: 8px 12px;
+            border: 2px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.15s ease;
             box-sizing: border-box;
-            transition: border-color 0.2s ease;
         }
         
-        .form-input:focus {
+        .cr-form-row__input:focus {
             outline: none;
             border-color: #4A90E2;
             box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
         }
         
-        .form-submit {
-            background: #4A90E2;
-            color: white;
-            border: none;
+        .cr-form-row__input--giant {
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;  /* more subtle */
             border-radius: 8px;
-            padding: 12px 24px;
             font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            min-width: 80px;
         }
         
-        .form-submit:hover {
-            background: #357ABD;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+        .cr-form-row__input--monospace {
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
         }
         
         /* Dark mode styles for welcome form */
         @media (prefers-color-scheme: dark) {
-            .welcome-form {
+            .cr-welcome-form {
                 background: #404040;
                 border-left: 4px solid #6BB6FF;
             }
             
-            .form-label {
+            .cr-form-row__label {
+                color: #e2e8f0;
+            }
+            
+            .cr-form-row__input {
+                background: #4a5568;
+                border-color: #555;
                 color: #e0e0e0;
             }
             
-            .form-input {
-                background: #2d2d30;
-                border: 2px solid #555;
-                color: #e0e0e0;
-            }
-            
-            .form-input:focus {
+            .cr-form-row__input:focus {
                 border-color: #6BB6FF;
                 box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
             }
@@ -1734,21 +1725,21 @@ def _welcome_page_html() -> str:
     
     content_html = dedent(
         """
-        <div class="error-icon">🏠</div>
+        <div class="cr-page__icon">🏠</div>
         
-        <div class="error-message">
+        <div class="cr-page__title">
             <strong>Welcome to Crystal</strong>
         </div>
         
         <p>Enter the URL of a page to load from the archive:</p>
         
-        <div class="welcome-form">
+        <div class="cr-welcome-form">
             <form action="/">
-                <div class="form-group">
-                    <label for="url-input" class="form-label">URL</label>
-                    <input type="text" id="url-input" name="url" value="http://" class="form-input" />
+                <div class="cr-form-row">
+                    <label for="cr-url-input" class="cr-form-row__label">URL</label>
+                    <input type="text" id="cr-url-input" name="url" value="http://" class="cr-form-row__input cr-form-row__input--giant cr-form-row__input--monospace" />
                 </div>
-                <input type="submit" value="Go" class="form-submit" />
+                <input type="submit" value="Go" class="cr-button cr-button--primary" />
             </form>
         </div>
         """
@@ -1765,20 +1756,20 @@ def _welcome_page_html() -> str:
 def _not_found_page_html() -> str:
     content_html = dedent(
         """
-        <div class="error-icon">❓</div>
+        <div class="cr-page__icon">❓</div>
         
-        <div class="error-message">
+        <div class="cr-page__title">
             <strong>Page Not Found</strong>
         </div>
         
         <p>There is no page here.</p>
         <p>The requested path was not found in this archive.</p>
         
-        <div class="actions">
-            <button onclick="history.back()" class="action-button secondary-button">
+        <div class="cr-page__actions">
+            <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
-            <a href="/" class="action-button primary-button">🏠 Return to Home</a>
+            <a href="/" class="cr-button cr-button--primary">🏠 Return to Home</a>
         </div>
         """
     ).strip()
@@ -1835,7 +1826,7 @@ def _not_in_archive_html(
         /* ------------------------------------------------------------------ */
         /* Readonly Notice */
         
-        .readonly-notice {
+        .cr-readonly-warning {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
             color: #856404;
@@ -1846,7 +1837,7 @@ def _not_in_archive_html(
         }
         
         @media (prefers-color-scheme: dark) {
-            .readonly-notice {
+            .cr-readonly-warning {
                 background: #5a4a2d;
                 border: 1px solid #8b7355;
                 color: #f4d03f;
@@ -1856,17 +1847,17 @@ def _not_in_archive_html(
         /* ------------------------------------------------------------------ */
         /* Download Progress Bar */
         
-        .download-progress {
+        .cr-download-progress-bar {
             display: none;
             margin-top: 15px;
         }
         
-        .download-progress.show {
+        .cr-download-progress-bar.show {
             display: block;
             animation: slideDown 0.6s ease-out;
         }
         
-        .progress-bar {
+        .cr-progress-bar__outline {
             width: 100%;
             height: 8px;
             background: #e9ecef;
@@ -1874,25 +1865,25 @@ def _not_in_archive_html(
             overflow: hidden;
         }
         
-        .progress-fill {
+        .cr-progress-bar__fill {
             height: 100%;
             background: #4A90E2;
             width: 0%;
             transition: width 0.3s ease;
         }
         
-        .progress-text {
+        .cr-progress-bar__message {
             font-size: 14px;
             margin-top: 8px;
             text-align: center;
         }
         
         @media (prefers-color-scheme: dark) {
-            .progress-bar {
+            .cr-progress-bar__outline {
                 background: #404040;
             }
             
-            .progress-fill {
+            .cr-progress-bar__fill {
                 background: #6BB6FF;
             }
         }
@@ -1900,7 +1891,7 @@ def _not_in_archive_html(
         /* ------------------------------------------------------------------ */
         /* Create Group Section: Top */
         
-        .group-creation-section {
+        .cr-create-group-section {
             margin-top: 20px;
             padding: 16px;
             background: #f8f9fa;
@@ -1908,11 +1899,11 @@ def _not_in_archive_html(
             border-radius: 8px;
         }
 
-        .group-checkbox-section {
+        .cr-form-row {
             margin-bottom: 16px;
         }
         
-        .checkbox-label {
+        .cr-checkbox {
             display: flex;
             align-items: center;
             cursor: pointer;
@@ -1920,14 +1911,14 @@ def _not_in_archive_html(
             font-weight: 500;
         }
         
-        .checkbox-label input[type="checkbox"] {
+        .cr-checkbox input[type="checkbox"] {
             margin-right: 8px;
             width: 16px;
             height: 16px;
         }
         
         @media (prefers-color-scheme: dark) {
-            .group-creation-section {
+            .cr-create-group-section {
                 background: #2d3748;
                 border-color: #4a5568;
             }
@@ -1936,16 +1927,16 @@ def _not_in_archive_html(
         /* ------------------------------------------------------------------ */
         /* Create Group Section: Form */
         
-        .group-form {
+        .cr-create-group-form {
             border-top: 1px solid #e9ecef;
             padding-top: 16px;
         }
         
-        .form-row {
+        .cr-form-row {
             margin-bottom: 16px;
         }
         
-        .form-label {
+        .cr-form-row__label {
             display: block;
             margin-bottom: 4px;
             font-weight: 500;
@@ -1953,11 +1944,11 @@ def _not_in_archive_html(
             color: #495057;
         }
         
-        .form-input-container {
+        .cr-form-input-container {
             position: relative;
         }
         
-        .form-input {
+        .cr-form-row__input {
             width: 100%;
             padding: 8px 12px;
             border: 2px solid #ced4da;
@@ -1967,39 +1958,39 @@ def _not_in_archive_html(
             box-sizing: border-box;
         }
         
-        .form-input:focus {
+        .cr-form-row__input:focus {
             outline: none;
             border-color: #4A90E2;
             box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
         }
         
-        .form-hint {
+        .cr-form-row__help-text {
             font-size: 12px;
             color: #6c757d;
             margin-top: 4px;
         }
         
         @media (prefers-color-scheme: dark) {
-            .group-form {
+            .cr-create-group-form {
                 border-color: #4a5568;
             }
             
-            .form-label {
+            .cr-form-row__label {
                 color: #e2e8f0;
             }
             
-            .form-input {
+            .cr-form-row__input {
                 background: #4a5568;
                 border-color: #555;
                 color: #e0e0e0;
             }
             
-            .form-input:focus {
+            .cr-form-row__input:focus {
                 border-color: #6BB6FF;
                 box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
             }
             
-            .form-hint {
+            .cr-form-row__help-text {
                 color: #a0aec0;
             }
         }
@@ -2007,7 +1998,7 @@ def _not_in_archive_html(
         /* ------------------------------------------------------------------ */
         /* Create Group Section: Form: Preview Members */
         
-        .preview-section {
+        .cr-form__section {
             margin-top: 16px;
             padding: 12px;
             background: white;
@@ -2015,19 +2006,19 @@ def _not_in_archive_html(
             border-radius: 4px;
         }
         
-        .preview-header {
+        .cr-form__section-header {
             font-weight: 500;
             margin-bottom: 8px;
             font-size: 14px;
         }
         
-        .preview-label {
+        .cr-form__static-text {
             font-size: 13px;
             color: #6c757d;
             margin-bottom: 8px;
         }
         
-        .preview-urls {
+        .cr-list-ctrl {
             height: 136px;  /* Fixed height for ~8 URLs (8 * 16px line + padding) */
             overflow-y: auto;
             overflow-x: auto;
@@ -2041,7 +2032,7 @@ def _not_in_archive_html(
             min-height: 136px;
         }
         
-        .preview-url-item {
+        .cr-list-ctrl-item {
             padding: 2px 0;
             color: #495057;
             white-space: nowrap;
@@ -2049,62 +2040,34 @@ def _not_in_archive_html(
         }
         
         @media (prefers-color-scheme: dark) {
-            .preview-section {
+            .cr-form__section {
                 background: #4a5568;
                 border-color: #555;
             }
             
-            .preview-header {
+            .cr-form__section-header {
                 color: #e2e8f0;
             }
             
-            .preview-label {
+            .cr-form__static-text {
                 color: #a0aec0;
             }
             
-            .preview-urls {
+            .cr-list-ctrl {
                 background: #2d3748;
                 border-color: #555;
                 color: #e0e0e0;
             }
             
-            .preview-url-item {
+            .cr-list-ctrl-item {
                 color: #e0e0e0;
-            }
-        }
-        
-        /* ------------------------------------------------------------------ */
-        /* Create Group Section: Form: New Group Options */
-        
-        .new-group-options-section {
-            margin-top: 16px;
-            padding: 12px;
-            background: white;
-            border: 1px solid #e9ecef;
-            border-radius: 4px;
-        }
-        
-        .section-header {
-            font-weight: 500;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        
-        @media (prefers-color-scheme: dark) {
-            .new-group-options-section {
-                background: #4a5568;
-                border-color: #555;
-            }
-            
-            .section-header {
-                color: #e2e8f0;
             }
         }
         
         /* ------------------------------------------------------------------ */
         /* Create Group Section: Form: Action Buttons */
         
-        .group-form-actions {
+        .cr-create-group-form__actions {
             margin-top: 16px;
             display: flex;
             align-items: center;
@@ -2112,20 +2075,20 @@ def _not_in_archive_html(
             transition: margin-top 0.6s ease-out;
         }
         /* Remove top margin from form actions when collapsible content is collapsed */
-        .slide-up + .group-form-actions {
+        .slide-up + .cr-create-group-form__actions {
             margin-top: 0;
         }
         
-        .action-message {
+        .cr-action-message {
             font-size: 14px;
             font-weight: 500;
         }
         
-        .action-message.success {
+        .cr-action-message.success {
             color: #28a745;
         }
         
-        .action-message.error {
+        .cr-action-message.error {
             color: #dc3545;
         }
         
@@ -2166,16 +2129,16 @@ def _not_in_archive_html(
     
     content_html = dedent(
         f"""
-        <div class="error-icon">🚫</div>
+        <div class="cr-page__icon">🚫</div>
         
-        <div class="error-message">
+        <div class="cr-page__title">
             <strong>Page Not in Archive</strong>
         </div>
         
         <p>The requested page was not found in this archive.</p>
         <p>The page has not been downloaded yet.</p>
         
-        {_URL_INFO_HTML_TEMPLATE % {
+        {_URL_BOX_HTML_TEMPLATE % {
             'label_html': 'Original URL',
             'url_html_attr': archive_url_html_attr,
             'url_html': archive_url_html
@@ -2183,71 +2146,71 @@ def _not_in_archive_html(
         
         {readonly_warning_html}
         
-        <div class="actions">
-            <button onclick="history.back()" class="action-button secondary-button">
+        <div class="cr-page__actions">
+            <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
-            <button id="download-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="action-button primary-button">⬇ Download</button>
+            <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
         </div>
         
-        <div id="download-progress" class="download-progress">
-            <div class="progress-bar">
-                <div id="progress-fill" class="progress-fill"></div>
+        <div id="cr-download-progress-bar" class="cr-download-progress-bar">
+            <div class="cr-progress-bar__outline">
+                <div id="cr-download-progress-bar__fill" class="cr-progress-bar__fill"></div>
             </div>
-            <div id="progress-text" class="progress-text">Preparing download...</div>
+            <div id="cr-download-progress-bar__message" class="cr-progress-bar__message">Preparing download...</div>
         </div>
         
-        <div class="group-creation-section" {'' if not readonly else 'style="display: none;"'}>
-            <div class="group-checkbox-section">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="create-group-checkbox" onchange="onCreateGroupCheckboxClicked()">
-                    <span class="checkbox-text">Create Group for Similar Pages</span>
+        <div class="cr-create-group-section" {'' if not readonly else 'style="display: none;"'}>
+            <div class="cr-form-row">
+                <label class="cr-checkbox">
+                    <input type="checkbox" id="cr-create-group-checkbox" onchange="onCreateGroupCheckboxClicked()">
+                    <span>Create Group for Similar Pages</span>
                 </label>
             </div>
             
-            <div id="group-form" class="group-form" style="display: none;">
-                <div id="group-form-collapsible-content">
-                    <div class="form-row">
-                        <label class="form-label">URL Pattern:</label>
-                        <div class="form-input-container">
-                            <input type="text" id="group-url-pattern" class="form-input" placeholder="https://example.com/post/*" value="{html_escape(create_group_form_data['predicted_url_pattern'])}">
-                            <div class="form-hint"># = numbers, @ = letters, * = anything but /, ** = anything</div>
+            <div id="cr-create-group-form" class="cr-create-group-form" style="display: none;">
+                <div id="cr-create-group-form__collapsible-content">
+                    <div class="cr-form-row">
+                        <label class="cr-form-row__label">URL Pattern:</label>
+                        <div class="cr-form-input-container">
+                            <input type="text" id="cr-group-url-pattern" class="cr-form-row__input" placeholder="https://example.com/post/*" value="{html_escape(create_group_form_data['predicted_url_pattern'])}">
+                            <div class="cr-form-row__help-text"># = numbers, @ = letters, * = anything but /, ** = anything</div>
                         </div>
                     </div>
                     
-                    <div class="form-row">
-                        <label class="form-label">Source:</label>
-                        <select id="group-source" class="form-input">
+                    <div class="cr-form-row">
+                        <label class="cr-form-row__label">Source:</label>
+                        <select id="cr-group-source" class="cr-form-row__input">
                             <!-- Source options will be populated by JavaScript -->
                         </select>
                     </div>
                     
-                    <div class="form-row">
-                        <label class="form-label">Name:</label>
-                        <input type="text" id="group-name" class="form-input" placeholder="e.g. Post" value="{html_escape(create_group_form_data['predicted_name'])}">
+                    <div class="cr-form-row">
+                        <label class="cr-form-row__label">Name:</label>
+                        <input type="text" id="cr-group-name" class="cr-form-row__input" placeholder="e.g. Post" value="{html_escape(create_group_form_data['predicted_name'])}">
                     </div>
                     
-                    <div class="preview-section">
-                        <div class="preview-header">Preview Members</div>
-                        <div class="preview-label">Known matching URLs:</div>
-                        <div id="preview-urls" class="preview-urls">
+                    <div class="cr-form__section">
+                        <div class="cr-form__section-header">Preview Members</div>
+                        <div class="cr-form__static-text">Known matching URLs:</div>
+                        <div id="cr-preview-urls" class="cr-list-ctrl">
                             <!-- URLs will be populated by JavaScript -->
                         </div>
                     </div>
                     
-                    <div class="new-group-options-section">
-                        <div class="section-header">New Group Options</div>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="download-immediately-checkbox" checked onchange="updateDownloadOrCreateGroupButtonTitleAndStyle()">
-                            <span class="checkbox-text">Download Group Immediately</span>
+                    <div class="cr-form__section">
+                        <div class="cr-form__section-header">New Group Options</div>
+                        <label class="cr-checkbox">
+                            <input type="checkbox" id="cr-download-immediately-checkbox" checked onchange="updateDownloadOrCreateGroupButtonTitleAndStyle()">
+                            <span>Download Group Immediately</span>
                         </label>
                     </div>
                 </div>
                 
-                <div class="group-form-actions">
-                    <button id="group-cancel-button" class="action-button secondary-button" onclick="onCancelCreateGroupButtonClicked()">Cancel</button>
-                    <button id="group-action-button" class="action-button primary-button" onclick="onDownloadOrCreateGroupButtonClicked()">⬇ Download</button>
-                    <span id="group-action-message" class="action-message"></span>
+                <div class="cr-create-group-form__actions">
+                    <button id="cr-cancel-group-button" class="cr-button cr-button--secondary" onclick="onCancelCreateGroupButtonClicked()">Cancel</button>
+                    <button id="cr-group-action-button" class="cr-button cr-button--primary" onclick="onDownloadOrCreateGroupButtonClicked()">⬇ Download</button>
+                    <span id="cr-group-action-message" class="cr-action-message"></span>
                 </div>
             </div>
         </div>
@@ -2264,13 +2227,13 @@ def _not_in_archive_html(
             let eventSource = null;
             
             async function onDownloadUrlButtonClicked() {
-                const createGroupCheckbox = document.getElementById('create-group-checkbox');
+                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
                 const groupFormIsVisibleAndEnabled = (
                     createGroupCheckbox && createGroupCheckbox.checked &&
                     isFormEnabled()  // form action already performed
                 );
                 if (groupFormIsVisibleAndEnabled) {
-                    const downloadImmediatelyCheckbox = document.getElementById('download-immediately-checkbox');
+                    const downloadImmediatelyCheckbox = document.getElementById('cr-download-immediately-checkbox');
                     if (downloadImmediatelyCheckbox && downloadImmediatelyCheckbox.checked) {
                         // Press "Download" button in the group form
                         await onDownloadOrCreateGroupButtonClicked();
@@ -2288,10 +2251,10 @@ def _not_in_archive_html(
             }
             
             async function startUrlDownload() {
-                const downloadButton = document.getElementById('download-button');
-                const progressDiv = document.getElementById('download-progress');
-                const progressFill = document.getElementById('progress-fill');
-                const progressText = document.getElementById('progress-text');
+                const downloadButton = document.getElementById('cr-download-url-button');
+                const progressDiv = document.getElementById('cr-download-progress-bar');
+                const progressFill = document.getElementById('cr-download-progress-bar__fill');
+                const progressText = document.getElementById('cr-download-progress-bar__message');
                 
                 // Disable the download button
                 downloadButton.disabled = true;
@@ -2406,8 +2369,8 @@ def _not_in_archive_html(
             
             // Shows the Create Group Form iff the Create Group checkbox is ticked.
             function updateCreateGroupFormVisible() {
-                const checkbox = document.getElementById('create-group-checkbox');
-                const form = document.getElementById('group-form');
+                const checkbox = document.getElementById('cr-create-group-checkbox');
+                const form = document.getElementById('cr-create-group-form');
                 
                 if (checkbox.checked) {
                     form.style.display = 'block';
@@ -2422,7 +2385,7 @@ def _not_in_archive_html(
             // Collapses the Create Group Form after a Create actions succeeded,
             // leaving the success message visible.
             function collapseCreateGroupForm() {
-                const collapsibleContent = document.getElementById('group-form-collapsible-content');
+                const collapsibleContent = document.getElementById('cr-create-group-form__collapsible-content');
                 collapsibleContent.classList.add('slide-up');
             }
             
@@ -2431,10 +2394,10 @@ def _not_in_archive_html(
             
             // Respond to Enter/Escape keys
             document.addEventListener('DOMContentLoaded', function() {
-                const urlPatternInput = document.getElementById('group-url-pattern');
+                const urlPatternInput = document.getElementById('cr-group-url-pattern');
                 urlPatternInput.addEventListener('keydown', handleFormKeydown);
                 
-                const nameInput = document.getElementById('group-name');
+                const nameInput = document.getElementById('cr-group-name');
                 nameInput.addEventListener('keydown', handleFormKeydown);
             });
             
@@ -2456,7 +2419,7 @@ def _not_in_archive_html(
             // Create Group Form: Source Field
             
             function populateSourceDropdown() {
-                const sourceSelect = document.getElementById('group-source');
+                const sourceSelect = document.getElementById('cr-group-source');
                 sourceSelect.innerHTML = '';
                 
                 createGroupFormData.source_choices.forEach(choice => {
@@ -2483,16 +2446,16 @@ def _not_in_archive_html(
             
             // Update Preview Member URLs in real-time as URL Pattern changes
             document.addEventListener('DOMContentLoaded', function() {
-                const urlPatternInput = document.getElementById('group-url-pattern');
+                const urlPatternInput = document.getElementById('cr-group-url-pattern');
                 urlPatternInput.addEventListener('input', updatePreviewUrls);
             });
             
             async function updatePreviewUrls() {
-                const urlPattern = document.getElementById('group-url-pattern').value.trim();
-                const previewContainer = document.getElementById('preview-urls');
+                const urlPattern = document.getElementById('cr-group-url-pattern').value.trim();
+                const previewContainer = document.getElementById('cr-preview-urls');
                 
                 if (!urlPattern) {
-                    previewContainer.innerHTML = '<div class="preview-url-item">Enter a URL pattern to see matching URLs</div>';
+                    previewContainer.innerHTML = '<div class="cr-list-ctrl-item">Enter a URL pattern to see matching URLs</div>';
                     return;
                 }
                 
@@ -2504,7 +2467,7 @@ def _not_in_archive_html(
                 const loadingTimeout = setTimeout(() => {
                     // Only show loading if this request is still the latest
                     if (updatePreviewUrls.lastRequestTime === requestStartTime) {
-                        previewContainer.innerHTML = '<div class="preview-url-item">Loading preview...</div>';
+                        previewContainer.innerHTML = '<div class="cr-list-ctrl-item">Loading preview...</div>';
                     }
                 }, 200);
                 
@@ -2534,13 +2497,13 @@ def _not_in_archive_html(
                     const matchingUrls = result.matching_urls;
                     
                     if (matchingUrls.length === 0) {
-                        previewContainer.innerHTML = '<div class="preview-url-item">No matching URLs found</div>';
+                        previewContainer.innerHTML = '<div class="cr-list-ctrl-item">No matching URLs found</div>';
                     } else {
                         // Clear container and add URLs safely
                         previewContainer.innerHTML = '';
                         matchingUrls.forEach(url => {
                             const urlDiv = document.createElement('div');
-                            urlDiv.className = 'preview-url-item';
+                            urlDiv.className = 'cr-list-ctrl-item';
                             urlDiv.textContent = url;
                             previewContainer.appendChild(urlDiv);
                         });
@@ -2552,7 +2515,7 @@ def _not_in_archive_html(
                     // Only update UI if this request is still the latest
                     if (updatePreviewUrls.lastRequestTime === requestStartTime) {
                         console.error('Preview URLs error:', error);
-                        previewContainer.innerHTML = '<div class="preview-url-item">Error loading preview URLs</div>';
+                        previewContainer.innerHTML = '<div class="cr-list-ctrl-item">Error loading preview URLs</div>';
                     }
                 }
             }
@@ -2561,7 +2524,7 @@ def _not_in_archive_html(
             // Create Group Form: Cancel Button
             
             function onCancelCreateGroupButtonClicked() {
-                const checkbox = document.getElementById('create-group-checkbox');
+                const checkbox = document.getElementById('cr-create-group-checkbox');
                 checkbox.checked = false;
                 updateCreateGroupFormVisible();
             }
@@ -2578,23 +2541,23 @@ def _not_in_archive_html(
             // Create Group Form to display the appropriate title,
             // depending on whether the Download Immediately checkbox is ticked.
             function updateDownloadOrCreateGroupButtonTitleAndStyle() {
-                const downloadImmediatelyCheckbox = document.getElementById('download-immediately-checkbox');
-                const actionButton = document.getElementById('group-action-button');
+                const downloadImmediatelyCheckbox = document.getElementById('cr-download-immediately-checkbox');
+                const actionButton = document.getElementById('cr-group-action-button');
                 
                 if (downloadImmediatelyCheckbox && downloadImmediatelyCheckbox.checked) {
                     actionButton.textContent = '⬇ Download';
-                    actionButton.className = 'action-button primary-button';
+                    actionButton.className = 'cr-button cr-button--primary';
                 } else {
                     actionButton.textContent = '✚ Create';
-                    actionButton.className = 'action-button secondary-button';
+                    actionButton.className = 'cr-button cr-button--secondary';
                 }
             }
             
             async function onDownloadOrCreateGroupButtonClicked(downloadUrlImmediately/*=false*/) {
-                const urlPattern = document.getElementById('group-url-pattern').value.trim();
-                const sourceValue = document.getElementById('group-source').value;
-                const name = document.getElementById('group-name').value.trim();
-                const downloadGroupImmediately = document.getElementById('download-immediately-checkbox').checked;
+                const urlPattern = document.getElementById('cr-group-url-pattern').value.trim();
+                const sourceValue = document.getElementById('cr-group-source').value;
+                const name = document.getElementById('cr-group-name').value.trim();
+                const downloadGroupImmediately = document.getElementById('cr-download-immediately-checkbox').checked;
                 
                 if (!urlPattern) {
                     showActionMessage('✖️ Please enter a URL pattern.', /*isSuccess=*/false);
@@ -2604,7 +2567,7 @@ def _not_in_archive_html(
                 clearActionMessage();
                 setFormEnabled(false);
                 
-                const actionButton = document.getElementById('group-action-button');
+                const actionButton = document.getElementById('cr-group-action-button');
                 const originalText = actionButton.textContent;
                 actionButton.textContent = downloadGroupImmediately ? 'Creating & Starting Download...' : 'Creating...';
                 
@@ -2651,32 +2614,32 @@ def _not_in_archive_html(
             // Create Group Form: Action Message
             
             function showActionMessage(message, isSuccess) {
-                const messageElement = document.getElementById('group-action-message');
+                const messageElement = document.getElementById('cr-group-action-message');
                 messageElement.textContent = message;
-                messageElement.className = `action-message ${isSuccess ? 'success' : 'error'}`;
+                messageElement.className = `cr-action-message ${isSuccess ? 'success' : 'error'}`;
             }
             
             function clearActionMessage() {
-                const messageElement = document.getElementById('group-action-message');
+                const messageElement = document.getElementById('cr-group-action-message');
                 messageElement.textContent = '';
-                messageElement.className = 'action-message';
+                messageElement.className = 'cr-action-message';
             }
             
             // -----------------------------------------------------------------
             // Create Group Form: Enabled State
             
             function setFormEnabled(enabled) {
-                const inputs = document.querySelectorAll('#group-form input, #group-form select, #group-form button');
+                const inputs = document.querySelectorAll('#cr-create-group-form input, #cr-create-group-form select, #cr-create-group-form button');
                 inputs.forEach(input => {
                     input.disabled = !enabled;
                 });
                 
-                const createGroupCheckbox = document.getElementById('create-group-checkbox');
+                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
                 createGroupCheckbox.disabled = !enabled;
             }
             
             function isFormEnabled() {
-                const createGroupCheckbox = document.getElementById('create-group-checkbox');
+                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
                 return !createGroupCheckbox.disabled;
             }
             
@@ -2691,7 +2654,7 @@ def _not_in_archive_html(
     return _base_page_html(
         title_html='Not in Archive | Crystal',
         style_html=(
-            _URL_INFO_STYLE_TEMPLATE + '\n' + 
+            _URL_BOX_STYLE_TEMPLATE + '\n' + 
             not_in_archive_styles
         ),
         content_html=content_html,
@@ -2706,9 +2669,9 @@ def _fetch_error_html(
         ) -> str:    
     content_html = dedent(
         f"""
-        <div class="error-icon">⚠️</div>
+        <div class="cr-page__icon">⚠️</div>
         
-        <div class="error-message">
+        <div class="cr-page__title">
             <strong>Fetch Error</strong>
         </div>
         
@@ -2717,14 +2680,14 @@ def _fetch_error_html(
             was encountered when fetching this resource.
         </p>
         
-        {_URL_INFO_HTML_TEMPLATE % {
+        {_URL_BOX_HTML_TEMPLATE % {
             'label_html': 'Original URL',
             'url_html_attr': archive_url,
             'url_html': html_escape(archive_url)
         } }
         
-        <div class="actions">
-            <button onclick="history.back()" class="action-button secondary-button">
+        <div class="cr-page__actions">
+            <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
         </div>
@@ -2734,7 +2697,7 @@ def _fetch_error_html(
     return _base_page_html(
         title_html='Fetch Error | Crystal',
         style_html=(
-            _URL_INFO_STYLE_TEMPLATE
+            _URL_BOX_STYLE_TEMPLATE
         ),
         content_html=content_html,
         script_html='',
@@ -2767,7 +2730,7 @@ def _base_page_html(
 
 _BASE_PAGE_STYLE_TEMPLATE = dedent(
     """
-    body {
+    .cr-body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         line-height: 1.6;
         margin: 0;
@@ -2780,7 +2743,7 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         overflow-y: scroll;
     }
     
-    .container {
+    .cr-body__container {
         max-width: 600px;
         margin: 0 auto;
         background: white;
@@ -2789,7 +2752,7 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     }
     
-    .header {
+    .cr-brand-header {
         display: flex;
         align-items: center;
         margin-bottom: 30px;
@@ -2799,22 +2762,22 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     
     /* Dark mode styles for top of page */
     @media (prefers-color-scheme: dark) {
-        body {
+        .cr-body {
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d30 100%);
             color: #e0e0e0;
         }
         
-        .container {
+        .cr-body__container {
             background: #2d2d30;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         }
         
-        .header {
+        .cr-brand-header {
             border-bottom: 2px solid #404040;
         }
     }
     
-    .logo {
+    .cr-brand-header__logo {
         width: 48px;
         height: 48px;
         margin-right: 16px;
@@ -2822,44 +2785,44 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         border-radius: 8px;
     }
     
-    .brand-text {
+    .cr-brand-header__text {
         flex: 1;
     }
     
-    .brand-title {
+    .cr-brand-header__title {
         margin: 0;
         height: 32px;
         line-height: 1;
     }
     
-    .brand-title img {
+    .cr-brand-header__title img {
         height: 32px;
         width: auto;
         vertical-align: baseline;
     }
     
     /* Default to light logotext */
-    .logotext-light {
+    .cr-brand-header__title__logotext--light {
         display: inline;
     }
-    .logotext-dark {
+    .cr-brand-header__title__logotext--dark {
         display: none;
     }
     
-    .brand-subtitle {
+    .cr-brand-header__subtitle {
         font-size: 14px;
         color: #6c757d;
         margin: 0;
     }
     
-    .error-icon {
+    .cr-page__icon {
         font-size: 64px;
         color: #e74c3c;
         text-align: center;
         margin: 20px 0;
     }
     
-    .error-message {
+    .cr-page__title {
         font-size: 18px;
         color: #2c3e50;
         text-align: center;
@@ -2868,28 +2831,28 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     
     /* Dark mode styles for brand and content */
     @media (prefers-color-scheme: dark) {
-        .brand-subtitle {
+        .cr-brand-header__subtitle {
             color: #a0a0a0;
         }
         
-        .error-message {
+        .cr-page__title {
             color: #e0e0e0;
         }
         
         /* Switch to dark logotext */
-        .logotext-light {
+        .cr-brand-header__title__logotext--light {
             display: none;
         }
-        .logotext-dark {
+        .cr-brand-header__title__logotext--dark {
             display: inline;
         }
     }
     
-    .actions {
+    .cr-page__actions {
         margin: 30px 0;
     }
     
-    .action-button {
+    .cr-button {
         display: inline-block;
         padding: 12px 24px;
         margin: 8px 8px 8px 0;
@@ -2909,47 +2872,47 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         line-height: 24px;
     }
     
-    .primary-button {
+    .cr-button--primary {
         background: #4A90E2;
         color: white;
     }
     
-    .primary-button:hover {
+    .cr-button--primary:hover {
         background: #357ABD;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
     }
     
-    .primary-button:disabled {
+    .cr-button--primary:disabled {
         opacity: 0.5;
         cursor: not-allowed;
         pointer-events: none;
     }
     
-    .primary-button:disabled:hover {
+    .cr-button--primary:disabled:hover {
         background: #4A90E2;
         transform: none;
         box-shadow: none;
     }
     
-    .secondary-button {
+    .cr-button--secondary {
         background: #6c757d;
         color: white;
     }
     
-    .secondary-button:hover {
+    .cr-button--secondary:hover {
         background: #5a6268;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
     }
     
-    .secondary-button:disabled {
+    .cr-button--secondary:disabled {
         opacity: 0.5;
         cursor: not-allowed;
         pointer-events: none;
     }
     
-    .secondary-button:disabled:hover {
+    .cr-button--secondary:disabled:hover {
         background: #6c757d;
         transform: none;
         box-shadow: none;
@@ -2970,26 +2933,26 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
             %(style_html)s
         </style>
     </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="logo" />
-                <div class="brand-text">
-                    <h1 class="brand-title">
+    <body class="cr-body">
+        <div class="cr-body__container">
+            <div class="cr-brand-header">
+                <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="cr-brand-header__logo" />
+                <div class="cr-brand-header__text">
+                    <h1 class="cr-brand-header__title">
                         <img
                             src="/_/crystal/resources/logotext.png" 
                             srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
                             alt="Crystal"
-                            class="logotext-light"
+                            class="cr-brand-header__title__logotext--light"
                         />
                         <img
                             src="/_/crystal/resources/logotext-dark.png" 
                             srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
                             alt="Crystal"
-                            class="logotext-dark"
+                            class="cr-brand-header__title__logotext--dark"
                         />
                     </h1>
-                    <p class="brand-subtitle">A Website Archiver</p>
+                    <p class="cr-brand-header__subtitle">A Website Archiver</p>
                 </div>
             </div>
             
@@ -3006,9 +2969,9 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # HTML Templates: URL Info Box
 
-_URL_INFO_STYLE_TEMPLATE = dedent(
+_URL_BOX_STYLE_TEMPLATE = dedent(
     """
-    .url-info {
+    .cr-url-box {
         background: #f8f9fa;
         padding: 15px;
         border-radius: 8px;
@@ -3016,7 +2979,7 @@ _URL_INFO_STYLE_TEMPLATE = dedent(
         margin: 20px 0;
     }
     
-    .url-label {
+    .cr-url-box__label {
         font-size: 12px;
         color: #6c757d;
         text-transform: uppercase;
@@ -3025,7 +2988,7 @@ _URL_INFO_STYLE_TEMPLATE = dedent(
         font-weight: 600;
     }
     
-    .url-link {
+    .cr-url-box__link {
         color: #4A90E2;
         text-decoration: none;
         word-break: break-all;
@@ -3033,22 +2996,22 @@ _URL_INFO_STYLE_TEMPLATE = dedent(
         font-size: 14px;
     }
     
-    .url-link:hover {
+    .cr-url-box__link:hover {
         text-decoration: underline;
     }
     
     /* Dark mode styles for URL */
     @media (prefers-color-scheme: dark) {
-        .url-info {
+        .cr-url-box {
             background: #404040;
             border-left: 4px solid #6BB6FF;
         }
         
-        .url-label {
+        .cr-url-box__label {
             color: #a0a0a0;
         }
         
-        .url-link {
+        .cr-url-box__link {
             color: #6BB6FF;
         }
     }
@@ -3056,11 +3019,11 @@ _URL_INFO_STYLE_TEMPLATE = dedent(
 ).lstrip()  # type: str
 
 
-_URL_INFO_HTML_TEMPLATE = dedent(
+_URL_BOX_HTML_TEMPLATE = dedent(
     """
-    <div class="url-info">
-        <div class="url-label">%(label_html)s</div>
-        <a href="%(url_html_attr)s" class="url-link" target="_blank" rel="noopener">%(url_html)s</a>
+    <div class="cr-url-box">
+        <div class="cr-url-box__label">%(label_html)s</div>
+        <a href="%(url_html_attr)s" class="cr-url-box__link" target="_blank" rel="noopener">%(url_html)s</a>
     </div>
     """
 ).strip()  # type: str
