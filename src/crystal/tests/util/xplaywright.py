@@ -16,14 +16,19 @@ import sys
 from typing import Any, TYPE_CHECKING, Protocol
 
 
-# Importable types: Page
+# Importable Playright types
+# 
+# These types are designed to be imported by tests without those tests
+# worrying about whether the underlying "playwright" package is available or not.
 if TYPE_CHECKING:
-    from playwright.sync_api import Page
+    from playwright.sync_api import Locator, Page as RawPage, expect
 else:
     try:
-        from playwright.sync_api import Page
+        from playwright.sync_api import Locator, Page as RawPage, expect
     except ImportError:
-        Page = Any
+        Locator = Any
+        RawPage = Any
+        expect = lambda *args, **kwargs: None
 
 
 # ------------------------------------------------------------------------------
@@ -42,7 +47,7 @@ def awith_playwright(test_func: 'Callable[[Playwright], Awaitable[None]]') -> Ca
 
 class BlockUsingPlaywright(Protocol):
     # NOTE: The *args and **kwargs allow the signature to be extended in the future
-    def __call__(self, page: Page, *args, **kwargs) -> None:
+    def __call__(self, raw_page: RawPage, *args, **kwargs) -> None:
         ...
 
 

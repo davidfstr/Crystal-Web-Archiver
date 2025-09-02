@@ -8,6 +8,7 @@ from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
 from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.downloads import network_down
+from crystal.tests.util.pages import NotInArchivePage, network_down_after_delay
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, extracted_project, fetch_archive_url,
@@ -19,7 +20,9 @@ from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, wait_for_future
 from crystal.tests.util.windows import (
     MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
 )
-from crystal.tests.util.xplaywright import Page, Playwright, awith_playwright
+from crystal.tests.util.xplaywright import (
+    Playwright, RawPage, awith_playwright, expect,
+)
 from crystal.util.ports import is_port_in_use
 from crystal.util.xos import is_linux
 from io import StringIO
@@ -482,59 +485,37 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
             with assert_does_open_webbrowser_to(home_url_in_archive):
                 click_button(mw.view_button)
 
-            def pw_task(page: Page, *args, **kwargs) -> None:
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
                 # Navigate to comic #1, which should be a "Not in Archive" page
-                page.goto(comic1_url_in_archive)
-                assert page.title() == 'Not in Archive | Crystal'
+                page = NotInArchivePage.open(raw_page, url_in_archive=comic1_url_in_archive)
                 
-                # Mock fetch to simulate network failure after delay
-                # 
-                # Patch window.fetch manually, rather than using the
-                # route() API, since we need a delayed response without
-                # blocking the thread that calls download_button.click()
-                page.evaluate("""
-                    window.originalFetch = window.fetch;
-                    window.fetch = function(url, options) {
-                        if (url && typeof url === 'string' && url.includes('/_/crystal/download-url')) {
-                            // Return a promise that rejects after 1 second
-                            return new Promise((resolve, reject) => {
-                                setTimeout(() => {
-                                    reject(new Error('Network connection failed'));
-                                }, 1000);
-                            });
-                        }
-                        // For all other requests, use the original fetch
-                        return window.originalFetch(url, options);
-                    };
-                """)
-                
-                # Ensure download button is initially enabled
-                download_button = page.locator('#cr-download-url-button')
-                assert download_button.is_enabled()
-                assert download_button.text_content() == '⬇ Download'
-                
-                # Ensure progress div is initially hidden
-                progress_div = page.locator('#cr-download-progress-bar')
-                assert not progress_div.is_visible()
-                
-                # Start download
-                download_button.click()
-                page.wait_for_function('document.getElementById("cr-download-url-button").disabled')
-                assert download_button.text_content() == '⬇ Downloading...'
-                page.wait_for_selector('#cr-download-progress-bar', state='visible')
-                
-                # Wait for download failure. Then:
-                # 1. Ensure the page did NOT reload
-                # 2. Wait for the download button to be re-enabled
-                page.wait_for_function('!document.getElementById("cr-download-url-button").disabled')
-                assert download_button.is_enabled()
-                assert download_button.text_content() == '⬇ Download'
-                
-                # Ensure error message is displayed
-                progress_text = page.locator('#cr-download-progress-bar__message')
-                progress_text_content = progress_text.text_content() or ''
-                assertIn('Download failed:', progress_text_content)
-                assertIn('Network connection failed', progress_text_content)
+                with network_down_after_delay(page):
+                    # Ensure download button is initially enabled
+                    download_button = page.download_button
+                    assert download_button.is_enabled()
+                    assert download_button.text_content() == '⬇ Download'
+                    
+                    # Ensure progress div is initially hidden
+                    progress_bar = page.progress_bar
+                    assert not progress_bar.is_visible()
+                    
+                    # Start download
+                    download_button.click()
+                    expect(download_button).to_be_disabled()
+                    assert download_button.text_content() == '⬇ Downloading...'
+                    progress_bar.wait_for(state='visible')
+                    
+                    # Wait for download failure. Then:
+                    # 1. Ensure the page did NOT reload
+                    # 2. Wait for the download button to be re-enabled
+                    expect(download_button).to_be_enabled()
+                    assert download_button.is_enabled()
+                    assert download_button.text_content() == '⬇ Download'
+                    
+                    # Ensure error message is displayed
+                    progress_bar_message = page.progress_bar_message
+                    assertIn('Download failed:', progress_bar_message)
+                    assertIn('Network connection failed', progress_bar_message)
             await pw.run(pw_task)
 
 
