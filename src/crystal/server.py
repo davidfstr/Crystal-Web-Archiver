@@ -1903,6 +1903,12 @@ def _not_in_archive_html(
             margin-bottom: 16px;
         }
         
+        /* Remove bottom margin from checkbox row when checkbox is unchecked
+         * the following #cr-create-group-form is hidden */
+        .cr-form-row:has(input#cr-create-group-checkbox:not(:checked)) {
+            margin-bottom: 0;
+        }
+        
         .cr-checkbox {
             display: flex;
             align-items: center;
@@ -1915,6 +1921,13 @@ def _not_in_archive_html(
             margin-right: 8px;
             width: 16px;
             height: 16px;
+        }
+        
+        .cr-checkbox:has(input[type="checkbox"]:disabled) {
+            cursor: not-allowed;
+        }
+        .cr-checkbox:has(input[type="checkbox"]:disabled) span {
+            opacity: 0.5;
         }
         
         @media (prefers-color-scheme: dark) {
@@ -1930,10 +1943,6 @@ def _not_in_archive_html(
         .cr-create-group-form {
             border-top: 1px solid #e9ecef;
             padding-top: 16px;
-        }
-        
-        .cr-form-row {
-            margin-bottom: 16px;
         }
         
         .cr-form-row__label {
@@ -2160,10 +2169,10 @@ def _not_in_archive_html(
             <div id="cr-download-progress-bar__message" class="cr-progress-bar__message">Preparing download...</div>
         </div>
         
-        <div class="cr-create-group-section" {'' if not readonly else 'style="display: none;"'}>
+        <div class="cr-create-group-section">
             <div class="cr-form-row">
                 <label class="cr-checkbox">
-                    <input type="checkbox" id="cr-create-group-checkbox" onchange="onCreateGroupCheckboxClicked()">
+                    <input type="checkbox" id="cr-create-group-checkbox" {'disabled ' if readonly else ''}onchange="onCreateGroupCheckboxClicked()">
                     <span>Create Group for Similar Pages</span>
                 </label>
             </div>

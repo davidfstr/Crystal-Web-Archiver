@@ -38,7 +38,7 @@ import re
 import sys
 import tempfile
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from unittest.mock import ANY, patch
 import wx
 
@@ -197,13 +197,15 @@ class OpenOrCreateDialog:
             raise
         finally:
             if autoclose:
-                # HACK: Suppress prompt to save changes upon close
-                if project.is_untitled:
-                    project._is_dirty = False
+                def suppress_do_not_save_changes_prompt():
+                    # HACK: Suppress prompt to save changes upon close
+                    if project.is_untitled:
+                        project._is_dirty = False
                 
                 await mw.close(
                     exc_info_while_close,
-                    wait_for_tasks_to_complete=wait_for_tasks_to_complete_on_close)
+                    wait_for_tasks_to_complete=wait_for_tasks_to_complete_on_close,
+                    before_close_func=suppress_do_not_save_changes_prompt)
     
     async def create_and_leave_open(self) -> MainWindow:
         old_opened_project = Project._last_opened_project  # capture
@@ -383,6 +385,16 @@ class MainWindow:
         else:
             raise AssertionError()
     
+    @property
+    def edit_button_label_type(self) -> Literal['Edit', 'Get Info']:
+        label = wx.Control.RemoveMnemonics(self.edit_button.Label)
+        if 'Edit' in label:
+            return 'Edit'
+        elif 'Get Info' in label:
+            return 'Get Info'
+        else:
+            raise AssertionError('Unexpected label for edit button: {label!r}')
+    
     # === Operations ===
     
     async def click_download_button(self, *, immediate_finish_ok: bool=False) -> None:
@@ -418,7 +430,11 @@ class MainWindow:
     
     CLOSE_TIMEOUT = 4.0
 
-    async def close(self, exc_info=None, *, wait_for_tasks_to_complete: bool | None=None) -> None:
+    async def close(self,
+            exc_info=None,
+            *, wait_for_tasks_to_complete: bool | None=None,
+            before_close_func: Callable[[], None]=lambda: None,
+            ) -> None:
         if wait_for_tasks_to_complete is None:  # auto
             wait_for_tasks_to_complete = not is_synced_with_scheduler_thread()
 
@@ -445,6 +461,7 @@ class MainWindow:
                 
                 # (continue)
         
+        before_close_func()
         self.main_window.Close()
         await self.wait_for_close()
     

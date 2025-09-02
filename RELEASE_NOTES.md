@@ -22,8 +22,12 @@ Release Notes ⋮
     * The "View" button no longer appears squished on Linux.
 
 * Workflow improvements
-    * Missing pages can be immediately downloaded with 1 click when browsing
-      a downloaded website.
+    * A website can be effectively downloaded entirely by browsing a partially
+      downloaded site via a web browser, rather than through Crystal's traditional UI:
+        * Missing pages can be immediately downloaded with 1 click when browsing
+          a partialy downloaded website.
+        * Groups can be immediately added with 2 clicks when browsing
+          a partialy downloaded website.
     * Untitled projects are automatically reopened after an unexpected quit.
     * Untitled projects are now saved to a permanent hidden directory instead of
       the system temporary directory, preventing data loss after unexpected

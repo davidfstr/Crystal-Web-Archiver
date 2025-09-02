@@ -17,7 +17,8 @@ See also:
 #       "playwright" package is not available.
 from collections.abc import Iterator
 from contextlib import contextmanager
-from crystal.tests.util.xplaywright import Locator, RawPage
+from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.xplaywright import Condition, CountToBeZeroCondition, HasClassCondition, expect, Locator, RawPage
 
 
 # ------------------------------------------------------------------------------
@@ -32,20 +33,24 @@ class NotInArchivePage(AbstractPage):
     @classmethod
     def open(cls, raw_page: RawPage, *, url_in_archive: str) -> 'NotInArchivePage':
         raw_page.goto(url_in_archive)
-        return NotInArchivePage.connect(raw_page)
+        return NotInArchivePage.wait_for(raw_page)
     
     @classmethod
-    def connect(cls, raw_page: RawPage) -> 'NotInArchivePage':
-        assert raw_page.title() == 'Not in Archive | Crystal'
+    def wait_for(cls, raw_page: RawPage) -> 'NotInArchivePage':
+        expect(raw_page).to_have_title('Not in Archive | Crystal')
         return NotInArchivePage(raw_page, _ready=True)
     
     def __init__(self, raw_page: RawPage, _ready: bool=False) -> None:
-        assert _ready, 'Did you mean to use NotInArchivePage.open() or .connect()?'
+        assert _ready, 'Did you mean to use NotInArchivePage.open() or .wait_for()?'
         super().__init__(raw_page)
     
+    # === URL Information ===
+    
     @property
-    def download_button(self) -> Locator:
+    def download_url_button(self) -> Locator:
         return self.raw_page.locator('#cr-download-url-button')
+    
+    # === Progress Bar ===
     
     @property
     def progress_bar(self) -> Locator:
@@ -56,6 +61,88 @@ class NotInArchivePage(AbstractPage):
         progress_bar_message = self.raw_page.locator('#cr-download-progress-bar__message')
         progress_bar_message_str = progress_bar_message.text_content() or ''
         return progress_bar_message_str
+    
+    def wait_for_progress_bar_visible_and_reload_page(self) -> None:
+        from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
+        
+        # TODO: Wait for either of the following conditions at the same time,
+        #       so that it's not necessary to wait the full timeout time
+        #       before continuing if the second condition matches
+        try:
+            self.progress_bar.wait_for(state='visible', timeout=500)
+        except PlaywrightTimeoutError:
+            if self.raw_page.title != 'Not in Archive | Crystal':
+                # Already navigated away from page
+                pass
+            else:
+                raise
+        
+        # Wait for the page to reload after download completes
+        expect(self.raw_page).not_to_have_title('Not in Archive | Crystal')
+    
+    # === Create Group Form ===
+    
+    @property
+    def create_group_checkbox(self) -> Locator:
+        return self.raw_page.locator('#cr-create-group-checkbox')
+    
+    @property
+    def create_group_form(self) -> Locator:
+        return self.raw_page.locator('#cr-create-group-form')
+    
+    @property
+    def create_group_form_enabled(self) -> Condition:
+        disabled_inputs = self.raw_page.locator('#cr-create-group-form input:disabled, #cr-create-group-form select:disabled, #cr-create-group-form button:disabled')
+        return CountToBeZeroCondition(disabled_inputs)
+    
+    @property
+    def create_group_form_collapsed(self) -> Condition:
+        collapsible_content = self.raw_page.locator('#cr-create-group-form__collapsible-content')
+        return HasClassCondition(collapsible_content, 'slide-up')
+    
+    @property
+    def url_pattern_field(self) -> Locator:
+        return self.raw_page.locator('#cr-group-url-pattern')
+    
+    @property
+    def source_dropdown(self) -> Locator:
+        return self.raw_page.locator('#cr-group-source')
+    
+    @property
+    def name_field(self) -> Locator:
+        return self.raw_page.locator('#cr-group-name')
+    
+    @property
+    def preview_urls_container(self) -> Locator:
+        return self.raw_page.locator('#cr-preview-urls')
+    
+    def wait_for_initial_preview_urls(self) -> None:
+        first_preview_url = self.preview_urls_container.locator('.cr-list-ctrl-item').first
+        first_preview_url.wait_for()
+        expect(first_preview_url).not_to_contain_text('Enter a URL pattern to see matching URLs')
+        expect(first_preview_url).not_to_contain_text('Loading preview...')
+    
+    def wait_for_preview_urls_after_url_pattern_changed(self) -> None:
+        # NOTE: Currently the same waiting logic will work, but I suspect
+        #       different logic may be needed in the future
+        self.wait_for_initial_preview_urls()
+    
+    @property
+    def download_immediately_checkbox(self) -> Locator:
+        return self.raw_page.locator('#cr-download-immediately-checkbox')
+    
+    @property
+    def cancel_group_button(self) -> Locator:
+        return self.raw_page.locator('#cr-cancel-group-button')
+    
+    @property
+    def download_or_create_group_button(self) -> Locator:
+        return self.raw_page.locator('#cr-group-action-button')
+    
+    @property
+    def action_message(self) -> Locator:
+        """The success/error message displayed in the form actions area."""
+        return self.raw_page.locator('.cr-action-message')
 
 
 # ------------------------------------------------------------------------------
@@ -77,7 +164,11 @@ def network_down_after_delay(page: AbstractPage | RawPage) -> Iterator[None]:
         }
         window.crOriginalFetch = window.fetch;
         window.fetch = function(url, options) {
-            if (url && typeof url === 'string' && url.includes('/_/crystal/download-url')) {
+            if (url && typeof url === 'string' && (
+                url.includes('/_/crystal/download-url') ||
+                url.includes('/_/crystal/create-group') ||
+                url.includes('/_/crystal/preview-urls')
+            )) {
                 // Return a promise that rejects after 1 second
                 return new Promise((resolve, reject) => {
                     setTimeout(() => {
