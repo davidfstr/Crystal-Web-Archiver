@@ -68,6 +68,8 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
             
             # Try to start second server, also on _DEFAULT_SERVER_PORT.
             # Expect it to actually start on (_DEFAULT_SERVER_PORT + 1).
+            # 
+            # TODO: Suppress warning: '*** Default port for project server is in use. Is a real Crystal app running in the background?'
             expected_port = _DEFAULT_SERVER_PORT + 1
             home_ti.SelectItem()
             try:
@@ -262,7 +264,7 @@ async def test_given_nia_page_visible_and_project_is_writable_then_download_butt
 
 
 async def test_given_nia_page_visible_when_download_button_pressed_then_download_starts_and_runs_with_progress_bar() -> None:
-    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         comic1_url = sp.get_request_url('https://xkcd.com/1/')
@@ -290,10 +292,8 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
                 await mw.click_download_button()
                 await wait_for_download_to_start_and_finish(mw.task_tree)
             
-            server_port = _DEFAULT_SERVER_PORT + 1
             home_url_in_archive = get_request_url(
                 home_url,
-                server_port,
                 project_default_url_prefix=project.default_url_prefix)
             
             # Start the project server by clicking View button
@@ -302,7 +302,7 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
                 click_button(mw.view_button)
             
             # Verify that the home page is NOT a "Not in Archive" page
-            home_page = await fetch_archive_url(home_url, server_port)
+            home_page = await fetch_archive_url(home_url)
             assert not home_page.is_not_in_archive
             assert home_page.status == 200
             
@@ -312,13 +312,14 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
                 "Home page should contain the '|<' (first comic) link"
             
             # Simulate press of that button by fetching the first comic page
-            first_comic_page = await fetch_archive_url(comic1_url, server_port)
+            first_comic_page = await fetch_archive_url(comic1_url)
             
             # Ensure that page IS a "Not in Archive" page
             assert first_comic_page.is_not_in_archive
             
             # Simulate press of the "Download" button on the "Not in Archive" page
             # by directly querying the related endpoint
+            server_port = _DEFAULT_SERVER_PORT
             download_response = await bg_fetch_url(
                 f'http://127.0.0.1:{server_port}/_/crystal/download-url',
                 method='POST',
@@ -338,7 +339,7 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
             
             # Simulate the page reload after download completion
             # by re-fetching the first comic page
-            reloaded_comic_page = await fetch_archive_url(comic1_url, server_port)
+            reloaded_comic_page = await fetch_archive_url(comic1_url)
             
             # Ensure that the fetched page is now no longer a "Not In Archive" page
             assert reloaded_comic_page.status == 200
@@ -351,7 +352,7 @@ async def test_when_download_complete_and_successful_download_with_content_then_
 
 
 async def test_when_download_complete_and_successful_download_with_fetch_error_then_page_reloads_to_reveal_error_page() -> None:
-    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         comic1_url = sp.get_request_url('https://xkcd.com/1/')
@@ -378,10 +379,8 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                 await mw.click_download_button()
                 await wait_for_download_to_start_and_finish(mw.task_tree)
             
-            server_port = _DEFAULT_SERVER_PORT + 1
             home_url_in_archive = get_request_url(
                 home_url,
-                server_port,
                 project_default_url_prefix=project.default_url_prefix)
             
             # Start the project server by clicking View button
@@ -390,7 +389,7 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                 click_button(mw.view_button)
             
             # Verify that the home page is NOT a "Not in Archive" page
-            home_page = await fetch_archive_url(home_url, server_port)
+            home_page = await fetch_archive_url(home_url)
             assert not home_page.is_not_in_archive
             assert home_page.status == 200
             
@@ -400,7 +399,7 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                 "Home page should contain the '|<' (first comic) link"
             
             # Simulate press of that button by fetching the first comic page
-            first_comic_page = await fetch_archive_url(comic1_url, server_port)
+            first_comic_page = await fetch_archive_url(comic1_url)
             
             # Ensure that page IS a "Not in Archive" page
             assert first_comic_page.is_not_in_archive
@@ -408,6 +407,7 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
             # Simulate press of the "Download" button with network down
             # by directly querying the related endpoint
             with network_down():  # for Crystal backend
+                server_port = _DEFAULT_SERVER_PORT
                 download_response = await bg_fetch_url(
                     f'http://127.0.0.1:{server_port}/_/crystal/download-url',
                     method='POST',
@@ -428,7 +428,7 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
             
             # Simulate the page reload after download completion
             # by re-fetching the first comic page
-            reloaded_comic_page = await fetch_archive_url(comic1_url, server_port)
+            reloaded_comic_page = await fetch_archive_url(comic1_url)
             
             # Ensure that the fetched page shows a fetch error page (not "Not In Archive")
             try:
@@ -450,7 +450,7 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
         skipTest('Playwright not available in bundled app')
     from playwright.sync_api import sync_playwright
     
-    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         comic1_url = sp.get_request_url('https://xkcd.com/1/')
@@ -477,14 +477,11 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
                 await mw.click_download_button()
                 await wait_for_download_to_start_and_finish(mw.task_tree)
             
-            server_port = _DEFAULT_SERVER_PORT + 1
             home_url_in_archive = get_request_url(
                 home_url,
-                server_port,
                 project_default_url_prefix=project.default_url_prefix)
             comic1_url_in_archive = get_request_url(
                 comic1_url,
-                server_port,
                 project_default_url_prefix=project.default_url_prefix)
             
             # Start the project server by clicking View button
@@ -793,7 +790,7 @@ async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
     Context manager that opens a test project, starts a server, and returns a WebPage
     for a "Fetch Error" page by requesting a URL that exists while the network is down.
     """
-    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
         
@@ -820,10 +817,8 @@ async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
                     await mw.click_download_button()
                     await wait_for_download_to_start_and_finish(mw.task_tree)
             
-            server_port = _DEFAULT_SERVER_PORT + 1
             home_url_in_archive = get_request_url(
                 home_url,
-                server_port,
                 project_default_url_prefix=project.default_url_prefix)
             
             # Start the project server by clicking View button
@@ -832,7 +827,7 @@ async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
                 click_button(mw.view_button)
             
             # Verify that "Fetch Error" page reached
-            fetch_error_page = await fetch_archive_url(home_url, server_port)
+            fetch_error_page = await fetch_archive_url(home_url)
             assert fetch_error_page.is_fetch_error
             assert fetch_error_page.title == 'Fetch Error | Crystal'
             assert fetch_error_page.status == 400
