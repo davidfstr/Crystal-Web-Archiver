@@ -2021,6 +2021,10 @@ class RootTask(_PureContainerTask):
             
             # Append deferred children
             for (child, already_complete_ok) in children_to_add_soon:
+                if child.complete and not already_complete_ok:
+                    # Child appears to have completed between the time it was queued to
+                    # be added and now, when it is actually being added. Ignore child.
+                    continue
                 super().append_child(child, already_complete_ok=already_complete_ok)
             assert len(self._children_to_add_soon) == 0, \
                 'RootTask._children_to_add_soon was modified concurrently unexpectedly'
