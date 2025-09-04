@@ -1998,6 +1998,12 @@ class RootTask(_PureContainerTask):
                 from crystal.model import ProjectClosedError
                 raise ProjectClosedError()
             
+            if child.complete and not already_complete_ok:
+                raise ValueError(
+                    f'Child being appended is already complete, '
+                    f'and already_completed_ok is False. '
+                    f'self={self}, child={child}')
+            
             # Defer append child until next call to RootTask.try_get_next_task_unit(),
             # which will have a lock on the scheduler thread (and access to Task.children)
             self._children_to_add_soon.append((child, already_complete_ok))
