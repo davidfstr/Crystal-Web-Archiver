@@ -26,6 +26,9 @@ else:
         Page = Any
 
 
+# ------------------------------------------------------------------------------
+# Playwright Interface
+
 def awith_playwright(test_func: 'Callable[[Playwright], Awaitable[None]]') -> Callable[[], Awaitable[None]]:
     """Decorates a test function which uses Playwright."""
     @wraps(test_func)
@@ -86,3 +89,63 @@ class Playwright:
                     block(page)
             block_future = executor.submit(run_block)
             await wait_for_future(block_future, timeout=sys.maxsize)
+
+
+# ------------------------------------------------------------------------------
+# Condition
+
+class Condition:  # abstract
+    def expect(self, timeout: float | None = None) -> None:  # abstract
+        raise NotImplementedError()
+    
+    def expect_not(self, timeout: float | None = None) -> None:  # abstract
+        raise NotImplementedError()
+    
+    def get(self) -> bool:  # abstract
+        raise NotImplementedError()
+
+
+class EnabledCondition(Condition):
+    def __init__(self, locator: Locator) -> None:
+        self._locator = locator
+    
+    def expect(self, timeout: float | None = None) -> None:
+        expect(self._locator).to_be_enabled(timeout=timeout)
+    
+    def expect_not(self, timeout: float | None = None) -> None:
+        expect(self._locator).not_to_be_enabled(timeout=timeout)
+    
+    def get(self) -> bool:
+        return self._locator.is_enabled()
+
+
+class CountToBeZeroCondition(Condition):
+    def __init__(self, locator: Locator) -> None:
+        self._locator = locator
+    
+    def expect(self, timeout: float | None = None) -> None:
+        expect(self._locator).to_have_count(0, timeout=timeout)
+    
+    def expect_not(self, timeout: float | None = None) -> None:
+        expect(self._locator).not_to_have_count(0, timeout=timeout)
+    
+    def get(self) -> bool:
+        return self._locator.count == 0
+
+
+class HasClassCondition(Condition):
+    def __init__(self, locator: Locator, class_name: str) -> None:
+        self._locator = locator
+        self._class_name = class_name
+    
+    def expect(self, timeout: float | None = None) -> None:
+        expect(self._locator).to_have_class(self._class_name, timeout=timeout)
+    
+    def expect_not(self, timeout: float | None = None) -> None:
+        expect(self._locator).not_to_have_class(self._class_name, timeout=timeout)
+    
+    def get(self) -> bool:
+        return self._class_name in (self._locator.get_attribute('class') or '').split(' ')
+
+
+# ------------------------------------------------------------------------------
