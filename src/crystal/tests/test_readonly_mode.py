@@ -7,7 +7,7 @@ from crystal.tests.test_untitled_projects import (
     _temporary_directory_on_new_filesystem,
     _untitled_project,
 )
-from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual
 from crystal.tests.util.controls import TreeItem, click_button
 from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.save_as import save_as_with_ui
@@ -279,7 +279,7 @@ async def test_given_readonly_project_then_edit_button_titled_get_info_and_when_
                 home_ti.SelectItem()
                 
                 assert mw.edit_button.Enabled
-                assertIn('Get Info', mw.edit_button.Label)
+                assertEqual('Get Info', mw.edit_button_label_type)
                 
                 # Click edit button to open dialog. Verify dialog is in readonly mode.
                 click_button(mw.edit_button)
@@ -308,7 +308,7 @@ async def test_given_readonly_project_then_edit_button_titled_get_info_and_when_
                 comic_ti.SelectItem()
                 
                 assert mw.edit_button.Enabled
-                assertIn('Get Info', mw.edit_button.Label)
+                assertEqual('Get Info', mw.edit_button_label_type)
                 
                 # Click edit button to open dialog. Verify dialog is in readonly mode.
                 click_button(mw.edit_button)
@@ -359,8 +359,8 @@ async def test_when_writable_project_becomes_readonly_then_edit_button_becomes_g
         
         # Verify initial state: button should say "Edit"
         assert mw.edit_button.Enabled
-        assertIn('Edit', mw.edit_button.Label)
-        assertNotIn('Get Info', mw.edit_button.Label)
+        assertEqual('Edit', mw.edit_button_label_type)
+        assertNotEqual('Get Info', mw.edit_button_label_type)
         
         save_path = os.path.join(save_dir, 'SqliteUnwritableProject.crystalproj')
         
@@ -387,8 +387,8 @@ async def test_when_writable_project_becomes_readonly_then_edit_button_becomes_g
         # HACK: The preceding call to save_as_with_ui() doesn't always
         #       wait until the UI is fully updated
         await wait_for(lambda: mw.edit_button.Enabled or None)
-        assertIn('Get Info', mw.edit_button.Label)
-        assertNotIn('Edit', mw.edit_button.Label)
+        assertEqual('Get Info', mw.edit_button_label_type)
+        assertNotEqual('Edit', mw.edit_button_label_type)
 
 
 async def test_when_readonly_project_becomes_writable_then_get_info_button_becomes_edit() -> None:
@@ -424,8 +424,8 @@ async def test_when_readonly_project_becomes_writable_then_get_info_button_becom
             
             # Verify initial state: button should say "Get Info"
             assert mw.edit_button.Enabled
-            assertIn('Get Info', mw.edit_button.Label)
-            assertNotIn('Edit', mw.edit_button.Label)
+            assertEqual('Get Info', mw.edit_button_label_type)
+            assertNotEqual('Edit', mw.edit_button_label_type)
             
             # Perform Save As to make the project writable
             copy_project_path = os.path.join(tmp_dir, 'CopiedProject.crystalproj')
@@ -441,8 +441,8 @@ async def test_when_readonly_project_becomes_writable_then_get_info_button_becom
             # HACK: The preceding call to save_as_with_ui() doesn't always
             #       wait until the UI is fully updated
             await wait_for(lambda: mw.edit_button.Enabled or None)
-            assertIn('Edit', mw.edit_button.Label)
-            assertNotIn('Get Info', mw.edit_button.Label)
+            assertEqual('Edit', mw.edit_button_label_type)
+            assertNotEqual('Get Info', mw.edit_button_label_type)
 
 
 # ------------------------------------------------------------------------------

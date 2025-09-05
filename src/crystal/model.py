@@ -3348,6 +3348,8 @@ class RootResource:
     project: Project
     _name: str
     _resource: Resource
+    # TODO: Alter the "deleted" value of _id from None to be a symbolic constant,
+    #       like Resource's _DELETED_ID.
     _id: int  # or None if deleted
     
     # === Init ===
@@ -4446,6 +4448,9 @@ class ResourceGroup(ListenableMixin):
     Groups resource whose url matches a particular pattern.
     Persisted and auto-saved.
     """
+    # TODO: Alter the "deleted" value of _id from None to be a symbolic constant,
+    #       like Resource's _DELETED_ID.
+    _id: int  # or None if deleted
     
     # === Init ===
     
@@ -4487,6 +4492,7 @@ class ResourceGroup(ListenableMixin):
         self._members = None  # type: Optional[List[Resource]]
         
         if project._loading:
+            assert _id is not None
             self._id = _id
             
             self._source = source

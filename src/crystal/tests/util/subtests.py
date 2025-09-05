@@ -115,7 +115,7 @@ def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], 
     subtests = SubtestsContext(test_name)
     
     @wraps(test_func)
-    def wrapper():
+    def wrapper() -> None:
         with subtests.run():
             test_func(subtests)
     return wrapper
@@ -130,7 +130,7 @@ def awith_subtests(test_func: Callable[[SubtestsContext], Awaitable[None]]) -> C
     subtests = SubtestsContext(test_name)
     
     @wraps(test_func)
-    async def wrapper():
+    async def wrapper() -> None:
         raised_exc = True
         try:
             await test_func(subtests)

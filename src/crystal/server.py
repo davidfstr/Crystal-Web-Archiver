@@ -9,11 +9,14 @@ from collections.abc import Callable, Generator
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
-    Project, Resource, ResourceGroup, ResourceRevision,
+    Project, Resource, ResourceGroup, ResourceGroupSource, ResourceRevision,
     RootResource,
 )
 from crystal import resources
-from crystal.predict_group import detect_regular_group, detect_sequential_groups
+from crystal.predict_group import (
+    DetectedRegularGroup, DetectedSequentialGroup, 
+    detect_regular_group, detect_sequential_groups,
+)
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
     TERMINAL_FG_PURPLE, colorize, print_error, print_info, print_success, print_warning,
@@ -21,9 +24,10 @@ from crystal.util.cli import (
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import (
-    bg_affinity, bg_call_later, fg_call_and_wait, run_thread_switching_coroutine,
-    SwitchToThread,
+    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, 
+    run_thread_switching_coroutine, SwitchToThread,
 )
+from crystal.util.xtyping import IntStr, intstr_from
 import datetime
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
@@ -38,7 +42,12 @@ import sys
 from textwrap import dedent
 import time
 import traceback
-from typing import Literal, Optional, TYPE_CHECKING
+import trycast
+from trycast import checkcast
+from typing import (
+    Literal, Mapping, Optional, TYPE_CHECKING, TypeAlias, TypedDict,
+    assert_never,
+)
 from typing_extensions import override
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
@@ -548,7 +557,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return
     
     def _do_POST(self) -> Generator[SwitchToThread, None, None]:
-        # Handle Crystal API endpoints
+        # Handle: "Not in Archive" Endpoints
         if self.path == '/_/crystal/download-url':
             yield SwitchToThread.BACKGROUND
             self._handle_start_download_url()
@@ -556,6 +565,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         elif self.path == '/_/crystal/download-progress':
             yield SwitchToThread.BACKGROUND
             self._handle_get_download_progress()
+            return
+        elif self.path == '/_/crystal/create-group':
+            yield SwitchToThread.BACKGROUND
+            self._handle_create_group()
+            return
+        elif self.path == '/_/crystal/preview-urls':
+            yield SwitchToThread.BACKGROUND
+            self._handle_preview_urls()
             return
         
         # For all other POST requests, return 405 Method Not Allowed
@@ -754,7 +771,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 return referer_archive_url
         return None
     
-    # --- Handle: Download Request ---
+    # --- Handle: "Not in Archive" Endpoints ---
     
     @bg_affinity
     def _handle_start_download_url(self) -> None:
@@ -840,7 +857,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
             return None
         task = fg_call_and_wait(find_task_by_id)
         if task is None:
-            self._send_sse_data({'error': 'Task not found'})
+            # Presumably the task completed very quickly,
+            # so report as complete immediately
+            self._send_sse_data({
+                'status': 'complete',
+                'progress': 100,
+                'message': 'Download completed'
+            })
             return
         
         # Send periodic progress updates
@@ -886,6 +909,123 @@ class _RequestHandler(BaseHTTPRequestHandler):
             pass
         except Exception as e:
             self._send_sse_data({'error': f'Progress tracking error: {str(e)}'})
+    
+    @bg_affinity
+    def _handle_create_group(self) -> None:
+        try:
+            # Ensure project is not readonly
+            if self.project.readonly:
+                self._send_json_response(403, CreateGroupErrorResponse({"error": "Project is read-only"}))
+                return
+            
+            # Parse arguments
+            content_length = int(self.headers.get('Content-Length', -1))
+            if content_length > 0:
+                post_data = self.rfile.read(content_length).decode('utf-8')
+            else:
+                post_data = self.rfile.read().decode('utf-8')
+            if not post_data:
+                self._send_json_response(400, CreateGroupErrorResponse({"error": "Missing request body"}))
+                return
+            try:
+                request_data = json.loads(post_data)
+                request = checkcast(CreateGroupRequest, request_data)
+                url_pattern = request['url_pattern']
+                source_data = request['source']
+                name = request['name']
+                download_immediately = request['download_immediately']
+            except json.JSONDecodeError:
+                self._send_json_response(400, CreateGroupErrorResponse({"error": "Invalid JSON"}))
+                return
+            except trycast.ValidationError:
+                self._send_json_response(400, CreateGroupErrorResponse({"error": "Invalid request"}))
+                return
+            
+            def parse_source_value(source_value: SourceChoiceValue | None) -> ResourceGroupSource:
+                if source_value is None:
+                    return None
+                elif source_value['type'] == 'root_resource':
+                    return self.project.get_root_resource(id=int(source_value['id']))
+                elif source_value['type'] == 'resource_group':
+                    return self.project.get_resource_group(id=int(source_value['id']))
+                else:
+                    raise ValueError(f"Invalid source type: {source_value['type']}")
+            
+            @fg_affinity
+            def create_group_and_optionally_start_download() -> CreateGroupResponse:
+                source = parse_source_value(source_data)
+                
+                # Check if group with this pattern already exists
+                existing_group = self.project.get_resource_group(url_pattern=url_pattern)
+                if existing_group is not None:
+                    return CreateGroupErrorResponse({"error": "Group with URL pattern already exists"})
+                
+                # Create the resource group
+                group = ResourceGroup(
+                    self.project,
+                    name=name,
+                    url_pattern=url_pattern,
+                    source=source,
+                    do_not_download=False
+                )
+                
+                # Start download of the group if requested
+                if download_immediately:
+                    group.download()
+                
+                result = CreateGroupSuccessResponse({
+                    "status": "success",
+                    "message": "Group created successfully",
+                    "group_id": intstr_from(group._id),
+                })
+                return result
+            result = fg_call_and_wait(create_group_and_optionally_start_download)
+            if 'error' in result:  # CreateGroupErrorResponse
+                self._send_json_response(400, result)
+            else:  # CreateGroupSuccessResponse
+                self._send_json_response(200, result)
+
+        except Exception as e:
+            self._print_error(f'Error handling create group request: {str(e)}')
+            self._send_json_response(500, CreateGroupErrorResponse({
+                "error": f"Internal server error: {str(e)}"
+            }))
+
+    @bg_affinity
+    def _handle_preview_urls(self) -> None:
+        try:
+            # Parse arguments
+            content_length = int(self.headers.get('Content-Length', -1))
+            if content_length > 0:
+                post_data = self.rfile.read(content_length).decode('utf-8')
+            else:
+                post_data = self.rfile.read().decode('utf-8')
+            if not post_data:
+                self._send_json_response(400, {"error": "Missing request body"})
+                return
+            try:
+                request_data = json.loads(post_data)
+                url_pattern = request_data.get('url_pattern')
+            except json.JSONDecodeError:
+                self._send_json_response(400, {"error": "Invalid JSON"})
+                return
+            if not url_pattern:
+                self._send_json_response(400, {"error": "Missing url_pattern parameter"})
+                return
+            
+            # NOTE: Use same algorithm as the NewGroupDialog to calculate and present URLs
+            from crystal.browser.new_group import NewGroupDialog
+            matching_urls_and_more_items = fg_call_and_wait(
+                lambda: NewGroupDialog._calculate_preview_urls(self.project, url_pattern))
+            self._send_json_response(200, {
+                "matching_urls": matching_urls_and_more_items,
+            })
+
+        except Exception as e:
+            self._print_error(f'Error handling preview URLs request: {str(e)}')
+            self._send_json_response(500, {
+                "error": f"Internal server error: {str(e)}"
+            })
 
     def _start_sse_stream(self) -> None:
         self.send_response(200)
@@ -902,7 +1042,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         except BrokenPipeError:
             pass
     
-    def _send_json_response(self, status_code: int, content: dict) -> None:
+    def _send_json_response(self, status_code: int, content: Mapping) -> None:
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
@@ -1000,19 +1140,88 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         readonly = self.project.readonly  # cache
         
+        create_group_form_data = self._calculate_create_group_form_data(
+            self.project, archive_url, self.referer_archive_url)
+        
         html_content = _not_in_archive_html(
             archive_url_html_attr=archive_url,
             archive_url_html=html_escape(archive_url),
             archive_url_json=json.dumps(archive_url),
             readonly_warning_html=(
-                '<div class="readonly-notice">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
+                '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
                 if readonly else ''
             ),
-            download_button_disabled_html=('disabled ' if readonly else '')
+            download_button_disabled_html=('disabled ' if readonly else ''),
+            create_group_form_data=create_group_form_data,
+            readonly=readonly
         )
         self.wfile.write(html_content.encode('utf-8'))
         
         self._print_error('*** Requested resource not in archive: ' + archive_url)
+    
+    @classmethod
+    @bg_affinity
+    def _calculate_create_group_form_data(cls,
+            project: Project,
+            archive_url: str,
+            referrer_archive_url: str | None,
+            ) -> CreateGroupFormData:
+        # Format Source choices,
+        # matching the choices computed for NewGroupDialog.source_choice_box
+        source_choices = [SourceChoice({
+            'display_name': 'none',
+            'value': None
+        })]
+        for rr in project.root_resources:
+            display_name = rr.display_name
+            source_choices.append(SourceChoice({
+                'display_name': display_name,
+                'value': SourceChoiceValue(
+                    {'type': 'root_resource', 'id': intstr_from(rr._id)})
+            }))
+        for rg in project.resource_groups:
+            display_name = rg.display_name
+            source_choices.append(SourceChoice({
+                'display_name': display_name,
+                'value': SourceChoiceValue(
+                    {'type': 'resource_group', 'id': intstr_from(rg._id)})
+            }))
+        
+        # Find the best predicted group
+        try:
+            # Priority 1: First detected sequential group
+            predicted_group = next(detect_sequential_groups(
+                project,
+                archive_url,
+                referrer_archive_url,
+                eager_downloads_ok=False,
+                detect_last_page_ordinals=False,
+            ))  # type: DetectedSequentialGroup | DetectedRegularGroup | None
+        except StopIteration:
+            # Priority 2: Regular group
+            predicted_group = detect_regular_group(project, archive_url, referrer_archive_url)
+        
+        predicted_url_pattern = predicted_group.url_pattern if predicted_group is not None else None
+        predicted_source = predicted_group.source if predicted_group is not None else None
+        
+        # Determine the selected source value for the dropdown
+        if predicted_source is None:
+            predicted_source_value = None  # type: SourceChoiceValue | None
+        elif isinstance(predicted_source, RootResource):
+            predicted_source_value = SourceChoiceValue(
+                {'type': 'root_resource', 'id': intstr_from(predicted_source._id)})
+        elif isinstance(predicted_source, ResourceGroup):
+            predicted_source_value = SourceChoiceValue(
+                {'type': 'resource_group', 'id': intstr_from(predicted_source._id)})
+        else:
+            assert_never(predicted_source)
+        
+        return CreateGroupFormData({
+            'source_choices': source_choices,
+            'predicted_url_pattern': predicted_url_pattern or '',
+            'predicted_source_value': predicted_source_value,
+            'predicted_name': '',
+        })
     
     @bg_affinity
     def send_redirect(self, redirect_url: str, *, vary_referer: bool=False) -> None:
@@ -1442,7 +1651,7 @@ def _pin_date_js(timestamp: int) -> str:
 def _welcome_page_html() -> str:
     welcome_styles = dedent(
         """
-        .welcome-form {
+        .cr-welcome-form {
             margin: 30px 0;
             padding: 20px;
             background: #f8f9fa;
@@ -1450,72 +1659,63 @@ def _welcome_page_html() -> str:
             border-left: 4px solid #4A90E2;
         }
         
-        .form-group {
-            margin-bottom: 15px;
+        .cr-form-row {
+            margin-bottom: 16px;
         }
         
-        .form-label {
+        .cr-form-row__label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
             font-size: 14px;
             color: #495057;
-            margin-bottom: 8px;
-            display: block;
-            font-weight: 500;
         }
         
-        .form-input {
+        .cr-form-row__input {
             width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 16px;
-            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            padding: 8px 12px;
+            border: 2px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.15s ease;
             box-sizing: border-box;
-            transition: border-color 0.2s ease;
         }
         
-        .form-input:focus {
+        .cr-form-row__input:focus {
             outline: none;
             border-color: #4A90E2;
             box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
         }
         
-        .form-submit {
-            background: #4A90E2;
-            color: white;
-            border: none;
+        .cr-form-row__input--giant {
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;  /* more subtle */
             border-radius: 8px;
-            padding: 12px 24px;
             font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            min-width: 80px;
         }
         
-        .form-submit:hover {
-            background: #357ABD;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+        .cr-form-row__input--monospace {
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
         }
         
         /* Dark mode styles for welcome form */
         @media (prefers-color-scheme: dark) {
-            .welcome-form {
+            .cr-welcome-form {
                 background: #404040;
                 border-left: 4px solid #6BB6FF;
             }
             
-            .form-label {
+            .cr-form-row__label {
+                color: #e2e8f0;
+            }
+            
+            .cr-form-row__input {
+                background: #4a5568;
+                border-color: #555;
                 color: #e0e0e0;
             }
             
-            .form-input {
-                background: #2d2d30;
-                border: 2px solid #555;
-                color: #e0e0e0;
-            }
-            
-            .form-input:focus {
+            .cr-form-row__input:focus {
                 border-color: #6BB6FF;
                 box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
             }
@@ -1525,21 +1725,21 @@ def _welcome_page_html() -> str:
     
     content_html = dedent(
         """
-        <div class="error-icon">🏠</div>
+        <div class="cr-page__icon">🏠</div>
         
-        <div class="error-message">
+        <div class="cr-page__title">
             <strong>Welcome to Crystal</strong>
         </div>
         
         <p>Enter the URL of a page to load from the archive:</p>
         
-        <div class="welcome-form">
+        <div class="cr-welcome-form">
             <form action="/">
-                <div class="form-group">
-                    <label for="url-input" class="form-label">URL</label>
-                    <input type="text" id="url-input" name="url" value="http://" class="form-input" />
+                <div class="cr-form-row">
+                    <label for="cr-url-input" class="cr-form-row__label">URL</label>
+                    <input type="text" id="cr-url-input" name="url" value="http://" class="cr-form-row__input cr-form-row__input--giant cr-form-row__input--monospace" />
                 </div>
-                <input type="submit" value="Go" class="form-submit" />
+                <input type="submit" value="Go" class="cr-button cr-button--primary" />
             </form>
         </div>
         """
@@ -1556,20 +1756,20 @@ def _welcome_page_html() -> str:
 def _not_found_page_html() -> str:
     content_html = dedent(
         """
-        <div class="error-icon">❓</div>
+        <div class="cr-page__icon">❓</div>
         
-        <div class="error-message">
+        <div class="cr-page__title">
             <strong>Page Not Found</strong>
         </div>
         
         <p>There is no page here.</p>
         <p>The requested path was not found in this archive.</p>
         
-        <div class="actions">
-            <button onclick="history.back()" class="action-button secondary-button">
+        <div class="cr-page__actions">
+            <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
-            <a href="/" class="action-button primary-button">🏠 Return to Home</a>
+            <a href="/" class="cr-button cr-button--primary">🏠 Return to Home</a>
         </div>
         """
     ).strip()
@@ -1582,16 +1782,51 @@ def _not_found_page_html() -> str:
     )
 
 
+class CreateGroupFormData(TypedDict):
+    source_choices: 'list[SourceChoice]'
+    predicted_url_pattern: str
+    predicted_source_value: 'SourceChoiceValue | None'
+    predicted_name: str
+
+class SourceChoice(TypedDict):
+    display_name: str
+    value: 'SourceChoiceValue | None'
+
+class SourceChoiceValue(TypedDict):
+    type: Literal['root_resource', 'resource_group']
+    id: IntStr
+
+class CreateGroupRequest(TypedDict):
+    url_pattern: str
+    source: SourceChoiceValue | None
+    name: str
+    download_immediately: bool
+
+CreateGroupResponse: TypeAlias = 'CreateGroupErrorResponse | CreateGroupSuccessResponse'
+
+class CreateGroupErrorResponse(TypedDict):
+    error: str
+
+class CreateGroupSuccessResponse(TypedDict):
+    status: str
+    message: str
+    group_id: IntStr
+
 def _not_in_archive_html(
         *, archive_url_html_attr: str,
         archive_url_html: str,
         archive_url_json: str,
         readonly_warning_html: str,
-        download_button_disabled_html: str
+        download_button_disabled_html: str,
+        create_group_form_data: CreateGroupFormData,
+        readonly: bool
         ) -> str:
     not_in_archive_styles = dedent(
         """
-        .readonly-notice {
+        /* ------------------------------------------------------------------ */
+        /* Readonly Notice */
+        
+        .cr-readonly-warning {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
             color: #856404;
@@ -1601,12 +1836,28 @@ def _not_in_archive_html(
             font-size: 14px;
         }
         
-        .download-progress {
+        @media (prefers-color-scheme: dark) {
+            .cr-readonly-warning {
+                background: #5a4a2d;
+                border: 1px solid #8b7355;
+                color: #f4d03f;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Download Progress Bar */
+        
+        .cr-download-progress-bar {
             display: none;
             margin-top: 15px;
         }
         
-        .progress-bar {
+        .cr-download-progress-bar.show {
+            display: block;
+            animation: slideDown 0.6s ease-out;
+        }
+        
+        .cr-progress-bar__outline {
             width: 100%;
             height: 8px;
             background: #e9ecef;
@@ -1614,50 +1865,289 @@ def _not_in_archive_html(
             overflow: hidden;
         }
         
-        .progress-fill {
+        .cr-progress-bar__fill {
             height: 100%;
             background: #4A90E2;
             width: 0%;
             transition: width 0.3s ease;
         }
         
-        .progress-text {
+        .cr-progress-bar__message {
             font-size: 14px;
             margin-top: 8px;
             text-align: center;
         }
         
-        /* Dark mode styles for readonly notice and progress */
         @media (prefers-color-scheme: dark) {
-            .readonly-notice {
-                background: #5a4a2d;
-                border: 1px solid #8b7355;
-                color: #f4d03f;
-            }
-            
-            .progress-bar {
+            .cr-progress-bar__outline {
                 background: #404040;
             }
             
-            .progress-fill {
+            .cr-progress-bar__fill {
                 background: #6BB6FF;
             }
         }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Top */
+        
+        .cr-create-group-section {
+            margin-top: 20px;
+            padding: 16px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+
+        .cr-form-row {
+            margin-bottom: 16px;
+        }
+        
+        /* Remove bottom margin from checkbox row when checkbox is unchecked
+         * the following #cr-create-group-form is hidden */
+        .cr-form-row:has(input#cr-create-group-checkbox:not(:checked)) {
+            margin-bottom: 0;
+        }
+        
+        .cr-checkbox {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .cr-checkbox input[type="checkbox"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+        }
+        
+        .cr-checkbox:has(input[type="checkbox"]:disabled) {
+            cursor: not-allowed;
+        }
+        .cr-checkbox:has(input[type="checkbox"]:disabled) span {
+            opacity: 0.5;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .cr-create-group-section {
+                background: #2d3748;
+                border-color: #4a5568;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Form */
+        
+        .cr-create-group-form {
+            border-top: 1px solid #e9ecef;
+            padding-top: 16px;
+        }
+        
+        .cr-form-row__label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            font-size: 14px;
+            color: #495057;
+        }
+        
+        .cr-form-input-container {
+            position: relative;
+        }
+        
+        .cr-form-row__input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.15s ease;
+            box-sizing: border-box;
+        }
+        
+        .cr-form-row__input:focus {
+            outline: none;
+            border-color: #4A90E2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+        
+        .cr-form-row__help-text {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .cr-create-group-form {
+                border-color: #4a5568;
+            }
+            
+            .cr-form-row__label {
+                color: #e2e8f0;
+            }
+            
+            .cr-form-row__input {
+                background: #4a5568;
+                border-color: #555;
+                color: #e0e0e0;
+            }
+            
+            .cr-form-row__input:focus {
+                border-color: #6BB6FF;
+                box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
+            }
+            
+            .cr-form-row__help-text {
+                color: #a0aec0;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Form: Preview Members */
+        
+        .cr-form__section {
+            margin-top: 16px;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+        }
+        
+        .cr-form__section-header {
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .cr-form__static-text {
+            font-size: 13px;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+        
+        .cr-list-ctrl {
+            height: 136px;  /* Fixed height for ~8 URLs (8 * 16px line + padding) */
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            background: #f8f9fa;
+            padding: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 136px;
+        }
+        
+        .cr-list-ctrl-item {
+            padding: 2px 0;
+            color: #495057;
+            white-space: nowrap;
+            overflow: visible;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .cr-form__section {
+                background: #4a5568;
+                border-color: #555;
+            }
+            
+            .cr-form__section-header {
+                color: #e2e8f0;
+            }
+            
+            .cr-form__static-text {
+                color: #a0aec0;
+            }
+            
+            .cr-list-ctrl {
+                background: #2d3748;
+                border-color: #555;
+                color: #e0e0e0;
+            }
+            
+            .cr-list-ctrl-item {
+                color: #e0e0e0;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Section: Form: Action Buttons */
+        
+        .cr-create-group-form__actions {
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: margin-top 0.6s ease-out;
+        }
+        /* Remove top margin from form actions when collapsible content is collapsed */
+        .slide-up + .cr-create-group-form__actions {
+            margin-top: 0;
+        }
+        
+        .cr-action-message {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .cr-action-message.success {
+            color: #28a745;
+        }
+        
+        .cr-action-message.error {
+            color: #dc3545;
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Animations */
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+                margin-top: 0;
+            }
+            to {
+                opacity: 1;
+                max-height: 100px;
+                margin-top: 15px;
+            }
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 1;
+                max-height: 1000px;
+            }
+            to {
+                opacity: 0;
+                max-height: 0;
+                overflow: hidden;
+            }
+        }
+        
+        .slide-up {
+            animation: slideUp 0.6s ease-out forwards;
+        }
+        
         """
     ).strip()
     
     content_html = dedent(
         f"""
-        <div class="error-icon">🚫</div>
+        <div class="cr-page__icon">🚫</div>
         
-        <div class="error-message">
+        <div class="cr-page__title">
             <strong>Page Not in Archive</strong>
         </div>
         
         <p>The requested page was not found in this archive.</p>
         <p>The page has not been downloaded yet.</p>
         
-        {_URL_INFO_HTML_TEMPLATE % {
+        {_URL_BOX_HTML_TEMPLATE % {
             'label_html': 'Original URL',
             'url_html_attr': archive_url_html_attr,
             'url_html': archive_url_html
@@ -1665,18 +2155,73 @@ def _not_in_archive_html(
         
         {readonly_warning_html}
         
-        <div class="actions">
-            <button onclick="history.back()" class="action-button secondary-button">
+        <div class="cr-page__actions">
+            <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
-            <button id="download-button" {download_button_disabled_html}onclick="startDownload()" class="action-button primary-button">⬇ Download</button>
+            <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
         </div>
         
-        <div id="download-progress" class="download-progress">
-            <div class="progress-bar">
-                <div id="progress-fill" class="progress-fill"></div>
+        <div id="cr-download-progress-bar" class="cr-download-progress-bar">
+            <div class="cr-progress-bar__outline">
+                <div id="cr-download-progress-bar__fill" class="cr-progress-bar__fill"></div>
             </div>
-            <div id="progress-text" class="progress-text">Preparing download...</div>
+            <div id="cr-download-progress-bar__message" class="cr-progress-bar__message">Preparing download...</div>
+        </div>
+        
+        <div class="cr-create-group-section">
+            <div class="cr-form-row">
+                <label class="cr-checkbox">
+                    <input type="checkbox" id="cr-create-group-checkbox" {'disabled ' if readonly else ''}onchange="onCreateGroupCheckboxClicked()">
+                    <span>Create Group for Similar Pages</span>
+                </label>
+            </div>
+            
+            <div id="cr-create-group-form" class="cr-create-group-form" style="display: none;">
+                <div id="cr-create-group-form__collapsible-content">
+                    <div class="cr-form-row">
+                        <label class="cr-form-row__label">URL Pattern:</label>
+                        <div class="cr-form-input-container">
+                            <input type="text" id="cr-group-url-pattern" class="cr-form-row__input" placeholder="https://example.com/post/*" value="{html_escape(create_group_form_data['predicted_url_pattern'])}">
+                            <div class="cr-form-row__help-text"># = numbers, @ = letters, * = anything but /, ** = anything</div>
+                        </div>
+                    </div>
+                    
+                    <div class="cr-form-row">
+                        <label class="cr-form-row__label">Source:</label>
+                        <select id="cr-group-source" class="cr-form-row__input">
+                            <!-- Source options will be populated by JavaScript -->
+                        </select>
+                    </div>
+                    
+                    <div class="cr-form-row">
+                        <label class="cr-form-row__label">Name:</label>
+                        <input type="text" id="cr-group-name" class="cr-form-row__input" placeholder="e.g. Post" value="{html_escape(create_group_form_data['predicted_name'])}">
+                    </div>
+                    
+                    <div class="cr-form__section">
+                        <div class="cr-form__section-header">Preview Members</div>
+                        <div class="cr-form__static-text">Known matching URLs:</div>
+                        <div id="cr-preview-urls" class="cr-list-ctrl">
+                            <!-- URLs will be populated by JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <div class="cr-form__section">
+                        <div class="cr-form__section-header">New Group Options</div>
+                        <label class="cr-checkbox">
+                            <input type="checkbox" id="cr-download-immediately-checkbox" checked onchange="updateDownloadOrCreateGroupButtonTitleAndStyle()">
+                            <span>Download Group Immediately</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="cr-create-group-form__actions">
+                    <button id="cr-cancel-group-button" class="cr-button cr-button--secondary" onclick="onCancelCreateGroupButtonClicked()">Cancel</button>
+                    <button id="cr-group-action-button" class="cr-button cr-button--primary" onclick="onDownloadOrCreateGroupButtonClicked()">⬇ Download</button>
+                    <span id="cr-group-action-message" class="cr-action-message"></span>
+                </div>
+            </div>
         </div>
         """
     ).strip()
@@ -1684,20 +2229,51 @@ def _not_in_archive_html(
     script_html = dedent(
         """
         <script>
+            // -----------------------------------------------------------------
+            // Download URL Button
+            
+            // Used to receive download progress updates
             let eventSource = null;
             
-            async function startDownload() {
-                const downloadButton = document.getElementById('download-button');
-                const progressDiv = document.getElementById('download-progress');
-                const progressFill = document.getElementById('progress-fill');
-                const progressText = document.getElementById('progress-text');
+            async function onDownloadUrlButtonClicked() {
+                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
+                const groupFormIsVisibleAndEnabled = (
+                    createGroupCheckbox && createGroupCheckbox.checked &&
+                    isFormEnabled()  // form action already performed
+                );
+                if (groupFormIsVisibleAndEnabled) {
+                    const downloadImmediatelyCheckbox = document.getElementById('cr-download-immediately-checkbox');
+                    if (downloadImmediatelyCheckbox && downloadImmediatelyCheckbox.checked) {
+                        // Press "Download" button in the group form
+                        await onDownloadOrCreateGroupButtonClicked();
+                        return;
+                    } else {
+                        // Press "Create" button in the group form,
+                        // then download the individual URL if successful
+                        await onDownloadOrCreateGroupButtonClicked(
+                            /*downloadUrlImmediately=*/true);
+                        return;
+                    }
+                } else {
+                    await startUrlDownload();
+                }
+            }
+            
+            async function startUrlDownload() {
+                const downloadButton = document.getElementById('cr-download-url-button');
+                const progressDiv = document.getElementById('cr-download-progress-bar');
+                const progressFill = document.getElementById('cr-download-progress-bar__fill');
+                const progressText = document.getElementById('cr-download-progress-bar__message');
                 
                 // Disable the download button
                 downloadButton.disabled = true;
                 downloadButton.textContent = '⬇ Downloading...';
                 
-                // Show progress
+                // Show progress with animation
                 progressDiv.style.display = 'block';
+                // Force a reflow to ensure display: block is applied before adding the animation class
+                progressDiv.offsetHeight;
+                progressDiv.classList.add('show');
                 progressFill.style.width = '0%%';
                 progressText.textContent = 'Starting download...';
                 
@@ -1789,16 +2365,305 @@ def _not_in_archive_html(
                     eventSource.close();
                 }
             });
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Show/Hide
+            
+            const createGroupFormData = %(create_group_form_data_json)s;
+            
+            function onCreateGroupCheckboxClicked() {
+                // (Browser already toggled the checked state of the checkbox)
+                updateCreateGroupFormVisible();
+            }
+            
+            // Shows the Create Group Form iff the Create Group checkbox is ticked.
+            function updateCreateGroupFormVisible() {
+                const checkbox = document.getElementById('cr-create-group-checkbox');
+                const form = document.getElementById('cr-create-group-form');
+                
+                if (checkbox.checked) {
+                    form.style.display = 'block';
+                    populateSourceDropdown();
+                    updatePreviewUrls();
+                    updateDownloadOrCreateGroupButtonTitleAndStyle();
+                } else {
+                    form.style.display = 'none';
+                }
+            }
+            
+            // Collapses the Create Group Form after a Create actions succeeded,
+            // leaving the success message visible.
+            function collapseCreateGroupForm() {
+                const collapsibleContent = document.getElementById('cr-create-group-form__collapsible-content');
+                collapsibleContent.classList.add('slide-up');
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Fields
+            
+            // Respond to Enter/Escape keys
+            document.addEventListener('DOMContentLoaded', function() {
+                const urlPatternInput = document.getElementById('cr-group-url-pattern');
+                urlPatternInput.addEventListener('keydown', handleFormKeydown);
+                
+                const nameInput = document.getElementById('cr-group-name');
+                nameInput.addEventListener('keydown', handleFormKeydown);
+            });
+            
+            function handleFormKeydown(event) {
+                if (event.key === 'Enter') {
+                    // Trigger the primary button, which is always a Download button
+                    onDownloadUrlButtonClicked();
+                    
+                    event.preventDefault();
+                } else if (event.key === 'Escape') {
+                    // Trigger the cancel button
+                    onCancelCreateGroupButtonClicked();
+                    
+                    event.preventDefault();
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Source Field
+            
+            function populateSourceDropdown() {
+                const sourceSelect = document.getElementById('cr-group-source');
+                sourceSelect.innerHTML = '';
+                
+                createGroupFormData.source_choices.forEach(choice => {
+                    const option = document.createElement('option');
+                    option.textContent = choice.display_name;
+                    option.value = JSON.stringify(choice.value);
+                    sourceSelect.appendChild(option);
+                });
+                
+                // Set predicted source if available
+                if (createGroupFormData.predicted_source_value) {
+                    const predictedValue = JSON.stringify(createGroupFormData.predicted_source_value);
+                    for (let i = 0; i < sourceSelect.options.length; i++) {
+                        if (sourceSelect.options[i].value === predictedValue) {
+                            sourceSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Preview Members Section
+            
+            // Update Preview Member URLs in real-time as URL Pattern changes
+            document.addEventListener('DOMContentLoaded', function() {
+                const urlPatternInput = document.getElementById('cr-group-url-pattern');
+                urlPatternInput.addEventListener('input', updatePreviewUrls);
+            });
+            
+            async function updatePreviewUrls() {
+                const urlPattern = document.getElementById('cr-group-url-pattern').value.trim();
+                const previewContainer = document.getElementById('cr-preview-urls');
+                
+                if (!urlPattern) {
+                    previewContainer.innerHTML = '<div class="cr-list-ctrl-item">Enter a URL pattern to see matching URLs</div>';
+                    return;
+                }
+                
+                // Track this request to cancel previous ones
+                const requestStartTime = Date.now();
+                updatePreviewUrls.lastRequestTime = requestStartTime;
+                
+                // Show loading state only after 200ms delay
+                const loadingTimeout = setTimeout(() => {
+                    // Only show loading if this request is still the latest
+                    if (updatePreviewUrls.lastRequestTime === requestStartTime) {
+                        previewContainer.innerHTML = '<div class="cr-list-ctrl-item">Loading preview...</div>';
+                    }
+                }, 200);
+                
+                try {
+                    const response = await fetch('/_/crystal/preview-urls', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ url_pattern: urlPattern })
+                    });
+                    
+                    // Clear the loading timeout since we got a response
+                    clearTimeout(loadingTimeout);
+                    
+                    // Only update UI if this request is still the latest
+                    if (updatePreviewUrls.lastRequestTime !== requestStartTime) {
+                        return;  // A newer request has started
+                    }
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to fetch preview URLs');
+                    }
+                    
+                    const result = await response.json();
+                    const matchingUrls = result.matching_urls;
+                    
+                    if (matchingUrls.length === 0) {
+                        previewContainer.innerHTML = '<div class="cr-list-ctrl-item">No matching URLs found</div>';
+                    } else {
+                        // Clear container and add URLs safely
+                        previewContainer.innerHTML = '';
+                        matchingUrls.forEach(url => {
+                            const urlDiv = document.createElement('div');
+                            urlDiv.className = 'cr-list-ctrl-item';
+                            urlDiv.textContent = url;
+                            previewContainer.appendChild(urlDiv);
+                        });
+                    }
+                } catch (error) {
+                    // Clear the loading timeout
+                    clearTimeout(loadingTimeout);
+                    
+                    // Only update UI if this request is still the latest
+                    if (updatePreviewUrls.lastRequestTime === requestStartTime) {
+                        console.error('Preview URLs error:', error);
+                        previewContainer.innerHTML = '<div class="cr-list-ctrl-item">Error loading preview URLs</div>';
+                    }
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Cancel Button
+            
+            function onCancelCreateGroupButtonClicked() {
+                const checkbox = document.getElementById('cr-create-group-checkbox');
+                checkbox.checked = false;
+                updateCreateGroupFormVisible();
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Download/Create Group Button
+            
+            // Initialize Download/Create button on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                updateDownloadOrCreateGroupButtonTitleAndStyle();
+            });
+            
+            // Updates the Download/Create button at the bottom of the
+            // Create Group Form to display the appropriate title,
+            // depending on whether the Download Immediately checkbox is ticked.
+            function updateDownloadOrCreateGroupButtonTitleAndStyle() {
+                const downloadImmediatelyCheckbox = document.getElementById('cr-download-immediately-checkbox');
+                const actionButton = document.getElementById('cr-group-action-button');
+                
+                if (downloadImmediatelyCheckbox && downloadImmediatelyCheckbox.checked) {
+                    actionButton.textContent = '⬇ Download';
+                    actionButton.className = 'cr-button cr-button--primary';
+                } else {
+                    actionButton.textContent = '✚ Create';
+                    actionButton.className = 'cr-button cr-button--secondary';
+                }
+            }
+            
+            async function onDownloadOrCreateGroupButtonClicked(downloadUrlImmediately/*=false*/) {
+                const urlPattern = document.getElementById('cr-group-url-pattern').value.trim();
+                const sourceValue = document.getElementById('cr-group-source').value;
+                const name = document.getElementById('cr-group-name').value.trim();
+                const downloadGroupImmediately = document.getElementById('cr-download-immediately-checkbox').checked;
+                
+                if (!urlPattern) {
+                    showActionMessage('✖️ Please enter a URL pattern.', /*isSuccess=*/false);
+                    return;
+                }
+                
+                clearActionMessage();
+                setFormEnabled(false);
+                
+                const actionButton = document.getElementById('cr-group-action-button');
+                const originalText = actionButton.textContent;
+                actionButton.textContent = downloadGroupImmediately ? 'Creating & Starting Download...' : 'Creating...';
+                
+                try {
+                    const createUrl = '/_/crystal/create-group';
+                    const response = await fetch(createUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            url_pattern: urlPattern,
+                            source: sourceValue ? JSON.parse(sourceValue) : null,
+                            name: name,
+                            download_immediately: downloadGroupImmediately
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to create group');
+                    }
+                    
+                    const result = await response.json();
+                    showActionMessage('✅ Group created successfully!', /*isSuccess=*/true);
+                    
+                    // If download was requested, start individual URL download
+                    // otherwise collapse the disabled form to show only essential elements
+                    if (downloadGroupImmediately || downloadUrlImmediately) {
+                        await startUrlDownload();
+                    } else {
+                        collapseCreateGroupForm();
+                    }
+                } catch (error) {
+                    console.error('Group action error:', error);
+                    showActionMessage('✖️ Failed to create group', /*isSuccess=*/false);
+                    setFormEnabled(true);
+                } finally {
+                    actionButton.textContent = originalText;
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Action Message
+            
+            function showActionMessage(message, isSuccess) {
+                const messageElement = document.getElementById('cr-group-action-message');
+                messageElement.textContent = message;
+                messageElement.className = `cr-action-message ${isSuccess ? 'success' : 'error'}`;
+            }
+            
+            function clearActionMessage() {
+                const messageElement = document.getElementById('cr-group-action-message');
+                messageElement.textContent = '';
+                messageElement.className = 'cr-action-message';
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form: Enabled State
+            
+            function setFormEnabled(enabled) {
+                const inputs = document.querySelectorAll('#cr-create-group-form input, #cr-create-group-form select, #cr-create-group-form button');
+                inputs.forEach(input => {
+                    input.disabled = !enabled;
+                });
+                
+                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
+                createGroupCheckbox.disabled = !enabled;
+            }
+            
+            function isFormEnabled() {
+                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
+                return !createGroupCheckbox.disabled;
+            }
+            
+            // -----------------------------------------------------------------
         </script>
         """ % {
-            'archive_url_json': archive_url_json
+            'archive_url_json': archive_url_json,
+            'create_group_form_data_json': json.dumps(create_group_form_data)
         }
     ).strip()
     
     return _base_page_html(
         title_html='Not in Archive | Crystal',
         style_html=(
-            _URL_INFO_STYLE_TEMPLATE + '\n' + 
+            _URL_BOX_STYLE_TEMPLATE + '\n' + 
             not_in_archive_styles
         ),
         content_html=content_html,
@@ -1813,9 +2678,9 @@ def _fetch_error_html(
         ) -> str:    
     content_html = dedent(
         f"""
-        <div class="error-icon">⚠️</div>
+        <div class="cr-page__icon">⚠️</div>
         
-        <div class="error-message">
+        <div class="cr-page__title">
             <strong>Fetch Error</strong>
         </div>
         
@@ -1824,14 +2689,14 @@ def _fetch_error_html(
             was encountered when fetching this resource.
         </p>
         
-        {_URL_INFO_HTML_TEMPLATE % {
+        {_URL_BOX_HTML_TEMPLATE % {
             'label_html': 'Original URL',
             'url_html_attr': archive_url,
             'url_html': html_escape(archive_url)
         } }
         
-        <div class="actions">
-            <button onclick="history.back()" class="action-button secondary-button">
+        <div class="cr-page__actions">
+            <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
         </div>
@@ -1841,7 +2706,7 @@ def _fetch_error_html(
     return _base_page_html(
         title_html='Fetch Error | Crystal',
         style_html=(
-            _URL_INFO_STYLE_TEMPLATE
+            _URL_BOX_STYLE_TEMPLATE
         ),
         content_html=content_html,
         script_html='',
@@ -1874,7 +2739,7 @@ def _base_page_html(
 
 _BASE_PAGE_STYLE_TEMPLATE = dedent(
     """
-    body {
+    .cr-body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         line-height: 1.6;
         margin: 0;
@@ -1883,9 +2748,11 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         min-height: 100vh;
         box-sizing: border-box;
         color: #333;
+        /* Always show vertical scrollbar to avoid layout shifts when page content changes height */
+        overflow-y: scroll;
     }
     
-    .container {
+    .cr-body__container {
         max-width: 600px;
         margin: 0 auto;
         background: white;
@@ -1894,7 +2761,7 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     }
     
-    .header {
+    .cr-brand-header {
         display: flex;
         align-items: center;
         margin-bottom: 30px;
@@ -1904,22 +2771,22 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     
     /* Dark mode styles for top of page */
     @media (prefers-color-scheme: dark) {
-        body {
+        .cr-body {
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d30 100%);
             color: #e0e0e0;
         }
         
-        .container {
+        .cr-body__container {
             background: #2d2d30;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         }
         
-        .header {
+        .cr-brand-header {
             border-bottom: 2px solid #404040;
         }
     }
     
-    .logo {
+    .cr-brand-header__logo {
         width: 48px;
         height: 48px;
         margin-right: 16px;
@@ -1927,44 +2794,44 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         border-radius: 8px;
     }
     
-    .brand-text {
+    .cr-brand-header__text {
         flex: 1;
     }
     
-    .brand-title {
+    .cr-brand-header__title {
         margin: 0;
         height: 32px;
         line-height: 1;
     }
     
-    .brand-title img {
+    .cr-brand-header__title img {
         height: 32px;
         width: auto;
         vertical-align: baseline;
     }
     
     /* Default to light logotext */
-    .logotext-light {
+    .cr-brand-header__title__logotext--light {
         display: inline;
     }
-    .logotext-dark {
+    .cr-brand-header__title__logotext--dark {
         display: none;
     }
     
-    .brand-subtitle {
+    .cr-brand-header__subtitle {
         font-size: 14px;
         color: #6c757d;
         margin: 0;
     }
     
-    .error-icon {
+    .cr-page__icon {
         font-size: 64px;
         color: #e74c3c;
         text-align: center;
         margin: 20px 0;
     }
     
-    .error-message {
+    .cr-page__title {
         font-size: 18px;
         color: #2c3e50;
         text-align: center;
@@ -1973,28 +2840,28 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     
     /* Dark mode styles for brand and content */
     @media (prefers-color-scheme: dark) {
-        .brand-subtitle {
+        .cr-brand-header__subtitle {
             color: #a0a0a0;
         }
         
-        .error-message {
+        .cr-page__title {
             color: #e0e0e0;
         }
         
         /* Switch to dark logotext */
-        .logotext-light {
+        .cr-brand-header__title__logotext--light {
             display: none;
         }
-        .logotext-dark {
+        .cr-brand-header__title__logotext--dark {
             display: inline;
         }
     }
     
-    .actions {
+    .cr-page__actions {
         margin: 30px 0;
     }
     
-    .action-button {
+    .cr-button {
         display: inline-block;
         padding: 12px 24px;
         margin: 8px 8px 8px 0;
@@ -2007,40 +2874,57 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         transition: all 0.2s ease;
         min-width: 120px;
         text-align: center;
+        
+        /* Use consistent height to avoid variance in height from emoji characters */
+        height: 48px;
+        box-sizing: border-box;
+        line-height: 24px;
     }
     
-    .primary-button {
+    .cr-button--primary {
         background: #4A90E2;
         color: white;
     }
     
-    .primary-button:hover {
+    .cr-button--primary:hover {
         background: #357ABD;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
     }
     
-    .primary-button:disabled {
+    .cr-button--primary:disabled {
         opacity: 0.5;
         cursor: not-allowed;
         pointer-events: none;
     }
     
-    .primary-button:disabled:hover {
+    .cr-button--primary:disabled:hover {
         background: #4A90E2;
         transform: none;
         box-shadow: none;
     }
     
-    .secondary-button {
+    .cr-button--secondary {
         background: #6c757d;
         color: white;
     }
     
-    .secondary-button:hover {
+    .cr-button--secondary:hover {
         background: #5a6268;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    
+    .cr-button--secondary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    
+    .cr-button--secondary:disabled:hover {
+        background: #6c757d;
+        transform: none;
+        box-shadow: none;
     }
     """
 ).lstrip()  # type: str
@@ -2058,26 +2942,26 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
             %(style_html)s
         </style>
     </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="logo" />
-                <div class="brand-text">
-                    <h1 class="brand-title">
+    <body class="cr-body">
+        <div class="cr-body__container">
+            <div class="cr-brand-header">
+                <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="cr-brand-header__logo" />
+                <div class="cr-brand-header__text">
+                    <h1 class="cr-brand-header__title">
                         <img
                             src="/_/crystal/resources/logotext.png" 
                             srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
                             alt="Crystal"
-                            class="logotext-light"
+                            class="cr-brand-header__title__logotext--light"
                         />
                         <img
                             src="/_/crystal/resources/logotext-dark.png" 
                             srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
                             alt="Crystal"
-                            class="logotext-dark"
+                            class="cr-brand-header__title__logotext--dark"
                         />
                     </h1>
-                    <p class="brand-subtitle">A Website Archiver</p>
+                    <p class="cr-brand-header__subtitle">A Website Archiver</p>
                 </div>
             </div>
             
@@ -2094,9 +2978,9 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # HTML Templates: URL Info Box
 
-_URL_INFO_STYLE_TEMPLATE = dedent(
+_URL_BOX_STYLE_TEMPLATE = dedent(
     """
-    .url-info {
+    .cr-url-box {
         background: #f8f9fa;
         padding: 15px;
         border-radius: 8px;
@@ -2104,7 +2988,7 @@ _URL_INFO_STYLE_TEMPLATE = dedent(
         margin: 20px 0;
     }
     
-    .url-label {
+    .cr-url-box__label {
         font-size: 12px;
         color: #6c757d;
         text-transform: uppercase;
@@ -2113,7 +2997,7 @@ _URL_INFO_STYLE_TEMPLATE = dedent(
         font-weight: 600;
     }
     
-    .url-link {
+    .cr-url-box__link {
         color: #4A90E2;
         text-decoration: none;
         word-break: break-all;
@@ -2121,22 +3005,22 @@ _URL_INFO_STYLE_TEMPLATE = dedent(
         font-size: 14px;
     }
     
-    .url-link:hover {
+    .cr-url-box__link:hover {
         text-decoration: underline;
     }
     
     /* Dark mode styles for URL */
     @media (prefers-color-scheme: dark) {
-        .url-info {
+        .cr-url-box {
             background: #404040;
             border-left: 4px solid #6BB6FF;
         }
         
-        .url-label {
+        .cr-url-box__label {
             color: #a0a0a0;
         }
         
-        .url-link {
+        .cr-url-box__link {
             color: #6BB6FF;
         }
     }
@@ -2144,11 +3028,11 @@ _URL_INFO_STYLE_TEMPLATE = dedent(
 ).lstrip()  # type: str
 
 
-_URL_INFO_HTML_TEMPLATE = dedent(
+_URL_BOX_HTML_TEMPLATE = dedent(
     """
-    <div class="url-info">
-        <div class="url-label">%(label_html)s</div>
-        <a href="%(url_html_attr)s" class="url-link" target="_blank" rel="noopener">%(url_html)s</a>
+    <div class="cr-url-box">
+        <div class="cr-url-box__label">%(label_html)s</div>
+        <a href="%(url_html_attr)s" class="cr-url-box__link" target="_blank" rel="noopener">%(url_html)s</a>
     </div>
     """
 ).strip()  # type: str

@@ -1,3 +1,17 @@
+"""
+Abstractions for interacting with wxPython windows, dialogs, panels,
+and other high-level UI elements.
+
+Automated tests interacting with the UI should use these abstractions
+when possible so that they don't need to know about
+- exact window names (i.e: "cr-...")
+- what condition to wait for after performing an action to verify it finished
+all of which are subject to change.
+
+See also:
+- crystal/tests/util/pages.py -- For interacting with high-level browser UI
+"""
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -24,7 +38,7 @@ import re
 import sys
 import tempfile
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from unittest.mock import ANY, patch
 import wx
 
@@ -46,7 +60,7 @@ class OpenOrCreateDialog:
     
     @staticmethod
     async def wait_for(timeout: float | None=None, *, _attempt_recovery: bool=True) -> OpenOrCreateDialog:
-        self = OpenOrCreateDialog(ready=True)
+        self = OpenOrCreateDialog(_ready=True)
         try:
             open_or_create_project_dialog = await wait_for(
                 window_condition('cr-open-or-create-project'),
@@ -105,8 +119,8 @@ class OpenOrCreateDialog:
         assert isinstance(self.create_button, wx.Button)
         return self
     
-    def __init__(self, *, ready: bool=False) -> None:
-        assert ready, 'Did you mean to use OpenOrCreateDialog.wait_for()?'
+    def __init__(self, *, _ready: bool=False) -> None:
+        assert _ready, 'Did you mean to use OpenOrCreateDialog.wait_for()?'
     
     @asynccontextmanager
     async def create(self, 
@@ -183,13 +197,15 @@ class OpenOrCreateDialog:
             raise
         finally:
             if autoclose:
-                # HACK: Suppress prompt to save changes upon close
-                if project.is_untitled:
-                    project._is_dirty = False
+                def suppress_do_not_save_changes_prompt():
+                    # HACK: Suppress prompt to save changes upon close
+                    if project.is_untitled:
+                        project._is_dirty = False
                 
                 await mw.close(
                     exc_info_while_close,
-                    wait_for_tasks_to_complete=wait_for_tasks_to_complete_on_close)
+                    wait_for_tasks_to_complete=wait_for_tasks_to_complete_on_close,
+                    before_close_func=suppress_do_not_save_changes_prompt)
     
     async def create_and_leave_open(self) -> MainWindow:
         old_opened_project = Project._last_opened_project  # capture
@@ -285,7 +301,7 @@ class MainWindow:
     
     @staticmethod
     async def wait_for(*, timeout: float | None=None) -> MainWindow:
-        self = MainWindow(ready=True)
+        self = MainWindow(_ready=True)
         self._connect_timeout = timeout
         await self._connect()
         return self
@@ -344,8 +360,8 @@ class MainWindow:
         self.read_write_icon = mw_frame.FindWindow(name='cr-read-write-icon')
         assert isinstance(self.read_write_icon, wx.StaticText)
     
-    def __init__(self, *, ready: bool=False) -> None:
-        assert ready, 'Did you mean to use MainWindow.wait_for()?'
+    def __init__(self, *, _ready: bool=False) -> None:
+        assert _ready, 'Did you mean to use MainWindow.wait_for()?'
     
     # === Menubar ===
     
@@ -368,6 +384,16 @@ class MainWindow:
             return False
         else:
             raise AssertionError()
+    
+    @property
+    def edit_button_label_type(self) -> Literal['Edit', 'Get Info']:
+        label = wx.Control.RemoveMnemonics(self.edit_button.Label)
+        if 'Edit' in label:
+            return 'Edit'
+        elif 'Get Info' in label:
+            return 'Get Info'
+        else:
+            raise AssertionError('Unexpected label for edit button: {label!r}')
     
     # === Operations ===
     
@@ -404,7 +430,11 @@ class MainWindow:
     
     CLOSE_TIMEOUT = 4.0
 
-    async def close(self, exc_info=None, *, wait_for_tasks_to_complete: bool | None=None) -> None:
+    async def close(self,
+            exc_info=None,
+            *, wait_for_tasks_to_complete: bool | None=None,
+            before_close_func: Callable[[], None]=lambda: None,
+            ) -> None:
         if wait_for_tasks_to_complete is None:  # auto
             wait_for_tasks_to_complete = not is_synced_with_scheduler_thread()
 
@@ -431,6 +461,7 @@ class MainWindow:
                 
                 # (continue)
         
+        before_close_func()
         self.main_window.Close()
         await self.wait_for_close()
     
@@ -496,7 +527,7 @@ class NewRootUrlDialog:
     
     @staticmethod
     async def wait_for() -> NewRootUrlDialog:
-        self = NewRootUrlDialog(ready=True)
+        self = NewRootUrlDialog(_ready=True)
         self._dialog = await wait_for(window_condition('cr-new-root-url-dialog'), stacklevel_extra=1)
         assert isinstance(self._dialog, wx.Dialog)
         assert RealNewRootUrlDialog._last_opened is not None
@@ -538,8 +569,8 @@ class NewRootUrlDialog:
         
         return self
     
-    def __init__(self, *, ready: bool=False) -> None:
-        assert ready, 'Did you mean to use NewRootUrlDialog.wait_for()?'
+    def __init__(self, *, _ready: bool=False) -> None:
+        assert _ready, 'Did you mean to use NewRootUrlDialog.wait_for()?'
     
     @property
     def shown(self) -> bool:
@@ -620,7 +651,7 @@ class NewGroupDialog:
     
     @staticmethod
     async def wait_for() -> NewGroupDialog:
-        self = NewGroupDialog(ready=True)
+        self = NewGroupDialog(_ready=True)
         self._dialog = await wait_for(
             NewGroupDialog.window_condition(),
             timeout=5.0,  # 4.2s observed for macOS test runners on GitHub Actions
@@ -666,8 +697,8 @@ class NewGroupDialog:
     def window_condition() -> Callable[[], wx.Window | None]:
         return window_condition('cr-new-group-dialog')
     
-    def __init__(self, *, ready: bool=False) -> None:
-        assert ready, 'Did you mean to use NewGroupDialog.wait_for()?'
+    def __init__(self, *, _ready: bool=False) -> None:
+        assert _ready, 'Did you mean to use NewGroupDialog.wait_for()?'
     
     # TODO: Rename -> source_name
     def _get_source(self) -> str | None:
@@ -743,7 +774,7 @@ class PreferencesDialog:
     async def wait_for() -> PreferencesDialog:
         import wx.adv
         
-        self = PreferencesDialog(ready=True)
+        self = PreferencesDialog(_ready=True)
         self._dialog = await wait_for(
             window_condition('cr-preferences-dialog'),
             timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
@@ -771,8 +802,8 @@ class PreferencesDialog:
         assert isinstance(self.ok_button, wx.Button)
         return self
     
-    def __init__(self, *, ready: bool=False) -> None:
-        assert ready, 'Did you mean to use PreferencesDialog.wait_for()?'
+    def __init__(self, *, _ready: bool=False) -> None:
+        assert _ready, 'Did you mean to use PreferencesDialog.wait_for()?'
     
     async def ok(self) -> None:
         click_button(self.ok_button)
