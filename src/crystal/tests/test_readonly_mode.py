@@ -202,7 +202,7 @@ async def test_when_readonly_project_has_source_resource_linking_to_target_url_w
                 # Ensure the Resource for page B is marked as unsaved
                 contact_resource = project.get_resource(contact_url)
                 assert contact_resource is not None
-                assert contact_resource._id == Resource._UNSAVED_ID
+                assertEqual(Resource._UNSAVED_ID, contact_resource._id)
 
 
 async def test_when_readonly_project_is_saved_then_becomes_writable_and_all_unsaved_resources_are_saved() -> None:
