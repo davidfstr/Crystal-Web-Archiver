@@ -5,7 +5,7 @@ from crystal.util.sizes import format_byte_size
 from crystal.util.wx_dialog import position_dialog_initially, ShowModal
 from crystal.util.xfunctools import partial2
 from crystal.util.xos import is_wx_gtk, is_windows
-from crystal.util.xthreading import fg_affinity, fg_call_later, is_foreground_thread
+from crystal.util.xthreading import fg_affinity, fg_call_later, fg_calls_paused, is_foreground_thread
 from functools import wraps
 import time
 from typing import List, Optional, overload, Self, TypeVar
@@ -765,7 +765,12 @@ class DeferredProgressDialog:
         # Show now. Apply deferred operations.
         assert len(self._calls) >= 1
         assert self._calls[0][0] == '__init__'
-        self._dialog = wx.ProgressDialog(*self._calls[0][1], **self._calls[0][2])
+        # NOTE: At least on Windows, the wx.ProgressDialog constructor may immediately
+        #       try to process events on a nested event loop. We don't want
+        #       arbitrary foreground callables to run here because the
+        #       DeferredProgressDialog instance is in an inconsistent state.
+        with fg_calls_paused():
+            self._dialog = wx.ProgressDialog(*self._calls[0][1], **self._calls[0][2])
         self._shown = True
         if self._window_modal:
             # NOTE: Not using ShowWindowModal() from util/wx_dialog.py here

@@ -154,6 +154,10 @@ def fg_trampoline(func: Callable[_P, None]) -> Callable[_P, None]:
 # ------------------------------------------------------------------------------
 # Call on Foreground Thread
 
+# Queue of deferred foreground callables to run
+_deferred_fg_calls = deque()  # type: Deque[Callable[[], None]]
+_deferred_fg_calls_paused = False
+
 def fg_call_later(
         callable: Callable[_P, None],
         # TODO: Give `args` the type `_P` once that can be spelled in Python's type system.
@@ -221,6 +225,8 @@ def fg_call_later(
         return
     
     try:
+        # NOTE: wx.CallAfter can be used on any thread
+        # NOTE: Schedules a wx.PyEvent with category wx.EVT_CATEGORY_UI
         wx.CallAfter(_run_deferred_fg_calls)
     except Exception as e:
         if not has_foreground_thread():
@@ -236,8 +242,18 @@ def fg_call_later(
             raise
 
 
-# Queue of deferred foreground callables to run
-_deferred_fg_calls = deque()  # type: Deque[Callable[[], None]]
+@contextmanager
+def fg_calls_paused() -> Iterator[None]:
+    """
+    Context in which dispatching of deferred foreground calls is temporarily paused.
+    """
+    global _deferred_fg_calls_paused
+    old_enabled = _deferred_fg_calls_paused
+    _deferred_fg_calls_paused = True
+    try:
+        yield
+    finally:
+        _deferred_fg_calls_paused = old_enabled
 
 
 @capture_crashes_to_stderr
@@ -246,6 +262,12 @@ def _run_deferred_fg_calls() -> bool:
     Runs all deferred foreground callables that were scheduled by fg_call_later().
     Returns whether any callables were run.
     """
+    if _deferred_fg_calls_paused:
+        # NOTE: wx.CallLater can be used on the foreground thread only
+        # NOTE: Schedules a wx.TimerEvent with category wx.EVT_CATEGORY_TIMER
+        wx.CallLater(1, _run_deferred_fg_calls)
+        return False
+    
     # Don't run more than the number of calls that were initially scheduled
     # to avoid an infinite loop in case a type of callable always
     # schedules at least one callable of the same type.
