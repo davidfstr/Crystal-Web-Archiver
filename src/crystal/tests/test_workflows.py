@@ -7,11 +7,14 @@ from __future__ import annotations
 
 from crystal.model import Project, Resource
 from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
+# TODO: Move to crystal.tests.util.data
+from crystal.tests.test_server import _navigate_from_home_to_comic_1_nia_page
 from crystal.tests.util.asserts import assertEqual, assertRegex
 from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
     click_button, click_checkbox, set_checkbox_value, TreeItem,
 )
+from crystal.tests.util.pages import NotInArchivePage
 from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url, is_url_not_in_archive,
@@ -26,6 +29,9 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import (
     EntityTree, MainWindow, NewGroupDialog, NewRootUrlDialog,
     OpenOrCreateDialog, PreferencesDialog,
+)
+from crystal.tests.util.xplaywright import (
+    Playwright, RawPage, awith_playwright, expect,
 )
 import crystal.tests.util.xtempfile as xtempfile
 from crystal.tests.util.xtzutils import localtime_fallback_for_get_localzone
@@ -666,16 +672,141 @@ async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> No
                 assert False == (await is_url_not_in_archive(atom_feed_url))
 
 
-# See: https://github.com/davidfstr/Crystal-Web-Archiver/issues/69
-@skip('partially implemented; not yet automated')
-async def test_can_download_and_serve_a_static_site_using_using_browser() -> None:
+@awith_playwright
+async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Playwright) -> None:
     """
     Test that can successfully download and serve a mostly-static site,
     by clicking through the served site in a browser.
     
     Example site: https://xkcd.com/
     """
-    pass
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic2_url = sp.get_request_url('https://xkcd.com/2/')
+            comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            assert False == mw.readonly
+            
+            # Test can create root resource
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti.GetFirstChild() is None  # no entities
+                
+                click_button(mw.new_root_url_button)
+                nud = await NewRootUrlDialog.wait_for()
+                
+                nud.url_field.Value = home_url
+                assert nud.download_immediately_checkbox.IsChecked()
+                await nud.ok()
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None  # entity was created
+                
+                await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            # Test can view resource
+            home_ti.SelectItem()
+            home_url_in_archive = get_request_url(
+                home_url,
+                project_default_url_prefix=project.default_url_prefix)
+            with assert_does_open_webbrowser_to(home_url_in_archive):
+                click_button(mw.view_button)
+            
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                # Ensure can see home page
+                raw_page.goto(home_url_in_archive)
+                expect(raw_page).to_have_title('xkcd: Air Gap')
+                
+                # Click "|<" link to navigate to first comic.
+                # Expect to see Not in Archive page.
+                comic1_url_in_archive = get_request_url(
+                    comic1_url,
+                    project_default_url_prefix=project.default_url_prefix)
+                page = _navigate_from_home_to_comic_1_nia_page(
+                    raw_page, home_url_in_archive, comic1_url_in_archive,
+                    already_at_home=True)
+                
+                # Verify that DetectedRegularGroup from the navigation is correct
+                comic_pattern_in_archive = get_request_url(
+                    comic_pattern,
+                    project_default_url_prefix=project.default_url_prefix)
+                page.create_group_checkbox.check()
+                expect(page.url_pattern_field).to_have_value(comic_pattern)
+                expect(page.source_dropdown.locator('option:checked')).to_have_text(home_url)
+                page.wait_for_initial_preview_urls()
+                expect(page.preview_urls_container).to_contain_text('xkcd.com')
+                page.create_group_checkbox.uncheck()
+                
+                # Download home page URL and refresh page
+                if True:
+                    # Click the download URL button (above the form)
+                    expect(page.download_url_button).to_be_enabled()
+                    expect(page.download_url_button).to_contain_text('⬇ Download')
+                    page.download_url_button.click()
+                    
+                    # Verify download button gets disabled and progress bar appears
+                    expect(page.download_url_button).to_be_disabled()
+                    expect(page.download_url_button).to_contain_text('⬇ Downloading...')
+                    page.progress_bar.wait_for(state='visible')
+                    
+                    # Wait for the page to reload after download completes.
+                    # The group should be created automatically and the page should reload to the comic.
+                    expect(raw_page).not_to_have_title('Not in Archive | Crystal')
+                    expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
+                
+                # Click ">" link to navigate to second comic.
+                # Expect to see Not in Archive page.
+                comic2_url_in_archive = get_request_url(
+                    comic2_url,
+                    project_default_url_prefix=project.default_url_prefix)
+                comic2_link = raw_page.locator('a', has_text='>').first
+                expect(comic2_link).to_be_visible()
+                comic2_link.click()
+                expect(raw_page).to_have_url(comic2_url_in_archive)
+                page = NotInArchivePage.wait_for(raw_page)
+                
+                # Verify that DetectedSequentialGroup from the navigation is correct
+                page.create_group_checkbox.check()
+                expect(page.url_pattern_field).to_have_value(comic_pattern)
+                expect(page.source_dropdown.locator('option:checked')).to_have_text(comic1_url)
+                page.wait_for_initial_preview_urls()
+                expect(page.preview_urls_container).to_contain_text('xkcd.com')
+                
+                # Download URL, start downloading group, and refresh page
+                if True:
+                    expect(page.download_immediately_checkbox).to_be_checked()
+                    
+                    expect(page.download_or_create_group_button).to_contain_text('⬇ Download')
+                    expect(page.download_or_create_group_button).to_be_enabled()
+                    page.download_or_create_group_button.click()
+                    
+                    # The button should get disabled as download starts
+                    expect(page.download_or_create_group_button).to_be_disabled()
+                    expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
+                    
+                    # Wait for the page to reload (indicating successful download)
+                    expect(raw_page).not_to_have_title('Not in Archive | Crystal')
+                    expect(raw_page).to_have_title('xkcd: Petit Trees (sketch)')
+            await pw.run(pw_task)
+            
+            # Wait for group to finish downloading
+            await wait_for_download_to_start_and_finish(mw.task_tree)
+            
+            # Verify that expected entities exist
+            home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+            comic1_ti = root_ti.find_child(comic1_url, project.default_url_prefix)
+            comic_pattern_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)
+            
+            # Verify that comic group is downloaded
+            comic_pattern_ti.Expand()
+            await wait_for(first_child_of_tree_item_is_not_loading_condition(comic_pattern_ti))
+            member_tis = comic_pattern_ti.Children
+            for m in member_tis:
+                await _assert_tree_item_icon_tooltip_contains(m, 'Fresh')
 
 
 @skip('not yet automated')

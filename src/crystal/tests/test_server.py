@@ -1300,12 +1300,14 @@ async def serve_and_fetch_xkcd_home_page(mw: MainWindow) -> tuple[WebPage, str]:
 def _navigate_from_home_to_comic_1_nia_page(
         raw_page: RawPage,
         home_url_in_archive: str,
-        comic1_url_in_archive: str) -> NotInArchivePage:
+        comic1_url_in_archive: str,
+        *, already_at_home: bool=False) -> NotInArchivePage:
     """
     Navigates from home page to comic #1, so that referrer is set correctly,
     and the predicted group attributes are realistic.
     """
-    raw_page.goto(home_url_in_archive)
+    if not already_at_home:
+        raw_page.goto(home_url_in_archive)
     first_comic_link = raw_page.locator('a', has_text='|<').first
     expect(first_comic_link).to_be_visible()
     first_comic_link.click()
