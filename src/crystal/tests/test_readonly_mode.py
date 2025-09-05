@@ -16,7 +16,7 @@ from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done, wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import wait_for, first_child_of_tree_item_is_not_loading_condition
-from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog, NewGroupDialog, NewRootUrlDialog
+from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog, NewGroupDialog, NewRootUrlDialog, PreferencesDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
 import crystal.tests.util.xtempfile as xtempfile
@@ -330,6 +330,36 @@ async def test_given_readonly_project_then_edit_button_titled_get_info_and_when_
                     assert ngd.ok_button is None
                     
                     await ngd.cancel()
+
+
+async def test_given_readonly_project_then_preferences_dialog_project_fields_are_disabled() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        # Open project as readonly
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
+            assert mw.readonly == True
+            
+            # Open Preferences dialog
+            click_button(mw.preferences_button)
+            
+            pref = await PreferencesDialog.wait_for()
+            try:
+                # Verify project-specific fields are disabled
+                assert not pref.html_parser_field.Enabled, 'HTML parser field should be disabled in readonly mode'
+                
+                # Verify session fields are still enabled (not project-specific)
+                assert pref.stale_before_checkbox.Enabled, 'Stale before checkbox should remain enabled'
+                assert pref.cookie_field.Enabled, 'Cookie field should remain enabled'
+                
+                # Verify app fields are still enabled (not project-specific)
+                assert pref.reset_callouts_button.Enabled, 'Reset callouts button should remain enabled'
+                
+                # Verify buttons are present (dialog should be functional)
+                assert pref.ok_button is not None
+                assert pref.cancel_button is not None
+                assert pref.ok_button.Enabled
+                assert pref.cancel_button.Enabled
+            finally:
+                await pref.cancel()
 
 
 async def test_when_writable_project_becomes_readonly_then_edit_button_becomes_get_info() -> None:

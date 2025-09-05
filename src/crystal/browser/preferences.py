@@ -121,6 +121,9 @@ class PreferencesDialog:
         self._old_html_parser_type = self._project.html_parser_type
         self.html_parser_field.Selection = self.html_parser_field.Items.index(
             self._ITEM_FOR_HTML_PARSER_TYPE[self._old_html_parser_type])
+        if self._project.readonly:
+            self.html_parser_field.Enabled = False
+        
         fields_sizer.Add(
             self.html_parser_field,
             flag=wx.EXPAND, pos=wx.GBPosition(1, 1))
@@ -237,11 +240,12 @@ class PreferencesDialog:
     
     def _on_ok(self, event: wx.CommandEvent) -> None:
         # Save project fields
-        new_html_parser_type = \
-            self._HTML_PARSER_TYPE_FOR_ITEM[
-                self.html_parser_field.Items[self.html_parser_field.Selection]]
-        if new_html_parser_type != self._old_html_parser_type:
-            self._project.html_parser_type = new_html_parser_type
+        if not self._project.readonly:
+            new_html_parser_type = \
+                self._HTML_PARSER_TYPE_FOR_ITEM[
+                    self.html_parser_field.Items[self.html_parser_field.Selection]]
+            if new_html_parser_type != self._old_html_parser_type:
+                self._project.html_parser_type = new_html_parser_type
         
         # Save session fields
         self._project.request_cookie = self.cookie_field.Value or None

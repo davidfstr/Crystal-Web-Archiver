@@ -73,18 +73,22 @@ Release Notes ⋮
       behavior that a caller wants. The latter function is deprecated.
 
 * Minor fixes
-    * Fix inability to browse the entity tree of some readonly projects.
-      Impact was limited primarily to very old readonly projects.
-    * Fix inability to open preferences/settings dialog of readonly projects
-      created with Crystal <=1.2.0.
+    * Fix several issues related to browsing readonly projects:
+        * Fix inability to browse the entity tree of some readonly projects.
+          Impact was limited primarily to very old readonly projects.
+        * Fix inability to open preferences/settings dialog of readonly projects
+          created with Crystal <=1.2.0.
+        * Project-specific preferences in a read-only project now appear as disabled
+          to clearly indicate they cannot be modified.
     * Most dialogs are now shown as window-modal rather than modeless to
       prevent certain types of concurrent edits to a project that Crystal
       isn't designed to handle.
-    * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
-      instead of generic "Yes" and "No" buttons, following platform conventions.
-    * The "Preferences..." / "Settings..." button in the main window now uses
-      the correct title based on OS conventions. And the dialog which appears
-      after pressing the button uses a consistent title.
+    * Adhere to OS-native conventions more closely:
+        * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
+          instead of generic "Yes" and "No" buttons, following platform conventions.
+        * The "Preferences..." / "Settings..." button in the main window now uses
+          the correct title based on OS conventions. And the dialog which appears
+          after pressing the button uses a consistent title.
     * Fixed the "Dismiss" action on a crashed task to not itself crash!
 
 * Testing improvements
