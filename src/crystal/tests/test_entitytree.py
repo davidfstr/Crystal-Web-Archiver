@@ -13,7 +13,7 @@ from crystal.tests.util.wait import (
     wait_for,
 )
 from crystal.tests.util.windows import (
-    MainWindow, MenuitemMissingError, NewRootUrlDialog, OpenOrCreateDialog, PreferencesDialog,
+    MainWindow, MenuitemDisabledError, MenuitemMissingError, NewRootUrlDialog, OpenOrCreateDialog, PreferencesDialog,
 )
 from functools import wraps
 import os
@@ -356,10 +356,10 @@ async def test_given_resource_node_whose_path_is_slash_when_set_default_url_doma
         # test_given_resource_node_whose_path_is_slash_then_cannot_set_default_url_prefix_to_it
         try:
             await mw.entity_tree.set_default_directory_to_entity_at_tree_item(rrn)
-        except MenuitemMissingError:
+        except MenuitemDisabledError:
             pass
         else:
-            raise AssertionError('Did not expect resource to offer option to: set_default_url_prefix')
+            raise AssertionError('Expected disabled option to: set_default_url_prefix')
 
 
 @skip('covered by: test_given_resource_node_whose_path_is_slash_when_set_default_url_domain_to_it_then_node_displays_only_path')
@@ -457,6 +457,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         assertEqual(
             [
                 ('Set As Default Domain', False),
+                ('Set As Default Directory', False),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -476,6 +477,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         assertEqual(
             [
                 ('Set As Default Domain', True),
+                ('Set As Default Directory', False),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -489,6 +491,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         assertEqual(
             [
                 ('Clear Default Domain', True),
+                ('Clear Default Directory', False),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 
@@ -502,6 +505,7 @@ async def test_when_selected_entity_changes_and_top_level_entity_menu_opened_the
         assertEqual(
             [
                 ('Set As Default Domain', True),
+                ('Set As Default Directory', False),
             ],
             [
                 (mi.ItemLabelText, mi.Enabled) for mi in 

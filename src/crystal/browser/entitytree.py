@@ -334,6 +334,8 @@ class EntityTree(Bulkhead):
         def append_default_disabled_menuitem() -> None:
             mi = wx.MenuItem(None, self._ID_SET_DOMAIN_PREFIX, 'Set As Default Domain')
             append_menuitem(mi, enabled=False)
+            mi = wx.MenuItem(None, self._ID_SET_DIRECTORY_PREFIX, 'Set As Default Directory')
+            append_menuitem(mi, enabled=False)
         
         if isinstance(node, (_ResourceNode, ResourceGroupNode)):
             selection_urllike = self._url_or_url_prefix_for(node)
@@ -358,19 +360,19 @@ class EntityTree(Bulkhead):
                 
                 # * Default Directory
                 assert selection_dir_prefix is not None
-                if selection_dir_prefix != selection_domain_prefix:
-                    if self._project.default_url_prefix == selection_dir_prefix:
-                        mi = wx.MenuItem(None, self._ID_CLEAR_PREFIX, 'Clear Default Directory')
-                        append_menuitem(mi, enabled=not is_readonly)
-                    else:
-                        prefix_descriptor = self._try_remove_http_scheme(selection_dir_prefix)
-                        mi = wx.MenuItem(
-                            None,
-                            self._ID_SET_DIRECTORY_PREFIX,
-                            f'Set As Default Directory: {prefix_descriptor}'
-                                if menu_type == 'popup'
-                                else 'Set As Default Directory')
-                        append_menuitem(mi, enabled=not is_readonly)
+                is_directory_available = (selection_dir_prefix != selection_domain_prefix)
+                if self._project.default_url_prefix == selection_dir_prefix:
+                    mi = wx.MenuItem(None, self._ID_CLEAR_PREFIX, 'Clear Default Directory')
+                    append_menuitem(mi, enabled=not is_readonly and is_directory_available)
+                else:
+                    prefix_descriptor = self._try_remove_http_scheme(selection_dir_prefix)
+                    mi = wx.MenuItem(
+                        None,
+                        self._ID_SET_DIRECTORY_PREFIX,
+                        f'Set As Default Directory: {prefix_descriptor}'
+                            if menu_type == 'popup'
+                            else 'Set As Default Directory')
+                    append_menuitem(mi, enabled=not is_readonly and is_directory_available)
         else:
             append_default_disabled_menuitem()
         assert len(menuitems) > 0
