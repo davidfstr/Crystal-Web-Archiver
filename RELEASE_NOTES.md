@@ -59,6 +59,15 @@ Release Notes ⋮
       future dynamic browsing features. Predictions are printed to the terminal
       with special `[PREDICT]` formatting.
 
+* Read-only project fixes
+    * Fix inability to browse the entity tree of some readonly projects.
+      Impact was limited primarily to very old readonly projects.
+    * Fix inability to open preferences/settings dialog of readonly projects
+      created with Crystal <=1.2.0.
+    * Project-specific preferences in a read-only project now appear as disabled.
+    * Menuitems related to changing the default URL prefix in a read-only project
+      now appear as disabled.
+
 * Documentation improvements
     * Contributing guidelines added as CONTRIBUTING.md.
     * License FAQ drafted.
@@ -73,13 +82,6 @@ Release Notes ⋮
       behavior that a caller wants. The latter function is deprecated.
 
 * Minor fixes
-    * Fix several issues related to browsing readonly projects:
-        * Fix inability to browse the entity tree of some readonly projects.
-          Impact was limited primarily to very old readonly projects.
-        * Fix inability to open preferences/settings dialog of readonly projects
-          created with Crystal <=1.2.0.
-        * Project-specific preferences in a read-only project now appear as disabled
-          to clearly indicate they cannot be modified.
     * Most dialogs are now shown as window-modal rather than modeless to
       prevent certain types of concurrent edits to a project that Crystal
       isn't designed to handle.

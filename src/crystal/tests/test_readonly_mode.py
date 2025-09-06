@@ -16,7 +16,7 @@ from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done, wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import wait_for, first_child_of_tree_item_is_not_loading_condition
-from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog, NewGroupDialog, NewRootUrlDialog, PreferencesDialog
+from crystal.tests.util.windows import MainWindow, MenuitemDisabledError, OpenOrCreateDialog, NewGroupDialog, NewRootUrlDialog, PreferencesDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
 import crystal.tests.util.xtempfile as xtempfile
@@ -262,6 +262,9 @@ async def test_when_readonly_project_is_saved_then_becomes_writable_and_all_unsa
                     assert comic2_r._id > 0
 
 
+# ------------------------------------------------------------------------------
+# Test: Disabled Dialogs
+
 async def test_given_readonly_project_then_edit_button_titled_get_info_and_when_clicked_opens_readonly_dialog() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         comic_pattern = 'https://xkcd.com/#/'
@@ -361,6 +364,61 @@ async def test_given_readonly_project_then_preferences_dialog_project_fields_are
             finally:
                 await pref.cancel()
 
+
+# ------------------------------------------------------------------------------
+# Test: Disabled Menuitems
+
+async def test_given_readonly_project_when_right_click_resource_node_then_url_prefix_menuitems_are_disabled() -> None:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
+            # Create a resource with a path that supports both domain and directory prefixes
+            rr = RootResource(project, '', Resource(project, 'https://example.com/path/page.html'))
+        
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+            
+            try:
+                await mw.entity_tree.set_default_domain_to_entity_at_tree_item(rrn)
+            except MenuitemDisabledError:
+                pass  # OK
+            else:
+                raise AssertionError('Expected MenuitemDisabledError')
+            
+            try:
+                await mw.entity_tree.set_default_directory_to_entity_at_tree_item(rrn)
+            except MenuitemDisabledError:
+                pass  # OK
+            else:
+                raise AssertionError('Expected MenuitemDisabledError')
+
+
+async def test_given_readonly_project_with_existing_default_domain_when_right_click_resource_node_then_clear_domain_menuitem_is_disabled() -> None:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
+            # Create a resource with a path that supports both domain and directory prefixes
+            rr = RootResource(project, '', Resource(project, 'https://example.com/path/page.html'))
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+            
+            # Set default domain
+            await mw.entity_tree.set_default_domain_to_entity_at_tree_item(rrn)
+        
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            rrn = root_ti.find_child(rr.resource.url, project.default_url_prefix)
+            
+            try:
+                await mw.entity_tree.clear_default_domain_from_entity_at_tree_item(rrn)
+            except MenuitemDisabledError:
+                pass  # OK
+            else:
+                raise AssertionError('Expected MenuitemDisabledError')
+
+
+# ------------------------------------------------------------------------------
+# Test: Readonly <-> Writable Transitions
 
 async def test_when_writable_project_becomes_readonly_then_edit_button_becomes_get_info() -> None:
     with scheduler_disabled(), \

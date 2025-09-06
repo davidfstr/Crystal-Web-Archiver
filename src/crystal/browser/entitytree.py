@@ -322,49 +322,67 @@ class EntityTree(Bulkhead):
             node: Node | None,
             *, menu_type: Literal['popup', 'top_level']
             ) -> Tuple[list[wx.MenuItem], Callable[[], None]]:
+        is_readonly = self._project.readonly  # cache
+        
         menuitems = []  # type: List[wx.MenuItem]
-        on_attach_menuitems = lambda: None
-        def append_disabled_menuitem() -> None:
-            nonlocal on_attach_menuitems
-            mi = wx.MenuItem(None, self._ID_SET_DOMAIN_PREFIX, 'Set As Default Domain')
-            # NOTE: wxGTK does not allow altering a wx.MenuItem's Enabled
-            #       state until it is attached to a wx.Menu
-            on_attach_menuitems = lambda: mi.Enable(False)
+        disabled_menuitems = []  # type: List[wx.MenuItem]
+        def append_menuitem(mi: wx.MenuItem, enabled: bool) -> None:
             menuitems.append(mi)
+            if not enabled:
+                disabled_menuitems.append(mi)
+        
+        def append_default_disabled_menuitem() -> None:
+            mi = wx.MenuItem(None, self._ID_SET_DOMAIN_PREFIX, 'Set As Default Domain')
+            append_menuitem(mi, enabled=False)
+        
         if isinstance(node, (_ResourceNode, ResourceGroupNode)):
             selection_urllike = self._url_or_url_prefix_for(node)
             selection_domain_prefix = get_url_domain_prefix_for(selection_urllike)
             selection_dir_prefix = get_url_directory_prefix_for(selection_urllike)
             if selection_domain_prefix is None:
-                append_disabled_menuitem()
+                append_default_disabled_menuitem()
             else:
+                # * Default Domain
                 if self._project.default_url_prefix == selection_domain_prefix:
-                    menuitems.append(wx.MenuItem(
-                        None, self._ID_CLEAR_PREFIX, 'Clear Default Domain'))
+                    mi = wx.MenuItem(None, self._ID_CLEAR_PREFIX, 'Clear Default Domain')
+                    append_menuitem(mi, enabled=not is_readonly)
                 else:
                     prefix_descriptor = self._try_remove_http_scheme(selection_domain_prefix)
-                    menuitems.append(wx.MenuItem(
+                    mi = wx.MenuItem(
                         None,
                         self._ID_SET_DOMAIN_PREFIX,
                         f'Set As Default Domain: {prefix_descriptor}'
                             if menu_type == 'popup'
-                            else 'Set As Default Domain'))
+                            else 'Set As Default Domain')
+                    append_menuitem(mi, enabled=not is_readonly)
+                
+                # * Default Directory
                 assert selection_dir_prefix is not None
                 if selection_dir_prefix != selection_domain_prefix:
                     if self._project.default_url_prefix == selection_dir_prefix:
-                        menuitems.append(wx.MenuItem(
-                            None, self._ID_CLEAR_PREFIX, 'Clear Default Directory'))
+                        mi = wx.MenuItem(None, self._ID_CLEAR_PREFIX, 'Clear Default Directory')
+                        append_menuitem(mi, enabled=not is_readonly)
                     else:
                         prefix_descriptor = self._try_remove_http_scheme(selection_dir_prefix)
-                        menuitems.append(wx.MenuItem(
+                        mi = wx.MenuItem(
                             None,
                             self._ID_SET_DIRECTORY_PREFIX,
                             f'Set As Default Directory: {prefix_descriptor}'
                                 if menu_type == 'popup'
-                                else 'Set As Default Directory'))
+                                else 'Set As Default Directory')
+                        append_menuitem(mi, enabled=not is_readonly)
         else:
-            append_disabled_menuitem()
+            append_default_disabled_menuitem()
         assert len(menuitems) > 0
+        
+        # Disables appropriate menuitems after they are attached
+        # 
+        # NOTE: wxGTK does not allow altering a wx.MenuItem's Enabled
+        #       state until it is attached to a wx.Menu
+        def on_attach_menuitems() -> None:
+            for mi in disabled_menuitems:
+                mi.Enable(False)
+        
         return (menuitems, on_attach_menuitems)
     
     @capture_crashes_to_self

@@ -15,7 +15,6 @@ from crystal.tests.util.wait import (
 from crystal.tests.util.windows import (
     MainWindow, MenuitemMissingError, NewRootUrlDialog, OpenOrCreateDialog, PreferencesDialog,
 )
-from crystal.util.xos import is_mac_os
 from functools import wraps
 import os
 import tempfile
