@@ -416,6 +416,14 @@ class _HttpServer(HTTPServer):
 
 
 class _RequestHandler(BaseHTTPRequestHandler):
+    PUBLIC_STATIC_RESOURCE_NAMES = {
+        'appicon.png',
+        'logotext.png',
+        'logotext@2x.png',
+        'logotext-dark.png',
+        'logotext-dark@2x.png'
+    }
+    
     # Prevent slow/broken request from blocking all other requests
     timeout = 1  # second
     
@@ -1053,15 +1061,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @bg_affinity
     def _handle_static_resource(self) -> None:
         """Serve static resources from Crystal's "resources" directory."""
-        
-        PUBLIC_STATIC_RESOURCE_NAMES = {
-            'appicon.png',
-            'logotext.png',
-            'logotext@2x.png',
-            'logotext-dark.png',
-            'logotext-dark@2x.png'
-        }
-        
         # Extract resource filename from path: /_/crystal/resources/filename.ext
         if not self.path.startswith('/_/crystal/resources/'):
             self.send_response(404)
@@ -1070,7 +1069,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         resource_name = self.path.removeprefix('/_/crystal/resources/')
         
         # Security: Only allow specific resource files to prevent directory traversal
-        if resource_name not in PUBLIC_STATIC_RESOURCE_NAMES:
+        if resource_name not in self.PUBLIC_STATIC_RESOURCE_NAMES:
             self.send_response(404)
             self.end_headers()
             return
