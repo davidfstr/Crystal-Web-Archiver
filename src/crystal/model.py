@@ -1571,7 +1571,8 @@ class Project(ListenableMixin):
             # NOTE: "resource" is NOT a keyword-only argument for backward compatibility
             resource: Resource | _Missing = _Missing.VALUE,
             *, id: int | _Missing = _Missing.VALUE,
-            name: str | _Missing = _Missing.VALUE
+            name: str | _Missing = _Missing.VALUE,
+            url: str | _Missing = _Missing.VALUE,
             ) -> RootResource | None:
         """
         Returns the RootResource with the specified resource, ID, or name.
@@ -1591,8 +1592,13 @@ class Project(ListenableMixin):
                 if rr.name == name:
                     return rr
             return None
+        elif url != _Missing.VALUE:
+            r = self.get_resource(url)
+            if r is None:
+                return None
+            return self.get_root_resource(r)
         else:
-            raise ValueError('Expected resource, id, or name to be specified')
+            raise ValueError('Expected resource, id, name, or url to be specified')
     
     # Soft-deprecated: Use get_root_resource(id=...) instead.
     def _get_root_resource_with_id(self, root_resource_id) -> RootResource | None:
