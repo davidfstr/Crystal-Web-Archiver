@@ -412,6 +412,8 @@ class HtmlDocument(Document):
         self._is_html = is_html
         self._pre_stringify_actions = pre_stringify_actions or []
     
+    # === Insertion Operations ===
+    
     def try_insert_script(self, script_url: str) -> bool:
         def create_script(html: FastSoup) -> Tag:
             script = html.new_tag('script')
@@ -432,11 +434,19 @@ class HtmlDocument(Document):
             link_tag, self._html, 'href', FAVICON_TYPE_TITLE, None, True)
         return link
     
+    def try_insert_meta_robots(self, content: str) -> bool:
+        def create_meta_robots(html: FastSoup) -> Tag:
+            meta = html.new_tag('meta')
+            html.tag_attrs(meta)['name'] = 'robots'
+            html.tag_attrs(meta)['content'] = content
+            return meta
+        return self._try_insert_html_element(create_meta_robots) is not None
+    
     def _try_insert_html_element(self, create_element_func: Callable[[FastSoup], Tag]) -> Tag | None:
         if not self._is_html:
             # Don't try to insert an HTML link into a non-HTML document,
             # such as an XML document
-            return False
+            return None
         
         first_element = self._html.find(True)
         if first_element is not None:
@@ -445,6 +455,8 @@ class HtmlDocument(Document):
             return new_element
         else:
             return None
+    
+    # === Stringify ===
     
     def __str__(self) -> str:
         for action in self._pre_stringify_actions:
