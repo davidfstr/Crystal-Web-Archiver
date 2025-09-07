@@ -3021,6 +3021,29 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
     """
 ).lstrip()  # type: str
 
+_CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE = [
+    '/_/crystal/resources/appicon.png',
+    '/_/crystal/resources/logotext.png',
+    '/_/crystal/resources/logotext@2x.png',
+    '/_/crystal/resources/logotext-dark.png',
+    '/_/crystal/resources/logotext-dark@2x.png',
+]
+_CRYSTAL_URL_REF_PREFIX = '/_/crystal/'
+if True:
+    if not _CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE[0].startswith(_CRYSTAL_URL_REF_PREFIX):
+        raise AssertionError('_CRYSTAL_URL_PREFIX does not appear to be correct')
+    
+    _bpt_without_crystal_urls = _BASE_PAGE_HTML_TEMPLATE
+    for _crystal_url in _CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE:
+        _bpt_without_crystal_urls = _bpt_without_crystal_urls.replace(_crystal_url, '')
+    if _CRYSTAL_URL_REF_PREFIX in _bpt_without_crystal_urls:
+        found_at = _bpt_without_crystal_urls.index(_CRYSTAL_URL_REF_PREFIX)
+        raise AssertionError(
+            '_CRYSTAL_URLS_IN_BASE_PAGE_TEMPLATE does not appear to include '
+            'every crystal:// URL in _BASE_PAGE_HTML_TEMPLATE. '
+            f'Found a match: {_bpt_without_crystal_urls[found_at: found_at+50]!r}...'
+        )
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # HTML Templates: URL Info Box
