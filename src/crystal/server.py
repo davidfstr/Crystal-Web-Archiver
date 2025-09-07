@@ -1147,10 +1147,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
             archive_url_html_attr=archive_url,
             archive_url_html=html_escape(archive_url),
             archive_url_json=json.dumps(archive_url),
-            readonly_warning_html=(
-                '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
-                if readonly else ''
-            ),
             download_button_disabled_html=('disabled ' if readonly else ''),
             create_group_form_data=create_group_form_data,
             readonly=readonly
@@ -1648,6 +1644,11 @@ def _pin_date_js(timestamp: int) -> str:
 # ------------------------------------------------------------------------------
 # HTML Templates
 
+# Whether to show _generic_404_page_html() when _not_in_archive_html() page
+# is requested. Useful for debugging the _generic_404_page_html() page.
+_SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE = False
+
+
 def _welcome_page_html() -> str:
     welcome_styles = dedent(
         """
@@ -1782,6 +1783,23 @@ def _not_found_page_html() -> str:
     )
 
 
+def _generic_404_page_html() -> str:
+    return _not_in_archive_html(
+        archive_url_html_attr='__ignored__',
+        archive_url_html='__ignored__',
+        archive_url_json=json.dumps('__ignored__'),
+        download_button_disabled_html='',  # ignored
+        create_group_form_data=CreateGroupFormData(  # ignored
+            source_choices=[],
+            predicted_url_pattern='',
+            predicted_source_value=None,
+            predicted_name='',
+        ),
+        readonly=True,  # ignored
+        _is_generic_404_page=True,
+    )
+
+
 class CreateGroupFormData(TypedDict):
     source_choices: 'list[SourceChoice]'
     predicted_url_pattern: str
@@ -1816,11 +1834,14 @@ def _not_in_archive_html(
         *, archive_url_html_attr: str,
         archive_url_html: str,
         archive_url_json: str,
-        readonly_warning_html: str,
         download_button_disabled_html: str,
         create_group_form_data: CreateGroupFormData,
-        readonly: bool
+        readonly: bool,
+        _is_generic_404_page: bool=False,
         ) -> str:
+    if _SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE:
+        return _generic_404_page_html()
+
     not_in_archive_styles = dedent(
         """
         /* ------------------------------------------------------------------ */
@@ -2136,7 +2157,18 @@ def _not_in_archive_html(
         """
     ).strip()
     
-    content_html = dedent(
+    readonly_warning_html = (
+        '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
+        if readonly else ''
+    )
+    
+    download_button_html = dedent(
+        f"""
+        <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
+        """
+    ).strip()
+    
+    content_top_html = dedent(
         f"""
         <div class="cr-page__icon">🚫</div>
         
@@ -2145,23 +2177,27 @@ def _not_in_archive_html(
         </div>
         
         <p>The requested page was not found in this archive.</p>
-        <p>The page has not been downloaded yet.</p>
+        {"<p>The page has not been downloaded yet.</p>" if not _is_generic_404_page else ""}
         
         {_URL_BOX_HTML_TEMPLATE % {
             'label_html': 'Original URL',
             'url_html_attr': archive_url_html_attr,
             'url_html': archive_url_html
-        }}
+        } if not _is_generic_404_page else ""}
         
-        {readonly_warning_html}
+        {readonly_warning_html if not _is_generic_404_page else ""}
         
         <div class="cr-page__actions">
             <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
-            <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
+            {download_button_html if not _is_generic_404_page else ""}
         </div>
-        
+        """
+    ).strip()
+    
+    content_bottom_html = dedent(
+        f"""
         <div id="cr-download-progress-bar" class="cr-download-progress-bar">
             <div class="cr-progress-bar__outline">
                 <div id="cr-download-progress-bar__fill" class="cr-progress-bar__fill"></div>
@@ -2663,11 +2699,20 @@ def _not_in_archive_html(
     return _base_page_html(
         title_html='Not in Archive | Crystal',
         style_html=(
-            _URL_BOX_STYLE_TEMPLATE + '\n' + 
-            not_in_archive_styles
+            (_URL_BOX_STYLE_TEMPLATE + '\n' + not_in_archive_styles)
+            if not _is_generic_404_page
+            else ''
         ),
-        content_html=content_html,
-        script_html=script_html
+        content_html=(
+            (content_top_html + content_bottom_html)
+            if not _is_generic_404_page
+            else content_top_html
+        ),
+        script_html=(
+            script_html
+            if not _is_generic_404_page
+            else ''
+        ),
     )
 
 
@@ -2859,6 +2904,9 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     
     .cr-page__actions {
         margin: 30px 0;
+    }
+    .cr-page__actions:last-child {
+        margin-bottom: 0;
     }
     
     .cr-button {
