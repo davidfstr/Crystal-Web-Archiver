@@ -2806,11 +2806,15 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     }
     
     .cr-brand-header {
+        border-bottom: 2px solid #e9ecef;
+        margin-bottom: 30px;
+    }
+    
+    .cr-brand-header__link {
         display: flex;
         align-items: center;
-        margin-bottom: 30px;
         padding-bottom: 20px;
-        border-bottom: 2px solid #e9ecef;
+        text-decoration: none;
     }
     
     /* Dark mode styles for top of page */
@@ -2992,24 +2996,26 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
     <body class="cr-body">
         <div class="cr-body__container">
             <div class="cr-brand-header">
-                <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="cr-brand-header__logo" />
-                <div class="cr-brand-header__text">
-                    <h1 class="cr-brand-header__title">
-                        <img
-                            src="/_/crystal/resources/logotext.png" 
-                            srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
-                            alt="Crystal"
-                            class="cr-brand-header__title__logotext--light"
-                        />
-                        <img
-                            src="/_/crystal/resources/logotext-dark.png" 
-                            srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
-                            alt="Crystal"
-                            class="cr-brand-header__title__logotext--dark"
-                        />
-                    </h1>
-                    <p class="cr-brand-header__subtitle">A Website Archiver</p>
-                </div>
+                <a class="cr-brand-header__link" href="https://dafoster.net/projects/crystal-web-archiver/" target="_blank">
+                    <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="cr-brand-header__logo" />
+                    <div class="cr-brand-header__text">
+                        <h1 class="cr-brand-header__title">
+                            <img
+                                src="/_/crystal/resources/logotext.png" 
+                                srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
+                                alt="Crystal"
+                                class="cr-brand-header__title__logotext--light"
+                            />
+                            <img
+                                src="/_/crystal/resources/logotext-dark.png" 
+                                srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
+                                alt="Crystal"
+                                class="cr-brand-header__title__logotext--dark"
+                            />
+                        </h1>
+                        <p class="cr-brand-header__subtitle">A Website Archiver</p>
+                    </div>
+                </a>
             </div>
             
             %(content_html)s
