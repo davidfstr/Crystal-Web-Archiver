@@ -41,6 +41,7 @@ Release Notes ⋮
       main window, alongside its version number.
     * Browser error pages are now appropriately styled and include
       Crystal's branding elements.
+    * Served pages include a footer banner with Crystal's branding elements.
     * Licensing terms have been added: PolyForm Noncommercial 1.0.0
 
 * Serving improvements
