@@ -5,6 +5,7 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable, Generator
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
@@ -29,6 +30,7 @@ from crystal.util.xthreading import (
 )
 from crystal.util.xtyping import IntStr, intstr_from
 import datetime
+from functools import cache
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -2772,6 +2774,7 @@ def _base_page_html(
             _BASE_PAGE_STYLE_TEMPLATE + '\n' + 
             style_html
         ),
+        'appicon_fallback_image_url': _appicon_fallback_image_url(),
         'content_html': content_html,
         'script_html': script_html
     }
@@ -2779,6 +2782,32 @@ def _base_page_html(
         offset = page_html.index('%%')
         raise ValueError(f'Unescaped % in HTML template. Near: {page_html[offset-20:offset+20]!r}')
     return page_html
+
+
+@cache
+def _appicon_fallback_image_url() -> str:
+    """Data image URL with a simplified version of the app icon."""
+    with resources.open_binary('appicon--fallback.svg') as f:
+        svg_bytes = f.read()
+    return _to_base64_url('image/svg+xml', _minify_svg(svg_bytes))
+
+
+def _minify_svg(svg_bytes: bytes) -> bytes:
+    # Delete comments
+    svg_bytes = re.sub(rb'<!--.*?-->', b'', svg_bytes)
+    # Delete whitespace between tags
+    svg_bytes = re.sub(rb'>\s+<', b'><', svg_bytes)
+    return svg_bytes
+
+
+def _to_base64_url(mime_type: str, svg_image_bytes: bytes) -> str:
+    """
+    Converts bytes to a base64-encoded data URL.
+
+    Returns a string like: "data:image/svg+xml;base64,PHN2ZyB4bWxu...".
+    """
+    b64 = base64.b64encode(svg_image_bytes).decode("ascii")
+    return f"data:{mime_type};base64,{b64}"
 
 
 _BASE_PAGE_STYLE_TEMPLATE = dedent(
@@ -2835,11 +2864,25 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     }
     
     .cr-brand-header__logo {
-        width: 48px;
-        height: 48px;
         margin-right: 16px;
         flex-shrink: 0;
-        border-radius: 8px;
+    }
+    .cr-brand-header__logo,
+    .cr-brand-header__logo--image,
+    .cr-brand-header__logo--image_fallback {
+        width: 48px;
+        height: 48px;
+    }
+    
+    /* Fallback to simplified inline image if full logo image not available */
+    .cr-brand-header__logo--image_fallback {
+        display: none;
+    }
+    .cr-brand-header__logo--error .cr-brand-header__logo--image_fallback {
+        display: inline;
+    }
+    .cr-brand-header__logo--error .cr-brand-header__logo--image {
+        display: none;
     }
     
     .cr-brand-header__text {
@@ -2863,6 +2906,23 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         display: inline;
     }
     .cr-brand-header__title__logotext--dark {
+        display: none;
+    }
+    
+    /* Fallback to regular text instead of logotext if logotext images not available */
+    .cr-brand-header__logotext--text {
+        display: none;
+        
+        /* NOTE: Duplicated by _BASE_FONT_SIZE and .cr-brand-header__logotext--text font-size */
+        font-size: 23px;
+        /* NOTE: Duplicated by _LIGHT_TEXT_COLOR and .cr-brand-header__logotext--text color */
+        color: #000;
+    }
+    .cr-brand-header__logotext--error .cr-brand-header__logotext--text {
+        display: inline;
+    }
+    .cr-brand-header__logotext--error .cr-brand-header__title__logotext--light,
+    .cr-brand-header__logotext--error .cr-brand-header__title__logotext--dark {
         display: none;
     }
     
@@ -2902,6 +2962,11 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         }
         .cr-brand-header__title__logotext--dark {
             display: inline;
+        }
+        
+        .cr-brand-header__logotext--text {
+            /* NOTE: Duplicated by _DARK_TEXT_COLOR and @media .cr-brand-header__logotext--text color */
+            color: #d8d8d8;
         }
     }
     
@@ -2997,21 +3062,31 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
         <div class="cr-body__container">
             <div class="cr-brand-header">
                 <a class="cr-brand-header__link" href="https://dafoster.net/projects/crystal-web-archiver/" target="_blank">
-                    <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="cr-brand-header__logo" />
+                    <span class="cr-brand-header__logo" />
+                        <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="cr-brand-header__logo--image" onerror="document.querySelector('.cr-brand-header__logo').classList.add('cr-brand-header__logo--error');" />
+                        <img src="%(appicon_fallback_image_url)s" alt="Crystal icon" class="cr-brand-header__logo--image_fallback" />
+                    </span>
                     <div class="cr-brand-header__text">
                         <h1 class="cr-brand-header__title">
-                            <img
-                                src="/_/crystal/resources/logotext.png" 
-                                srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
-                                alt="Crystal"
-                                class="cr-brand-header__title__logotext--light"
-                            />
-                            <img
-                                src="/_/crystal/resources/logotext-dark.png" 
-                                srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
-                                alt="Crystal"
-                                class="cr-brand-header__title__logotext--dark"
-                            />
+                            <span class="cr-brand-header__logotext" />
+                                <span class="cr-brand-header__logotext--text">
+                                    Crystal
+                                </span>
+                                <img
+                                    src="/_/crystal/resources/logotext.png" 
+                                    srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
+                                    alt="Crystal"
+                                    class="cr-brand-header__title__logotext--light"
+                                    onerror="document.querySelector('.cr-brand-header__logotext').classList.add('cr-brand-header__logotext--error');"
+                                />
+                                <img
+                                    src="/_/crystal/resources/logotext-dark.png" 
+                                    srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
+                                    alt="Crystal"
+                                    class="cr-brand-header__title__logotext--dark"
+                                    onerror="document.querySelector('.cr-brand-header__logotext').classList.add('cr-brand-header__logotext--error');"
+                                />
+                            </span>
                         </h1>
                         <p class="cr-brand-header__subtitle">A Website Archiver</p>
                     </div>

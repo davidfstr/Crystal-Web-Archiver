@@ -18,7 +18,12 @@ import wx
 # Text to render
 _TEXT = "Crystal"
 # Base font size for 1x rendering
+# NOTE: Duplicated by _BASE_FONT_SIZE and .cr-brand-header__logotext--text font-size */
 _BASE_FONT_SIZE = 23
+# NOTE: Duplicated by _LIGHT_TEXT_COLOR and .cr-brand-header__logotext--text color
+_LIGHT_TEXT_COLOR = (0, 0, 0)
+# NOTE: Duplicated by _DARK_TEXT_COLOR and @media .cr-brand-header__logotext--text color
+_DARK_TEXT_COLOR = (216, 216, 216)  # AKA #d8d8d8
 
 
 def generate_logotext_bitmaps(output_dir: str | None = None):
@@ -58,14 +63,14 @@ def generate_logotext_bitmaps(output_dir: str | None = None):
         
         # Generate light mode variants (black text)
         # Generate 1x bitmap
-        bitmap_1x_light = _render_text_to_bitmap(_TEXT, font_1x, text_color=(0, 0, 0))
+        bitmap_1x_light = _render_text_to_bitmap(_TEXT, font_1x, text_color=_LIGHT_TEXT_COLOR)
         bitmap_1x_path = output_dir_path / "logotext.png"
         bitmap_1x_light.SaveFile(str(bitmap_1x_path), wx.BITMAP_TYPE_PNG)
         print(f"Generated 1x logotext (light): {bitmap_1x_path}")
         print(f"  Size: {bitmap_1x_light.GetWidth()}x{bitmap_1x_light.GetHeight()}")
         
         # Generate 2x bitmap  
-        bitmap_2x_light = _render_text_to_bitmap(_TEXT, font_2x, text_color=(0, 0, 0))
+        bitmap_2x_light = _render_text_to_bitmap(_TEXT, font_2x, text_color=_LIGHT_TEXT_COLOR)
         bitmap_2x_path = output_dir_path / "logotext@2x.png"
         bitmap_2x_light.SaveFile(str(bitmap_2x_path), wx.BITMAP_TYPE_PNG)
         print(f"Generated 2x logotext (light): {bitmap_2x_path}")
@@ -73,14 +78,14 @@ def generate_logotext_bitmaps(output_dir: str | None = None):
         
         # Generate dark mode variants (white text on black background)
         # Generate 1x bitmap
-        bitmap_1x_dark = _render_text_to_bitmap(_TEXT, font_1x, text_color=(216, 216, 216), background_color=(0, 0, 0))
+        bitmap_1x_dark = _render_text_to_bitmap(_TEXT, font_1x, text_color=_DARK_TEXT_COLOR, background_color=(0, 0, 0))
         bitmap_1x_dark_path = output_dir_path / "logotext-dark.png"
         bitmap_1x_dark.SaveFile(str(bitmap_1x_dark_path), wx.BITMAP_TYPE_PNG)
         print(f"Generated 1x logotext (dark): {bitmap_1x_dark_path}")
         print(f"  Size: {bitmap_1x_dark.GetWidth()}x{bitmap_1x_dark.GetHeight()}")
         
         # Generate 2x bitmap  
-        bitmap_2x_dark = _render_text_to_bitmap(_TEXT, font_2x, text_color=(216, 216, 216), background_color=(0, 0, 0))
+        bitmap_2x_dark = _render_text_to_bitmap(_TEXT, font_2x, text_color=_DARK_TEXT_COLOR, background_color=(0, 0, 0))
         bitmap_2x_dark_path = output_dir_path / "logotext-dark@2x.png"
         bitmap_2x_dark.SaveFile(str(bitmap_2x_dark_path), wx.BITMAP_TYPE_PNG)
         print(f"Generated 2x logotext (dark): {bitmap_2x_dark_path}")
@@ -94,7 +99,12 @@ def generate_logotext_bitmaps(output_dir: str | None = None):
         app.Destroy()
 
 
-def _render_text_to_bitmap(text: str, font: wx.Font, text_color: tuple[int, int, int] = (0, 0, 0), background_color: tuple[int, int, int] = (255, 255, 255)) -> wx.Bitmap:
+def _render_text_to_bitmap(
+        text: str,
+        font: wx.Font,
+        text_color: tuple[int, int, int] = (0, 0, 0),
+        background_color: tuple[int, int, int] = (255, 255, 255)
+        ) -> wx.Bitmap:
     """
     Render text to a bitmap with transparent background.
     
