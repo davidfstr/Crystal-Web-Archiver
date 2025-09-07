@@ -92,6 +92,8 @@ Release Notes ⋮
           the correct title based on OS conventions. And the dialog which appears
           after pressing the button uses a consistent title.
     * Fixed the "Dismiss" action on a crashed task to not itself crash!
+    * Altered the prefilled URL prefix on the server Welcome page to
+      be https:// rather than http://, which is more appropriate for most sites.
 
 * Testing improvements
     * If the default server port is in use while tests are running, a warning

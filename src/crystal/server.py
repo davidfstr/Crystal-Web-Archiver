@@ -1737,7 +1737,7 @@ def _welcome_page_html() -> str:
             <form action="/">
                 <div class="cr-form-row">
                     <label for="cr-url-input" class="cr-form-row__label">URL</label>
-                    <input type="text" id="cr-url-input" name="url" value="http://" class="cr-form-row__input cr-form-row__input--giant cr-form-row__input--monospace" />
+                    <input type="text" id="cr-url-input" name="url" value="https://" class="cr-form-row__input cr-form-row__input--giant cr-form-row__input--monospace" />
                 </div>
                 <input type="submit" value="Go" class="cr-button cr-button--primary" />
             </form>
