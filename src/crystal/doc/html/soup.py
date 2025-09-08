@@ -475,6 +475,9 @@ class HtmlDocument(Document):
             a = html.new_tag('a')
             html.tag_attrs(a)['id'] = 'cr-footer-banner'
             html.tag_attrs(a)['href'] = _CRYSTAL_APP_URL
+            # Open in new window because target site - likely GitHub - may
+            # refuse to load inside an iframe/frame, which we might be in
+            html.tag_attrs(a)['target'] = '_blank'
             html.tag_attrs(a)['style'] = (
                 'border-top: 2px #B40010 solid;'
                 'background: #FFFAE1;'
