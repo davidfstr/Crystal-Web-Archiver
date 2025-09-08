@@ -43,11 +43,6 @@ Release Notes ⋮
       Crystal's branding elements.
     * Licensing terms have been added: PolyForm Noncommercial 1.0.0
 
-* Downloading improvements
-    * While long downloads are running the system will be kept awake
-      ("caffeinated") on Linux. macOS and Windows support for caffeination
-      already existed.
-
 * Serving improvements
     * When serving from a remote `--host`, projects are opened in `--readonly`
       mode by default so that remote users cannot modify a served project.
@@ -67,6 +62,16 @@ Release Notes ⋮
     * Project-specific preferences in a read-only project now appear as disabled.
     * Menuitems related to changing the default URL prefix in a read-only project
       now appear as disabled.
+
+* Parsing improvements
+    * Recognizes pages containing `<frameset>` tags more accurately.
+      In particular a page using a DOCTYPE DTD that mentions "frameset"
+      is no longer assumed to necessarily actually contain a `<frameset>`.
+
+* Downloading improvements
+    * While long downloads are running the system will be kept awake
+      ("caffeinated") on Linux. macOS and Windows support for caffeination
+      already existed.
 
 * Documentation improvements
     * Contributing guidelines added as CONTRIBUTING.md.

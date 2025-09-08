@@ -5,6 +5,7 @@ Parses HTML documents.
 from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
+import re
 from typing import BinaryIO, Literal, Tuple
 
 # HTML parsing library to use. See comparison between options at: 
@@ -14,6 +15,9 @@ HtmlParserType = Literal['lxml', 'html_parser']
 HTML_PARSER_TYPE_CHOICES = (
     HtmlParserType.__args__  # type: ignore[attr-defined]
 )  # type: Tuple[HtmlParserType, ...]
+
+
+_FRAMESET_RE = re.compile(rb'(?i)<\s*frameset')
 
 
 def parse_html_and_links(
@@ -48,7 +52,7 @@ def parse_html_and_links(
     
     # HACK: The BeautifulSoup parser doesn't currently handle <frameset>
     #       tags correctly. So workaround with a basic parser.
-    if (b'frameset' in html_bytes) or (b'FRAMESET' in html_bytes):
+    if _FRAMESET_RE.search(html_bytes) is not None:
         return basic.parse_html_and_links(html_bytes, declared_charset)
     else:
         return soup.parse_html_and_links(
