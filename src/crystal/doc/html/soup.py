@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import json
 import re
 from re import Match
+from textwrap import dedent
 from typing import List, Literal, Optional, Tuple, Type, TypeAlias, assert_never
 from urllib.parse import urlparse
 
@@ -492,6 +493,10 @@ class HtmlDocument(Document):
                 'align-items: center;'
                 'justify-content: center;'
                 'gap: 4px;'
+                
+                # Try to stack on top of all other elements.
+                # Useful on sites like https://bongo.cat/
+                'z-index: 9999;'
             )
             
             img = html.new_tag('img')
@@ -502,6 +507,87 @@ class HtmlDocument(Document):
             
             span = html.new_tag('span', text_content='This page was archived by Crystal')
             html.tag_append(a, span)
+            
+            # 1. If this HTML page is being shown inside an <iframe> or <frame>
+            #    hide the banner unless we can prove it's in an frame at the bottom
+            #    of the browser window's viewport.
+            #    Useful on sites like http://www.rakhal.com/ .
+            # 2. If banner appears too high on screen, pin it to the bottom of the viewport.
+            #    Useful on sites like https://bongo.cat/ .
+            script_content = dedent(
+                """
+                window.addEventListener('load', function() {
+                    const a = document.querySelector('#cr-footer-banner');
+                    if (!a) { return; }
+                    
+                    if (window !== window.top) {
+                        let atBottomOfViewport = false;
+                        if (window.name) {
+                            const embedElements = window.parent.document.getElementsByName(window.name);
+                            if (embedElements.length === 1) {
+                                const embedElement = embedElements[0];
+                                if (embedElement.tagName === 'FRAME' &&
+                                    embedElement.parentElement.tagName === 'FRAMESET')
+                                {
+                                    let curFrameOrFrameset = embedElement;
+                                    while (true) {
+                                        if (curFrameOrFrameset.parentElement.tagName !== 'FRAMESET') {
+                                            atBottomOfViewport = true;
+                                            break;
+                                        }
+                                        if (curFrameOrFrameset.parentElement.attributes['rows'] !== undefined) {
+                                            const rows = curFrameOrFrameset.parentElement.children;
+                                            if (curFrameOrFrameset === rows[rows.length - 1]) {
+                                                curFrameOrFrameset = curFrameOrFrameset.parentElement;
+                                                continue;
+                                            } else {
+                                                break;
+                                            }
+                                        } else if (curFrameOrFrameset.parentElement.attributes['cols'] !== undefined) {
+                                            const cols = Array.from(curFrameOrFrameset.parentElement.children);
+                                            const colIndex = cols.indexOf(curFrameOrFrameset);
+                                            if (colIndex === -1) {
+                                                break;
+                                            }
+                                            const colSizeStrs = curFrameOrFrameset.parentElement.attributes['cols'].value.split(',');
+                                            const colSizeInts = colSizeStrs.map((s) => parseInt(s.trim()));
+                                            if (colSizeStrs[colIndex].trim() === '*' ||
+                                                colSizeInts[colIndex] === Math.max.apply(null, colSizeInts))
+                                            {
+                                                curFrameOrFrameset = curFrameOrFrameset.parentElement;
+                                                continue;
+                                            } else {
+                                                break;
+                                            }
+                                        } else {
+                                            // Frameset not defining rows or cols
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (!atBottomOfViewport) {
+                            a.style['display'] = 'none';
+                        }
+                    }
+                    
+                    const aRect = a.getBoundingClientRect();
+                    const bannerTooHigh = (aRect.y < aRect.height);
+                    if (bannerTooHigh) {
+                        // Pin to bottom of viewport
+                        a.style['position'] = 'fixed';
+                        a.style['bottom'] = '0';
+                        a.style['left'] = '0';
+                        a.style['right'] = '0';
+                    }
+                });
+                """
+            ).strip()
+            
+            script = html.new_tag('script', text_content=script_content)
+            html.tag_append(a, script)
             
             return a
         return self._try_insert_html_element(create_footer_banner, _BOTTOM_OF_BODY) is not None
