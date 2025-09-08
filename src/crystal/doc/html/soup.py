@@ -497,9 +497,8 @@ class HtmlDocument(Document):
                 'justify-content: center;'
                 'gap: 4px;'
                 
-                # Try to stack on top of all other elements.
-                # Useful on sites like https://bongo.cat/
-                'z-index: 9999;'
+                # Position below any floated elements
+                'clear: both;'
             )
             
             img = html.new_tag('img')
@@ -584,6 +583,9 @@ class HtmlDocument(Document):
                         a.style['bottom'] = '0';
                         a.style['left'] = '0';
                         a.style['right'] = '0';
+                        
+                        // Stack on top
+                        a.style['z-index'] = '9999';
                     }
                 });
                 """
