@@ -587,6 +587,14 @@ class HtmlDocument(Document):
                         // Stack on top
                         a.style['z-index'] = '9999';
                     }
+                    
+                    const pageTooShort = (
+                        document.body.getBoundingClientRect().height <
+                        aRect.height * 2
+                    );
+                    if (pageTooShort) {
+                        a.style['display'] = 'none';
+                    }
                 });
                 """
             ).strip()
