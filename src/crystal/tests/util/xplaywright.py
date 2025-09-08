@@ -13,7 +13,7 @@ from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, wait_for_future
 from crystal.util.xos import is_linux
 from crystal.tests.util.skip import skipTest
 import sys
-from typing import Any, TYPE_CHECKING, Protocol
+from typing import Any, TYPE_CHECKING, Concatenate, ParamSpec, Protocol
 
 
 # Importable Playright types
@@ -34,14 +34,18 @@ else:
 # ------------------------------------------------------------------------------
 # Playwright Interface
 
-def awith_playwright(test_func: 'Callable[[Playwright], Awaitable[None]]') -> Callable[[], Awaitable[None]]:
+_P = ParamSpec('_P')
+
+def awith_playwright(
+        test_func: 'Callable[Concatenate[Playwright, _P], Awaitable[None]]'
+        ) -> Callable[_P, Awaitable[None]]:
     """Decorates a test function which uses Playwright."""
     @wraps(test_func)
-    async def wrapper() -> None:
+    async def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> None:
         # NOTE: May raise SkipTest if Playwright library not available
         pw = Playwright()
         
-        await test_func(pw)
+        await test_func(pw, *args, **kwargs)
     return wrapper
 
 

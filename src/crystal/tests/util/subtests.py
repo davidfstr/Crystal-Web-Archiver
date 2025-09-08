@@ -3,7 +3,12 @@ from contextlib import contextmanager
 from functools import wraps
 from io import StringIO
 import traceback
+from typing import Concatenate, ParamSpec
 from unittest import SkipTest
+
+
+_P = ParamSpec('_P')
+
 
 # ------------------------------------------------------------------------------
 # Utility: Subtests
@@ -107,7 +112,9 @@ class SubtestFailed(Exception):
         super().__init__('Subtest failed')
 
 
-def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], None]:
+def with_subtests(
+        test_func: Callable[Concatenate[SubtestsContext, _P], None]
+        ) -> Callable[_P, None]:
     """Decorates a test function which can use subtests."""
     test_func_id = (test_func.__module__, test_func.__name__)
     test_name = f'{test_func_id[0]}.{test_func_id[1]}'
@@ -115,14 +122,16 @@ def with_subtests(test_func: Callable[[SubtestsContext], None]) -> Callable[[], 
     subtests = SubtestsContext(test_name)
     
     @wraps(test_func)
-    def wrapper() -> None:
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> None:
         with subtests.run():
-            test_func(subtests)
+            test_func(subtests, *args, **kwargs)
     return wrapper
 
 
 # NOTE: Duplicate logic in SubtestsContext.run() and awith_subtests().
-def awith_subtests(test_func: Callable[[SubtestsContext], Awaitable[None]]) -> Callable[[], Awaitable[None]]:
+def awith_subtests(
+        test_func: Callable[Concatenate[SubtestsContext, _P], Awaitable[None]]
+        ) -> Callable[_P, Awaitable[None]]:
     """Decorates a test function which can use subtests."""
     test_func_id = (test_func.__module__, test_func.__name__)
     test_name = f'{test_func_id[0]}.{test_func_id[1]}'
@@ -130,10 +139,10 @@ def awith_subtests(test_func: Callable[[SubtestsContext], Awaitable[None]]) -> C
     subtests = SubtestsContext(test_name)
     
     @wraps(test_func)
-    async def wrapper() -> None:
+    async def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> None:
         raised_exc = True
         try:
-            await test_func(subtests)
+            await test_func(subtests, *args, **kwargs)
             raised_exc = False
         except _SubtestReturn:
             raised_exc = False
