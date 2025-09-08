@@ -408,6 +408,7 @@ InsertLocation = Literal[
     'first_element',
     
     'body_last_child',
+    'html_last_child',
 ]
 
 InsertLocationPreference: TypeAlias = tuple[InsertLocation, ...]
@@ -415,7 +416,7 @@ InsertLocationPreference: TypeAlias = tuple[InsertLocation, ...]
 _TOP_OF_HEAD: InsertLocationPreference = \
     ('head_first_child', 'html_first_child', 'first_element')
 _BOTTOM_OF_BODY: InsertLocationPreference = \
-    ('body_last_child',)
+    ('body_last_child', 'html_last_child')
 
 
 class HtmlDocument(Document):
@@ -539,10 +540,17 @@ class HtmlDocument(Document):
                     continue
                 self._html.tag_insert_before(first_element, new_element)
             elif loc == 'body_last_child':
+                # TODO: Precompile this element selector
                 bodys = list(self._html.find_all('body'))
                 if len(bodys) == 0:
                     continue
                 self._html.tag_append(bodys[-1], new_element)
+            elif loc == 'html_last_child':
+                # TODO: Precompile this element selector
+                htmls = list(self._html.find_all('html'))
+                if len(htmls) == 0:
+                    continue
+                self._html.tag_append(htmls[-1], new_element)
             else:
                 assert_never(loc)
             break  # success
