@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
 from crystal import server
+from crystal.doc.html.soup import HtmlDocument
 from crystal.model import Resource, ResourceRevision
 from crystal.server import _DEFAULT_SERVER_PORT, ProjectServer, get_request_url
 from crystal.tests.util.asserts import assertEqual, assertIn
@@ -25,6 +26,7 @@ from crystal.tests.util.windows import (
 from crystal.tests.util.xplaywright import (
     Playwright, RawPage, awith_playwright, expect,
 )
+from crystal.util.cli import TERMINAL_FG_PURPLE, colorize
 from crystal.util.ports import is_port_in_use
 from io import StringIO
 import json
@@ -1110,6 +1112,19 @@ async def test_when_serve_page_with_unknown_x_header_then_excludes_header_silent
 # TODO: Treat <frame> links (inside a <frameset>) as embedded
 _MUST_DOWNLOAD_FRAMES_IN_FRAMESET_EXPLICITLY = True
 
+# Maximum overhead that the footer banner is allowed to add to regular pages
+# before triggering a test failure.
+# 
+# As of 2025-09-09:
+# - Overhead is 2,576 bytes, before variable name substitution
+# - Overhead is 2,126 bytes, after variable name substitution
+_MAX_BANNER_OVERHEAD_BYTES = 3_000  # 3KB
+
+# Whether to print the footer banner overhead in bytes, when running the test:
+# $ crystal --test test_footer_banner_does_not_add_more_than_X_bytes_of_overhead_to_page
+_PRINT_BANNER_OVERHEAD = True
+
+
 @awith_playwright
 async def test_when_serve_regular_page_then_footer_banner_appears_at_bottom_of_page_content(pw: Playwright) -> None:
     # Serve a long page
@@ -2054,6 +2069,79 @@ async def test_when_serve_regular_page_and_branding_logo_cannot_load_then_hides_
                         expect(logo_img).to_have_css('display', 'none')
                     
                     await pw.run(pw_task)
+
+
+async def test_footer_banner_does_not_add_more_than_X_bytes_of_overhead_to_page() -> None:
+    """
+    The footer banner is currently the heaviest (in page size) element that the
+    ProjectServer adds to regular pages. This test verifies that the weight of
+    the footer banner does not increase unexpectedly.
+    """
+    # Serve a simple page that will have a banner
+    mock_server = MockHttpServer({
+        '/simple-page': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Simple Page</title>
+                </head>
+                <body>
+                    <h1>Simple Page Content</h1>
+                    <div>
+                        {LOREM_IPSUM_SHORT}
+                    </div>
+                </body>
+                </html>
+                """
+            ).strip().encode('utf-8')
+        )
+    })
+    with mock_server:
+        simple_page_url = mock_server.get_url('/simple-page')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the page
+            r = Resource(project, simple_page_url)
+            revision_future = r.download(wait_for_embedded=True)
+            await wait_for_future(revision_future)
+            
+            # Serve the page and measure size with banner
+            with closing(ProjectServer(project)) as project_server:
+                served_page_with_banner = await fetch_archive_url(simple_page_url)
+                assert served_page_with_banner.status == 200
+                assert 'id="cr-footer-banner"' in served_page_with_banner.content
+                assert 'This page was archived by Crystal' in served_page_with_banner.content
+                page_size_with_banner = len(served_page_with_banner.content_bytes)
+            
+            # Serve the page and measure size without banner
+            with patch.object(HtmlDocument, 'try_insert_footer_banner', return_value=False):
+                with closing(ProjectServer(project)) as project_server:
+                    served_page_without_banner = await fetch_archive_url(simple_page_url)
+                    assert served_page_without_banner.status == 200
+                    assert 'id="cr-footer-banner"' not in served_page_without_banner.content
+                    assert 'This page was archived by Crystal' not in served_page_without_banner.content
+                    page_size_without_banner = len(served_page_without_banner.content_bytes)
+            
+            # Calculate overhead
+            banner_overhead = page_size_with_banner - page_size_without_banner
+            if _PRINT_BANNER_OVERHEAD:
+                print(colorize(
+                    TERMINAL_FG_PURPLE,
+                    f'Footer banner overhead: {banner_overhead} bytes'
+                ))
+            
+            # Verify banner overhead does not increase greatly unexpectedly
+            assert banner_overhead > 0, \
+                f'Banner should add some overhead, but got {banner_overhead} bytes'
+            assert banner_overhead <= _MAX_BANNER_OVERHEAD_BYTES, (
+                f'Banner overhead is {banner_overhead} bytes, which exceeds the '
+                f'maximum allowed {_MAX_BANNER_OVERHEAD_BYTES} bytes. '
+                f'This indicates the banner content grew unexpectedly.'
+            )
 
 
 # ------------------------------------------------------------------------------

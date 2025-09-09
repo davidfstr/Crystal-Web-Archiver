@@ -22,6 +22,7 @@ from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
     TERMINAL_FG_PURPLE, colorize, print_error, print_info, print_success, print_warning,
 )
+from crystal.util.minify import minify_svg
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import (
@@ -2797,15 +2798,7 @@ def _appicon_fallback_image_url() -> str:
     """Data image URL with a simplified version of the app icon."""
     with resources.open_binary('appicon--fallback.svg') as f:
         svg_bytes = f.read()
-    return _to_base64_url('image/svg+xml', _minify_svg(svg_bytes))
-
-
-def _minify_svg(svg_bytes: bytes) -> bytes:
-    # Delete comments
-    svg_bytes = re.sub(rb'<!--.*?-->', b'', svg_bytes)
-    # Delete whitespace between tags
-    svg_bytes = re.sub(rb'>\s+<', b'><', svg_bytes)
-    return svg_bytes
+    return _to_base64_url('image/svg+xml', minify_svg(svg_bytes))
 
 
 def _to_base64_url(mime_type: str, svg_image_bytes: bytes) -> str:

@@ -13,7 +13,9 @@ from crystal.util.fastsoup import (
     BeautifulFastSoup, FastSoup, FindFunc, LxmlFastSoup, name_of_tag,
     parse_html, Tag,
 )
+from crystal.util.minify import minify_js
 from dataclasses import dataclass
+from functools import cache
 import json
 import re
 from re import Match
@@ -460,6 +462,129 @@ class HtmlDocument(Document):
             return meta
         return self._try_insert_html_element(create_meta_robots, _TOP_OF_HEAD) is not None
     
+    # === Insertion Operations: Footer Banner ===
+    
+    @staticmethod
+    @cache
+    def _FOOTER_BANNER_ROOT_CSS():  # minified
+        from crystal.server import _STANDARD_FONT_FAMILY
+        return (
+            'border-top: 2px #B40010 solid;'
+            'background: #FFFAE1;'
+            
+            f'font-family: {_STANDARD_FONT_FAMILY};'
+            'font-variant: initial;'
+            'font-weight: initial;'
+            'text-transform: none;'
+            'font-size: 14px;'
+            'color: #6c757d;'
+            'line-height: 2.0;'
+            
+            'cursor: pointer;'
+            
+            'display: flex;'
+            'align-items: center;'
+            'justify-content: center;'
+            'gap: 4px;'
+            
+            # Position below any floated elements
+            'clear: both;'
+        )
+    
+    # - Hide banner if it is not at the bottom of the viewport
+    # - If banner too high on page, pin to bottom of viewport
+    # - If page too short, don't show the banner at all
+    _FOOTER_BANNER_UNMINIFIED_JS = dedent(
+        """
+        window.addEventListener('load', function() {
+            const a = document.querySelector('#cr-footer-banner');
+            if (!a) { return; }
+            
+            // Hide banner if it is not at the bottom of the viewport
+            if (window !== window.top) {
+                let atBottomOfViewport = false;
+                if (window.name) {
+                    const embedElements = window.parent.document.getElementsByName(window.name);
+                    if (embedElements.length === 1) {
+                        const embedElement = embedElements[0];
+                        if (embedElement.tagName === 'FRAME' &&
+                            embedElement.parentElement.tagName === 'FRAMESET')
+                        {
+                            let curFrameOrFrameset = embedElement;
+                            while (true) {
+                                if (curFrameOrFrameset.parentElement.tagName !== 'FRAMESET') {
+                                    atBottomOfViewport = true;
+                                    break;
+                                }
+                                if (curFrameOrFrameset.parentElement.attributes['rows'] !== undefined) {
+                                    const rows_ = curFrameOrFrameset.parentElement.children;
+                                    if (curFrameOrFrameset === rows_[rows_.length - 1]) {
+                                        curFrameOrFrameset = curFrameOrFrameset.parentElement;
+                                        continue;
+                                    } else {
+                                        break;
+                                    }
+                                } else if (curFrameOrFrameset.parentElement.attributes['cols'] !== undefined) {
+                                    const cols_ = Array.from(curFrameOrFrameset.parentElement.children);
+                                    const colIndex = cols_.indexOf(curFrameOrFrameset);
+                                    if (colIndex === -1) {
+                                        break;
+                                    }
+                                    const colSizeStrs = curFrameOrFrameset.parentElement.attributes['cols'].value.split(',');
+                                    const colSizeInts = colSizeStrs.map((s) => parseInt(s.trim()));
+                                    if (colSizeStrs[colIndex].trim() === '*' ||
+                                        colSizeInts[colIndex] === Math.max.apply(null, colSizeInts))
+                                    {
+                                        curFrameOrFrameset = curFrameOrFrameset.parentElement;
+                                        continue;
+                                    } else {
+                                        break;
+                                    }
+                                } else {
+                                    // Frameset not defining rows or cols
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (!atBottomOfViewport) {
+                    a.style['display'] = 'none';
+                }
+            }
+            
+            // If banner too high on page, pin to bottom of viewport
+            const aRect = a.getBoundingClientRect();
+            const bannerTooHigh = (aRect.y < aRect.height);
+            if (bannerTooHigh) {
+                // Pin to bottom of viewport
+                a.style['position'] = 'fixed';
+                a.style['bottom'] = '0';
+                a.style['left'] = '0';
+                a.style['right'] = '0';
+                
+                // Stack on top
+                a.style['z-index'] = '9999';
+            }
+            
+            // If page too short, don't show the banner at all
+            const pageTooShort = (
+                document.body.getBoundingClientRect().height <
+                aRect.height * 2
+            );
+            if (pageTooShort) {
+                a.style['display'] = 'none';
+            }
+        });
+        """
+    ).strip()
+    
+    @classmethod
+    @cache
+    def _FOOTER_BANNER_JS(cls) -> str:
+        return minify_js(cls._FOOTER_BANNER_UNMINIFIED_JS)
+    
     def try_insert_footer_banner(self, get_request_url: Callable[[str], str]) -> bool:
         """
         Tries to insert a banner at the document footer declaring that
@@ -478,28 +603,7 @@ class HtmlDocument(Document):
             # Open in new window because target site - likely GitHub - may
             # refuse to load inside an iframe/frame, which we might be in
             html.tag_attrs(a)['target'] = '_blank'
-            html.tag_attrs(a)['style'] = (
-                'border-top: 2px #B40010 solid;'
-                'background: #FFFAE1;'
-                
-                f'font-family: {_STANDARD_FONT_FAMILY};'
-                'font-variant: initial;'
-                'font-weight: initial;'
-                'text-transform: none;'
-                'font-size: 14px;'
-                'color: #6c757d;'
-                'line-height: 2.0;'
-                
-                'cursor: pointer;'
-                
-                'display: flex;'
-                'align-items: center;'
-                'justify-content: center;'
-                'gap: 4px;'
-                
-                # Position below any floated elements
-                'clear: both;'
-            )
+            html.tag_attrs(a)['style'] = self._FOOTER_BANNER_ROOT_CSS()
             
             img = html.new_tag('img')
             html.tag_attrs(img)['src'] = get_request_url(_CRYSTAL_APPICON_IMAGE_URL)
@@ -511,103 +615,13 @@ class HtmlDocument(Document):
             span = html.new_tag('span', text_content='This page was archived by Crystal')
             html.tag_append(a, span)
             
-            # 1. If this HTML page is being shown inside an <iframe> or <frame>
-            #    hide the banner unless we can prove it's in an frame at the bottom
-            #    of the browser window's viewport.
-            #    Useful on sites like http://www.rakhal.com/ .
-            # 2. If banner appears too high on screen, pin it to the bottom of the viewport.
-            #    Useful on sites like https://bongo.cat/ .
-            script_content = dedent(
-                """
-                window.addEventListener('load', function() {
-                    const a = document.querySelector('#cr-footer-banner');
-                    if (!a) { return; }
-                    
-                    // Hide banner if it is not at the bottom of the viewport
-                    if (window !== window.top) {
-                        let atBottomOfViewport = false;
-                        if (window.name) {
-                            const embedElements = window.parent.document.getElementsByName(window.name);
-                            if (embedElements.length === 1) {
-                                const embedElement = embedElements[0];
-                                if (embedElement.tagName === 'FRAME' &&
-                                    embedElement.parentElement.tagName === 'FRAMESET')
-                                {
-                                    let curFrameOrFrameset = embedElement;
-                                    while (true) {
-                                        if (curFrameOrFrameset.parentElement.tagName !== 'FRAMESET') {
-                                            atBottomOfViewport = true;
-                                            break;
-                                        }
-                                        if (curFrameOrFrameset.parentElement.attributes['rows'] !== undefined) {
-                                            const rows = curFrameOrFrameset.parentElement.children;
-                                            if (curFrameOrFrameset === rows[rows.length - 1]) {
-                                                curFrameOrFrameset = curFrameOrFrameset.parentElement;
-                                                continue;
-                                            } else {
-                                                break;
-                                            }
-                                        } else if (curFrameOrFrameset.parentElement.attributes['cols'] !== undefined) {
-                                            const cols = Array.from(curFrameOrFrameset.parentElement.children);
-                                            const colIndex = cols.indexOf(curFrameOrFrameset);
-                                            if (colIndex === -1) {
-                                                break;
-                                            }
-                                            const colSizeStrs = curFrameOrFrameset.parentElement.attributes['cols'].value.split(',');
-                                            const colSizeInts = colSizeStrs.map((s) => parseInt(s.trim()));
-                                            if (colSizeStrs[colIndex].trim() === '*' ||
-                                                colSizeInts[colIndex] === Math.max.apply(null, colSizeInts))
-                                            {
-                                                curFrameOrFrameset = curFrameOrFrameset.parentElement;
-                                                continue;
-                                            } else {
-                                                break;
-                                            }
-                                        } else {
-                                            // Frameset not defining rows or cols
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        if (!atBottomOfViewport) {
-                            a.style['display'] = 'none';
-                        }
-                    }
-                    
-                    // If banner too high on page, pin to bottom of viewport
-                    const aRect = a.getBoundingClientRect();
-                    const bannerTooHigh = (aRect.y < aRect.height);
-                    if (bannerTooHigh) {
-                        // Pin to bottom of viewport
-                        a.style['position'] = 'fixed';
-                        a.style['bottom'] = '0';
-                        a.style['left'] = '0';
-                        a.style['right'] = '0';
-                        
-                        // Stack on top
-                        a.style['z-index'] = '9999';
-                    }
-                    
-                    // If page too short, don't show the banner at all
-                    const pageTooShort = (
-                        document.body.getBoundingClientRect().height <
-                        aRect.height * 2
-                    );
-                    if (pageTooShort) {
-                        a.style['display'] = 'none';
-                    }
-                });
-                """
-            ).strip()
-            
-            script = html.new_tag('script', text_content=script_content)
+            script = html.new_tag('script', text_content=self._FOOTER_BANNER_JS())
             html.tag_append(a, script)
             
             return a
         return self._try_insert_html_element(create_footer_banner, _BOTTOM_OF_BODY) is not None
+    
+    # === Insertion Operations: Utility ===
     
     def _try_insert_html_element(self,
             create_element_func: Callable[[FastSoup], Tag],
