@@ -189,6 +189,52 @@ async def test_given_welcome_page_visible_when_enter_url_then_navigates_to_url_i
 
 
 # ------------------------------------------------------------------------------
+# Test: Special Pages
+
+@awith_playwright
+async def test_when_serve_special_page_and_branding_logo_cannot_load_then_replaces_logo_with_simplified_svg_fallback(pw: Playwright) -> None:
+    # Use the "Not in Archive" special page, 
+    # with the logo image prevented from loading successfully
+    original_public_filenames = server._RequestHandler.PUBLIC_STATIC_RESOURCE_NAMES
+    with patch.object(
+            server._RequestHandler,
+            'PUBLIC_STATIC_RESOURCE_NAMES',
+            original_public_filenames - {'appicon.png'}):
+        async with _not_in_archive_page_visible() as server_page:
+            # Verify the NIA page contains branding header
+            assert server_page.is_not_in_archive
+            assert server_page.status == 404
+            assert 'cr-brand-header' in server_page.content
+            
+            # Use Playwright to verify the fallback logo is displayed
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                # Navigate to the NIA page 
+                raw_page.goto(f'http://127.0.0.1:{_DEFAULT_SERVER_PORT}/https://xkcd.com/missing-page/')
+                
+                # Ensure the brand header exists
+                brand_header = raw_page.locator('.cr-brand-header')
+                expect(brand_header).to_be_visible()
+                
+                # Ensure the main logo image is hidden due to error
+                main_logo = brand_header.locator('.cr-brand-header__logo--image')
+                expect(main_logo).to_have_count(1)
+                expect(main_logo).to_have_css('display', 'none')
+                
+                # Ensure the fallback logo image is visible
+                fallback_logo = brand_header.locator('.cr-brand-header__logo--image_fallback')
+                expect(fallback_logo).to_have_count(1)
+                expect(fallback_logo).to_have_css('display', 'inline')
+                expect(fallback_logo).to_be_visible()
+                
+                # Verify the fallback logo src is a data URL (inlined SVG),
+                # which should always be available and render correctly
+                fallback_src = fallback_logo.get_attribute('src')
+                assert fallback_src is not None
+                assert fallback_src.startswith('data:image/svg+xml;base64,')
+            await pw.run(pw_task)
+
+
+# ------------------------------------------------------------------------------
 # Test: "Not Found" Page (send_not_found_page)
 
 async def test_given_not_found_page_visible_then_crystal_branding_and_exit_button_is_visible() -> None:
@@ -1934,7 +1980,17 @@ async def test_when_serve_page_with_all_absolute_positioned_content_then_footer_
 
 
 @awith_playwright
-async def test_when_branding_logo_cannot_load_then_hides_logo(pw: Playwright) -> None:
+async def test_when_serve_regular_page_and_branding_logo_cannot_load_then_hides_logo(pw: Playwright) -> None:
+    """
+    NOTE: The fallback behavior of hiding the broken logo image is different 
+          than the fallback behavior for the logo in the branding area on
+          served special pages (like the Not in Archive page). On the latter
+          pages the logo is replaced with a simplified SVG image which is
+          inlined to the page itself. However that inlined SVG adds additional
+          size to the page which I don't want to add to every footer banner
+          displayed on every served page.
+    """
+    
     # Serve a simple page that will have a banner
     mock_server = MockHttpServer({
         '/simple-page': dict(
