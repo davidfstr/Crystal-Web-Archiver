@@ -505,6 +505,7 @@ class HtmlDocument(Document):
             html.tag_attrs(img)['src'] = get_request_url(_CRYSTAL_APPICON_IMAGE_URL)
             html.tag_attrs(img)['width'] = '24'
             html.tag_attrs(img)['height'] = '24'
+            html.tag_attrs(img)['onerror'] = "this.style['display'] = 'none';"
             html.tag_append(a, img)
             
             span = html.new_tag('span', text_content='This page was archived by Crystal')
@@ -522,6 +523,7 @@ class HtmlDocument(Document):
                     const a = document.querySelector('#cr-footer-banner');
                     if (!a) { return; }
                     
+                    // Hide banner if it is not at the bottom of the viewport
                     if (window !== window.top) {
                         let atBottomOfViewport = false;
                         if (window.name) {
@@ -575,6 +577,7 @@ class HtmlDocument(Document):
                         }
                     }
                     
+                    // If banner too high on page, pin to bottom of viewport
                     const aRect = a.getBoundingClientRect();
                     const bannerTooHigh = (aRect.y < aRect.height);
                     if (bannerTooHigh) {
@@ -588,6 +591,7 @@ class HtmlDocument(Document):
                         a.style['z-index'] = '9999';
                     }
                     
+                    // If page too short, don't show the banner at all
                     const pageTooShort = (
                         document.body.getBoundingClientRect().height <
                         aRect.height * 2

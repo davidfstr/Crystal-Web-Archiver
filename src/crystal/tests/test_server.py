@@ -30,6 +30,7 @@ from io import StringIO
 import json
 from textwrap import dedent
 from unittest import skip
+from unittest.mock import patch
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
 #       in test_workflows.py. Link stubs for such behaviors
@@ -1930,6 +1931,73 @@ async def test_when_serve_page_with_all_absolute_positioned_content_then_footer_
                     assert position in ['fixed', 'absolute'], \
                         f"Banner should be positioned fixed or absolute, got {position}"
                 await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_when_branding_logo_cannot_load_then_hides_logo(pw: Playwright) -> None:
+    # Serve a simple page that will have a banner
+    mock_server = MockHttpServer({
+        '/simple-page': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Simple Page</title>
+                </head>
+                <body>
+                    <h1>Simple Page Content</h1>
+                    <div>
+                        {LOREM_IPSUM_SHORT}
+                    </div>
+                </body>
+                </html>
+                """
+            ).strip().encode('utf-8')
+        )
+    })
+    with mock_server:
+        simple_page_url = mock_server.get_url('/simple-page')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the page
+            r = Resource(project, simple_page_url)
+            revision_future = r.download(wait_for_embedded=True)
+            await wait_for_future(revision_future)
+            
+            # Serve the page, with the logo image prevented from loading successfully
+            original_public_filenames = server._RequestHandler.PUBLIC_STATIC_RESOURCE_NAMES
+            with patch.object(
+                    server._RequestHandler,
+                    'PUBLIC_STATIC_RESOURCE_NAMES',
+                    original_public_filenames - {'appicon.png'}):
+                with closing(ProjectServer(project)) as project_server:
+                    simple_page_url_in_archive = project_server.get_request_url(simple_page_url)
+                    
+                    # Verify banner is present in the served HTML
+                    served_page = await fetch_archive_url(simple_page_url)
+                    assert served_page.status == 200
+                    assert 'id="cr-footer-banner"' in served_page.content
+                    assert 'This page was archived by Crystal' in served_page.content
+                    
+                    # Verify logo is hidden in browser due to onerror handler
+                    def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                        raw_page.goto(simple_page_url_in_archive)
+                        
+                        # Ensure the banner exists
+                        footer_banner = raw_page.locator('#cr-footer-banner')
+                        expect(footer_banner).to_be_visible()
+                        expect(footer_banner).to_contain_text(
+                            'This page was archived by Crystal')
+                        
+                        # Ensure the logo img element exists but is hidden due to onerror
+                        logo_img = footer_banner.locator('img')
+                        expect(logo_img).to_have_count(1)
+                        expect(logo_img).to_have_css('display', 'none')
+                    
+                    await pw.run(pw_task)
 
 
 # ------------------------------------------------------------------------------
