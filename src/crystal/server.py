@@ -416,6 +416,14 @@ class _HttpServer(HTTPServer):
 
 
 class _RequestHandler(BaseHTTPRequestHandler):
+    PUBLIC_STATIC_RESOURCE_NAMES = {
+        'appicon.png',
+        'logotext.png',
+        'logotext@2x.png',
+        'logotext-dark.png',
+        'logotext-dark@2x.png'
+    }
+    
     # Prevent slow/broken request from blocking all other requests
     timeout = 1  # second
     
@@ -1053,15 +1061,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @bg_affinity
     def _handle_static_resource(self) -> None:
         """Serve static resources from Crystal's "resources" directory."""
-        
-        PUBLIC_STATIC_RESOURCE_NAMES = {
-            'appicon.png',
-            'logotext.png',
-            'logotext@2x.png',
-            'logotext-dark.png',
-            'logotext-dark@2x.png'
-        }
-        
         # Extract resource filename from path: /_/crystal/resources/filename.ext
         if not self.path.startswith('/_/crystal/resources/'):
             self.send_response(404)
@@ -1070,7 +1069,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         resource_name = self.path.removeprefix('/_/crystal/resources/')
         
         # Security: Only allow specific resource files to prevent directory traversal
-        if resource_name not in PUBLIC_STATIC_RESOURCE_NAMES:
+        if resource_name not in self.PUBLIC_STATIC_RESOURCE_NAMES:
             self.send_response(404)
             self.end_headers()
             return
@@ -1147,10 +1146,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
             archive_url_html_attr=archive_url,
             archive_url_html=html_escape(archive_url),
             archive_url_json=json.dumps(archive_url),
-            readonly_warning_html=(
-                '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
-                if readonly else ''
-            ),
             download_button_disabled_html=('disabled ' if readonly else ''),
             create_group_form_data=create_group_form_data,
             readonly=readonly
@@ -1648,6 +1643,11 @@ def _pin_date_js(timestamp: int) -> str:
 # ------------------------------------------------------------------------------
 # HTML Templates
 
+# Whether to show _generic_404_page_html() when _not_in_archive_html() page
+# is requested. Useful for debugging the _generic_404_page_html() page.
+_SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE = False
+
+
 def _welcome_page_html() -> str:
     welcome_styles = dedent(
         """
@@ -1782,6 +1782,23 @@ def _not_found_page_html() -> str:
     )
 
 
+def _generic_404_page_html() -> str:
+    return _not_in_archive_html(
+        archive_url_html_attr='__ignored__',
+        archive_url_html='__ignored__',
+        archive_url_json=json.dumps('__ignored__'),
+        download_button_disabled_html='',  # ignored
+        create_group_form_data=CreateGroupFormData(  # ignored
+            source_choices=[],
+            predicted_url_pattern='',
+            predicted_source_value=None,
+            predicted_name='',
+        ),
+        readonly=True,  # ignored
+        _is_generic_404_page=True,
+    )
+
+
 class CreateGroupFormData(TypedDict):
     source_choices: 'list[SourceChoice]'
     predicted_url_pattern: str
@@ -1816,11 +1833,14 @@ def _not_in_archive_html(
         *, archive_url_html_attr: str,
         archive_url_html: str,
         archive_url_json: str,
-        readonly_warning_html: str,
         download_button_disabled_html: str,
         create_group_form_data: CreateGroupFormData,
-        readonly: bool
+        readonly: bool,
+        _is_generic_404_page: bool=False,
         ) -> str:
+    if _SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE:
+        return _generic_404_page_html()
+
     not_in_archive_styles = dedent(
         """
         /* ------------------------------------------------------------------ */
@@ -2136,7 +2156,18 @@ def _not_in_archive_html(
         """
     ).strip()
     
-    content_html = dedent(
+    readonly_warning_html = (
+        '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
+        if readonly else ''
+    )
+    
+    download_button_html = dedent(
+        f"""
+        <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
+        """
+    ).strip()
+    
+    content_top_html = dedent(
         f"""
         <div class="cr-page__icon">🚫</div>
         
@@ -2145,23 +2176,27 @@ def _not_in_archive_html(
         </div>
         
         <p>The requested page was not found in this archive.</p>
-        <p>The page has not been downloaded yet.</p>
+        {"<p>The page has not been downloaded yet.</p>" if not _is_generic_404_page else ""}
         
         {_URL_BOX_HTML_TEMPLATE % {
             'label_html': 'Original URL',
             'url_html_attr': archive_url_html_attr,
             'url_html': archive_url_html
-        }}
+        } if not _is_generic_404_page else ""}
         
-        {readonly_warning_html}
+        {readonly_warning_html if not _is_generic_404_page else ""}
         
         <div class="cr-page__actions">
             <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
-            <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
+            {download_button_html if not _is_generic_404_page else ""}
         </div>
-        
+        """
+    ).strip()
+    
+    content_bottom_html = dedent(
+        f"""
         <div id="cr-download-progress-bar" class="cr-download-progress-bar">
             <div class="cr-progress-bar__outline">
                 <div id="cr-download-progress-bar__fill" class="cr-progress-bar__fill"></div>
@@ -2663,11 +2698,20 @@ def _not_in_archive_html(
     return _base_page_html(
         title_html='Not in Archive | Crystal',
         style_html=(
-            _URL_BOX_STYLE_TEMPLATE + '\n' + 
-            not_in_archive_styles
+            (_URL_BOX_STYLE_TEMPLATE + '\n' + not_in_archive_styles)
+            if not _is_generic_404_page
+            else ''
         ),
-        content_html=content_html,
-        script_html=script_html
+        content_html=(
+            (content_top_html + content_bottom_html)
+            if not _is_generic_404_page
+            else content_top_html
+        ),
+        script_html=(
+            script_html
+            if not _is_generic_404_page
+            else ''
+        ),
     )
 
 
@@ -2860,6 +2904,9 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     .cr-page__actions {
         margin: 30px 0;
     }
+    .cr-page__actions:last-child {
+        margin-bottom: 0;
+    }
     
     .cr-button {
         display: inline-block;
@@ -2973,6 +3020,29 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
     </html>
     """
 ).lstrip()  # type: str
+
+_CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE = [
+    '/_/crystal/resources/appicon.png',
+    '/_/crystal/resources/logotext.png',
+    '/_/crystal/resources/logotext@2x.png',
+    '/_/crystal/resources/logotext-dark.png',
+    '/_/crystal/resources/logotext-dark@2x.png',
+]
+_CRYSTAL_URL_REF_PREFIX = '/_/crystal/'
+if True:
+    if not _CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE[0].startswith(_CRYSTAL_URL_REF_PREFIX):
+        raise AssertionError('_CRYSTAL_URL_PREFIX does not appear to be correct')
+    
+    _bpt_without_crystal_urls = _BASE_PAGE_HTML_TEMPLATE
+    for _crystal_url in _CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE:
+        _bpt_without_crystal_urls = _bpt_without_crystal_urls.replace(_crystal_url, '')
+    if _CRYSTAL_URL_REF_PREFIX in _bpt_without_crystal_urls:
+        found_at = _bpt_without_crystal_urls.index(_CRYSTAL_URL_REF_PREFIX)
+        raise AssertionError(
+            '_CRYSTAL_URLS_IN_BASE_PAGE_TEMPLATE does not appear to include '
+            'every crystal:// URL in _BASE_PAGE_HTML_TEMPLATE. '
+            f'Found a match: {_bpt_without_crystal_urls[found_at: found_at+50]!r}...'
+        )
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
