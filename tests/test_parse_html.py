@@ -79,8 +79,8 @@ def test_can_insert_script_reference_in_html_document() -> None:
                         """
                         <!DOCTYPE html>
                         
-                        <script src="/script.js"></script><html>
-                        <head>
+                        <html>
+                        <head><script src="/script.js"></script>
                         <meta charset="utf-8"/>
                         <title>Home</title>
                         </head>
@@ -93,8 +93,8 @@ def test_can_insert_script_reference_in_html_document() -> None:
                     dedent(  # lxml
                         """
                         <html>
-                        <script src="/script.js"></script><head>
-                            <meta charset="utf-8">
+                        <head>
+                            <script src="/script.js"></script><meta charset="utf-8">
                             <title>Home</title>
                         </head>
                         <body>

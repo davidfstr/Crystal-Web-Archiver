@@ -17,7 +17,8 @@ from dataclasses import dataclass
 import json
 import re
 from re import Match
-from typing import List, Optional, Tuple, Type
+from textwrap import dedent
+from typing import List, Literal, Optional, Tuple, Type, TypeAlias, assert_never
 from urllib.parse import urlparse
 
 _PARSER_LIBRARY_T_CHOICES = (
@@ -402,6 +403,23 @@ def _format_srcset_str(srcset: list[list[str]]) -> str:
     return ','.join([' '.join(parts) for parts in srcset])
 
 
+InsertLocation = Literal[
+    'head_first_child',
+    'html_first_child',
+    'first_element',
+    
+    'body_last_child',
+    'html_last_child',
+]
+
+InsertLocationPreference: TypeAlias = tuple[InsertLocation, ...]
+
+_TOP_OF_HEAD: InsertLocationPreference = \
+    ('head_first_child', 'html_first_child', 'first_element')
+_BOTTOM_OF_BODY: InsertLocationPreference = \
+    ('body_last_child', 'html_last_child')
+
+
 class HtmlDocument(Document):
     def __init__(self,
             html: FastSoup,
@@ -419,7 +437,7 @@ class HtmlDocument(Document):
             script = html.new_tag('script')
             html.tag_attrs(script)['src'] = script_url
             return script
-        return self._try_insert_html_element(create_script) is not None
+        return self._try_insert_html_element(create_script, _TOP_OF_HEAD) is not None
     
     def try_insert_favicon_link(self, favicon_url: str) -> Link | None:
         def create_link(html: FastSoup) -> Tag:
@@ -427,7 +445,7 @@ class HtmlDocument(Document):
             self._html.tag_attrs(link)['rel'] = 'icon'
             self._html.tag_attrs(link)['href'] = favicon_url
             return link
-        link_tag = self._try_insert_html_element(create_link)
+        link_tag = self._try_insert_html_element(create_link, _TOP_OF_HEAD)
         if link_tag is None:
             return None
         link = HtmlLink.create_from_tag(
@@ -440,21 +458,204 @@ class HtmlDocument(Document):
             html.tag_attrs(meta)['name'] = 'robots'
             html.tag_attrs(meta)['content'] = content
             return meta
-        return self._try_insert_html_element(create_meta_robots) is not None
+        return self._try_insert_html_element(create_meta_robots, _TOP_OF_HEAD) is not None
     
-    def _try_insert_html_element(self, create_element_func: Callable[[FastSoup], Tag]) -> Tag | None:
+    def try_insert_footer_banner(self, get_request_url: Callable[[str], str]) -> bool:
+        """
+        Tries to insert a banner at the document footer declaring that
+        the current page was archived by Crystal.
+        """
+        def create_footer_banner(html: FastSoup) -> Tag:
+            from crystal.server import (
+                _CRYSTAL_APP_URL,
+                _CRYSTAL_APPICON_IMAGE_URL,
+                _STANDARD_FONT_FAMILY,
+            )
+            
+            a = html.new_tag('a')
+            html.tag_attrs(a)['id'] = 'cr-footer-banner'
+            html.tag_attrs(a)['href'] = _CRYSTAL_APP_URL
+            # Open in new window because target site - likely GitHub - may
+            # refuse to load inside an iframe/frame, which we might be in
+            html.tag_attrs(a)['target'] = '_blank'
+            html.tag_attrs(a)['style'] = (
+                'border-top: 2px #B40010 solid;'
+                'background: #FFFAE1;'
+                
+                f'font-family: {_STANDARD_FONT_FAMILY};'
+                'font-variant: initial;'
+                'font-weight: initial;'
+                'text-transform: none;'
+                'font-size: 14px;'
+                'color: #6c757d;'
+                'line-height: 2.0;'
+                
+                'cursor: pointer;'
+                
+                'display: flex;'
+                'align-items: center;'
+                'justify-content: center;'
+                'gap: 4px;'
+                
+                # Position below any floated elements
+                'clear: both;'
+            )
+            
+            img = html.new_tag('img')
+            html.tag_attrs(img)['src'] = get_request_url(_CRYSTAL_APPICON_IMAGE_URL)
+            html.tag_attrs(img)['width'] = '24'
+            html.tag_attrs(img)['height'] = '24'
+            html.tag_append(a, img)
+            
+            span = html.new_tag('span', text_content='This page was archived by Crystal')
+            html.tag_append(a, span)
+            
+            # 1. If this HTML page is being shown inside an <iframe> or <frame>
+            #    hide the banner unless we can prove it's in an frame at the bottom
+            #    of the browser window's viewport.
+            #    Useful on sites like http://www.rakhal.com/ .
+            # 2. If banner appears too high on screen, pin it to the bottom of the viewport.
+            #    Useful on sites like https://bongo.cat/ .
+            script_content = dedent(
+                """
+                window.addEventListener('load', function() {
+                    const a = document.querySelector('#cr-footer-banner');
+                    if (!a) { return; }
+                    
+                    if (window !== window.top) {
+                        let atBottomOfViewport = false;
+                        if (window.name) {
+                            const embedElements = window.parent.document.getElementsByName(window.name);
+                            if (embedElements.length === 1) {
+                                const embedElement = embedElements[0];
+                                if (embedElement.tagName === 'FRAME' &&
+                                    embedElement.parentElement.tagName === 'FRAMESET')
+                                {
+                                    let curFrameOrFrameset = embedElement;
+                                    while (true) {
+                                        if (curFrameOrFrameset.parentElement.tagName !== 'FRAMESET') {
+                                            atBottomOfViewport = true;
+                                            break;
+                                        }
+                                        if (curFrameOrFrameset.parentElement.attributes['rows'] !== undefined) {
+                                            const rows = curFrameOrFrameset.parentElement.children;
+                                            if (curFrameOrFrameset === rows[rows.length - 1]) {
+                                                curFrameOrFrameset = curFrameOrFrameset.parentElement;
+                                                continue;
+                                            } else {
+                                                break;
+                                            }
+                                        } else if (curFrameOrFrameset.parentElement.attributes['cols'] !== undefined) {
+                                            const cols = Array.from(curFrameOrFrameset.parentElement.children);
+                                            const colIndex = cols.indexOf(curFrameOrFrameset);
+                                            if (colIndex === -1) {
+                                                break;
+                                            }
+                                            const colSizeStrs = curFrameOrFrameset.parentElement.attributes['cols'].value.split(',');
+                                            const colSizeInts = colSizeStrs.map((s) => parseInt(s.trim()));
+                                            if (colSizeStrs[colIndex].trim() === '*' ||
+                                                colSizeInts[colIndex] === Math.max.apply(null, colSizeInts))
+                                            {
+                                                curFrameOrFrameset = curFrameOrFrameset.parentElement;
+                                                continue;
+                                            } else {
+                                                break;
+                                            }
+                                        } else {
+                                            // Frameset not defining rows or cols
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (!atBottomOfViewport) {
+                            a.style['display'] = 'none';
+                        }
+                    }
+                    
+                    const aRect = a.getBoundingClientRect();
+                    const bannerTooHigh = (aRect.y < aRect.height);
+                    if (bannerTooHigh) {
+                        // Pin to bottom of viewport
+                        a.style['position'] = 'fixed';
+                        a.style['bottom'] = '0';
+                        a.style['left'] = '0';
+                        a.style['right'] = '0';
+                        
+                        // Stack on top
+                        a.style['z-index'] = '9999';
+                    }
+                    
+                    const pageTooShort = (
+                        document.body.getBoundingClientRect().height <
+                        aRect.height * 2
+                    );
+                    if (pageTooShort) {
+                        a.style['display'] = 'none';
+                    }
+                });
+                """
+            ).strip()
+            
+            script = html.new_tag('script', text_content=script_content)
+            html.tag_append(a, script)
+            
+            return a
+        return self._try_insert_html_element(create_footer_banner, _BOTTOM_OF_BODY) is not None
+    
+    def _try_insert_html_element(self,
+            create_element_func: Callable[[FastSoup], Tag],
+            at: InsertLocationPreference,
+            ) -> Tag | None:
+        """
+        Tries to insert an element at the specified location within this HTML document.
+        Returns the inserted element if successful.
+        """
         if not self._is_html:
             # Don't try to insert an HTML link into a non-HTML document,
             # such as an XML document
             return None
         
-        first_element = self._html.find(True)
-        if first_element is not None:
-            new_element = create_element_func(self._html)
-            self._html.tag_insert_before(first_element, new_element)
-            return new_element
+        new_element = create_element_func(self._html)
+        
+        for loc in at:
+            if loc == 'head_first_child':
+                # TODO: Precompile this element selector
+                heads = list(self._html.find_all('head'))
+                if len(heads) == 0:
+                    continue
+                self._html.tag_insert_0(heads[0], new_element)
+            elif loc == 'html_first_child':
+                # TODO: Precompile this element selector
+                htmls = list(self._html.find_all('html'))
+                if len(htmls) == 0:
+                    continue
+                self._html.tag_insert_0(htmls[0], new_element)
+            elif loc == 'first_element':
+                first_element = self._html.find(True)
+                if first_element is None:
+                    continue
+                self._html.tag_insert_before(first_element, new_element)
+            elif loc == 'body_last_child':
+                # TODO: Precompile this element selector
+                bodys = list(self._html.find_all('body'))
+                if len(bodys) == 0:
+                    continue
+                self._html.tag_append(bodys[-1], new_element)
+            elif loc == 'html_last_child':
+                # TODO: Precompile this element selector
+                htmls = list(self._html.find_all('html'))
+                if len(htmls) == 0:
+                    continue
+                self._html.tag_append(htmls[-1], new_element)
+            else:
+                assert_never(loc)
+            break  # success
         else:
             return None
+        return new_element
     
     # === Stringify ===
     

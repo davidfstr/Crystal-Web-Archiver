@@ -60,7 +60,7 @@ class FastSoup:  # abstract
     def find(self, pattern: Literal[True]) -> 'Optional[Tag]':
         raise NotImplementedError()
     
-    def new_tag(self, tag_name: str) -> 'Tag':
+    def new_tag(self, tag_name: str, text_content: str | None=None) -> 'Tag':
         raise NotImplementedError()
     
     def __str__(self) -> str:
@@ -80,7 +80,16 @@ class FastSoup:  # abstract
     def set_tag_string(self, tag: Tag, string: str | None) -> None:
         raise NotImplementedError()
     
-    def tag_insert_before(self, tag: Tag, tag2: Tag) -> None:
+    def tag_insert_before(self, tag1: Tag, tag2: Tag) -> None:
+        """Inserts tag2 as the previous sibling to tag."""
+        raise NotImplementedError()
+    
+    def tag_insert_0(self, tag1: Tag, tag2: Tag) -> None:
+        """Inserts tag2 at the start of tag1's children list."""
+        raise NotImplementedError()
+    
+    def tag_append(self, tag1: Tag, tag2: Tag) -> None:
+        """Inserts tag2 at the end of tag1's children list."""
         raise NotImplementedError()
 
 
@@ -113,8 +122,8 @@ class BeautifulFastSoup(FastSoup):
         assert not isinstance(result, bs4.NavigableString)
         return result
     
-    def new_tag(self, tag_name: str) -> 'Tag':
-        return self._base.new_tag(tag_name)
+    def new_tag(self, tag_name: str, text_content: str | None=None) -> 'Tag':
+        return self._base.new_tag(tag_name, string=text_content)
     
     def __str__(self) -> str:
         return str(self._base)
@@ -135,12 +144,22 @@ class BeautifulFastSoup(FastSoup):
     
     def set_tag_string(self, tag: Tag, string: str | None) -> None:
         assert isinstance(tag, bs4.Tag)
-        tag.string = string;
+        tag.string = string
     
-    def tag_insert_before(self, tag: Tag, tag2: Tag) -> None:
-        assert isinstance(tag, bs4.Tag)
+    def tag_insert_before(self, tag1: Tag, tag2: Tag) -> None:
+        assert isinstance(tag1, bs4.Tag)
         assert isinstance(tag2, bs4.Tag)
-        tag.insert_before(tag2)
+        tag1.insert_before(tag2)
+    
+    def tag_insert_0(self, tag1: Tag, tag2: Tag) -> None:
+        assert isinstance(tag1, bs4.Tag)
+        assert isinstance(tag2, bs4.Tag)
+        tag1.insert(0, tag2)
+    
+    def tag_append(self, tag1: Tag, tag2: Tag) -> None:
+        assert isinstance(tag1, bs4.Tag)
+        assert isinstance(tag2, bs4.Tag)
+        tag1.append(tag2)
 
 
 class LxmlFastSoup(FastSoup):
@@ -235,8 +254,11 @@ class LxmlFastSoup(FastSoup):
     def find(self, pattern: Literal[True]) -> 'Optional[Tag]':
         return self._root.find('*')
     
-    def new_tag(self, tag_name: str) -> 'Tag':
-        return self._root.makeelement(tag_name)
+    def new_tag(self, tag_name: str, text_content: str | None=None) -> 'Tag':
+        tag = self._root.makeelement(tag_name)
+        if text_content is not None:
+            tag.text = text_content
+        return tag
     
     def __str__(self) -> str:
         return lxml.html.tostring(self._root, encoding='unicode')
@@ -259,10 +281,20 @@ class LxmlFastSoup(FastSoup):
         assert isinstance(tag, lxml.html.HtmlElement)
         tag.text = string
     
-    def tag_insert_before(self, tag: Tag, tag2: Tag) -> None:
-        assert isinstance(tag, lxml.html.HtmlElement)
+    def tag_insert_before(self, tag1: Tag, tag2: Tag) -> None:
+        assert isinstance(tag1, lxml.html.HtmlElement)
         assert isinstance(tag2, lxml.html.HtmlElement)
-        tag.addprevious(tag2)
+        tag1.addprevious(tag2)
+    
+    def tag_insert_0(self, tag1: Tag, tag2: Tag) -> None:
+        assert isinstance(tag1, lxml.html.HtmlElement)
+        assert isinstance(tag2, lxml.html.HtmlElement)
+        tag1.insert(0, tag2)
+    
+    def tag_append(self, tag1: Tag, tag2: Tag) -> None:
+        assert isinstance(tag1, lxml.html.HtmlElement)
+        assert isinstance(tag2, lxml.html.HtmlElement)
+        tag1.append(tag2)
 
 
 def name_of_tag(tag: Tag) -> str:

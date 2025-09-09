@@ -7,16 +7,18 @@ from crystal.model import Resource, ResourceRevision
 from crystal.server import _DEFAULT_SERVER_PORT, ProjectServer, get_request_url
 from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.data import LOREM_IPSUM_LONG, LOREM_IPSUM_SHORT
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.pages import NotInArchivePage, network_down_after_delay
-from crystal.tests.util.runner import bg_fetch_url
+from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, extracted_project, fetch_archive_url,
-    served_project, WebPage,
+    MockHttpServer, served_project, WebPage,
 )
 from crystal.tests.util.skip import skipTest
+from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
-from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, wait_for_future
+from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, DEFAULT_WAIT_PERIOD, wait_for_future
 from crystal.tests.util.windows import (
     MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
 )
@@ -24,10 +26,9 @@ from crystal.tests.util.xplaywright import (
     Playwright, RawPage, awith_playwright, expect,
 )
 from crystal.util.ports import is_port_in_use
-from crystal.util.xos import is_linux
 from io import StringIO
 import json
-import sys
+from textwrap import dedent
 from unittest import skip
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
@@ -95,7 +96,7 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
 #   - send_redirect
 #   - send_resource_not_in_archive -- covered below
 #   - send_revision -- NOT covered elsewhere yet
-#     - send_http_revision
+#     - send_http_revision -- partially covered below
 #     - send_generic_revision
 
 
@@ -964,7 +965,7 @@ async def test_given_fetch_error_page_visible_when_press_go_back_button_then_nav
 
 
 # ------------------------------------------------------------------------------
-# Test: Header Inclusion & Exclusion (_HEADER_ALLOWLIST, _HEADER_DENYLIST)
+# Test: Send HTTP Revision: Header Inclusion & Exclusion (_HEADER_ALLOWLIST, _HEADER_DENYLIST)
 
 async def test_when_serve_page_then_safe_headers_included() -> None:
     SAFE_HEADER_NAME = 'Date'
@@ -1051,6 +1052,884 @@ async def test_when_serve_page_with_unknown_x_header_then_excludes_header_silent
             f'*** Ignoring unknown header in archive: {UNKNOWN_X_HEADER_NAME}: '
             not in captured_stdout
         )
+
+
+# ------------------------------------------------------------------------------
+# Test: Send HTTP Revision: Footer Banner
+
+# Currently pages containing <frameset> are parsed as a BasicDocument
+# which is too dumb to know which BasicLinks it contains are embedded.
+# 
+# TODO: Treat <frame> links (inside a <frameset>) as embedded
+_MUST_DOWNLOAD_FRAMES_IN_FRAMESET_EXPLICITLY = True
+
+@awith_playwright
+async def test_when_serve_regular_page_then_footer_banner_appears_at_bottom_of_page_content(pw: Playwright) -> None:
+    # Serve a long page
+    server = MockHttpServer({
+        '/long-page': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Long Lorem Ipsum Page</title>
+                </head>
+                <body>
+                    <h1>Very Long Page for Footer Banner Testing</h1>
+                    <div>
+                        {LOREM_IPSUM_LONG * 15}
+                    </div>
+                </body>
+                </html>
+                """
+            ).strip().encode('utf-8')
+        )
+    })
+    with server:
+        long_page_url = server.get_url('/long-page')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the page
+            r = Resource(project, long_page_url)
+            revision_future = r.download(wait_for_embedded=True)
+            await wait_for_future(revision_future)
+            
+            # Serve the page
+            with closing(ProjectServer(project)) as project_server:
+                long_page_url_in_archive = project_server.get_request_url(long_page_url)
+                
+                # Verify banner is present in the served HTML
+                served_page = await fetch_archive_url(long_page_url)
+                assert served_page.status == 200
+                assert 'id="cr-footer-banner"' in served_page.content
+                assert 'This page was archived by Crystal' in served_page.content
+                
+                # Verify banner is visible only after scrolling to bottom of page
+                def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                    raw_page.goto(long_page_url_in_archive)
+                    
+                    # Ensure the banner exists
+                    footer_banner = raw_page.locator('#cr-footer-banner')
+                    expect(footer_banner).to_be_visible()
+                    expect(footer_banner).to_contain_text(
+                        'This page was archived by Crystal')
+                    
+                    # Ensure the banner is not initially visible,
+                    # before scrolling the page content
+                    initial_banner_box = footer_banner.bounding_box()
+                    viewport_size = raw_page.viewport_size
+                    assert initial_banner_box is not None
+                    assert viewport_size is not None
+                    assert initial_banner_box['y'] > viewport_size['height']
+                    
+                    # Scroll to the bottom of the page
+                    raw_page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                    
+                    # Ensure the banner is visible,
+                    # after scrolling the page content
+                    final_banner_box = footer_banner.bounding_box()
+                    assert final_banner_box is not None
+                    assert final_banner_box['y'] < viewport_size['height']
+                await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_when_serve_iframe_then_footer_banner_does_not_appear_at_bottom_of_iframe(pw: Playwright) -> None:
+    # Serve a page with an iframe structure
+    server = MockHttpServer({
+        '/main-page': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Main Page with Iframe</title>
+                </head>
+                <body>
+                    <h1>Main Page Content</h1>
+                    <p>
+                        {LOREM_IPSUM_SHORT}
+                    </p]>
+                    
+                    <iframe id="test-iframe" src="/iframe-content" width="800" height="400" style="border: 2px solid red;"></iframe>
+                    
+                    <p>
+                        {LOREM_IPSUM_SHORT}
+                    </p>
+                </body>
+                </html>
+                """
+            ).strip().encode('utf-8')
+        ),
+        '/iframe-content': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Iframe Content</title>
+                </head>
+                <body style="background-color: lightblue; margin: 10px;">
+                    <h2>Content Inside Iframe</h2>
+                    <p>
+                        {LOREM_IPSUM_SHORT}
+                    </p>
+                </body>
+                </html>
+                """
+            ).strip().encode('utf-8')
+        )
+    })
+    with server:
+        main_page_url = server.get_url('/main-page')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download both the main page and iframe content
+            main_resource = Resource(project, main_page_url)
+            main_revision_future = main_resource.download(wait_for_embedded=True)
+            await wait_for_future(main_revision_future)
+            
+            # Serve the pages
+            with closing(ProjectServer(project)) as project_server:
+                main_page_url_in_archive = project_server.get_request_url(main_page_url)
+                
+                def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                    raw_page.goto(main_page_url_in_archive)
+                    
+                    # Ensure banner exists at bottom of main page
+                    main_banner = raw_page.locator('#cr-footer-banner')
+                    expect(main_banner).to_be_visible()
+                    expect(main_banner).to_contain_text('This page was archived by Crystal')
+                    
+                    # Wait for iframe to load
+                    iframe = raw_page.locator('#test-iframe')
+                    expect(iframe).to_be_visible()
+                    
+                    # Ensure no banner exists at bottom of iframe
+                    iframe_content = iframe.content_frame
+                    iframe_banner = iframe_content.locator('#cr-footer-banner')
+                    expect(iframe_banner).not_to_be_visible()
+                await pw.run(pw_task)
+
+
+@awith_subtests
+@awith_playwright
+async def test_when_serve_frameset_page_then_footer_banner_appears_at_bottom_of_largest_frame_at_bottom_of_browser_viewport(
+        pw: Playwright,
+        subtests: SubtestsContext
+        ) -> None:
+    # Case 1:
+    # - Single frame on bottom row
+    #     - FRAMESET with ROWS="120,*" where the bottom frame gets the banner
+    # - Based on: http://www.rakhal.com/FFIndex/lstmain.html
+    with subtests.test(case=1):
+        server = MockHttpServer({
+            '/lstmain.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <HTML>
+                    <HEAD><TITLE>The Penultimate Ranma Fanfic Index</TITLE></HEAD>
+                    <FRAMESET ROWS="120,*" FRAMEBORDER="1" FRAMESPACING="0" BORDER="0"> 
+                        <FRAMESET COLS="75%,*" FRAMEBORDER="1" FRAMESPACING="0" BORDER="0">
+                            <FRAME NAME="lefttop" SRC="/rindex.htm"> 
+                            <FRAME NAME="righttop" SRC="/rankey.html">
+                        </FRAMESET>
+                        <FRAME NAME="body" SRC="/ranlgnd.shtml"> 
+                    </FRAMESET> 
+                    </HTML>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/rindex.htm': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Left Top Frame</title>
+                    </head>
+                    <body style="background-color: lightgreen; margin: 10px;">
+                        <h3>Left Top Frame</h3>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/rankey.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Right Top Frame</title>
+                    </head>
+                    <body style="background-color: lightcoral; margin: 10px;">
+                        <h3>Right Top Frame</h3>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/ranlgnd.shtml': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Main Body Frame</title>
+                    </head>
+                    <body style="background-color: white; margin: 10px;">
+                        <h2>Main Content Frame</h2>
+                        <div>
+                            {LOREM_IPSUM_SHORT}
+                        </div>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            )
+        })
+        with server:
+            frameset_page_url = server.get_url('/lstmain.html')
+            frame1_url = server.get_url('/rindex.htm')
+            frame2_url = server.get_url('/rankey.html')
+            frame3_url = server.get_url('/ranlgnd.shtml')
+            
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                # Download the frameset page and all frame content
+                await wait_for_future(
+                    Resource(project, frameset_page_url).download(wait_for_embedded=True)
+                )
+                if _MUST_DOWNLOAD_FRAMES_IN_FRAMESET_EXPLICITLY:
+                    for frame_url in [frame1_url, frame2_url, frame3_url]:
+                        await wait_for_future(
+                            Resource(project, frame_url).download(wait_for_embedded=True)
+                        )
+                
+                # Serve the pages
+                with closing(ProjectServer(project)) as project_server:
+                    frameset_page_url_in_archive = project_server.get_request_url(frameset_page_url)
+                    
+                    # Verify frameset page HTML has no footer banner
+                    served_frameset_page = await fetch_archive_url(frameset_page_url)
+                    assert served_frameset_page.status == 200
+                    assert 'id="cr-footer-banner"' not in served_frameset_page.content
+                    
+                    # Verify footer banner appears only in appropriate frames
+                    def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                        raw_page.goto(frameset_page_url_in_archive)
+                        
+                        # Wait for frames to load
+                        raw_page.wait_for_load_state('networkidle')
+                        
+                        # Left top frame should NOT have footer banner
+                        lefttop_frame = raw_page.frame('lefttop')
+                        assert lefttop_frame is not None
+                        lefttop_banner = lefttop_frame.locator('#cr-footer-banner')
+                        expect(lefttop_banner).not_to_be_visible()
+                        
+                        # Right top frame should NOT have footer banner
+                        righttop_frame = raw_page.frame('righttop')
+                        assert righttop_frame is not None
+                        righttop_banner = righttop_frame.locator('#cr-footer-banner')
+                        expect(righttop_banner).not_to_be_visible()
+                        
+                        # Body frame (at bottom) SHOULD have footer banner
+                        body_frame = raw_page.frame('body')
+                        assert body_frame is not None
+                        body_banner = body_frame.locator('#cr-footer-banner')
+                        expect(body_banner).to_be_visible()
+                        expect(body_banner).to_contain_text('This page was archived by Crystal')
+                    await pw.run(pw_task)
+    
+    # Case 2:
+    # - Multiple frames on bottom row. Top-level column split.
+    #     - FRAMESET with COLS="19%,81%" where the wider right column gets the banner
+    # - Based on: http://www.tmffa.com/old/frame.html
+    with subtests.test(case=2):
+        server = MockHttpServer({
+            '/frame.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <HTML>
+                    <HEAD><TITLE>The Tenchi Muyo Fan Fiction Archive</TITLE></HEAD>
+                    <FRAMESET COLS="19%,81%">
+                        <FRAMESET ROWS="19%,81%">
+                            <FRAME SRC="/midi.html" NAME="midi">
+                            <FRAME SRC="/menu.html" NAME="menu">
+                        </FRAMESET>
+                        <FRAME SRC="/fanfic.html" NAME="Screen">
+                    </FRAMESET>
+                    </HTML>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/midi.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Midi Frame</title>
+                    </head>
+                    <body style="background-color: lightgray; margin: 10px;">
+                        <h4>Midi Frame</h4>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/menu.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Menu Frame</title>
+                    </head>
+                    <body style="background-color: lightblue; margin: 10px;">
+                        <h4>Menu Frame</h4>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/fanfic.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Screen Frame</title>
+                    </head>
+                    <body style="background-color: white; margin: 10px;">
+                        <h2>Screen Frame Content</h2>
+                        <div>
+                            {LOREM_IPSUM_SHORT}
+                        </div>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            )
+        })
+        with server:
+            frameset_page_url = server.get_url('/frame.html')
+            midi_url = server.get_url('/midi.html')
+            menu_url = server.get_url('/menu.html')
+            fanfic_url = server.get_url('/fanfic.html')
+            
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                # Download the frameset page and all frame content
+                await wait_for_future(
+                    Resource(project, frameset_page_url).download(wait_for_embedded=True)
+                )
+                if _MUST_DOWNLOAD_FRAMES_IN_FRAMESET_EXPLICITLY:
+                    for frame_url in [midi_url, menu_url, fanfic_url]:
+                        await wait_for_future(
+                            Resource(project, frame_url).download(wait_for_embedded=True)
+                        )
+                
+                # Serve the pages
+                with closing(ProjectServer(project)) as project_server:
+                    frameset_page_url_in_archive = project_server.get_request_url(frameset_page_url)
+                    
+                    # Verify frameset page HTML has no footer banner
+                    served_frameset_page = await fetch_archive_url(frameset_page_url)
+                    assert served_frameset_page.status == 200
+                    assert 'id="cr-footer-banner"' not in served_frameset_page.content
+                    
+                    # Verify footer banner appears only in appropriate frames
+                    def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                        raw_page.goto(frameset_page_url_in_archive)
+                        
+                        # Wait for frames to load
+                        raw_page.wait_for_load_state('networkidle')
+                        
+                        # Midi frame should NOT have footer banner
+                        midi_frame = raw_page.frame('midi')
+                        assert midi_frame is not None
+                        midi_banner = midi_frame.locator('#cr-footer-banner')
+                        expect(midi_banner).not_to_be_visible()
+                        
+                        # Menu frame should NOT have footer banner
+                        menu_frame = raw_page.frame('menu')
+                        assert menu_frame is not None
+                        menu_banner = menu_frame.locator('#cr-footer-banner')
+                        expect(menu_banner).not_to_be_visible()
+                        
+                        # Screen frame (largest at bottom) SHOULD have footer banner
+                        screen_frame = raw_page.frame('Screen')
+                        assert screen_frame is not None
+                        screen_banner = screen_frame.locator('#cr-footer-banner')
+                        expect(screen_banner).to_be_visible()
+                        expect(screen_banner).to_contain_text('This page was archived by Crystal')
+                    await pw.run(pw_task)
+    
+    # Case 3:
+    # - Very short single frame on bottom.
+    #     - FRAMESET with ROWS="*,20" where the bottom row gets the banner
+    #         - However the bottom row is so short that the banner will be hidden
+    # - Based on: https://otakuworld.com/index.html?/0home.html
+    with subtests.test(case=3):
+        server = MockHttpServer({
+            '/index.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN" "http://www.w3.org/TR/html4/frameset.dtd">
+                    <html>
+                    <head><title>Otaku World! Anime and Manga</title></head>
+                    <frameset rows="*,20" border="0">
+                        <frame src="/0home.html" frameborder="0" marginheight="2" marginwidth="0" name="main" scrolling="Auto">
+                        <frame src="/map2.htm" frameborder="0" marginheight="0" marginwidth="0" name="map" scrolling="no" noresize>
+                    </frameset>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/0home.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Main Content</title>
+                    </head>
+                    <body style="background-color: white; margin: 10px;">
+                        <h1>Otaku World Main Content</h1>
+                        <div>
+                            {LOREM_IPSUM_SHORT}
+                        </div>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/map2.htm': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Map Frame</title>
+                    </head>
+                    <body style="background-color: lightgray; margin: 0; padding: 0;">
+                        <small>Navigation Map</small>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            )
+        })
+        with server:
+            frameset_page_url = server.get_url('/index.html')
+            main_url = server.get_url('/0home.html')
+            map_url = server.get_url('/map2.htm')
+            
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                # Download the frameset page and all frame content
+                await wait_for_future(
+                    Resource(project, frameset_page_url).download(wait_for_embedded=True)
+                )
+                if _MUST_DOWNLOAD_FRAMES_IN_FRAMESET_EXPLICITLY:
+                    for frame_url in [main_url, map_url]:
+                        await wait_for_future(
+                            Resource(project, frame_url).download(wait_for_embedded=True)
+                        )
+                
+                # Serve the pages
+                with closing(ProjectServer(project)) as project_server:
+                    frameset_page_url_in_archive = project_server.get_request_url(frameset_page_url)
+                    
+                    # Verify frameset page HTML has no footer banner
+                    served_frameset_page = await fetch_archive_url(frameset_page_url)
+                    assert served_frameset_page.status == 200
+                    assert 'id="cr-footer-banner"' not in served_frameset_page.content
+                    
+                    # Verify footer banner appears only in appropriate frames
+                    def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                        raw_page.goto(frameset_page_url_in_archive)
+                        
+                        # Wait for frames to load
+                        raw_page.wait_for_load_state('networkidle')
+                        
+                        # Main frame should NOT have footer banner
+                        main_frame = raw_page.frame('main')
+                        assert main_frame is not None
+                        main_banner = main_frame.locator('#cr-footer-banner')
+                        expect(main_banner).not_to_be_visible()
+                        
+                        # Map frame (at bottom but very short) gets the banner but it's hidden due to height
+                        map_frame = raw_page.frame('map')
+                        assert map_frame is not None
+                        map_banner = map_frame.locator('#cr-footer-banner')
+                        expect(map_banner).not_to_be_visible()
+                    await pw.run(pw_task)
+    
+    # Case 4:
+    # - Frameset nested inside frame
+    #     - FRAMESET with ROWS="*,20" where the bottom row gets the banner
+    #         - However the bottom row is so short that the banner will be hidden
+    #     - Additionally, the top row is itself a FRAMESET with COLS="300,*",
+    #       where the wider right column gets the banner
+    #         - Strictly-speaking this nested right column is NOT at the
+    #           bottom of the browser window's viewport, so arguably no
+    #           banner should be shown in this case. However the current
+    #           behavior actually looks good for the example site,
+    #           so I am keeping the behavior for now.
+    #           It may change in the future.
+    # - Based on: https://otakuworld.com/index.html?/kiss/dolls/
+    with subtests.test(case=4):
+        server = MockHttpServer({
+            '/index.html': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN" "http://www.w3.org/TR/html4/frameset.dtd">
+                    <html>
+                    <head><title>Otaku World! Anime and Manga</title></head>
+                    <frameset rows="*,20" border="0">
+                        <frame src="/kiss/dolls/" frameborder="0" marginheight="2" marginwidth="0" name="main" scrolling="Auto">
+                        <frame src="/map2.htm" frameborder="0" marginheight="0" marginwidth="0" name="map" scrolling="no" noresize>
+                    </frameset>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/kiss/dolls/': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <html>
+                    <head><title>The Big KiSS Page - The Dolls</title></head>
+                    <frameset cols="300,*" border="0" framespacing="0" frameborder="NO">
+                        <frame src="/kiss/dolls/newest.htm" marginheight="1" marginwidth="4" noresize name="lists">
+                        <frame src="/kiss/dolls/intro.htm" marginheight="3" marginwidth="3" noresize name="pictures">
+                    </frameset>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/kiss/dolls/newest.htm': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Lists Frame</title>
+                    </head>
+                    <body style="background-color: lightgray; margin: 4px;">
+                        <h4>Lists Content</h4>
+                        <p>Navigation and lists content</p>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/kiss/dolls/intro.htm': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Pictures Frame</title>
+                    </head>
+                    <body style="background-color: white; margin: 3px;">
+                        <h2>Pictures Content</h2>
+                        <div>
+                            {LOREM_IPSUM_SHORT}
+                        </div>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            ),
+            '/map2.htm': dict(
+                status_code=200,
+                headers=[('Content-Type', 'text/html')],
+                content=dedent(
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Map Frame</title>
+                    </head>
+                    <body style="background-color: lightgray; margin: 0; padding: 0;">
+                        <small>Navigation Map</small>
+                    </body>
+                    </html>
+                    """
+                ).strip().encode('utf-8')
+            )
+        })
+        with server:
+            frameset_page_url = server.get_url('/index.html')
+            nested_frameset_url = server.get_url('/kiss/dolls/')
+            lists_url = server.get_url('/kiss/dolls/newest.htm')
+            pictures_url = server.get_url('/kiss/dolls/intro.htm')
+            map_url = server.get_url('/map2.htm')
+            
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                # Download the frameset page and all frame content
+                await wait_for_future(
+                    Resource(project, frameset_page_url).download(wait_for_embedded=True)
+                )
+                if _MUST_DOWNLOAD_FRAMES_IN_FRAMESET_EXPLICITLY:
+                    for frame_url in [nested_frameset_url, lists_url, pictures_url, map_url]:
+                        await wait_for_future(
+                            Resource(project, frame_url).download(wait_for_embedded=True)
+                        )
+                
+                # Serve the pages
+                with closing(ProjectServer(project)) as project_server:
+                    frameset_page_url_in_archive = project_server.get_request_url(frameset_page_url)
+                    
+                    # Verify frameset page HTML has no footer banner
+                    served_frameset_page = await fetch_archive_url(frameset_page_url)
+                    assert served_frameset_page.status == 200
+                    assert 'id="cr-footer-banner"' not in served_frameset_page.content
+                    
+                    # Verify nested frameset page HTML has no footer banner
+                    served_nested_frameset_page = await fetch_archive_url(nested_frameset_url)
+                    assert served_nested_frameset_page.status == 200
+                    assert 'id="cr-footer-banner"' not in served_nested_frameset_page.content
+                    
+                    # Verify footer banner appears only in appropriate frames
+                    def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                        raw_page.goto(frameset_page_url_in_archive)
+                        
+                        # Wait for frames to load
+                        raw_page.wait_for_load_state('networkidle')
+                        
+                        # Top-level map frame (at bottom but very short) gets banner but it's hidden
+                        map_frame = raw_page.frame('map')
+                        assert map_frame is not None
+                        map_banner = map_frame.locator('#cr-footer-banner')
+                        expect(map_banner).not_to_be_visible()
+                        
+                        # Main frame contains nested frameset
+                        main_frame = raw_page.frame('main')
+                        assert main_frame is not None
+                        
+                        # Lists frame (left column in nested frameset) should NOT have banner
+                        lists_frame = main_frame.frame_locator('frame[name="lists"]').first
+                        lists_banner = lists_frame.locator('#cr-footer-banner')
+                        expect(lists_banner).not_to_be_visible()
+                        
+                        # Pictures frame (right column in nested frameset) SHOULD have banner
+                        # (even though it's not at the bottom of the browser viewport, 
+                        #  the current behavior shows the banner here and it looks good)
+                        pictures_frame = main_frame.frame_locator('frame[name="pictures"]').first
+                        pictures_banner = pictures_frame.locator('#cr-footer-banner')
+                        expect(pictures_banner).to_be_visible()
+                        expect(pictures_banner).to_contain_text('This page was archived by Crystal')
+                    await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_when_serve_page_with_all_floated_content_then_footer_banner_appears_at_bottom_of_page_content(pw: Playwright) -> None:
+    # Serve a page with all floated content
+    server = MockHttpServer({
+        '/floated-page': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                f"""
+                <!DOCTYPE html>
+                <html lang="en-US">
+                <head><title>All About Me! - Project Lafiel</title></head>
+                <body>
+                    <div id="page-title-wide" style="float: left; width: 100%;">
+                        <h1>All About Me!</h1>
+                    </div>
+                    <div class="clearfix" style="clear: both;"></div>
+                    <div id="main-section" style="float: left; width: 100%; clear: both;">
+                        <p>{LOREM_IPSUM_SHORT}</p>
+                    </div>
+                    <div class="clearfix" style="clear: both;"></div>
+                    <footer id="canuck-footer" style="float: left; width: 100%;">
+                        Seikai no Dansho, Seikai no Monsho, Seikai no Senki. Copyright 1996-2020 Hiroyuki Morioka
+                    </footer>
+                </body>
+                </html>
+                """
+            ).strip().encode('utf-8')
+        )
+    })
+    with server:
+        floated_page_url = server.get_url('/floated-page')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the page
+            r = Resource(project, floated_page_url)
+            revision_future = r.download(wait_for_embedded=True)
+            await wait_for_future(revision_future)
+            
+            # Serve the page
+            with closing(ProjectServer(project)) as project_server:
+                floated_page_url_in_archive = project_server.get_request_url(floated_page_url)
+                
+                # Verify banner is present in the served HTML
+                served_page = await fetch_archive_url(floated_page_url)
+                assert served_page.status == 200
+                assert 'id="cr-footer-banner"' in served_page.content
+                assert 'This page was archived by Crystal' in served_page.content
+                
+                # Verify banner appears correctly at bottom of page with floated content
+                def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                    raw_page.goto(floated_page_url_in_archive)
+                    
+                    # Ensure the banner exists and is visible
+                    footer_banner = raw_page.locator('#cr-footer-banner')
+                    expect(footer_banner).to_be_visible()
+                    expect(footer_banner).to_contain_text('This page was archived by Crystal')
+                    
+                    # Verify banner has non-zero dimensions
+                    banner_box = footer_banner.bounding_box()
+                    assert banner_box is not None
+                    assert banner_box['width'] > 0, f"Banner width should be > 0, got {banner_box['width']}"
+                    assert banner_box['height'] > 0, f"Banner height should be > 0, got {banner_box['height']}"
+                    
+                    # Verify banner has the clear: both style to properly position after floated content
+                    banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
+                    assert banner_styles['clear'] == 'both', f"Banner should have clear: both style, got {banner_styles['clear']}"
+                    
+                    # Verify banner is positioned after all the floated content
+                    main_section = raw_page.locator('#main-section')
+                    main_box = main_section.bounding_box()
+                    assert main_box is not None
+                    main_bottom = main_box['y'] + main_box['height']
+                    assert banner_box['y'] >= main_bottom, (
+                        f"Banner should be below main content. "
+                        f"Banner Y: {banner_box['y']}, Main bottom: {main_bottom}"
+                    )
+                await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_when_serve_page_with_all_absolute_positioned_content_then_footer_banner_appears_pinned_to_bottom_of_browser_viewport_and_stacked_on_top(pw: Playwright) -> None:
+    # Serve a page with all absolute positioned content
+    server = MockHttpServer({
+        '/absolute-page': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                """
+                <html>
+                <head>
+                    <meta charset="utf-8" />
+                    <title>Bongo Cat</title>
+                </head>
+                <body>
+                    <header style="position: absolute; width: calc(100% - 20px); padding: 10px; font-size: 32px; text-align: center;">
+                        Controls
+                    </header>
+                    <div id="container" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 400px; height: 400px; font-size: 200px; text-align: center; line-height: 400px;">
+                        😺
+                    </div>
+                    <footer style="position: absolute; width: calc(100% - 20px); padding: 10px; bottom: 0; z-index: 500;">
+                        Meme by X. Website by Y.
+                    </footer>
+                </body>
+                </html>
+                """
+            ).strip().encode('utf-8')
+        )
+    })
+    with server:
+        absolute_page_url = server.get_url('/absolute-page')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the page
+            r = Resource(project, absolute_page_url)
+            revision_future = r.download(wait_for_embedded=True)
+            await wait_for_future(revision_future)
+            
+            # Serve the page
+            with closing(ProjectServer(project)) as project_server:
+                absolute_page_url_in_archive = project_server.get_request_url(absolute_page_url)
+                
+                # Verify banner is present in the served HTML
+                served_page = await fetch_archive_url(absolute_page_url)
+                assert served_page.status == 200
+                assert 'id="cr-footer-banner"' in served_page.content
+                assert 'This page was archived by Crystal' in served_page.content
+                
+                # Verify banner appears pinned to bottom of viewport and stacked on top
+                def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                    raw_page.goto(absolute_page_url_in_archive)
+                    
+                    # Ensure the banner exists and is visible
+                    footer_banner = raw_page.locator('#cr-footer-banner')
+                    expect(footer_banner).to_be_visible()
+                    expect(footer_banner).to_contain_text('This page was archived by Crystal')
+                    
+                    # Verify banner has non-zero dimensions
+                    banner_box = footer_banner.bounding_box()
+                    assert banner_box is not None
+                    assert banner_box['width'] > 0, \
+                        f"Banner width should be > 0, got {banner_box['width']}"
+                    assert banner_box['height'] > 0, \
+                        f"Banner height should be > 0, got {banner_box['height']}"
+                    
+                    # Verify banner Y coordinate is > 0 (visible in viewport)
+                    assert banner_box['y'] > 0, \
+                        f"Banner Y coordinate should be > 0, got {banner_box['y']}"
+                    
+                    # Verify banner is positioned at or very close to the bottom of the viewport
+                    viewport_size = raw_page.viewport_size
+                    assert viewport_size is not None
+                    viewport_bottom = viewport_size['height']
+                    banner_bottom = banner_box['y'] + banner_box['height']
+                    assert abs(banner_bottom - viewport_bottom) <= 10, \
+                        f"Banner should be at bottom of viewport. Banner bottom: {banner_bottom}, Viewport bottom: {viewport_bottom}"
+                    
+                    # Verify banner is stacked on top (has high z-index)
+                    banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
+                    z_index = banner_styles.get('zIndex', 'auto')
+                    assert z_index.isdigit() and int(z_index) >= 1000, \
+                        f"Banner should have high z-index for stacking, got {z_index}"
+                    
+                    # Verify banner is positioned fixed or absolute to stay at bottom
+                    position = banner_styles['position']
+                    assert position in ['fixed', 'absolute'], \
+                        f"Banner should be positioned fixed or absolute, got {position}"
+                await pw.run(pw_task)
 
 
 # ------------------------------------------------------------------------------

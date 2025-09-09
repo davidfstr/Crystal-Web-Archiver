@@ -1381,12 +1381,15 @@ class _RequestHandler(BaseHTTPRequestHandler):
             base_url = revision.resource.url
             self._rewrite_links(links, base_url, self.get_request_url)
             
-            if _ENABLE_PIN_DATE_MITIGATION:
-                # TODO: Add try_insert_script() to Document interface
-                if isinstance(doc, HtmlDocument) and revision_datetime is not None:
-                    doc.try_insert_script(
-                        _PIN_DATE_JS_PATH_PREFIX + 
-                        str(int(revision_datetime.timestamp())))
+            if (_ENABLE_PIN_DATE_MITIGATION and
+                    revision_datetime is not None and
+                    isinstance(doc, HtmlDocument)):
+                doc.try_insert_script(
+                    _PIN_DATE_JS_PATH_PREFIX + 
+                    str(int(revision_datetime.timestamp())))
+            
+            if isinstance(doc, HtmlDocument):
+                doc.try_insert_footer_banner(self.get_request_url)
             
             # Output altered document
             try:
@@ -1613,6 +1616,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def _stdout(self) -> TextIOBase | None:
         return self.server.stdout
 
+
+# ------------------------------------------------------------------------------
+# Other Templates
 
 _PIN_DATE_JS_TEMPLATE = dedent(
     """
@@ -2774,6 +2780,8 @@ def _base_page_html(
             _BASE_PAGE_STYLE_TEMPLATE + '\n' + 
             style_html
         ),
+        'crystal_app_url': _CRYSTAL_APP_URL,
+        'appicon_image_url_ref': _CRYSTAL_APPICON_IMAGE_URL_REF,
         'appicon_fallback_image_url': _appicon_fallback_image_url(),
         'content_html': content_html,
         'script_html': script_html
@@ -2810,14 +2818,16 @@ def _to_base64_url(mime_type: str, svg_image_bytes: bytes) -> str:
     return f"data:{mime_type};base64,{b64}"
 
 
+_STANDARD_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+
 _BASE_PAGE_STYLE_TEMPLATE = dedent(
     """
     .cr-body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-family: %(_STANDARD_FONT_FAMILY)s;
         line-height: 1.6;
         margin: 0;
         padding: 40px 20px;
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        background: linear-gradient(135deg, #f5f7fa 0%%, #c3cfe2 100%%);
         min-height: 100vh;
         box-sizing: border-box;
         color: #333;
@@ -2849,7 +2859,7 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     /* Dark mode styles for top of page */
     @media (prefers-color-scheme: dark) {
         .cr-body {
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d30 100%);
+            background: linear-gradient(135deg, #1a1a1a 0%%, #2d2d30 100%%);
             color: #e0e0e0;
         }
         
@@ -3043,8 +3053,15 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         box-shadow: none;
     }
     """
-).lstrip()  # type: str
+).lstrip() % dict(
+    _STANDARD_FONT_FAMILY=_STANDARD_FONT_FAMILY,
+)
 
+
+_CRYSTAL_APP_URL = 'https://dafoster.net/projects/crystal-web-archiver/'
+
+_CRYSTAL_APPICON_IMAGE_URL_REF = '/_/crystal/resources/appicon.png'
+_CRYSTAL_APPICON_IMAGE_URL = 'crystal://resources/appicon.png'
 
 _BASE_PAGE_HTML_TEMPLATE = dedent(
     """
@@ -3061,9 +3078,9 @@ _BASE_PAGE_HTML_TEMPLATE = dedent(
     <body class="cr-body">
         <div class="cr-body__container">
             <div class="cr-brand-header">
-                <a class="cr-brand-header__link" href="https://dafoster.net/projects/crystal-web-archiver/" target="_blank">
+                <a class="cr-brand-header__link" href="%(crystal_app_url)s" target="_blank">
                     <span class="cr-brand-header__logo" />
-                        <img src="/_/crystal/resources/appicon.png" alt="Crystal icon" class="cr-brand-header__logo--image" onerror="document.querySelector('.cr-brand-header__logo').classList.add('cr-brand-header__logo--error');" />
+                        <img src="%(appicon_image_url_ref)s" alt="Crystal icon" class="cr-brand-header__logo--image" onerror="document.querySelector('.cr-brand-header__logo').classList.add('cr-brand-header__logo--error');" />
                         <img src="%(appicon_fallback_image_url)s" alt="Crystal icon" class="cr-brand-header__logo--image_fallback" />
                     </span>
                     <div class="cr-brand-header__text">
