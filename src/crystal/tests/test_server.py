@@ -1126,7 +1126,7 @@ _PRINT_BANNER_OVERHEAD = True
 
 
 @awith_playwright
-async def test_when_serve_regular_page_then_footer_banner_appears_at_bottom_of_page_content(pw: Playwright) -> None:
+async def test_when_serve_regular_page_with_long_content_then_footer_banner_appears_at_bottom_of_page_content(pw: Playwright) -> None:
     # Serve a long page
     server = MockHttpServer({
         '/long-page': dict(
@@ -1195,6 +1195,93 @@ async def test_when_serve_regular_page_then_footer_banner_appears_at_bottom_of_p
                     final_banner_box = footer_banner.bounding_box()
                     assert final_banner_box is not None
                     assert final_banner_box['y'] < viewport_size['height']
+                await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_when_serve_regular_page_with_short_content_then_footer_banner_appears_pinned_to_bottom_of_browser_viewport(pw: Playwright) -> None:
+    # Serve a short page that will have a banner
+    mock_server = MockHttpServer({
+        '/short-page': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=dedent(
+                f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Short Page</title>
+                </head>
+                <body>
+                    <h1>Short Page Content</h1>
+                    <div>
+                        {LOREM_IPSUM_SHORT}
+                    </div>
+                </body>
+                </html>
+                """
+            ).strip().encode('utf-8')
+        )
+    })
+    with mock_server:
+        short_page_url = mock_server.get_url('/short-page')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the page
+            r = Resource(project, short_page_url)
+            revision_future = r.download(wait_for_embedded=True)
+            await wait_for_future(revision_future)
+            
+            # Serve the page
+            with closing(ProjectServer(project)) as project_server:
+                short_page_url_in_archive = project_server.get_request_url(short_page_url)
+                
+                # Verify banner is present in the served HTML
+                served_page = await fetch_archive_url(short_page_url)
+                assert served_page.status == 200
+                assert 'id="cr-footer-banner"' in served_page.content
+                assert 'This page was archived by Crystal' in served_page.content
+                
+                # Verify banner appears pinned to bottom of viewport and stacked on top
+                def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                    raw_page.goto(short_page_url_in_archive)
+                    
+                    # Ensure the banner exists and is visible
+                    footer_banner = raw_page.locator('#cr-footer-banner')
+                    expect(footer_banner).to_be_visible()
+                    expect(footer_banner).to_contain_text('This page was archived by Crystal')
+                    
+                    # Verify banner has non-zero dimensions
+                    banner_box = footer_banner.bounding_box()
+                    assert banner_box is not None
+                    assert banner_box['width'] > 0, \
+                        f"Banner width should be > 0, got {banner_box['width']}"
+                    assert banner_box['height'] > 0, \
+                        f"Banner height should be > 0, got {banner_box['height']}"
+                    
+                    # Verify banner Y coordinate is > 0 (visible in viewport)
+                    assert banner_box['y'] > 0, \
+                        f"Banner Y coordinate should be > 0, got {banner_box['y']}"
+                    
+                    # Verify banner is positioned at or very close to the bottom of the viewport
+                    viewport_size = raw_page.viewport_size
+                    assert viewport_size is not None
+                    viewport_bottom = viewport_size['height']
+                    banner_bottom = banner_box['y'] + banner_box['height']
+                    assert abs(banner_bottom - viewport_bottom) <= 10, \
+                        f"Banner should be at bottom of viewport. ' \
+                        f'Banner bottom: {banner_bottom}, Viewport bottom: {viewport_bottom}"
+                    
+                    # Verify banner is positioned fixed or absolute to stay at bottom
+                    banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
+                    position = banner_styles['position']
+                    assert position in ['fixed', 'absolute'], \
+                        f"Banner should be positioned fixed or absolute, got {position}"
+                    
+                    # Verify banner is stacked on top (has high z-index)
+                    z_index = banner_styles.get('zIndex', 'auto')
+                    assert z_index.isdigit() and int(z_index) >= 1000, \
+                        f"Banner should have high z-index for stacking, got {z_index}"
                 await pw.run(pw_task)
 
 
@@ -1889,7 +1976,8 @@ async def test_when_serve_page_with_all_floated_content_then_footer_banner_appea
                     
                     # Verify banner has the clear: both style to properly position after floated content
                     banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
-                    assert banner_styles['clear'] == 'both', f"Banner should have clear: both style, got {banner_styles['clear']}"
+                    assert banner_styles['clear'] == 'both', \
+                        f"Banner should have clear: both style, got {banner_styles['clear']}"
                     
                     # Verify banner is positioned after all the floated content
                     main_section = raw_page.locator('#main-section')
@@ -1979,18 +2067,19 @@ async def test_when_serve_page_with_all_absolute_positioned_content_then_footer_
                     viewport_bottom = viewport_size['height']
                     banner_bottom = banner_box['y'] + banner_box['height']
                     assert abs(banner_bottom - viewport_bottom) <= 10, \
-                        f"Banner should be at bottom of viewport. Banner bottom: {banner_bottom}, Viewport bottom: {viewport_bottom}"
-                    
-                    # Verify banner is stacked on top (has high z-index)
-                    banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
-                    z_index = banner_styles.get('zIndex', 'auto')
-                    assert z_index.isdigit() and int(z_index) >= 1000, \
-                        f"Banner should have high z-index for stacking, got {z_index}"
+                        f"Banner should be at bottom of viewport. ' \
+                        f'Banner bottom: {banner_bottom}, Viewport bottom: {viewport_bottom}"
                     
                     # Verify banner is positioned fixed or absolute to stay at bottom
+                    banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
                     position = banner_styles['position']
                     assert position in ['fixed', 'absolute'], \
                         f"Banner should be positioned fixed or absolute, got {position}"
+                    
+                    # Verify banner is stacked on top (has high z-index)
+                    z_index = banner_styles.get('zIndex', 'auto')
+                    assert z_index.isdigit() and int(z_index) >= 1000, \
+                        f"Banner should have high z-index for stacking, got {z_index}"
                 await pw.run(pw_task)
 
 

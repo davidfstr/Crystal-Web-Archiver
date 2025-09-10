@@ -556,7 +556,7 @@ class HtmlDocument(Document):
             
             // If banner too high on page, pin to bottom of viewport
             const aRect = a.getBoundingClientRect();
-            const bannerTooHigh = (aRect.y < aRect.height);
+            const bannerTooHigh = (aRect.y < window.innerHeight - aRect.height);
             if (bannerTooHigh) {
                 // Pin to bottom of viewport
                 a.style['position'] = 'fixed';
