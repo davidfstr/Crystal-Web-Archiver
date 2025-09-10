@@ -1167,7 +1167,7 @@ async def test_when_serve_regular_page_with_long_content_then_footer_banner_appe
                 served_page = await fetch_archive_url(long_page_url)
                 assert served_page.status == 200
                 assert 'id="cr-footer-banner"' in served_page.content
-                assert 'This page was archived by Crystal' in served_page.content
+                assert HtmlDocument._FOOTER_BANNER_MESSAGE in served_page.content
                 
                 # Verify banner is visible only after scrolling to bottom of page
                 def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
@@ -1177,7 +1177,7 @@ async def test_when_serve_regular_page_with_long_content_then_footer_banner_appe
                     footer_banner = raw_page.locator('#cr-footer-banner')
                     expect(footer_banner).to_be_visible()
                     expect(footer_banner).to_contain_text(
-                        'This page was archived by Crystal')
+                        HtmlDocument._FOOTER_BANNER_MESSAGE)
                     
                     # Ensure the banner is not initially visible,
                     # before scrolling the page content
@@ -1240,7 +1240,7 @@ async def test_when_serve_regular_page_with_short_content_then_footer_banner_app
                 served_page = await fetch_archive_url(short_page_url)
                 assert served_page.status == 200
                 assert 'id="cr-footer-banner"' in served_page.content
-                assert 'This page was archived by Crystal' in served_page.content
+                assert HtmlDocument._FOOTER_BANNER_MESSAGE in served_page.content
                 
                 # Verify banner appears pinned to bottom of viewport and stacked on top
                 def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
@@ -1249,7 +1249,7 @@ async def test_when_serve_regular_page_with_short_content_then_footer_banner_app
                     # Ensure the banner exists and is visible
                     footer_banner = raw_page.locator('#cr-footer-banner')
                     expect(footer_banner).to_be_visible()
-                    expect(footer_banner).to_contain_text('This page was archived by Crystal')
+                    expect(footer_banner).to_contain_text(HtmlDocument._FOOTER_BANNER_MESSAGE)
                     
                     # Verify banner has non-zero dimensions
                     banner_box = footer_banner.bounding_box()
@@ -1355,7 +1355,7 @@ async def test_when_serve_iframe_then_footer_banner_does_not_appear_at_bottom_of
                     # Ensure banner exists at bottom of main page
                     main_banner = raw_page.locator('#cr-footer-banner')
                     expect(main_banner).to_be_visible()
-                    expect(main_banner).to_contain_text('This page was archived by Crystal')
+                    expect(main_banner).to_contain_text(HtmlDocument._FOOTER_BANNER_MESSAGE)
                     
                     # Wait for iframe to load
                     iframe = raw_page.locator('#test-iframe')
@@ -1503,7 +1503,7 @@ async def test_when_serve_frameset_page_then_footer_banner_appears_at_bottom_of_
                         assert body_frame is not None
                         body_banner = body_frame.locator('#cr-footer-banner')
                         expect(body_banner).to_be_visible()
-                        expect(body_banner).to_contain_text('This page was archived by Crystal')
+                        expect(body_banner).to_contain_text(HtmlDocument._FOOTER_BANNER_MESSAGE)
                     await pw.run(pw_task)
     
     # Case 2:
@@ -1635,7 +1635,7 @@ async def test_when_serve_frameset_page_then_footer_banner_appears_at_bottom_of_
                         assert screen_frame is not None
                         screen_banner = screen_frame.locator('#cr-footer-banner')
                         expect(screen_banner).to_be_visible()
-                        expect(screen_banner).to_contain_text('This page was archived by Crystal')
+                        expect(screen_banner).to_contain_text(HtmlDocument._FOOTER_BANNER_MESSAGE)
                     await pw.run(pw_task)
     
     # Case 3:
@@ -1906,7 +1906,7 @@ async def test_when_serve_frameset_page_then_footer_banner_appears_at_bottom_of_
                         pictures_frame = main_frame.frame_locator('frame[name="pictures"]').first
                         pictures_banner = pictures_frame.locator('#cr-footer-banner')
                         expect(pictures_banner).to_be_visible()
-                        expect(pictures_banner).to_contain_text('This page was archived by Crystal')
+                        expect(pictures_banner).to_contain_text(HtmlDocument._FOOTER_BANNER_MESSAGE)
                     await pw.run(pw_task)
 
 
@@ -1957,7 +1957,7 @@ async def test_when_serve_page_with_all_floated_content_then_footer_banner_appea
                 served_page = await fetch_archive_url(floated_page_url)
                 assert served_page.status == 200
                 assert 'id="cr-footer-banner"' in served_page.content
-                assert 'This page was archived by Crystal' in served_page.content
+                assert HtmlDocument._FOOTER_BANNER_MESSAGE in served_page.content
                 
                 # Verify banner appears correctly at bottom of page with floated content
                 def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
@@ -1966,7 +1966,7 @@ async def test_when_serve_page_with_all_floated_content_then_footer_banner_appea
                     # Ensure the banner exists and is visible
                     footer_banner = raw_page.locator('#cr-footer-banner')
                     expect(footer_banner).to_be_visible()
-                    expect(footer_banner).to_contain_text('This page was archived by Crystal')
+                    expect(footer_banner).to_contain_text(HtmlDocument._FOOTER_BANNER_MESSAGE)
                     
                     # Verify banner has non-zero dimensions
                     banner_box = footer_banner.bounding_box()
@@ -2038,7 +2038,7 @@ async def test_when_serve_page_with_all_absolute_positioned_content_then_footer_
                 served_page = await fetch_archive_url(absolute_page_url)
                 assert served_page.status == 200
                 assert 'id="cr-footer-banner"' in served_page.content
-                assert 'This page was archived by Crystal' in served_page.content
+                assert HtmlDocument._FOOTER_BANNER_MESSAGE in served_page.content
                 
                 # Verify banner appears pinned to bottom of viewport and stacked on top
                 def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
@@ -2047,7 +2047,7 @@ async def test_when_serve_page_with_all_absolute_positioned_content_then_footer_
                     # Ensure the banner exists and is visible
                     footer_banner = raw_page.locator('#cr-footer-banner')
                     expect(footer_banner).to_be_visible()
-                    expect(footer_banner).to_contain_text('This page was archived by Crystal')
+                    expect(footer_banner).to_contain_text(HtmlDocument._FOOTER_BANNER_MESSAGE)
                     
                     # Verify banner has non-zero dimensions
                     banner_box = footer_banner.bounding_box()
@@ -2140,7 +2140,7 @@ async def test_when_serve_regular_page_and_branding_logo_cannot_load_then_hides_
                     served_page = await fetch_archive_url(simple_page_url)
                     assert served_page.status == 200
                     assert 'id="cr-footer-banner"' in served_page.content
-                    assert 'This page was archived by Crystal' in served_page.content
+                    assert HtmlDocument._FOOTER_BANNER_MESSAGE in served_page.content
                     
                     # Verify logo is hidden in browser due to onerror handler
                     def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
@@ -2150,7 +2150,7 @@ async def test_when_serve_regular_page_and_branding_logo_cannot_load_then_hides_
                         footer_banner = raw_page.locator('#cr-footer-banner')
                         expect(footer_banner).to_be_visible()
                         expect(footer_banner).to_contain_text(
-                            'This page was archived by Crystal')
+                            HtmlDocument._FOOTER_BANNER_MESSAGE)
                         
                         # Ensure the logo img element exists but is hidden due to onerror
                         logo_img = footer_banner.locator('img')
@@ -2203,7 +2203,7 @@ async def test_footer_banner_does_not_add_more_than_X_bytes_of_overhead_to_page(
                 served_page_with_banner = await fetch_archive_url(simple_page_url)
                 assert served_page_with_banner.status == 200
                 assert 'id="cr-footer-banner"' in served_page_with_banner.content
-                assert 'This page was archived by Crystal' in served_page_with_banner.content
+                assert HtmlDocument._FOOTER_BANNER_MESSAGE in served_page_with_banner.content
                 page_size_with_banner = len(served_page_with_banner.content_bytes)
             
             # Serve the page and measure size without banner
@@ -2212,7 +2212,7 @@ async def test_footer_banner_does_not_add_more_than_X_bytes_of_overhead_to_page(
                     served_page_without_banner = await fetch_archive_url(simple_page_url)
                     assert served_page_without_banner.status == 200
                     assert 'id="cr-footer-banner"' not in served_page_without_banner.content
-                    assert 'This page was archived by Crystal' not in served_page_without_banner.content
+                    assert HtmlDocument._FOOTER_BANNER_MESSAGE not in served_page_without_banner.content
                     page_size_without_banner = len(served_page_without_banner.content_bytes)
             
             # Calculate overhead

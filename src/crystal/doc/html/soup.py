@@ -585,10 +585,12 @@ class HtmlDocument(Document):
     def _FOOTER_BANNER_JS(cls) -> str:
         return minify_js(cls._FOOTER_BANNER_UNMINIFIED_JS)
     
+    _FOOTER_BANNER_MESSAGE = 'This page was archived with Crystal'
+    
     def try_insert_footer_banner(self, get_request_url: Callable[[str], str]) -> bool:
         """
         Tries to insert a banner at the document footer declaring that
-        the current page was archived by Crystal.
+        the current page was archived with Crystal.
         """
         def create_footer_banner(html: FastSoup) -> Tag:
             from crystal.server import (
@@ -612,7 +614,7 @@ class HtmlDocument(Document):
             html.tag_attrs(img)['onerror'] = "this.style['display'] = 'none';"
             html.tag_append(a, img)
             
-            span = html.new_tag('span', text_content='This page was archived by Crystal')
+            span = html.new_tag('span', text_content=self._FOOTER_BANNER_MESSAGE)
             html.tag_append(a, span)
             
             script = html.new_tag('script', text_content=self._FOOTER_BANNER_JS())
