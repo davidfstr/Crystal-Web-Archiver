@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.ssd import database_on_ssd
@@ -604,6 +605,25 @@ def _served_simple_site_with_group() -> Iterator[tuple[str, str]]:
         comic_pattern = server.get_url('/**')
         
         yield (home_url, comic_pattern)
+
+
+# === Test: Copy ===
+
+async def test_when_press_copy_then_copies_url_pattern() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            test_pattern = 'https://example.com/post/*'
+            
+            click_button(mw.new_group_button)
+            ngd = await NewGroupDialog.wait_for()
+            
+            ngd.pattern_field.Value = test_pattern
+            
+            with FakeClipboard() as clipboard:
+                click_button(ngd.copy_button)
+                assertEqual(test_pattern, clipboard.text)
+            
+            await ngd.cancel()
 
 
 # === Utility ===

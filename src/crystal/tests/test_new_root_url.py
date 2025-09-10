@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager, contextmanager
 from crystal.browser.new_root_url import fields_hide_hint_when_focused
 from crystal.model import Project, Resource, RootResource
 from crystal.task import DownloadResourceGroupTask
-from crystal.tests.util.asserts import *
+from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.subtests import (
@@ -1148,6 +1149,63 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 assertEqual(True, nud.name_field.Enabled)
                 assertEqual(True, nud.ok_button.Enabled)
                 assertEqual(True, nud.cancel_button.Enabled)
+
+
+# === Test: Copy ===
+
+async def test_given_clean_url_in_url_field_when_press_copy_then_copies_clean_url() -> None:
+    with _urlopen_responding_with({'example.com': _UrlOpenHttpResponse(code=200, url='example.com')}):
+        with served_project('testdata_xkcd.crystalproj.zip') as sp:
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                clean_url = 'https://example.com/'
+                
+                click_button(mw.new_root_url_button)
+                nrud = await NewRootUrlDialog.wait_for()
+                
+                nrud.url_field.SetFocus()
+                nrud.url_field.Value = clean_url
+                
+                with FakeClipboard() as clipboard:
+                    nrud.copy_button.SetFocus()
+                    click_button(nrud.copy_button)
+                    
+                    await wait_for(
+                        lambda: nrud.url_cleaning_complete(clean_url) or None,
+                        timeout=2.0)
+                    
+                    await wait_for(
+                        lambda: (clipboard.text == clean_url) or None,
+                        timeout=2.0)
+                
+                await nrud.cancel()
+
+
+async def test_given_unclean_url_in_url_field_when_press_copy_then_waits_for_url_to_finish_cleaning_and_copies_clean_url() -> None:
+    with _urlopen_responding_with({'example.com': _UrlOpenHttpResponse(code=200, url='example.com')}):
+        with served_project('testdata_xkcd.crystalproj.zip') as sp:
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                unclean_url = 'example.com'
+                expected_clean_url = 'https://example.com/'
+                
+                click_button(mw.new_root_url_button)
+                nrud = await NewRootUrlDialog.wait_for()
+                
+                nrud.url_field.SetFocus()
+                nrud.url_field.Value = unclean_url
+                
+                with FakeClipboard() as clipboard:
+                    nrud.copy_button.SetFocus()
+                    click_button(nrud.copy_button)
+                    
+                    await wait_for(
+                        lambda: nrud.url_cleaning_complete(expected_clean_url) or None,
+                        timeout=2.0)
+                    
+                    await wait_for(
+                        lambda: (clipboard.text == expected_clean_url) or None,
+                        timeout=2.0)
+                
+                await nrud.cancel()
 
 
 # === Utility ===

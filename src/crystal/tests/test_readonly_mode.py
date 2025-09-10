@@ -8,6 +8,7 @@ from crystal.tests.test_untitled_projects import (
     _untitled_project,
 )
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual
+from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import TreeItem, click_button
 from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.save_as import save_as_with_ui
@@ -332,6 +333,54 @@ async def test_given_readonly_project_then_edit_button_titled_get_info_and_when_
                     assert ngd.cancel_button is not None
                     assert ngd.ok_button is None
                     
+                    await ngd.cancel()
+
+
+async def test_given_readonly_project_and_get_info_button_pressed_then_copy_button_is_visible_and_works() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        comic_pattern = 'https://xkcd.com/#/'
+        
+        # Open project as readonly
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
+            assert mw.readonly == True
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            
+            # Test: RootResource
+            if True:
+                home_url = 'https://xkcd.com/'
+                home_ti = root_ti.find_child(home_url)
+                home_ti.SelectItem()
+                
+                # Click Get Info button to open dialog
+                click_button(mw.edit_button)
+                nrud = await NewRootUrlDialog.wait_for()
+                try:
+                    with FakeClipboard() as clipboard:
+                        original_label = nrud.copy_button.Label
+                        click_button(nrud.copy_button)
+                        assert nrud.copy_button.Label in [original_label, '✓'], \
+                            "Copy button should respond to click"
+                        assertEqual(home_url, clipboard.text)
+                finally:
+                    await nrud.cancel()
+            
+            # Test: ResourceGroup
+            if True:
+                comic_ti = root_ti.find_child(comic_pattern)
+                comic_ti.SelectItem()
+                
+                # Click Get Info button to open dialog
+                click_button(mw.edit_button)
+                ngd = await NewGroupDialog.wait_for()
+                try:
+                    with FakeClipboard() as clipboard:
+                        original_label = ngd.copy_button.Label
+                        click_button(ngd.copy_button)
+                        assert ngd.copy_button.Label in [original_label, '✓'], \
+                            "Copy button should respond to click"
+                        assertEqual(comic_pattern, clipboard.text)
+                finally:
                     await ngd.cancel()
 
 

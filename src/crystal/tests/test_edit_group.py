@@ -1,4 +1,6 @@
 from crystal.model import Project, ResourceGroup
+from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.server import extracted_project
 from crystal.tests.util.wait import (
@@ -192,3 +194,22 @@ async def test_given_editing_group_when_select_self_as_source_and_press_save_the
 @skip('covered by: test_can_edit_source_of_group')
 async def test_given_editing_group_when_select_source_that_would_create_cycle_and_press_save_then_shows_error_dialog() -> None:
     pass
+
+
+async def test_can_copy_url_pattern() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        comic_pattern = 'https://xkcd.com/#/'
+        
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            comic_ti = root_ti.find_child(comic_pattern)
+            comic_ti.SelectItem()
+            
+            click_button(mw.edit_button)
+            ngd = await NewGroupDialog.wait_for()
+            
+            with FakeClipboard() as clipboard:
+                click_button(ngd.copy_button)
+                assertEqual(comic_pattern, clipboard.text)
+            
+            await ngd.cancel()

@@ -1,4 +1,6 @@
 from crystal.model import Project, ResourceGroup
+from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.server import extracted_project
 from crystal.tests.util.wait import (
@@ -95,3 +97,22 @@ async def test_can_edit_name_of_root_url() -> None:
 @skip('covered by: test_can_edit_name_of_root_url')
 async def test_cannot_edit_url_of_root_url() -> None:
     pass
+
+
+async def test_can_copy_url() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        home_url = 'https://xkcd.com/'
+        
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.find_child(home_url)
+            home_ti.SelectItem()
+            
+            click_button(mw.edit_button)
+            nrud = await NewRootUrlDialog.wait_for()
+            
+            with FakeClipboard() as clipboard:
+                click_button(nrud.copy_button)
+                assertEqual(home_url, clipboard.text)
+            
+            await nrud.cancel()

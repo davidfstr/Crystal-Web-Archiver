@@ -8,6 +8,7 @@ from crystal.model import Project, ResourceGroup, ResourceGroupSource
 from crystal.progress import CancelLoadUrls
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
+from crystal.util.wx_clipboard import create_copy_button
 from crystal.util.wx_dialog import (
     CreateButtonSizer, add_title_heading_to_dialog_if_needed, 
     position_dialog_initially, ShowModal, ShowWindowModal,
@@ -63,6 +64,7 @@ class NewGroupDialog:
         self._saving_source_would_create_cycle_func = saving_source_would_create_cycle_func
         self._is_edit = is_edit
         self._readonly = readonly
+        self._is_destroying_or_destroyed = False
         
         # Show progress dialog in advance if will need to load all project URLs
         try:
@@ -85,6 +87,7 @@ class NewGroupDialog:
         dialog.SetSizer(dialog_sizer)
         bind(dialog, wx.EVT_BUTTON, self._on_button)
         bind(dialog, wx.EVT_CLOSE, self._on_close)
+        bind(dialog, wx.EVT_WINDOW_DESTROY, self._on_destroyed)
         
         content_sizer = wx.BoxSizer(wx.VERTICAL)
         content_sizer.Add(
@@ -154,6 +157,10 @@ class NewGroupDialog:
         fields_sizer.AddGrowableCol(1)
         
         pattern_field_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Create horizontal sizer for pattern field and copy button
+        pattern_field_and_copy = wx.BoxSizer(wx.HORIZONTAL)
+        
         self.pattern_field = wx.TextCtrl(
             parent, value=initial_url_pattern,
             size=(self._INITIAL_URL_PATTERN_WIDTH, wx.DefaultCoord),
@@ -162,7 +169,16 @@ class NewGroupDialog:
         self.pattern_field.Hint = 'https://example.com/post/*'
         self.pattern_field.SetSelection(-1, -1)  # select all upon focus
         self.pattern_field.Enabled = not is_edit and not self._readonly
-        pattern_field_sizer.Add(self.pattern_field, flag=wx.EXPAND)
+        pattern_field_and_copy.Add(self.pattern_field, proportion=1, flag=wx.EXPAND)
+        
+        copy_button = create_copy_button(
+            parent,
+            name='cr-new-group-dialog__pattern-copy-button',
+            text_to_copy=lambda: self.pattern_field.Value,
+            parent_is_disposed=lambda: self._is_destroying_or_destroyed)
+        pattern_field_and_copy.Add(copy_button, flag=wx.LEFT|wx.CENTER, border=5)
+        
+        pattern_field_sizer.Add(pattern_field_and_copy, flag=wx.EXPAND)
         pattern_field_sizer.Add(wx.StaticText(parent, label='# = numbers, @ = letters, * = anything but /, ** = anything'), flag=wx.EXPAND)
         
         pattern_label = wx.StaticText(parent, label='URL Pattern:', style=wx.ALIGN_RIGHT|wx.ALIGN_TOP)
@@ -478,6 +494,10 @@ class NewGroupDialog:
     @fg_affinity
     def _on_close(self, event: wx.CloseEvent) -> None:
         self._on_cancel()
+    
+    @fg_affinity
+    def _on_destroyed(self, event) -> None:
+        self._is_destroying_or_destroyed = True
     
     @fg_affinity
     def _on_ok(self) -> None:

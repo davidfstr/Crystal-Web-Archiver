@@ -4,6 +4,7 @@ from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.test_mode import tests_are_running
 from crystal.util.wx_bind import bind
+from crystal.util.wx_clipboard import create_copy_button
 from crystal.util.wx_dialog import (
     CreateButtonSizer, add_title_heading_to_dialog_if_needed, 
     position_dialog_initially, ShowModal, ShowWindowModal,
@@ -88,7 +89,7 @@ class NewRootUrlDialog:
         self._readonly = readonly
         
         self._url_field_focused = False
-        self._last_cleaned_url = None  # type: Optional[str]
+        self._last_cleaned_url = initial_url if is_edit else None  # type: Optional[str]
         self._url_cleaner = None  # type: Optional[UrlCleaner]
         self._was_ok_pressed = False
         self._is_destroying_or_destroyed = False
@@ -203,6 +204,17 @@ class NewRootUrlDialog:
                 bind(self._url_field, wx.EVT_SET_FOCUS, self._on_url_field_focus)
                 bind(self._url_field, wx.EVT_KILL_FOCUS, self._on_url_field_blur)
                 url_field_and_spinner.Add(self._url_field, proportion=1, flag=wx.EXPAND)
+                
+                copy_button = create_copy_button(
+                    parent,
+                    name='cr-new-root-url-dialog__url-copy-button',
+                    text_to_copy=lambda: (
+                        self._url_field.Value
+                        if self._url_field.Value == self._last_cleaned_url
+                        else None  # not ready to copy yet
+                    ),
+                    parent_is_disposed=lambda: self._is_destroying_or_destroyed)
+                url_field_and_spinner.Add(copy_button, flag=wx.LEFT|wx.CENTER, border=self._FIELD_TO_SPINNER_MARGIN)
                 
                 spinner_diameter = self._url_field.Size.Height
                 self.url_cleaner_spinner = wx.ActivityIndicator(

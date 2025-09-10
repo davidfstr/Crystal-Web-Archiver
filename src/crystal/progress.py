@@ -48,7 +48,7 @@ class _AbstractProgressDialog:
     def __enter__(self) -> Self:
         return self
     
-    def __exit__(self, tp, value, tb) -> None:
+    def __exit__(self, *args) -> None:
         self.reset()
     
     # === Utility ===

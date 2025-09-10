@@ -34,6 +34,8 @@ Release Notes ⋮
       logout, restart, or shutdown.
     * The Download button is now closer to the View button,
       to make them easier to use together.
+    * A copy button is added beside the URL and URL Pattern fields when editing
+      root URLs and groups.
 
 * Branding changes
     * Crystal is now known as "Crystal: A Website Archiver" in long form.

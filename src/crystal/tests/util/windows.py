@@ -513,6 +513,7 @@ class NewRootUrlDialog:
     _dialog: wx.Dialog
     _controller: RealNewRootUrlDialog
     url_field: wx.TextCtrl
+    copy_button: wx.Button  # or None
     url_cleaner_spinner: wx.ActivityIndicator
     name_field: wx.TextCtrl
     ok_button: wx.Button  # or None
@@ -534,6 +535,8 @@ class NewRootUrlDialog:
         self._controller = RealNewRootUrlDialog._last_opened
         self.url_field = self._dialog.FindWindow(name='cr-new-root-url-dialog__url-field')
         assert isinstance(self.url_field, wx.TextCtrl)
+        self.copy_button = self._dialog.FindWindow(name='cr-new-root-url-dialog__url-copy-button')
+        assert isinstance(self.copy_button, wx.Button)
         self.url_cleaner_spinner = self._dialog.FindWindow(name='cr-new-root-url-dialog__url-cleaner-spinner')
         assert isinstance(self.url_cleaner_spinner, wx.ActivityIndicator)
         self.name_field = self._dialog.FindWindow(name='cr-new-root-url-dialog__name-field')
@@ -572,6 +575,8 @@ class NewRootUrlDialog:
     def __init__(self, *, _ready: bool=False) -> None:
         assert _ready, 'Did you mean to use NewRootUrlDialog.wait_for()?'
     
+    # === Properties ===
+    
     @property
     def shown(self) -> bool:
         if self._controller._is_destroying_or_destroyed:
@@ -581,6 +586,10 @@ class NewRootUrlDialog:
     @property
     def url_field_focused(self) -> bool:
         return self._controller._url_field_focused
+    
+    def url_cleaning_complete(self, clean_url: str) -> bool:
+        """Returns whether the URL cleaning process is complete."""
+        return self._controller._last_cleaned_url == clean_url
     
     @property
     def new_options_shown(self) -> bool:
@@ -638,6 +647,7 @@ class NewGroupDialog:
     
     _dialog: wx.Dialog
     name_field: wx.TextCtrl
+    copy_button: wx.Button
     pattern_field: wx.TextCtrl
     source_field: wx.Choice
     preview_members_pane: wx.CollapsiblePane | None
@@ -660,6 +670,8 @@ class NewGroupDialog:
         assert isinstance(self._dialog, wx.Dialog)
         self.name_field = self._dialog.FindWindow(name='cr-new-group-dialog__name-field')
         assert isinstance(self.name_field, wx.TextCtrl)
+        self.copy_button = self._dialog.FindWindow(name='cr-new-group-dialog__pattern-copy-button')
+        assert isinstance(self.copy_button, wx.Button)
         self.pattern_field = self._dialog.FindWindow(name='cr-new-group-dialog__pattern-field')
         assert isinstance(self.pattern_field, wx.TextCtrl)
         self.source_field = self._dialog.FindWindow(name='cr-new-group-dialog__source-field')

@@ -696,7 +696,7 @@ class MainWindow(CloakMixin):
     def __enter__(self) -> 'MainWindow':
         return self
     
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+    def __exit__(self, *args) -> None:
         self.close()
     
     # === Project: Events ===

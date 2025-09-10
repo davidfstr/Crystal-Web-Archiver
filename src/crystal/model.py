@@ -2504,7 +2504,7 @@ class Project(ListenableMixin):
     def __enter__(self) -> Self:
         return self
     
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+    def __exit__(self, *args) -> None:
         self.close()
 
 

@@ -152,7 +152,7 @@ class MockHttpServer:
     def __enter__(self) -> MockHttpServer:
         return self
     
-    def __exit__(self, exc_type, exc_value, exc_traceback) -> None:
+    def __exit__(self, *args) -> None:
         self.close()
 
 
