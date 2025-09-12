@@ -45,7 +45,14 @@ _QUOTED_HTTP_LINK_RE = re.compile(
 )
 ABSOLUTE_HTTP_LINK_RE = re.compile(r'''(?i)^(https?://.+)$''')
 
-PROBABLE_EMBEDDED_URL_RE = re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)(?:\?[^/?]*)?$')
+# Matches URLs that are likely to refer to an embedded resource
+PROBABLE_EMBEDDED_URL_RE = \
+    re.compile(r'(?i)\.(gif|jpe?g|png|svg|js|css)(?:\?[^/?]*)?$')
+
+# Matches URLs that are likely to refer to an embedded resource,
+# that cannot itself contain document-relative links
+PROBABLE_EMBEDDED_URL_WITHOUT_DOCUMENT_RELATIVE_LINKS_RE = \
+    re.compile(r'(?i)\.(gif|jpe?g|png|svg|js)(?:\?[^/?]*)?$')
 
 
 @dataclass
