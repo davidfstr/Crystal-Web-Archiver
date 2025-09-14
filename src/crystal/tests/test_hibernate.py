@@ -1,10 +1,13 @@
 from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, redirect_stderr
+from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import Project, Resource, ResourceGroup, RootResource
+import crystal.task
 from crystal.task import (
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
     DownloadResourceTask,
 )
+from crystal.tests.util.asserts import assertEqual, assertNotIn
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import (
@@ -16,9 +19,13 @@ from crystal.tests.util.tasks import (
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal
+from crystal.util.xtyping import not_none
+from io import StringIO
 from unittest.mock import patch
 import wx
 
+
+# === Tests: Reopen Project ===
 
 async def test_when_reopen_project_given_resource_group_was_downloading_then_resumes_downloading() -> None:
     # ...starting from correct member
@@ -240,6 +247,8 @@ async def test_when_reopen_project_as_readonly_then_does_not_resume_downloading(
             assert isinstance(comic1_dr_task, DownloadResourceTask)
 
 
+# === Tests: Close Project + Resume Data ===
+
 async def test_when_close_project_abruptly_and_reopen_project_with_stale_resume_data_then_resume_ignores_invalid_data() -> None:
     with scheduler_disabled(), served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
@@ -368,6 +377,73 @@ async def test_while_project_open_then_periodically_saves_resume_data_so_that_ca
                 append_deferred_top_level_tasks(project)
                 (comic1_dr_task,) = project.root_task.children
                 assert isinstance(comic1_dr_task, DownloadResourceTask)
+
+
+# === Tests: Close Project + Special Situations ===
+
+async def test_given_download_resource_task_running_when_close_project_then_drt_cancels_without_delay() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        comic_url = sp.get_request_url('https://xkcd.com/1/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            rmw = RealMainWindow._last_created
+            assert rmw is not None
+            
+            # Create and start download task
+            comic_rr = RootResource(project, '', Resource(project, comic_url))
+            comic_rr.download()
+            
+            append_deferred_top_level_tasks(project)
+            (comic_dr_task,) = project.root_task.children
+            assert isinstance(comic_dr_task, DownloadResourceTask)
+            
+            # Step scheduler until about to complete the last child
+            # of the DownloadResourceTask
+            while True:
+                if not not_none(comic_dr_task._download_body_task).complete:
+                    # Step until _download_body_task is complete
+                    pass
+                elif not not_none(comic_dr_task._parse_links_task).complete:
+                    # Step until _parse_links_task is complete
+                    pass
+                else:
+                    # Stop until all but the last child is complete
+                    child_tasks = comic_dr_task.children
+                    if child_tasks[-2].complete and not child_tasks[-1].complete:
+                        break
+                await step_scheduler(project)
+            
+            # Close the window, cancelling the last child of the DownloadResourceTask,
+            # hopefully triggering this logic:
+            # 
+            #     self.subtitle = 'Waiting before performing next request...'  # ⭐ WANT
+            #     if task.cancelled:
+            #         # Download did not actually finish. Do not wait.
+            #         pass  # ⭐ WANT
+            #     else:
+            #         if is_foreground_thread():
+            #             raise AssertionError(...)  # ⚠️ do not want
+            #         sleep(DELAY_BETWEEN_DOWNLOADS)  # ⚠️ do not want
+            with patch('crystal.task.sleep', wraps=crystal.task.sleep) as spy_sleep, \
+                    patch.object(
+                        comic_dr_task, 'child_task_did_complete',
+                        wraps=comic_dr_task.child_task_did_complete
+                        ) as spy_child_task_did_complete, \
+                    patch.object(
+                        comic_dr_task, '_set_subtitle',
+                        wraps=comic_dr_task._set_subtitle
+                        ) as spy_set_subtitle, \
+                    redirect_stderr(StringIO()) as captured_stderr:
+                rmw.close()
+                
+                assert spy_child_task_did_complete.call_count >= 1
+                spy_set_subtitle.assert_any_call('Waiting before performing next request...')
+                assertEqual(0, spy_sleep.call_count)
+                assertNotIn('AssertionError', captured_stderr.getvalue())
+                
+                assert comic_dr_task.complete
 
 
 # === Utility ===

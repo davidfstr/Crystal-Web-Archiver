@@ -231,7 +231,11 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         for lis in self.listeners:
             if hasattr(lis, 'task_subtitle_did_change'):
                 run_bulkhead_call(lis.task_subtitle_did_change, self)  # type: ignore[attr-defined]
-    subtitle = property(_get_subtitle, _set_subtitle)
+    subtitle = property(
+        _get_subtitle,
+        # HACK: Allow _set_subtitle to be patched by automated tests
+        lambda self, value: self._set_subtitle(value)
+    )
     
     # TODO: Alter parent tracking to support multiple parents,
     #       since in truth a Task can already have multiple parents,
@@ -1348,8 +1352,17 @@ class DownloadResourceTask(Task['ResourceRevision']):
                     self._download_body_task is not None and
                     self._download_body_task.did_download):
                 self.subtitle = 'Waiting before performing next request...'
-                assert not is_foreground_thread()
-                sleep(DELAY_BETWEEN_DOWNLOADS)
+                if task.cancelled:
+                    # Download did not actually finish. Do not wait.
+                    pass
+                else:
+                    if is_foreground_thread():
+                        raise AssertionError(
+                            'DownloadResourceTask.child_task_did_complete() '
+                            'called unexpectedly on foreground thread. '
+                            'Cannot safely wait between downloads without '
+                            'blocking the foreground thread.')
+                    sleep(DELAY_BETWEEN_DOWNLOADS)
             
             self.finish()
     
