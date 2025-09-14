@@ -10,6 +10,7 @@ from crystal.task import (
 from crystal.tests.util.asserts import assertEqual, assertNotIn
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
+from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
     scheduler_disabled,
@@ -444,6 +445,173 @@ async def test_given_download_resource_task_running_when_close_project_then_drt_
                 assertNotIn('AssertionError', captured_stderr.getvalue())
                 
                 assert comic_dr_task.complete
+
+
+@awith_subtests
+async def test_given_download_resource_task_running_at_any_step_when_close_project_then_drt_cancels_without_error(subtests: SubtestsContext) -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        comic_url = sp.get_request_url('https://xkcd.com/1/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create and start download task
+            comic_rr = RootResource(project, '', Resource(project, comic_url))
+            comic_rr.download()
+            
+            append_deferred_top_level_tasks(project)
+            (comic_dr_task,) = project.root_task.children
+            assert isinstance(comic_dr_task, DownloadResourceTask)
+            
+            # Step scheduler until DownloadResourceTask is complete,
+            # counting the number of steps required
+            drt_step_count = 0
+            while not comic_dr_task.complete:
+                await step_scheduler(project)
+                drt_step_count += 1
+            await step_scheduler(project, expect_done=True)
+        
+        for n in range(drt_step_count + 1):
+            print(f'Testing cancel after {n}/{drt_step_count} step(s)')
+            with subtests.test(cancel_after_n_steps=n):
+                async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                    rmw = RealMainWindow._last_created
+                    assert rmw is not None
+                    
+                    # Create and start download task
+                    comic_rr = RootResource(project, '', Resource(project, comic_url))
+                    comic_rr.download()
+                    
+                    append_deferred_top_level_tasks(project)
+                    (comic_dr_task,) = project.root_task.children
+                    assert isinstance(comic_dr_task, DownloadResourceTask)
+                    
+                    for _ in range(n):
+                        await step_scheduler(project)
+                    
+                    with redirect_stderr(StringIO()) as captured_stderr:
+                        rmw.close()
+                        assertNotIn('Traceback', captured_stderr.getvalue())
+                        assert comic_dr_task.complete
+
+
+@awith_subtests
+async def test_given_download_resource_group_task_without_source_running_at_any_step_when_close_project_then_drgt_cancels_without_error(subtests: SubtestsContext) -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+        feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create RootResources for the feeds
+            atom_feed_rr = RootResource(project, '', Resource(project, atom_feed_url))
+            rss_feed_rr = RootResource(project, '', Resource(project, rss_feed_url))
+            
+            # Create and start download ResourceGroup task
+            feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+            feed_g.download()
+            
+            append_deferred_top_level_tasks(project)
+            (feed_drg_task,) = project.root_task.children
+            assert isinstance(feed_drg_task, DownloadResourceGroupTask)
+            
+            # Step scheduler until DownloadResourceGroupTask is complete,
+            # counting the number of steps required
+            drgt_step_count = 0
+            while not feed_drg_task.complete:
+                await step_scheduler(project)
+                drgt_step_count += 1
+            await step_scheduler(project, expect_done=True)
+        
+        for n in range(drgt_step_count + 1):
+            print(f'Testing cancel after {n}/{drgt_step_count} step(s)')
+            with subtests.test(cancel_after_n_steps=n):
+                async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                    rmw = RealMainWindow._last_created
+                    assert rmw is not None
+                    
+                    # Create RootResources for the feeds
+                    atom_feed_rr = RootResource(project, '', Resource(project, atom_feed_url))
+                    rss_feed_rr = RootResource(project, '', Resource(project, rss_feed_url))
+                    
+                    # Create and start download ResourceGroup task
+                    feed_g = ResourceGroup(project, '', feed_pattern, source=None)
+                    feed_g.download()
+                    
+                    append_deferred_top_level_tasks(project)
+                    (feed_drg_task,) = project.root_task.children
+                    assert isinstance(feed_drg_task, DownloadResourceGroupTask)
+                    
+                    for _ in range(n):
+                        await step_scheduler(project)
+                    
+                    with redirect_stderr(StringIO()) as captured_stderr:
+                        rmw.close()
+                        assertNotIn('Traceback', captured_stderr.getvalue())
+                        assert feed_drg_task.complete
+
+
+@awith_subtests
+async def test_given_download_resource_group_task_with_source_running_at_any_step_when_close_project_then_drgt_cancels_without_error(subtests: SubtestsContext) -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
+        rss_feed_url = sp.get_request_url('https://xkcd.com/rss.xml')
+        feed_pattern = sp.get_request_url('https://xkcd.com/*.xml')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create RootResources
+            home_rr = RootResource(project, '', Resource(project, home_url))
+            atom_feed_rr = RootResource(project, '', Resource(project, atom_feed_url))
+            rss_feed_rr = RootResource(project, '', Resource(project, rss_feed_url))
+            
+            # Create and start download ResourceGroup task
+            feed_g = ResourceGroup(project, '', feed_pattern, source=home_rr)
+            feed_g.download()
+            
+            append_deferred_top_level_tasks(project)
+            (feed_drg_task,) = project.root_task.children
+            assert isinstance(feed_drg_task, DownloadResourceGroupTask)
+            
+            # Step scheduler until DownloadResourceGroupTask is complete,
+            # counting the number of steps required
+            drgt_step_count = 0
+            while not feed_drg_task.complete:
+                await step_scheduler(project)
+                drgt_step_count += 1
+            await step_scheduler(project, expect_done=True)
+        
+        for n in range(drgt_step_count + 1):
+            print(f'Testing cancel after {n}/{drgt_step_count} step(s)')
+            with subtests.test(cancel_after_n_steps=n):
+                async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                    rmw = RealMainWindow._last_created
+                    assert rmw is not None
+                    
+                    # Create RootResources
+                    home_rr = RootResource(project, '', Resource(project, home_url))
+                    atom_feed_rr = RootResource(project, '', Resource(project, atom_feed_url))
+                    rss_feed_rr = RootResource(project, '', Resource(project, rss_feed_url))
+                    
+                    # Create and start download ResourceGroup task
+                    feed_g = ResourceGroup(project, '', feed_pattern, source=home_rr)
+                    feed_g.download()
+                    
+                    append_deferred_top_level_tasks(project)
+                    (feed_drg_task,) = project.root_task.children
+                    assert isinstance(feed_drg_task, DownloadResourceGroupTask)
+                    
+                    for _ in range(n):
+                        await step_scheduler(project)
+                    
+                    with redirect_stderr(StringIO()) as captured_stderr:
+                        rmw.close()
+                        assertNotIn('Traceback', captured_stderr.getvalue())
+                        assert feed_drg_task.complete
 
 
 # === Utility ===
