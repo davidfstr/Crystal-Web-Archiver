@@ -747,6 +747,7 @@ class MainWindow(CloakMixin):
     def _on_system_appearance_changed(self, event: wx.SysColourChangedEvent) -> None:
         """Update UI when system transitions to/from dark mode."""
         self._refresh_branding_area()
+        self._refresh_task_tree_appearance()
         
         # Keep processing the event
         event.Skip()
@@ -1419,11 +1420,22 @@ class MainWindow(CloakMixin):
     
     def _create_task_tree(self, parent: wx.Window) -> wx.Window:
         self.task_tree = TaskTree(parent, self.project.root_task)
-        if is_mac_os():
-            self.task_tree.peer.SetBackgroundColour(
-                wx.Colour(254, 254, 254))  # pure white
+        self._set_task_tree_background_color()
         
         return self.task_tree.peer
+    
+    def _set_task_tree_background_color(self) -> None:
+        """Sets the task tree background color based on the current light/dark mode."""
+        if not is_mac_os():
+            # Use OS default appearance
+            return
+        
+        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        if is_dark_mode:
+            # Use a slightly lighter dark color to ensure text is readable
+            self.task_tree.peer.SetBackgroundColour(wx.Colour(0x30, 0x30, 0x30))  # dark gray
+        else:
+            self.task_tree.peer.SetBackgroundColour(wx.Colour(254, 254, 254))  # pure white
     
     # === Task Pane: Other Commands ===
     
@@ -1681,6 +1693,13 @@ class MainWindow(CloakMixin):
         self._branding_area = self._create_branding_area(parent)
         sizer.Insert(sizer_position, self._branding_area, proportion, flag, border)
         parent.Layout()
+    
+    @fg_affinity
+    def _refresh_task_tree_appearance(self) -> None:
+        """Refresh the task tree appearance to reflect the new light/dark mode."""
+        assert hasattr(self, 'task_tree')
+        self._set_task_tree_background_color()
+        self.task_tree.peer.Refresh()
     
     @staticmethod
     def _load_app_icon() -> wx.Bitmap:

@@ -17,6 +17,7 @@ from crystal.util.bulkheads import (
 from crystal.util.profile import create_profiled_callable
 from crystal.util.quitting import is_quitting
 from crystal.util.xfunctools import partial2
+from crystal.util.xos import is_windows
 from enum import Enum
 from functools import wraps
 import os
@@ -28,8 +29,6 @@ import traceback
 from typing import Any, assert_never, cast, Deque, Optional, Protocol, TypeVar
 from typing_extensions import ParamSpec
 import wx
-
-from crystal.util.xos import is_windows
 
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.

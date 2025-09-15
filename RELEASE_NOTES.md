@@ -102,6 +102,8 @@ Release Notes ⋮
     * Fixed the "Dismiss" action on a crashed task to not itself crash!
     * Altered the prefilled URL prefix on the server Welcome page to
       be https:// rather than http://, which is more appropriate for most sites.
+    * Task tree appears with a dark background on macOS when in dark mode
+      rather than a pure white background.
 
 * Testing improvements
     * If the default server port is in use while tests are running, a warning
