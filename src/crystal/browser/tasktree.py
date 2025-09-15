@@ -408,6 +408,10 @@ class TaskTreeNode:
             @capture_crashes_to(bulkhead)
             def fg_task() -> None:
                 # Find last_more_node, or create if missing
+                if len(self.tree_node.children) == 0:
+                    # Node is disposed. Abort.
+                    assert self.tree_node.peer is None
+                    return
                 last_child_tree_node = self.tree_node.children[-1]
                 if isinstance(last_child_tree_node, _MoreNodeView):
                     last_more_node = last_child_tree_node
