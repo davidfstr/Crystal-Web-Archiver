@@ -22,6 +22,7 @@ from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xtyping import not_none
 from io import StringIO
+from unittest import skip
 from unittest.mock import patch
 import wx
 
@@ -382,6 +383,8 @@ async def test_while_project_open_then_periodically_saves_resume_data_so_that_ca
 
 # === Tests: Close Project + Special Situations ===
 
+# NOTE: Covered by test_given_download_resource_task_running_at_any_step_when_close_project_then_drt_cancels_without_error.
+#       However this test has more specific checks (than the other test) for a particular regression.
 async def test_given_download_resource_task_running_when_close_project_then_drt_cancels_without_delay() -> None:
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -443,10 +446,14 @@ async def test_given_download_resource_task_running_when_close_project_then_drt_
                 spy_set_subtitle.assert_any_call('Waiting before performing next request...')
                 assertEqual(0, spy_sleep.call_count)
                 assertNotIn('AssertionError', captured_stderr.getvalue())
+                assertNotIn('Traceback', captured_stderr.getvalue())
                 
                 assert comic_dr_task.complete
 
 
+# NOTE: Test is skipped, despite being implemented, because it is slow.
+#       As the decorator notes, its functionality should be covered by another test.
+@skip('covered by: test_given_download_resource_group_task_with_source_running_at_any_step_when_close_project_then_drgt_cancels_without_error')
 @awith_subtests
 async def test_given_download_resource_task_running_at_any_step_when_close_project_then_drt_cancels_without_error(subtests: SubtestsContext) -> None:
     with scheduler_disabled(), \
@@ -495,6 +502,9 @@ async def test_given_download_resource_task_running_at_any_step_when_close_proje
                         assert comic_dr_task.complete
 
 
+# NOTE: Test is skipped, despite being implemented, because it is slow.
+#       As the decorator notes, its functionality should be covered by another test.
+@skip('covered by: test_given_download_resource_group_task_with_source_running_at_any_step_when_close_project_then_drgt_cancels_without_error')
 @awith_subtests
 async def test_given_download_resource_group_task_without_source_running_at_any_step_when_close_project_then_drgt_cancels_without_error(subtests: SubtestsContext) -> None:
     with scheduler_disabled(), \
@@ -555,6 +565,33 @@ async def test_given_download_resource_group_task_without_source_running_at_any_
 
 @awith_subtests
 async def test_given_download_resource_group_task_with_source_running_at_any_step_when_close_project_then_drgt_cancels_without_error(subtests: SubtestsContext) -> None:
+    # A DownloadResourceGroupTask with a source will have a task tree that looks like:
+    # 
+    #   - DownloadResourceGroupTask
+    #       - UpdateResourceGroupMembersTask
+    #           - DownloadResourceTask (for a RootResource source)
+    #               - ...
+    #       - DownloadResourceGroupMembersTask
+    #           - DownloadResourceTask 1
+    #               - DownloadResourceBodyTask
+    #               - ParseResourceRevisionLinks
+    #               - DownloadResourceTask 1
+    #                   - ...
+    #               - ...
+    #               - DownloadResourceTask N
+    #                   - ...
+    #           - ...
+    #           - DownloadResourceTask N
+    #               - ...
+    # 
+    # Therefore the following task types are covered by this test:
+    #   - DownloadResourceGroupTask
+    #   - UpdateResourceGroupMembersTask
+    #   - DownloadResourceGroupMembersTask
+    #   - DownloadResourceTask
+    #   - DownloadResourceBodyTask
+    #   - ParseResourceRevisionLinks
+    
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
