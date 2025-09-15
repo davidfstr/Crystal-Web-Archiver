@@ -10,6 +10,7 @@ from crystal.task import (
 from crystal.tests.util.asserts import assertEqual, assertNotIn
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
+from crystal.tests.util.slow import slow
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
@@ -563,6 +564,7 @@ async def test_given_download_resource_group_task_without_source_running_at_any_
                         assert feed_drg_task.complete
 
 
+@slow
 @awith_subtests
 async def test_given_download_resource_group_task_with_source_running_at_any_step_when_close_project_then_drgt_cancels_without_error(subtests: SubtestsContext) -> None:
     # A DownloadResourceGroupTask with a source will have a task tree that looks like:
