@@ -141,6 +141,7 @@ jobs:
           CRYSTAL_ADDRESS_SANITIZER: 'True'
           # Multiply timeouts because ASan builds of Python are slower than regular builds
           CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER: '2.0'
+          CRYSTAL_EXCLUDE_TESTS_MARKED: 'slow'
         run: |
           crystal --test ${TEST_NAMES}
 
@@ -323,6 +324,7 @@ jobs:
           CRYSTAL_FAULTHANDLER: 'True'
           # Force Crystal to print stdout and stderr rather than sending them to log files
           TERM: __interactive__
+          CRYSTAL_EXCLUDE_TESTS_MARKED: 'slow'
         run: |
           ulimit -c unlimited  # allow core dumps of unlimited size
           CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots \
@@ -504,6 +506,7 @@ jobs:
           # Enable a version of malloc() that looks for heap corruption specially:
           # https://stackoverflow.com/a/3718867/604063
           MALLOC_CHECK_: '2'
+          CRYSTAL_EXCLUDE_TESTS_MARKED: ''  # INCLUDE 'slow' tests
         run: |
           CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots \
             poetry run xvfb-run \
@@ -591,6 +594,7 @@ jobs:
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
           $env:CRYSTAL_FAULTHANDLER = "True"
+          $env:CRYSTAL_EXCLUDE_TESTS_MARKED = "slow"
           poetry run python run_exe.py "--argsfile=arguments.txt" "--stdouterrfile=$LOGDIR\stdouterr.log" `
             "dist\Crystal.exe" "---" "--test" ${env:TEST_NAMES}
 
