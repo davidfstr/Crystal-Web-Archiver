@@ -172,7 +172,7 @@ jobs:
           - "3.11.9"
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 24  # 150% of normal time: 16 min, as of 2025-08-15
+    timeout-minutes: 33  # 150% of normal time: 22 min, as of 2025-09-17
     env:
       # Enables capturing and uploading core dumps on macOS
       # TODO: Convert this to a workflow_dispatch input so that it can be
@@ -410,7 +410,7 @@ jobs:
           - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 9  # 150% of normal time: 5 min, as of 2025-07-21
+    timeout-minutes: 18  # 150% of normal time: 12 min, as of 2025-09-17
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -541,7 +541,7 @@ jobs:
           - "3.11.9"
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 18  # 150% of normal time: 12 min, as of 2025-09-04
+    timeout-minutes: 20  # 150% of normal time: 13 min, as of 2025-09-17
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
