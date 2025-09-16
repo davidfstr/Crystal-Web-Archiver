@@ -349,7 +349,12 @@ def py_eval(
     python.stdin.write(f'{py_code}\n'); python.stdin.flush()
     (result, found_stop_suffix) = read_until(
         python.stdout, stop_suffix, timeout=timeout, stacklevel_extra=1)
-    return result[:-len(found_stop_suffix)]
+    result_no_suffix = result[:-len(found_stop_suffix)]
+    if os.environ.get('TERM_PROGRAM') == 'vscode':
+        # HACK: VS Code inserts terminal integration escape sequences (OSC 633).
+        #       Remove them.
+        result_no_suffix = result_no_suffix.removesuffix('\x1b]633;E;0\x07\x1b]633;A\x07')
+    return result_no_suffix
 
 
 def read_until(
@@ -392,6 +397,10 @@ def _read_until_inner(
         ) -> tuple[str, str]:
     if isinstance(stop_suffix, str):
         stop_suffix = (stop_suffix,)
+    if os.environ.get('TERM_PROGRAM') == 'vscode' and '>>> ' in stop_suffix:
+        # HACK: VS Code inserts terminal integration escape sequences (OSC 633).
+        #       Weaken pattern match to ignore them.
+        stop_suffix += ('>>>',)
     if timeout is None:
         timeout = DEFAULT_WAIT_TIMEOUT
     if period is None:
