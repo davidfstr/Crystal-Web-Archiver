@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from crystal.util.wx_bind import bind
+from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_linux
 import wx
 
@@ -11,6 +12,7 @@ def create_copy_button(
         *, name: str,
         text_to_copy: Callable[[], str | None],
         parent_is_disposed: Callable[[], bool],
+        previously_focused_func: Callable[[], wx.Window | None]=lambda: None,
         ) -> wx.Button:
     if is_linux():
         # Button needs to be at least this large for icon to display at all
@@ -21,7 +23,7 @@ def create_copy_button(
     copy_button = wx.Button(parent, label='📋', size=size, name=name)
     copy_button.SetToolTip(f'Copy to clipboard')
     
-    def on_copy_click(event: wx.CommandEvent | None = None) -> None:
+    def on_copy_click(event: wx.CommandEvent | None = None, *, already_focused: bool=False) -> None:
         if parent_is_disposed():
             return
         
@@ -29,8 +31,10 @@ def create_copy_button(
         if text is None:
             # Not ready to copy yet
             copy_button.SetLabel('⏳')
-            copy_button.SetFocus()  # blur the field being copied
-            wx.CallLater(200, on_copy_click)  # try again
+            if not already_focused:
+                # Blur the field being copied
+                SetFocus(copy_button, previously_focused_func(), simulate_events=True)
+            wx.CallLater(200, lambda: on_copy_click(already_focused=True))  # try again
             return
         
         copy_text_to_clipboard(text)

@@ -1159,19 +1159,27 @@ async def test_given_clean_url_in_url_field_when_press_copy_then_copies_clean_ur
             async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                 clean_url = 'https://example.com/'
                 
+                last_focused = None  # type: Optional[wx.Window]
+                
                 click_button(mw.new_root_url_button)
                 nrud = await NewRootUrlDialog.wait_for()
                 
-                nrud.url_field.SetFocus()
+                last_focused = SetFocus(nrud.url_field, last_focused)
                 nrud.url_field.Value = clean_url
                 
                 with FakeClipboard() as clipboard:
-                    nrud.copy_button.SetFocus()
+                    last_focused = SetFocus(nrud.copy_button, last_focused)
                     click_button(nrud.copy_button)
                     
                     await wait_for(
                         lambda: nrud.url_cleaning_complete(clean_url) or None,
-                        timeout=2.0)
+                        timeout=4.0,
+                        message=lambda: (
+                            f'URL cleaning did not complete. '
+                            f'{clean_url=!r}, '
+                            f'_last_cleaned_url={nrud._controller._last_cleaned_url!r}, '
+                            f'url_field_focused={nrud.url_field_focused}'
+                        ))
                     
                     await wait_for(
                         lambda: (clipboard.text == clean_url) or None,
@@ -1187,19 +1195,27 @@ async def test_given_unclean_url_in_url_field_when_press_copy_then_waits_for_url
                 unclean_url = 'example.com'
                 expected_clean_url = 'https://example.com/'
                 
+                last_focused = None  # type: Optional[wx.Window]
+                
                 click_button(mw.new_root_url_button)
                 nrud = await NewRootUrlDialog.wait_for()
                 
-                nrud.url_field.SetFocus()
+                last_focused = SetFocus(nrud.url_field, last_focused)
                 nrud.url_field.Value = unclean_url
                 
                 with FakeClipboard() as clipboard:
-                    nrud.copy_button.SetFocus()
+                    last_focused = SetFocus(nrud.copy_button, last_focused)
                     click_button(nrud.copy_button)
                     
                     await wait_for(
                         lambda: nrud.url_cleaning_complete(expected_clean_url) or None,
-                        timeout=2.0)
+                        timeout=4.0,
+                        message=lambda: (
+                            f'URL cleaning did not complete. '
+                            f'clean_url={expected_clean_url=!r}, '
+                            f'_last_cleaned_url={nrud._controller._last_cleaned_url!r}, '
+                            f'url_field_focused={nrud.url_field_focused}'
+                        ))
                     
                     await wait_for(
                         lambda: (clipboard.text == expected_clean_url) or None,

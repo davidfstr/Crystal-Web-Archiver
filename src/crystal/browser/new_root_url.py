@@ -10,6 +10,7 @@ from crystal.util.wx_dialog import (
     position_dialog_initially, ShowModal, ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
+from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_linux, is_mac_os, is_windows, is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
 from typing import Literal, Optional, Union
@@ -213,7 +214,11 @@ class NewRootUrlDialog:
                         if self._url_field.Value == self._last_cleaned_url
                         else None  # not ready to copy yet
                     ),
-                    parent_is_disposed=lambda: self._is_destroying_or_destroyed)
+                    parent_is_disposed=lambda: self._is_destroying_or_destroyed,
+                    previously_focused_func=lambda: (
+                        self._url_field if self._url_field_focused
+                        else None  # unknown
+                    ))
                 url_field_and_spinner.Add(copy_button, flag=wx.LEFT|wx.CENTER, border=self._FIELD_TO_SPINNER_MARGIN)
                 
                 spinner_diameter = self._url_field.Size.Height
