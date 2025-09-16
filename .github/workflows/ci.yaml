@@ -132,6 +132,9 @@ jobs:
         run: poetry run playwright install chromium
       
       - name: Run non-UI tests
+        # Disable this tests because they are low value in an ASAN context,
+        # and add several minutes of runtime
+        if: false
         run: poetry run python -m pytest
       
       - name: Run UI tests
