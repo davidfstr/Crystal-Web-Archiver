@@ -1216,7 +1216,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         return CreateGroupFormData({
             'source_choices': source_choices,
-            'predicted_url_pattern': predicted_url_pattern or '',
+            'predicted_url_pattern': predicted_url_pattern or archive_url,
             'predicted_source_value': predicted_source_value,
             'predicted_name': '',
         })
