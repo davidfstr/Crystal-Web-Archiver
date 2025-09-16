@@ -2415,7 +2415,9 @@ async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
                 with network_down():
                     home_ti.SelectItem()
                     await mw.click_download_button()
-                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                    await wait_for_download_to_start_and_finish(
+                        mw.task_tree,
+                        immediate_finish_ok=True)
             
             home_url_in_archive = get_request_url(
                 home_url,
