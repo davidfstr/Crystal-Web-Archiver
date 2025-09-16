@@ -93,6 +93,11 @@ Release Notes ⋮
     * Most dialogs are now shown as window-modal rather than modeless to
       prevent certain types of concurrent edits to a project that Crystal
       isn't designed to handle.
+    * Dark mode fixes:
+        * Task tree appears with a dark background on macOS when in dark mode
+          rather than a pure white background.
+        * Pure black icons in the task tree and entity tree appear as off-white
+          when in dark mode
     * Adhere to OS-native conventions more closely:
         * Save changes dialog now uses OS-native button labels ("Save" and "Don't Save")
           instead of generic "Yes" and "No" buttons, following platform conventions.
@@ -102,8 +107,6 @@ Release Notes ⋮
     * Fixed the "Dismiss" action on a crashed task to not itself crash!
     * Altered the prefilled URL prefix on the server Welcome page to
       be https:// rather than http://, which is more appropriate for most sites.
-    * Task tree appears with a dark background on macOS when in dark mode
-      rather than a pure white background.
 
 * Testing improvements
     * If the default server port is in use while tests are running, a warning

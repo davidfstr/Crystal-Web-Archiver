@@ -202,10 +202,7 @@ class TaskTreeNode:
         
         self.tree_node = NodeView()
         self.tree_node.delegate = self
-        if self.task.icon_name is not None:
-            self.tree_node.icon_set = (
-                (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()[self.task.icon_name]),
-            )
+        self.update_icon_set()
         self.tree_node.title = self.task.title
         self.tree_node.subtitle = self._calculate_tree_node_subtitle(
             self.task.subtitle,
@@ -276,6 +273,18 @@ class TaskTreeNode:
                 f'Expected delegate of NodeView to be TaskTreeNode or None but found: {node}')
     
     # === Properties ===
+    
+    def update_icon_set(self) -> None:
+        icon_name = self.task.icon_name  # cache
+        if icon_name is None:
+            return
+        
+        ICONS = TREE_NODE_ICONS()  # cache
+        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        icon = ICONS[icon_name + '-dark'] if is_dark_mode else ICONS[icon_name]
+        self.tree_node.icon_set = (
+            (wx.TreeItemIcon_Normal, icon),
+        )
     
     @classmethod
     def _calculate_tree_node_subtitle(cls,
@@ -608,10 +617,18 @@ class _MoreNodeView(NodeView):
         self._more_count = -1
         
         super().__init__()
-        self.icon_set = (
-            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_more']),
-        )
+        self.update_icon_set()
         self.more_count = more_count  # sets self.title too
+    
+    def update_icon_set(self) -> None:
+        icon_name = 'entitytree_more'
+        
+        ICONS = TREE_NODE_ICONS()  # cache
+        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        icon = ICONS[icon_name + '-dark'] if is_dark_mode else ICONS[icon_name]
+        self.icon_set = (
+            (wx.TreeItemIcon_Normal, icon),
+        )
     
     def _get_more_count(self) -> int:
         return self._more_count

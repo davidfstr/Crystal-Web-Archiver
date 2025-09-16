@@ -8,7 +8,8 @@ import wx
 
 @cache
 def TREE_NODE_ICONS() -> dict[str, wx.Bitmap]:
-    return OrderedDict([
+    # Load icons from disk
+    icons = OrderedDict([
         (icon_name, _load_png_resource(f'treenodeicon_{icon_name}.png'))
         for icon_name in [
             # Entity Tree Icons
@@ -30,6 +31,31 @@ def TREE_NODE_ICONS() -> dict[str, wx.Bitmap]:
             'tasktree_update_group',
         ]
     ])
+    
+    # Create dark mode versions of certain icons,
+    # transformed from the light mode versions
+    for icon_name in [
+        # Entity Tree Icons (subset)
+        'entitytree_more',
+        
+        # Task Tree Icons (subset)
+        'tasktree_download_group_members',
+        'tasktree_download_group',
+        'tasktree_download_resource_body',
+        'tasktree_download_resource',
+    ]:
+        icons[icon_name + '-dark'] = _replace_dark_pixels_with_light_pixels(icons[icon_name])
+    
+    # For remaining icons without a custom dark mode version,
+    # define the dark mode version to be the same as the light mode version
+    for icon_name in list(icons.keys()):
+        if icon_name.endswith('-dark'):
+            continue
+        if (icon_name + '-dark') in icons:
+            continue
+        icons[icon_name + '-dark'] = icons[icon_name]
+    
+    return icons
 
 
 @cache
@@ -124,6 +150,31 @@ def add_transparent_left_border(original: wx.Bitmap, thickness: int) -> wx.Bitma
     dc.SelectObject(wx.NullBitmap)  # commit changes to bordered
     bordered.SetMaskColour(wx.Colour(255, 255, 255))  # replace white with transparent
     return bordered
+
+
+def _replace_dark_pixels_with_light_pixels(bitmap: wx.Bitmap) -> wx.Bitmap:
+    """
+    Convert dark pixels (below a threshold) to off-white while preserving transparency.
+    """
+    OFF_WHITE_COLOR = (240, 240, 240)  # Light gray that's visible on dark backgrounds
+    
+    # Convert to image for pixel manipulation
+    image = bitmap.ConvertToImage()
+    
+    # Transform pixels
+    (width, height) = image.GetSize()
+    for y in range(height):
+        for x in range(width):
+            if image.GetAlpha(x, y) == 0 and image.HasAlpha():
+                continue  # Skip transparent pixels
+            
+            (r, g, b) = (image.GetRed(x, y), image.GetGreen(x, y), image.GetBlue(x, y))
+            luminance = (0.299 * r + 0.587 * g + 0.114 * b)
+            if luminance < 128:  # dark pixel
+                image.SetRGB(x, y, *OFF_WHITE_COLOR)
+    
+    # Convert back to bitmap for drawing
+    return wx.Bitmap(image)
 
 
 # ------------------------------------------------------------------------------

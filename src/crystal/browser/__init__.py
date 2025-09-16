@@ -11,7 +11,7 @@ from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.browser.new_group import NewGroupDialog
 from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
 from crystal.browser.preferences import PreferencesDialog
-from crystal.browser.tasktree import TaskTree
+from crystal.browser.tasktree import TaskTree, TaskTreeNode
 from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
@@ -26,6 +26,7 @@ from crystal.ui.callout import Callout
 from crystal.ui.clickable_text import ClickableText
 from crystal.ui.log_drawer import LogDrawer
 from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
+from crystal.ui.tree2 import NodeView
 from crystal.util.bulkheads import (
     capture_crashes_to, capture_crashes_to_stderr,
 )
@@ -746,8 +747,9 @@ class MainWindow(CloakMixin):
     @fg_affinity
     def _on_system_appearance_changed(self, event: wx.SysColourChangedEvent) -> None:
         """Update UI when system transitions to/from dark mode."""
-        self._refresh_branding_area()
+        self.entity_tree.root.update_icon_set_of_descendants_supporting_dark_mode()
         self._refresh_task_tree_appearance()
+        self._refresh_branding_area()
         
         # Keep processing the event
         event.Skip()
@@ -1389,7 +1391,7 @@ class MainWindow(CloakMixin):
         # Keep processing the event normally
         event.Skip()
     
-    # === Task Pane: Init ===
+    # === Task Pane: Init/Refresh ===
     
     def _create_task_pane(self, parent: wx.Window) -> wx.Window:
         pane = wx.Panel(parent)
@@ -1437,6 +1439,26 @@ class MainWindow(CloakMixin):
         else:
             self.task_tree.peer.SetBackgroundColour(wx.Colour(254, 254, 254))  # pure white
     
+    @fg_affinity
+    def _refresh_task_tree_appearance(self) -> None:
+        """Refresh the task tree appearance to reflect the new light/dark mode."""
+        assert hasattr(self, 'task_tree')
+        self._set_task_tree_background_color()
+        def update_icon_set_of_descendents(tn: NodeView) -> None:
+            for child in tn.children:
+                assert isinstance(child, NodeView)
+                update_icon_set_of_descendents(child)
+            
+            if hasattr(tn, 'update_icon_set'):
+                tn.update_icon_set()
+            else:
+                ttn = tn.delegate
+                if ttn is not None:
+                    assert isinstance(ttn, TaskTreeNode)
+                    ttn.update_icon_set()
+        update_icon_set_of_descendents(self.task_tree.root.tree_node)
+        self.task_tree.peer.Refresh()
+    
     # === Task Pane: Other Commands ===
     
     @capture_crashes_to_stderr
@@ -1483,7 +1505,7 @@ class MainWindow(CloakMixin):
             return should_resume
         self.project.unhibernate_tasks(confirm_unhibernate_tasks)
     
-    # === Status Bar: Init ===
+    # === Status Bar: Init/Refresh ===
     
     def _create_status_bar(self, parent: wx.Window) -> wx.Window:
         pane = wx.Panel(parent)
@@ -1693,13 +1715,6 @@ class MainWindow(CloakMixin):
         self._branding_area = self._create_branding_area(parent)
         sizer.Insert(sizer_position, self._branding_area, proportion, flag, border)
         parent.Layout()
-    
-    @fg_affinity
-    def _refresh_task_tree_appearance(self) -> None:
-        """Refresh the task tree appearance to reflect the new light/dark mode."""
-        assert hasattr(self, 'task_tree')
-        self._set_task_tree_background_color()
-        self.task_tree.peer.Refresh()
     
     @staticmethod
     def _load_app_icon() -> wx.Bitmap:

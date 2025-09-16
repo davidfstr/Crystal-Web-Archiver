@@ -54,6 +54,8 @@ class EntityTree(Bulkhead):
     _ID_SET_DIRECTORY_PREFIX = 102
     _ID_CLEAR_PREFIX = 103
     
+    # === Init/Refresh ===
+    
     def __init__(self,
             parent_peer: wx.Window,
             project: Project,
@@ -83,6 +85,13 @@ class EntityTree(Bulkhead):
         root_children = self.root.children
         if len(root_children) >= 1:
             root_children[0].view.peer.SelectItem()
+    
+    # TODO: Should this be marked with: @capture_crashes_to_self
+    def update(self):
+        """
+        Updates the nodes in this tree, usually due to a project change.
+        """
+        self.root.update_descendants()
     
     # === Bulkhead ===
     
@@ -179,15 +188,6 @@ class EntityTree(Bulkhead):
                 return None
         else:
             return None
-    
-    # === Updates ===
-    
-    # TODO: Should this be marked with: @capture_crashes_to_self
-    def update(self):
-        """
-        Updates the nodes in this tree, usually due to a project change.
-        """
-        self.root.update_descendants()
     
     # === Events: Resource Lifecycle ===
     
@@ -647,6 +647,12 @@ class Node(Bulkhead):
                 self.update_icon_set()
         for child in self.children:
             child.update_icon_set_of_descendants_in_group(group)
+    
+    def update_icon_set_of_descendants_supporting_dark_mode(self) -> None:
+        if isinstance(self, MorePlaceholderNode):
+            self.update_icon_set()
+        for child in self.children:
+            child.update_icon_set_of_descendants_supporting_dark_mode()
     
     def _call_on_descendants(self, method_name) -> None:
         getattr(self, method_name)()
@@ -1579,15 +1585,26 @@ class MorePlaceholderNode(Node):
         
         self.view = NodeView()
         #self.view.title = ... (set below)
-        self.view.icon_set = (
-            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_more']),
-        )
+        self.view.icon_set = self.calculate_icon_set
         self.view.expandable = True
         
         self.more_count = more_count  # sets self.view.title too
         
         # Workaround for: https://github.com/wxWidgets/wxWidgets/issues/13886
         self.children = [_LoadingNode()]
+    
+    # === Properties ===
+    
+    @override
+    def calculate_icon_set(self) -> IconSet | None:
+        icon_name = 'entitytree_more'
+        
+        ICONS = TREE_NODE_ICONS()  # cache
+        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        icon = ICONS[icon_name + '-dark'] if is_dark_mode else ICONS[icon_name]
+        return (
+            (wx.TreeItemIcon_Normal, icon),
+        )
     
     def _get_more_count(self) -> int:
         return self._more_count
