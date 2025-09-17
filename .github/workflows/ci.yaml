@@ -102,6 +102,13 @@ jobs:
         run: |
           cpython/python.exe -m venv venv_asan
       
+      - name: Install non-ASAN Python for Playwright
+        id: install-nonasan-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          update-environment: false
+      
       - name: Install Poetry
         run: |
           python -m pip install -U pip setuptools
@@ -145,6 +152,7 @@ jobs:
           # Multiply timeouts because ASan builds of Python are slower than regular builds
           CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER: '2.0'
           CRYSTAL_EXCLUDE_TESTS_MARKED: 'slow'
+          CRYSTAL_NONASAN_PYTHON_PATH: ${{ steps.install-nonasan-python.outputs.python-path }}
         run: |
           crystal --test ${TEST_NAMES}
 

@@ -850,6 +850,11 @@ async def test_given_create_group_form_visible_when_download_or_create_button_cl
 @awith_playwright
 async def test_given_create_group_form_visible_when_type_in_url_pattern_field_then_preview_members_update_live(pw: Playwright) -> None:
     async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp):
+        # Extract values before defining the closure
+        # to avoid capturing the unserializable ProjectServer object
+        url_pattern_1 = sp.get_request_url('https://xkcd.com/#/')
+        url_pattern_2 = sp.get_request_url('https://xkcd.com/1*/')
+        
         def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
             page = _navigate_from_home_to_comic_1_nia_page(
                 raw_page, home_url_in_archive, comic1_url_in_archive)
@@ -865,14 +870,14 @@ async def test_given_create_group_form_visible_when_type_in_url_pattern_field_th
             
             # Enter a URL pattern
             page.url_pattern_field.clear()
-            page.url_pattern_field.type(sp.get_request_url('https://xkcd.com/#/'))
+            page.url_pattern_field.type(url_pattern_1)
             page.wait_for_preview_urls_after_url_pattern_changed()
             expect(page.preview_urls_container).to_contain_text('xkcd.com')
             old_preview_urls = page.preview_urls_container.text_content() or ''  # capture
             
             # Enter a more-specific URL pattern
             page.url_pattern_field.clear()
-            page.url_pattern_field.type(sp.get_request_url('https://xkcd.com/1*/'))
+            page.url_pattern_field.type(url_pattern_2)
             expect(page.preview_urls_container).not_to_contain_text(old_preview_urls)
             expect(page.preview_urls_container).to_contain_text('xkcd.com')
         await pw.run(pw_task)
@@ -881,6 +886,10 @@ async def test_given_create_group_form_visible_when_type_in_url_pattern_field_th
 @awith_playwright
 async def test_given_create_group_form_visible_when_type_in_url_pattern_field_and_network_down_then_preview_members_show_error_message(pw: Playwright) -> None:
     async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp):
+        # Extract values before defining the closure
+        # to avoid capturing the unserializable ProjectServer object
+        url_pattern = sp.get_request_url('https://xkcd.com/1*/')
+        
         def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
             page = _navigate_from_home_to_comic_1_nia_page(
                 raw_page, home_url_in_archive, comic1_url_in_archive)
@@ -897,7 +906,7 @@ async def test_given_create_group_form_visible_when_type_in_url_pattern_field_an
             # Now simulate network going down and try to update URL pattern
             with network_down_after_delay(page):
                 page.url_pattern_field.clear()
-                page.url_pattern_field.type(sp.get_request_url('https://xkcd.com/1*/'))
+                page.url_pattern_field.type(url_pattern)
                 
                 # Wait a moment for the network request to fail.
                 # The preview should show an error message.

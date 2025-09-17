@@ -118,6 +118,8 @@ isort = "^6.0.1"
 pillow = { version = ">=9.2.0", markers = "sys_platform == 'linux'" }
 # For browser automation tests
 playwright = "^1.48.0"
+# For serializing local function closures in Playwright tests
+dill = "^0.3.8"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

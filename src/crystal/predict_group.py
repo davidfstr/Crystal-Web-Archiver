@@ -119,6 +119,10 @@ def _detect_new_group_given_member_url_and_source(
     for the current URL, or the source is linking to group members using
     dynamic links rather than static links.
     """
+    # HACK: Import locally so that Task._USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS
+    #       doesn't capture the wrong value
+    from crystal.task import TaskDisposedException
+    
     if isinstance(best_source, RootResource):
         source_rs = [best_source.resource]
     elif isinstance(best_source, ResourceGroup):
@@ -142,7 +146,18 @@ def _detect_new_group_given_member_url_and_source(
         # TODO: Error handling?
         # TODO: Start all Futures concurrently
         revision_future = source_r.download_body()
-        revision = revision_future.result()
+        try:
+            revision = revision_future.result()
+        # HACK: Situation can happen if running within a Playwright.run() block,
+        #       probably because its subprocess isn't receiving the full state
+        #       from its parent process.
+        except TaskDisposedException:
+            # HACK: Clear any cached DownloadResourceBodyTask
+            source_r._download_body_task_ref = None
+            
+            # Try again
+            revision_future = source_r.download_body()
+            revision = revision_future.result()
         
         # Parse links from source resource's latest revision
         source_r_url = source_r.url  # cache

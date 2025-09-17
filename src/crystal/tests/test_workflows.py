@@ -716,6 +716,15 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
             with assert_does_open_webbrowser_to(home_url_in_archive):
                 click_button(mw.view_button)
             
+            # Extract values before defining the closure
+            # to avoid capturing the unserializable Project object
+            comic1_url_in_archive = get_request_url(
+                comic1_url,
+                project_default_url_prefix=project.default_url_prefix)
+            comic2_url_in_archive = get_request_url(
+                comic2_url,
+                project_default_url_prefix=project.default_url_prefix)
+            
             def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
                 # Ensure can see home page
                 raw_page.goto(home_url_in_archive)
@@ -723,17 +732,11 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 
                 # Click "|<" link to navigate to first comic.
                 # Expect to see Not in Archive page.
-                comic1_url_in_archive = get_request_url(
-                    comic1_url,
-                    project_default_url_prefix=project.default_url_prefix)
                 page = _navigate_from_home_to_comic_1_nia_page(
                     raw_page, home_url_in_archive, comic1_url_in_archive,
                     already_at_home=True)
                 
                 # Verify that DetectedRegularGroup from the navigation is correct
-                comic_pattern_in_archive = get_request_url(
-                    comic_pattern,
-                    project_default_url_prefix=project.default_url_prefix)
                 page.create_group_checkbox.check()
                 expect(page.url_pattern_field).to_have_value(comic_pattern)
                 expect(page.source_dropdown.locator('option:checked')).to_have_text(home_url)
@@ -760,9 +763,6 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 
                 # Click ">" link to navigate to second comic.
                 # Expect to see Not in Archive page.
-                comic2_url_in_archive = get_request_url(
-                    comic2_url,
-                    project_default_url_prefix=project.default_url_prefix)
                 comic2_link = raw_page.locator('a', has_text='>').first
                 expect(comic2_link).to_be_visible()
                 comic2_link.click()
