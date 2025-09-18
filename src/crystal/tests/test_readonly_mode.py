@@ -16,7 +16,7 @@ from crystal.tests.util.server import MockHttpServer, served_project, extracted_
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done, wait_for_download_to_start_and_finish
-from crystal.tests.util.wait import wait_for, first_child_of_tree_item_is_not_loading_condition
+from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, first_child_of_tree_item_is_not_loading_condition
 from crystal.tests.util.windows import MainWindow, MenuitemDisabledError, OpenOrCreateDialog, NewGroupDialog, NewRootUrlDialog, PreferencesDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
@@ -194,6 +194,9 @@ async def test_when_readonly_project_has_source_resource_linking_to_target_url_w
                     about_ti = home_ti.find_child(about_url, project.default_url_prefix)
                     contact_ti = home_ti.find_child(contact_url, project.default_url_prefix)
                 
+                # Ensure all downloads have completed
+                await wait_for(tree_has_no_children_condition(mw.task_tree))
+                
                 # Find and delete the Resource for page B (contact page)
                 contact_resource = project.get_resource(contact_url)
                 assert contact_resource is not None
@@ -201,6 +204,8 @@ async def test_when_readonly_project_has_source_resource_linking_to_target_url_w
                 
             # Reopen the project as read-only
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
+                assert project.readonly
+                
                 root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                 (home_ti,) = root_ti.Children
                 
