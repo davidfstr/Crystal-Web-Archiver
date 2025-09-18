@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import code
+from concurrent.futures import Future
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.headless import is_headless_mode
+from crystal.util.xfunctools import partial2
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_call_and_wait, has_foreground_thread,
@@ -14,7 +16,7 @@ from crystal.util.xthreading import (
 import os
 import signal
 import sys
-from typing import Optional
+from typing import Literal, Optional
 from typing_extensions import override
 
 
@@ -60,7 +62,7 @@ class Shell:
         except ImportError:
             pass
     
-    def start(self) -> None:
+    def start(self, *, wait_for_banner: bool = True) -> None:
         """
         Starts the shell in a separate thread.
         """
@@ -70,12 +72,19 @@ class Shell:
         if not has_foreground_thread():
             raise ValueError('Expected there to be a foreground thread when starting a Shell')
         
+        banner_printed = Future()  # type: Future[Literal[True]]
+        
         # NOTE: Keep the process alive while the shell is running
-        bg_call_later(self._run, daemon=False)
+        bg_call_later(partial2(self._run, banner_printed), daemon=False)
         self._started = True
+        
+        # Wait for banner to be printed
+        if wait_for_banner:
+            banner_printed._cr_declare_no_deadlocks = True  # type: ignore[attr-defined]
+            banner_printed.result()
     
     @capture_crashes_to_stderr
-    def _run(self) -> None:
+    def _run(self, banner_printed: Future[Literal[True]]) -> None:
         # Define exit instructions,
         # based on site.setquit()'s definition in Python 3.8
         if os.sep == '\\':
@@ -98,6 +107,7 @@ class Shell:
                     window=self._window_proxy,
                 ),
                 exitmsg='now waiting for all windows to close...',
+                banner_printed=banner_printed,
             )
         except SystemExit:
             pass
@@ -182,11 +192,16 @@ class _Proxy:
             return getattr(value, attr_name)
 
 
-def fg_interact(banner=None, local=None, exitmsg=None):
+def fg_interact(
+        banner=None,
+        local=None,
+        exitmsg=None,
+        banner_printed: Future[Literal[True]] | None = None,
+        ) -> None:
     """
     Similar to code.interact(), but evaluates code on the foreground thread.
     """
-    console = _FgInteractiveConsole(local)
+    console = _FgInteractiveConsole(local, banner_printed=banner_printed)
     try:
         import readline
     except ImportError:
@@ -208,9 +223,22 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     
     Will also execute a startup file specified in $PYTHONSTARTUP if defined.
     """
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self,
+            *args,
+            banner_printed: Future[Literal[True]] | None = None,
+            **kwargs
+            ) -> None:
         super().__init__(*args, **kwargs)
+        self._first_write = True
         self._first_input = True
+        self.banner_printed = banner_printed or Future()  # type: Future[Literal[True]]
+    
+    @override
+    def write(self, data: str) -> None:
+        if self._first_write:
+            self._first_write = False
+            self.banner_printed.set_result(True)
+        super().write(data)
     
     @override
     @bg_affinity

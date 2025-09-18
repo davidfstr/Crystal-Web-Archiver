@@ -488,7 +488,7 @@ def _main(args: list[str]) -> None:
         
         # Start shell if requested
         if shell is not None:
-            shell.start()
+            shell.start(wait_for_banner=True)
         
         # Starts tests if requested
         if parsed_args.test is not None:
@@ -735,6 +735,7 @@ async def _did_launch(
                     stdout=cast(TextIOBase, sys.stdout),
                     # NOTE: Print special exit instruction in headless mode
                     exit_instruction='Press Ctrl-C to stop.',
+                    wait_for_banner=True,
                 )
         except Exception as e:
             if window is not None:

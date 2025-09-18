@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable, Generator
+from concurrent.futures import Future
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
@@ -90,6 +91,7 @@ class ProjectServer:
             *, verbosity: Verbosity='normal',
             stdout: TextIOBase | None=None,
             exit_instruction: str | None=None,
+            wait_for_banner: bool=True,
             ) -> None:
         """
         Raises:
@@ -147,6 +149,8 @@ class ProjectServer:
         self._server = server
         self._port = port
         
+        banner_printed = Future()  # type: Future[Literal[True]]
+        
         # NOTE: It's very hard to crash _HttpServer itself such that an
         #       unhandled exception would escape to this level.
         #       Most errors already get routed to _HttpServer.handle_error().
@@ -165,10 +169,18 @@ class ProjectServer:
                     
                     if exit_instruction:
                         print_info(exit_instruction, file=self._stdout)
+                
+                # Signal that banner has printed
+                banner_printed.set_result(True)
+                
                 self._server.serve_forever()
             finally:
                 self._server.server_close()
         bg_call_later(bg_task, daemon=True)
+        
+        if wait_for_banner:
+            banner_printed._cr_declare_no_deadlocks = True  # type: ignore[attr-defined]
+            banner_printed.result()
         
         # Export reference to self, if running tests
         if tests_are_running():
