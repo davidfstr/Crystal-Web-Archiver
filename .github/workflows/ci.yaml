@@ -28,8 +28,8 @@ on:
           - 'x86_64'
           # NOTE: Required for building the distribution artifact
           - 'universal2'
-      run_macos_asan_tests:
-        description: 'Run macOS Address Sanitizer tests'
+      run_asan_tests:
+        description: 'Run Address Sanitizer tests'
         required: false
         default: false
         type: boolean
@@ -58,7 +58,7 @@ jobs:
   #          Keep the matrix small to avoid high costs.
   build-macos-asan:
     # Only run this expensive job when explicitly requested or when building distribution artifacts
-    if: ${{ github.event.inputs.run_macos_asan_tests == 'true' || github.event.inputs.build_dist_artifact == 'true' }}
+    if: ${{ github.event.inputs.run_asan_tests == 'true' || github.event.inputs.build_dist_artifact == 'true' }}
     strategy:
       matrix:
         python-version:
@@ -155,6 +155,179 @@ jobs:
           CRYSTAL_NONASAN_PYTHON_PATH: ${{ steps.install-nonasan-python.outputs.python-path }}
         run: |
           crystal --test ${TEST_NAMES}
+  
+  build-linux-asan:
+    # Only run this expensive job when explicitly requested or when building distribution artifacts
+    if: ${{ github.event.inputs.run_asan_tests == 'true' || github.event.inputs.build_dist_artifact == 'true' }}
+    strategy:
+      matrix:
+        os:
+          # Same as build-linux job
+          - ubuntu-22.04
+        python-version:
+          # Oldest version in the build-linux job
+          - "3.11.9"
+          - "3.12.9"
+          - "3.13.5"
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    env:
+      ASAN_OPTIONS: detect_leaks=0:allocator_may_return_null=1:handle_segv=0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Restore cached Python and virtual environment
+        id: restore-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cpython
+            venv_asan
+          key: build-linux-asan-os-${{ matrix.os }}-python-${{ matrix.python-version }}
+
+      - name: Update APT packages
+        run: sudo apt-get update
+
+      # NOTE: Compiler choice taken from: https://github.com/python/cpython/actions/runs/17596932916/workflow
+      - name: Set up GCC-10 for ASAN
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        uses: egor-tensin/setup-gcc@v1
+        with:
+          version: 10
+      
+      - name: Install OpenSSL
+        run: sudo apt-get install -y openssl
+      
+      - name: Compile Python ${{ matrix.python-version }} with Address Sanitizer
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
+        run: |
+          wget --no-verbose https://github.com/python/cpython/archive/refs/tags/v$PYTHON_VERSION.zip
+          unzip -q v3.*.zip
+          mv cpython-3.* cpython
+          cd cpython
+          ./configure --with-address-sanitizer --without-pymalloc
+          make -s -j3
+          ./python -c 'print("OK")'
+      
+      - name: Create virtual environment
+        if: steps.restore-cache.outputs.cache-hit != 'true'
+        run: |
+          cpython/python -m venv venv_asan
+      
+      - name: Install non-ASAN Python for Playwright
+        id: install-nonasan-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          update-environment: false
+      
+      - name: Install Poetry
+        run: |
+          python -m pip install -U pip setuptools
+          python -m pip install -U "poetry==2.1.1"
+      
+      - name: Activate virtual environment
+        run: |
+          source venv_asan/bin/activate
+          echo PATH=$PATH >> $GITHUB_ENV
+          echo VIRTUAL_ENV=$VIRTUAL_ENV >> $GITHUB_ENV
+
+      # HACK: Suppress warning "Error retrieving accessibility bus
+      #       address: org.freedesktop.DBus.Error.ServiceUnknown:
+      #       The name org.a11y.Bus was not provided by any .service files"
+      #       when running tests later
+      - name: Install at-spi2-core
+        run: sudo apt-get install -y at-spi2-core
+      
+      # NOTE: Needed for screenshot support while running tests
+      # TODO: Is scrot actually still needed? gnome-screenshot definitely is.
+      - name: Install scrot and gnome-screenshot
+        run: sudo apt-get install scrot gnome-screenshot
+
+      - name: Install wxPython dependencies
+        run: sudo apt-get install -y libgtk-3-dev
+
+      # Install additional dependencies for Python 3.13 wxPython
+      - name: Install wxPython dependencies for Python 3.13
+        if: startsWith(matrix.python-version, '3.13.')
+        run: sudo apt-get install -y libnotify4
+
+      # Install wxPython from precompiled wagon because installing
+      # wxPython from source takes about 40 minutes on GitHub Actions
+      # 
+      # NOTE: To recompile the .wgn, see instructions in: doc/how_to_make_wxpython_wagon.md
+      - name: Install dependency wxPython from wagon (Python 3.11)
+        if: startsWith(matrix.python-version, '3.11.')
+        run: |
+          poetry run pip3 install wagon
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py311-none-linux_x86_64.wgn
+          poetry run wagon install wxPython-4.2.3-py311-none-linux_x86_64.wgn
+
+      - name: Install dependency wxPython from wagon (Python 3.12)
+        if: startsWith(matrix.python-version, '3.12.')
+        run: |
+          poetry run pip3 install wagon
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py312-none-linux_x86_64.wgn
+          poetry run wagon install wxPython-4.2.3-py312-none-linux_x86_64.wgn
+
+      - name: Install dependency wxPython from wagon (Python 3.13)
+        if: startsWith(matrix.python-version, '3.13.')
+        run: |
+          poetry run pip3 install wagon
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py313-none-linux_x86_64.wgn
+          poetry run wagon install wxPython-4.2.3-py313-none-linux_x86_64.wgn
+
+      - name: Fail if wxPython wagon is not available for this Python version
+        if: ${{ !startsWith(matrix.python-version, '3.11.') && !startsWith(matrix.python-version, '3.12.') && !startsWith(matrix.python-version, '3.13.') }}
+        run: |
+          echo "ERROR: No precompiled wxPython wagon is available for Python ${{ matrix.python-version }} on Linux."
+          echo "You must build a .wgn for this Python version and update the workflow."
+          exit 1
+
+      - name: Install remaining dependencies with Poetry
+        # If build takes a very long time, the precompiled .wgn in the 
+        # previous build step may no longer be installing the correct
+        # dependency versions that are consistent with pyproject.toml and
+        # poetry.lock. In that case you'll need to rebuild the .wgn using
+        # instructions from: doc/how_to_make_wxpython_wagon.md
+        timeout-minutes: 2  # normally takes 6s, as of 2023-03-03
+        run: poetry install
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        run: poetry run playwright install chromium
+      
+      - name: Run non-UI tests
+        # Disable this tests because they are low value in an ASAN context,
+        # and add several minutes of runtime
+        if: false
+        run: poetry run python -m pytest
+      
+      - name: Run UI tests
+        id: run_ui_tests
+        env:
+          CRYSTAL_FAULTHANDLER: 'True'
+          CRYSTAL_ADDRESS_SANITIZER: 'True'
+          # Multiply timeouts because ASan builds of Python are slower than regular builds
+          CRYSTAL_GLOBAL_TIMEOUT_MULTIPLIER: '2.0'
+          CRYSTAL_EXCLUDE_TESTS_MARKED: 'slow'
+          CRYSTAL_NONASAN_PYTHON_PATH: ${{ steps.install-nonasan-python.outputs.python-path }}
+          # Enable a version of malloc() that looks for heap corruption specially:
+          # https://stackoverflow.com/a/3718867/604063
+          MALLOC_CHECK_: '2'
+        run: |
+          poetry run xvfb-run \
+            crystal --test ${TEST_NAMES}
 
   # CAUTION: macOS runners cost 10x a Linux runner and 5x a Windows runner.
   #          Keep the matrix small to avoid high costs.
