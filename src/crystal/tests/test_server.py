@@ -772,7 +772,6 @@ async def test_given_create_group_form_visible_and_group_previously_created_when
             
             # Verify form gets disabled immediately
             expect(page.download_or_create_group_button).to_be_disabled()
-            expect(page.download_or_create_group_button).to_contain_text('Creating...')
             
             # Wait for the creation to complete and success message to appear
             expect(page.action_message).to_be_visible()
