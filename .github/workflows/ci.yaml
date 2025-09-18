@@ -133,8 +133,6 @@ jobs:
         with:
           path: ~/Library/Caches/ms-playwright
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            playwright-browsers-${{ runner.os }}-
 
       - name: Install Playwright browsers
         run: poetry run playwright install chromium
@@ -303,8 +301,6 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            playwright-browsers-${{ runner.os }}-
 
       - name: Install Playwright browsers
         run: poetry run playwright install chromium
@@ -410,8 +406,6 @@ jobs:
         with:
           path: ~/Library/Caches/ms-playwright
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            playwright-browsers-${{ runner.os }}-
 
       - name: Install Playwright browsers
         run: ${POETRY_RUN}playwright install chromium
@@ -672,8 +666,6 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            playwright-browsers-${{ runner.os }}-
 
       - name: Install Playwright browsers
         run: poetry run playwright install chromium
@@ -747,8 +739,6 @@ jobs:
         with:
           path: ~\AppData\Local\ms-playwright
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            playwright-browsers-${{ runner.os }}-
 
       - name: Install Playwright browsers
         run: poetry run playwright install chromium
