@@ -11,7 +11,7 @@ from contextlib import closing
 from functools import wraps
 from subprocess import SubprocessError
 from textwrap import dedent
-from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, wait_for_future
+from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, GLOBAL_TIMEOUT_MULTIPLIER, wait_for_future
 from crystal.util.xos import is_asan, is_linux
 from crystal.tests.util.skip import skipTest
 import os
@@ -207,7 +207,7 @@ def _run_block_with_playwright(serialized_block: bytes) -> None:
     with sync_playwright() as p, \
             closing(p.chromium.launch(headless=True)) as browser, \
             closing(browser.new_context()) as context:
-        context.set_default_timeout(int(DEFAULT_WAIT_TIMEOUT * 1000))
+        context.set_default_timeout(int(DEFAULT_WAIT_TIMEOUT * 1000) * GLOBAL_TIMEOUT_MULTIPLIER)
         page = context.new_page()
         
         block(page)
@@ -232,10 +232,10 @@ class EnabledCondition(Condition):
         self._locator = locator
     
     def expect(self, timeout: float | None = None) -> None:
-        expect(self._locator).to_be_enabled(timeout=timeout)
+        expect(self._locator).to_be_enabled(timeout=scale_timeout(timeout))
     
     def expect_not(self, timeout: float | None = None) -> None:
-        expect(self._locator).not_to_be_enabled(timeout=timeout)
+        expect(self._locator).not_to_be_enabled(timeout=scale_timeout(timeout))
     
     def get(self) -> bool:
         return self._locator.is_enabled()
@@ -246,10 +246,10 @@ class CountToBeZeroCondition(Condition):
         self._locator = locator
     
     def expect(self, timeout: float | None = None) -> None:
-        expect(self._locator).to_have_count(0, timeout=timeout)
+        expect(self._locator).to_have_count(0, timeout=scale_timeout(timeout))
     
     def expect_not(self, timeout: float | None = None) -> None:
-        expect(self._locator).not_to_have_count(0, timeout=timeout)
+        expect(self._locator).not_to_have_count(0, timeout=scale_timeout(timeout))
     
     def get(self) -> bool:
         return self._locator.count == 0
@@ -261,13 +261,23 @@ class HasClassCondition(Condition):
         self._class_name = class_name
     
     def expect(self, timeout: float | None = None) -> None:
-        expect(self._locator).to_have_class(self._class_name, timeout=timeout)
+        expect(self._locator).to_have_class(self._class_name, timeout=scale_timeout(timeout))
     
     def expect_not(self, timeout: float | None = None) -> None:
-        expect(self._locator).not_to_have_class(self._class_name, timeout=timeout)
+        expect(self._locator).not_to_have_class(self._class_name, timeout=scale_timeout(timeout))
     
     def get(self) -> bool:
         return self._class_name in (self._locator.get_attribute('class') or '').split(' ')
+
+
+# ------------------------------------------------------------------------------
+# Utility
+
+def scale_timeout(timeout: float | None) -> float | None:
+    if timeout is None:
+        return timeout
+    else:
+        return timeout * GLOBAL_TIMEOUT_MULTIPLIER
 
 
 # ------------------------------------------------------------------------------
