@@ -402,7 +402,7 @@ def _future_result_deadlock_detection():
             #       code that unsafely calls Future.result(timeout=None)
             #       in a context it believes the Future will always be done.
             if timeout is None and not self.done() and not getattr(self, '_cr_declare_no_deadlocks', False):
-                raise AssertionError(
+                raise RuntimeError(
                     "Calling Future.result() from the foreground thread will cause a deadlock. "
                     "Use 'await wait_for_future(future)' instead."
                 )
