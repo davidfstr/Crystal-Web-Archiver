@@ -29,6 +29,7 @@ from crystal.util.url_prefix import (
     get_url_directory_prefix_for, get_url_domain_prefix_for,
 )
 from crystal.util.wx_bind import bind
+from crystal.util.wx_system_appearance import IsDark
 from crystal.util.wx_treeitem_gettooltip import (
     EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent,
 )
@@ -1600,7 +1601,7 @@ class MorePlaceholderNode(Node):
         icon_name = 'entitytree_more'
         
         ICONS = TREE_NODE_ICONS()  # cache
-        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        is_dark_mode = IsDark()
         icon = ICONS[icon_name + '-dark'] if is_dark_mode else ICONS[icon_name]
         return (
             (wx.TreeItemIcon_Normal, icon),

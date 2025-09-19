@@ -14,6 +14,7 @@ from crystal.util.bulkheads import Bulkhead, BulkheadCell, capture_crashes_to
 from crystal.util.bulkheads import capture_crashes_to_bulkhead_arg
 from crystal.util.bulkheads import capture_crashes_to_stderr, CrashReason
 from crystal.util.wx_bind import bind
+from crystal.util.wx_system_appearance import IsDark
 from crystal.util.wx_treeitem_gettooltip import (
     EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent,
 )
@@ -280,7 +281,7 @@ class TaskTreeNode:
             return
         
         ICONS = TREE_NODE_ICONS()  # cache
-        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        is_dark_mode = IsDark()
         icon = ICONS[icon_name + '-dark'] if is_dark_mode else ICONS[icon_name]
         self.tree_node.icon_set = (
             (wx.TreeItemIcon_Normal, icon),
@@ -624,7 +625,7 @@ class _MoreNodeView(NodeView):
         icon_name = 'entitytree_more'
         
         ICONS = TREE_NODE_ICONS()  # cache
-        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        is_dark_mode = IsDark()
         icon = ICONS[icon_name + '-dark'] if is_dark_mode else ICONS[icon_name]
         self.icon_set = (
             (wx.TreeItemIcon_Normal, icon),

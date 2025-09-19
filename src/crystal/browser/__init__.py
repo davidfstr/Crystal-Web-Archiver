@@ -44,6 +44,7 @@ from crystal.util.wx_dialog import (
     position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
     ShowModal,
 )
+from crystal.util.wx_system_appearance import IsDark, IsDarkNow, SetDark
 from crystal.util.wx_timer import Timer, TimerError
 from crystal.util.xcollections.iterables import is_iterable_empty, is_iterable_len_1
 from crystal.util.xos import (
@@ -747,6 +748,8 @@ class MainWindow(CloakMixin):
     @fg_affinity
     def _on_system_appearance_changed(self, event: wx.SysColourChangedEvent) -> None:
         """Update UI when system transitions to/from dark mode."""
+        SetDark(IsDarkNow())
+        
         self.entity_tree.root.update_icon_set_of_descendants_supporting_dark_mode()
         self._refresh_task_tree_appearance()
         self._refresh_branding_area()
@@ -1432,7 +1435,7 @@ class MainWindow(CloakMixin):
             # Use OS default appearance
             return
         
-        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        is_dark_mode = IsDark()
         if is_dark_mode:
             # Use a slightly lighter dark color to ensure text is readable
             self.task_tree.peer.SetBackgroundColour(wx.Colour(0x30, 0x30, 0x30))  # dark gray
@@ -1552,7 +1555,7 @@ class MainWindow(CloakMixin):
         else:
             raise AssertionError('Unknown operating system')
         
-        is_dark_mode = wx.SystemSettings.GetAppearance().IsDark()
+        is_dark_mode = IsDark()
         
         # Create branding area with icon and text
         branding_area = wx.Panel(parent)
