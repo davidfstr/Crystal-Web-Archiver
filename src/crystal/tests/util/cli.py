@@ -1,4 +1,5 @@
 
+from ast import literal_eval
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from crystal.util.xos import is_asan, is_windows
 from select import select
 import textwrap
 import time
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 import warnings
 from io import TextIOBase
 import os
@@ -304,11 +305,11 @@ def py_eval(
     expression, remember to wrap the expression in a print() statement.
     For example:
     
-        untitled_project_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
+        untitled_project_path = py_eval_literal(crystal, textwrap.dedent('''\
             from crystal.util.unsaved_project import get_unsaved_untitled_project_path
             print(repr(get_unsaved_untitled_project_path()))
             '''
-        )))
+        ))
 
     If you need to execute any code that waits on parts of the user interface,
     you'll need to run the waits in a separate thread. Use the following
@@ -337,6 +338,9 @@ def py_eval(
     - `print('OK')` -- Signal that the code has finished executing
     - `_OK_THREAD_STOP_SUFFIX` -- Wait for the code to finish executing
     - `timeout=...` -- Pick an appropriate timeout
+    
+    See also:
+    - py_eval_literal()
     """
     if '\n' in py_code:
         # Execute multi-line code as a single line
@@ -355,6 +359,25 @@ def py_eval(
         #       Remove them.
         result_no_suffix = result_no_suffix.removesuffix('\x1b]633;E;0\x07\x1b]633;A\x07')
     return result_no_suffix
+
+
+def py_eval_literal(
+        python: subprocess.Popen,
+        py_code: str,
+        ) -> Any:
+    """
+    Similar to py_eval() but always returns the parsed repr() of the expression
+    printed by the code.
+    """
+    expr_str = py_eval(python, py_code)
+    try:
+        return literal_eval(expr_str)
+    except SyntaxError as e:
+        raise SyntaxError(
+            f'{e} '
+            f'Tried to parse: {expr_str!r} '
+            f'Trailing output: {drain(python)!r}'
+        ) from None
 
 
 def read_until(

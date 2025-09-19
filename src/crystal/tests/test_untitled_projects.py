@@ -1,4 +1,3 @@
-from ast import literal_eval
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from crystal.browser import MainWindow as RealMainWindow
@@ -9,7 +8,7 @@ from crystal.progress import CancelSaveAs, SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
 from crystal.tests.util import xtempfile
 from crystal.tests.util.cli import (
-    PROJECT_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, crystal_shell, py_eval, wait_for_main_window, _OK_THREAD_STOP_SUFFIX,
+    PROJECT_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, crystal_shell, py_eval, py_eval_literal, wait_for_main_window, _OK_THREAD_STOP_SUFFIX,
 )
 from crystal.tests.util.controls import (
     TreeItem, file_dialog_returning,
@@ -1192,15 +1191,15 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             create_new_empty_project(crystal)
             
             # Verify project is tracked for reopen
-            tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
+            tracked_path = py_eval_literal(crystal, textwrap.dedent('''\
                 from crystal.app_preferences import app_prefs
                 print(repr(app_prefs.unsaved_untitled_project_path))
                 '''
-            )))
+            ))
             assert tracked_path and 'UntitledProjects' in tracked_path
             
             # Capture the project path for later verification
-            project_path = literal_eval(py_eval(crystal, 'project.path'))
+            project_path = py_eval_literal(crystal, 'project.path')
             
             # Simulate unexpected quit
             crystal.kill()
@@ -1218,19 +1217,15 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             wait_for_main_window(crystal)
             
             # Verify the untitled project was automatically reopened
-            reopened_path_str = py_eval(crystal, 'project.path')
-            try:
-                reopened_path = literal_eval(reopened_path_str)
-            except SyntaxError:
-                raise AssertionError(f'Failed to parse reopened project path: {reopened_path_str!r}')
+            reopened_path = py_eval_literal(crystal, 'project.path')
             assert reopened_path == project_path
             
             # Verify it's still untitled
-            is_untitled = literal_eval(py_eval(crystal, 'project.is_untitled'))
+            is_untitled = py_eval_literal(crystal, 'project.is_untitled')
             assert is_untitled == True
             
             # Verify it's considered immediately dirty
-            is_dirty = literal_eval(py_eval(crystal, 'project.is_dirty'))
+            is_dirty = py_eval_literal(crystal, 'project.is_dirty')
             assert is_dirty == True
             
             # Force quit, so that we don't have to respond to the "Save Changes?" dialog
@@ -1291,11 +1286,11 @@ async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then
             ), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
             
             # Verify state is cleared after saving
-            tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
+            tracked_path = py_eval_literal(crystal, textwrap.dedent('''\
                 from crystal.app_preferences import app_prefs
                 print(repr(app_prefs.unsaved_untitled_project_path))
                 '''
-            )))
+            ))
             assert tracked_path == None, f"Expected 'None' but got {repr(tracked_path)}"
             
             # Simulate unexpected quit
@@ -1329,11 +1324,11 @@ async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_
             create_new_empty_project(crystal)
             
             # Verify project is tracked
-            tracked_path = literal_eval(py_eval(crystal, textwrap.dedent('''\
+            tracked_path = py_eval_literal(crystal, textwrap.dedent('''\
                 from crystal.app_preferences import app_prefs
                 print(repr(app_prefs.unsaved_untitled_project_path))
                 '''
-            )))
+            ))
             assert 'UntitledProjects' in tracked_path
             
             # Close the project cleanly through the UI (this should clear the reopen state)

@@ -1,8 +1,7 @@
-from ast import literal_eval
 from typing import List
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, read_until, wait_for_crystal_to_exit, crystal_shell
+from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_literal, read_until, wait_for_crystal_to_exit, crystal_shell
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
@@ -129,7 +128,7 @@ def test_can_use_pythonstartup_file() -> None:
         with crystal_shell(env_extra={'PYTHONSTARTUP': startup_file.name}) as (crystal, _):
             assertEqual(
                 ['a', 'b', 'c'],
-                literal_eval(py_eval(crystal, 'EXCLUDED_URLS')),
+                py_eval_literal(crystal, 'EXCLUDED_URLS'),
                 'Expected variables written at top-level by '
                     '$PYTHONSTARTUP file to be accessible from shell'
             )
@@ -146,12 +145,12 @@ def test_builtin_globals_have_stable_public_api(subtests: SubtestsContext) -> No
         
         with subtests.test(global_name='project'):
             assertEqual(_EXPECTED_PROJECT_PUBLIC_MEMBERS,
-                literal_eval(py_eval(crystal, "[x for x in dir(project) if not x.startswith('_')]")),
+                py_eval_literal(crystal, "[x for x in dir(project) if not x.startswith('_')]"),
                 'Public API of Project class has changed')
         
         with subtests.test(global_name='window'):
             assertEqual(_EXPECTED_WINDOW_PUBLIC_MEMBERS,
-                literal_eval(py_eval(crystal, "[x for x in dir(window) if not x.startswith('_')]")),
+                py_eval_literal(crystal, "[x for x in dir(window) if not x.startswith('_')]"),
                 'Public API of MainWindow class has changed')
 
 
@@ -362,7 +361,7 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                         'reason_phrase': 'OK',
                         'headers': ANY
                     },
-                    literal_eval(py_eval(crystal, f'rr.metadata')))
+                    py_eval_literal(crystal, f'rr.metadata'))
                 py_eval(crystal, f'with rr.open() as f:\n    body = f.read()\n', stop_suffix='>>> ')
                 assertEqual(
                     r"""b'<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" type="text/css" href="/s/7d94e0.css" title="Default"/>\n<title>xkcd: Air Gap</title>\n'""" + '\n',
@@ -379,8 +378,8 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                         crystal, f'server = ProjectServer(p, stdout=StringIO())',
                         timeout=8.0  # 2.0s and 4.0s isn't long enough for macOS test runners on GitHub Actions
                     ))
-                port = literal_eval(py_eval(crystal, f'server.port'))
-                request_url = literal_eval(py_eval(crystal, f'server.get_request_url({home_url!r})'))
+                port = py_eval_literal(crystal, f'server.port')
+                request_url = py_eval_literal(crystal, f'server.get_request_url({home_url!r})')
                 
                 # Test ProjectServer serves resource revision
                 assertIn(str(port), request_url)
@@ -439,7 +438,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                     assertEqual('', py_eval(crystal, 'rr_future = r.download()'))
                     # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
-                        is_done = (literal_eval(py_eval(crystal, 'rr_future.done()')) == True)
+                        is_done = (py_eval_literal(crystal, 'rr_future.done()') == True)
                         if is_done:
                             break
                         time.sleep(.2)
@@ -453,7 +452,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                     py_eval(crystal, f'rg = ResourceGroup(p, "Comic", {comic_pattern!r}); rg'))
                 # Ensure ResourceGroup includes some members discovered by downloading resource Home
                 def rg_member_count() -> int:
-                    count = literal_eval(py_eval(crystal, f'len(rg.members)'))
+                    count = py_eval_literal(crystal, f'len(rg.members)')
                     assert isinstance(count, int)
                     return count
                 wait_for_sync(lambda: 9 == rg_member_count())
@@ -502,7 +501,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                     assertEqual('', py_eval(crystal, 'rr_future = root_r.download()'))
                     # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
-                        is_done = (literal_eval(py_eval(crystal, 'rr_future.done()')) == True)
+                        is_done = (py_eval_literal(crystal, 'rr_future.done()') == True)
                         if is_done:
                             break
                         time.sleep(.2)
@@ -518,20 +517,20 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Ensure ResourceGroup includes some members discovered by downloading resource Home
                 assertEqual(
                     2,
-                    literal_eval(py_eval(crystal, f'len(rg.members)')))
+                    py_eval_literal(crystal, f'len(rg.members)'))
                 
                 # Test can download ResourceGroup
                 with delay_between_downloads_minimized(crystal):
                     assertEqual('', py_eval(crystal, 'drgt = rg.download()'))
                     # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
-                        is_done = (literal_eval(py_eval(crystal, 'drgt.complete')) == True)
+                        is_done = (py_eval_literal(crystal, 'drgt.complete') == True)
                         if is_done:
                             break
                         time.sleep(.2)
                 assertEqual(
                     [True] * 2,
-                    literal_eval(py_eval(crystal, '[r.has_any_revisions() for r in rg.members]')))
+                    py_eval_literal(crystal, '[r.has_any_revisions() for r in rg.members]'))
 
 
 @skip('covered by: test_can_write_project_with_shell')
@@ -562,7 +561,7 @@ def test_can_delete_project_entities() -> None:
 def test_can_import_guppy_in_shell() -> None:
     with crystal_shell() as (crystal, _):
         # Ensure can import guppy
-        import_result = literal_eval(py_eval(crystal, 'import guppy; guppy.__version__'))
+        import_result = py_eval_literal(crystal, 'import guppy; guppy.__version__')
         assert isinstance(import_result, str)
         
         # Ensure can create hpy instance
