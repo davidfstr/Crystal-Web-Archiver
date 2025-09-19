@@ -24,7 +24,7 @@ from crystal.tests.util.windows import (
     MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
 )
 from crystal.tests.util.xplaywright import (
-    Playwright, RawPage, awith_playwright, expect,
+    Playwright, RawPage, awith_playwright, expect, scale_timeout,
 )
 from crystal.util.cli import TERMINAL_FG_PURPLE, colorize
 from crystal.util.ports import is_port_in_use
@@ -702,7 +702,6 @@ async def test_given_create_group_form_visible_when_any_download_button_clicked_
             
             # Wait for the page to reload after download completes.
             # The group should be created automatically and the page should reload to the comic.
-            expect(raw_page).not_to_have_title('Not in Archive | Crystal')
             expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
 
     # Test Case 2: Download button at the bottom of the create group form
@@ -949,7 +948,6 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
                 expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
                 
                 # Wait for the page to reload (indicating successful download)
-                expect(raw_page).not_to_have_title('Not in Archive | Crystal')
                 expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
             await pw.run(pw_task)
 

@@ -78,6 +78,8 @@ class NotInArchivePage(AbstractPage):
                 raise
         
         # Wait for the page to reload after download completes
+        # TODO: This kind of check is probably flaky.
+        #       Caller should pass in what the title is expected to be instead.
         expect(self.raw_page).not_to_have_title('Not in Archive | Crystal')
     
     # === Create Group Form ===

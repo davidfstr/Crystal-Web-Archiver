@@ -758,7 +758,6 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     
                     # Wait for the page to reload after download completes.
                     # The group should be created automatically and the page should reload to the comic.
-                    expect(raw_page).not_to_have_title('Not in Archive | Crystal')
                     expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
                 
                 # Click ">" link to navigate to second comic.
@@ -789,7 +788,6 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
                     
                     # Wait for the page to reload (indicating successful download)
-                    expect(raw_page).not_to_have_title('Not in Archive | Crystal')
                     expect(raw_page).to_have_title('xkcd: Petit Trees (sketch)')
             await pw.run(pw_task)
             
