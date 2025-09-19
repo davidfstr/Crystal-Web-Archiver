@@ -1,3 +1,4 @@
+from contextlib import closing
 import random
 import sqlite3
 from typing import LiteralString
@@ -33,14 +34,14 @@ def is_database_read_only_error(e: object) -> bool:
 #       in that case.
 def sqlite_has_json_support() -> bool:
     with sqlite3.connect(':memory:') as db:
-        c = db.cursor()
-        try:
-            return list(c.execute('select json(1)')) == [('1',)]
-        except sqlite3.OperationalError as e:
-            if str(e) == 'no such function: json':
-                return False
-            else:
-                raise
+        with closing(db.cursor()) as c:
+            try:
+                return list(c.execute('select json(1)')) == [('1',)]
+            except sqlite3.OperationalError as e:
+                if str(e) == 'no such function: json':
+                    return False
+                else:
+                    raise
 
 
 def random_choices_from_table_ids(

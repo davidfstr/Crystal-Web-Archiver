@@ -8,7 +8,7 @@ All tests below implicitly include the condition:
 * given_project_opened_as_writable
 """
 from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, closing, contextmanager
 from crystal import progress
 import crystal.main
 from crystal.model import Project, Resource
@@ -281,21 +281,21 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
             # Create many revisions
             if True:
                 # Create revision rows in database
-                c = project._db.cursor()
-                encoded_null_error = RR._encode_error(None)
-                encoded_404_error = RR._encode_metadata(ResourceRevisionMetadata(
-                    http_version=10,
-                    status_code=404,
-                    reason_phrase='Not Found',
-                    headers=[],
-                ))
-                c.executemany(
-                    'insert into resource_revision '
-                        '(id, resource_id, request_cookie, error, metadata) values (?, ?, ?, ?, ?)', 
-                    [
-                        (r._id, r._id, None, encoded_null_error, encoded_404_error)
-                        for r in resources
-                    ])
+                with closing(project._db.cursor()) as c:
+                    encoded_null_error = RR._encode_error(None)
+                    encoded_404_error = RR._encode_metadata(ResourceRevisionMetadata(
+                        http_version=10,
+                        status_code=404,
+                        reason_phrase='Not Found',
+                        headers=[],
+                    ))
+                    c.executemany(
+                        'insert into resource_revision '
+                            '(id, resource_id, request_cookie, error, metadata) values (?, ?, ?, ?, ?)', 
+                        [
+                            (r._id, r._id, None, encoded_null_error, encoded_404_error)
+                            for r in resources
+                        ])
                 project._db.commit()
                 
                 # Create revision files in filesystem

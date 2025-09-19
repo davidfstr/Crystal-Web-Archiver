@@ -1,3 +1,4 @@
+from contextlib import closing
 from crystal import progress
 import crystal.main
 from crystal.model import Project, Resource
@@ -163,10 +164,10 @@ async def test_given_project_is_corrupt_when_open_project_then_displays_error_di
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             group = list(project.resource_groups)[0]  # arbitrary
             
-            c = project._db.cursor()
-            c.execute(
-                'update resource_group set source_type = ? where id = ?',
-                ('bogus', group._id))
+            with closing(project._db.cursor()) as c:
+                c.execute(
+                    'update resource_group set source_type = ? where id = ?',
+                    ('bogus', group._id))
             project._db.commit()
         
         # Try to open that project

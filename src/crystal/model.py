@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from concurrent.futures import Future
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 import copy
 from crystal import resources as resources_
 from crystal.doc.css import parse_css_and_links
@@ -307,9 +307,8 @@ class Project(ListenableMixin):
             try:
                 # NOTE: May raise ProjectReadOnlyError if the database cannot be opened as writable
                 with cls._open_database_but_close_if_raises(path, readonly_requested, self._mark_dirty_if_untitled, expect_writable=create) as (
-                        self._db, self._readonly, self._database_is_on_ssd):
-                    c = self._db.cursor()
-                    
+                            self._db, self._readonly, self._database_is_on_ssd), \
+                        closing(self._db.cursor()) as c:
                     # Create new project content, if missing
                     if create:
                         self._create(c, self._db)
@@ -438,8 +437,8 @@ class Project(ListenableMixin):
             # creating a database file but not actually writing to it.
             if not readonly_actual:
                 try:
-                    c = db.cursor()
-                    c.execute('pragma user_version = user_version')
+                    with closing(db.cursor()) as c:
+                        c.execute('pragma user_version = user_version')
                 except Exception as e:
                     if is_database_read_only_error(e):
                         readonly_actual = True  # reinterpret
@@ -452,13 +451,13 @@ class Project(ListenableMixin):
             
             # Prefer Write Ahead Log (WAL) mode for higher performance
             if not readonly_actual:
-                c = db.cursor()
-                [(new_journal_mode,)] = c.execute('pragma journal_mode = wal')
-                if new_journal_mode != 'wal':
-                    print(
-                        '*** Unable to open database in WAL mode. '
-                            'Downloads may be slower.',
-                        file=sys.stderr)
+                with closing(db.cursor()) as c:
+                    [(new_journal_mode,)] = c.execute('pragma journal_mode = wal')
+                    if new_journal_mode != 'wal':
+                        print(
+                            '*** Unable to open database in WAL mode. '
+                                'Downloads may be slower.',
+                            file=sys.stderr)
             
             yield (db, readonly_actual, database_is_on_ssd)
         except:
@@ -1087,8 +1086,8 @@ class Project(ListenableMixin):
                 return
             if self.readonly:
                 raise ProjectReadOnlyError()
-            c = self._db.cursor()
-            c.execute('insert or replace into project_property (name, value) values (?, ?)', (name, value))
+            with closing(self._db.cursor()) as c:
+                c.execute('insert or replace into project_property (name, value) values (?, ?)', (name, value))
             self._db.commit()
         self._properties[name] = value
     def _delete_property(self, name: str) -> None:
@@ -1097,8 +1096,8 @@ class Project(ListenableMixin):
                 return
             if self.readonly:
                 raise ProjectReadOnlyError()
-            c = self._db.cursor()
-            c.execute('delete from project_property where name=?', (name,))
+            with closing(self._db.cursor()) as c:
+                c.execute('delete from project_property where name=?', (name,))
             self._db.commit()
         del self._properties[name]
     
@@ -1191,18 +1190,18 @@ class Project(ListenableMixin):
         """
         ordering = 'desc' if most_recent_first else 'asc'
         
-        c = self._db.cursor()
-        try:
-            return [
-                rc for (rc,) in
-                c.execute(f'select distinct request_cookie from resource_revision where request_cookie is not null order by id {ordering}')
-            ]
-        except Exception as e:
-            if is_no_such_column_error_for('request_cookie', e):
-                # Fetch from <=1.2.0 database schema
-                return []
-            else:
-                raise
+        with closing(self._db.cursor()) as c:
+            try:
+                return [
+                    rc for (rc,) in
+                    c.execute(f'select distinct request_cookie from resource_revision where request_cookie is not null order by id {ordering}')
+                ]
+            except Exception as e:
+                if is_no_such_column_error_for('request_cookie', e):
+                    # Fetch from <=1.2.0 database schema
+                    return []
+                else:
+                    raise
     
     def _get_min_fetch_date(self) -> datetime.datetime | None:
         return self._min_fetch_date
@@ -1263,19 +1262,20 @@ class Project(ListenableMixin):
                     resource = Resource(self, url, _id=id)
                 resources.append(resource)
             # NOTE: May raise CancelLoadUrls if user cancels
-            self._process_table_rows(
-                self._db.cursor(),
-                # NOTE: The following query to approximate row count is
-                #       significantly faster than the exact query
-                #       ('select count(1) from resource') because it
-                #       does not require a full table scan.
-                'select id from resource order by id desc limit 1',
-                # TODO: Consider add 'order by id asc'
-                'select url, id from resource',
-                load_resource,
-                progress_listener.will_load_resources,
-                loading_resource,
-                progress_listener.did_load_resources)
+            with closing(self._db.cursor()) as c:
+                self._process_table_rows(
+                    c,
+                    # NOTE: The following query to approximate row count is
+                    #       significantly faster than the exact query
+                    #       ('select count(1) from resource') because it
+                    #       does not require a full table scan.
+                    'select id from resource order by id desc limit 1',
+                    # TODO: Consider add 'order by id asc'
+                    'select url, id from resource',
+                    load_resource,
+                    progress_listener.will_load_resources,
+                    loading_resource,
+                    progress_listener.did_load_resources)
             
             # Index Resources
             progress_listener.indexing_resources()
@@ -1357,12 +1357,12 @@ class Project(ListenableMixin):
             #           r = (# of Resources in Project),
             #           s = (# of Resources in Project matching the literal prefix), and
             #           g = (# of Resources in the resulting group).
-            c = self._db.cursor()
-            member_data = c.execute(
-                'select id, url from resource where url glob ? and url regexp ? order by id',
-                (literal_prefix + '*', url_pattern_re.pattern)
-            )
-            return self._materialize_resources(member_data)
+            with closing(self._db.cursor()) as c:
+                member_data = c.execute(
+                    'select id, url from resource where url glob ? and url regexp ? order by id',
+                    (literal_prefix + '*', url_pattern_re.pattern)
+                )
+                return self._materialize_resources(member_data)
     
     def _materialize_resources(self, resources_data: Iterator[tuple[int, str]]) -> list[Resource]:
         resources = []
@@ -1438,26 +1438,26 @@ class Project(ListenableMixin):
             #       in O(log(r) + s) time rather than O(r) time, where
             #           r = (# of Resources in Project) and
             #           s = (# of Resources in Project matching the literal prefix).
-            c = self._db.cursor()
-            if limit is None:
-                member_urls = [url for (url,) in c.execute(
-                    'select url from resource where url glob ? and url regexp ? order by url',
-                    (literal_prefix + '*', url_pattern_re.pattern)
-                )]
-                return (member_urls, len(member_urls))
-            else:
-                member_urls = [url for (url,) in c.execute(
-                    'select url from resource where url glob ? and url regexp ? order by url limit ?',
-                    (literal_prefix + '*', url_pattern_re.pattern, limit + 1)
-                )]
-                if len(member_urls) <= limit:
+            with closing(self._db.cursor()) as c:
+                if limit is None:
+                    member_urls = [url for (url,) in c.execute(
+                        'select url from resource where url glob ? and url regexp ? order by url',
+                        (literal_prefix + '*', url_pattern_re.pattern)
+                    )]
                     return (member_urls, len(member_urls))
                 else:
-                    [(approx_member_count,)] = c.execute(
-                        'select count(1) from resource where url glob ?',
-                        (literal_prefix + '*',)
-                    )
-                    return (member_urls[:-1], approx_member_count)
+                    member_urls = [url for (url,) in c.execute(
+                        'select url from resource where url glob ? and url regexp ? order by url limit ?',
+                        (literal_prefix + '*', url_pattern_re.pattern, limit + 1)
+                    )]
+                    if len(member_urls) <= limit:
+                        return (member_urls, len(member_urls))
+                    else:
+                        [(approx_member_count,)] = c.execute(
+                            'select count(1) from resource where url glob ?',
+                            (literal_prefix + '*',)
+                        )
+                        return (member_urls[:-1], approx_member_count)
     
     # === Children ===
     
@@ -1476,9 +1476,9 @@ class Project(ListenableMixin):
             # TODO: Alter implementation to load resources one page at a time
             #       rather than all at once, so that this method can be used
             #       on projects with very many resources
-            c = self._db.cursor()
-            resources_data = c.execute('select id, url from resource order by id')
-            return self._materialize_resources(resources_data)
+            with closing(self._db.cursor()) as c:
+                resources_data = c.execute('select id, url from resource order by id')
+                return self._materialize_resources(resources_data)
     
     @property
     def _materialized_resources(self) -> Iterable[Resource]:
@@ -1515,8 +1515,8 @@ class Project(ListenableMixin):
         resource = self._resource_for_url.get(url)
         if resource is not None:
             return resource
-        c = self._db.cursor()
-        rows = list(c.execute('select id from resource where url = ?', (url,)))
+        with closing(self._db.cursor()) as c:
+            rows = list(c.execute('select id from resource where url = ?', (url,)))
         if len(rows) == 0:
             return None
         else:
@@ -1546,8 +1546,8 @@ class Project(ListenableMixin):
         resource = self._resource_for_id.get(id)
         if resource is not None:
             return resource
-        c = self._db.cursor()
-        rows = list(c.execute('select url from resource where id = ?', (id,)))
+        with closing(self._db.cursor()) as c:
+            rows = list(c.execute('select url from resource where id = ?', (id,)))
         if len(rows) == 0:
             return None
         else:
@@ -1653,9 +1653,9 @@ class Project(ListenableMixin):
     
     # NOTE: Used by tests
     def _revision_count(self) -> int:
-        c = self._db.cursor()
-        [(revision_count,)] = c.execute('select count(1) from resource_revision')
-        return revision_count
+        with closing(self._db.cursor()) as c:
+            [(revision_count,)] = c.execute('select count(1) from resource_revision')
+            return revision_count
     
     # === Tasks ===
     
@@ -2125,8 +2125,7 @@ class Project(ListenableMixin):
             db_raw = sqlite3.connect(
                 'file:' + url_quote(db_filepath) + db_connect_query,
                 uri=True)
-            with db_raw:
-                c = db_raw.cursor()
+            with db_raw, closing(db_raw.cursor()) as c:
                 # NOTE: This is much faster than count(1)
                 [(max_revision_id,)] = c.execute('select max(id) from resource_revision')
                 approx_revision_count = max_revision_id or 0
@@ -2446,15 +2445,15 @@ class Project(ListenableMixin):
         # as recommended by: https://www.sqlite.org/wal.html#readonly
         if not readonly:
             try:
-                c = db.cursor()
-                [(old_journal_mode,)] = c.execute('pragma journal_mode')
-                if old_journal_mode == 'wal':
-                    [(new_journal_mode,)] = c.execute('pragma journal_mode = delete')
-                    if new_journal_mode != 'delete':
-                        print(
-                            '*** Unable to close database with WAL mode turned off. '
-                                'Project may be slower to read if burned to read-only media.',
-                            file=sys.stderr)
+                with closing(db.cursor()) as c:
+                    [(old_journal_mode,)] = c.execute('pragma journal_mode')
+                    if old_journal_mode == 'wal':
+                        [(new_journal_mode,)] = c.execute('pragma journal_mode = delete')
+                        if new_journal_mode != 'delete':
+                            print(
+                                '*** Unable to close database with WAL mode turned off. '
+                                    'Project may be slower to read if burned to read-only media.',
+                                file=sys.stderr)
             except sqlite3.Error:
                 # Ignore errors while closing database
                 pass
@@ -2668,11 +2667,11 @@ class Resource:
             if project.readonly:
                 _id = Resource._UNSAVED_ID
             else:
-                c = project._db.cursor()
-                c.execute('insert into resource (url) values (?)', (normalized_url,))
-                project._db.commit()
-                assert c.lastrowid is not None
-                _id = c.lastrowid
+                with closing(project._db.cursor()) as c:
+                    c.execute('insert into resource (url) values (?)', (normalized_url,))
+                    project._db.commit()
+                    assert c.lastrowid is not None
+                    _id = c.lastrowid
             
             # Can't have revisions because it was just created this session
             self._definitely_has_no_revisions = True
@@ -2872,12 +2871,12 @@ class Resource:
         else:
             message = lambda: f'{len(normalized_urls)} links from {origin_url!r}'
         with warn_if_slow('Inserting links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
-            c = project._db.cursor()
-            placeholders = ','.join(['(?)'] * len(normalized_urls))
-            rows = list(c.execute(
-                f'insert into resource (url) values {placeholders} returning id',
-                normalized_urls)
-            )  # type: List[Tuple[int]]
+            with closing(project._db.cursor()) as c:
+                placeholders = ','.join(['(?)'] * len(normalized_urls))
+                rows = list(c.execute(
+                    f'insert into resource (url) values {placeholders} returning id',
+                    normalized_urls)
+                )  # type: List[Tuple[int]]
         with warn_if_slow('Committing links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
             project._db.commit()  # end transaction
         return [id for (id,) in rows]
@@ -3180,9 +3179,9 @@ class Resource:
         if self._definitely_has_no_revisions:
             return False
         
-        c = self.project._db.cursor()
-        c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
-        return c.fetchone() is not None
+        with closing(self.project._db.cursor()) as c:
+            c.execute('select 1 from resource_revision where resource_id=? limit 1', (self._id,))
+            return c.fetchone() is not None
     
     @fg_affinity
     def default_revision(self, *, stale_ok: bool=True) -> ResourceRevision | None:
@@ -3227,33 +3226,33 @@ class Resource:
         
         ordering = 'asc' if not reversed else 'desc'
         
-        c = self.project._db.cursor()
-        try:
-            rows = c.execute(
-                f'select request_cookie, error, metadata, id '
-                    f'from resource_revision where resource_id=? order by id {ordering}',
-                (self._id,)
-            )  # type: Iterable[Tuple[Any, Any, Any, Any]]
-        except Exception as e:
-            if is_no_such_column_error_for('request_cookie', e):
-                # Fetch from <=1.2.0 database schema
-                old_rows = c.execute(
-                    f'select error, metadata, id '
+        with closing(self.project._db.cursor()) as c:
+            try:
+                rows = c.execute(
+                    f'select request_cookie, error, metadata, id '
                         f'from resource_revision where resource_id=? order by id {ordering}',
                     (self._id,)
-                )  # type: Iterable[Tuple[Any, Any, Any]]
-                rows = ((None, c0, c1, c2) for (c0, c1, c2) in old_rows)
-            else:
-                raise
-        any_rows = False
-        for (request_cookie, error, metadata, id) in rows:
-            any_rows = True
-            yield ResourceRevision._load_from_data(
-                resource=self,
-                request_cookie=request_cookie,
-                error=RR._decode_error(error),
-                metadata=RR._decode_metadata(metadata),
-                id=id)
+                )  # type: Iterable[Tuple[Any, Any, Any, Any]]
+            except Exception as e:
+                if is_no_such_column_error_for('request_cookie', e):
+                    # Fetch from <=1.2.0 database schema
+                    old_rows = c.execute(
+                        f'select error, metadata, id '
+                            f'from resource_revision where resource_id=? order by id {ordering}',
+                        (self._id,)
+                    )  # type: Iterable[Tuple[Any, Any, Any]]
+                    rows = ((None, c0, c1, c2) for (c0, c1, c2) in old_rows)
+                else:
+                    raise
+            any_rows = False
+            for (request_cookie, error, metadata, id) in rows:
+                any_rows = True
+                yield ResourceRevision._load_from_data(
+                    resource=self,
+                    request_cookie=request_cookie,
+                    error=RR._decode_error(error),
+                    metadata=RR._decode_metadata(metadata),
+                    id=id)
         
         if not any_rows:
             self._definitely_has_no_revisions = True
@@ -3300,8 +3299,8 @@ class Resource:
         
         if project.readonly:
             raise ProjectReadOnlyError()
-        c = project._db.cursor()
-        c.execute('update resource set url=? where id=?', (new_url, self._id,))
+        with closing(project._db.cursor()) as c:
+            c.execute('update resource set url=? where id=?', (new_url, self._id,))
         project._db.commit()
         
         old_url = self._url  # capture
@@ -3319,12 +3318,12 @@ class Resource:
             raise ProjectReadOnlyError()
         
         # Ensure not referenced by a RootResource
-        c = project._db.cursor()
-        root_resource_ids = [
-            id
-            for (id,) in 
-            c.execute('select id from root_resource where resource_id=?', (self._id,))
-        ]
+        with closing(project._db.cursor()) as c:
+            root_resource_ids = [
+                id
+                for (id,) in 
+                c.execute('select id from root_resource where resource_id=?', (self._id,))
+            ]
         if len(root_resource_ids) > 0:
             raise ValueError(f'Cannot delete {self!r} referenced by RootResource {root_resource_ids!r}')
         
@@ -3335,8 +3334,8 @@ class Resource:
         project._resource_will_delete(self)
         
         # Delete Resource itself
-        c = project._db.cursor()
-        c.execute('delete from resource where id=?', (self._id,))
+        with closing(project._db.cursor()) as c:
+            c.execute('delete from resource where id=?', (self._id,))
         project._db.commit()
         self._id = Resource._DELETED_ID
     
@@ -3400,10 +3399,10 @@ class RootResource:
             else:
                 if project.readonly:
                     raise ProjectReadOnlyError()
-                c = project._db.cursor()
-                c.execute('insert into root_resource (name, resource_id) values (?, ?)', (name, resource._id))
-                project._db.commit()
-                self._id = c.lastrowid
+                with closing(project._db.cursor()) as c:
+                    c.execute('insert into root_resource (name, resource_id) values (?, ?)', (name, resource._id))
+                    project._db.commit()
+                    self._id = c.lastrowid
             project._root_resources[resource] = self
             
             if not project._loading:
@@ -3425,8 +3424,8 @@ class RootResource:
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        c = self.project._db.cursor()
-        c.execute('delete from root_resource where id=?', (self._id,))
+        with closing(self.project._db.cursor()) as c:
+            c.execute('delete from root_resource where id=?', (self._id,))
         self.project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
@@ -3446,10 +3445,10 @@ class RootResource:
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        c = self.project._db.cursor()
-        c.execute('update root_resource set name=? where id=?', (
-            name,
-            self._id,))
+        with closing(self.project._db.cursor()) as c:
+            c.execute('update root_resource set name=? where id=?', (
+                name,
+                self._id,))
         self.project._db.commit()
         
         self._name = name
@@ -3663,13 +3662,13 @@ class ResourceRevision:
                 
                 if project.readonly:
                     raise ProjectReadOnlyError()
-                c = project._db.cursor()
-                c.execute(
-                    'insert into resource_revision '
-                        '(resource_id, request_cookie, error, metadata) values (?, ?, ?, ?)', 
-                    (resource._id, request_cookie, RR._encode_error(error), RR._encode_metadata(metadata)))
-                project._db.commit()
-                self._id = c.lastrowid
+                with closing(project._db.cursor()) as c:
+                    c.execute(
+                        'insert into resource_revision '
+                            '(resource_id, request_cookie, error, metadata) values (?, ?, ?, ?)', 
+                        (resource._id, request_cookie, RR._encode_error(error), RR._encode_metadata(metadata)))
+                    project._db.commit()
+                    self._id = c.lastrowid
             except BaseException as e:
                 callable_exc_info = sys.exc_info()
             finally:
@@ -3718,8 +3717,8 @@ class ResourceRevision:
                         def fg_task() -> None:
                             if project.readonly:
                                 raise ProjectReadOnlyError()
-                            c = project._db.cursor()
-                            c.execute('delete from resource_revision where id=?', (self._id,))
+                            with closing(project._db.cursor()) as c:
+                                c.execute('delete from resource_revision where id=?', (self._id,))
                             project._db.commit()
                         # NOTE: Use profile=False because no obvious further optimizations exist
                         fg_call_and_wait(fg_task, profile=False)
@@ -3783,13 +3782,13 @@ class ResourceRevision:
         or returns None if no such revision exists.
         """
         # Fetch the revision's resource URL
-        c = project._db.cursor()
-        rows = list(c.execute(
-            f'select '
-                f'resource_id from resource_revision '
-                f'where resource_revision.id=?',
-            (id,)
-        ))
+        with closing(project._db.cursor()) as c:
+            rows = list(c.execute(
+                f'select '
+                    f'resource_id from resource_revision '
+                    f'where resource_revision.id=?',
+                (id,)
+            ))
         if len(rows) == 0:
             return None
         [(resource_id)] = rows
@@ -4319,11 +4318,11 @@ class ResourceRevision:
         self.metadata = new_metadata
         
         # Alter ResourceRevision's metadata in database
-        c = project._db.cursor()
-        c.execute(
-            'update resource_revision set metadata = ? where id = ?',
-            (json.dumps(new_metadata), self._id),  # type: ignore[attr-defined]
-            ignore_readonly=ignore_readonly)
+        with closing(project._db.cursor()) as c:
+            c.execute(
+                'update resource_revision set metadata = ? where id = ?',
+                (json.dumps(new_metadata), self._id),  # type: ignore[attr-defined]
+                ignore_readonly=ignore_readonly)
         project._db.commit()
     
     @property
@@ -4384,8 +4383,8 @@ class ResourceRevision:
             # OK. The revision may have already been partially deleted outside of Crystal.
             pass
         
-        c = project._db.cursor()
-        c.execute('delete from resource_revision where id=?', (self._id,))
+        with closing(project._db.cursor()) as c:
+            c.execute('delete from resource_revision where id=?', (self._id,))
         project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
@@ -4505,10 +4504,10 @@ class ResourceGroup(ListenableMixin):
         else:
             if project.readonly:
                 raise ProjectReadOnlyError()
-            c = project._db.cursor()
-            c.execute('insert into resource_group (name, url_pattern, do_not_download) values (?, ?, ?)', (name, url_pattern, do_not_download))
-            project._db.commit()
-            self._id = c.lastrowid
+            with closing(project._db.cursor()) as c:
+                c.execute('insert into resource_group (name, url_pattern, do_not_download) values (?, ?, ?)', (name, url_pattern, do_not_download))
+                project._db.commit()
+                self._id = c.lastrowid
             
             if source is Ellipsis:
                 raise ValueError()
@@ -4542,8 +4541,8 @@ class ResourceGroup(ListenableMixin):
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        c = self.project._db.cursor()
-        c.execute('delete from resource_group where id=?', (self._id,))
+        with closing(self.project._db.cursor()) as c:
+            c.execute('delete from resource_group where id=?', (self._id,))
         self.project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
@@ -4562,10 +4561,10 @@ class ResourceGroup(ListenableMixin):
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        c = self.project._db.cursor()
-        c.execute('update resource_group set name=? where id=?', (
-            name,
-            self._id,))
+        with closing(self.project._db.cursor()) as c:
+            c.execute('update resource_group set name=? where id=?', (
+                name,
+                self._id,))
         self.project._db.commit()
         
         self._name = name
@@ -4605,8 +4604,8 @@ class ResourceGroup(ListenableMixin):
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        c = self.project._db.cursor()
-        c.execute('update resource_group set source_type=?, source_id=? where id=?', (source_type, source_id, self._id))
+        with closing(self.project._db.cursor()) as c:
+            c.execute('update resource_group set source_type=?, source_id=? where id=?', (source_type, source_id, self._id))
         self.project._db.commit()
         
         self._source = value
@@ -4620,8 +4619,8 @@ class ResourceGroup(ListenableMixin):
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        c = self.project._db.cursor()
-        c.execute('update resource_group set do_not_download=? where id=?', (value, self._id))
+        with closing(self.project._db.cursor()) as c:
+            c.execute('update resource_group set do_not_download=? where id=?', (value, self._id))
         self.project._db.commit()
         
         self._do_not_download = value
