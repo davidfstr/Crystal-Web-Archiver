@@ -151,8 +151,6 @@ async def _run_block_with_playwright_using_custom_python(
     )
     
     # Start Playwright in subprocess
-    # TODO: Passthru {stdin, stdout} so that breakpoints can be used within
-    #       the block in the usual fashion.
     process = subprocess.Popen(
         [python_executable, '-c', dedent(
             '''
@@ -164,8 +162,8 @@ async def _run_block_with_playwright_using_custom_python(
             '''
         )],
         stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=None,  # passthru
+        stderr=None,  # passthru
         env={
             **os.environ,
             **{
@@ -177,11 +175,10 @@ async def _run_block_with_playwright_using_custom_python(
     # Run subprocess in background thread to avoid blocking the foreground thread
     with ThreadPoolExecutor(max_workers=1) as executor:
         def run_and_wait() -> None:
-            (_stdout, stderr) = process.communicate(input=serialized_block)
+            process.communicate(input=serialized_block)
             if process.returncode != 0:
                 raise SubprocessError(
-                    f'Playwright subprocess failed with code {process.returncode}:\n'
-                    f'{stderr.decode("utf-8", errors="replace")}'
+                    f'Playwright subprocess failed with code {process.returncode}'
                 )
         future = executor.submit(run_and_wait)
         await wait_for_future(future, timeout=sys.maxsize)
