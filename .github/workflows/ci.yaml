@@ -66,6 +66,7 @@ jobs:
       fail-fast: false
     # NOTE: macos-13 is the last macOS runner to run on Intel rather than arm64
     runs-on: macos-13
+    timeout-minutes: 60  # high limit; last resort to detect hangs
     env:
       # Suppress warning "malloc: nano zone abandoned due to inability to preallocate reserved vm space"
       # from macOS being confused by Address Sanitizer's changes to malloc.
@@ -171,6 +172,7 @@ jobs:
           - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60  # high limit; last resort to detect hangs
     env:
       ASAN_OPTIONS: detect_leaks=0:allocator_may_return_null=1:handle_segv=0
     steps:
