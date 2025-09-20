@@ -21,7 +21,7 @@ Either install a binary version of Crystal:
 
 Or install from source, using pipx:
 
-* Install [Python] >=3.11,<3.12 and pip:
+* Install [Python] >=3.11 and pip:
     * Ubuntu/Kubuntu 22.04+: `apt-get update; apt-get install -y python3 python3-pip python3-venv`
     * Fedora 37+: `yum update -y; yum install -y python3 python3-pip`
 * On Linux, install dependencies of wxPython from your package manager:
