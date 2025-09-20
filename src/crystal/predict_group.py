@@ -648,6 +648,15 @@ def _split_url_by_dimension(url: str) -> list[UrlDimension]:
         return [UrlDimension(type=url, value='')]
     (scheme, scheme_relative_url) = m.groups()
     
+    # If URL looks like it is from an exported Crystal site,
+    # restore the original query in the URL so that predictions are better
+    url_has_crystal_style_query = (
+        '$/' in scheme_relative_url and 
+        '?' not in scheme_relative_url
+    )
+    if url_has_crystal_style_query:
+        scheme_relative_url = scheme_relative_url.replace('$/', '?')
+    
     # ex: [('//', 'xkcd.com'), ('/', '1'), ('/', '')]
     # ex: [('//', 'www.artima.com'), ('/', 'weblogs'), ('/', 'index.jsp?blogger=guido&start=0&thRange=15')]
     level_dimensions = re.findall(r'(/+)([^/]*)', scheme_relative_url)  # type: list[tuple[str, str]]
@@ -693,6 +702,13 @@ def _split_url_by_dimension(url: str) -> list[UrlDimension]:
             dimensions = _dims_from_tuples(level_dimensions)
     else:
         dimensions = _dims_from_tuples(level_dimensions)
+    
+    # Undo rewrite of the URL's query, if it was rewritten
+    if url_has_crystal_style_query:
+        for (i, dim) in enumerate(dimensions):
+            if dim.type.startswith('?'):
+                new_dim = _replace_dim_type(dim, '$/' + dim.type.removeprefix('?'))
+                dimensions[i] = new_dim
     
     # Prepend scheme to first dimension
     if len(dimensions) > 0:
