@@ -176,12 +176,12 @@ Tips for download more types of complex sites are available on the wiki:
 History 📖
 -------
 
-I wrote Crystal originally in 2011 because other website downloaders
-I tried didn't work well for me and because I wanted to write a large
-Python program, as Python was a new language for me at the time.
+David Foster wrote Crystal originally in 2011 because other website downloaders
+he tried didn't work well for him and because he wanted to write a large
+Python program, as Python was a new language for him at the time.
 
-Every few years I revisit Crystal to add features allowing me to archive 
-more sites that I care about and to streamline the downloading process.
+Every few years he revisits Crystal to add features allowing him to archive 
+more sites that he cares about and to streamline the downloading process.
 
 
 Design 📐
