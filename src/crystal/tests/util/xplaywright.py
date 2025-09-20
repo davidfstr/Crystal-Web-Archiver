@@ -78,12 +78,15 @@ class Playwright:
     async def run(self, block: BlockUsingPlaywright) -> None:
         """
         Runs the specified block of code in a context where a web browser
-        can be controlled with the Playwright library. 
+        can be controlled with the Playwright library.
         
         The block must be serializable using the "dill" library.
         
         This runs Playwright + greenlet in a separate process because they
         can trigger segfaults when combined with wxPython's event loop.
+        
+        Set environment variable CRYSTAL_HEADLESS_BROWSER=False if you
+        want to see what the browser is doing.
         """
         import dill
         
@@ -199,10 +202,9 @@ def _run_block_with_playwright(serialized_block: bytes) -> None:
     # TODO: Recommend sharing a single Playwright,
     #       BrowserContext, and Browser instance between multiple
     #       test functions, to reduce setup/teardown overhead.
-    # TODO: Allow browser's headless mode to be controlled by
-    #       an environment variable, like CRYSTAL_HEADLESS_BROWSER=False
+    headless = os.environ.get('CRYSTAL_HEADLESS_BROWSER', 'True') == 'True'
     with sync_playwright() as p, \
-            closing(p.chromium.launch(headless=True)) as browser, \
+            closing(p.chromium.launch(headless=headless)) as browser, \
             closing(browser.new_context()) as context:
         context.set_default_timeout(int(DEFAULT_WAIT_TIMEOUT * 1000) * GLOBAL_TIMEOUT_MULTIPLIER)
         page = context.new_page()
