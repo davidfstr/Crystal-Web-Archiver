@@ -13,9 +13,9 @@ Exec=__CRYSTAL_PATH__ %f
 # Title used for app in dock
 Name=Crystal
 # TODO: What does this key actually affect?
-GenericName=Website Downloader
+GenericName=Website Archiver
 # TODO: What does this key actually affect?
-Comment=Download Websites
+Comment=Archive Websites
 # Icon used for app in dock
 Icon=__APPICON_PATH__
 # MIME Types that this app knows how to open
