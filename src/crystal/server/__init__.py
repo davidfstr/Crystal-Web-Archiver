@@ -818,21 +818,26 @@ class _RequestHandler(BaseHTTPRequestHandler):
             try:
                 request_data = json.loads(post_data)
                 url = request_data.get('url')
+                is_root = request_data.get('is_root')
             except json.JSONDecodeError:
                 self._send_json_response(400, {"error": "Invalid JSON"})
                 return
-            if not url:
-                self._send_json_response(400, {"error": "Missing URL parameter"})
+            if url is None or is_root is None:
+                self._send_json_response(400, {"error": "Missing parameter"})
+                return
+            if not isinstance(url, str) or not isinstance(is_root, bool):
+                self._send_json_response(400, {"error": "Invalid parameter type"})
                 return
             
             def create_and_start_download_task() -> str:
                 # Get or create a Resource for the URL
                 r = Resource(self.project, url)
                 
-                # Get or create RootResource for the URL
-                rr = self.project.get_root_resource(r)
-                if rr is None:
-                    rr = RootResource(self.project, '', r)
+                # Get or create RootResource for the URL, if requested
+                if is_root:
+                    rr = self.project.get_root_resource(r)
+                    if rr is None:
+                        rr = RootResource(self.project, '', r)
                 
                 # Create download task and start downloading
                 (task, created) = r.get_or_create_download_task(

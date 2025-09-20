@@ -631,11 +631,11 @@ def not_in_archive_html(
                         return;
                     }
                 } else {
-                    await startUrlDownload();
+                    await startUrlDownload(/*isRoot=*/true);
                 }
             }
             
-            async function startUrlDownload() {
+            async function startUrlDownload(isRoot) {
                 const downloadButton = document.getElementById('cr-download-url-button');
                 const progressDiv = document.getElementById('cr-download-progress-bar');
                 const progressFill = document.getElementById('cr-download-progress-bar__fill');
@@ -661,7 +661,10 @@ def not_in_archive_html(
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ url: %(archive_url_json)s })
+                        body: JSON.stringify({
+                            url: %(archive_url_json)s,
+                            is_root: isRoot,
+                        })
                     });
                     if (!response.ok) {
                         const errorData = await response.json();
@@ -982,7 +985,7 @@ def not_in_archive_html(
                     // If download was requested, start individual URL download
                     // otherwise collapse the disabled form to show only essential elements
                     if (downloadGroupImmediately || downloadUrlImmediately) {
-                        await startUrlDownload();
+                        await startUrlDownload(/*isRoot=*/false);
                     } else {
                         collapseCreateGroupForm();
                     }
