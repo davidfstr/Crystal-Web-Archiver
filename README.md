@@ -9,9 +9,7 @@ It works best on traditional websites made of distinct pages using limited JavaS
 although it can also download more dynamic sites which have infinitely 
 scrolling feeds of content (such as social media sites).
 
-If you are an early adopter and want to get started downloading your first website
-with Crystal, please see the Tutorial below.
-Additional documentation will be available once Crystal v2.0 is released.
+To get started downloading your first website with Crystal, please see the Tutorial below.
 
 Download ⬇︎
 --------
@@ -44,107 +42,135 @@ Or install from source, using pipx:
 [Python]: https://www.python.org/
 
 
+<a name="tutorial" />
+
 Tutorial ⭐
 --------
 
-### To download a static website (ex: [xkcd]):
+<a name="tutorial-simple-website" />
 
-* Download Crystal. See the Download section above.
-* Open Crystal and create a new project, call it "xkcd".
-* Click the "New Root URL" button to add the "https://xkcd.com/1/" URL, named "First Comic".
-* Expand the new "First Comic" node to download the page and display its links.
-* Click the "New Group" button to add a new group named "Comics" with the pattern
-  "https://xkcd.com/#/". The "#" is a wildcard that matches any number.
-  Make sure it also has "First Comic" selected as the Source.
-    * In the "Preview Members" section of the dialog, you should see a list of
-      several URLs, including "https://xkcd.com/1/" and "https://xkcd.com/2/".
-* Close the "First Comic" node so that you can see the new "Comics" node.
-* Select the "Comics" node and press the "Download" button.
-  This will download all xkcd comics.
-* Expand the "Comics" node to see a list of all comic pages.
-* Select any comic page you'd like to see and press the "View" button.
-  Your default web browser should open and display the downloaded page.
-* Congratulations! You've downloaded your first website with Crystal!
+### Download a simple website
 
-### To download a dynamic website (ex: [The Pragmatic Engineer]):
+A *simple website* is created or administered by only a single person, 
+may contain text and images but not video, 
+and does not requiring logging in to view its content.
 
-* Open Crystal and create a new project, call it "Pragmatic Engineer".
-* Press the "New Root URL" button and add the `https://newsletter.pragmaticengineer.com/` URL, named "Home".
-* Select the added "Home" and press the "Download" button. Wait for it to finish downloading.
-* With "Home" still selected, press the "View" button.
-  A web browser should open and display the downloaded home page.
-* While browsing a downloaded site from a web browser,
-  Crystal's server will log information about requests it
-  receives from the web browser. For example:
-    * `"GET /_/https/newsletter.pragmaticengineer.com/ HTTP/1.1" 200 -`
-        * This line says the web browser did try to fetch the
-          <https://newsletter.pragmaticengineer.com/> URL from Crystal.
-* Notice in the server log that many red lines did appear saying
-  "Requested resource not in archive".
-    * Since these were fetched immediately when loading the page,
-      they must be a kind of resource that is "embedded" into the page.
-      When Crystal downloads a page it also downloads all embedded
-      resources it can find statically, but these embedded resources 
-      must have been fetched *dynamically* by JavaScript code running on the page,
-      which Crystal cannot see.
-* We want to eliminate those red lines that appear when viewing the home page.
+There are many simple websites you can practice downloading at <https://daarchive.net/>.
 
-Eliminate red lines:
+Steps to download [xkcd], a simple site:
 
-* Let's start by eliminating the "Requested resource not in archive" red lines
-  related to URLs like `https://substackcdn.com/bundle/assets/entry-f6e60c95.js​`
-* Press the "New Group" button and add `https://substackcdn.com/**`, named "Substack CDN Asset".
-* Reload the home page in the web browser.
-* Notice in the server log that many green lines did appear saying
-  "*** Dynamically downloading existing resource in group 'Substack CDN Asset':"
-  and that there are no more red lines related to `https://substackcdn.com/**`.
-* All red lines related to `https://substackcdn.com/**` should be gone.
+* Download Crystal. See the Download section above for specific instructions.
+* Open Crystal and press "New Project" to create a new untitled project.
+* Click the big "New Root URL..." button and type in 
+  "https://xkcd.daarchive.net/" for the URL. 
+  Optionally type in "Home" for the Name.
+* Tick the "Create Group to Download Entire Site" checkbox.
+  The "Download Site Immediately" checkbox should already be ticked.
+  Press the "New" button to create the root URL, create the group for the site,
+  and start downloading the site.
+* The newly created "Home" URL at path "/" should already be selected.
+  Click the "View" button to open the downloaded home page in your default
+  web browser.
+* Within the web browser you should be able to navigate to any page in the
+  downloaded site.
+* Return to the Crystal app. Close the untitled window.
+  Don't worry if download tasks are still running because Crystal
+  will offer to resume any downloads later when the project is reopened.
+* You'll be prompted to save the project somewhere permanent.
+  Save it as "Tutorial" on your desktop.
+* Find the saved "Tutorial" project on your desktop and double-click it
+  to open it.
+* On macOS the project will open in Crystal immediately.
+  On Windows or Linux a window will appear with an "OPEN ME" file.
+  Double-click the "OPEN ME" file to open the project in Crystal.
+* The home URL should be selected. Press "View" to see the downloaded
+  home page again in your web browser.
+* Congratulations! You've downloaded your first simple website with Crystal!
 
-Eliminate the last red lines:
+<a name="tutorial-complex-website" />
 
-* There should be only a few red lines left:
-    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/firehose?`...
-    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/archive?`...
-    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/homepage_links`
-    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/recommendations/`...
-    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/api/v1/homepage_data`
-    * `*** Requested resource not in archive: https://newsletter.pragmaticengineer.com/service-worker.js`
-* Eliminate these red lines by creating:
-    * a group `https://newsletter.pragmaticengineer.com/api/v1/firehose?**`, named "Firehose API"
-    * a group `https://newsletter.pragmaticengineer.com/api/v1/archive?**`, named "Archive API"
-    * a root URL `https://newsletter.pragmaticengineer.com/api/v1/homepage_links`, named "Homepage Links"
-    * a group `https://newsletter.pragmaticengineer.com/api/v1/recommendations/**`, named "Recommendations API"
-    * a root URL `https://newsletter.pragmaticengineer.com/api/v1/homepage_data`, named "Homepage Data"
-    * a root URL `https://newsletter.pragmaticengineer.com/service-worker.js`, named "Service Worker"
-* Reload the home page in the web browser.
-* There should be no red lines left.
+### Download a complex website
 
-Final testing:
+Any website that is not simple is a *complex website*. In particular:
 
-* If you click the "Let me read it first" link at the bottom of the page,
-  a list of article links should appear.
-* Congratulations! You've fully downloaded the page! 🎉
+* Sites that contain content from *multiple people* are complex. 
+  Most forums, wikis (like: Wikipedia), and social media sites (like: Facebook, YouTube, or X) are complex.
+* Sites that contain large assets such as video (ex: YouTube), 
+  files (ex: Hugging Face), or large images are complex.
+* Sites that require *login* to view content like paid blogs (ex: Pragmatic Engineer), 
+  paid news sites (ex: The New York Times), 
+  and paid video sites (ex: Barre3) are complex.
 
-### To download a website that requires login (ex: [The Pragmatic Engineer]):
+When downloading a complex website you need to precisely define which pages you want to download because downloading the entire site would take too much space/time.
 
-* Using a browser like Chrome, login to the website you want to download.
-* Right-click anywhere on the page and choose Inspect to open the Chrome Developer Tools.
-* Switch to the Network pane and enable the Doc filter.
-* Reload the page by pressing the ⟳ button.
-* Select the page's URL in the Network pane.
-* Scroll down to see the "Request Headers" section and look for a "cookie" request header.
-* Copy the value of the "cookie" request header to a text file for safekeeping.
-* Open Crystal, either creating a new project or opening an existing project.
-* Click the "Preferences..." / "Settings..." button,
-  paste the cookie value in the text box, and click "OK".
-    * This cookie value will be remembered only while the project remains open.
-      If you reopen Crystal again later you'll need to paste the cookie value in again.
-* Now download pages using Crystal as you would normally. The specified cookie
-  header value (which logs you in to the remote server) will be used as you
-  download pages.
+Each complex website is different. Here is an example of downloading only
+Guido's blog posts from [Artima Weblogs], a complex site containing content from
+multiple people:
 
-[xkcd]: https://xkcd.com
-[The Pragmatic Engineer]: https://newsletter.pragmaticengineer.com/
+* Download Crystal. See the Download section above for specific instructions.
+* Open Crystal and press "New Project" to create a new untitled project.
+* Click the big "New Root URL..." button and type in 
+  "https://artima.daarchive.net/" for the URL. 
+  Optionally type in "Home" for the name.
+* The "Download URL Immediately" checkbox should already be ticked.
+  Press the "New" button to create the root URL and start downloading it.
+* The newly created "Home" URL at path "/" should already be selected.
+  Click the "View" button to open the downloaded home page in your default
+  web browser.
+* In the left navigation where it says "Artima Blogger", look for the link
+  "Guido van van Rossum" [sic]. Click it.
+* A Crystal error page appears that says "Page Not in Archive", because
+  the link you clicked (https://artima.daarchive.net/index.html$/blogger=guido.html)
+  hasn't been downloaded yet.
+* Click the "Download" button to individually download and view Guido's first post list page.
+* Notice at the top of the page there are links to pages 2, 3, 4, and 5
+  of Guido's post list. Click the page 2 link.
+* Again, a Crystal page saying "Page Not in Archive" appears.
+  This time though, we want to download all similar pages.
+  Tick the "Create Group for Similar Pages" checkbox to reveal a form for
+  creating a Group.
+  A Group describes a collection of pages that all have the same URL pattern.
+* Crystal automatically populates its best guess for a URL Pattern.
+  For this example that guessed pattern is:
+  "https://artima.daarchive.net/index.html$/blogger=guido&start=#&thRange=15.html".
+  The "#" wildcard in the pattern will match any number of digits, like "15" or "30".
+  There are other wildcards like "*" which will match any block of text without a "/".
+* Notice that the Preview Members box displays all URLs matching the
+  currently typed URL Pattern.
+* Crystal also automatically populates its best guess for what the Source of
+  the Group should be. The source of a group typically links to all or most
+  members of the group. When Crystal is asked to redownload a group it will
+  redownload the source first to see if the group has any new members.
+* For this example Crystal has guessed an appropriate URL Pattern and Source
+  for matching all of Guido's post list pages, so we don't need to change them.
+* Optionally type in "Guido Post List, Page 2+" for the name of the group.
+* The "Download Group Immediately" checkbox should already be ticked.
+  Press the "Download" button to create the group and start downloading it.
+* Return to the Crystal app. The top "Root URLs and Groups" pane displays
+  each URL and Group you discovered by navigating the downloaded site.
+  It should say:
+  * ⚓️ / - Home
+  * ⚓️ /index.html$/blogger=guido.html
+  * 📁 /index.html$/blogger=guido&start=#&thRange=15.html - Guido Post List, Page 2+
+* Each ⚓️ is a Root URL. Each 📁 is a Group.
+* Click the second ⚓️ to select it.
+* Click the "Edit" button.
+* Type "Guido Post List, Page 1" for the name of the group.
+* Click the "Save" button. Now the displayed URLs and groups should be:
+  * ⚓️ / - Home
+  * ⚓️ /index.html$/blogger=guido.html - Guido Post List, Page 1
+  * 📁 /index.html$/blogger=guido&start=#&thRange=15.html - Guido Post List, Page 2+
+* Close the untitled window.
+  You'll be prompted to save the project somewhere permanent.
+  Save it as "Complex Tutorial" on your desktop.
+* Congratulations! You've downloaded your first complex website with Crystal!
+
+Tips for download more types of complex sites are available on the wiki:
+
+* [Complex Website Download Examples](https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Complex-Website-Download-Examples)
+
+[xkcd]: https://xkcd.daarchive.net/
+[Artima Weblogs]: https://artima.daarchive.net/
 
 
 History 📖
