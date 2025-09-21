@@ -183,7 +183,12 @@ class FetchUrlCommand(Command['WebPage']):
             response_stream = e
         with response_stream as response:
             response_bytes = response.read()
-        return WebPage(response_stream.status, response_stream.headers, response_bytes)
+        return WebPage(
+            self._url,
+            response_stream.status,
+            response_stream.headers,
+            response_bytes,
+        )
 
 
 class PumpWxEventsCommand(Command[None]):

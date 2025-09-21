@@ -5,6 +5,7 @@ from crystal.util.minify import minify_svg
 from functools import cache
 from html import escape as html_escape  # type: ignore[attr-defined]
 import json
+import os
 from textwrap import dedent
 
 
@@ -13,7 +14,9 @@ from textwrap import dedent
 
 # Whether to show _generic_404_page_html() when _not_in_archive_html() page
 # is requested. Useful for debugging the _generic_404_page_html() page.
-_SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE = False
+SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE = (
+    os.environ.get('CRYSTAL_USE_GENERIC_404_PAGE', 'False') == 'True'
+)
 
 
 def welcome_page_html() -> str:
@@ -150,7 +153,11 @@ def not_found_page_html() -> str:
     )
 
 
-def generic_404_page_html() -> str:
+# NOTE: Crystal itself prefers to serve a Not in Archive page rather than a
+#       generic HTTP 404 page. However a generic HTTP 404 page is useful
+#       when exporting a Crystal project. In that context a single HTTP 404 page
+#       must be suitable as the HTTP 404 response for any page in the same project.
+def generic_404_page_html(default_url_prefix: str | None) -> str:
     content_top_html = dedent(
         f"""
         <div class="cr-page__icon">🚫</div>
@@ -161,6 +168,11 @@ def generic_404_page_html() -> str:
         
         <p>The requested page was not found in this archive.</p>
         
+        {_url_box_html(
+            label_html='Original URL',
+            url=None
+        )}
+        
         <div class="cr-page__actions">
             <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
@@ -169,11 +181,122 @@ def generic_404_page_html() -> str:
         """
     ).strip()
     
+    from crystal.server import _REQUEST_PATH_IN_ARCHIVE_RE
+    REQUEST_PATH_IN_ARCHIVE_RE_STR = _REQUEST_PATH_IN_ARCHIVE_RE.pattern
+    script_html = dedent(
+        """
+        <script>
+            const crDefaultUrlPrefix = %(default_url_prefix_json)s;
+            
+            // -----------------------------------------------------------------
+            // URL Box
+            
+            // Calculate the original archive URL based on the request URL
+            document.addEventListener('DOMContentLoaded', async () => {
+                const loc = document.location;
+                if (loc.pathname.endsWith('/404.html')) {
+                    // 404 page loaded directly. No original URL exists.
+                    // Leave fallback messaging in place.
+                    return;
+                }
+                
+                const requestPath = loc.pathname + loc.search;
+                const siteRootPath = await locateSiteRootPath(loc.origin, requestPath);
+                const siteRelRequestPath = requestPath.substring(siteRootPath.length - 1);
+                
+                const archiveUrl = getArchiveUrlWithDup(siteRelRequestPath, crDefaultUrlPrefix);
+                if (archiveUrl === null) {
+                    // Unable to resolve archive URL.
+                    // Leave fallback messaging in place.
+                    return;
+                }
+                
+                // Display the original archive URL
+                const urlBoxLinkDom = document.querySelector('.cr-url-box__link');
+                urlBoxLinkDom.href = archiveUrl;
+                urlBoxLinkDom.innerText = archiveUrl;
+            });
+            
+            // Locates the path to the directory containing the exported site,
+            // which also will directly contain the "404.html" page.
+            async function locateSiteRootPath(origin, pathWithinSiteRoot) {
+                let pathSegments = pathWithinSiteRoot.split('/').slice(1);
+                pathSegments = pathSegments.slice(0, pathSegments.length - 1);
+                
+                // Check each directory level, starting from root, leading up to pathWithinSiteRoot.
+                // Look for a "404.html" page matching this 404 page.
+                for (let i = 0; i <= pathSegments.length; i++) {
+                    const candidateDir = '/' + pathSegments.slice(0, i).join('/') + (i > 0 ? '/' : '');
+                    const candidate404Url = origin + candidateDir + '404.html';
+                    
+                    let content;
+                    try {
+                        const response = await fetch(candidate404Url);
+                        content = await response.text();
+                    } catch (fetchError) {
+                        // No 404.html page found here
+                        continue;
+                    }
+                    
+                    const match = content.match(/const crDefaultUrlPrefix = ([^;]+);/);
+                    if (!match) {
+                        // No Crystal 404.html page found here
+                        continue;
+                    }
+                    
+                    let candidateUrlPrefix;
+                    try {
+                        candidateUrlPrefix = JSON.parse(match[1]);
+                    } catch (parseError) {
+                        // Looks like a Crystal 404.html page, but has a bogus crDefaultUrlPrefix.
+                        continue;
+                    }
+                    if (candidateUrlPrefix !== crDefaultUrlPrefix) {
+                        // Is a Crystal 404.html page but does not match this 404 page.
+                        continue
+                    }
+                    
+                    return candidateDir;
+                }
+                
+                // Fallback to root if no matching Crystal 404 page was found
+                return '/';
+            }
+            
+            // NOTE: Duplicated in get_archive_url_with_dup() and getArchiveUrlWithDup()
+            function getArchiveUrlWithDup(requestPath, defaultUrlPrefix) {
+                const match = requestPath.match(/%(REQUEST_PATH_IN_ARCHIVE_RE_STR)s/);
+                if (match) {
+                    const scheme = match[1];
+                    const rest = match[2];
+                    const archiveUrl = scheme + '://' + rest;
+                    return archiveUrl;
+                } else {
+                    // If valid default URL prefix is set, use it
+                    if (defaultUrlPrefix !== null && !defaultUrlPrefix.endsWith('/')) {
+                        if (!requestPath.startsWith('/')) {
+                            throw new Error('Expected path to start with /');
+                        }
+                        return defaultUrlPrefix + requestPath;
+                    } else {
+                        return null;
+                    }
+                }
+            }
+            
+            // -----------------------------------------------------------------
+        </script>
+        """ % {
+            'default_url_prefix_json': json.dumps(default_url_prefix),
+            'REQUEST_PATH_IN_ARCHIVE_RE_STR': REQUEST_PATH_IN_ARCHIVE_RE_STR.replace('/', r'\/'),
+        }
+    ).strip()
+    
     return _base_page_html(
-        title_html='Not in Archive | Crystal',
-        style_html='',
+        title_html='Not in Archive',
+        style_html=_URL_BOX_STYLE_TEMPLATE,
         content_html=content_top_html,
-        script_html='',
+        script_html=script_html,
         include_brand_header=False,
     )
 
@@ -182,9 +305,10 @@ def not_in_archive_html(
         *, archive_url: str,
         create_group_form_data: CreateGroupFormData,
         readonly: bool,
+        default_url_prefix: str | None,
         ) -> str:
-    if _SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE:
-        return generic_404_page_html()
+    if SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE:
+        return generic_404_page_html(default_url_prefix)
     
     archive_url_html_attr = archive_url
     archive_url_html = html_escape(archive_url)
@@ -1462,14 +1586,15 @@ _URL_BOX_STYLE_TEMPLATE = dedent(
     }
     
     .cr-url-box__link {
-        color: #4A90E2;
         text-decoration: none;
         word-break: break-all;
         font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
         font-size: 14px;
     }
-    
-    .cr-url-box__link:hover {
+    .cr-url-box__link[href] {
+        color: #4A90E2;
+    }
+    .cr-url-box__link[href]:hover {
         text-decoration: underline;
     }
     
@@ -1492,15 +1617,14 @@ _URL_BOX_STYLE_TEMPLATE = dedent(
 ).lstrip()  # type: str
 
 
-def _url_box_html(label_html: str, url: str) -> str:
-    url_html_attr = url
-    url_html = html_escape(url)
-    
+def _url_box_html(label_html: str, url: str | None) -> str:
     return dedent(
         f"""
         <div class="cr-url-box">
             <div class="cr-url-box__label">{label_html}</div>
-            <a href="{url_html_attr}" class="cr-url-box__link" target="_blank" rel="noopener">{url_html}</a>
+            <a{(' href="' + url + '"') if url is not None else ''} class="cr-url-box__link" target="_blank" rel="noopener">
+                {html_escape(url) if url is not None else "See browser's URL"}
+            </a>
         </div>
         """
     ).strip()

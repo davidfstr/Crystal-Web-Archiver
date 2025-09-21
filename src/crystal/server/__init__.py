@@ -1167,7 +1167,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
         html_content = not_in_archive_html(
             archive_url=archive_url,
             create_group_form_data=create_group_form_data,
-            readonly=readonly
+            readonly=readonly,
+            default_url_prefix=self.project.default_url_prefix,
         )
         self.wfile.write(html_content.encode('utf-8'))
         
@@ -1453,6 +1454,17 @@ class _RequestHandler(BaseHTTPRequestHandler):
     # === URL Transformation ===
     
     def get_archive_url(self, request_path: str) -> str | None:
+        return self.get_archive_url_with_dup(
+            request_path,
+            default_url_prefix=self.project.default_url_prefix
+        )
+    
+    # NOTE: Duplicated in get_archive_url_with_dup() and getArchiveUrlWithDup()
+    @staticmethod
+    def get_archive_url_with_dup(
+            request_path: str,
+            default_url_prefix: str | None,
+            ) -> str | None:
         match = _REQUEST_PATH_IN_ARCHIVE_RE.match(request_path)
         if match:
             (scheme, rest) = match.groups()
@@ -1460,12 +1472,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
             return archive_url
         else:
             # If valid default URL prefix is set, use it
-            default_url_prefix = self.project.default_url_prefix  # cache
             if default_url_prefix is not None and not default_url_prefix.endswith('/'):
                 assert request_path.startswith('/')
                 return default_url_prefix + request_path
-            
-            return None
+            else:
+                return None
     
     def get_request_url(self, archive_url: str) -> str:
         return self.get_request_url_with_host(

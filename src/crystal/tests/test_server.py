@@ -4,10 +4,11 @@ from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
 from crystal import server
 from crystal.doc.html.soup import HtmlDocument
-from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
 from crystal.model import Project, Resource, ResourceRevision
 from crystal.server import _DEFAULT_SERVER_PORT, ProjectServer, get_request_url
-from crystal.tests.util.asserts import assertEqual, assertIn
+from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
+from crystal.server.special_pages import generic_404_page_html
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.data import LOREM_IPSUM_LONG, LOREM_IPSUM_SHORT
 from crystal.tests.util.downloads import network_down
@@ -258,6 +259,177 @@ async def test_given_not_found_page_visible_then_crystal_branding_and_exit_butto
         # Verify return home button is visible
         assert 'Return to Home' in content, \
             "Return to Home button should be visible on the not found page"
+
+
+# ------------------------------------------------------------------------------
+# Test: "Generic 404" Page (generic_404_page_html)
+
+async def test_given_404_page_visible_then_no_crystal_branding_is_visible() -> None:
+    # ...because the 404 page is intended to blend into its parent site
+    
+    async with _generic_404_page_visible() as server_page:
+        content = server_page.content
+        assertNotIn('<div class="cr-brand-header">', content)
+        assertNotIn('Crystal', server_page.title)
+
+
+@awith_playwright
+async def test_given_404_page_visible_and_served_from_root_directory_of_domain_then_url_box_links_to_correct_original_url(pw: Playwright) -> None:
+    _404_PAGE = dict(
+        status_code=404,
+        headers=[('Content-Type', 'text/html')],
+        content=generic_404_page_html(
+            default_url_prefix='https://xkcd.com',
+        ).encode('utf-8')
+    )
+    
+    # Case 1: Request URL is within the domain of the default URL prefix
+    # - Default URL prefix is 'https://xkcd.com'
+    # - Serve root is: 'http://xkcd.daarchive.net/'
+    # - Request URL is: 'http://xkcd.daarchive.net/222/'
+    # - Then archive URL should be: 'https://xkcd.com/222/'
+    server = MockHttpServer({
+        '/404.html': _404_PAGE,
+        '/222/': _404_PAGE,
+    })
+    with server:
+        missing_comic_url = server.get_url('/222/')
+        
+        def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+            raw_page.goto(missing_comic_url)
+            url_box_link = raw_page.locator('.cr-url-box__link')
+            expect(url_box_link).to_have_text('https://xkcd.com/222/')
+        await pw.run(pw_task)
+    
+    # Case 2: Request URL is outside the domain of the default URL prefix
+    # - Default URL prefix is 'https://xkcd.com'
+    # - Serve root is: 'http://xkcd.daarchive.net/'
+    # - Request URL is: 'http://xkcd.daarchive.net/_/https/c.xkcd.com/random/comic/'
+    # - Then archive URL should be: 'https://c.xkcd.com/random/comic/'
+    server = MockHttpServer({
+        '/404.html': _404_PAGE,
+        '/_/https/c.xkcd.com/random/comic/': _404_PAGE,
+    })
+    with server:
+        missing_comic_url = server.get_url('/_/https/c.xkcd.com/random/comic/')
+        
+        def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+            raw_page.goto(missing_comic_url)
+            url_box_link = raw_page.locator('.cr-url-box__link')
+            expect(url_box_link).to_have_text('https://c.xkcd.com/random/comic/')
+        await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_given_404_page_visible_and_served_from_subdirectory_of_domain_then_url_box_links_to_correct_original_url(pw: Playwright) -> None:
+    _404_PAGE = dict(
+        status_code=404,
+        headers=[('Content-Type', 'text/html')],
+        content=generic_404_page_html(
+            default_url_prefix='https://xkcd.com',
+        ).encode('utf-8')
+    )
+    
+    OTHER_CRYSTAL_404_PAGE = dict(
+        status_code=404,
+        headers=[('Content-Type', 'text/html')],
+        content=generic_404_page_html(
+            default_url_prefix='https://blag.xkcd.com',
+        ).encode('utf-8')
+    )
+    
+    # Case 1: Request URL is within the domain of the default URL prefix
+    # - Default URL prefix is 'https://xkcd.com'
+    # - Serve root is: 'http://dafoster.net/xkcd.daarchive.net/'
+    # - Request URL is: 'http://dafoster.net/xkcd.daarchive.net/222/'
+    # - Then archive URL should be: 'https://xkcd.com/222/'
+    if True:
+        # Case 1.1: Has no 404.html in any parent directories
+        server = MockHttpServer({
+            '/xkcd.daarchive.net/404.html': _404_PAGE,
+            '/xkcd.daarchive.net/222/': _404_PAGE,
+        })
+        with server:
+            missing_comic_url = server.get_url('/xkcd.daarchive.net/222/')
+            
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                raw_page.goto(missing_comic_url)
+                url_box_link = raw_page.locator('.cr-url-box__link')
+                expect(url_box_link).to_have_text('https://xkcd.com/222/')
+            await pw.run(pw_task)
+        
+        # Case 1.2: Has OTHER_CRYSTAL_404_PAGE in a parent directory
+        server = MockHttpServer({
+            '/404.html': OTHER_CRYSTAL_404_PAGE,
+            '/xkcd.daarchive.net/404.html': _404_PAGE,
+            '/xkcd.daarchive.net/222/': _404_PAGE,
+        })
+        with server:
+            missing_comic_url = server.get_url('/xkcd.daarchive.net/222/')
+            
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                raw_page.goto(missing_comic_url)
+                url_box_link = raw_page.locator('.cr-url-box__link')
+                expect(url_box_link).to_have_text('https://xkcd.com/222/')
+            await pw.run(pw_task)
+
+    # Case 2: Request URL is outside the domain of the default URL prefix
+    # - Default URL prefix is 'https://xkcd.com'
+    # - Serve root is: 'http://dafoster.net/xkcd.daarchive.net/'
+    # - Request URL is: 'http://dafoster.net/xkcd.daarchive.net/_/https/c.xkcd.com/random/comic/'
+    # - Then archive URL should be: 'https://c.xkcd.com/random/comic/'
+    if True:
+        # Case 2.1: Has no 404.html in any parent directories
+        server = MockHttpServer({
+            '/xkcd.daarchive.net/404.html': _404_PAGE,
+            '/xkcd.daarchive.net/_/https/c.xkcd.com/random/comic/': _404_PAGE,
+        })
+        with server:
+            missing_comic_url = server.get_url('/xkcd.daarchive.net/_/https/c.xkcd.com/random/comic/')
+            
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                raw_page.goto(missing_comic_url)
+                url_box_link = raw_page.locator('.cr-url-box__link')
+                expect(url_box_link).to_have_text('https://c.xkcd.com/random/comic/')
+            await pw.run(pw_task)
+        
+        # Case 2.2: Has OTHER_CRYSTAL_404_PAGE in a parent directory
+        server = MockHttpServer({
+            '/404.html': OTHER_CRYSTAL_404_PAGE,
+            '/xkcd.daarchive.net/404.html': _404_PAGE,
+            '/xkcd.daarchive.net/_/https/c.xkcd.com/random/comic/': _404_PAGE,
+        })
+        with server:
+            missing_comic_url = server.get_url('/xkcd.daarchive.net/_/https/c.xkcd.com/random/comic/')
+            
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                raw_page.goto(missing_comic_url)
+                url_box_link = raw_page.locator('.cr-url-box__link')
+                expect(url_box_link).to_have_text('https://c.xkcd.com/random/comic/')
+            await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_given_404_page_viewed_directly_then_does_not_link_to_any_original_url(pw: Playwright) -> None:
+    _404_PAGE = dict(
+        status_code=404,
+        headers=[('Content-Type', 'text/html')],
+        content=generic_404_page_html(
+            default_url_prefix='https://xkcd.com',
+        ).encode('utf-8')
+    )
+    
+    server = MockHttpServer({
+        '/404.html': _404_PAGE,
+    })
+    with server:
+        missing_comic_url = server.get_url('/404.html')
+        
+        def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+            raw_page.goto(missing_comic_url)
+            url_box_link = raw_page.locator('.cr-url-box__link')
+            expect(url_box_link).to_have_text("See browser's URL")
+        await pw.run(pw_task)
 
 
 # ------------------------------------------------------------------------------
@@ -2353,6 +2525,42 @@ async def _not_found_page_visible(*, readonly: bool=False) -> AsyncIterator[WebP
             assert not_found_page.status == 404
             
             yield not_found_page
+
+
+@asynccontextmanager
+async def _generic_404_page_visible(
+        *, request_path: str='/missing-page/'
+        ) -> AsyncIterator[WebPage]:
+    """
+    Context manager that opens a test project, starts a server, and returns a WebPage
+    for a "Generic 404" page by requesting a URL that doesn't exist in the archive.
+    """
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            patch('crystal.server.special_pages.SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE', True):
+        with Project(project_dirpath) as project:
+            project.default_url_prefix = 'https://xkcd.com'
+        
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
+            # Start server
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.GetFirstChild()
+            assert home_ti is not None
+            home_ti.SelectItem()
+            home_request_url = get_request_url(
+                'https://xkcd.com/',
+                project_default_url_prefix=project.default_url_prefix)
+            with assert_does_open_webbrowser_to(home_request_url):
+                click_button(mw.view_button)
+            
+            # Verify that "Not in Archive" page reached
+            request_url = get_request_url(
+                f'https://xkcd.com{request_path}',
+                project_default_url_prefix=project.default_url_prefix)
+            g404_page = await bg_fetch_url(request_url)
+            assert g404_page.title == 'Not in Archive'
+            assert g404_page.status == 404
+            
+            yield g404_page
 
 
 @asynccontextmanager
