@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
 from crystal import server
 from crystal.doc.html.soup import HtmlDocument
-from crystal.footer_banner import _FOOTER_BANNER_MESSAGE
+from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
 from crystal.model import Resource, ResourceRevision
 from crystal.server import _DEFAULT_SERVER_PORT, ProjectServer, get_request_url
 from crystal.tests.util.asserts import assertEqual, assertIn

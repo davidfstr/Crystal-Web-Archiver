@@ -476,7 +476,7 @@ class HtmlDocument(Document):
         Tries to insert a banner at the document footer declaring that
         the current page was archived with Crystal.
         """
-        from crystal.footer_banner import create_footer_banner, FOOTER_BANNER_ID
+        from crystal.server.footer_banner import create_footer_banner, FOOTER_BANNER_ID
         
         # Don't insert a footer banner if there already appears to be one.
         # This can happen when serving a page downloaded from a site
