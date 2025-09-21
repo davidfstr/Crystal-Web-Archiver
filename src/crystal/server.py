@@ -1804,19 +1804,29 @@ def _not_found_page_html() -> str:
 
 
 def _generic_404_page_html() -> str:
-    return _not_in_archive_html(
-        archive_url_html_attr='__ignored__',
-        archive_url_html='__ignored__',
-        archive_url_json=json.dumps('__ignored__'),
-        download_button_disabled_html='',  # ignored
-        create_group_form_data=CreateGroupFormData(  # ignored
-            source_choices=[],
-            predicted_url_pattern='',
-            predicted_source_value=None,
-            predicted_name='',
-        ),
-        readonly=True,  # ignored
-        _is_generic_404_page=True,
+    content_top_html = dedent(
+        f"""
+        <div class="cr-page__icon">🚫</div>
+        
+        <div class="cr-page__title">
+            <strong>Page Not in Archive</strong>
+        </div>
+        
+        <p>The requested page was not found in this archive.</p>
+        
+        <div class="cr-page__actions">
+            <button onclick="history.back()" class="cr-button cr-button--secondary">
+                ← Go Back
+            </button>
+        </div>
+        """
+    ).strip()
+    
+    return _base_page_html(
+        title_html='Not in Archive | Crystal',
+        style_html='',
+        content_html=content_top_html,
+        script_html='',
     )
 
 
@@ -1861,7 +1871,7 @@ def _not_in_archive_html(
         ) -> str:
     if _SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE:
         return _generic_404_page_html()
-
+    
     not_in_archive_styles = dedent(
         """
         /* ------------------------------------------------------------------ */
@@ -2177,17 +2187,6 @@ def _not_in_archive_html(
         """
     ).strip()
     
-    readonly_warning_html = (
-        '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
-        if readonly else ''
-    )
-    
-    download_button_html = dedent(
-        f"""
-        <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
-        """
-    ).strip()
-    
     content_top_html = dedent(
         f"""
         <div class="cr-page__icon">🚫</div>
@@ -2197,21 +2196,24 @@ def _not_in_archive_html(
         </div>
         
         <p>The requested page was not found in this archive.</p>
-        {"<p>The page has not been downloaded yet.</p>" if not _is_generic_404_page else ""}
+        <p>The page has not been downloaded yet.</p>
         
         {_URL_BOX_HTML_TEMPLATE % {
             'label_html': 'Original URL',
             'url_html_attr': archive_url_html_attr,
             'url_html': archive_url_html
-        } if not _is_generic_404_page else ""}
+        }}
         
-        {readonly_warning_html if not _is_generic_404_page else ""}
+        {
+            '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
+            if readonly else ''
+        }
         
         <div class="cr-page__actions">
             <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
-            {download_button_html if not _is_generic_404_page else ""}
+            <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
         </div>
         """
     ).strip()
@@ -2718,21 +2720,9 @@ def _not_in_archive_html(
     
     return _base_page_html(
         title_html='Not in Archive | Crystal',
-        style_html=(
-            (_URL_BOX_STYLE_TEMPLATE + '\n' + not_in_archive_styles)
-            if not _is_generic_404_page
-            else ''
-        ),
-        content_html=(
-            (content_top_html + content_bottom_html)
-            if not _is_generic_404_page
-            else content_top_html
-        ),
-        script_html=(
-            script_html
-            if not _is_generic_404_page
-            else ''
-        ),
+        style_html=(_URL_BOX_STYLE_TEMPLATE + '\n' + not_in_archive_styles),
+        content_html=(content_top_html + content_bottom_html),
+        script_html=script_html,
     )
 
 
