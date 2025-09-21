@@ -1400,13 +1400,13 @@ def _BRAND_HEADER_HTML_TEMPLATE() -> str:
         f"""
         <div class="cr-brand-header">
             <a class="cr-brand-header__link" href="{CRYSTAL_APP_URL}" target="_blank">
-                <span class="cr-brand-header__logo" />
+                <span class="cr-brand-header__logo">
                     <img src="{_CRYSTAL_APPICON_IMAGE_URL_REF}" alt="Crystal icon" class="cr-brand-header__logo--image" onerror="document.querySelector('.cr-brand-header__logo').classList.add('cr-brand-header__logo--error');" />
                     <img src="{_APPICON_FALLBACK_IMAGE_URL()}" alt="Crystal icon" class="cr-brand-header__logo--image_fallback" />
                 </span>
                 <div class="cr-brand-header__text">
                     <h1 class="cr-brand-header__title">
-                        <span class="cr-brand-header__logotext" />
+                        <span class="cr-brand-header__logotext">
                             <span class="cr-brand-header__logotext--text">
                                 Crystal
                             </span>
