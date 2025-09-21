@@ -5,7 +5,8 @@ Crystal: A Website Archiver
 
 Crystal is a tool that downloads high-fidelity copies of websites for long-term archival.
 
-It works best on traditional websites made of distinct pages using limited JavaScript (such as blogs, wikis, and other static websites)
+It works best on traditional websites made of distinct pages using 
+limited JavaScript (such as blogs, wikis, and other static websites)
 although it can also download more dynamic sites which have infinitely 
 scrolling feeds of content (such as social media sites).
 
