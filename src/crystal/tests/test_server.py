@@ -5,7 +5,7 @@ from copy import deepcopy
 from crystal import server
 from crystal.doc.html.soup import HtmlDocument
 from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
-from crystal.model import Resource, ResourceRevision
+from crystal.model import Project, Resource, ResourceRevision
 from crystal.server import _DEFAULT_SERVER_PORT, ProjectServer, get_request_url
 from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.controls import click_button, TreeItem
@@ -378,7 +378,10 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
             download_response = await bg_fetch_url(
                 f'http://127.0.0.1:{server_port}/_/crystal/download-url',
                 method='POST',
-                data=json.dumps({'url': comic1_url}).encode('utf-8'),
+                data=json.dumps({
+                    'url': comic1_url,
+                    'is_root': True,
+                }).encode('utf-8'),
                 headers={'Content-Type': 'application/json'}
             )
             
@@ -401,6 +404,7 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
             assert not reloaded_comic_page.is_not_in_archive
 
 
+# TODO: Implement discrete test that actually checks that the progress bar updates
 @skip('covered by: test_given_nia_page_visible_when_download_button_pressed_then_download_starts_and_runs_with_progress_bar')
 async def test_when_download_complete_and_successful_download_with_content_then_page_reloads_to_reveal_downloaded_page() -> None:
     pass
@@ -466,7 +470,10 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                 download_response = await bg_fetch_url(
                     f'http://127.0.0.1:{server_port}/_/crystal/download-url',
                     method='POST',
-                    data=json.dumps({'url': comic1_url}).encode('utf-8'),
+                    data=json.dumps({
+                        'url': comic1_url,
+                        'is_root': True,
+                    }).encode('utf-8'),
                     headers={'Content-Type': 'application/json'}
                 )
                 
@@ -670,7 +677,7 @@ async def test_given_create_group_form_visible_when_cancel_button_pressed_then_h
 @awith_playwright
 async def test_given_create_group_form_visible_when_any_download_button_clicked_then_disables_form_and_creates_group_and_starts_downloading_group_and_displays_success_message_and_downloads_url_and_reloads_page(pw: Playwright) -> None:
     # Test Case 1: Download button above the create group form is clicked
-    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, *_):
+    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, project, *_):
         def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
             page = _navigate_from_home_to_comic_1_nia_page(
                 raw_page, home_url_in_archive, comic1_url_in_archive)
@@ -704,9 +711,23 @@ async def test_given_create_group_form_visible_when_any_download_button_clicked_
             # Wait for the page to reload after download completes.
             # The group should be created automatically and the page should reload to the comic.
             expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
+        await pw.run(pw_task)
+        
+        # Ensure expected entities created
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic_url_pattern = sp.get_request_url('https://xkcd.com/#/')
+            
+            assert project.get_root_resource(url=home_url) is not None
+            assert project.get_root_resource(url=comic1_url) is None, (
+                'Should not have created RootResource for comic 1 '
+                'because created ResourceGroup covers it'
+            )
+            assert project.get_resource_group(url_pattern=comic_url_pattern) is not None
 
     # Test Case 2: Download button at the bottom of the create group form
-    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, *_):
+    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, project, *_):
         def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
             page = _navigate_from_home_to_comic_1_nia_page(
                 raw_page, home_url_in_archive, comic1_url_in_archive)
@@ -739,6 +760,19 @@ async def test_given_create_group_form_visible_when_any_download_button_clicked_
             # The group should be created automatically and the page should reload to the comic.
             expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
         await pw.run(pw_task)
+        
+        # Ensure expected entities created
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic_url_pattern = sp.get_request_url('https://xkcd.com/#/')
+            
+            assert project.get_root_resource(url=home_url) is not None
+            assert project.get_root_resource(url=comic1_url) is None, (
+                'Should not have created RootResource for comic 1 '
+                'because created ResourceGroup covers it'
+            )
+            assert project.get_resource_group(url_pattern=comic_url_pattern) is not None
 
 
 @skip('covered by: test_given_create_group_form_visible_and_group_previously_created_when_download_button_clicked_then_downloads_url_and_reloads_page')
@@ -748,7 +782,7 @@ async def test_given_create_group_form_visible_when_create_button_clicked_then_d
 
 @awith_playwright
 async def test_given_create_group_form_visible_and_group_previously_created_when_download_button_clicked_then_downloads_url_and_reloads_page(pw: Playwright) -> None:
-    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, *_):
+    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, project, *_):
         def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
             page = _navigate_from_home_to_comic_1_nia_page(
                 raw_page, home_url_in_archive, comic1_url_in_archive)
@@ -801,6 +835,19 @@ async def test_given_create_group_form_visible_and_group_previously_created_when
             # Ensure refreshed page is the actual comic page.
             expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
         await pw.run(pw_task)
+        
+        # Ensure expected entities created
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic_url_pattern = sp.get_request_url('https://xkcd.com/#/')
+            
+            assert project.get_root_resource(url=home_url) is not None
+            assert project.get_root_resource(url=comic1_url) is None, (
+                'Should not have created RootResource for comic 1 '
+                'because created ResourceGroup covers it'
+            )
+            assert project.get_resource_group(url_pattern=comic_url_pattern) is not None
 
 
 @awith_playwright
@@ -849,7 +896,7 @@ async def test_given_create_group_form_visible_when_download_or_create_button_cl
 
 @awith_playwright
 async def test_given_create_group_form_visible_when_type_in_url_pattern_field_then_preview_members_update_live(pw: Playwright) -> None:
-    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp):
+    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, *_):
         # Extract values before defining the closure
         # to avoid capturing the unserializable ProjectServer object
         url_pattern_1 = sp.get_request_url('https://xkcd.com/#/')
@@ -885,7 +932,7 @@ async def test_given_create_group_form_visible_when_type_in_url_pattern_field_th
 
 @awith_playwright
 async def test_given_create_group_form_visible_when_type_in_url_pattern_field_and_network_down_then_preview_members_show_error_message(pw: Playwright) -> None:
-    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp):
+    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, *_):
         # Extract values before defining the closure
         # to avoid capturing the unserializable ProjectServer object
         url_pattern = sp.get_request_url('https://xkcd.com/1*/')
@@ -919,7 +966,7 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
     # Case 1: URL Pattern text field
     # Case 2: Name text field
     for field_func in [lambda page: page.url_pattern_field, lambda page: page.name_field]:
-        async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp):
+        async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, *_):
             def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
                 page = _navigate_from_home_to_comic_1_nia_page(
                     raw_page, home_url_in_archive, comic1_url_in_archive)
@@ -958,7 +1005,7 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
     # Case 1: URL Pattern text field
     # Case 2: Name text field
     for field_func in [lambda page: page.url_pattern_field, lambda page: page.name_field]:
-        async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp):
+        async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, *_):
             def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
                 page = _navigate_from_home_to_comic_1_nia_page(
                     raw_page, home_url_in_archive, comic1_url_in_archive)
@@ -2340,7 +2387,7 @@ async def _not_in_archive_page_visible(*, readonly: bool=False) -> AsyncIterator
 
 
 @asynccontextmanager
-async def _not_in_archive_page_visible_temporarily() -> AsyncIterator[tuple[str, str, ProjectServer]]:
+async def _not_in_archive_page_visible_temporarily() -> AsyncIterator[tuple[str, str, ProjectServer, Project]]:
     """
     Context manager that opens a test project, starts a server, and
     shows a "Not in Archive" page by requesting a URL that doesn't exist in the archive.
@@ -2388,7 +2435,7 @@ async def _not_in_archive_page_visible_temporarily() -> AsyncIterator[tuple[str,
             with assert_does_open_webbrowser_to(home_url_in_archive):
                 click_button(mw.view_button)
             
-            yield (comic1_url_in_archive, home_url_in_archive, sp)
+            yield (comic1_url_in_archive, home_url_in_archive, sp, project)
 
 
 @asynccontextmanager
