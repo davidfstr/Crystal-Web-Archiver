@@ -1827,6 +1827,7 @@ def _generic_404_page_html() -> str:
         style_html='',
         content_html=content_top_html,
         script_html='',
+        include_brand_header=False,
     )
 
 
@@ -2958,6 +2959,9 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
         color: #e74c3c;
         text-align: center;
         margin: 20px 0;
+    }
+    .cr-page__icon:first-child {
+        margin-top: 0;
     }
     
     .cr-page__title {
