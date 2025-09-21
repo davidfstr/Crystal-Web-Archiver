@@ -121,7 +121,7 @@ def _detect_new_group_given_member_url_and_source(
     """
     # HACK: Import locally so that Task._USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS
     #       doesn't capture the wrong value
-    from crystal.task import TaskDisposedException
+    from crystal.task import CannotDownloadWhenProjectReadOnlyError, TaskDisposedException
     
     if isinstance(best_source, RootResource):
         source_rs = [best_source.resource]
@@ -148,6 +148,11 @@ def _detect_new_group_given_member_url_and_source(
         revision_future = source_r.download_body()
         try:
             revision = revision_future.result()
+        except CannotDownloadWhenProjectReadOnlyError:
+            # TODO: Implement better error handling.
+            #       If must skip a resource from a group then an extra member
+            #       from the group should be consulted.
+            continue
         # HACK: Situation can happen if running within a Playwright.run() block,
         #       probably because its subprocess isn't receiving the full state
         #       from its parent process.
