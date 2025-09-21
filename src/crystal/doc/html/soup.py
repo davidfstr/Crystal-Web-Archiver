@@ -599,6 +599,13 @@ class HtmlDocument(Document):
         Tries to insert a banner at the document footer declaring that
         the current page was archived with Crystal.
         """
+        # Don't insert a footer banner if there already appears to be one.
+        # This can happen when serving a page downloaded from a site
+        # that was exported by or itself served with Crystal.
+        footers = list(self._html.find_all('a', id='cr-footer-banner'))
+        if len(footers) > 0:
+            return False
+        
         def create_footer_banner(html: FastSoup) -> Tag:
             from crystal.server import (
                 _CRYSTAL_APP_URL,
