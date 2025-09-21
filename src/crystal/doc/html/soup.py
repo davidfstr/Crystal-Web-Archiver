@@ -594,6 +594,13 @@ class HtmlDocument(Document):
     
     _FOOTER_BANNER_MESSAGE = 'This page was archived with Crystal'
     
+    @staticmethod
+    def FOOTER_IMAGE_URLS() -> list[str]:
+        from crystal.server import _CRYSTAL_APPICON_IMAGE_URL
+        return [
+            _CRYSTAL_APPICON_IMAGE_URL,
+        ]
+    
     def try_insert_footer_banner(self, get_request_url: Callable[[str], str]) -> bool:
         """
         Tries to insert a banner at the document footer declaring that

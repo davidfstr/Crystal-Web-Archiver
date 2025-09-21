@@ -2776,27 +2776,43 @@ def _base_page_html(
         style_html: str,
         content_html: str,
         script_html: str,
+        include_brand_header: bool=True,
         ) -> str:
-    page_html = _BASE_PAGE_HTML_TEMPLATE % {
-        'title_html': title_html,
-        'style_html': (
-            _BASE_PAGE_STYLE_TEMPLATE + '\n' + 
-            style_html
-        ),
-        'crystal_app_url': _CRYSTAL_APP_URL,
-        'appicon_image_url_ref': _CRYSTAL_APPICON_IMAGE_URL_REF,
-        'appicon_fallback_image_url': _appicon_fallback_image_url(),
-        'content_html': content_html,
-        'script_html': script_html
-    }
+    page_html = dedent(
+        f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8" />
+            <title>{title_html}</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                {_BASE_PAGE_STYLE_TEMPLATE + '\n' + style_html}
+            </style>
+        </head>
+        <body class="cr-body">
+            <div class="cr-body__container">
+                {_BRAND_HEADER_HTML_TEMPLATE() if include_brand_header else ''}
+                
+                {content_html}
+            </div>
+            
+            {script_html}
+        </body>
+        </html>
+        """
+    ).lstrip()  # type: str
+    
+    # Look for common templating errors
     if '%%' in page_html:
         offset = page_html.index('%%')
         raise ValueError(f'Unescaped % in HTML template. Near: {page_html[offset-20:offset+20]!r}')
+    
     return page_html
 
 
 @cache
-def _appicon_fallback_image_url() -> str:
+def _APPICON_FALLBACK_IMAGE_URL() -> str:
     """Data image URL with a simplified version of the app icon."""
     with resources.open_binary('appicon--fallback.svg') as f:
         svg_bytes = f.read()
@@ -3058,84 +3074,44 @@ _CRYSTAL_APP_URL = 'https://dafoster.net/projects/crystal-web-archiver/'
 _CRYSTAL_APPICON_IMAGE_URL_REF = '/_/crystal/resources/appicon.png'
 _CRYSTAL_APPICON_IMAGE_URL = 'crystal://resources/appicon.png'
 
-_BASE_PAGE_HTML_TEMPLATE = dedent(
-    """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8" />
-        <title>%(title_html)s</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            %(style_html)s
-        </style>
-    </head>
-    <body class="cr-body">
-        <div class="cr-body__container">
-            <div class="cr-brand-header">
-                <a class="cr-brand-header__link" href="%(crystal_app_url)s" target="_blank">
-                    <span class="cr-brand-header__logo" />
-                        <img src="%(appicon_image_url_ref)s" alt="Crystal icon" class="cr-brand-header__logo--image" onerror="document.querySelector('.cr-brand-header__logo').classList.add('cr-brand-header__logo--error');" />
-                        <img src="%(appicon_fallback_image_url)s" alt="Crystal icon" class="cr-brand-header__logo--image_fallback" />
-                    </span>
-                    <div class="cr-brand-header__text">
-                        <h1 class="cr-brand-header__title">
-                            <span class="cr-brand-header__logotext" />
-                                <span class="cr-brand-header__logotext--text">
-                                    Crystal
-                                </span>
-                                <img
-                                    src="/_/crystal/resources/logotext.png" 
-                                    srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
-                                    alt="Crystal"
-                                    class="cr-brand-header__title__logotext--light"
-                                    onerror="document.querySelector('.cr-brand-header__logotext').classList.add('cr-brand-header__logotext--error');"
-                                />
-                                <img
-                                    src="/_/crystal/resources/logotext-dark.png" 
-                                    srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
-                                    alt="Crystal"
-                                    class="cr-brand-header__title__logotext--dark"
-                                    onerror="document.querySelector('.cr-brand-header__logotext').classList.add('cr-brand-header__logotext--error');"
-                                />
+@cache
+def _BRAND_HEADER_HTML_TEMPLATE() -> str:
+    return dedent(
+        f"""
+        <div class="cr-brand-header">
+            <a class="cr-brand-header__link" href="{_CRYSTAL_APP_URL}" target="_blank">
+                <span class="cr-brand-header__logo" />
+                    <img src="{_CRYSTAL_APPICON_IMAGE_URL_REF}" alt="Crystal icon" class="cr-brand-header__logo--image" onerror="document.querySelector('.cr-brand-header__logo').classList.add('cr-brand-header__logo--error');" />
+                    <img src="{_APPICON_FALLBACK_IMAGE_URL()}" alt="Crystal icon" class="cr-brand-header__logo--image_fallback" />
+                </span>
+                <div class="cr-brand-header__text">
+                    <h1 class="cr-brand-header__title">
+                        <span class="cr-brand-header__logotext" />
+                            <span class="cr-brand-header__logotext--text">
+                                Crystal
                             </span>
-                        </h1>
-                        <p class="cr-brand-header__subtitle">A Website Archiver</p>
-                    </div>
-                </a>
-            </div>
-            
-            %(content_html)s
+                            <img
+                                src="/_/crystal/resources/logotext.png" 
+                                srcset="/_/crystal/resources/logotext.png 1x, /_/crystal/resources/logotext@2x.png 2x"
+                                alt="Crystal"
+                                class="cr-brand-header__title__logotext--light"
+                                onerror="document.querySelector('.cr-brand-header__logotext').classList.add('cr-brand-header__logotext--error');"
+                            />
+                            <img
+                                src="/_/crystal/resources/logotext-dark.png" 
+                                srcset="/_/crystal/resources/logotext-dark.png 1x, /_/crystal/resources/logotext-dark@2x.png 2x"
+                                alt="Crystal"
+                                class="cr-brand-header__title__logotext--dark"
+                                onerror="document.querySelector('.cr-brand-header__logotext').classList.add('cr-brand-header__logotext--error');"
+                            />
+                        </span>
+                    </h1>
+                    <p class="cr-brand-header__subtitle">A Website Archiver</p>
+                </div>
+            </a>
         </div>
-        
-        %(script_html)s
-    </body>
-    </html>
-    """
-).lstrip()  # type: str
-
-_CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE = [
-    '/_/crystal/resources/appicon.png',
-    '/_/crystal/resources/logotext.png',
-    '/_/crystal/resources/logotext@2x.png',
-    '/_/crystal/resources/logotext-dark.png',
-    '/_/crystal/resources/logotext-dark@2x.png',
-]
-_CRYSTAL_URL_REF_PREFIX = '/_/crystal/'
-if True:
-    if not _CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE[0].startswith(_CRYSTAL_URL_REF_PREFIX):
-        raise AssertionError('_CRYSTAL_URL_PREFIX does not appear to be correct')
-    
-    _bpt_without_crystal_urls = _BASE_PAGE_HTML_TEMPLATE
-    for _crystal_url in _CRYSTAL_URL_REFS_IN_BASE_PAGE_TEMPLATE:
-        _bpt_without_crystal_urls = _bpt_without_crystal_urls.replace(_crystal_url, '')
-    if _CRYSTAL_URL_REF_PREFIX in _bpt_without_crystal_urls:
-        found_at = _bpt_without_crystal_urls.index(_CRYSTAL_URL_REF_PREFIX)
-        raise AssertionError(
-            '_CRYSTAL_URLS_IN_BASE_PAGE_TEMPLATE does not appear to include '
-            'every crystal:// URL in _BASE_PAGE_HTML_TEMPLATE. '
-            f'Found a match: {_bpt_without_crystal_urls[found_at: found_at+50]!r}...'
-        )
+        """
+    )
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
