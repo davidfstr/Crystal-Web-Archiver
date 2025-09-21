@@ -782,7 +782,7 @@ async def test_given_create_group_form_visible_when_create_button_clicked_then_d
 
 @awith_playwright
 async def test_given_create_group_form_visible_and_group_previously_created_when_download_button_clicked_then_downloads_url_and_reloads_page(pw: Playwright) -> None:
-    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, *_):
+    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, project, *_):
         def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
             page = _navigate_from_home_to_comic_1_nia_page(
                 raw_page, home_url_in_archive, comic1_url_in_archive)
@@ -835,6 +835,19 @@ async def test_given_create_group_form_visible_and_group_previously_created_when
             # Ensure refreshed page is the actual comic page.
             expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
         await pw.run(pw_task)
+        
+        # Ensure expected entities created
+        if True:
+            home_url = sp.get_request_url('https://xkcd.com/')
+            comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic_url_pattern = sp.get_request_url('https://xkcd.com/#/')
+            
+            assert project.get_root_resource(url=home_url) is not None
+            assert project.get_root_resource(url=comic1_url) is None, (
+                'Should not have created RootResource for comic 1 '
+                'because created ResourceGroup covers it'
+            )
+            assert project.get_resource_group(url_pattern=comic_url_pattern) is not None
 
 
 @awith_playwright

@@ -613,13 +613,13 @@ def not_in_archive_html(
             
             async function onDownloadUrlButtonClicked() {
                 const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
-                const groupFormIsVisibleAndEnabled = (
-                    createGroupCheckbox && createGroupCheckbox.checked &&
-                    isFormEnabled()  // form action already performed
+                const groupShouldBeCreated = (
+                    createGroupCheckbox.checked &&
+                    isFormEnabled()  // form action not already performed
                 );
-                if (groupFormIsVisibleAndEnabled) {
+                if (groupShouldBeCreated) {
                     const downloadImmediatelyCheckbox = document.getElementById('cr-download-immediately-checkbox');
-                    if (downloadImmediatelyCheckbox && downloadImmediatelyCheckbox.checked) {
+                    if (downloadImmediatelyCheckbox.checked) {
                         // Press "Download" button in the group form
                         await onDownloadOrCreateGroupButtonClicked();
                         return;
@@ -631,7 +631,9 @@ def not_in_archive_html(
                         return;
                     }
                 } else {
-                    await startUrlDownload(/*isRoot=*/true);
+                    const groupWasCreated = createGroupCheckbox.checked;
+                    const rootUrlShouldBeCreated = !groupWasCreated;
+                    await startUrlDownload(/*isRoot=*/rootUrlShouldBeCreated);
                 }
             }
             
