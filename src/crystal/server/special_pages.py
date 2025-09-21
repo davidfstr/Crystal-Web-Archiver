@@ -516,11 +516,10 @@ def not_in_archive_html(
         <p>The requested page was not found in this archive.</p>
         <p>The page has not been downloaded yet.</p>
         
-        {_URL_BOX_HTML_TEMPLATE % {
-            'label_html': 'Original URL',
-            'url_html_attr': archive_url_html_attr,
-            'url_html': archive_url_html
-        }}
+        {_url_box_html(
+            label_html='Original URL',
+            url=archive_url
+        )}
         
         {
             '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
@@ -1067,11 +1066,10 @@ def fetch_error_html(
             was encountered when fetching this resource.
         </p>
         
-        {_URL_BOX_HTML_TEMPLATE % {
-            'label_html': 'Original URL',
-            'url_html_attr': archive_url,
-            'url_html': html_escape(archive_url)
-        } }
+        {_url_box_html(
+            label_html='Original URL',
+            url=archive_url,
+        )}
         
         <div class="cr-page__actions">
             <button onclick="history.back()" class="cr-button cr-button--secondary">
@@ -1494,14 +1492,18 @@ _URL_BOX_STYLE_TEMPLATE = dedent(
 ).lstrip()  # type: str
 
 
-_URL_BOX_HTML_TEMPLATE = dedent(
-    """
-    <div class="cr-url-box">
-        <div class="cr-url-box__label">%(label_html)s</div>
-        <a href="%(url_html_attr)s" class="cr-url-box__link" target="_blank" rel="noopener">%(url_html)s</a>
-    </div>
-    """
-).strip()  # type: str
+def _url_box_html(label_html: str, url: str) -> str:
+    url_html_attr = url
+    url_html = html_escape(url)
+    
+    return dedent(
+        f"""
+        <div class="cr-url-box">
+            <div class="cr-url-box__label">{label_html}</div>
+            <a href="{url_html_attr}" class="cr-url-box__link" target="_blank" rel="noopener">{url_html}</a>
+        </div>
+        """
+    ).strip()
 
 
 # ------------------------------------------------------------------------------
