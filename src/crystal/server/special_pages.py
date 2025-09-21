@@ -179,16 +179,16 @@ def generic_404_page_html() -> str:
 
 
 def not_in_archive_html(
-        *, archive_url_html_attr: str,
-        archive_url_html: str,
-        archive_url_json: str,
-        download_button_disabled_html: str,
+        *, archive_url: str,
         create_group_form_data: CreateGroupFormData,
         readonly: bool,
-        _is_generic_404_page: bool=False,
         ) -> str:
     if _SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE:
         return generic_404_page_html()
+    
+    archive_url_html_attr = archive_url
+    archive_url_html = html_escape(archive_url)
+    archive_url_json = json.dumps(archive_url)
     
     not_in_archive_styles = dedent(
         """
@@ -531,7 +531,7 @@ def not_in_archive_html(
             <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
-            <button id="cr-download-url-button" {download_button_disabled_html}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
+            <button id="cr-download-url-button" {'disabled ' if readonly else ''}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
         </div>
         """
     ).strip()

@@ -1165,10 +1165,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.project, archive_url, self.referer_archive_url)
         
         html_content = not_in_archive_html(
-            archive_url_html_attr=archive_url,
-            archive_url_html=html_escape(archive_url),
-            archive_url_json=json.dumps(archive_url),
-            download_button_disabled_html=('disabled ' if readonly else ''),
+            archive_url=archive_url,
             create_group_form_data=create_group_form_data,
             readonly=readonly
         )
