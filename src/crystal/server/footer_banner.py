@@ -10,22 +10,22 @@ _FOOTER_BANNER_MESSAGE = 'This page was archived with Crystal'
 
 
 def create_footer_banner(html: FastSoup, get_request_url: Callable[[str], str]) -> Tag:
-    from crystal.server import (
-        _CRYSTAL_APP_URL,
-        _CRYSTAL_APPICON_IMAGE_URL,
-        _STANDARD_FONT_FAMILY,
+    from crystal.server.special_pages import (
+        CRYSTAL_APP_URL,
+        CRYSTAL_APPICON_IMAGE_URL,
+        STANDARD_FONT_FAMILY,
     )
     
     a = html.new_tag('a')
     html.tag_attrs(a)['id'] = FOOTER_BANNER_ID
-    html.tag_attrs(a)['href'] = _CRYSTAL_APP_URL
+    html.tag_attrs(a)['href'] = CRYSTAL_APP_URL
     # Open in new window because target site - likely GitHub - may
     # refuse to load inside an iframe/frame, which we might be in
     html.tag_attrs(a)['target'] = '_blank'
     html.tag_attrs(a)['style'] = _FOOTER_BANNER_STYLE()
     
     img = html.new_tag('img')
-    html.tag_attrs(img)['src'] = get_request_url(_CRYSTAL_APPICON_IMAGE_URL)
+    html.tag_attrs(img)['src'] = get_request_url(CRYSTAL_APPICON_IMAGE_URL)
     html.tag_attrs(img)['width'] = '24'
     html.tag_attrs(img)['height'] = '24'
     html.tag_attrs(img)['onerror'] = "this.style['display'] = 'none';"
@@ -42,12 +42,12 @@ def create_footer_banner(html: FastSoup, get_request_url: Callable[[str], str]) 
 
 @cache
 def _FOOTER_BANNER_STYLE():  # minified
-    from crystal.server import _STANDARD_FONT_FAMILY
+    from crystal.server.special_pages import STANDARD_FONT_FAMILY
     return (
         'border-top: 2px #B40010 solid;'
         'background: #FFFAE1;'
         
-        f'font-family: {_STANDARD_FONT_FAMILY};'
+        f'font-family: {STANDARD_FONT_FAMILY};'
         'font-variant: initial;'
         'font-weight: initial;'
         'text-transform: none;'
@@ -163,7 +163,7 @@ def _FOOTER_BANNER_JS() -> str:
 
 
 def FOOTER_IMAGE_URLS() -> list[str]:
-    from crystal.server import _CRYSTAL_APPICON_IMAGE_URL
+    from crystal.server.special_pages import CRYSTAL_APPICON_IMAGE_URL
     return [
-        _CRYSTAL_APPICON_IMAGE_URL,
+        CRYSTAL_APPICON_IMAGE_URL,
     ]
