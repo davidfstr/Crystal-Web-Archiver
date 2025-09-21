@@ -1101,6 +1101,8 @@ def _base_page_html(
         script_html: str,
         include_brand_header: bool=True,
         ) -> str:
+    # TODO: After Python 3.12+ is minimum Python version, inline this
+    NEWLINE = '\n'
     page_html = dedent(
         f"""
         <!DOCTYPE html>
@@ -1110,7 +1112,7 @@ def _base_page_html(
             <title>{title_html}</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                {_BASE_PAGE_STYLE_TEMPLATE + '\n' + style_html}
+                {_BASE_PAGE_STYLE_TEMPLATE + NEWLINE + style_html}
             </style>
         </head>
         <body class="cr-body">
