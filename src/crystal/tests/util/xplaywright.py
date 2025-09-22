@@ -208,6 +208,7 @@ def _run_block_with_playwright(serialized_block: bytes) -> None:
             closing(browser.new_context()) as context:
         context.set_default_timeout(int(DEFAULT_WAIT_TIMEOUT * 1000) * GLOBAL_TIMEOUT_MULTIPLIER)
         page = context.new_page()
+        page.on('pageerror', lambda e: print(f'*** Uncaught JavaScript exception: {e}', file=sys.stderr))
         
         block(page)
 
