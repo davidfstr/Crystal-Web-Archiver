@@ -158,6 +158,12 @@ def not_found_page_html() -> str:
 #       when exporting a Crystal project. In that context a single HTTP 404 page
 #       must be suitable as the HTTP 404 response for any page in the same project.
 def generic_404_page_html(default_url_prefix: str | None) -> str:
+    default_url_prefix_b64 = (
+        base64.b64encode(default_url_prefix.encode('utf-8')).decode('ascii')
+        if default_url_prefix is not None else 
+        None
+    )
+    
     content_top_html = dedent(
         f"""
         <div class="cr-page__icon">🚫</div>
@@ -184,9 +190,11 @@ def generic_404_page_html(default_url_prefix: str | None) -> str:
     from crystal.server import _REQUEST_PATH_IN_ARCHIVE_RE
     REQUEST_PATH_IN_ARCHIVE_RE_STR = _REQUEST_PATH_IN_ARCHIVE_RE.pattern
     script_html = dedent(
+        # NOTE: crDefaultUrlPrefixB64 is obfuscated as base64 so that its URL-like
+        #       value won't be rewritten if Crystal downloads the 404 page.
         """
         <script>
-            const crDefaultUrlPrefix = %(default_url_prefix_json)s;
+            const crDefaultUrlPrefixB64 = %(default_url_prefix_b64_json)s;
             
             // -----------------------------------------------------------------
             // URL Box
@@ -204,6 +212,9 @@ def generic_404_page_html(default_url_prefix: str | None) -> str:
                 const siteRootPath = await locateSiteRootPath(loc.origin, requestPath);
                 const siteRelRequestPath = requestPath.substring(siteRootPath.length - 1);
                 
+                const crDefaultUrlPrefix = (crDefaultUrlPrefixB64 !== null)
+                    ? tryDecodeBase64Utf8(crDefaultUrlPrefixB64)
+                    : null;
                 const archiveUrl = getArchiveUrlWithDup(siteRelRequestPath, crDefaultUrlPrefix);
                 if (archiveUrl === null) {
                     // Unable to resolve archive URL.
@@ -216,6 +227,30 @@ def generic_404_page_html(default_url_prefix: str | None) -> str:
                 urlBoxLinkDom.href = archiveUrl;
                 urlBoxLinkDom.innerText = archiveUrl;
             });
+            
+            function tryDecodeBase64Utf8(b64Str) {
+                try {
+                    const bytes = Uint8Array.fromBase64(base64);
+                    return new TextDecoder('utf-8').decode(bytes, {fatal: true});
+                } catch (e) {
+                    if (e instanceof SyntaxError || e instanceof TypeError) {
+                        // Invalid base64 or UTF-8
+                        return null;
+                    } else {
+                        // API unavailable: Uint8Array, TextDecoder
+                        try {
+                            return atob(b64Str);
+                        } catch (f) {
+                            if (f instanceof InvalidCharacterError) {
+                                // Invalid base64 or string is not ASCII.
+                                return null;
+                            } else {
+                                throw f;
+                            }
+                        }
+                    }
+                }
+            }
             
             // Locates the path to the directory containing the exported site,
             // which also will directly contain the "404.html" page.
@@ -238,20 +273,20 @@ def generic_404_page_html(default_url_prefix: str | None) -> str:
                         continue;
                     }
                     
-                    const match = content.match(/const crDefaultUrlPrefix = ([^;]+);/);
+                    const match = content.match(/const crDefaultUrlPrefixB64 = ([^;]+);/);
                     if (!match) {
                         // No Crystal 404.html page found here
                         continue;
                     }
                     
-                    let candidateUrlPrefix;
+                    let candidateUrlPrefixB64;
                     try {
-                        candidateUrlPrefix = JSON.parse(match[1]);
+                        candidateUrlPrefixB64 = JSON.parse(match[1]);
                     } catch (parseError) {
-                        // Looks like a Crystal 404.html page, but has a bogus crDefaultUrlPrefix.
+                        // Looks like a Crystal 404.html page, but has a bogus crDefaultUrlPrefixB64.
                         continue;
                     }
-                    if (candidateUrlPrefix !== crDefaultUrlPrefix) {
+                    if (candidateUrlPrefixB64 !== crDefaultUrlPrefixB64) {
                         // Is a Crystal 404.html page but does not match this 404 page.
                         continue
                     }
@@ -287,7 +322,7 @@ def generic_404_page_html(default_url_prefix: str | None) -> str:
             // -----------------------------------------------------------------
         </script>
         """ % {
-            'default_url_prefix_json': json.dumps(default_url_prefix),
+            'default_url_prefix_b64_json': json.dumps(default_url_prefix_b64),
             'REQUEST_PATH_IN_ARCHIVE_RE_STR': REQUEST_PATH_IN_ARCHIVE_RE_STR.replace('/', r'\/'),
         }
     ).strip()

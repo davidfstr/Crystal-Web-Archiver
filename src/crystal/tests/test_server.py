@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
 from crystal import server
 from crystal.doc.html.soup import HtmlDocument
-from crystal.model import Project, Resource, ResourceRevision
+from crystal.model import Project, Resource, ResourceRevision, RootResource
 from crystal.server import _DEFAULT_SERVER_PORT, ProjectServer, get_request_url
 from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
 from crystal.server.special_pages import generic_404_page_html
@@ -35,6 +35,7 @@ import json
 from textwrap import dedent
 from unittest import skip
 from unittest.mock import patch
+
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
 #       in test_workflows.py. Link stubs for such behaviors
@@ -430,6 +431,37 @@ async def test_given_404_page_viewed_directly_then_does_not_link_to_any_original
             url_box_link = raw_page.locator('.cr-url-box__link')
             expect(url_box_link).to_have_text("See browser's URL")
         await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_when_404_page_downloaded_and_served_by_crystal_then_url_box_links_to_correct_original_url(pw: Playwright) -> None:
+    original_404_url = 'https://xkcd.com/missing-page/'
+    async with _generic_404_page_visible(request_path='/missing-page/', headless=True) as server_page:
+        served_404_url = server_page.request_url
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create RootResource with dialog, which should also set the default URL prefix
+            click_button(mw.new_root_url_button)
+            nrud = await NewRootUrlDialog.wait_for()
+            nrud.url_field.Value = served_404_url
+            nrud.do_not_download_immediately()  # easier to test
+            await nrud.ok()
+            
+            # Start server
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti,) = root_ti.Children
+            home_ti.SelectItem()
+            served_404_url_in_archive = get_request_url(
+                served_404_url,
+                project_default_url_prefix=project.default_url_prefix)
+            with assert_does_open_webbrowser_to(served_404_url_in_archive):
+                click_button(mw.view_button)
+            
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                raw_page.goto(served_404_url_in_archive)
+                url_box_link = raw_page.locator('.cr-url-box__link')
+                expect(url_box_link).to_have_text(original_404_url)
+            await pw.run(pw_task)
 
 
 # ------------------------------------------------------------------------------
@@ -2529,7 +2561,8 @@ async def _not_found_page_visible(*, readonly: bool=False) -> AsyncIterator[WebP
 
 @asynccontextmanager
 async def _generic_404_page_visible(
-        *, request_path: str='/missing-page/'
+        *, request_path: str='/missing-page/',
+        headless: bool=False,
         ) -> AsyncIterator[WebPage]:
     """
     Context manager that opens a test project, starts a server, and returns a WebPage
@@ -2540,27 +2573,37 @@ async def _generic_404_page_visible(
         with Project(project_dirpath) as project:
             project.default_url_prefix = 'https://xkcd.com'
         
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
-            # Start server
-            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            home_ti = root_ti.GetFirstChild()
-            assert home_ti is not None
-            home_ti.SelectItem()
-            home_request_url = get_request_url(
-                'https://xkcd.com/',
-                project_default_url_prefix=project.default_url_prefix)
-            with assert_does_open_webbrowser_to(home_request_url):
-                click_button(mw.view_button)
-            
-            # Verify that "Not in Archive" page reached
-            request_url = get_request_url(
-                f'https://xkcd.com{request_path}',
-                project_default_url_prefix=project.default_url_prefix)
-            g404_page = await bg_fetch_url(request_url)
-            assert g404_page.title == 'Not in Archive'
-            assert g404_page.status == 404
-            
-            yield g404_page
+        if headless:
+            with Project(project_dirpath, readonly=True) as project:
+                with closing(ProjectServer(project, _DEFAULT_SERVER_PORT+1)) as sp:
+                    request_url = sp.get_request_url(f'https://xkcd.com{request_path}')
+                    g404_page = await bg_fetch_url(request_url)
+                    assert g404_page.title == 'Not in Archive'
+                    assert g404_page.status == 404
+                    
+                    yield g404_page
+        else:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
+                # Start server
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                home_ti = root_ti.GetFirstChild()
+                assert home_ti is not None
+                home_ti.SelectItem()
+                home_request_url = get_request_url(
+                    'https://xkcd.com/',
+                    project_default_url_prefix=project.default_url_prefix)
+                with assert_does_open_webbrowser_to(home_request_url):
+                    click_button(mw.view_button)
+                
+                # Verify that "Not in Archive" page reached
+                request_url = get_request_url(
+                    f'https://xkcd.com{request_path}',
+                    project_default_url_prefix=project.default_url_prefix)
+                g404_page = await bg_fetch_url(request_url)
+                assert g404_page.title == 'Not in Archive'
+                assert g404_page.status == 404
+                
+                yield g404_page
 
 
 @asynccontextmanager
