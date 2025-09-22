@@ -9,7 +9,7 @@ from crystal.server import _DEFAULT_SERVER_PORT, ProjectServer, get_request_url
 from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
 from crystal.server.special_pages import generic_404_page_html
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.data import LOREM_IPSUM_LONG, LOREM_IPSUM_SHORT
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.pages import NotInArchivePage, network_down_after_delay
@@ -34,7 +34,7 @@ from io import StringIO
 import json
 from textwrap import dedent
 from unittest import skip
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
@@ -262,6 +262,85 @@ async def test_given_not_found_page_visible_then_crystal_branding_and_exit_butto
             "Return to Home button should be visible on the not found page"
 
 
+async def test_when_invalid_internal_crystal_url_is_requested_then_always_serves_not_found_page() -> None:
+    with Project() as project:
+        with closing(ProjectServer(project, _DEFAULT_SERVER_PORT)) as sp:
+            invalid_page = await bg_fetch_url('http://127.0.0.1:2797/_/')
+            assertEqual('Not Found | Crystal', invalid_page.title)  # not_found_page_html
+            
+            invalid_page = await bg_fetch_url('http://127.0.0.1:2797/_/https/')
+            assertEqual('Not Found | Crystal', invalid_page.title)  # not_found_page_html
+            
+            missing_page = await bg_fetch_url('http://127.0.0.1:2797/_/https/xkcd.com/')
+            assertEqual('Not in Archive | Crystal', missing_page.title)  # not_in_archive_html
+
+
+async def test_when_404_html_at_site_root_is_requested_then_always_serves_not_found_page() -> None:
+    # ...and NOT a "Not in Archive" page or a "Generic 404" page
+    
+    # Case 1: A more-direct test
+    with Project() as project:
+        with closing(ProjectServer(project, _DEFAULT_SERVER_PORT)) as sp:
+            reserved_404_page = await bg_fetch_url('http://127.0.0.1:2797/404.html')
+            assertEqual('Not Found | Crystal', reserved_404_page.title)  # not_found_page_html
+    
+    # Case 2: A more-realistic test
+    if True:
+        COMIC_PAGE = dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content='Comic!'.encode('utf-8')
+        )
+        
+        _404_PAGE = dict(
+            status_code=404,
+            headers=[('Content-Type', 'text/html')],
+            content='404!'.encode('utf-8')
+        )
+        
+        server = MockHttpServer({
+            '/': COMIC_PAGE,
+            # NOTE: An exported site will have a 404 HTML page in this location.
+            #       ProjectServer will never serve an archive URL here.
+            '/404.html': _404_PAGE,
+        })
+        with server:
+            home_url = server.get_url('/')
+            _404_url = server.get_url('/404.html')
+            
+            with Project() as project:
+                project.default_url_prefix = home_url.removesuffix('/')
+                home_rr = RootResource(project, '', Resource(project, home_url))
+                _404_rr = RootResource(project, '', Resource(project, _404_url))
+                
+                await wait_for_future(home_rr.download())
+                await wait_for_future(_404_rr.download())
+                
+                with closing(ProjectServer(project, _DEFAULT_SERVER_PORT)) as sp:
+                    home_url_in_archive = sp.get_request_url(home_url)
+                    _404_url_in_archive = sp.get_request_url(_404_url)
+                    
+                    assertEqual(
+                        'http://127.0.0.1:2797/',
+                        home_url_in_archive)
+                    assertEqual(
+                        # NOT: 'http://127.0.0.1:2797/404.html'
+                        #      even though it is in the default URL prefix "http://127.0.0.1:2798/"
+                        'http://127.0.0.1:2797/_/http/127.0.0.1:2798/404.html',
+                        _404_url_in_archive)
+                    reserved_404_html_url_in_archive = \
+                        'http://127.0.0.1:2797/404.html'
+                    
+                    home_page = await bg_fetch_url(home_url_in_archive)
+                    assertIn('Comic!', home_page.content)
+                    
+                    _404_page = await bg_fetch_url(_404_url_in_archive)
+                    assertIn('404!', _404_page.content)
+                    
+                    reserved_404_page = await bg_fetch_url(reserved_404_html_url_in_archive)
+                    assertEqual('Not Found | Crystal', reserved_404_page.title)  # not_found_page_html
+
+
 # ------------------------------------------------------------------------------
 # Test: "Generic 404" Page (generic_404_page_html)
 
@@ -461,6 +540,72 @@ async def test_when_404_page_downloaded_and_served_by_crystal_then_url_box_links
                 raw_page.goto(served_404_url_in_archive)
                 url_box_link = raw_page.locator('.cr-url-box__link')
                 expect(url_box_link).to_have_text(original_404_url)
+            await pw.run(pw_task)
+
+
+@awith_playwright
+async def test_when_404_page_exported_by_crystal_is_downloaded_and_served_by_crystal_then_url_box_links_to_correct_original_url(pw: Playwright) -> None:
+    COMIC_PAGE = dict(
+        status_code=200,
+        headers=[('Content-Type', 'text/html')],
+        content='Comic!'.encode('utf-8')
+    )
+    
+    _404_PAGE = dict(
+        status_code=404,
+        headers=[('Content-Type', 'text/html')],
+        content=generic_404_page_html(
+            default_url_prefix='https://xkcd.com',
+        ).encode('utf-8')
+    )
+    
+    server = MockHttpServer({
+        '/': COMIC_PAGE,
+        '/99999/index.html': _404_PAGE,
+        '/_/https/c.xkcd.com/random/comic/index.html': _404_PAGE,
+        
+        # NOTE: An exported site will have a 404 HTML page in this location.
+        #       However a ProjectServer will always serve a "Not Found" page
+        #       at this special location.
+        '/404.html': _404_PAGE,
+    })
+    with server:
+        home_url = server.get_url('/')
+        _404_url_samedomain = server.get_url('/99999/index.html')
+        _404_url_otherdomain = server.get_url('/_/https/c.xkcd.com/random/comic/index.html')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create RootResource with dialog, which should also set the default URL prefix
+            click_button(mw.new_root_url_button)
+            nrud = await NewRootUrlDialog.wait_for()
+            nrud.url_field.Value = home_url
+            nrud.do_not_download_immediately()  # easier to test
+            click_checkbox(nrud.create_group_checkbox)
+            assert nrud.create_group_checkbox.Value  # download URLs in domain upon request
+            await nrud.ok()
+            
+            # Start server
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti, *_) = root_ti.Children
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(ANY):
+                click_button(mw.view_button)
+            
+            _404_url_samedomain_in_archive = get_request_url(
+                _404_url_samedomain,
+                project_default_url_prefix=project.default_url_prefix)
+            _404_url_otherdomain_in_archive = get_request_url(
+                _404_url_otherdomain,
+                project_default_url_prefix=project.default_url_prefix)
+            
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                raw_page.goto(_404_url_samedomain_in_archive)
+                url_box_link = raw_page.locator('.cr-url-box__link')
+                expect(url_box_link).to_have_text('https://xkcd.com/99999/index.html')
+                
+                raw_page.goto(_404_url_otherdomain_in_archive)
+                url_box_link = raw_page.locator('.cr-url-box__link')
+                expect(url_box_link).to_have_text('https://c.xkcd.com/random/comic/index.html')
             await pw.run(pw_task)
 
 

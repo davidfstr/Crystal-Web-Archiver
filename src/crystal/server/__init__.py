@@ -561,6 +561,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self._handle_get_download_progress()
             return
         
+        # Reserve 404.html in the root directory for exported projects
+        if self.path == '/404.html':
+            self.send_not_found_page(vary_referer=True)
+            return
+        
         # Serve resource revision in archive
         archive_url = self.get_archive_url(self.path)
         if archive_url is not None:
@@ -759,6 +764,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @bg_affinity
     def _redirect_to_archive_url_if_referer_is_self(self) -> bool:
+        # Do not redirect Crystal-internal URLs
+        if self.path.startswith('/_/'):
+            return False
+        
         dynamic_ok = self._dynamic_ok()  # cache
         if not dynamic_ok:
             return False
@@ -1470,6 +1479,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
             (scheme, rest) = match.groups()
             archive_url = '{}://{}'.format(scheme, rest)
             return archive_url
+        elif request_path.startswith('/_/'):
+            # Looks similar to _REQUEST_PATH_IN_ARCHIVE_RE but does not match
+            return None
         else:
             # If valid default URL prefix is set, use it
             if default_url_prefix is not None and not default_url_prefix.endswith('/'):
@@ -1499,6 +1511,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 if slash_path.startswith('/_/'):
                     # Don't eliminate the default URL prefix because the
                     # resulting URL looks like a different Crystal-internal URL
+                    pass
+                elif slash_path == '/404.html':
+                    # Don't eliminate the default URL prefix to reserve
+                    # 404.html in the root directory for an exported site's
+                    # HTTP 404 page
                     pass
                 else:
                     # Eliminate the default URL prefix
