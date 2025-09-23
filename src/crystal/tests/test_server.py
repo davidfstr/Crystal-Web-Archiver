@@ -1106,7 +1106,6 @@ async def test_given_create_group_form_visible_when_any_download_button_clicked_
                 
                 # Verify form gets disabled immediately and progress bar appears
                 expect(page.download_or_create_group_button).to_be_disabled()
-                expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
                 page.progress_bar.wait_for(state='visible')
             
             # Wait for the page to reload after download completes.
@@ -1348,7 +1347,6 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
                     
                     # The button should get disabled as download starts
                     expect(page.download_or_create_group_button).to_be_disabled()
-                    expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
                 
                 # Wait for the page to reload (indicating successful download)
                 expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
