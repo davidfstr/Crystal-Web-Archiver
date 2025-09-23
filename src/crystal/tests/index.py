@@ -228,6 +228,7 @@ def _run_tests(test_names: list[str]) -> bool:
     with warnings.catch_warnings(record=True) as warning_list, _warnings_sent_to_ci():
         assert warning_list is not None
         
+        test_funcs_to_run = []
         for test_func in _TEST_FUNCS:
             if not callable(test_func):
                 raise ValueError(f'Test function is not callable: {test_func}')
@@ -238,12 +239,20 @@ def _run_tests(test_names: list[str]) -> bool:
             if len(test_names) > 0:
                 if test_name not in test_names and test_func.__module__ not in test_names:
                     continue
+            test_funcs_to_run.append(test_func)
+            
+        num_test_funcs_to_run = len(test_funcs_to_run)  # cache
+        for (test_func_index, test_func) in enumerate(test_funcs_to_run):
+            test_func_id = (test_func.__module__, test_func.__name__)
+            test_name = f'{test_func_id[0]}.{test_func_id[1]}'
+            
             run_count += 1
             
             os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
             
             print('=' * 70)
-            print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]}.{test_func_id[1]})')
+            (numer, denom) = (test_func_index+1, num_test_funcs_to_run)
+            print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]}.{test_func_id[1]}) [{int(numer*100/denom)}%]')
             print('-' * 70)
             try:
                 try:
