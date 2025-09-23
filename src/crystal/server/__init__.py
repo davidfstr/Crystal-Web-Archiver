@@ -1403,6 +1403,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 except BrokenPipeError:
                     # Browser did disconnect early
                     return
+                except OSError as e:
+                    # macOS: [Errno 57] Socket is not connected
+                    if 'Socket is not connected' in str(e):
+                        # Browser did disconnect early
+                        return
+                    raise
         else:
             # Rewrite links in document
             base_url = revision.resource.url
