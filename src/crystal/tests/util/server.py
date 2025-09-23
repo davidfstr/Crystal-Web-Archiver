@@ -208,7 +208,8 @@ async def fetch_archive_url(
 
 # TODO: Rename as HttpResponse or ProjectServerResponse
 class WebPage:
-    def __init__(self, status: int, headers: EmailMessage, content_bytes: bytes) -> None:
+    def __init__(self, request_url: str, status: int, headers: EmailMessage, content_bytes: bytes) -> None:
+        self._request_url = request_url
         self._status = status
         self._headers = headers
         self._content_bytes = content_bytes
@@ -244,6 +245,10 @@ class WebPage:
             return m.group(1).strip()
     
     # === Low-Level Attributes ===
+    
+    @property
+    def request_url(self) -> str:
+        return self._request_url
     
     @property
     def status(self) -> int:
