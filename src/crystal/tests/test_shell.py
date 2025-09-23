@@ -171,19 +171,10 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
             close_main_window(crystal)
             
             close_open_or_create_dialog(crystal)
-            
-            try:
-                result_str = py_eval(crystal, '2 + 2', timeout=5.0)  # took >4.0s in Linux CI
-                if result_str == '':
-                    # HACK: Try again
-                    assert isinstance(crystal.stdout, TextIOBase)
-                    (result_str, _) = read_until(crystal.stdout, '>>> ', timeout=5.0)
-                    result_str = result_str.removesuffix('>>> ')
-                assertEqual(
-                    '4\n',
-                    result_str)
-            except AssertionError as e:
-                raise AssertionError(f'{e} Trailing output: {drain(crystal)!r}')
+            assertEqual(
+                4,
+                py_eval_literal(crystal, '2 + 2', timeout=5.0)  # took >4.0s in Linux CI
+            )
     
     for exit_method in ('exit()', 'Ctrl-D'):
         with subtests.test(case=f'test when {exit_method} given first open/create dialog is already closed then exits'):

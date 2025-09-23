@@ -364,12 +364,18 @@ def py_eval(
 def py_eval_literal(
         python: subprocess.Popen,
         py_code: str,
+        *, timeout: float|None=None,
         ) -> Any:
     """
     Similar to py_eval() but always returns the parsed repr() of the expression
     printed by the code.
     """
-    expr_str = py_eval(python, py_code)
+    expr_str = py_eval(python, py_code, timeout=timeout)
+    if expr_str == '':
+        # HACK: Try again
+        assert isinstance(python.stdout, TextIOBase)
+        (result_str, _) = read_until(python.stdout, '>>> ', timeout=timeout)
+        expr_str = result_str.removesuffix('>>> ')
     try:
         return literal_eval(expr_str)
     except SyntaxError as e:
