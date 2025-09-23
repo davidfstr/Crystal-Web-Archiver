@@ -2868,7 +2868,8 @@ async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
                 # Download the home page, when network is down
                 with network_down():
                     home_ti.SelectItem()
-                    await mw.click_download_button()
+                    await mw.click_download_button(
+                        immediate_finish_ok=True)
                     await wait_for_download_to_start_and_finish(
                         mw.task_tree,
                         immediate_finish_ok=True)
