@@ -1,5 +1,4 @@
 from collections.abc import AsyncIterator, Callable
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
 from crystal import server
@@ -12,8 +11,10 @@ from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.data import LOREM_IPSUM_LONG, LOREM_IPSUM_SHORT
 from crystal.tests.util.downloads import network_down
-from crystal.tests.util.pages import NotInArchivePage, network_down_after_delay
-from crystal.tests.util.runner import bg_fetch_url, bg_sleep
+from crystal.tests.util.pages import (
+    NotInArchivePage, network_down_after_delay, reloads_paused
+)
+from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, extracted_project, fetch_archive_url,
     MockHttpServer, served_project, WebPage,
@@ -26,7 +27,7 @@ from crystal.tests.util.windows import (
     MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
 )
 from crystal.tests.util.xplaywright import (
-    Playwright, RawPage, awith_playwright, expect, scale_timeout,
+    Playwright, RawPage, awith_playwright, expect,
 )
 from crystal.util.cli import TERMINAL_FG_PURPLE, colorize
 from crystal.util.ports import is_port_in_use
@@ -867,6 +868,7 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
                 
                 # Start download
                 page.download_url_button.click()
+                # TODO: Pause something to prevent download from immediately completing
                 expect(page.download_url_button).to_be_disabled()
                 expect(page.download_url_button).to_contain_text('⬇ Downloading...')
                 page.progress_bar.wait_for(state='visible')
@@ -1050,12 +1052,13 @@ async def test_given_create_group_form_visible_when_any_download_button_clicked_
             # Click the download URL button (above the form)
             expect(page.download_url_button).to_be_enabled()
             expect(page.download_url_button).to_contain_text('⬇ Download')
-            page.download_url_button.click()
-            
-            # Verify download button gets disabled and progress bar appears
-            expect(page.download_url_button).to_be_disabled()
-            expect(page.download_url_button).to_contain_text('⬇ Downloading...')
-            page.progress_bar.wait_for(state='visible')
+            with reloads_paused(raw_page):
+                page.download_url_button.click()
+                
+                # Verify download button gets disabled and progress bar appears
+                expect(page.download_url_button).to_be_disabled()
+                expect(page.download_url_button).to_contain_text('⬇ Downloading...')
+                page.progress_bar.wait_for(state='visible')
             
             # Wait for the page to reload after download completes.
             # The group should be created automatically and the page should reload to the comic.
@@ -1098,12 +1101,13 @@ async def test_given_create_group_form_visible_when_any_download_button_clicked_
             expect(page.progress_bar).not_to_be_visible()
             
             # Click the download button at the bottom of the create group form
-            page.download_or_create_group_button.click()
-            
-            # Verify form gets disabled immediately and progress bar appears
-            expect(page.download_or_create_group_button).to_be_disabled()
-            expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
-            page.wait_for_progress_bar_visible_and_reload_page()
+            with reloads_paused(raw_page):
+                page.download_or_create_group_button.click()
+                
+                # Verify form gets disabled immediately and progress bar appears
+                expect(page.download_or_create_group_button).to_be_disabled()
+                expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
+                page.progress_bar.wait_for(state='visible')
             
             # Wait for the page to reload after download completes.
             # The group should be created automatically and the page should reload to the comic.
@@ -1173,12 +1177,13 @@ async def test_given_create_group_form_visible_and_group_previously_created_when
             # Click the download URL button
             expect(page.download_url_button).to_be_enabled()
             expect(page.download_url_button).to_contain_text('⬇ Download')
-            page.download_url_button.click()
-            
-            # Verify download button gets disabled and progress bar appears
-            expect(page.download_url_button).to_be_disabled()
-            expect(page.download_url_button).to_contain_text('⬇ Downloading...')
-            page.wait_for_progress_bar_visible_and_reload_page()
+            with reloads_paused(raw_page):
+                page.download_url_button.click()
+                
+                # Verify download button gets disabled and progress bar appears
+                expect(page.download_url_button).to_be_disabled()
+                expect(page.download_url_button).to_contain_text('⬇ Downloading...')
+                page.progress_bar.wait_for(state='visible')
             
             # Wait for the page to reload after download completes.
             # Ensure refreshed page is the actual comic page.
@@ -1338,11 +1343,12 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
                 expect(page.download_or_create_group_button).to_be_enabled()
                 
                 # Press Enter and verify it activates the primary button (Download)
-                text_field.press('Enter')
-                
-                # The button should get disabled as download starts
-                expect(page.download_or_create_group_button).to_be_disabled()
-                expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
+                with reloads_paused(raw_page):
+                    text_field.press('Enter')
+                    
+                    # The button should get disabled as download starts
+                    expect(page.download_or_create_group_button).to_be_disabled()
+                    expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
                 
                 # Wait for the page to reload (indicating successful download)
                 expect(raw_page).to_have_title('xkcd: Barrel - Part 1')

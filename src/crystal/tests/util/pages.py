@@ -62,26 +62,6 @@ class NotInArchivePage(AbstractPage):
         progress_bar_message_str = progress_bar_message.text_content() or ''
         return progress_bar_message_str
     
-    def wait_for_progress_bar_visible_and_reload_page(self) -> None:
-        from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
-        
-        # TODO: Wait for either of the following conditions at the same time,
-        #       so that it's not necessary to wait the full timeout time
-        #       before continuing if the second condition matches
-        try:
-            self.progress_bar.wait_for(state='visible', timeout=500)
-        except PlaywrightTimeoutError:
-            if self.raw_page.title != 'Not in Archive | Crystal':
-                # Already navigated away from page
-                pass
-            else:
-                raise
-        
-        # Wait for the page to reload after download completes
-        # TODO: This kind of check is probably flaky.
-        #       Caller should pass in what the title is expected to be instead.
-        expect(self.raw_page).not_to_have_title('Not in Archive | Crystal')
-    
     # === Create Group Form ===
     
     @property
@@ -148,7 +128,57 @@ class NotInArchivePage(AbstractPage):
 
 
 # ------------------------------------------------------------------------------
-# Utility
+# Utility: Reload
+
+@contextmanager
+def reloads_paused(page: RawPage, *, expect_reload: bool=True) -> Iterator[None]:
+    """
+    Context manager that pauses `window.crReload()` calls during execution,
+    then performs the reload after exiting if one was attempted.
+    
+    It would be ideal to patch `window.location.reload`, but it appears to be
+    a read-only property which ignores assignments.
+    
+    Usage:
+        with reloads_paused(page):
+            page.some_button.click()  # This might call window.crReload()
+            expect(page.some_element).to_be_visible()
+        # (If window.crReload() was called above, it happens here)
+    """
+    page.evaluate('''() => {
+        window.crOriginalReload = window.crReload;
+        window.crReloadCalled = false;
+        window.crReload = function() {
+            window.crReloadCalled = true;
+        };
+    }''')
+    try:
+        yield
+        
+        if expect_reload:
+            from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
+            try:
+                page.wait_for_function('() => window.crReloadCalled')
+            except PlaywrightTimeoutError:
+                raise AssertionError(
+                    'Expected window.crReload() to be called'
+                ) from None
+    finally:
+        reload_was_called = page.evaluate('() => window.crReloadCalled')  # capture
+        page.evaluate('''() => {
+            if (window.crOriginalReload) {
+                window.crReload = window.crOriginalReload;
+                delete window.crOriginalReload;
+                delete window.crReloadCalled;
+            }
+        }''')
+        
+        if reload_was_called:
+            page.evaluate('() => window.crReload();')
+
+
+# ------------------------------------------------------------------------------
+# Utility: Network Down
 
 @contextmanager
 def network_down_after_delay(page: AbstractPage | RawPage) -> Iterator[None]:

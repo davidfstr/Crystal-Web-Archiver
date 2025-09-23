@@ -763,6 +763,11 @@ def not_in_archive_html(
     script_html = dedent(
         """
         <script>
+            // NOTE: Patched by tests
+            window.crReload = function() {
+                window.location.reload();
+            };
+            
             // -----------------------------------------------------------------
             // Download URL Button
             
@@ -863,7 +868,7 @@ def not_in_archive_html(
                             eventSource.close();
                             
                             // Reload the page ASAP
-                            window.location.reload();
+                            window.crReload();
                         } else if (data.status === 'in_progress') {
                             progressFill.style.width = `${data.progress}%%`;
                             progressText.textContent = data.message;
