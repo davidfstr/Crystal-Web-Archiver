@@ -1,6 +1,6 @@
 
 from ast import literal_eval
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 import re
@@ -290,6 +290,9 @@ def crystal_shell(*, args=[], env_extra={}, reopen_projects_enabled: bool=False)
 # ------------------------------------------------------------------------------
 # Interact
 
+_VSC_ESCAPE_SEQUENCE = '\x1b]633;E;0\x07\x1b]633;A\x07'
+
+
 def py_eval(
         python: subprocess.Popen,
         py_code: str,
@@ -312,8 +315,8 @@ def py_eval(
         ))
 
     If you need to execute any code that waits on parts of the user interface,
-    you'll need to run the waits in a separate thread. Use the following
-    pattern:
+    you'll need to run the waits in a separate thread. Use py_eval_await(),
+    or implement the following pattern manually:
     
         py_eval(crystal, textwrap.dedent('''\
             from crystal.tests.util.runner import run_test
@@ -339,8 +342,11 @@ def py_eval(
     - `_OK_THREAD_STOP_SUFFIX` -- Wait for the code to finish executing
     - `timeout=...` -- Pick an appropriate timeout
     
+    > TODO: Rewrite occurrences of the above verbose pattern to use py_eval_await() instead.
+    
     See also:
     - py_eval_literal()
+    - py_eval_await()
     """
     if '\n' in py_code:
         # Execute multi-line code as a single line
@@ -357,7 +363,7 @@ def py_eval(
     if os.environ.get('TERM_PROGRAM') == 'vscode':
         # HACK: VS Code inserts terminal integration escape sequences (OSC 633).
         #       Remove them.
-        result_no_suffix = result_no_suffix.removesuffix('\x1b]633;E;0\x07\x1b]633;A\x07')
+        result_no_suffix = result_no_suffix.removesuffix(_VSC_ESCAPE_SEQUENCE)
     return result_no_suffix
 
 
@@ -376,6 +382,72 @@ def py_eval_literal(
         assert isinstance(python.stdout, TextIOBase)
         (result_str, _) = read_until(python.stdout, '>>> ', timeout=timeout)
         expr_str = result_str.removesuffix('>>> ')
+    try:
+        return literal_eval(expr_str)
+    except SyntaxError as e:
+        raise SyntaxError(
+            f'{e} '
+            f'Tried to parse: {expr_str!r} '
+            f'Trailing output: {drain(python)!r}'
+        ) from None
+
+
+def py_eval_await(
+        python: subprocess.Popen,
+        define_async_func_code: str,
+        func_name: str,
+        func_args: Sequence[str]=(),
+        *, timeout: float|None=None,
+        ) -> str:
+    """
+    Evaluates an async function in the specified Crystal process
+    and returns anything printed to stdout.
+    
+    Usage:
+    
+        stdout_str = py_eval_await(crystal, textwrap.dedent('''\
+            from crystal.tests.util.windows import OpenOrCreateDialog
+            
+            async def crystal_task(arg1: str) -> None:
+                ocd = await OpenOrCreateDialog.wait_for()
+                ...
+            '''
+        ), 'crystal_task', [arg1])
+    
+    See also:
+    - py_eval_await_literal()
+    """
+    py_eval(python, define_async_func_code)
+    stdout_str = py_eval(python, textwrap.dedent(f'''\
+        from crystal.tests.util.runner import run_test
+        from threading import Thread
+        
+        result_cell = [Ellipsis]
+        def get_result(result_cell):
+            result_cell[0] = run_test(lambda: {func_name}(*{repr(func_args)}))
+            print('OK')
+        
+        t = Thread(target=lambda: get_result(result_cell))
+        t.start()
+        '''
+    ), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=timeout)
+    stdout_str = stdout_str.removeprefix(_VSC_ESCAPE_SEQUENCE)
+    stdout_str = stdout_str.removeprefix('>>>')
+    return stdout_str
+
+
+def py_eval_await_literal(
+        python: subprocess.Popen,
+        define_async_func_code: str,
+        func_name: str,
+        *args,
+        **kwargs,
+        ) -> Any:
+    """
+    Similar to py_eval_await() but always returns the parsed repr() of the expression
+    printed by the code.
+    """
+    expr_str = py_eval_await(python, define_async_func_code, func_name, *args, **kwargs)
     try:
         return literal_eval(expr_str)
     except SyntaxError as e:

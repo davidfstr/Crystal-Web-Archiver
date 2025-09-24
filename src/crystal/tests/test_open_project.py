@@ -1,8 +1,11 @@
 from contextlib import closing
+from functools import wraps
 from crystal import progress
 import crystal.main
 from crystal.model import Project, Resource
 from crystal.progress import CancelOpenProject
+from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.cli import crystal_shell, py_eval_await_literal
 from crystal.tests.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project
@@ -16,9 +19,22 @@ from crystal.tests.util.windows import OpenOrCreateDialog
 import crystal.tests.util.xtempfile as xtempfile
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import os.path
+import textwrap
 from unittest import skip
 from unittest.mock import call, patch
 import wx
+
+
+# === Decorators ===
+
+def skip_if_not_macos(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        if not is_mac_os():
+            skipTest('only runs on macOS')
+        return func(*args, **kwargs)
+    return wrapped
+
 
 # === Test: Create Project ===
 
@@ -57,11 +73,246 @@ async def test_can_create_project_with_url_unsafe_characters() -> None:
 
 # === Test: Start Open Project ===
 
-@skip('not yet automated: hard to automate')
+@skip_if_not_macos
 async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_opens_project() -> None:
-    pass
+    """
+    macOS (unlike Windows and Linux) requires that an app open all of its
+    documents in the same process. The MacOpenFile wx.App method must handle
+    opening projects when Crystal starts and when it is already running.
+    """
+    # Create placeholder titled project
+    # TODO: Delete the project during test cleanup
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, titled_project):
+        titled_project_dirpath = titled_project.path
+    
+    # Case 1: Crystal was not running
+    with crystal_shell(env_extra={
+                # Make it easier to open a file when app initially starts,
+                # before wait_for_maybe_open_file() decides that no initial file
+                # was opened at app start
+                'CRYSTAL_OPEN_FILE_DELAY': '5.0'}
+            ) as (crystal, *_):
+        project_path = py_eval_await_literal(crystal, textwrap.dedent(
+            '''\
+            from contextlib import closing
+            from crystal.model import Project
+            from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
+            import wx
+            
+            async def crystal_task(titled_project_dirpath: str) -> None:
+                # Simulate double-click on titled project immediately before app start
+                wx.GetApp().MacOpenFile(titled_project_dirpath)
+                
+                with closing(await MainWindow.wait_for()) as mw:
+                    project = Project._last_opened_project
+                    assert project is not None
+                    project_path = project.path  # capture
+                print(repr(project_path))
+            '''
+        ), 'crystal_task', [titled_project_dirpath])
+        assertEqual(titled_project_dirpath, project_path)
+    
+    # Case 2: Crystal was running and other project was open
+    #         (i.e. a MainWindow is visible)
+    if True:
+        # Case 2.1: The other project has no unsaved changes
+        with crystal_shell() as (crystal, *_):
+            project_path = py_eval_await_literal(crystal, textwrap.dedent(
+                '''\
+                from crystal.model import Project
+                from crystal.tests.util.wait import wait_for
+                from crystal.tests.util.windows import OpenOrCreateDialog
+                import wx
+                
+                async def crystal_task(titled_project_dirpath: str) -> None:
+                    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, untitled_project):
+                        if not untitled_project.is_untitled:
+                            print(repr('__not_untitled__'))
+                            return
+                        
+                        # Simulate double-click on titled project while Crystal running
+                        wx.GetApp().MacOpenFile(titled_project_dirpath)
+                        
+                        def new_project_opened() -> Project|None:
+                            maybe_new_project = Project._last_opened_project
+                            if maybe_new_project is None or maybe_new_project == untitled_project:
+                                return None
+                            else:
+                                return maybe_new_project
+                        project = await wait_for(new_project_opened)
+                        project_path = project.path  # capture
+                    print(repr(project_path))
+                '''
+            ), 'crystal_task', [titled_project_dirpath])
+            assertEqual(titled_project_dirpath, project_path)
+        
+        # Case 2.2: The other project is untitled and has unsaved changes
+        if True:
+            # Case 2.2.1: The user saves the changes before closing the project
+            with crystal_shell() as (crystal, *_):
+                project_path = py_eval_await_literal(crystal, textwrap.dedent(
+                    '''\
+                    from crystal.model import Project, Resource, RootResource
+                    from crystal.tests.util.controls import file_dialog_returning
+                    from crystal.tests.util.wait import wait_for
+                    from crystal.tests.util.windows import OpenOrCreateDialog
+                    from crystal.tests.util import xtempfile
+                    from crystal.util.wx_dialog import mocked_show_modal
+                    import os.path
+                    from unittest.mock import patch
+                    import wx
+                    
+                    async def crystal_task(titled_project_dirpath: str) -> None:
+                        async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, untitled_project):
+                            if not untitled_project.is_untitled:
+                                print(repr('__not_untitled__'))
+                                return
+                            
+                            # Create an unsaved change to the untitled project 
+                            rr = RootResource(untitled_project, '', Resource(untitled_project, 'https://example.com/'))
+                            
+                            # Simulate double-click on titled project while Crystal running
+                            with xtempfile.TemporaryDirectory() as tmp_dir:
+                                save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
+                                with patch(
+                                        'crystal.browser.ShowModal',
+                                        mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)
+                                        ) as show_modal_method, \
+                                        file_dialog_returning(save_path):
+                                    wx.GetApp().MacOpenFile(titled_project_dirpath)
+                                    assert 1 == show_modal_method.call_count
+                            
+                            def new_project_opened() -> Project|None:
+                                maybe_new_project = Project._last_opened_project
+                                if maybe_new_project is None or maybe_new_project == untitled_project:
+                                    return None
+                                else:
+                                    return maybe_new_project
+                            project = await wait_for(new_project_opened)
+                            project_path = project.path  # capture
+                        print(repr(project_path))
+                    '''
+                ), 'crystal_task', [titled_project_dirpath])
+                assertEqual(titled_project_dirpath, project_path)
+            
+            # Case 2.2.2: The user does NOT save the changes before closing the project
+            with crystal_shell() as (crystal, *_):
+                project_path = py_eval_await_literal(crystal, textwrap.dedent(
+                    '''\
+                    from crystal.model import Project, Resource, RootResource
+                    from crystal.tests.util.wait import wait_for
+                    from crystal.tests.util.windows import OpenOrCreateDialog
+                    from crystal.util.wx_dialog import mocked_show_modal
+                    from unittest.mock import patch
+                    import wx
+                    
+                    async def crystal_task(titled_project_dirpath: str) -> None:
+                        async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, untitled_project):
+                            if not untitled_project.is_untitled:
+                                print(repr('__not_untitled__'))
+                                return
+                            
+                            # Create an unsaved change to the untitled project 
+                            rr = RootResource(untitled_project, '', Resource(untitled_project, 'https://example.com/'))
+                            
+                            # Simulate double-click on titled project while Crystal running
+                            with patch(
+                                    'crystal.browser.ShowModal',
+                                    mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)
+                                    ) as show_modal_method:
+                                wx.GetApp().MacOpenFile(titled_project_dirpath)
+                                assert 1 == show_modal_method.call_count
+                            
+                            def new_project_opened() -> Project|None:
+                                maybe_new_project = Project._last_opened_project
+                                if maybe_new_project is None or maybe_new_project == untitled_project:
+                                    return None
+                                else:
+                                    return maybe_new_project
+                            project = await wait_for(new_project_opened)
+                            project_path = project.path  # capture
+                        print(repr(project_path))
+                    '''
+                ), 'crystal_task', [titled_project_dirpath])
+                assertEqual(titled_project_dirpath, project_path)
+            
+            # Case 2.2.3: The user CANCELS closing the project
+            with crystal_shell() as (crystal, *_):
+                did_keep_untitled_project_open = py_eval_await_literal(crystal, textwrap.dedent(
+                    '''\
+                    from crystal.model import Project, Resource, RootResource
+                    from crystal.tests.util.wait import wait_for, WaitTimedOut
+                    from crystal.tests.util.windows import OpenOrCreateDialog
+                    from crystal.util.wx_dialog import mocked_show_modal
+                    from unittest.mock import patch
+                    import wx
+                    
+                    async def crystal_task(titled_project_dirpath: str) -> None:
+                        async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, untitled_project):
+                            if not untitled_project.is_untitled:
+                                print(repr('__not_untitled__'))
+                                return
+                            
+                            # Create an unsaved change to the untitled project 
+                            rr = RootResource(untitled_project, '', Resource(untitled_project, 'https://example.com/'))
+                            
+                            # Simulate double-click on titled project while Crystal running
+                            with patch(
+                                    'crystal.browser.ShowModal',
+                                    mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)
+                                    ) as show_modal_method:
+                                wx.GetApp().MacOpenFile(titled_project_dirpath)
+                                assert 1 == show_modal_method.call_count
+                            
+                            def new_project_opened() -> Project|None:
+                                maybe_new_project = Project._last_opened_project
+                                if maybe_new_project is None or maybe_new_project == untitled_project:
+                                    return None
+                                else:
+                                    return maybe_new_project
+                            try:
+                                project = await wait_for(new_project_opened, timeout=2.0)
+                            except WaitTimedOut:
+                                # Expected
+                                did_keep_untitled_project_open = (
+                                    Project._last_opened_project ==
+                                    untitled_project
+                                )
+                            else:
+                                # Fail
+                                did_keep_untitled_project_open = False
+                        print(repr(did_keep_untitled_project_open))
+                    '''
+                ), 'crystal_task', [titled_project_dirpath], timeout=6.0)
+                assertEqual(True, did_keep_untitled_project_open)
+    
+    # Case 3: Crystal was running and no other project was open
+    #         (i.e. an OpenOrCreateDialog is visible)
+    with crystal_shell() as (crystal, *_):
+        project_path = py_eval_await_literal(crystal, textwrap.dedent(
+            '''\
+            from contextlib import closing
+            from crystal.model import Project
+            from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
+            import wx
+            
+            async def crystal_task(titled_project_dirpath: str) -> None:
+                ocd = await OpenOrCreateDialog.wait_for()
+                
+                # Simulate double-click on titled project while Crystal running
+                wx.GetApp().MacOpenFile(titled_project_dirpath)
+                
+                with closing(await MainWindow.wait_for()) as mw:
+                    project = Project._last_opened_project
+                    assert project is not None
+                    project_path = project.path  # capture
+                print(repr(project_path))
+            '''
+        ), 'crystal_task', [titled_project_dirpath])
+        assertEqual(titled_project_dirpath, project_path)
 
 
+@skip_if_not_macos
 async def test_given_macos_when_open_crystalproj_package_in_open_dialog_then_opens_project() -> None:
     if not is_mac_os():
         skipTest('only supported on macOS')

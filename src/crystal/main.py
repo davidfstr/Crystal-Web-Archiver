@@ -41,6 +41,12 @@ _P = ParamSpec('_P')
 _RT = TypeVar('_RT')
 
 
+_project_path_to_open_soon: Optional[str] = None
+# Interrupts prompt_for_prompt() to open _project_path_to_open_soon.
+# None if prompt_for_prompt() is not running.
+_interrupt_prompt_for_project_to_open_project: Optional[Callable[[], None]] = None
+
+
 def main() -> Never:
     """
     Main function. Starts the program.
@@ -389,7 +395,7 @@ def _main(args: list[str]) -> None:
             # Call self._finish_launch() after a short delay if it isn't
             # called in the meantime by MacOpenFile
             def wait_for_maybe_open_file():
-                time.sleep(.2)
+                time.sleep(float(os.environ.get('CRYSTAL_OPEN_FILE_DELAY', '.2')))
                 
                 if not self._did_finish_launch:
                     from crystal.util.xthreading import fg_call_later
@@ -399,13 +405,38 @@ def _main(args: list[str]) -> None:
             
             return True
         
+        # TODO: Migrate to use the non-deprecated MacOpenFiles interface,
+        #       which accepts *multiple* files to open at the same time.
         @capture_crashes_to_stderr
         @override
         def MacOpenFile(self, filepath):
             if self._did_finish_launch:
-                # Ignore attempts to open additional projects if one is already open
-                pass
+                # App is already running
+                
+                # Open the project at the next available opportunity
+                global _project_path_to_open_soon
+                _project_path_to_open_soon = filepath
+                
+                # If the open/create dialog is currently showing,
+                # interrupt it to observe the project we are requesting
+                # to open and open it.
+                global _interrupt_prompt_for_project_to_open_project
+                if _interrupt_prompt_for_project_to_open_project is not None:
+                    _interrupt_prompt_for_project_to_open_project()
+                
+                # If a project window is open, try to close it.
+                # After it closes the open/create dialog will prepare to appear
+                # again, observe the project we are requesting to open,
+                # and open it.
+                nonlocal last_window
+                current_window = last_window  # capture
+                if current_window is not None:
+                    success = current_window.try_close()
+                    if not success:
+                        # Cancel the open operation
+                        _project_path_to_open_soon = None
             else:
+                # App is starting
                 self._finish_launch(filepath)
         
         @capture_crashes_to_stderr
@@ -617,8 +648,14 @@ async def _did_launch(
     from crystal.util.ports import is_port_in_use_error
     from crystal.util.test_mode import tests_are_running
 
+    # If MacOpenFile queued a project to be opened, open it
+    global _project_path_to_open_soon
+    if _project_path_to_open_soon is not None and filepath is None:
+        filepath = _project_path_to_open_soon  # reinterpret
+        _project_path_to_open_soon = None  # consume
+
     # If project to open was passed on the command-line, use it
-    if parsed_args.project_filepath is not None:
+    if parsed_args.project_filepath is not None and filepath is None:
         filepath = parsed_args.project_filepath  # reinterpret
     
     # Open/create a project
@@ -804,40 +841,62 @@ async def _prompt_for_project(
         escape_is_cancel=True,
         name='cr-open-or-create-project')
     with dialog:
-        # Set initial state of Create button based on checkbox state
-        on_checkbox_clicked()
+        def interrupt_dialog_to_open_project() -> None:
+            import wx
+            wx.PostEvent(dialog, wx.CommandEvent(
+                wx.wxEVT_COMMAND_BUTTON_CLICKED,
+                wx.ID_NO  # "Open" button
+            ))
         
-        # Configure Ctrl+R (and Alt+R) key to toggle readonly checkbox.
-        # NOTE: Use wx.EVT_CHAR_HOOK rather than wx.EVT_KEY_DOWN so that
-        #       works on macOS where wx.EVT_KEY_DOWN does not work in dialogs.
-        dialog.Bind(wx.EVT_CHAR_HOOK, on_char_hook)
+        global _interrupt_prompt_for_project_to_open_project
+        _interrupt_prompt_for_project_to_open_project = interrupt_dialog_to_open_project
+        try:
+            # Set initial state of Create button based on checkbox state
+            on_checkbox_clicked()
+            
+            # Configure Ctrl+R (and Alt+R) key to toggle readonly checkbox.
+            # NOTE: Use wx.EVT_CHAR_HOOK rather than wx.EVT_KEY_DOWN so that
+            #       works on macOS where wx.EVT_KEY_DOWN does not work in dialogs.
+            dialog.Bind(wx.EVT_CHAR_HOOK, on_char_hook)
 
-        dialog.SetAcceleratorTable(wx.AcceleratorTable([
-            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
-            wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O'), wx.ID_NO),
-        ]))
-        
-        while True:
-            from crystal.util.wx_dialog import ShowModalAsync
-            choice = await ShowModalAsync(dialog)
+            dialog.SetAcceleratorTable(wx.AcceleratorTable([
+                wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
+                wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O'), wx.ID_NO),
+            ]))
             
-            project_kwargs = {
-                **project_kwargs,
-                **dict(readonly=dialog.IsCheckBoxChecked()),
-            }  # reinterpret
-            
-            try:
-                if choice == wx.ID_YES:
-                    return _create_untitled_project(dialog, progress_listener, **project_kwargs)
-                elif choice == wx.ID_NO:
-                    return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
-                elif choice == wx.ID_CANCEL:
-                    raise SystemExit()
-                else:
-                    raise AssertionError()
-            except CancelOpenProject:
-                progress_listener.reset()
-                continue
+            while True:
+                from crystal.util.wx_dialog import ShowModalAsync
+                choice = await ShowModalAsync(dialog)
+                
+                project_kwargs = {
+                    **project_kwargs,
+                    **dict(readonly=dialog.IsCheckBoxChecked()),
+                }  # reinterpret
+                
+                try:
+                    if choice == wx.ID_YES:  # New Project
+                        return _create_untitled_project(dialog, progress_listener, **project_kwargs)
+                    elif choice == wx.ID_NO:  # Open
+                        # If MacOpenFile queued a project to be opened, open it
+                        global _project_path_to_open_soon
+                        if _project_path_to_open_soon is not None:
+                            filepath = _project_path_to_open_soon
+                            _project_path_to_open_soon = None  # consume
+                            return _load_project(
+                                filepath,
+                                progress_listener,
+                                **project_kwargs)  # type: ignore[arg-type]
+                        
+                        return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
+                    elif choice == wx.ID_CANCEL:
+                        raise SystemExit()
+                    else:
+                        raise AssertionError()
+                except CancelOpenProject:
+                    progress_listener.reset()
+                    continue
+        finally:
+            _interrupt_prompt_for_project_to_open_project = None
 
 
 def _create_untitled_project(

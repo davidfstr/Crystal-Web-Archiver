@@ -20,6 +20,8 @@ Release Notes ⋮
     * There are new "Root URLs and Groups" and "Tasks" headings in the
       main window to clearly identify what is in each part of the window.
     * The "View" button no longer appears squished on Linux.
+    * A project can be opened by double-clicking it in the macOS Finder
+      after Crystal is already running.
 
 * Workflow improvements
     * A website can be effectively downloaded entirely by browsing a partially
