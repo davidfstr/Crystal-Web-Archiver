@@ -430,7 +430,7 @@ def _main(args: list[str]) -> None:
                 # After it closes the open/create dialog will prepare to appear
                 # again, observe the project file we are requesting to open,
                 # and open it.
-                global last_window
+                nonlocal last_window
                 current_window = last_window  # capture
                 if current_window is not None:
                     current_window.try_close()
