@@ -5,9 +5,9 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
-import base64
 from collections.abc import Callable, Generator
 from concurrent.futures import Future
+import threading
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
@@ -29,7 +29,8 @@ from crystal.util.minify import minify_svg
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import (
-    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, 
+    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_wait_for,
+    is_foreground_thread,
     run_thread_switching_coroutine, SwitchToThread,
 )
 from crystal.util.xtyping import IntStr, intstr_from
@@ -188,8 +189,46 @@ class ProjectServer:
         if tests_are_running():
             ProjectServer._last_created = self
     
-    def close(self) -> None:
-        self._server.shutdown()
+    def close(self, *, _timeout_if_fg_thread: float|None=None) -> None:
+        """
+        Raises:
+        * TimeoutError
+        """
+        if is_foreground_thread():
+            # Wait for shutdown while still processing wx events
+            self._fg_shutdown(self._server, timeout=_timeout_if_fg_thread)
+        else:
+            self._server.shutdown()
+    
+    @staticmethod
+    def _fg_shutdown(http_server: HTTPServer, *, timeout: float|None) -> None:
+        """
+        Raises:
+        * TimeoutError
+        """
+        # Request that shutdown happen soon
+        assert isinstance(getattr(http_server, '_BaseServer__shutdown_request', None), bool), (
+            "BaseServer.__shutdown_request not found or wrong type. "
+            "Has BaseServer's internal API changed?"
+        )
+        http_server._BaseServer__shutdown_request = True  # type: ignore[attr-defined]
+        
+        # Wait for shutdown to complete,
+        # while still processing events in the wx event loop
+        is_shut_down = getattr(http_server, '_BaseServer__is_shut_down', None)
+        assert isinstance(is_shut_down, threading.Event), (
+            "BaseServer.__is_shut_down not found or wrong type. "
+            "Has BaseServer's internal API changed?"
+        )
+        def poll_is_shut_down() -> bool:
+            success = is_shut_down.wait(20 / 1000)  # 20 ms
+            return success
+        fg_wait_for(
+            poll_is_shut_down,
+            timeout=timeout,
+            # No need to sleep additionally between polls because 
+            # poll_is_shut_down() sleeps internally
+            poll_interval=0)
     
     # === Properties ===
     

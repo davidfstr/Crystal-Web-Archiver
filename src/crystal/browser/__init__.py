@@ -71,6 +71,7 @@ _WINDOW_INNER_PADDING = 10
 
 class MainWindow(CloakMixin):
     _AUTOHIBERNATE_PERIOD = 1000 * 60 * 5  # 5 min, in milliseconds
+    _PROJECT_SERVER_SHUTDOWN_TIMEOUT = 2.0  # seconds; short
     
     project: Project
     _frame: wx.Frame
@@ -938,7 +939,14 @@ class MainWindow(CloakMixin):
         
         # Dispose resources created in MainWindow.start_server(), in reverse order
         if self._project_server is not None:
-            self._project_server.close()
+            try:
+                self._project_server.close(
+                    _timeout_if_fg_thread=self._PROJECT_SERVER_SHUTDOWN_TIMEOUT)
+            except TimeoutError:
+                # Ignore timeout. Let the server continue shutting down in the
+                # background. ProjectServer runs a daemon thread, so the Crystal
+                # process won't be kept alive even if ProjectServer blocks forever.
+                pass
         if self._log_drawer is not None:
             self._log_drawer.close()
         
