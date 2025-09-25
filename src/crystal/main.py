@@ -41,9 +41,10 @@ _P = ParamSpec('_P')
 _RT = TypeVar('_RT')
 
 
-# Support opening a project while the app is running
-_mac_open_file_path: Optional[str] = None
-_current_open_or_create_dialog: Optional['wx.Dialog'] = None
+_project_path_to_open_soon: Optional[str] = None
+# Interrupts prompt_for_prompt() to open _project_path_to_open_soon.
+# None if prompt_for_prompt() is not running.
+_interrupt_prompt_for_project_to_open_project: Optional[Callable[[], None]] = None
 
 
 def main() -> Never:
@@ -410,25 +411,20 @@ def _main(args: list[str]) -> None:
             if self._did_finish_launch:
                 # App is already running
                 
-                # Open the project file at the next available opportunity
-                global _mac_open_file_path
-                _mac_open_file_path = filepath
+                # Open the project at the next available opportunity
+                global _project_path_to_open_soon
+                _project_path_to_open_soon = filepath
                 
                 # If the open/create dialog is currently showing,
-                # simulate clicking "Open". It will then observe the
-                # project file we are requesting to open and open it.
-                global _current_open_or_create_dialog
-                if _current_open_or_create_dialog is not None:
-                    import wx
-                    event = wx.CommandEvent(
-                        wx.wxEVT_COMMAND_BUTTON_CLICKED,
-                        wx.ID_NO  # "Open" button
-                    )
-                    wx.PostEvent(_current_open_or_create_dialog, event)
+                # interrupt it to observe the project we are requesting
+                # to open and open it.
+                global _interrupt_prompt_for_project_to_open_project
+                if _interrupt_prompt_for_project_to_open_project is not None:
+                    _interrupt_prompt_for_project_to_open_project()
                 
                 # If a project window is open, try to close it.
                 # After it closes the open/create dialog will prepare to appear
-                # again, observe the project file we are requesting to open,
+                # again, observe the project we are requesting to open,
                 # and open it.
                 nonlocal last_window
                 current_window = last_window  # capture
@@ -648,10 +644,10 @@ async def _did_launch(
     from crystal.util.test_mode import tests_are_running
 
     # If MacOpenFile queued a project to be opened, open it
-    global _mac_open_file_path
-    if _mac_open_file_path is not None and filepath is None:
-        filepath = _mac_open_file_path  # reinterpret
-        _mac_open_file_path = None  # consume
+    global _project_path_to_open_soon
+    if _project_path_to_open_soon is not None and filepath is None:
+        filepath = _project_path_to_open_soon  # reinterpret
+        _project_path_to_open_soon = None  # consume
 
     # If project to open was passed on the command-line, use it
     if parsed_args.project_filepath is not None and filepath is None:
@@ -840,8 +836,15 @@ async def _prompt_for_project(
         escape_is_cancel=True,
         name='cr-open-or-create-project')
     with dialog:
-        global _current_open_or_create_dialog
-        _current_open_or_create_dialog = dialog
+        def interrupt_dialog_to_open_project() -> None:
+            import wx
+            wx.PostEvent(dialog, wx.CommandEvent(
+                wx.wxEVT_COMMAND_BUTTON_CLICKED,
+                wx.ID_NO  # "Open" button
+            ))
+        
+        global _interrupt_prompt_for_project_to_open_project
+        _interrupt_prompt_for_project_to_open_project = interrupt_dialog_to_open_project
         try:
             # Set initial state of Create button based on checkbox state
             on_checkbox_clicked()
@@ -870,10 +873,10 @@ async def _prompt_for_project(
                         return _create_untitled_project(dialog, progress_listener, **project_kwargs)
                     elif choice == wx.ID_NO:  # Open
                         # If MacOpenFile queued a project to be opened, open it
-                        global _mac_open_file_path
-                        if _mac_open_file_path is not None:
-                            filepath = _mac_open_file_path
-                            _mac_open_file_path = None  # consume
+                        global _project_path_to_open_soon
+                        if _project_path_to_open_soon is not None:
+                            filepath = _project_path_to_open_soon
+                            _project_path_to_open_soon = None  # consume
                             return _load_project(
                                 filepath,
                                 progress_listener,
@@ -888,7 +891,7 @@ async def _prompt_for_project(
                     progress_listener.reset()
                     continue
         finally:
-            _current_open_or_create_dialog = None
+            _interrupt_prompt_for_project_to_open_project = None
 
 
 def _create_untitled_project(
