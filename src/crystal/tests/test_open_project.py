@@ -59,6 +59,33 @@ async def test_can_create_project_with_url_unsafe_characters() -> None:
 
 @skip('not yet automated: hard to automate')
 async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_opens_project() -> None:
+    """
+    macOS (unlike Windows and Linux) requires that an app open all of its
+    documents in the same process. The MacOpenFile wx.App method must handle
+    opening projects when Crystal starts and when it is already running.
+    """
+    # Case 1: Crystal was not running
+    pass
+    
+    # Case 2: Crystal was running and other project was open
+    #         (i.e. a MainWindow is visible)
+    if True:
+        # Case 2.1: The other project has no unsaved changes
+        pass
+        
+        # Case 2.2: The other project is untitled and has unsaved changes
+        if True:
+            # Case 2.2.1: The user saves the changes before closing the project
+            pass
+            
+            # Case 2.2.2: The user does NOT save the changes before closing the project
+            pass
+            
+            # Case 2.2.3: The user CANCELS closing the project
+            pass
+    
+    # Case 3: Crystal was running and no other project was open
+    #         (i.e. an OpenOrCreateDialog is visible)
     pass
 
 
