@@ -405,6 +405,8 @@ def _main(args: list[str]) -> None:
             
             return True
         
+        # TODO: Migrate to use the non-deprecated MacOpenFiles interface,
+        #       which accepts *multiple* files to open at the same time.
         @capture_crashes_to_stderr
         @override
         def MacOpenFile(self, filepath):
@@ -429,7 +431,10 @@ def _main(args: list[str]) -> None:
                 nonlocal last_window
                 current_window = last_window  # capture
                 if current_window is not None:
-                    current_window.try_close()
+                    success = current_window.try_close()
+                    if not success:
+                        # Cancel the open operation
+                        _project_path_to_open_soon = None
             else:
                 # App is starting
                 self._finish_launch(filepath)
