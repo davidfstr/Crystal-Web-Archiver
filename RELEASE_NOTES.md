@@ -52,6 +52,10 @@ Release Notes ⋮
     * When serving from a remote `--host`, projects are opened in `--readonly`
       mode by default so that remote users cannot modify a served project.
       Remote modifications can be explicitly enabled with `--no-readonly`.
+    * Caching is disabled for revisions served from the root directory
+      to avoid seeing stale HTML pages when browsing multiple Crystal projects
+      around the same time.
+    * Served revisions always have a Date header, to conform with RFC 7231 §7.1.1.2.
     * **Experimental**: Resource group pattern prediction. When enabled with
       `CRYSTAL_PREDICT_GROUPS=1`, Crystal will analyze the current URL and
       referrer when visiting non-archived pages to predict suitable URL patterns

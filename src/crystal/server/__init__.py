@@ -62,6 +62,9 @@ if TYPE_CHECKING:
     from crystal.task import Task
 
 
+# ------------------------------------------------------------------------------
+# ProjectServer
+
 _DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
 _DEFAULT_SERVER_HOST = '127.0.0.1'
 
@@ -279,6 +282,7 @@ def get_request_url(
 
 
 # ------------------------------------------------------------------------------
+# _HttpServer, _RequestHandler
 
 _REQUEST_PATH_IN_ARCHIVE_RE = re.compile(r'^/_/([^/]+)/(.+)$')
 
@@ -433,8 +437,12 @@ _IGNORE_UNKNOWN_X_HEADERS = True
 # consistent value, allowing those generated URLs to be cached effectively.
 _ENABLE_PIN_DATE_MITIGATION = True
 
-# By default, browsers may cache Crystal-served assets for 1 hour
-_CACHE_CONTROL_POLICY = 'max-age=3600'  # type: Optional[str]
+# By default, browsers may not cache root Crystal-served assets
+# because it is common for multiple Crystal projects opened near the same
+# time to serve different assets at the root
+_CACHE_CONTROL_POLICY_AT_ROOT = 'max-age=0, must-revalidate'  # type: Optional[str]
+# By default, browsers may cache non-root Crystal-served assets for 1 hour
+_CACHE_CONTROL_POLICY_AT_SUBDIRECTORY = 'max-age=3600'  # type: Optional[str]
 
 _HTTP_COLON_SLASH_SLASH_RE = re.compile(r'(?i)https?://')
 
@@ -1394,8 +1402,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
                         self._print_warning(
                             '*** Ignoring unknown header in archive: {}: {}'.format(name, value))
                 continue
-        if _CACHE_CONTROL_POLICY is not None:
-            self.send_header('Cache-Control', _CACHE_CONTROL_POLICY)
+        if 'date' not in [name.lower() for (name, value) in headers]:
+            self.send_header('Date', self.date_time_string())
+        self.send_cache_control_header()
         self.end_headers()
         
         # Send body
@@ -1410,11 +1419,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
             content_type_with_options = revision.declared_content_type_with_options
         
         # Send status line
-        self.send_response(200)
+        self.send_response_without_extra_headers(200)
         
         # Send headers
         if content_type_with_options is not None:
             self.send_header('Content-Type', content_type_with_options)
+        self.send_header('Date', self.date_time_string())
+        self.send_cache_control_header()
         self.end_headers()
         
         # Send body
@@ -1504,6 +1515,21 @@ class _RequestHandler(BaseHTTPRequestHandler):
         """
         self.log_request(code)
         self.send_response_only(code, message)
+    
+    def send_cache_control_header(self) -> None:
+        request_path = self.path
+        request_path_at_root = (
+            request_path.startswith('/') and 
+            request_path.rfind('/') == 0
+        )
+        
+        cache_control_policy = (
+            _CACHE_CONTROL_POLICY_AT_ROOT
+            if request_path_at_root
+            else _CACHE_CONTROL_POLICY_AT_SUBDIRECTORY
+        )
+        if cache_control_policy is not None:
+            self.send_header('Cache-Control', cache_control_policy)
     
     # === URL Transformation ===
     
