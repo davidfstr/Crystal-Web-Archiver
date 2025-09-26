@@ -52,18 +52,18 @@ Tutorial ⭐
 
 ### Download a simple website
 
-A *simple website* is created or administered by only a single person, 
-may contain text and images but not video, 
-and does not requiring logging in to view its content.
-
-There are many simple websites you can practice downloading at <https://daarchive.net/>.
+> A **simple website** is created or administered by only a single person, 
+> may contain text and images but not video, 
+> and does not requiring logging in to view its content.
+> 
+> There are many simple websites you can practice downloading at <https://daarchive.net/>.
 
 Steps to download [xkcd], a simple site:
 
 * Download Crystal. See the Download section above for specific instructions.
 * Open Crystal and press "New Project" to create a new untitled project.
 * Click the big "New Root URL..." button and type in 
-  "https://xkcd.daarchive.net/" for the URL. 
+  "xkcd.daarchive.net" for the URL. 
   Optionally type in "Home" for the Name.
 * Tick the "Create Group to Download Entire Site" checkbox.
   The "Download Site Immediately" checkbox should already be ticked.
@@ -78,8 +78,8 @@ Steps to download [xkcd], a simple site:
   Don't worry if download tasks are still running because Crystal
   will offer to resume any downloads later when the project is reopened.
 * You'll be prompted to save the project somewhere permanent.
-  Save it as "Tutorial" on your desktop.
-* Find the saved "Tutorial" project on your desktop and double-click it
+  Save it as "Simple Tutorial" on your desktop.
+* Find the saved "Simple Tutorial" project on your desktop and double-click it
   to open it.
 * On macOS the project will open in Crystal immediately.
   On Windows or Linux a window will appear with an "OPEN ME" file.
@@ -92,15 +92,16 @@ Steps to download [xkcd], a simple site:
 
 ### Download a complex website
 
-Any website that is not simple is a *complex website*. In particular:
-
-* Sites that contain content from *multiple people* are complex. 
-  Most forums, wikis (like: Wikipedia), and social media sites (like: Facebook, YouTube, or X) are complex.
-* Sites that contain large assets such as video (ex: YouTube), 
-  files (ex: Hugging Face), or large images are complex.
-* Sites that require *login* to view content like paid blogs (ex: Pragmatic Engineer), 
-  paid news sites (ex: The New York Times), 
-  and paid video sites (ex: Barre3) are complex.
+> Any website that is not simple is a **complex website**. In particular:
+> 
+> * Sites that contain content from *multiple people* are complex. 
+>   Most forums, wikis (like: Wikipedia), and social media sites
+>   (like: Facebook, YouTube, or X) are complex.
+> * Sites that contain large assets such as video (ex: YouTube), 
+>   files (ex: Hugging Face), or large images are complex.
+> * Sites that require *login* to view content like paid blogs (ex: Pragmatic Engineer), 
+>   paid news sites (ex: The New York Times), 
+>   and paid video sites (ex: Barre3) are complex.
 
 When downloading a complex website you need to precisely define which pages you want to download because downloading the entire site would take too much space/time.
 
@@ -111,7 +112,7 @@ multiple people:
 * Download Crystal. See the Download section above for specific instructions.
 * Open Crystal and press "New Project" to create a new untitled project.
 * Click the big "New Root URL..." button and type in 
-  "https://artima.daarchive.net/" for the URL. 
+  "artima.daarchive.net" for the URL. 
   Optionally type in "Home" for the name.
 * The "Download URL Immediately" checkbox should already be ticked.
   Press the "New" button to create the root URL and start downloading it.
@@ -128,20 +129,21 @@ multiple people:
   of Guido's post list. Click the page 2 link.
 * Again, a Crystal page saying "Page Not in Archive" appears.
   This time though, we want to download all similar pages.
-  Tick the "Create Group for Similar Pages" checkbox to reveal a form for
-  creating a Group.
-  A Group describes a collection of pages that all have the same URL pattern.
-* Crystal automatically populates its best guess for a URL Pattern.
-  For this example that guessed pattern is:
-  "https://artima.daarchive.net/index.html$/blogger=guido&start=#&thRange=15.html".
-  The "#" wildcard in the pattern will match any number of digits, like "15" or "30".
-  There are other wildcards like "*" which will match any block of text without a "/".
-* Notice that the Preview Members box displays all URLs matching the
-  currently typed URL Pattern.
-* Crystal also automatically populates its best guess for what the Source of
-  the Group should be. The source of a group typically links to all or most
-  members of the group. When Crystal is asked to redownload a group it will
-  redownload the source first to see if the group has any new members.
+  Tick the "Create Group for Similar Pages" checkbox at the bottom of the page
+  to reveal a form for creating a group.
+    * A **group** describes a collection of pages that all have the same URL pattern.
+    * Crystal automatically populates its best guess for a URL Pattern.
+      For this example that guessed pattern is:
+      `https://artima.daarchive.net/index.html$/blogger=guido&start=#&thRange=15.html`.
+      The "#" wildcard in the pattern will match any number of digits, like "15" or "30".
+      There are other wildcards like "*" which will match any block of text without a "/".
+    * Notice that the Preview Members box displays all URLs matching the
+      currently typed URL Pattern.
+    * Crystal also automatically populates its best guess for what the source of
+      the Group should be.
+        * The **source** of a group links to all or most members of the group.
+          When Crystal is asked to redownload a group it will redownload the
+          source first to see if the group has any new members.
 * For this example Crystal has guessed an appropriate URL Pattern and Source
   for matching all of Guido's post list pages, so we don't need to change them.
 * Optionally type in "Guido Post List, Page 2+" for the name of the group.
@@ -166,7 +168,7 @@ multiple people:
   Save it as "Complex Tutorial" on your desktop.
 * Congratulations! You've downloaded your first complex website with Crystal!
 
-Tips for download more types of complex sites are available on the wiki:
+Tips for downloading more types of complex sites are available on the wiki:
 
 * [Complex Website Download Examples](https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Complex-Website-Download-Examples)
 
