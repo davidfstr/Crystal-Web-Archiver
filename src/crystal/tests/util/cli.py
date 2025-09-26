@@ -104,6 +104,7 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, reope
                 'CRYSTAL_NO_PROFILE_FG_TASKS': 'True',
                 'CRYSTAL_NO_PROFILE_GC': 'True',
                 'CRYSTAL_NO_PROFILE_RECORD_LINKS': 'True',
+                'CRYSTAL_NO_SCREENSHOT_MESSAGES': 'True',
                 
                 # Disable auto-reopening of untitled projects during subprocess tests
                 # unless explicitly enabled for testing the reopen functionality

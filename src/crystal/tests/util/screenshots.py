@@ -27,7 +27,9 @@ def take_error_screenshot() -> None:
     
     screenshot_filename = os.environ.get('CRYSTAL_SCREENSHOT_ID', 'screenshot') + '.png'
     screenshot_filepath = os.path.abspath(os.path.join(screenshots_dirpath, screenshot_filename))
-    print('*** Saving screenshot to: ' + screenshot_filepath, file=sys.stderr)
+    print_screenshot_messages = os.environ.get('CRYSTAL_NO_SCREENSHOT_MESSAGES', 'False') != 'True'
+    if print_screenshot_messages:
+        print('*** Saving screenshot to: ' + screenshot_filepath, file=sys.stderr)
     
     try:
         if is_mac_os():
