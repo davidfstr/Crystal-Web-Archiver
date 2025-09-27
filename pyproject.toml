@@ -48,6 +48,7 @@ packages = [
     { include = "crystal", from = "src" },
 ]
 include = [
+    "README/crystal-ui.png",
     "README/logo.png",
     "README/logo@2x.png",
 ]
