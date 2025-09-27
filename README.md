@@ -10,9 +10,12 @@ limited JavaScript (such as blogs, wikis, and other static websites)
 although it can also download more dynamic sites which have infinitely 
 scrolling feeds of content (such as social media sites).
 
-To get started downloading your first website with Crystal, please see the Tutorial below.
+To get started downloading your first website with Crystal, please see the 
+[Tutorial](#tutorial) below.
 
 <img src="https://raw.githubusercontent.com/davidfstr/Crystal-Web-Archiver/main/README/crystal-ui.png" alt="Crystal user interface" />
+
+<a name="download" />
 
 Download ⬇︎
 --------
@@ -62,7 +65,7 @@ Tutorial ⭐
 
 Steps to download [xkcd], a simple site:
 
-* Download Crystal. See the Download section above for specific instructions.
+* Download Crystal. See the [Download](#download) section above for specific instructions.
 * Open Crystal and press "New Project" to create a new untitled project.
 * Click the big "New Root URL..." button and type in 
   "xkcd.daarchive.net" for the URL. 
@@ -111,7 +114,7 @@ Each complex website is different. Here is an example of downloading only
 Guido's blog posts from [Artima Weblogs], a complex site containing content from
 multiple people:
 
-* Download Crystal. See the Download section above for specific instructions.
+* Download Crystal. See the [Download](#download) section above for specific instructions.
 * Open Crystal and press "New Project" to create a new untitled project.
 * Click the big "New Root URL..." button and type in 
   "artima.daarchive.net" for the URL. 
