@@ -15,7 +15,7 @@ To get started downloading your first website with Crystal, please see the
 
 <img src="https://raw.githubusercontent.com/davidfstr/Crystal-Web-Archiver/main/README/crystal-ui.png" alt="Crystal user interface" />
 
-<a name="download" />
+<a name="download"></a>
 
 Download ⬇︎
 --------
@@ -48,12 +48,12 @@ Or install from source, using pipx:
 [Python]: https://www.python.org/
 
 
-<a name="tutorial" />
+<a name="tutorial"></a>
 
 Tutorial ⭐
 --------
 
-<a name="tutorial-simple-website" />
+<a name="tutorial-simple-website"></a>
 
 ### Download a simple website
 
@@ -93,7 +93,7 @@ Steps to download [xkcd], a simple site:
   home page again in your web browser.
 * Congratulations! You've downloaded your first simple website with Crystal!
 
-<a name="tutorial-complex-website" />
+<a name="tutorial-complex-website"></a>
 
 ### Download a complex website
 
