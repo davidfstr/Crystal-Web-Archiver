@@ -12,6 +12,16 @@ Release Notes ⋮
 
 ### v2.0.0 (September 26, 2025)
 
+Crystal 2.0 is a huge release with many new features and all-new tutorials!
+It's now possible to download a website entirely through a web browser, 
+by navigating through already-downloaded pages and incrementally adding URLs 
+and groups for any links that weren't already downloaded. Inline help messages
+guide first-time users through the process of downloading their first website.
+Projects are now created as untitled by default, no longer requiring you to 
+immediately save & title them upon creation. Many bugs related to browsing 
+read-only projects are now fixed. Documentation is great. UI is stable.
+New contributors are actively welcome to help enhance Crystal going forward!
+
 * First-time-run experience improvements
     * After creating an empty project a call-to-action appears to create
       the first root URL.
