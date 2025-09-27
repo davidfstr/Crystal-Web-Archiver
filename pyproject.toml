@@ -18,7 +18,7 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "Intended Audience :: Information Technology",
     "Intended Audience :: System Administrators",
-    "License :: Other/Proprietary License",
+    "License :: Free for non-commercial use",
     "Natural Language :: English",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
