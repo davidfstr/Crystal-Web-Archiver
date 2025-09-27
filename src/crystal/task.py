@@ -859,7 +859,7 @@ from urllib.parse import urljoin
 
 # Limit how fast Crystal can download from a remote server to avoid overwhelming
 # any particular remote server.
-DELAY_BETWEEN_DOWNLOADS = 0.5  # secs
+DELAY_BETWEEN_DOWNLOADS = 1.0  # secs
 
 # Configures where the DELAY_BETWEEN_DOWNLOADS delay is inserted
 # into the download process. Options are:
@@ -870,7 +870,7 @@ DELAY_BETWEEN_DOWNLOADS = 0.5  # secs
 #     A delay is inserted after downloading a page and after each of its
 #     embedded resources is downloaded.
 #     Uses server-side compute & bandwidth more slowly.
-_DOWNLOAD_DELAY_STYLE = 'after_every_page'  # type: Literal['after_every_page', 'after_every_resource']
+_DOWNLOAD_DELAY_STYLE = 'after_every_resource'  # type: Literal['after_every_page', 'after_every_resource']
 
 # NOTE: This optimization is important for downloading large projects.
 #       Do not recommend disabling.
