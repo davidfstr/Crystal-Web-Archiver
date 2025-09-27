@@ -129,6 +129,14 @@ New contributors are actively welcome to help enhance Crystal going forward!
       message will be printed suggesting to look for other running copies
       of Crystal.
 
+#### v2.0.1
+
+* Downloading improvements
+    * Adjust default crawl speed to be friendlier to website hosts.
+
+* Documentation improvements
+    * Fix anchor formatting in README on PyPI.
+
 ### v1.11.0 (August 6, 2025)
 
 This release contains many improvements to the first-run experience:

@@ -388,7 +388,8 @@ async def test_while_project_open_then_periodically_saves_resume_data_so_that_ca
 #       However this test has more specific checks (than the other test) for a particular regression.
 async def test_given_download_resource_task_running_when_close_project_then_drt_cancels_without_delay() -> None:
     with scheduler_disabled(), \
-            served_project('testdata_xkcd.crystalproj.zip') as sp:
+            served_project('testdata_xkcd.crystalproj.zip') as sp, \
+            patch('crystal.task._DOWNLOAD_DELAY_STYLE', 'after_every_page'):
         # Define URLs
         comic_url = sp.get_request_url('https://xkcd.com/1/')
         
