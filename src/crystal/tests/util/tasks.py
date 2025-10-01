@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from concurrent.futures import Future
 from contextlib import contextmanager
 from crystal.browser.tasktree import TaskTreeNode
-from crystal.model import Project
+from crystal.model import Project, ResourceRevision
 import crystal.task
 from crystal.task import RootTask, _is_scheduler_thread, scheduler_affinity, Task
 from crystal.tests.util.controls import TreeItem
@@ -14,6 +15,7 @@ from crystal.tests.util.wait import (
 )
 from crystal.tests.util.xthreading import bg_call_and_wait
 from crystal.util.xthreading import fg_affinity
+from io import BytesIO
 import re
 import threading
 from typing import List
@@ -402,3 +404,20 @@ def mark_as_complete(task: Task) -> None:
     assert not task.complete
     RootTask._cancel_tree_now(task)
     assert task.complete
+
+
+@contextmanager
+def downloads_patched_to_return_empty_revision() -> Iterator[None]:
+    """
+    Patches DownloadResourceTask to immediately return an empty ResourceRevision
+    as its response. Useful to avoid DownloadResourceTask needing to run any
+    logic on the scheduler thread, especially if the scheduler thread is disabled.
+    """
+    def get_future_with_result(self, *args, **kwargs) -> Future[ResourceRevision]:
+        future = Future()  # type: Future[ResourceRevision]
+        future.set_result(ResourceRevision.create_from_response(self.resource, None, BytesIO()))
+        return future
+    
+    # Request the root resource URL, which should trigger dynamic download
+    with patch('crystal.task.DownloadResourceTask.get_future', new=get_future_with_result):
+        yield

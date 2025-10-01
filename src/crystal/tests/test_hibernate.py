@@ -565,7 +565,7 @@ async def test_given_download_resource_group_task_without_source_running_at_any_
                         assert feed_drg_task.complete
 
 
-@slow
+@slow  # 115s on Apple M3 2024
 @awith_subtests
 async def test_given_download_resource_group_task_with_source_running_at_any_step_when_close_project_then_drgt_cancels_without_error(subtests: SubtestsContext) -> None:
     # A DownloadResourceGroupTask with a source will have a task tree that looks like:

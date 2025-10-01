@@ -5,7 +5,8 @@ from crystal.model import (
 from crystal.server import ProjectServer
 from crystal.task import (
     ASSUME_RESOURCES_DOWNLOADED_IN_SESSION_WILL_ALWAYS_REMAIN_FRESH,
-    DownloadResourceGroupMembersTask, ProjectFreeSpaceTooLowError, Task,
+    DownloadResourceGroupMembersTask,
+    DownloadResourceTask, ProjectFreeSpaceTooLowError, Task,
 )
 from crystal.tests.util.asserts import *
 from crystal.tests.util.data import (
@@ -310,7 +311,18 @@ async def test_given_download_resource_group_members_when_add_group_member_via_d
                             with scheduler_thread_context(enabled=False):
                                 _ = await fetch_archive_url(comic2_url)
                         
-                        # Process deferred event: DRGMT.group_did_add_member
+                        # HACK: Force the newly-added DownloadResourceTask to run 
+                        #       with non-interactive priority so that we can observe
+                        #       the subtitle change in DownloadResourceGroupTask
+                        append_deferred_top_level_tasks(project)
+                        dr_task = project.root_task.children[-1]
+                        assert isinstance(dr_task, DownloadResourceTask)
+                        assert True == dr_task.interactive
+                        dr_task._interactive = False
+                        assert False == dr_task.interactive
+                        
+                        # 1. Step the DownloadResourceGroupTask
+                        # 2. Process deferred event: DRGMT.group_did_add_member
                         await step_scheduler(project)
                         
                         # Ensure newly discovered group member is queued for download

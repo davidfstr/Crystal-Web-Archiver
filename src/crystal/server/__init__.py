@@ -702,10 +702,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 ))
                 
                 # Try download resource immediately
-                def download_resource() -> Resource:
+                def create_resource() -> Resource:
                     assert archive_url is not None
                     return Resource(self.project, archive_url)
-                resource = fg_call_and_wait(download_resource)
+                resource = fg_call_and_wait(create_resource)
                 yield SwitchToThread.BACKGROUND
                 self._try_download_revision_dynamically(resource, needs_result=False)
                 # (continue to serve downloaded resource revision)
@@ -798,10 +798,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 #       to finish downloading.
                 wait_for_embedded=True,
                 needs_result=needs_result,
-                # Assume optimistically that resource is embedded so that
-                # it downloads at "interactive priority", without inserting
-                # any artificial delays
-                is_embedded=True,
+                # Download at interactive priority
+                interactive=True,
             ).result()
         except Exception:
             # Don't care if there was an error downloading

@@ -540,24 +540,14 @@ async def test_when_DRGMT_group_did_add_member_event_crashes_then_DRGT_displays_
             assert isinstance(update_rg_members_task, UpdateResourceGroupMembersTask)
             assert isinstance(download_rg_members_task, DownloadResourceGroupMembersTask)
             
-            super_notify_did_append_child = download_rg_members_task.notify_did_append_child
-            def notify_did_append_child(*args, **kwargs):
-                super_notify_did_append_child(*args, **kwargs)
-                
-                # Simulate failure of `self._pbc.total += 1`
-                # due to self._pbc being unset, due to known issue:
-                # https://github.com/davidfstr/Crystal-Web-Archiver/issues/141
-                # 
-                # TODO: Once that issue is fixed, replace the next line with:
-                #           raise _CRASH
-                raise _mark_as_simulated_crash(
-                    AttributeError("'DownloadResourceGroupMembersTask' object has no attribute '_pbc'")
-                )
+            @capture_crashes_to_self
+            def group_did_add_member(self, *args, **kwargs):
+                raise _CRASH
             
             # Precondition
             assert download_rg_members_task.crash_reason is None
             
-            with patch.object(download_rg_members_task, 'notify_did_append_child', notify_did_append_child):
+            with patch('crystal.task.DownloadResourceGroupMembersTask.group_did_add_member', new=group_did_add_member):
                 Resource(project, rss_feed_url)
             
             # Postcondition

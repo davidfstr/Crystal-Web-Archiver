@@ -921,7 +921,7 @@ class _ResourceNode(Node):
         # If this is the first expansion attempt, start an asynchronous task to fetch
         # the resource and subsequently update the children
         if self.download_future is None:
-            self.download_future = self.resource.download()
+            self.download_future = self.resource.download(interactive=True)
             
             def download_done(future: Future[ResourceRevision]) -> None:
                 try:

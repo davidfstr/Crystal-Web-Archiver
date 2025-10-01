@@ -1664,6 +1664,8 @@ class Project(ListenableMixin):
         Schedules the specified top-level task for execution,
         unless it is already complete.
         
+        Can be called from any thread.
+        
         Raises:
         * ProjectClosedError -- if this project is closed
         """
@@ -3076,7 +3078,12 @@ class Resource:
             self._download_body_task_ref = _WeakTaskRef()
         return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
-    def download(self, *, wait_for_embedded: bool=False, needs_result: bool=True, is_embedded: bool=False) -> Future[ResourceRevision]:
+    def download(self,
+            *, wait_for_embedded: bool=False,
+            needs_result: bool=True,
+            is_embedded: bool=False,
+            interactive: bool=False,
+            ) -> Future[ResourceRevision]:
         """
         Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
         up-to-date version of this resource's body. If a download is performed, all
@@ -3107,12 +3114,31 @@ class Resource:
             download more resources.
         * ProjectHasTooManyRevisionsError
         """
+        if interactive:
+            # Assume optimistically that resource is embedded so that
+            # it downloads without inserting any artificial delays
+            is_embedded = True  # reinterpret
+        
         (task, created) = self.get_or_create_download_task(
             needs_result=needs_result, is_embedded=is_embedded)
-        if created:
+        
+        # 1. If task was just created, schedule it at the root of the task tree
+        # 2. If task should be interactive priority, mark it as such, and
+        #    (re)schedule it as a top-level task
+        # NOTE: This is currently the only place where an interactive=True task is
+        #       created/promoted. If additional locations want to do something
+        #       similar, this interactive-related logic should be extracted
+        #       to the Task class to improve encapsulation.
+        if interactive and not task._interactive:
+            task._interactive = True
+        if created or (interactive and task not in self._top_level_tasks()):
             if not task.complete:
                 self.project.add_task(task)
+        
         return task.get_future(wait_for_embedded)
+    
+    def _top_level_tasks(self) -> Sequence[Task]:
+        return self.project.root_task.children_unsynchronized
     
     # Soft Deprecated: Use get_or_create_download_task() instead,
     # which clarifies that an existing task may be returned.
@@ -3130,7 +3156,10 @@ class Resource:
         (task, _) = self.get_or_create_download_task(*args, **kwargs)
         return task
     
-    def get_or_create_download_task(self, *, needs_result: bool=True, is_embedded: bool=False) -> Tuple[DownloadResourceTask, bool]:
+    def get_or_create_download_task(self,
+            *, needs_result: bool=True,
+            is_embedded: bool=False,
+            ) -> Tuple[DownloadResourceTask, bool]:
         """
         Gets/creates a Task to download this resource and all its embedded resources.
         Returns the task and whether it was created.

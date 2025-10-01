@@ -149,6 +149,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
     all_incomplete_children_crashed_implies_this_task_should_crash = True
     """For a container task, whether all of its incomplete children being crashed implies that the container should crash as well."""
     
+    _VERBOSE_TASK_SUBTITLE_CHANGES = False
     _USE_EXTRA_LISTENER_ASSERTIONS_ALWAYS = (
         tests_are_running()
     )
@@ -165,6 +166,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         '_num_children_complete',
         '_complete',
         '_cancelled',
+        '_interactive',
         '_did_yield_self',
         '_future',
         # NOTE: Used differently by SCHEDULING_STYLE_SEQUENTIAL and SCHEDULING_STYLE_ROUND_ROBIN
@@ -186,6 +188,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         self._num_children_complete = 0
         self._complete = False
         self._cancelled = False
+        self._interactive = False
         
         self._did_yield_self = False            # used by leaf tasks
         self._future = None  # type: Optional[Future[_R]]  # used by leaf tasks
@@ -223,6 +226,8 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         """
         return self._subtitle
     def _set_subtitle(self, value: str) -> None:
+        if self._VERBOSE_TASK_SUBTITLE_CHANGES:
+            print(f'SUBTITLE: {type(self).__name__}: {value}')
         if self._subtitle == 'Complete':
             assert value == 'Complete', \
                 f'Cannot change subtitle of completed task {self!r} to {value!r}'
@@ -326,6 +331,11 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         Every cancelled task is also complete, but not every complete task is cancelled.
         """
         return self._cancelled
+    
+    @property
+    def interactive(self) -> bool:
+        """Whether this task should be scheduled with interactive (high) priority."""
+        return self._interactive
     
     @property
     def future(self) -> Future[_R]:
@@ -659,9 +669,19 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
                         schedule_check_result = self._notify_did_schedule_all_children()
                     if not isinstance(schedule_check_result, bool):
                         return schedule_check_result
+                any_incomplete_interactive_children = any(
+                    c.interactive and not c.complete
+                    for c in self.children
+                )  # cache
                 cur_child_index = self._next_child_index
                 while True:
-                    unit = self.children[cur_child_index].try_get_next_task_unit()
+                    cur_child = self.children[cur_child_index]
+                    if any_incomplete_interactive_children and not cur_child.interactive:
+                        # If there are any interactive priority children
+                        # then ignore all other children for scheduling purposes
+                        unit = None
+                    else:
+                        unit = cur_child.try_get_next_task_unit()
                     if unit is not None:
                         self._next_child_index = (cur_child_index + 1) % len(self.children)
                         return unit
@@ -1707,17 +1727,17 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
     
     @capture_crashes_to_self
     def group_did_add_member(self, group: ResourceGroup, member: Resource) -> None:
-        if not is_synced_with_scheduler_thread():
-            assert is_foreground_thread()  # to access: self._children_loaded, self._deferred_events
-            if self._children_loaded:
-                # Defer
-                self._deferred_events.append(lambda: self.group_did_add_member(group, member))
-            else:
-                # Ignore
-                pass
+        if not self._children_loaded:
+            # Ignore
             return
         
         assert self._children_loaded
+        if not is_synced_with_scheduler_thread():
+            # Defer
+            assert is_foreground_thread()  # to access: self._children_loaded, self._deferred_events
+            self._deferred_events.append(lambda: self.group_did_add_member(group, member))
+            return
+        
         assert self._pbc is not None
         
         if self._LAZY_LOAD_CHILDREN:

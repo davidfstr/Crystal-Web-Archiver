@@ -132,7 +132,10 @@ New contributors are actively welcome to help enhance Crystal going forward!
 #### v2.0.1
 
 * Downloading improvements
-    * Adjust default crawl speed to be friendlier to website hosts.
+    * For URLs downloaded interactively - by browsing to an undownloaded URL or
+      expanding a entity tree node for an undownloaded URL - download at
+      high priority, before other tasks.
+    * Adjust default (non-interactive) crawl speed to be friendlier to website hosts.
 
 * Documentation improvements
     * Fix anchor formatting in README on PyPI.

@@ -25,7 +25,7 @@ from crystal.tests.util.controls import (
     click_button, file_dialog_returning, select_menuitem_now, TreeItem,
 )
 from crystal.tests.util.save_as import wait_for_save_as_to_complete
-from crystal.tests.util.tasks import first_task_title_progression
+from crystal.tests.util.tasks import append_deferred_top_level_tasks, first_task_title_progression
 from crystal.tests.util.wait import (
     not_condition, or_condition, tree_has_no_children_condition, wait_for,
     WaitTimedOut, window_condition, window_disposed_condition,
@@ -397,11 +397,22 @@ class MainWindow:
     
     # === Operations ===
     
-    async def click_download_button(self, *, immediate_finish_ok: bool=False) -> None:
+    async def click_download_button(self,
+            *, immediate_finish_ok: bool=False,
+            project: Project | None=None
+            ) -> None:
         """
         Clicks the "Download" button and waits for it to finish starting
         a download task.
+        
+        If the scheduler thread is disabled, the `project` parameter is required.
         """
+        if is_synced_with_scheduler_thread() and immediate_finish_ok:
+            raise ValueError(
+                'Not possible for a download to finish immediately '
+                'if the scheduler thread is disabled. '
+                'Remove redundant click_download_button(immediate_finish_ok=True).')
+        
         task_root_ti = TreeItem.GetRootItem(self.task_tree)
         assert task_root_ti is not None
         
@@ -409,6 +420,13 @@ class MainWindow:
         
         click_button(self.download_button)
         def task_count_changed_condition() -> int | None:
+            if is_synced_with_scheduler_thread():
+                if project is None:
+                    raise ValueError(
+                        'Must provide click_download_button(project=...) '
+                        'when scheduler is disabled')
+                append_deferred_top_level_tasks(project)
+            
             assert task_root_ti is not None
             new_task_count = len(task_root_ti.Children)
             if new_task_count != old_task_count:
