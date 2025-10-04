@@ -3149,9 +3149,12 @@ class Resource:
                 self._download_task_ref = _WeakTaskRef()
             task_ref = self._download_task_ref
         else:
-            if self._download_task_noresult_ref is None:
-                self._download_task_noresult_ref = _WeakTaskRef()
-            task_ref = self._download_task_noresult_ref
+            if self._download_task_ref is not None:
+                task_ref = self._download_task_ref
+            else:
+                if self._download_task_noresult_ref is None:
+                    self._download_task_noresult_ref = _WeakTaskRef()
+                task_ref = self._download_task_noresult_ref
         return self._get_task_or_create(task_ref, task_factory)
     
     def _get_task_or_create(self,
