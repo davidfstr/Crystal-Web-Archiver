@@ -756,6 +756,8 @@ def wait_for_crystal_to_exit(
         *, timeout: float,
         stacklevel_extra: int=0
         ) -> None:
+    assert isinstance(crystal.stdout, TextIOBase)
+    
     start_time = time.time()  # capture
     try:
         crystal.wait(timeout=timeout)
@@ -763,7 +765,10 @@ def wait_for_crystal_to_exit(
         try:
             crystal.wait(timeout=(timeout * HARD_TIMEOUT_MULTIPLIER) - timeout)
         except subprocess.TimeoutExpired:
-            raise WaitTimedOut('Timed out waiting for Crystal to exit') from None
+            raise WaitTimedOut(
+                f'Timed out waiting for Crystal to exit. '
+                f'Trailing output: {drain(crystal.stdout)!r} '
+            ) from None
         else:
             delta_time = time.time() - start_time
             warnings.warn(

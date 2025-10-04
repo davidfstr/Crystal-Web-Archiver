@@ -4,6 +4,12 @@ Tests functionality of the MainWindow which isn't covered by more-specific suite
 For high-level tests of complete user workflows, see test_workflows.py
 """
 
+from crystal.tests.util.cli import (
+    crystal_shell, py_eval, py_eval_await, wait_for_crystal_to_exit,
+)
+from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+import textwrap
 from unittest import skip
 
 
@@ -79,3 +85,44 @@ async def test_branding_area_updates_correctly_when_system_appearance_changes_be
 # === Test: Close ===
 
 # (See test_hibernate.py)
+# (See "Logout Tests" in test_untitled_projects.py)
+
+
+async def test_given_open_or_create_dialog_visible_when_os_logout_then_crystal_actually_quits() -> None:
+    _simulate_logout_in_crystal_subprocess(open_main_window=False)
+
+
+async def test_given_main_window_visible_when_os_logout_then_crystal_actually_quits() -> None:
+    _simulate_logout_in_crystal_subprocess(open_main_window=True)
+
+
+def _simulate_logout_in_crystal_subprocess(*, open_main_window: bool) -> None:
+    with crystal_shell() as (crystal, banner):
+        # Simulate OS logout by firing wx.EVT_QUERY_END_SESSION and wx.EVT_END_SESSION events
+        py_eval_await(crystal, textwrap.dedent(f'''\
+            from crystal.tests.util.windows import OpenOrCreateDialog
+            import wx
+            
+            async def simulate_os_logout():
+                ocd = await OpenOrCreateDialog.wait_for()
+                {'await ocd.create_and_leave_open()' if open_main_window else ''}
+                
+                app = wx.GetApp()
+                
+                # Fire wx.EVT_QUERY_END_SESSION event.
+                # Should not be veto-ed for OpenOrCreateDialog.
+                query_event = wx.CloseEvent(wx.EVT_QUERY_END_SESSION.typeId)
+                app.ProcessEvent(query_event)
+                if query_event.GetVeto():
+                    raise AssertionError("EVT_QUERY_END_SESSION was veto-ed but should not have been")
+                
+                # Fire wx.EVT_END_SESSION event
+                end_event = wx.CloseEvent(wx.EVT_END_SESSION.typeId)
+                app.ProcessEvent(end_event)
+            '''), 'simulate_os_logout')
+        
+        # Close the shell so that it doesn't prevent Crystal from exiting
+        py_eval(crystal, 'exit()', stop_suffix='')
+        
+        # Ensure that the Crystal process quits cleanly
+        wait_for_crystal_to_exit(crystal, timeout=DEFAULT_WAIT_TIMEOUT)

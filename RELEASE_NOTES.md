@@ -140,6 +140,11 @@ New contributors are actively welcome to help enhance Crystal going forward!
 * Documentation improvements
     * Fix anchor formatting in README on PyPI.
 
+* Minor fixes
+    * When OS logout occurs, Crystal will actually finish quitting normally.
+    * When Quit is selected from Crystal's Dock icon on macOS,
+      Crystal will actually quit.
+
 ### v1.11.0 (August 6, 2025)
 
 This release contains many improvements to the first-run experience:

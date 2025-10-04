@@ -497,6 +497,9 @@ def _main(args: list[str]) -> None:
             Called when the session is ending and can't be stopped.
             Cleans up resources but does not try to prevent log out or shut down.
             """
+            from crystal.util.quitting import set_is_quitting
+            set_is_quitting()
+            
             # Allow the logout/shutdown to proceed
             event.Skip()
     
