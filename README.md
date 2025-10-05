@@ -127,7 +127,7 @@ multiple people:
 * In the left navigation where it says "Artima Blogger", look for the link
   "Guido van van Rossum" [sic]. Click it.
 * A Crystal error page appears that says "Page Not in Archive", because
-  the link you clicked (https://artima.daarchive.net/index.html$/blogger=guido.html)
+  the link you clicked (`https://artima.daarchive.net/index.html$/blogger=guido.html`)
   hasn't been downloaded yet.
 * Click the "Download" button to individually download and view Guido's first post list page.
 * Notice at the top of the page there are links to pages 2, 3, 4, and 5
@@ -163,7 +163,7 @@ multiple people:
 * Each ⚓️ is a Root URL. Each 📁 is a Group.
 * Click the second ⚓️ to select it.
 * Click the "Edit" button.
-* Type "Guido Post List, Page 1" for the name of the group.
+* Type "Guido Post List, Page 1" for the name of the URL.
 * Click the "Save" button. Now the displayed URLs and groups should be:
   * ⚓️ / - Home
   * ⚓️ /index.html$/blogger=guido.html - Guido Post List, Page 1
