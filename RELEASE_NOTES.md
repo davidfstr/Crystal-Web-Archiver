@@ -132,18 +132,25 @@ New contributors are actively welcome to help enhance Crystal going forward!
 #### v2.0.1
 
 * Downloading improvements
-    * For URLs downloaded interactively - by browsing to an undownloaded URL or
-      expanding a entity tree node for an undownloaded URL - download at
-      high priority, before other tasks.
-    * Adjust default (non-interactive) crawl speed to be friendlier to website hosts.
+    * Crawl speed improvements
+        * For URLs downloaded interactively - by browsing to an undownloaded URL or
+          expanding a entity tree node for an undownloaded URL - download at
+          high priority, before other tasks.
+        * Adjust default (non-interactive) crawl speed to be friendlier to website hosts.
+
+* Serving improvements
+    * After the Not in Archive page downloads a page, it will consistently
+      reload to display the downloaded page rather than a stale cached
+      Not in Archive page.
 
 * Documentation improvements
     * Fix anchor formatting in README on PyPI.
 
 * Minor fixes
-    * When OS logout occurs, Crystal will actually finish quitting normally.
-    * When Quit is selected from Crystal's Dock icon on macOS,
-      Crystal will actually quit.
+    * Quit and OS logout improvements
+        * When OS logout occurs, Crystal will actually finish quitting normally.
+        * When Quit is selected from Crystal's Dock icon on macOS,
+          Crystal will actually quit.
 
 ### v1.11.0 (August 6, 2025)
 

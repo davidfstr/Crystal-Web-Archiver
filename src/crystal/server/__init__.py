@@ -1187,6 +1187,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/html')
         if vary_referer:
             self.send_header('Vary', 'Referer')
+        # When the default URL prefix for the project is set,
+        # this page will be replaced with the default domain's root page,
+        # so don't cache the welcome page.
+        self.send_header('Cache-Control', 'no-cache')
         self.end_headers()
         
         html_content = welcome_page_html()
@@ -1211,6 +1215,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         self.send_response(404)
         self.send_header('Content-Type', 'text/html')
+        # If the Download button on the NIA page is pressed,
+        # the page will be replaced with the downloaded page,
+        # so don't cache the NIA page
+        self.send_header('Cache-Control', 'no-cache')
         self.end_headers()
         
         readonly = self.project.readonly  # cache
