@@ -426,7 +426,7 @@ async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> No
                 # Test can download resource (by expanding tree node)
                 if True:
                     comic1_ti.Expand()
-                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                    await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
                     assert first_child_of_tree_item_is_not_loading_condition(comic1_ti)()
                     
                     comic2_ti = comic1_ti.find_child(comic2_url)  # ensure did find sub-resource for Comic #2

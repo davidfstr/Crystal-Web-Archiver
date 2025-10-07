@@ -337,6 +337,14 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         """Whether this task should be scheduled with interactive (high) priority."""
         return self._interactive
     
+    def any_ancestor_is_interactive(self) -> bool:
+        task = self  # type: Task | None
+        while task is not None:
+            if task.interactive:
+                return True
+            task = task.parent
+        return False
+    
     @property
     def future(self) -> Future[_R]:
         """
@@ -1010,9 +1018,13 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
             return download_resource_revision(self._resource, self)
         finally:
             if _DOWNLOAD_DELAY_STYLE == 'after_every_resource':
-                self.subtitle = 'Waiting before performing next request...'
-                assert not is_foreground_thread()
-                sleep(DELAY_BETWEEN_DOWNLOADS)
+                if self.any_ancestor_is_interactive():
+                    # Do not delay
+                    pass
+                else:
+                    self.subtitle = 'Waiting before performing next request...'
+                    assert not is_foreground_thread()
+                    sleep(DELAY_BETWEEN_DOWNLOADS)
     
     def __repr__(self) -> str:
         return f'<DownloadResourceBodyTask for {self._resource.url!r}>'
@@ -1371,18 +1383,22 @@ class DownloadResourceTask(Task['ResourceRevision']):
                     not self._is_embedded and
                     self._download_body_task is not None and
                     self._download_body_task.did_download):
-                self.subtitle = 'Waiting before performing next request...'
-                if task.cancelled:
-                    # Download did not actually finish. Do not wait.
+                if self.any_ancestor_is_interactive():
+                    # Do not delay
                     pass
                 else:
-                    if is_foreground_thread():
-                        raise AssertionError(
-                            'DownloadResourceTask.child_task_did_complete() '
-                            'called unexpectedly on foreground thread. '
-                            'Cannot safely wait between downloads without '
-                            'blocking the foreground thread.')
-                    sleep(DELAY_BETWEEN_DOWNLOADS)
+                    self.subtitle = 'Waiting before performing next request...'
+                    if task.cancelled:
+                        # Download did not actually finish. Do not wait.
+                        pass
+                    else:
+                        if is_foreground_thread():
+                            raise AssertionError(
+                                'DownloadResourceTask.child_task_did_complete() '
+                                'called unexpectedly on foreground thread. '
+                                'Cannot safely wait between downloads without '
+                                'blocking the foreground thread.')
+                        sleep(DELAY_BETWEEN_DOWNLOADS)
             
             self.finish()
     

@@ -513,6 +513,11 @@ async def test_given_downloading_group_and_few_uncompleted_children_remaining_wh
 
 # === Test: Interactive Priority Tasks ===
 
+# TODO: Move this section to test_tasks.py because its tests don't really relate
+#       to the Task Tree.
+
+# --- Test: Interactive Priority Tasks: Task Becomes Interactive ===
+
 async def test_when_resource_node_in_entity_tree_expanded_then_related_resource_downloaded_at_interactive_priority() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp, \
             scheduler_disabled():
@@ -606,6 +611,8 @@ async def test_when_partially_downloaded_resource_requested_from_project_server_
     pass
 
 
+# --- Test: Interactive Priority Tasks: Interactive Task Behavior ===
+
 @slow  # 22s on Apple M3 2024
 async def test_when_top_level_task_is_interactive_priority_then_is_scheduled_before_any_non_interactive_tasks() -> None:
     # NOTE: Test both cases because there's a rare branch tested by the False case,
@@ -682,6 +689,13 @@ async def test_when_top_level_task_is_interactive_priority_then_is_scheduled_bef
                     assert spy_group_try_get_next.call_count > 0, \
                         'DownloadResourceGroupTask should be called after interactive task completes'
 
+
+@skip('not yet automated')
+async def test_when_top_level_task_is_interactive_priority_then_descendent_download_tasks_do_not_delay_between_downloads() -> None:
+    pass
+
+
+# --- Test: Interactive Priority Tasks: Interactive Tasks Always (Aliased) at Top Level ===
 
 async def test_when_download_resource_at_interactive_priority_given_same_resource_not_already_in_task_tree_then_new_task_scheduled_as_top_level_task_at_interactive_priority() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp, \

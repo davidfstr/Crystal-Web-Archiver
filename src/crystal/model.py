@@ -3114,6 +3114,8 @@ class Resource:
             download more resources.
         * ProjectHasTooManyRevisionsError
         """
+        from crystal.task import DownloadResourceTask
+        
         if interactive:
             # Assume optimistically that resource is embedded so that
             # it downloads without inserting any artificial delays
@@ -3130,6 +3132,12 @@ class Resource:
         #       similar, this interactive-related logic should be extracted
         #       to the Task class to improve encapsulation.
         if interactive and not task._interactive:
+            assert isinstance(task, DownloadResourceTask), (
+                # Don't allow big tasks like DownloadResourceGroup to be scheduled
+                # with interactive=True priority to avoid hammering origin servers
+                # with requests.
+                'Only DownloadResourceTasks are intended to support interactive=True priority'
+            )
             task._interactive = True
         if created or (interactive and task not in self._top_level_tasks()):
             if not task.complete:
