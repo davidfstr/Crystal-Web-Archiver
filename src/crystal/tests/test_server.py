@@ -107,6 +107,11 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
 #     - send_generic_revision
 
 
+@skip('not yet automated')
+def test_when_url_requested_corresponds_to_partially_downloaded_resource_then_wait_for_embedded_subresources_before_serving_resource() -> None:
+    pass
+
+
 @skip('covered by: test_can_download_and_serve_a_site_requiring_dynamic_url_discovery')
 def test_when_url_requested_corresponds_to_undownloaded_resource_matching_a_defined_root_resource_then_dynamically_downloads_the_url() -> None:
     # In particular, covers when the following warning is

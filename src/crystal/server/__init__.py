@@ -661,6 +661,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
     # --- Handle: Archive URL ---
     
     def _serve_archive_url(self, archive_url: str) -> Generator[SwitchToThread, None, None]:
+        from crystal.task import TaskDisposedException
+        
         readonly = self.project.readonly  # cache
         dynamic_ok = self._dynamic_ok()  # cache
 
@@ -756,6 +758,22 @@ class _RequestHandler(BaseHTTPRequestHandler):
             if revision is None:
                 self.send_resource_not_in_archive(archive_url)
                 return
+        
+        # HACK: Don't wait for subresources to download if there is no real
+        #       scheduler thread to run the downloads
+        scheduler_running = isinstance(self.project._scheduler_thread, threading.Thread)
+        if scheduler_running:
+            # 1. Wait for any embedded subresources to finish downloading
+            # 2. Escalate any in-progress download of subresources to interactive priority
+            download_embedded_future = resource.download(
+                wait_for_embedded=True, needs_result=False, interactive=True)
+            yield SwitchToThread.BACKGROUND
+            try:
+                download_embedded_future.result()
+            except TaskDisposedException:
+                # The download task was concurrently disposed on the scheduler thread.
+                # Therefore all subresources must already be downloaded.
+                pass
         
         # If client did make a conditional request which did match the revision,
         # send a short HTTP 304 response rather than the whole revision

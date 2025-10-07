@@ -142,6 +142,8 @@ New contributors are actively welcome to help enhance Crystal going forward!
     * After the Not in Archive page downloads a page, it will consistently
       reload to display the downloaded page rather than a stale cached
       Not in Archive page.
+    * Wait for a page to fully download (including embedded resources)
+      before serving it.
 
 * Documentation improvements
     * Fix anchor formatting in README on PyPI.

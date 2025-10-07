@@ -601,6 +601,11 @@ async def test_when_resource_matching_root_resource_or_resource_group_requested_
                 assertEqual(True, comic1_download_task.interactive)
 
 
+@skip('not yet automated')
+async def test_when_partially_downloaded_resource_requested_from_project_server_then_existing_download_task_escalated_to_interactive_priority() -> None:
+    pass
+
+
 @slow  # 22s on Apple M3 2024
 async def test_when_top_level_task_is_interactive_priority_then_is_scheduled_before_any_non_interactive_tasks() -> None:
     # NOTE: Test both cases because there's a rare branch tested by the False case,
