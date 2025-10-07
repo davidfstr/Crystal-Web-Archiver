@@ -596,13 +596,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(_pin_date_js(timestamp).encode('utf-8'))
             return
         
-        # Handle Crystal static resources endpoint
+        # Handle: Crystal static resources
         if self.path.startswith('/_/crystal/resources/'):
             yield SwitchToThread.BACKGROUND
             self._handle_static_resource()
             return
         
-        # Handle download progress endpoint
+        # Handle: "Not in Archive" Endpoints
         if self.path.startswith('/_/crystal/download-progress'):
             yield SwitchToThread.BACKGROUND
             self._handle_get_download_progress()
@@ -638,10 +638,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
         if self.path == '/_/crystal/download-url':
             yield SwitchToThread.BACKGROUND
             self._handle_start_download_url()
-            return
-        elif self.path == '/_/crystal/download-progress':
-            yield SwitchToThread.BACKGROUND
-            self._handle_get_download_progress()
             return
         elif self.path == '/_/crystal/create-group':
             yield SwitchToThread.BACKGROUND
@@ -978,15 +974,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
                         }
                     
                     completed = task.num_children_complete
-                    # TODO: Check whether this condition is correct.
-                    #       Probably waits for resource body to download,
-                    #       but likely does not wait for parse links to finish.
-                    if completed == 0:
-                        return {
-                            'status': 'in_progress',
-                            'progress': 0,
-                            'message': 'Starting download...'
-                        }
                     total = len(task.children_unsynchronized)
                     progress = int((completed / total) * 100) if total > 0 else 0
                     return {
@@ -1005,9 +992,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 time.sleep(REPORT_PERIOD)
         except BrokenPipeError:
             # Client disconnected
-            pass
+            return
         except Exception as e:
             self._send_sse_data({'error': f'Progress tracking error: {str(e)}'})
+            return
     
     @bg_affinity
     def _handle_create_group(self) -> None:

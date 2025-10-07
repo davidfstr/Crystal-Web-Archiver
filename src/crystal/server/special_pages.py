@@ -839,7 +839,7 @@ def not_in_archive_html(
                     const result = await response.json();
                     const taskId = result.task_id;
                     
-                    // Listening for download progress updates
+                    // Listen for download progress updates
                     const progressUrl = `/_/crystal/download-progress?task_id=${encodeURIComponent(taskId)}`;
                     eventSource = new EventSource(progressUrl);
                     
@@ -872,13 +872,15 @@ def not_in_archive_html(
                         } else if (data.status === 'in_progress') {
                             progressFill.style.width = `${data.progress}%%`;
                             progressText.textContent = data.message;
+                        } else {
+                            console.warn(`Unknown download status: ${data.status}`);
                         }
                     };
                     
                     eventSource.onerror = function(event) {
                         // Update progress with error
                         progressFill.style.width = '0%%';
-                        progressText.textContent = 'Connection error. Download may still be in progress.';
+                        progressText.textContent = 'Download failed.';
                         
                         eventSource.close();
                         

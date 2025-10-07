@@ -748,7 +748,7 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
             task_id = download_result['task_id']
             
             # Wait for the download task to complete
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
             
             # Simulate the page reload after download completion
             # by re-fetching the first comic page
@@ -820,7 +820,7 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
             
             # Simulate press of the "Download" button with network down
             # by directly querying the related endpoint
-            with network_down():  # for Crystal backend
+            with network_down():  # for backend
                 server_port = _DEFAULT_SERVER_PORT
                 download_response = await bg_fetch_url(
                     f'http://127.0.0.1:{server_port}/_/crystal/download-url',
@@ -863,7 +863,7 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
         def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
             page = NotInArchivePage.open(raw_page, url_in_archive=comic1_url_in_archive)
             
-            with network_down_after_delay(page):
+            with network_down_after_delay(page):  # for frontend
                 # Ensure download button is initially enabled
                 expect(page.download_url_button).to_be_enabled()
                 expect(page.download_url_button).to_contain_text('⬇ Download')
