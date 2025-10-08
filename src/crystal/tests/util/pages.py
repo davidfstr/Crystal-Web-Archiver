@@ -183,17 +183,19 @@ def reloads_paused(page: RawPage, *, expect_reload: bool=True) -> Iterator[None]
 @contextmanager
 def network_down_after_delay(page: AbstractPage | RawPage) -> Iterator[None]:
     """
-    Mock fetch to simulate network failure after delay.
+    Mock fetch and EventSource to simulate network failure after delay.
     """
     raw_page = page if isinstance(page, RawPage) else page.raw_page
     
-    # Patch window.fetch manually, rather than using the
+    # Patch window.fetch and EventSource manually, rather than using the
     # route() API, since we need a delayed response without
     # blocking the thread that calls other UI actions.
     raw_page.evaluate("""
-        if (window.crOriginalFetch) {
+        if (window.crOriginalFetch || window.crOriginalEventSource) {
             throw new Error('Cannot nest network_down_after_delay() contexts');
         }
+        
+        // Patch window.fetch
         window.crOriginalFetch = window.fetch;
         window.fetch = function(url, options) {
             if (url && typeof url === 'string' && (
@@ -211,6 +213,31 @@ def network_down_after_delay(page: AbstractPage | RawPage) -> Iterator[None]:
             // For all other requests, use the original fetch
             return window.crOriginalFetch(url, options);
         };
+        
+        // Patch EventSource for the download endpoint
+        window.crOriginalEventSource = window.EventSource;
+        window.EventSource = function(url, config) {
+            // If this is a download URL, throw an error immediately to simulate network failure
+            if (url && typeof url === 'string' && url.includes('/_/crystal/download-url')) {
+                const fakeEventSource = {
+                    onmessage: null,
+                    onerror: null,
+                    close: function() {},
+                };
+                
+                // Fire an error after 1 second
+                setTimeout(() => {
+                    if (fakeEventSource.onerror) {
+                        const errorEvent = {};
+                        fakeEventSource.onerror(errorEvent);
+                    }
+                }, 1000);
+                
+                return fakeEventSource;
+            }
+            // For other URLs, use the original EventSource
+            return new window.crOriginalEventSource(url, config);
+        };
     """)
     try:
         yield
@@ -218,6 +245,9 @@ def network_down_after_delay(page: AbstractPage | RawPage) -> Iterator[None]:
         raw_page.evaluate("""
             window.fetch = window.crOriginalFetch;
             delete window.crOriginalFetch;
+            
+            window.EventSource = window.crOriginalEventSource;
+            delete window.crOriginalEventSource;
         """)
 
 
