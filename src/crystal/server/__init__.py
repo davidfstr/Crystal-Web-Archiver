@@ -957,7 +957,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self._send_sse_data({
                 'status': 'complete',
                 'progress': 100,
-                'message': 'Download completed'
+                'message': 'Download completed',
+                'completed': 1,
+                'total': 1,
             })
             return
         
@@ -966,23 +968,25 @@ class _RequestHandler(BaseHTTPRequestHandler):
         try:
             while (time.monotonic() - start_time) < REPORT_MAX_DURATION:
                 def get_task_status() -> dict:
+                    completed = task.num_children_complete
+                    total = len(task.children_unsynchronized)
+                    progress = int((completed / total) * 100) if total > 0 else 0
                     if task.complete:
                         return {
                             'status': 'complete',
                             'progress': 100,
-                            'message': 'Download completed'
+                            'message': 'Download completed',
+                            'completed': completed,
+                            'total': total,
                         }
-                    
-                    completed = task.num_children_complete
-                    total = len(task.children_unsynchronized)
-                    progress = int((completed / total) * 100) if total > 0 else 0
-                    return {
-                        'status': 'in_progress',
-                        'progress': progress,
-                        'message': f'{completed} of {total} items downloaded',
-                        'completed': completed,
-                        'total': total
-                    }
+                    else:
+                        return {
+                            'status': 'in_progress',
+                            'progress': progress,
+                            'message': f'{completed} of {total} items downloaded',
+                            'completed': completed,
+                            'total': total,
+                        }
                 status = fg_call_and_wait(get_task_status)
                 self._send_sse_data(status)
                 
