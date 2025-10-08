@@ -611,6 +611,12 @@ async def test_when_partially_downloaded_resource_requested_from_project_server_
     pass
 
 
+@skip('not yet automated')
+async def test_when_download_button_pressed_on_not_in_archive_page_then_related_resource_downloaded_at_interactive_priority() -> None:
+    # However any created ResourceGroup (if any) is NOT downloaded at interactive priority.
+    pass
+
+
 # --- Test: Interactive Priority Tasks: Interactive Task Behavior ===
 
 @slow  # 22s on Apple M3 2024

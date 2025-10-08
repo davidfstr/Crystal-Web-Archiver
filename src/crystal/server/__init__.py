@@ -912,10 +912,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                         rr = RootResource(self.project, '', r)
                 
                 # Create download task and start downloading
-                (task, created) = r.get_or_create_download_task(
-                    needs_result=True, is_embedded=False)
-                if created and not task.complete:
-                    self.project.add_task(task)
+                task = r.download_with_task(interactive=True, needs_result=False)
                 
                 # Return task ID for progress tracking
                 # TODO: Consider using a different format for the task ID

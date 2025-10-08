@@ -3078,25 +3078,32 @@ class Resource:
             self._download_body_task_ref = _WeakTaskRef()
         return self._get_task_or_create(self._download_body_task_ref, task_factory)
     
-    def download(self,
-            *, wait_for_embedded: bool=False,
-            needs_result: bool=True,
-            is_embedded: bool=False,
-            interactive: bool=False,
-            ) -> Future[ResourceRevision]:
+    def download(self, *, wait_for_embedded: bool=False, **kwargs) -> Future[ResourceRevision]:
         """
-        Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
-        up-to-date version of this resource's body. If a download is performed, all
-        embedded resources will be downloaded as well.
+        Same as download_with_task() but returns a Future[ResourceRevision]
+        instead of a DownloadResourceTask.
         
         The returned Future may invoke its callbacks on any thread.
-        
-        A top-level Task will be created internally to display the progress.
         
         By default the returned future waits only for the resource itself
         to finish downloading but not for any embedded resources to finish
         downloading. Pass wait_for_embedded=True if you also want to wait
         for embedded resources.
+        
+        See documentation for download_with_task() to see the supported kwargs.
+        """
+        task = self.download_with_task(**kwargs)
+        return task.get_future(wait_for_embedded)
+    
+    def download_with_task(self,
+            *, needs_result: bool=True,
+            is_embedded: bool=False,
+            interactive: bool=False,
+            ) -> DownloadResourceTask:
+        """
+        Returns a DownloadResourceTask that downloads (if necessary) and returns an
+        up-to-date version of this resource's body. If a download is performed, all
+        embedded resources will be downloaded as well.
         
         If needs_result=False then the caller is declaring that it does
         not need and will ignore the result of the returned future,
@@ -3143,7 +3150,7 @@ class Resource:
             if not task.complete:
                 self.project.add_task(task)
         
-        return task.get_future(wait_for_embedded)
+        return task
     
     def _top_level_tasks(self) -> Sequence[Task]:
         return self.project.root_task.children_unsynchronized
