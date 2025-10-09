@@ -3019,7 +3019,7 @@ class Resource:
     
     # === Operations: Download ===
     
-    def download_body(self) -> Future[ResourceRevision]:
+    def download_body(self, *, interactive: bool=False) -> Future[ResourceRevision]:
         """
         Returns a Future[ResourceRevision] that downloads (if necessary) and returns an
         up-to-date version of this resource's body.
@@ -3041,9 +3041,7 @@ class Resource:
         * ProjectHasTooManyRevisionsError
         """
         (task, created) = self.get_or_create_download_body_task()
-        if created:
-            if not task.complete:
-                self.project.add_task(task)
+        self._schedule_task_at_top_level_if_created_or_interactive(task, created, interactive)
         return task.future
     
     # Soft Deprecated: Use get_or_create_download_body_task() instead,
@@ -3121,8 +3119,6 @@ class Resource:
             download more resources.
         * ProjectHasTooManyRevisionsError
         """
-        from crystal.task import DownloadResourceTask
-        
         if interactive:
             # Assume optimistically that resource is embedded so that
             # it downloads without inserting any artificial delays
@@ -3130,27 +3126,32 @@ class Resource:
         
         (task, created) = self.get_or_create_download_task(
             needs_result=needs_result, is_embedded=is_embedded)
+        self._schedule_task_at_top_level_if_created_or_interactive(task, created, interactive)
+        return task
+    
+    # TODO: Consider extract this interactive-related logic to the Task class
+    #       to improve encapsulation of task._interactive.
+    def _schedule_task_at_top_level_if_created_or_interactive(self,
+            task: Task,
+            created: bool,
+            interactive: bool,
+            ) -> None:
+        from crystal.task import DownloadResourceTask, DownloadResourceBodyTask
         
         # 1. If task was just created, schedule it at the root of the task tree
         # 2. If task should be interactive priority, mark it as such, and
         #    (re)schedule it as a top-level task
-        # NOTE: This is currently the only place where an interactive=True task is
-        #       created/promoted. If additional locations want to do something
-        #       similar, this interactive-related logic should be extracted
-        #       to the Task class to improve encapsulation.
         if interactive and not task._interactive:
-            assert isinstance(task, DownloadResourceTask), (
+            assert isinstance(task, (DownloadResourceTask, DownloadResourceBodyTask)), (
                 # Don't allow big tasks like DownloadResourceGroup to be scheduled
                 # with interactive=True priority to avoid hammering origin servers
                 # with requests.
-                'Only DownloadResourceTasks are intended to support interactive=True priority'
+                'Only small tasks are intended to support interactive=True priority'
             )
             task._interactive = True
         if created or (interactive and task not in self._top_level_tasks()):
             if not task.complete:
                 self.project.add_task(task)
-        
-        return task
     
     def _top_level_tasks(self) -> Sequence[Task]:
         return self.project.root_task.children_unsynchronized

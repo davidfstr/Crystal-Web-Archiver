@@ -612,6 +612,11 @@ async def test_when_partially_downloaded_resource_requested_from_project_server_
 
 
 @skip('not yet automated')
+async def test_when_not_in_archive_page_served_and_groups_are_predicted_then_related_resource_bodies_are_downloaded_at_interactive_priority() -> None:
+    pass
+
+
+@skip('not yet automated')
 async def test_when_download_button_pressed_on_not_in_archive_page_then_related_resource_downloaded_at_interactive_priority() -> None:
     # However any created ResourceGroup (if any) is NOT downloaded at interactive priority.
     pass

@@ -142,10 +142,10 @@ def _detect_new_group_given_member_url_and_source(
     linked_urls = []  # type: list[str]
     for source_r in source_rs:
         # Read/download the latest revision of the source resource
+        # TODO: Start all Futures concurrently
         # TODO: Timeout?
         # TODO: Error handling?
-        # TODO: Start all Futures concurrently
-        revision_future = source_r.download_body()
+        revision_future = source_r.download_body(interactive=True)
         try:
             revision = revision_future.result()
         except CannotDownloadWhenProjectReadOnlyError:
@@ -161,7 +161,7 @@ def _detect_new_group_given_member_url_and_source(
             source_r._download_body_task_ref = None
             
             # Try again
-            revision_future = source_r.download_body()
+            revision_future = source_r.download_body(interactive=True)
             revision = revision_future.result()
         
         # Parse links from source resource's latest revision
@@ -592,9 +592,9 @@ def _download_and_parse_page(project: Project, page_url: PageUrl) -> Page:
     # Read/download the current page's latest revision
     try:
         page_r = fg_call_and_wait(lambda: Resource(project, page_url_url))
-        page_rev_future = page_r.download_body()
         # TODO: Timeout?
         # TODO: Better error handling?
+        page_rev_future = page_r.download_body(interactive=True)
         page_rev = page_rev_future.result()
     except Exception:
         # If we can't download, assume page does not exist
