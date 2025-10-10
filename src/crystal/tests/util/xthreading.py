@@ -25,7 +25,8 @@ async def bg_call_and_wait(callable: Callable[[], _R], *, timeout: float | None=
     result_cell._cr_declare_no_deadlocks = True  # type: ignore[attr-defined]
     @capture_crashes_to_stderr
     def bg_task() -> None:
-        result_cell.set_running_or_notify_cancel()
+        running = result_cell.set_running_or_notify_cancel()
+        assert running
         try:
             result_cell.set_result(callable())
         except BaseException as e:

@@ -315,7 +315,7 @@ def fg_call_and_wait(
         raise NoForegroundThreadError()
     
     if is_foreground_thread():
-        return callable(*args)  # cr-traceback: ignore
+        return callable(*args)  # type: ignore[call-arg]  # cr-traceback: ignore
     else:
         event = threading.Event()
         callable_started = False
@@ -334,7 +334,7 @@ def fg_call_and_wait(
             fg_thread = threading.current_thread()
             setattr(fg_thread, '_cr_waiting_calling_thread', waiting_calling_thread)
             try:
-                callable_result = callable(*args)  # cr-traceback: ignore
+                callable_result = callable(*args)  # type: ignore[call-arg]  # cr-traceback: ignore
             except BaseException as e:
                 callable_exc_info = sys.exc_info()
             finally:
@@ -519,7 +519,8 @@ def start_thread_switching_coroutine(
         bubble_exceptions_to_deco = True
     
     future = Future()  # type: Future[_R]
-    future.set_running_or_notify_cancel()
+    running = future.set_running_or_notify_cancel()
+    assert running
     
     # If is foreground thread, immediately run any prefix of the coroutine
     # that wants to be on the foreground thread

@@ -22,6 +22,7 @@ from crystal.util.xcollections.dedup import dedup_list
 from crystal.util.xcollections.lazy import (
     AppendableLazySequence, UnmaterializedItemError,
 )
+from crystal.util.xfutures import InterruptableFuture
 from crystal.util.xgc import gc_disabled
 from crystal.util.xsqlite3 import is_database_closed_error
 from crystal.util.xthreading import (
@@ -359,7 +360,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         """
         if callable(self):
             if self._future is None:
-                self._future = Future()
+                self._future = InterruptableFuture()
             return self._future
         else:
             raise TaskHasNoResult('Container tasks do not define a result by default.')
@@ -508,7 +509,9 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         
         self._cancelled = True
         try:
-            # NOTE: The future may or may not cancel successfully, and that's OK
+            # NOTE: The future may fail to cancel if it was already cancelled.
+            # NOTE: Because the future is usually an InterruptableFuture,
+            #       it will cancel successfully even if it is running.
             _ = self.future.cancel()
         except TaskHasNoResult:
             pass
@@ -745,14 +748,15 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         
         # (Ignore client requests to cancel)
         if self._future is None:
-            self._future = Future()
+            self._future = InterruptableFuture()
         if self._future.done():
             raise AssertionError(f'Future for {self!r} was already done')
-        self._future.set_running_or_notify_cancel()
+        running = self._future.set_running_or_notify_cancel()
         try:
-            # NOTE: Prefer `self.__call__()` over `self()` because the former
-            #       is easier to mock in automated tests
-            self._future.set_result(self.__call__())
+            if running:  # not cancelled
+                # NOTE: Prefer `self.__call__()` over `self()` because the former
+                #       is easier to mock in automated tests
+                self._future.set_result(self.__call__())
         except BaseException as e:
             self._future.set_exception(e)
         finally:
