@@ -139,11 +139,13 @@ New contributors are actively welcome to help enhance Crystal going forward!
         * Adjust default (non-interactive) crawl speed to be friendlier to website hosts.
 
 * Serving improvements
-    * After the Not in Archive page downloads a page, it will consistently
-      reload to display the downloaded page rather than a stale cached
-      Not in Archive page.
     * Wait for a page to fully download (including embedded resources)
       before serving it.
+    * Not in Archive Page fixes:
+        * Fix race condition where the Download button might not actually wait
+          for URL to download before trying to navigate to it.
+        * Fix cache configuration so that refreshing the page will never
+          display a stale cached Not in Archive page.
 
 * Documentation improvements
     * Fix anchor formatting in README on PyPI.

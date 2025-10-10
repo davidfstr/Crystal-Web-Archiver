@@ -911,9 +911,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 task = r.download_with_task(interactive=True, needs_result=False)
                 
                 # Return task ID for progress tracking
-                # TODO: Consider using a different format for the task ID
-                #       that doesn't expose the memory address of the Task
-                return str(id(task))
+                return task.resource.url
             task_id = fg_call_and_wait(create_and_start_download_task)
             
             # Send success response with task ID
@@ -946,10 +944,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         # Find the task to report on
         def find_task_by_id() -> Task | None:
-            for child in self.project.root_task.children:
-                if str(id(child)) == task_id:
-                    return child
-            return None
+            resource_url = task_id  # unwrap
+            resource = self.project.get_resource(url=resource_url)
+            if resource is None:
+                return None
+            task = resource.get_download_task(needs_result=False)
+            if task is None:
+                return None
+            return task
         task = fg_call_and_wait(find_task_by_id)
         if task is None:
             # Presumably the task completed very quickly,

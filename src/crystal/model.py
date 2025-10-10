@@ -3172,9 +3172,30 @@ class Resource:
         (task, _) = self.get_or_create_download_task(*args, **kwargs)
         return task
     
+    def get_download_task(self,
+            *, needs_result: bool=True,
+            ) -> DownloadResourceTask | None:
+        """
+        Gets an existing Task to download this resource and all its embedded resources,
+        or None if no such task exists.
+        
+        A looked up task may be complete.
+        """
+        try:
+            (task, created) = self.get_or_create_download_task(
+                needs_result=needs_result,
+                _get_only=True,
+            )
+        except _TaskNotFoundException:
+            return None
+        else:
+            assert not created
+            return task
+    
     def get_or_create_download_task(self,
             *, needs_result: bool=True,
             is_embedded: bool=False,
+            _get_only: bool=False,
             ) -> Tuple[DownloadResourceTask, bool]:
         """
         Gets/creates a Task to download this resource and all its embedded resources.
@@ -3186,9 +3207,13 @@ class Resource:
         A created task may be complete immediately after initialization,
         and a looked up task may be complete.
         """
-        def task_factory() -> DownloadResourceTask:
-            from crystal.task import DownloadResourceTask
-            return DownloadResourceTask(self, needs_result=needs_result, is_embedded=is_embedded)
+        if _get_only:
+            def task_factory() -> DownloadResourceTask:
+                raise _TaskNotFoundException()
+        else:
+            def task_factory() -> DownloadResourceTask:
+                from crystal.task import DownloadResourceTask
+                return DownloadResourceTask(self, needs_result=needs_result, is_embedded=is_embedded)
         if needs_result:
             if self._download_task_ref is None:
                 self._download_task_ref = _WeakTaskRef()
@@ -4832,3 +4857,7 @@ def _is_ascii(s: str) -> bool:
         return False
     else:
         return True
+
+
+class _TaskNotFoundException(Exception):
+    pass
