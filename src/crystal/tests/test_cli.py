@@ -706,7 +706,8 @@ def _crystal_shell_with_serve(
     
     with crystal_shell(args=args) as (crystal, banner):
         assert isinstance(crystal.stdout, TextIOBase)
-        (server_start_message, _) = read_until(crystal.stdout, '\n', timeout=banner_timeout)
+        (server_start_message, _) = read_until(
+            crystal.stdout, '\n', timeout=banner_timeout, stacklevel_extra=1)
         if 'Traceback ' in server_start_message:
             raise AssertionError(
                 f'Crystal raised exception immediately after launch:\n\n'
