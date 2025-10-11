@@ -9,8 +9,9 @@ from crystal.tests.util.cli import (
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+from crystal.util.xos import is_wx_gtk
 import textwrap
-from unittest import skip
+from unittest import SkipTest, skip
 
 
 # === Test: Open ===
@@ -97,6 +98,10 @@ async def test_given_main_window_visible_when_os_logout_then_crystal_actually_qu
 
 
 def _simulate_logout_in_crystal_subprocess(*, open_main_window: bool) -> None:
+    if is_wx_gtk():
+        # https://github.com/wxWidgets/wxWidgets/issues/17582
+        raise SkipTest('wxGTK/Linux does not fire wx.EVT_END_SESSION')
+    
     with crystal_shell() as (crystal, banner):
         # Simulate OS logout by firing wx.EVT_QUERY_END_SESSION and wx.EVT_END_SESSION events
         py_eval_await(crystal, textwrap.dedent(f'''\
