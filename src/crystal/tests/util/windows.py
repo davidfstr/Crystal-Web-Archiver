@@ -129,6 +129,7 @@ class OpenOrCreateDialog:
             delete: bool | None=None,
             wait_for_tasks_to_complete_on_close: bool | None=None,
             _is_untitled: bool=False,
+            stacklevel_extra: int=0,
             ) -> AsyncIterator[tuple[MainWindow, Project]]:
         """
         Creates a new project.
@@ -205,7 +206,8 @@ class OpenOrCreateDialog:
                 await mw.close(
                     exc_info_while_close,
                     wait_for_tasks_to_complete=wait_for_tasks_to_complete_on_close,
-                    before_close_func=suppress_do_not_save_changes_prompt)
+                    before_close_func=suppress_do_not_save_changes_prompt,
+                    stacklevel_extra=1 + stacklevel_extra)
     
     async def create_and_leave_open(self) -> MainWindow:
         old_opened_project = Project._last_opened_project  # capture
@@ -452,6 +454,7 @@ class MainWindow:
             exc_info=None,
             *, wait_for_tasks_to_complete: bool | None=None,
             before_close_func: Callable[[], None]=lambda: None,
+            stacklevel_extra: int=0,
             ) -> None:
         if wait_for_tasks_to_complete is None:  # auto
             wait_for_tasks_to_complete = not is_synced_with_scheduler_thread()
@@ -464,7 +467,7 @@ class MainWindow:
                 await wait_for(
                     tree_has_no_children_condition(self.task_tree),
                     timeout=self.CLOSE_TIMEOUT,  # wait only briefly
-                    stacklevel_extra=1)
+                    stacklevel_extra=1 + stacklevel_extra)
             except WaitTimedOut:
                 first_task_title = first_task_title_progression(self.task_tree)()
                 print(f'*** MainWindow: Closing while tasks are still running. May deadlock! Current task: {first_task_title}')
