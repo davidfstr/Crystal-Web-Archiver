@@ -28,7 +28,10 @@ from crystal.util.xtraceback import format_exception_for_user
 from typing import List, Optional, Tuple
 import wx
 
+
 _ID_DISMISS = 101
+
+_INTERACTIVE_SUFFIX = ' ⚡️'
 
 
 class TaskTree:
@@ -207,7 +210,8 @@ class TaskTreeNode:
         self.tree_node.title = self.task.title
         self.tree_node.subtitle = self._calculate_tree_node_subtitle(
             self.task.subtitle,
-            self.task.crash_reason)
+            self.task.crash_reason,
+            self.task.interactive)
         self.tree_node.text_color = self._calculate_tree_node_text_color(self.task.crash_reason)
         self.tree_node.bold = self._calculate_tree_node_bold(self.task.crash_reason)
         self.tree_node.expandable = not callable(task)
@@ -287,12 +291,17 @@ class TaskTreeNode:
             (wx.TreeItemIcon_Normal, icon),
         )
     
+    # TODO: Proactively update the node subtitle when Task.interactive changes,
+    #       rather than waiting for the next update to Task.subtitle.
+    # TODO: Explain that the ⚡️ icon means "(⚡️ Interactive)" in the UI,
+    #       perhaps by adding a tooltip.
     @classmethod
     def _calculate_tree_node_subtitle(cls,
             task_subtitle: str,
-            task_crash_reason: CrashReason | None) -> str:
+            task_crash_reason: CrashReason | None,
+            task_interactive: bool) -> str:
         return (
-            task_subtitle
+            task_subtitle + (_INTERACTIVE_SUFFIX if task_interactive else '')
             if task_crash_reason is None
             else cls._CRASH_SUBTITLE
         )
@@ -339,9 +348,10 @@ class TaskTreeNode:
     def task_subtitle_did_change(self, task: Task) -> None:
         task_subtitle = self.task.subtitle  # capture
         task_crash_reason = self.task.crash_reason  # capture
+        task_interactive = self.task.interactive  # capture
         @capture_crashes_to(task)
         def fg_task() -> None:
-            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
+            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason, task_interactive)
         # NOTE: Use profile=False because no obvious further optimizations exist
         fg_call_later(fg_task, profile=False)
     
@@ -350,10 +360,11 @@ class TaskTreeNode:
     def task_crash_reason_did_change(self, task: Task) -> None:
         task_crash_reason = self.task.crash_reason  # capture
         task_subtitle = self.task.subtitle  # capture
+        task_interactive = self.task.interactive  # capture
         # NOTE: Cannot use @capture_crashes_to(task) because would create infinite loop
         @capture_crashes_to_stderr
         def fg_task() -> None:
-            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason)
+            self.tree_node.subtitle = self._calculate_tree_node_subtitle(task_subtitle, task_crash_reason, task_interactive)
             self.tree_node.text_color = self._calculate_tree_node_text_color(task_crash_reason)
             self.tree_node.bold = self._calculate_tree_node_bold(task_crash_reason)
         # NOTE: Use profile=False because no obvious further optimizations exist

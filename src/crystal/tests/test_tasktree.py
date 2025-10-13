@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import (
     AbstractContextManager, asynccontextmanager, contextmanager, nullcontext,
 )
-from crystal.browser.tasktree import _MoreNodeView, TaskTreeNode
+from crystal.browser.tasktree import _INTERACTIVE_SUFFIX, _MoreNodeView, TaskTreeNode
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.task import (
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
@@ -541,6 +541,10 @@ async def test_when_resource_node_in_entity_tree_expanded_then_related_resource_
             
             # Ensure DownloadResourceTask has interactive=True priority
             assertEqual(True, download_task.interactive)
+            
+            # test_interactive_tasks_are_marked_in_the_task_tree_ui
+            download_ttn = _ttn_for_task(download_task)
+            assert download_ttn.tree_node.subtitle.endswith(_INTERACTIVE_SUFFIX)
 
 
 async def test_when_resource_matching_root_resource_or_resource_group_requested_from_project_server_then_related_resource_downloaded_at_interactive_priority() -> None:
@@ -703,6 +707,11 @@ async def test_when_top_level_task_is_interactive_priority_then_is_scheduled_bef
 
 @skip('not yet automated')
 async def test_when_top_level_task_is_interactive_priority_then_descendent_download_tasks_do_not_delay_between_downloads() -> None:
+    pass
+
+
+@skip('covered by: test_when_resource_node_in_entity_tree_expanded_then_related_resource_downloaded_at_interactive_priority')
+async def test_interactive_tasks_are_marked_in_the_task_tree_ui() -> None:
     pass
 
 

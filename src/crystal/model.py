@@ -3154,7 +3154,10 @@ class Resource:
                 self.project.add_task(task)
     
     def _top_level_tasks(self) -> Sequence[Task]:
-        return self.project.root_task.children_unsynchronized
+        if is_foreground_thread():
+            return self.project.root_task.children
+        else:
+            return list(self.project.root_task.children_unsynchronized)  # clone a snapshot
     
     # Soft Deprecated: Use get_or_create_download_task() instead,
     # which clarifies that an existing task may be returned.

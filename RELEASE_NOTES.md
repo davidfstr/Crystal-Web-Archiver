@@ -135,7 +135,7 @@ New contributors are actively welcome to help enhance Crystal going forward!
     * Crawl speed improvements
         * For URLs downloaded interactively - by browsing to an undownloaded URL or
           expanding a entity tree node for an undownloaded URL - download at
-          high priority, before other tasks.
+          high priority, before other tasks. Mark such tasks with a ⚡️ icon.
         * Adjust default (non-interactive) crawl speed to be friendlier to website hosts.
 
 * Serving improvements
