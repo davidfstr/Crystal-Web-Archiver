@@ -159,6 +159,10 @@ class FetchUrlCommand(Command['WebPage']):
     @bg_affinity
     def run(self) -> WebPage:
         from crystal.tests.util.server import WebPage
+        from crystal.tests.util.wait import GLOBAL_TIMEOUT_MULTIPLIER
+        
+        timeout = self._timeout
+        timeout *= GLOBAL_TIMEOUT_MULTIPLIER  # reinterpret
         
         try:
             request = urllib.request.Request(
@@ -170,7 +174,7 @@ class FetchUrlCommand(Command['WebPage']):
             
             if self._follow_redirects:
                 # Use default behavior (follows redirects)
-                response_stream = urllib.request.urlopen(request, timeout=self._timeout)
+                response_stream = urllib.request.urlopen(request, timeout=timeout)
             else:
                 # Create opener that doesn't follow redirects
                 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -178,11 +182,11 @@ class FetchUrlCommand(Command['WebPage']):
                         return None  # Don't follow redirects
                 
                 opener = urllib.request.build_opener(NoRedirectHandler)
-                response_stream = opener.open(request, timeout=self._timeout)
+                response_stream = opener.open(request, timeout=timeout)
         except urllib.error.HTTPError as e:
             response_stream = e
         except TimeoutError:
-            raise TimeoutError(f'Timed out connecting to URL {self._url!r} after {self._timeout:.1f}s')
+            raise TimeoutError(f'Timed out connecting to URL {self._url!r} after {timeout:.1f}s')
         with response_stream as response:
             response_bytes = response.read()
         return WebPage(
