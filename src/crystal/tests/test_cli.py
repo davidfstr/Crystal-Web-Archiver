@@ -691,7 +691,8 @@ def _crystal_shell_with_serve(
     MAX_ADDITIONAL_LINES = 7
     
     if banner_timeout is None:
-        banner_timeout = 4.0  # currently (2 * DEFAULT_WAIT_TIMEOUT)
+        # macOS CI has been observed to take 6.2s
+        banner_timeout = 7.0
     if extra_args is None:
         extra_args = []
     
@@ -707,7 +708,7 @@ def _crystal_shell_with_serve(
     with crystal_shell(args=args) as (crystal, banner):
         assert isinstance(crystal.stdout, TextIOBase)
         (server_start_message, _) = read_until(
-            crystal.stdout, '\n', timeout=banner_timeout, stacklevel_extra=1)
+            crystal.stdout, '\n', timeout=banner_timeout, stacklevel_extra=2)
         if 'Traceback ' in server_start_message:
             raise AssertionError(
                 f'Crystal raised exception immediately after launch:\n\n'
