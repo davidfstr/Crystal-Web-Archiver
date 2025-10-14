@@ -49,6 +49,8 @@ packages = [
 ]
 include = [
     "README/crystal-ui.png",
+    "README/download-complex-poster-play.png",
+    "README/download-simple-poster-play.png",
     "README/logo.png",
     "README/logo@2x.png",
 ]

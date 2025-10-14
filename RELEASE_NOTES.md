@@ -131,6 +131,10 @@ New contributors are actively welcome to help enhance Crystal going forward!
 
 #### v2.0.1
 
+* Documentation improvements
+    * Add video tutorials.
+    * Fix anchor formatting in README on PyPI.
+
 * Downloading improvements
     * Crawl speed improvements
         * For URLs downloaded interactively - by browsing to an undownloaded URL or
@@ -146,9 +150,6 @@ New contributors are actively welcome to help enhance Crystal going forward!
           for URL to download before trying to navigate to it.
         * Fix cache configuration so that refreshing the page will never
           display a stale cached Not in Archive page.
-
-* Documentation improvements
-    * Fix anchor formatting in README on PyPI.
 
 * Minor fixes
     * Quit and OS logout improvements

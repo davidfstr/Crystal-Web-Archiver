@@ -63,6 +63,8 @@ Tutorial ⭐
 > 
 > There are many simple websites you can practice downloading at <https://daarchive.net/>.
 
+<a href="https://youtu.be/rNrbBfcO0rE" target="_blank"><img src="https://raw.githubusercontent.com/davidfstr/Crystal-Web-Archiver/main/README/download-simple-poster-play.png" alt="Video showing how to download a simple site with Crystal" /></a>
+
 Steps to download [xkcd], a simple site:
 
 * Download Crystal. See the [Download](#download) section above for specific instructions.
@@ -107,6 +109,8 @@ Steps to download [xkcd], a simple site:
 > * Sites that require *login* to view content like paid blogs (ex: Pragmatic Engineer), 
 >   paid news sites (ex: The New York Times), 
 >   and paid video sites (ex: Barre3) are complex.
+
+<a href="https://youtu.be/1rDZVduWYlA" target="_blank"><img src="https://raw.githubusercontent.com/davidfstr/Crystal-Web-Archiver/main/README/download-complex-poster-play.png" alt="Video showing how to download a complex site with Crystal" /></a>
 
 When downloading a complex website you need to precisely define which pages you want to download because downloading the entire site would take too much space/time.
 
