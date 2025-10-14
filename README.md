@@ -13,7 +13,7 @@ scrolling feeds of content (such as social media sites).
 To get started downloading your first website with Crystal, please see the 
 [Tutorial](#tutorial) below.
 
-<img src="https://raw.githubusercontent.com/davidfstr/Crystal-Web-Archiver/main/README/crystal-ui.png" alt="Crystal user interface" />
+<img src="https://raw.githubusercontent.com/davidfstr/Crystal-Web-Archiver/main/README/crystal-ui.png" alt="Crystal's user interface" title="Crystal's user interface" />
 
 <a name="download"></a>
 
