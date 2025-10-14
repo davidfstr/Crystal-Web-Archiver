@@ -768,6 +768,8 @@ jobs:
       - name: Run UI tests
         id: run_ui_tests
         working-directory: ".\\setup"
+        env:
+          PYTHONUTF8: '1'
         run: |
           $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
