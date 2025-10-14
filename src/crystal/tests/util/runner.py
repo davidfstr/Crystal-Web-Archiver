@@ -181,6 +181,8 @@ class FetchUrlCommand(Command['WebPage']):
                 response_stream = opener.open(request, timeout=self._timeout)
         except urllib.error.HTTPError as e:
             response_stream = e
+        except TimeoutError:
+            raise TimeoutError(f'Timed out connecting to URL {self._url!r} after {self._timeout:.1f}s')
         with response_stream as response:
             response_bytes = response.read()
         return WebPage(
