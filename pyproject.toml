@@ -89,32 +89,33 @@ omit = [
 show_contexts = true
 
 [tool.poetry.dependencies]
-# NOTE: Python 3.13 is the latest Python supported by py2exe 0.14.0.0
-python = ">=3.11,<3.14"
+# NOTE: Python 3.13 is the latest Python supported by py2exe 0.14.0.0,
+#       the latest version of py2exe as of 2025-10-15.
+python = ">=3.11,<3.15"
 # NOTE: When changing the version of wxPython to Y, you'll need to make sure
 #       there is a precompiled wheel for {Python 3.X, wxPython Y, OS}
 #       for every {Python 3.X, OS} in continuous integration (CI) jobs
-#       (defined by push-github-action.yml) so that CI jobs don't take
+#       (defined by ci.yaml) so that CI jobs don't take
 #       a very long time to complete. If wheels are missing (which is common
 #       for Linux) you'll need to precompile a .wgn yourself for the platform.
 #       See instructions in: doc/how_to_make_wxpython_wagon.md
-wxPython = "4.2.3"
+wxPython = "4.2.4"
 beautifulsoup4 = "^4.9.3"
 py2app = { version = "^0.28", markers = "sys_platform == 'darwin'" }
 # NOTE: py2exe 0.14.0.0 supports Python 3.11, 3.12, and 3.13.
-py2exe = { version = "^0.14.0.0", markers = "sys_platform == 'win32' and python_version >= '3.11'" }
+py2exe = { version = "^0.14.0.0", markers = "sys_platform == 'win32' and python_version >= '3.11' and python_version < '3.14'" }
 tinycss2 = "^1.1.0"
 appdirs = "^1.4.4"
 colorama = "^0.4.4"
 tzlocal = "^4.2"
-lxml = "^5.2.2"
+lxml = "^6.0.2"
 tqdm = "^4.65.0"
 sortedcontainers = "^2.4.0"
 # For manual memory leak profiling with "guppy" module
-guppy3 = "^3.1.5"
+# NOTE: guppy3 3.1.5 does not support Python 3.14+
+guppy3 = { version = "^3.1.5", markers = "python_version < '3.14'" }
 xattr = { version = "^1.1.4", markers = "sys_platform == 'darwin'" }
 psutil = { version = "^5.9.5", markers = "sys_platform == 'linux'" }
-pywin32 = { version = "*", markers = "sys_platform == 'win32'" }
 wmi = { version = "*", markers = "sys_platform == 'win32'" }
 typing-extensions = "^4.8.0"
 types-tqdm = "^4.66.0.20240106"

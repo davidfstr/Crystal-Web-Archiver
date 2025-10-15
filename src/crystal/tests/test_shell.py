@@ -3,6 +3,7 @@ from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, crystal_shell
 from crystal.tests.util.server import served_project
+from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_TIMEOUT, wait_for_sync,
@@ -537,6 +538,9 @@ def test_can_delete_project_entities() -> None:
 
 
 def test_can_import_guppy_in_shell() -> None:
+    if sys.version_info >= (3, 14, 0):
+        skipTest('guppy does not support this version of Python')
+    
     with crystal_shell() as (crystal, _):
         # Ensure can import guppy
         import_result = py_eval_literal(crystal, 'import guppy; guppy.__version__')

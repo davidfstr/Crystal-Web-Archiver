@@ -93,10 +93,31 @@ time ./configure
     # real  9m55.020s
 time make -j4
     # real  13m31.239s
-./python --version
+make install
+python3.13 --version
 # Install pip for Python 3.13
 wget https://bootstrap.pypa.io/get-pip.py
-./python get-pip.py
+python3.13 get-pip.py
+```
+
+* Install Python 3.14, if appropriate for this .wgn
+
+```bash
+# Install Python 3.14.0 (from source)
+apt-get update
+apt-get install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libsqlite3-dev libreadline-dev libffi-dev curl libbz2-dev wget
+curl -O https://www.python.org/ftp/python/3.14.0/Python-3.14.0.tar.xz
+tar -xf Python-3.14.0.tar.xz
+cd Python-3.14.0
+time ./configure
+    # real  [TODO: fill in duration]
+time make -j4
+    # real  [TODO: fill in duration]
+make install
+python3.14 --version
+# Install pip for Python 3.14
+wget https://bootstrap.pypa.io/get-pip.py
+python3.14 get-pip.py
 ```
 
 * Install wxPython dependencies and wagon
@@ -112,21 +133,30 @@ python3 -m pip install --upgrade pip  # or: python3.x -m pip install --upgrade p
 python3 -m pip install wagon[dist]  # or: python3.x -m pip install wagon[dist]
 ```
 
+* Patch wagon 1.0.3 to work on Python 3.14+
+
+```bash
+WAGON_PATH=/usr/local/lib/python3.14/site-packages/wagon.py
+sed -i 's/from urllib.request import URLopener/from urllib.request import urlopen/' $WAGON_PATH
+sed -i 's/from urllib import urlopen/from urllib.request import urlopen/' $WAGON_PATH
+```
+
 * Compile wagon
 
 ```bash
 # Compile wagon
 cd /usr/src  # shared folder with Docker host
-time wagon create wxPython==4.2.3  # use version from pyproject.toml
+time wagon create wxPython==4.2.4  # use version from pyproject.toml
     # real  81m6.382s (Python 3.9)
     # real  ~80m+ (Python 3.12.9)
     # real  ~80m+ (Python 3.13.5)
+    # real  95m26.779s (Python 3.14.0)
 ```
 
 If using a locally built Python from source:
 
 ```bash
-time ./python -m wagon create wxPython==4.2.3  # use version from pyproject.toml
+time ./python -m wagon create wxPython==4.2.4  # use version from pyproject.toml
 ```
 
 * Upload the .wgn file as a release artifact to a release tag on GitHub,
