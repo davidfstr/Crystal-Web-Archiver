@@ -6,7 +6,7 @@ from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.ssd import database_on_ssd
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish, wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
     tree_has_no_children_condition, tree_item_has_no_children_condition,
@@ -256,8 +256,8 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             if True:
                 grouped_subresources_ti.SelectItem()
                 assert mw.download_button.IsEnabled()
-                await mw.click_download_button()
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    await mw.click_download_button()
             
             # Forget the group to unbundle the links
             if True:

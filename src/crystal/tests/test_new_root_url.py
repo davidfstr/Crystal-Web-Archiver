@@ -13,6 +13,7 @@ from crystal.tests.util.subtests import (
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
     scheduler_disabled,
+    wait_for_download_task_to_start_and_finish,
     wait_for_download_to_start_and_finish,
 )
 from crystal.tests.util.wait import (
@@ -85,8 +86,8 @@ async def test_can_create_root_url(
             if ensure_revisions_not_deleted:
                 # Download a revision of the root URL
                 home_ti.SelectItem()
-                await mw.click_download_button()
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    await mw.click_download_button()
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
             
             # Forget root URL

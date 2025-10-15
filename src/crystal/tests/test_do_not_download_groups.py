@@ -11,7 +11,7 @@ from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, extracted_project,
     served_project_from_filepath,
 )
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition, wait_for,
 )
@@ -34,8 +34,8 @@ async def test_when_download_html_page_then_does_not_download_embedded_resource_
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
         assert home_ti is not None
-        home_ti.Expand()
-        await wait_for_download_to_start_and_finish(mw.task_tree)
+        async with wait_for_download_task_to_start_and_finish(project):
+            home_ti.Expand()
         assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
         
         # Expand HTML page children in entity tree
@@ -60,8 +60,8 @@ async def test_then_embedded_resource_does_not_appear_in_a_hidden_embedded_clust
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
         assert home_ti is not None
-        home_ti.Expand()
-        await wait_for_download_to_start_and_finish(mw.task_tree)
+        async with wait_for_download_task_to_start_and_finish(project):
+            home_ti.Expand()
         assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
         
         # Expand HTML page children in entity tree
@@ -83,8 +83,8 @@ async def test_when_browse_to_html_page_and_browser_requests_embedded_resource_t
         home_ti = root_ti.GetFirstChild()
         assert home_ti is not None
         home_ti.SelectItem()
-        await mw.click_download_button()
-        await wait_for_download_to_start_and_finish(mw.task_tree)
+        async with wait_for_download_task_to_start_and_finish(project):
+            await mw.click_download_button()
         
         # Start server
         home_ti.SelectItem()
@@ -104,8 +104,8 @@ async def test_given_embedded_resource_selected_in_entity_tree_when_press_downlo
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
         assert home_ti is not None
-        home_ti.Expand()
-        await wait_for_download_to_start_and_finish(mw.task_tree)
+        async with wait_for_download_task_to_start_and_finish(project):
+            home_ti.Expand()
         assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
         
         # Expand HTML page children in entity tree
@@ -119,13 +119,10 @@ async def test_given_embedded_resource_selected_in_entity_tree_when_press_downlo
         assert not comic_image_r.has_any_revisions()
         
         comic_image_r_ti.SelectItem()
-        await mw.click_download_button(
-            # NOTE: May "finish immediately" because has no embedded subresources
-            immediate_finish_ok=True)
-        await wait_for_download_to_start_and_finish(
-            mw.task_tree,
-            # NOTE: May "finish immediately" because has no embedded subresources
-            immediate_finish_ok=True)
+        async with wait_for_download_task_to_start_and_finish(project):
+            await mw.click_download_button(
+                # NOTE: May "finish immediately" because has no embedded subresources
+                immediate_finish_ok=True)
         assert comic_image_r.has_any_revisions()
 
 
@@ -137,8 +134,8 @@ async def test_given_do_not_download_group_selected_in_entity_tree_when_press_do
         home_ti = root_ti.GetFirstChild()
         assert home_ti is not None
         home_ti.SelectItem()
-        await mw.click_download_button()
-        await wait_for_download_to_start_and_finish(mw.task_tree)
+        async with wait_for_download_task_to_start_and_finish(project):
+            await mw.click_download_button()
         
         # Expand group children in entity tree
         comic_image_rg_ti = root_ti.find_child(comic_image_rg_pattern)
@@ -151,8 +148,8 @@ async def test_given_do_not_download_group_selected_in_entity_tree_when_press_do
         assert not comic_image_r.has_any_revisions()
         
         comic_image_rg_ti.SelectItem()
-        await mw.click_download_button()
-        await wait_for_download_to_start_and_finish(mw.task_tree)
+        async with wait_for_download_task_to_start_and_finish(project):
+            await mw.click_download_button()
         assert comic_image_r.has_any_revisions()
 
 
@@ -163,8 +160,8 @@ async def test_then_embedded_resource_in_entity_tree_appears_with_do_not_downloa
         root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
         home_ti = root_ti.GetFirstChild()
         assert home_ti is not None
-        home_ti.Expand()
-        await wait_for_download_to_start_and_finish(mw.task_tree)
+        async with wait_for_download_task_to_start_and_finish(project):
+            home_ti.Expand()
         assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
         
         # Expand HTML page children in entity tree

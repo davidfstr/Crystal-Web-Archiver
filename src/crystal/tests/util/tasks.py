@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import Future
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import Project, ResourceRevision
 import crystal.task
@@ -19,6 +19,7 @@ from io import BytesIO
 import re
 import threading
 from typing import List
+from typing_extensions import deprecated
 from unittest.mock import patch
 import wx
 
@@ -35,6 +36,10 @@ _MAX_DOWNLOAD_DURATION_PER_LARGE_ITEM = (
 )
 MAX_DOWNLOAD_DURATION_PER_ITEM = _MAX_DOWNLOAD_DURATION_PER_LARGE_ITEM
 
+@deprecated(
+    'Use wait_for_download_task_to_start_and_finish() instead. '
+    'This method always races to observe a task before it disappears.'
+)
 async def wait_for_download_to_start_and_finish(
         task_tree: wx.TreeCtrl,
         *, immediate_finish_ok: bool=False,
@@ -130,6 +135,46 @@ def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], str | N
             return None  # done
         return first_task_ti.Text
     return first_task_title
+
+
+@asynccontextmanager
+async def wait_for_download_task_to_start_and_finish(project: Project) -> AsyncIterator[None]:
+    """
+    Context in which a download task is started. When exiting the context,
+    waits for the download to complete.
+    """
+    period = DEFAULT_WAIT_PERIOD
+    
+    appended_tasks = []
+    
+    super_append_child = project.root_task.append_child
+    def spy_append_child(child: Task, *args, **kwargs):
+        appended_tasks.append(child)
+        return super_append_child(child, *args, **kwargs)
+    project.root_task.append_child = spy_append_child  # type: ignore[method-assign]
+    try:
+        # Take action that should append a top-level task
+        yield
+    finally:
+        project.root_task.append_child = super_append_child  # type: ignore[method-assign]
+    
+    # Locate appended top-level task
+    if len(appended_tasks) != 1:
+        raise AssertionError(f'Expected 1 top-level task to be created, but found: {appended_tasks}')
+    (appended_task,) = appended_tasks
+    assert isinstance(appended_task, Task)  # help mypy
+    
+    # Wait until complete
+    task_title_func = lambda: None if appended_task.complete else appended_task.title
+    await wait_while(
+        task_title_func,
+        progress_timeout=MAX_DOWNLOAD_DURATION_PER_ITEM,
+        progress_timeout_message=lambda: (
+            f'Subresource download timed out after {MAX_DOWNLOAD_DURATION_PER_ITEM:.1f}s: '
+            f'Stuck at status: {task_title_func()!r}'
+        ),
+        period=period,
+    )
 
 
 # ------------------------------------------------------------------------------

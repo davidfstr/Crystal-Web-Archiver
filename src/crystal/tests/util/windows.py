@@ -399,6 +399,8 @@ class MainWindow:
     
     # === Operations ===
     
+    # TODO: Use wait_for_download_task_to_start_and_finish() internally,
+    #       which eliminates the need for the immediate_finish_ok parameter.
     async def click_download_button(self,
             *, immediate_finish_ok: bool=False,
             project: Project | None=None

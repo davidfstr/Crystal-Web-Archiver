@@ -21,7 +21,7 @@ from crystal.tests.util.server import (
 )
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish, wait_for_download_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, DEFAULT_WAIT_PERIOD, wait_for_future
 from crystal.tests.util.windows import (
     MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
@@ -75,8 +75,8 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
             
             # Download the URL
             home_ti.SelectItem()
-            await mw.click_download_button()
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                await mw.click_download_button()
             
             # Try to start second server, also on _DEFAULT_SERVER_PORT.
             # Expect it to actually start on (_DEFAULT_SERVER_PORT + 1).
@@ -699,8 +699,8 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
                 
                 # Download the home page
                 home_ti.SelectItem()
-                await mw.click_download_button()
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    await mw.click_download_button()
             
             home_url_in_archive = get_request_url(
                 home_url,
@@ -790,8 +790,8 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                 
                 # Download the home page
                 home_ti.SelectItem()
-                await mw.click_download_button()
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    await mw.click_download_button()
             
             home_url_in_archive = get_request_url(
                 home_url,
@@ -2825,8 +2825,8 @@ async def _not_in_archive_page_visible_temporarily() -> AsyncIterator[tuple[str,
                 
                 # Download the home page
                 home_ti.SelectItem()
-                await mw.click_download_button()
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    await mw.click_download_button()
             
             home_url_in_archive = get_request_url(
                 home_url,
@@ -2873,11 +2873,9 @@ async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
                 # Download the home page, when network is down
                 with network_down():
                     home_ti.SelectItem()
-                    await mw.click_download_button(
-                        immediate_finish_ok=True)
-                    await wait_for_download_to_start_and_finish(
-                        mw.task_tree,
-                        immediate_finish_ok=True)
+                    async with wait_for_download_task_to_start_and_finish(project):
+                        await mw.click_download_button(
+                            immediate_finish_ok=True)
             
             home_url_in_archive = get_request_url(
                 home_url,
