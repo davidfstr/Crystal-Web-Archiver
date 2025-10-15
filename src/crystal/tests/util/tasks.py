@@ -48,20 +48,16 @@ async def wait_for_download_task_to_start_and_finish(
     """
     period = DEFAULT_WAIT_PERIOD
     
-    appended_tasks = []
-    
-    super_append_child = project.root_task.append_child
-    def spy_append_child(child: Task, *args, **kwargs):
-        appended_tasks.append(child)
-        return super_append_child(child, *args, **kwargs)
-    project.root_task.append_child = spy_append_child  # type: ignore[method-assign]
-    try:
+    with patch.object(
+            project.root_task,
+            'append_child',
+            wraps=project.root_task.append_child
+            ) as spy_append_child:
         # Take action that should append a top-level task
         yield
-    finally:
-        project.root_task.append_child = super_append_child  # type: ignore[method-assign]
     
     # Locate appended top-level task
+    appended_tasks = [c.args[0] for c in spy_append_child.call_args_list]
     if type is not None:
         appended_tasks = [t for t in appended_tasks if isinstance(t, type)]  # reinterpret
     if len(appended_tasks) != 1:
