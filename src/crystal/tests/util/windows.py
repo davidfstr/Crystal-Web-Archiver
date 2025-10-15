@@ -397,15 +397,6 @@ class MainWindow:
         else:
             raise AssertionError('Unexpected label for edit button: {label!r}')
     
-    # === Operations ===
-    
-    # TODO: Inline
-    async def click_download_button(self,
-            *, immediate_finish_ok: bool=False,
-            project: Project | None=None
-            ) -> None:
-        click_button(self.download_button)
-    
     # === Close ===
     
     CLOSE_TIMEOUT = 4.0

@@ -182,7 +182,7 @@ async def test_given_project_database_on_ssd_given_resource_group_node_selected_
                     
                     # Wait for download to start and complete
                     async with wait_for_download_task_to_start_and_finish(project):
-                        await mw.click_download_button()
+                        click_button(mw.download_button)
                     
                     # Ensure did not show LoadUrlsProgressDialog
                     assert 0 == progress_listener_method.call_count

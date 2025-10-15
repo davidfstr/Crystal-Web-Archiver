@@ -257,7 +257,7 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 grouped_subresources_ti.SelectItem()
                 assert mw.download_button.IsEnabled()
                 async with wait_for_download_task_to_start_and_finish(project):
-                    await mw.click_download_button()
+                    click_button(mw.download_button)
             
             # Forget the group to unbundle the links
             if True:

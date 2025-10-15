@@ -87,7 +87,7 @@ async def test_can_create_root_url(
                 # Download a revision of the root URL
                 home_ti.SelectItem()
                 async with wait_for_download_task_to_start_and_finish(project):
-                    await mw.click_download_button()
+                    click_button(mw.download_button)
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
             
             # Forget root URL

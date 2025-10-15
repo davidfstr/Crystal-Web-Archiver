@@ -658,7 +658,7 @@ async def test_when_top_level_task_is_interactive_priority_then_is_scheduled_bef
                 
                 # Start download of comic group at non-interactive priority
                 comic_group_ti.SelectItem()
-                await mw.click_download_button(project=project)
+                click_button(mw.download_button)
                 
                 if populate_download_group_task_members:
                     # Populate download tasks for the group's members
@@ -741,7 +741,7 @@ async def test_when_download_resource_at_interactive_priority_given_same_resourc
             
             # Start download of comic #1 at non-interactive priority
             comic1_ti.SelectItem()
-            await mw.click_download_button(project=project)
+            click_button(mw.download_button)
             
             # Start download of comic #2 at interactive priority
             comic2_ti.SelectItem()
@@ -789,7 +789,7 @@ async def test_when_download_resource_at_interactive_priority_given_same_resourc
             # by selecting corresponding entity tree node and pressing Download button
             () = project.root_task.children
             comic1_ti.SelectItem()
-            await mw.click_download_button(project=project)
+            click_button(mw.download_button)
             append_deferred_top_level_tasks(project)
             
             # Ensure DownloadResourceTask for comic #1 scheduled at top-level of task tree

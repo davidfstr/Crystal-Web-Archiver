@@ -84,7 +84,7 @@ async def test_when_browse_to_html_page_and_browser_requests_embedded_resource_t
         assert home_ti is not None
         home_ti.SelectItem()
         async with wait_for_download_task_to_start_and_finish(project):
-            await mw.click_download_button()
+            click_button(mw.download_button)
         
         # Start server
         home_ti.SelectItem()
@@ -120,9 +120,7 @@ async def test_given_embedded_resource_selected_in_entity_tree_when_press_downlo
         
         comic_image_r_ti.SelectItem()
         async with wait_for_download_task_to_start_and_finish(project):
-            await mw.click_download_button(
-                # NOTE: May "finish immediately" because has no embedded subresources
-                immediate_finish_ok=True)
+            click_button(mw.download_button)
         assert comic_image_r.has_any_revisions()
 
 
@@ -135,7 +133,7 @@ async def test_given_do_not_download_group_selected_in_entity_tree_when_press_do
         assert home_ti is not None
         home_ti.SelectItem()
         async with wait_for_download_task_to_start_and_finish(project):
-            await mw.click_download_button()
+            click_button(mw.download_button)
         
         # Expand group children in entity tree
         comic_image_rg_ti = root_ti.find_child(comic_image_rg_pattern)
@@ -149,7 +147,7 @@ async def test_given_do_not_download_group_selected_in_entity_tree_when_press_do
         
         comic_image_rg_ti.SelectItem()
         async with wait_for_download_task_to_start_and_finish(project):
-            await mw.click_download_button()
+            click_button(mw.download_button)
         assert comic_image_r.has_any_revisions()
 
 
