@@ -6,7 +6,7 @@ from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
     tree_has_no_children_condition, wait_for,
@@ -181,8 +181,8 @@ async def test_given_project_database_on_ssd_given_resource_group_node_selected_
                     feed_group_ti.SelectItem()
                     
                     # Wait for download to start and complete
-                    await mw.click_download_button()
-                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                    async with wait_for_download_task_to_start_and_finish(project):
+                        click_button(mw.download_button)
                     
                     # Ensure did not show LoadUrlsProgressDialog
                     assert 0 == progress_listener_method.call_count

@@ -1242,28 +1242,33 @@ class MainWindow(CloakMixin):
             else:
                 progress_dialog = None
         
-        # Run download() on a background thread because it can take a long time
-        # to instantiate the tree of related download tasks (when _LAZY_LOAD_CHILDREN == False)
-        # 
-        # NOTE: Loudly crashes the entire scheduler thread upon failure.
-        #       If this failure mode ends up happening commonly,
-        #       suggest implementing a less drastic failure mode.
-        @capture_crashes_to(self.project.root_task)
-        def bg_task() -> None:
-            assert selected_entity is not None
-            
+        if DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
             # Start download
             selected_entity.download(needs_result=False)
-            
-            # Close progress dialog, if applicable
-            if progress_dialog is not None:
-                def fg_task() -> None:
-                    nonlocal progress_dialog
-                    assert progress_dialog is not None
-                    progress_dialog.Destroy()
-                    progress_dialog = None  # unexport
-                fg_call_and_wait(fg_task)
-        bg_call_later(bg_task)
+        else:
+            # Run download() on a background thread because it can take a long time
+            # to instantiate the tree of related download tasks 
+            # (when _LAZY_LOAD_CHILDREN == False)
+            # 
+            # NOTE: Loudly crashes the entire scheduler thread upon failure.
+            #       If this failure mode ends up happening commonly,
+            #       suggest implementing a less drastic failure mode.
+            @capture_crashes_to(self.project.root_task)
+            def bg_task() -> None:
+                assert selected_entity is not None
+                
+                # Start download
+                selected_entity.download(needs_result=False)
+                
+                # Close progress dialog, if applicable
+                if progress_dialog is not None:
+                    def fg_task() -> None:
+                        nonlocal progress_dialog
+                        assert progress_dialog is not None
+                        progress_dialog.Destroy()
+                        progress_dialog = None  # unexport
+                    fg_call_and_wait(fg_task)
+            bg_call_later(bg_task)
     
     def _on_update_group_members(self, event):
         selected_entity = self.entity_tree.selected_entity

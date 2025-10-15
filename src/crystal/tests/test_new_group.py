@@ -6,7 +6,7 @@ from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.ssd import database_on_ssd
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
     tree_has_no_children_condition, tree_item_has_no_children_condition,
@@ -190,8 +190,8 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
                 (home_ti,) = root_ti.Children
             
             # Expand home URL
-            home_ti.Expand()
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                home_ti.Expand()
             assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
             
             # Select a comic link from the home URL
@@ -256,8 +256,8 @@ async def test_given_resource_node_with_multiple_link_children_matching_url_patt
             if True:
                 grouped_subresources_ti.SelectItem()
                 assert mw.download_button.IsEnabled()
-                await mw.click_download_button()
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    click_button(mw.download_button)
             
             # Forget the group to unbundle the links
             if True:
@@ -326,7 +326,7 @@ async def test_given_node_is_selected_in_entity_tree_when_press_new_group_button
                 comic_rgn = _find_child(root_ti, comic_pattern, url_prefix)
                 
                 # Children of RootResourceNode (a kind of _ResourceNode) that is inside RootNode
-                await _expand_node(home_rrn, mw, will_download=True)
+                await _expand_node(home_rrn, project, will_download=True)
                 home_rrn__atom_feed_rrn = _find_child(
                     home_rrn, atom_feed_url, url_prefix)
                 home_rrn__about_rrn = _find_child(
@@ -361,21 +361,21 @@ async def test_given_node_is_selected_in_entity_tree_when_press_new_group_button
                 # ---
                 
                 # Children of LinkedResourceNode (a kind of _ResourceNode) that is inside GroupedLinkedResourceNode
-                await _expand_node(home_rrn__feed_glrn__rss_feed_lrn, mw, will_download=True)
+                await _expand_node(home_rrn__feed_glrn__rss_feed_lrn, project, will_download=True)
                 home_rrn__feed_glrn__rss_feed_lrn__home_rrn = _find_child(
                     home_rrn__feed_glrn__rss_feed_lrn, home_url, url_prefix)
                 
                 # Children of LinkedResourceNode (a kind of _ResourceNode) that is inside RootResourceNode
                 # HACK: Relies on Crystal's "Not in Archive" page to provide a
                 #       link to the original URL (which is offsite)
-                await _expand_node(home_rrn__archive_lrn, mw)  # not in archive
+                await _expand_node(home_rrn__archive_lrn, project)  # not in archive
                 home_rrn__archive_lrn__offsite_cn = _find_child_by_title(
                     home_rrn__archive_lrn, 'Offsite')
                 
                 # Children of LinkedResourceNode (a kind of _ResourceNode) that is inside ClusterNode
                 # HACK: Relies on Crystal's "Not in Archive" page to provide a
                 #       link to the original URL (which is offsite)
-                await _expand_node(home_rrn__offsite_cn__twitter_lrn, mw)  # not in archive
+                await _expand_node(home_rrn__offsite_cn__twitter_lrn, project)  # not in archive
                 home_rrn__offsite_cn__twitter_lrn__offsite_cn = _find_child_by_title(
                     home_rrn__offsite_cn__twitter_lrn, 'Offsite')
                 await _expand_node(home_rrn__embedded_cn__stylesheet_lrn)  # already downloaded
@@ -430,15 +430,14 @@ async def test_given_node_is_selected_in_entity_tree_when_press_new_group_button
                 assertEqual('Feed', await _source_name_for_node(feed_rgn__rss_feed_nrn__home_rrn, mw))
 
 
-async def _expand_node(node_ti: TreeItem, mw: MainWindow | None=None, *, will_download: bool=False) -> None:
-    node_ti.Expand()
+async def _expand_node(node_ti: TreeItem, project: Project | None=None, *, will_download: bool=False) -> None:
     if will_download:
-        if mw is None:
-            raise ValueError('Need mw parameter when will_download=True')
-        await wait_for_download_to_start_and_finish(
-            mw.task_tree,
-            immediate_finish_ok=True,
-            stacklevel_extra=1)
+        if project is None:
+            raise ValueError('Need project parameter when will_download=True')
+        async with wait_for_download_task_to_start_and_finish(project):
+            node_ti.Expand()
+    else:
+        node_ti.Expand()
     await wait_for(
         first_child_of_tree_item_is_not_loading_condition(node_ti),
         timeout=3.0,  # took 2.2s on Windows CI
@@ -501,8 +500,8 @@ async def test_given_urls_loaded_and_new_url_created_when_show_new_group_dialog_
                 assert progress_listener_method.call_count >= 1
             
             # Expand home URL, to discover initial comic URLs
-            home_ti.Expand()
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                home_ti.Expand()
             assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
             assert len(comic_ti.Children) >= 2  # contains at least the first and last comics
             
@@ -532,8 +531,8 @@ async def test_when_add_group_then_does_not_download_immediately_by_default() ->
     with _served_simple_site_with_group() as (home_url, comic_pattern):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             rr = RootResource(project, 'Home', Resource(project, home_url))
-            rr.download()
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                rr.download()
             
             assert mw.new_group_button.Enabled
             click_button(mw.new_group_button)
@@ -553,8 +552,8 @@ async def test_when_add_group_can_download_group_immediately_with_1_extra_click(
     with _served_simple_site_with_group() as (home_url, comic_pattern):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             rr = RootResource(project, 'Home', Resource(project, home_url))
-            rr.download()
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                rr.download()
             
             assert mw.new_group_button.Enabled
             click_button(mw.new_group_button)
@@ -563,12 +562,12 @@ async def test_when_add_group_can_download_group_immediately_with_1_extra_click(
             ngd.pattern_field.Value = comic_pattern
             ngd.name_field.Value = 'Comic'
             click_checkbox(ngd.download_immediately_checkbox)  # extra click #1
-            await ngd.ok()
-            
-            # Ensure started downloading
-            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            root_ti.find_child(comic_pattern, project.default_url_prefix)
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                await ngd.ok()
+                
+                # Ensure started downloading
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                root_ti.find_child(comic_pattern, project.default_url_prefix)
 
 
 async def test_when_edit_group_then_new_group_options_not_shown() -> None:

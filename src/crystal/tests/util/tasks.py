@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import Future
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import Project, ResourceRevision
 import crystal.task
@@ -19,6 +19,7 @@ from io import BytesIO
 import re
 import threading
 from typing import List
+from typing_extensions import deprecated
 from unittest.mock import patch
 import wx
 
@@ -35,90 +36,53 @@ _MAX_DOWNLOAD_DURATION_PER_LARGE_ITEM = (
 )
 MAX_DOWNLOAD_DURATION_PER_ITEM = _MAX_DOWNLOAD_DURATION_PER_LARGE_ITEM
 
-async def wait_for_download_to_start_and_finish(
-        task_tree: wx.TreeCtrl,
-        *, immediate_finish_ok: bool=False,
-        stacklevel_extra: int=0
-        ) -> None:
+
+@asynccontextmanager
+async def wait_for_download_task_to_start_and_finish(
+        project: Project,
+        *, type: type[Task] | None = None,
+        ) -> AsyncIterator[None]:
+    """
+    Context in which a download task is started. When exiting the context,
+    waits for the download to complete.
+    """
     period = DEFAULT_WAIT_PERIOD
     
-    # Wait for start of download
+    appended_tasks = []
+    
+    super_append_child = project.root_task.append_child
+    def spy_append_child(child: Task, *args, **kwargs):
+        appended_tasks.append(child)
+        return super_append_child(child, *args, **kwargs)
+    project.root_task.append_child = spy_append_child  # type: ignore[method-assign]
     try:
-        await wait_for(
-            tree_has_children_condition(task_tree),
-            timeout=4.0,  # 2.0s isn't long enough for Windows test runners on GitHub Actions
-            message=lambda: f'Timed out waiting for download task to appear',
-            stacklevel_extra=(1 + stacklevel_extra),
-            screenshot_on_error=not immediate_finish_ok)
-    except WaitTimedOut:
-        if immediate_finish_ok:
-            return
-        else:
-            raise
+        # Take action that should append a top-level task
+        yield
+    finally:
+        project.root_task.append_child = super_append_child  # type: ignore[method-assign]
     
-    # TODO: Eliminate fancy logic to determine `item_count` because it's no longer being used
-    # 
-    # Wait until download task is observed that says how many items are being downloaded
-    item_count: int | None
-    first_task_title_func = first_task_title_progression(task_tree)
-    observed_titles = []  # type: List[str]
-    did_start_download = False
-    while True:
-        download_task_title = first_task_title_func()
-        if download_task_title is None:
-            if did_start_download:
-                # Didn't observe what the item count was
-                # but we DID see evidence that a download actually started
-                break
-            if immediate_finish_ok:
-                return
-            raise AssertionError(
-                'Download finished early without finding sub-resources. '
-                'Did the download fail? '
-                f'Task titles observed were: {observed_titles}')
-        if download_task_title not in observed_titles:
-            observed_titles.append(download_task_title)
-        
-        m = re.fullmatch(
-            r'^(?:Downloading(?: group)?|Finding members of group): (.*?) -- (?:(\d+) of (?:at least )?(\d+) item\(s\)(?: -- .+)?(?: ⚡️)?|(.*))$',
-            download_task_title)
-        if m is None:
-            raise AssertionError(
-                f'Expected first task to be a download task but found task with title: '
-                f'{download_task_title}')
-        if m.group(4) is not None:
-            if m.group(4) in [
-                    'Waiting for response...',
-                    'Parsing links...',
-                    'Recording links...',
-                    'Waiting before performing next request...']:
-                did_start_download = True
-            pass  # keep waiting
-        else:
-            did_start_download = True
-            # NOTE: Currently unused. Just proving that we can calculate it.
-            int(m.group(3))
-            break
-        
-        await bg_sleep(period)
-        continue
-    assert did_start_download
+    # Locate appended top-level task
+    if type is not None:
+        appended_tasks = [t for t in appended_tasks if isinstance(t, type)]  # reinterpret
+    if len(appended_tasks) != 1:
+        raise AssertionError(f'Expected 1 top-level task to be created, but found: {appended_tasks}')
+    (appended_task,) = appended_tasks
+    assert isinstance(appended_task, Task)  # help mypy
     
-    # Wait while downloading
+    # Wait until complete
+    task_title_func = lambda: None if appended_task.complete else appended_task.title
     await wait_while(
-        first_task_title_func,
+        task_title_func,
         progress_timeout=MAX_DOWNLOAD_DURATION_PER_ITEM,
         progress_timeout_message=lambda: (
             f'Subresource download timed out after {MAX_DOWNLOAD_DURATION_PER_ITEM:.1f}s: '
-            f'Stuck at status: {first_task_title_func()!r}'
+            f'Stuck at status: {task_title_func()!r}'
         ),
         period=period,
     )
-    
-    # Ensure did finish downloading
-    assert tree_has_no_children_condition(task_tree)()
 
 
+# NOTE: No longer used within this module. Only used externally.
 def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], str | None]:
     def first_task_title():
         root_ti = TreeItem.GetRootItem(task_tree)

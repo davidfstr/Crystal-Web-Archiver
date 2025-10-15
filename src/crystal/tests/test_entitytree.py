@@ -7,7 +7,7 @@ from crystal.tests.util.controls import TreeItem, click_button, click_checkbox
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project, served_project
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
     wait_for,
@@ -725,11 +725,11 @@ async def test_given_rr_is_downloaded_and_is_error_when_expand_rrn_then_shows_er
             with network_down():
                 r = Resource(project, home_url)
                 home_rr = RootResource(project, 'Home', r)
-                revision_future = home_rr.download()
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                # Wait for download to complete, including the trailing wait
-                await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    revision_future = home_rr.download()
+                    while not revision_future.done():
+                        await bg_sleep(DEFAULT_WAIT_PERIOD)
+                    # (Wait for download to complete, including the trailing wait)
                 
                 rr = revision_future.result()
                 assert DownloadErrorDict(
@@ -780,16 +780,15 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
                 # TODO: In the future, block on the redownload finishing
                 #       and list the links in the redownloaded revision,
                 #       WITHOUT needing to reopen the project later
-                home_ti.Expand()
-                await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
-                (error_ti,) = home_ti.Children
-                assert (
-                    'Cannot list links: URL revision body is missing. Recommend delete and redownload.' ==
-                    error_ti.Text
-                )
-                
-                # Wait for redownload to complete
-                await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    home_ti.Expand()
+                    await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+                    (error_ti,) = home_ti.Children
+                    assert (
+                        'Cannot list links: URL revision body is missing. Recommend delete and redownload.' ==
+                        error_ti.Text
+                    )
+                    # (Wait for redownload to complete)
                 
                 # Reexpand RootResourceNode and ensure the children are the same
                 home_ti.Collapse()

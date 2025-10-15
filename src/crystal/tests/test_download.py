@@ -7,7 +7,7 @@ from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import MockHttpServer, served_project
-from crystal.tests.util.tasks import wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
 import crystal.tests.util.xtempfile as xtempfile
@@ -37,12 +37,11 @@ async def test_given_downloading_resource_when_start_download_resource_then_exis
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, home_url)
             
-            rr_future = r.download()
-            
-            rr_future2 = r.download()
-            assert rr_future2 is rr_future
-            
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                rr_future = r.download()
+                
+                rr_future2 = r.download()
+                assert rr_future2 is rr_future
 
 
 # ------------------------------------------------------------------------------
