@@ -16,6 +16,9 @@ Release Notes ⋮
     * macOS 14+ is now the minimum macOS version.
       Drop support for macOS 13.
 
+* Testing improvements
+    * Increased determinism and speed of tests that perform downloads.
+
 ### v2.0.0 (September 26, 2025)
 
 Crystal 2.0 is a huge release with many new features and all-new tutorials!
