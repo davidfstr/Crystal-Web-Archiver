@@ -19,6 +19,10 @@ Release Notes ⋮
 * Testing improvements
     * Increased determinism and speed of tests that perform downloads.
 
+* Development improvements
+    * Manually bring app to front on macOS when run from source,
+      to workaround a wxPython 4.2.3 bug.
+
 ### v2.0.0 (September 26, 2025)
 
 Crystal 2.0 is a huge release with many new features and all-new tutorials!

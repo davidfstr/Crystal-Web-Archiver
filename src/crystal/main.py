@@ -650,6 +650,7 @@ async def _did_launch(
     from crystal.server import _DEFAULT_SERVER_HOST, _DEFAULT_SERVER_PORT
     from crystal.util.ports import is_port_in_use_error
     from crystal.util.test_mode import tests_are_running
+    from crystal.util.xos import is_mac_os
 
     # If MacOpenFile queued a project to be opened, open it
     global _project_path_to_open_soon
@@ -660,6 +661,13 @@ async def _did_launch(
     # If project to open was passed on the command-line, use it
     if parsed_args.project_filepath is not None and filepath is None:
         filepath = parsed_args.project_filepath  # reinterpret
+    
+    # wxPython 4.2.3: Workaround bug where the launched application is not
+    # brought to the front on macOS when run outside of an .app bundle.
+    # For more info: https://github.com/wxWidgets/Phoenix/issues/2499
+    if is_mac_os() and getattr(sys, 'frozen', None) != 'macosx_app':
+        from crystal.util.bring_app_to_front import bring_app_to_front
+        bring_app_to_front()
     
     # Open/create a project
     project: Project | None = None
