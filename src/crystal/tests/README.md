@@ -324,13 +324,13 @@ download.
 It's not recommended to manually wait for a download to complete using a 
 fixed timeout because they can take a highly variable amount of time to complete,
 depending on how many embedded subresources there are, among other factors.
-Instead use the `wait_for_download_to_start_and_finish` utility method,
+Instead use the `wait_for_download_task_to_start_and_finish` utility method,
 which looks for continued *progress* in a download, regardless of how long the
 total download task takes to finish:
 
 ```
-            home_ti.Expand()
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                home_ti.Expand()
 ```
 
 ## Waiting for other things to happen

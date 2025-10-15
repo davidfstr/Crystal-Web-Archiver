@@ -6,7 +6,7 @@ from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
-from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish, wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
     first_child_of_tree_item_is_not_loading_condition,
     tree_has_no_children_condition, wait_for,

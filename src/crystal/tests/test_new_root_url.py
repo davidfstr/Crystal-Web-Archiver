@@ -14,7 +14,6 @@ from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
     scheduler_disabled,
     wait_for_download_task_to_start_and_finish,
-    wait_for_download_to_start_and_finish,
 )
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
@@ -157,8 +156,8 @@ async def test_given_resource_node_with_links_can_create_new_root_url_to_label_l
                 (home_ti,) = root_ti.Children
             
             # Expand home URL
-            home_ti.Expand()
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                home_ti.Expand()
             assert first_child_of_tree_item_is_not_loading_condition(home_ti)()
             
             # Select the Atom Feed link from the home URL
@@ -225,12 +224,12 @@ async def test_when_add_url_then_downloads_url_immediately_by_default() -> None:
             assert nud.download_immediately_checkbox.Value
             
             nud.url_field.Value = home_url
-            await nud.ok()
-            
-            # Ensure started downloading
-            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            home_ti = root_ti.find_child(home_url, project.default_url_prefix)
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                await nud.ok()
+                
+                # Ensure started downloading
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                home_ti = root_ti.find_child(home_url, project.default_url_prefix)
             await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
 
 

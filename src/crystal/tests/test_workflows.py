@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from crystal.model import Project, Resource
 from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
+from crystal.task import DownloadResourceGroupTask
 # TODO: Move to crystal.tests.util.data
 from crystal.tests.test_server import _navigate_from_home_to_comic_1_nia_page
 from crystal.tests.util.asserts import assertEqual, assertRegex
@@ -20,7 +21,7 @@ from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url, is_url_not_in_archive,
     MockHttpServer, served_project,
 )
-from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish, wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT,
     first_child_of_tree_item_is_not_loading_condition,
@@ -88,6 +89,8 @@ async def test_first_time_user_can_easily_download_and_view_first_url() -> None:
                 
                 # Action 5 (Click): "OK"
                 action_count += 1
+                download_waiter = wait_for_download_task_to_start_and_finish(project)
+                await download_waiter.__aenter__()
                 await nud.ok()
                 (home_ti,) = root_ti.Children  # entity was created
             
@@ -113,7 +116,7 @@ async def test_first_time_user_can_easily_download_and_view_first_url() -> None:
                 #         displayed in a progress bar.
                 #       - Reload page when download is complete.
                 #       See: https://github.com/davidfstr/Crystal-Web-Archiver/issues/109
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                await download_waiter.__aexit__(None, None, None)
                 
                 assert home_ti.IsSelected(), \
                     'First created root resource should already be selected'
@@ -228,6 +231,8 @@ async def test_first_time_user_can_easily_download_and_view_simple_site() -> Non
                 
                 # Action 6 (Click): "OK"
                 action_count += 1
+                download_waiter = wait_for_download_task_to_start_and_finish(project)
+                await download_waiter.__aenter__()
                 await nud.ok()
                 
                 # Verify both root resource and resource group were created
@@ -261,7 +266,7 @@ async def test_first_time_user_can_easily_download_and_view_simple_site() -> Non
                 #         displayed in a progress bar.
                 #       - Reload page when download is complete.
                 #       See: https://github.com/davidfstr/Crystal-Web-Archiver/issues/109
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                await download_waiter.__aexit__(None, None, None)
                 
                 assert home_ti.IsSelected(), \
                     'First created root resource should already be selected'
@@ -425,8 +430,8 @@ async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> No
                 
                 # Test can download resource (by expanding tree node)
                 if True:
-                    comic1_ti.Expand()
-                    await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
+                    async with wait_for_download_task_to_start_and_finish(project):
+                        comic1_ti.Expand()
                     assert first_child_of_tree_item_is_not_loading_condition(comic1_ti)()
                     
                     comic2_ti = comic1_ti.find_child(comic2_url)  # ensure did find sub-resource for Comic #2
@@ -574,8 +579,8 @@ async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> No
                     # which should download members of feed group automatically
                     assert tree_has_no_children_condition(mw.task_tree)()
                     feed_item_group_ti.SelectItem()
-                    click_button(mw.update_members_button)
-                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                    async with wait_for_download_task_to_start_and_finish(project):
+                        click_button(mw.update_members_button)
                 
                 # Ensure members of the feed group were downloaded
                 with Project(project_dirpath) as project:
@@ -702,11 +707,10 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 
                 nud.url_field.Value = home_url
                 assert nud.download_immediately_checkbox.IsChecked()
-                await nud.ok()
-                home_ti = root_ti.GetFirstChild()
-                assert home_ti is not None  # entity was created
-                
-                await wait_for_download_to_start_and_finish(mw.task_tree)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    await nud.ok()
+                    home_ti = root_ti.GetFirstChild()
+                    assert home_ti is not None  # entity was created
             
             # Test can view resource
             home_ti.SelectItem()
@@ -789,10 +793,10 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     
                     # Wait for the page to reload (indicating successful download)
                     expect(raw_page).to_have_title('xkcd: Petit Trees (sketch)')
-            await pw.run(pw_task)
+            async with wait_for_download_task_to_start_and_finish(project, type=DownloadResourceGroupTask):
+                await pw.run(pw_task)
             
-            # Wait for group to finish downloading
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+                # (Wait for group to finish downloading)
             
             # Verify that expected entities exist
             home_ti = root_ti.find_child(home_url, project.default_url_prefix)
@@ -924,7 +928,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                     home_page = await fetch_archive_url(home_url)
                     # TODO: Use a *dynamic* timeout that looks for progress in
                     #       download tasks in the UI, similar to
-                    #       wait_for_download_to_start_and_finish
+                    #       wait_for_download_task_to_start_and_finish
                     target_page = await fetch_archive_url(target_url, timeout=10)
                 
                 # Ensure console does log that target in not in the archive
@@ -959,7 +963,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                         home_page = await fetch_archive_url(home_url)
                         # TODO: Use a *dynamic* timeout that looks for progress in
                         #       download tasks in the UI, similar to
-                        #       wait_for_download_to_start_and_finish
+                        #       wait_for_download_task_to_start_and_finish
                         target_page = await fetch_archive_url(target_url, timeout=10)
                     
                     # Ensure console does log that target is being dynamically fetched,
@@ -987,7 +991,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                         home_page = await fetch_archive_url(home_url)
                         # TODO: Use a *dynamic* timeout that looks for progress in
                         #       download tasks in the UI, similar to
-                        #       wait_for_download_to_start_and_finish
+                        #       wait_for_download_task_to_start_and_finish
                         target_page = await fetch_archive_url(target_url, timeout=10)
                     
                     # Ensure console does log that target is being dynamically fetched,
@@ -1031,7 +1035,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                         home_page = await fetch_archive_url(home_url)
                         # TODO: Use a *dynamic* timeout that looks for progress in
                         #       download tasks in the UI, similar to
-                        #       wait_for_download_to_start_and_finish
+                        #       wait_for_download_task_to_start_and_finish
                         target_page = await fetch_archive_url(target_url, timeout=10)
                     
                     # Ensure console does log that target is being dynamically fetched,
@@ -1479,7 +1483,7 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
             feed_item_pattern = sp.get_request_url('https://xkcd.com/##/')
             assert feed_item_pattern != comic_pattern
         
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             # 1. Test can create unnamed root resource
             # 2. Ensure unnamed root resource at root of Entity Tree has OK title
             if True:
@@ -1498,8 +1502,8 @@ async def test_can_download_a_static_site_with_unnamed_root_urls_and_groups() ->
                 assert f'{home_url}' == home_ti.Text
             
             # Expand root resource
-            home_ti.Expand()
-            await wait_for_download_to_start_and_finish(mw.task_tree)
+            async with wait_for_download_task_to_start_and_finish(project):
+                home_ti.Expand()
             comic1_ti = home_ti.find_child(comic1_url)  # ensure did find sub-resource for Comic #1
             
             # 1. Test can create unnamed resource group

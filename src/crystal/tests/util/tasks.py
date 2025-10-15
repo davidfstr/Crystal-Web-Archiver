@@ -36,109 +36,12 @@ _MAX_DOWNLOAD_DURATION_PER_LARGE_ITEM = (
 )
 MAX_DOWNLOAD_DURATION_PER_ITEM = _MAX_DOWNLOAD_DURATION_PER_LARGE_ITEM
 
-@deprecated(
-    'Use wait_for_download_task_to_start_and_finish() instead. '
-    'This method always races to observe a task before it disappears.'
-)
-async def wait_for_download_to_start_and_finish(
-        task_tree: wx.TreeCtrl,
-        *, immediate_finish_ok: bool=False,
-        stacklevel_extra: int=0
-        ) -> None:
-    period = DEFAULT_WAIT_PERIOD
-    
-    # Wait for start of download
-    try:
-        await wait_for(
-            tree_has_children_condition(task_tree),
-            timeout=4.0,  # 2.0s isn't long enough for Windows test runners on GitHub Actions
-            message=lambda: (
-                f'Timed out waiting for download task to appear. '
-                f'Maybe it finished immediately? If so then use immediate_finish_ok=True.'
-            ),
-            stacklevel_extra=(1 + stacklevel_extra),
-            screenshot_on_error=not immediate_finish_ok)
-    except WaitTimedOut:
-        if immediate_finish_ok:
-            return
-        else:
-            raise
-    
-    # TODO: Eliminate fancy logic to determine `item_count` because it's no longer being used
-    # 
-    # Wait until download task is observed that says how many items are being downloaded
-    item_count: int | None
-    first_task_title_func = first_task_title_progression(task_tree)
-    observed_titles = []  # type: List[str]
-    did_start_download = False
-    while True:
-        download_task_title = first_task_title_func()
-        if download_task_title is None:
-            if did_start_download:
-                # Didn't observe what the item count was
-                # but we DID see evidence that a download actually started
-                break
-            if immediate_finish_ok:
-                return
-            raise AssertionError(
-                'Download finished early without finding sub-resources. '
-                'Did the download fail? '
-                f'Task titles observed were: {observed_titles}')
-        if download_task_title not in observed_titles:
-            observed_titles.append(download_task_title)
-        
-        m = re.fullmatch(
-            r'^(?:Downloading(?: group)?|Finding members of group): (.*?) -- (?:(\d+) of (?:at least )?(\d+) item\(s\)(?: -- .+)?(?: ⚡️)?|(.*))$',
-            download_task_title)
-        if m is None:
-            raise AssertionError(
-                f'Expected first task to be a download task but found task with title: '
-                f'{download_task_title}')
-        if m.group(4) is not None:
-            if m.group(4) in [
-                    'Waiting for response...',
-                    'Parsing links...',
-                    'Recording links...',
-                    'Waiting before performing next request...']:
-                did_start_download = True
-            pass  # keep waiting
-        else:
-            did_start_download = True
-            # NOTE: Currently unused. Just proving that we can calculate it.
-            int(m.group(3))
-            break
-        
-        await bg_sleep(period)
-        continue
-    assert did_start_download
-    
-    # Wait while downloading
-    await wait_while(
-        first_task_title_func,
-        progress_timeout=MAX_DOWNLOAD_DURATION_PER_ITEM,
-        progress_timeout_message=lambda: (
-            f'Subresource download timed out after {MAX_DOWNLOAD_DURATION_PER_ITEM:.1f}s: '
-            f'Stuck at status: {first_task_title_func()!r}'
-        ),
-        period=period,
-    )
-    
-    # Ensure did finish downloading
-    assert tree_has_no_children_condition(task_tree)()
-
-
-def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], str | None]:
-    def first_task_title():
-        root_ti = TreeItem.GetRootItem(task_tree)
-        first_task_ti = root_ti.GetFirstChild()
-        if first_task_ti is None:
-            return None  # done
-        return first_task_ti.Text
-    return first_task_title
-
 
 @asynccontextmanager
-async def wait_for_download_task_to_start_and_finish(project: Project) -> AsyncIterator[None]:
+async def wait_for_download_task_to_start_and_finish(
+        project: Project,
+        *, type: type[Task] | None = None,
+        ) -> AsyncIterator[None]:
     """
     Context in which a download task is started. When exiting the context,
     waits for the download to complete.
@@ -159,6 +62,8 @@ async def wait_for_download_task_to_start_and_finish(project: Project) -> AsyncI
         project.root_task.append_child = super_append_child  # type: ignore[method-assign]
     
     # Locate appended top-level task
+    if type is not None:
+        appended_tasks = [t for t in appended_tasks if isinstance(t, type)]  # reinterpret
     if len(appended_tasks) != 1:
         raise AssertionError(f'Expected 1 top-level task to be created, but found: {appended_tasks}')
     (appended_task,) = appended_tasks
@@ -175,6 +80,17 @@ async def wait_for_download_task_to_start_and_finish(project: Project) -> AsyncI
         ),
         period=period,
     )
+
+
+# NOTE: No longer used within this module. Only used externally.
+def first_task_title_progression(task_tree: wx.TreeCtrl) -> Callable[[], str | None]:
+    def first_task_title():
+        root_ti = TreeItem.GetRootItem(task_tree)
+        first_task_ti = root_ti.GetFirstChild()
+        if first_task_ti is None:
+            return None  # done
+        return first_task_ti.Text
+    return first_task_title
 
 
 # ------------------------------------------------------------------------------

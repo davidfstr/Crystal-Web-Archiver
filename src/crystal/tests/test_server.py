@@ -21,7 +21,7 @@ from crystal.tests.util.server import (
 )
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
-from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish, wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT, DEFAULT_WAIT_PERIOD, wait_for_future
 from crystal.tests.util.windows import (
     MainWindow, NewRootUrlDialog, OpenOrCreateDialog,
@@ -727,28 +727,28 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
             # Ensure that page IS a "Not in Archive" page
             assert first_comic_page.is_not_in_archive
             
-            # Simulate press of the "Download" button on the "Not in Archive" page
-            # by directly querying the related endpoint
-            server_port = _DEFAULT_SERVER_PORT
-            download_response = await bg_fetch_url(
-                f'http://127.0.0.1:{server_port}/_/crystal/download-url',
-                method='POST',
-                data=json.dumps({
-                    'url': comic1_url,
-                    'is_root': True,
-                }).encode('utf-8'),
-                headers={'Content-Type': 'application/json'}
-            )
-            
-            # Ensure the download started successfully
-            assert download_response.status == 200
-            download_result = json.loads(download_response.content)
-            assert download_result['status'] == 'success'
-            assert 'task_id' in download_result
-            task_id = download_result['task_id']
-            
-            # Wait for the download task to complete
-            await wait_for_download_to_start_and_finish(mw.task_tree, immediate_finish_ok=True)
+            async with wait_for_download_task_to_start_and_finish(project):
+                # Simulate press of the "Download" button on the "Not in Archive" page
+                # by directly querying the related endpoint
+                server_port = _DEFAULT_SERVER_PORT
+                download_response = await bg_fetch_url(
+                    f'http://127.0.0.1:{server_port}/_/crystal/download-url',
+                    method='POST',
+                    data=json.dumps({
+                        'url': comic1_url,
+                        'is_root': True,
+                    }).encode('utf-8'),
+                    headers={'Content-Type': 'application/json'}
+                )
+                
+                # Ensure the download started successfully
+                assert download_response.status == 200
+                download_result = json.loads(download_response.content)
+                assert download_result['status'] == 'success'
+                assert 'task_id' in download_result
+                task_id = download_result['task_id']
+                
+                # (Wait for the download task to complete)
             
             # Simulate the page reload after download completion
             # by re-fetching the first comic page
@@ -821,27 +821,26 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
             # Simulate press of the "Download" button with network down
             # by directly querying the related endpoint
             with network_down():  # for backend
-                server_port = _DEFAULT_SERVER_PORT
-                download_response = await bg_fetch_url(
-                    f'http://127.0.0.1:{server_port}/_/crystal/download-url',
-                    method='POST',
-                    data=json.dumps({
-                        'url': comic1_url,
-                        'is_root': True,
-                    }).encode('utf-8'),
-                    headers={'Content-Type': 'application/json'}
-                )
-                
-                # Ensure the download started successfully
-                assert download_response.status == 200
-                download_result = json.loads(download_response.content)
-                assert download_result['status'] == 'success'
-                assert 'task_id' in download_result
-                task_id = download_result['task_id']
-                
-                # Wait for the download task to complete (will fail due to network being down)
-                await wait_for_download_to_start_and_finish(
-                    mw.task_tree, immediate_finish_ok=True)
+                async with wait_for_download_task_to_start_and_finish(project):
+                    server_port = _DEFAULT_SERVER_PORT
+                    download_response = await bg_fetch_url(
+                        f'http://127.0.0.1:{server_port}/_/crystal/download-url',
+                        method='POST',
+                        data=json.dumps({
+                            'url': comic1_url,
+                            'is_root': True,
+                        }).encode('utf-8'),
+                        headers={'Content-Type': 'application/json'}
+                    )
+                    
+                    # Ensure the download started successfully
+                    assert download_response.status == 200
+                    download_result = json.loads(download_response.content)
+                    assert download_result['status'] == 'success'
+                    assert 'task_id' in download_result
+                    task_id = download_result['task_id']
+                    
+                    # (Wait for the download task to complete. Will fail due to network being down.)
             
             # Simulate the page reload after download completion
             # by re-fetching the first comic page

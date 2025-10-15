@@ -15,7 +15,7 @@ from crystal.tests.util.save_as import save_as_with_ui
 from crystal.tests.util.server import MockHttpServer, served_project, extracted_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
-from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done, wait_for_download_to_start_and_finish
+from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done, wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import tree_has_no_children_condition, wait_for, first_child_of_tree_item_is_not_loading_condition
 from crystal.tests.util.windows import MainWindow, MenuitemDisabledError, OpenOrCreateDialog, NewGroupDialog, NewRootUrlDialog, PreferencesDialog
 from crystal.util.db import DatabaseCursor
@@ -241,8 +241,8 @@ async def test_when_readonly_project_is_saved_then_becomes_writable_and_all_unsa
                     
                     root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
                     (home_ti,) = root_ti.Children
-                    home_ti.Expand()
-                    await wait_for_download_to_start_and_finish(mw.task_tree)
+                    async with wait_for_download_task_to_start_and_finish(project):
+                        home_ti.Expand()
                 
             # Reopen the project as read-only
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):
