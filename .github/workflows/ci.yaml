@@ -170,7 +170,7 @@ jobs:
           - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60  # high limit; last resort to detect hangs
+    timeout-minutes: 78  # 150% of normal time: 32-52 min, as of 2025-10-14
     env:
       ASAN_OPTIONS: detect_leaks=0:allocator_may_return_null=1:handle_segv=0
     steps:
