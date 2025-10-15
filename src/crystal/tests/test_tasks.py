@@ -58,9 +58,9 @@ async def test_some_tasks_may_complete_immediately(subtests) -> None:
             with subtests.test(task_type='DownloadResourceTask'):
                 # Download the resource
                 assert False == missing_r.already_downloaded_this_session
-                missing_rr_future = missing_r.download()  # uses DownloadResourceTask
+                dr_task = missing_r.download_with_task()  # uses DownloadResourceTask
                 await wait_for(
-                    lambda: missing_rr_future.done() or None,
+                    lambda: dr_task.complete or None,
                     timeout=MAX_TIME_TO_DOWNLOAD_404_URL)
                 assert True == missing_r.already_downloaded_this_session
                 
