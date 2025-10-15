@@ -790,6 +790,7 @@ async def test_when_download_resource_at_interactive_priority_given_same_resourc
             () = project.root_task.children
             comic1_ti.SelectItem()
             await mw.click_download_button(project=project)
+            append_deferred_top_level_tasks(project)
             
             # Ensure DownloadResourceTask for comic #1 scheduled at top-level of task tree
             # with interactive=False priority
