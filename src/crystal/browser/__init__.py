@@ -547,7 +547,8 @@ class MainWindow(CloakMixin):
             # NOTE: cta_button.MinWidth does not return a sensible value
             #       on at least macOS
             cta_button.SetMinSize((cta_button.MinWidth, 40))
-        panel_sizer.Add(cta_button, flag=wx.ALIGN_CENTER)
+        from crystal.util.wx_thread_enforce import unwrap
+        panel_sizer.Add(unwrap(cta_button), flag=wx.ALIGN_CENTER)
         
         # Center vertically
         panel_sizer.AddStretchSpacer()
@@ -621,21 +622,22 @@ class MainWindow(CloakMixin):
             name='cr-view-button-callout'
         )
         
+        from crystal.util.wx_thread_enforce import unwrap
         content_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        content_sizer.Add(new_root_url_button)
+        content_sizer.Add(unwrap(new_root_url_button))
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(new_group_button)
+        content_sizer.Add(unwrap(new_group_button))
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(edit_entity_button)
+        content_sizer.Add(unwrap(edit_entity_button))
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(forget_entity_button)
+        content_sizer.Add(unwrap(forget_entity_button))
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING * 2)
         content_sizer.AddStretchSpacer()
-        content_sizer.Add(update_members_button)
+        content_sizer.Add(unwrap(update_members_button))
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(download_button)
+        content_sizer.Add(unwrap(download_button))
         content_sizer.AddSpacer(_WINDOW_INNER_PADDING)
-        content_sizer.Add(view_button)
+        content_sizer.Add(unwrap(view_button))
         return content_sizer
     
     # === Entity Pane: View Button Callout ===
@@ -1536,13 +1538,14 @@ class MainWindow(CloakMixin):
         self._read_write_icon = read_write_icon = wx.StaticText(pane, name='cr-read-write-icon')
         self._update_read_write_icon_for_readonly_status()
         
+        from crystal.util.wx_thread_enforce import unwrap
         pane_sizer.Add(
             self._branding_area,
             proportion=1,
             flag=wx.CENTER|wx.EXPAND|wx.ALL,
             border=_WINDOW_INNER_PADDING)
         pane_sizer.Add(
-            preferences_button,
+            unwrap(preferences_button),
             flag=wx.CENTER|wx.ALL &~ wx.RIGHT,
             border=_WINDOW_INNER_PADDING)
         pane_sizer.Add(

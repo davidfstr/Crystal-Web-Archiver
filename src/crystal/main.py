@@ -314,6 +314,15 @@ def _main(args: list[str]) -> None:
     import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
     import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
     
+    # Wrap only a single class for now, at import time
+    from crystal.util.wx_thread_enforce import wrap_class
+    wx.Button = wrap_class(wx.Button)
+    wx.BoxSizer = wrap_class(wx.BoxSizer)
+    import crystal.ui.BetterMessageDialog
+    crystal.ui.BetterMessageDialog.BetterMessageDialog = \
+        wrap_class(crystal.ui.BetterMessageDialog.BetterMessageDialog)
+    #wx.Dialog = wrap_class(wx.Dialog)
+    
     @atexit.register
     def on_atexit() -> None:
         """Called when the main thread and all non-daemon threads have exited."""

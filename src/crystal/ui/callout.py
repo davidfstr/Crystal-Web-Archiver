@@ -137,8 +137,9 @@ class Callout(wx.Panel):
             flag=wx.ALIGN_TOP | wx.ALL,
             border=self._PADDING,
         )
+        from crystal.util.wx_thread_enforce import unwrap
         top_bar.Add(
-            close_button,
+            unwrap(close_button),
             flag=wx.ALIGN_TOP | wx.TOP | wx.BOTTOM | wx.RIGHT,
             border=self._PADDING,
         )
