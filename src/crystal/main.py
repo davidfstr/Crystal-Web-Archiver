@@ -314,7 +314,6 @@ def _main(args: list[str]) -> None:
     import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
     import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
     
-    @atexit.register
     def on_atexit() -> None:
         """Called when the main thread and all non-daemon threads have exited."""
 
@@ -327,6 +326,7 @@ def _main(args: list[str]) -> None:
         # Exit process immediately, without bothering to run garbage collection
         # or other cleanup processes that can take a long time
         os._exit(exit_code)
+    atexit.register(on_atexit)
     
     # Set headless mode, before anybody tries to call fg_call_later
     from crystal.util.headless import set_headless_mode
@@ -350,6 +350,8 @@ def _main(args: list[str]) -> None:
         def __init__(self, *args, **kwargs):
             from crystal import APP_NAME
             from crystal.util.wx_bind import bind
+            from crystal.util.xos import is_mac_os
+            import wx
             
             self._keepalive_frame = None
             self._did_finish_launch = False
@@ -357,6 +359,22 @@ def _main(args: list[str]) -> None:
             
             # macOS: Define app name used by the "Quit X" and "Hide X" menuitems
             self.SetAppDisplayName(APP_NAME)
+            
+            # macOS + non-.app: Set Dock icon explicitly
+            if is_mac_os() and getattr(sys, 'frozen', None) != 'macosx_app':
+                from crystal import resources
+                import wx.adv
+                
+                appicon = wx.Icon()
+                success = appicon.LoadFile(resources.get_filepath('appicon.png'), wx.BITMAP_TYPE_PNG)
+                if not success:
+                    print('Warning: Failed to load Dock icon', file=sys.stderr)
+                else:
+                    tbi = wx.adv.TaskBarIcon(wx.adv.TBI_DOCK)
+                    tbi.SetIcon(appicon, 'Crystal')
+                    # Store in field to avoid garbage collection,
+                    # which will unset the Dock icon
+                    self._tbi = tbi
             
             # Listen for OS logout
             bind(self, wx.EVT_QUERY_END_SESSION, self._on_query_end_session)

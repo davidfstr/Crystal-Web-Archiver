@@ -22,6 +22,7 @@ Release Notes ⋮
 * Development improvements
     * Manually bring app to front on macOS when run from source,
       to workaround a wxPython 4.2.3 bug.
+    * Show correct Dock icon on macOS when run from source.
 
 ### v2.0.0 (September 26, 2025)
 
