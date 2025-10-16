@@ -314,6 +314,9 @@ def _main(args: list[str]) -> None:
     import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
     import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
     
+    # TODO: Alter API to be straightforward
+    import crystal.util.wx_thread_enforce
+    
     @atexit.register
     def on_atexit() -> None:
         """Called when the main thread and all non-daemon threads have exited."""
