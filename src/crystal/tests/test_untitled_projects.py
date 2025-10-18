@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource,
 )
@@ -32,6 +33,7 @@ from crystal.app_preferences import app_prefs
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xappdirs import user_untitled_projects_dir
 from crystal.util.xos import is_ci, is_linux, is_mac_os, is_windows
+from crystal.util.xtyping import not_none
 from dataclasses import dataclass
 import errno
 from functools import cache, wraps
@@ -137,6 +139,8 @@ async def test_when_project_properties_changed_then_untitled_project_becomes_dir
 
 @awith_subtests
 async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtests: SubtestsContext) -> None:
+    DEBUG_TASK_TREE = False
+    
     with scheduler_disabled() as disabled_scheduler, \
             served_project('testdata_xkcd.crystalproj.zip') as sp:
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
@@ -256,40 +260,78 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
         # Test saving an untitled project while downloads are in progress
         # AKA: test_when_save_as_project_with_active_tasks_then_hibernates_and_restores_tasks
         with subtests.test(tasks_running=True), \
-                _untitled_project() as project, \
                 xtempfile.TemporaryDirectory() as new_container_dirpath:
-            # Download a resource revision, so that comic URLs are discovered
-            r = Resource(project, home_url)
-            rr_future = r.download()
-            await step_scheduler_until_done(project)
-            
-            # Start downloading a group and an individual resource
-            g = ResourceGroup(project, 'Comic', comic_pattern)
-            g.download()
-            await step_scheduler(project)
-            root_r = RootResource(project, '', Resource(project, comic50_url))
-            root_r.download()
-            await step_scheduler(project)
-            (old_drg_task, old_dr_task) = project.root_task.children
-            assert isinstance(old_drg_task, DownloadResourceGroupTask)
-            assert isinstance(old_dr_task, DownloadResourceTask)
-            
-            # Save untitled project to somewhere else
-            new_project_dirpath = os.path.join(
-                new_container_dirpath,
-                os.path.basename(old_project_dirpath))
-            await save_as_without_ui(project, new_project_dirpath)
-            append_deferred_top_level_tasks(project)
-            
-            # Ensure tasks are restored
-            (new_drg_task, new_dr_task) = project.root_task.children
-            assert isinstance(new_drg_task, DownloadResourceGroupTask)
-            assert isinstance(new_dr_task, DownloadResourceTask)
-            assert new_drg_task is not old_drg_task
-            assert new_dr_task is not old_dr_task
-            
-            # Ensure tasks can still be stepped without error
-            await step_scheduler(project)
+            # Create untitled project with UI
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                rmw = RealMainWindow._last_created
+                assert rmw is not None
+                
+                # Download a resource revision, so that comic URLs are discovered
+                r = Resource(project, home_url)
+                rr_future = r.download()
+                await step_scheduler_until_done(project)
+                
+                # Start downloading a group and an individual resource
+                g = ResourceGroup(project, 'Comic', comic_pattern)
+                g.download()
+                await step_scheduler(project)
+                root_r = RootResource(project, '', Resource(project, comic50_url))
+                root_r.download()
+                await step_scheduler(project)
+                (old_drg_task, old_dr_task) = project.root_task.children
+                assert isinstance(old_drg_task, DownloadResourceGroupTask)
+                assert isinstance(old_dr_task, DownloadResourceTask)
+                
+                if DEBUG_TASK_TREE:
+                    print(f'Task tree before save:')
+                    project.root_task.print_tree()
+                
+                # Save untitled project to somewhere else
+                new_project_dirpath = os.path.join(
+                    new_container_dirpath,
+                    os.path.basename(old_project_dirpath))
+                await save_as_with_ui(rmw, new_project_dirpath)
+                append_deferred_top_level_tasks(project)
+                
+                # Ensure tasks are restored (in Task Tree)
+                (new_drg_task, new_dr_task) = project.root_task.children
+                assert isinstance(new_drg_task, DownloadResourceGroupTask)
+                assert isinstance(new_dr_task, DownloadResourceTask)
+                assert new_drg_task is not old_drg_task
+                assert new_dr_task is not old_dr_task
+                
+                # Ensure tasks are restored (in Task Tree UI)
+                top_level_ttns = [
+                    not_none(TaskTreeNode.for_node_view(nv))
+                    for nv in rmw.task_tree.root.tree_node.children
+                ]
+                (new_drg_ttn, new_dr_ttn) = top_level_ttns
+                assert isinstance(new_drg_ttn.task, DownloadResourceGroupTask)
+                assert isinstance(new_dr_ttn.task, DownloadResourceTask)
+                assert new_drg_ttn.task is new_drg_task
+                assert new_dr_ttn.task is new_dr_task
+                
+                # Ensure tasks are restored (in low level Task Tree UI)
+                assert 2 == rmw.task_tree.peer.GetChildrenCount(rmw.task_tree.peer.GetRootItem(), recursively=False)
+                
+                # 1. Ensure restored tasks can still be stepped without error
+                # 2. Ensure restored tasks will complete
+                done = False
+                step_count = 0
+                if DEBUG_TASK_TREE:
+                    print(f'Task tree after save + 0 step(s):')
+                    project.root_task.print_tree()
+                while not done:
+                    done = await step_scheduler(project, expect_done=None)
+                    step_count += 1
+                    if DEBUG_TASK_TREE:
+                        print(f'Task tree after save + {step_count} step(s):')
+                        project.root_task.print_tree()
+                
+                # Ensure effects of restored tasks are correct
+                assert root_r.resource.has_any_revisions()
+                for member in g.members:
+                    assert member.has_any_revisions(), f'Member {member.url!r} did not finish downloading'
 
 
 # === Untitled Project: Create Tests ===

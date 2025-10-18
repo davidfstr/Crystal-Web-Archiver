@@ -160,7 +160,11 @@ class TaskTree:
         # Dispose the old root TaskTreeNode
         self.root.dispose()
         
-        # Create new root TaskTreeNode for the new root task
+        # Dispose all peer TreeItems
+        self.peer.DeleteChildren(self.peer.GetRootItem())
+        
+        # 1. Create new root TaskTreeNode for the new root task
+        # 2. Create new peer TreeItems
         self.root = TaskTreeNode(new_root_task)
         self.tree.root = self.root.tree_node
     
