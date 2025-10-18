@@ -30,3 +30,6 @@ tmpdir_*
 
 # AI Coding
 /plan
+
+# Coverage
+.coverage

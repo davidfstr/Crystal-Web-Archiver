@@ -37,3 +37,12 @@ Windows 11 and later:
 
 Linux:
 * Figure it out and let me know.
+
+
+Running Coverage
+================
+
+$ coverage run -m crystal --test
+$ coverage report
+$ coverage html
+$ open htmlcov/index.html

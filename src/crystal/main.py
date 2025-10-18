@@ -323,9 +323,14 @@ def _main(args: list[str]) -> None:
             # Main thread did not set an exit code. Assume a bug.
             exit_code = 1  # default error exit code
         
-        # Exit process immediately, without bothering to run garbage collection
-        # or other cleanup processes that can take a long time
-        os._exit(exit_code)
+        from crystal.util.xos import is_coverage
+        if is_coverage():
+            # Exit process normally, so that coverage results are written to disk
+            pass
+        else:
+            # Exit process immediately, without bothering to run garbage collection
+            # or other cleanup processes that can take a long time
+            os._exit(exit_code)
     atexit.register(on_atexit)
     
     # Set headless mode, before anybody tries to call fg_call_later
@@ -564,6 +569,8 @@ def _main(args: list[str]) -> None:
             # before starting bg_task() on background thread
             from crystal.tests.index import run_tests
             from crystal.util.bulkheads import capture_crashes_to_stderr
+            from crystal.util.xos import is_coverage
+            from crystal.util.xthreading import fg_call_and_wait
 
             # NOTE: Any unhandled exception will probably call os._exit(1)
             #       before reaching this decorator.
@@ -579,7 +586,16 @@ def _main(args: list[str]) -> None:
                     is_ok = run_tests(parsed_args.test)
                 finally:
                     exit_code = 0 if is_ok else 1
-                    os._exit(exit_code)
+                    if is_coverage():
+                        # Exit app normally,
+                        # so that coverage results are written to disk
+                        def close_all_windows() -> None:
+                            for w in list(wx.GetTopLevelWindows()):
+                                w.Close()
+                        fg_call_and_wait(close_all_windows)
+                    else:
+                        # Exit app immediately
+                        os._exit(exit_code)
             bg_call_later(bg_task)
         
         # 1. Run main loop
