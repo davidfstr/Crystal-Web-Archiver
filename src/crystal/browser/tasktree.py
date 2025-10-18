@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.task import (
     CrashedTask, DownloadResourceGroupMembersTask, RootTask,
+    scheduler_affinity,
     SCHEDULING_STYLE_SEQUENTIAL, Task,
 )
 from crystal.ui.tree2 import NodeView, NULL_NODE_VIEW, TreeView
@@ -473,6 +474,7 @@ class TaskTreeNode:
             self._ignore_complete_events = False
     
     @capture_crashes_to_task_arg
+    @scheduler_affinity  # protect access to self._first_incomplete_child_index, in particular
     def task_child_did_complete(self, task: Task, child: Task) -> None:
         assert task is self.task
         if task.scheduling_style != SCHEDULING_STYLE_SEQUENTIAL:
