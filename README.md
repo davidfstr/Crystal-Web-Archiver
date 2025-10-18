@@ -22,7 +22,7 @@ Download ⬇︎
 
 Either install a binary version of Crystal:
 
-* [macOS 14 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v2.0.1/crystal-mac-2.0.1.dmg)
+* [macOS 13 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v2.0.1/crystal-mac-2.0.1.dmg)
 * [Windows 11 and later](https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v2.0.1/crystal-win-2.0.1.exe)
 
 Or install from source, using pipx:

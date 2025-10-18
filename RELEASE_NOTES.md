@@ -15,10 +15,6 @@ Release Notes ⋮
 * Workflow improvements
     * When reopening a project, restore download tasks correctly.
 
-* Support changes **(Breaking Change)**
-    * macOS 14+ is now the minimum macOS version.
-      Drop support for macOS 13.
-
 * Testing improvements
     * Increased determinism and speed of tests that perform downloads.
 
