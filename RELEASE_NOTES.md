@@ -10,6 +10,12 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Support changes **(Breaking Change)**
+    * macOS 14+ is now the minimum macOS version.
+      Drop support for macOS 13.
+
 ### v2.0.0 (September 26, 2025)
 
 Crystal 2.0 is a huge release with many new features and all-new tutorials!
