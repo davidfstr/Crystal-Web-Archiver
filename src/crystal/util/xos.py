@@ -91,6 +91,10 @@ def is_asan() -> bool:
     return os.environ.get('CRYSTAL_ADDRESS_SANITIZER') == 'True'
 
 
+def is_coverage() -> bool:
+    return os.environ.get('COVERAGE_RUN', None) is not None
+
+
 # === Misc ===
 
 def preferences_are_called_settings_in_this_os() -> bool:

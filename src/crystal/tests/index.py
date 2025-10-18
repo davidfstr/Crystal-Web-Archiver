@@ -18,7 +18,7 @@ from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
-from crystal.util.xos import is_windows
+from crystal.util.xos import is_coverage, is_windows
 from crystal.util.xthreading import bg_affinity, fg_call_and_wait, has_foreground_thread, is_foreground_thread
 from crystal.util.xtime import sleep_profiled
 from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
@@ -234,6 +234,10 @@ def _run_tests(test_names: list[str]) -> bool:
                 raise ValueError(f'Test function is not callable: {test_func}')
             test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
             test_name = f'{test_func_id[0]}.{test_func_id[1]}'
+            
+            # Skip suites that cause segfaults under coverage
+            if is_coverage() and 'test_bulkheads' in test_name:
+                continue
             
             # Only run test if it was requested (or if all tests are to be run)
             if len(test_names) > 0:
