@@ -577,7 +577,7 @@ class TaskTreeNode:
             )
             
             # Commit changes to the children list
-            new_children = []  # type: List[NodeView1]
+            new_children = []  # type: List[NodeView]
             if first_more_node.more_count != 0:
                 new_children.append(first_more_node)
             new_children.extend(intermediate_nodes)
