@@ -472,17 +472,20 @@ class Project(ListenableMixin):
         """
         import crystal.task
         
-        # Capture old root task if it exists (for reopen scenarios)
+        # Recreate the root task
         old_root_task = getattr(self, 'root_task', None)  # capture
-        
-        self.root_task = crystal.task.RootTask()
-        self._scheduler_thread = (
-            crystal.task.start_scheduler_thread(self.root_task)
-        )  # type: threading.Thread | None
+        new_root_task = crystal.task.RootTask()
+        self.root_task = new_root_task  # export
         
         # Notify listeners if this is a root task change (not initial creation)
         if old_root_task is not None:
-            self._root_task_did_change(old_root_task, self.root_task)
+            self._root_task_did_change(old_root_task, new_root_task)
+        
+        # Start the scheduler (after preparing everything else)
+        self._scheduler_thread = (
+            crystal.task.start_scheduler_thread(new_root_task)
+        )  # type: threading.Thread | None
+        
     
     # --- Load: Validity ---
     
@@ -1993,6 +1996,10 @@ class Project(ListenableMixin):
             #       recovery code below attempts to reopen using the same
             #       Project state it may fail again.
             self.close(capture_crashes=False, _will_reopen=True)
+            
+            # Reset session state that could affect how tasks are unhibernated
+            for r in self._materialized_resources:
+                r.already_downloaded_this_session = False
             
             # Move/copy the project directory to the new path.
             # - If the project is untitled, it will be renamed.

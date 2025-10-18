@@ -800,6 +800,30 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         
         if hasattr(self, 'child_task_did_crash'):
             self.child_task_did_crash(task)
+
+    # === Debugging ===
+
+    def print_tree(self) -> None:
+        """Print a formatted view of this task and its descendants."""
+        lines: list[str] = []
+        def format_tree(parent: Task, depth: int) -> None:
+            children_seq = parent.children  # cache
+            for index in range(len(children_seq)):
+                try:
+                    child = children_seq[index]
+                except UnmaterializedItemError:
+                    lines.append(f"{'  ' * depth}{index}: <unmaterialized child>")
+                else:
+                    lines.append(f"{'  ' * depth}{index}: {child.title} -- {child.subtitle}")
+                    format_tree(child, depth + 1)
+        if len(self.children) == 0:
+            lines.append('<empty>')
+        else:
+            format_tree(self, 0)
+        
+        tree_output = '\n'.join(lines)
+        print(tree_output)
+        print()
     
     # === Utility ===
     

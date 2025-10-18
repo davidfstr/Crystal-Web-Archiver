@@ -6,6 +6,7 @@ Provides a tree UI with an API similar to the 'tree' module, but with one differ
 # Clients should be able to import TreeView from this package
 from crystal.ui.tree import NodeView as NodeView1
 from crystal.ui.tree import TreeView
+from typing import List
 
 
 class NodeView(NodeView1):
@@ -33,6 +34,9 @@ class NodeView(NodeView1):
         self.__subtitle = value
         self._update_base_title()
     subtitle = property(_get_subtitle, _set_subtitle)
+    
+    # NOTE: Assumes that tree of NodeViews will all be of the same type
+    children: 'List[NodeView]'  # type: ignore[assignment]
     
     def _update_base_title(self) -> None:
         subtitle = self.__subtitle  # cache

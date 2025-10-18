@@ -234,7 +234,7 @@ def scheduler_thread_context(enabled: bool=True) -> Iterator[None]:
 @scheduler_affinity  # manual control of scheduler thread is assumed
 async def step_scheduler(
         project: Project,
-        *, expect_done: bool=False,
+        *, expect_done: bool | None=False,
         after_get: Callable[[], None] | None=None,
         ) -> bool:
     """
@@ -256,12 +256,12 @@ async def step_scheduler(
     if after_get is not None:
         after_get()
     if unit is None:
-        if not expect_done:
+        if expect_done == False:
             raise AssertionError('Expected there to be no more tasks')
         _set_scheduler_is_waiting(project.root_task, True)
         return True
     else:
-        if expect_done:
+        if expect_done == True:
             raise AssertionError('Expected there to be at least one task remaining')
         await bg_call_and_wait(scheduler_thread_context()(unit))
         return False

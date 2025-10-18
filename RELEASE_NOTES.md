@@ -12,6 +12,9 @@ Release Notes ⋮
 
 ### main
 
+* Workflow improvements
+    * When reopening a project, restore download tasks correctly.
+
 * Support changes **(Breaking Change)**
     * macOS 14+ is now the minimum macOS version.
       Drop support for macOS 13.

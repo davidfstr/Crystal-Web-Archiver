@@ -160,7 +160,11 @@ class TaskTree:
         # Dispose the old root TaskTreeNode
         self.root.dispose()
         
-        # Create new root TaskTreeNode for the new root task
+        # Dispose all peer TreeItems
+        self.peer.DeleteChildren(self.peer.GetRootItem())
+        
+        # 1. Create new root TaskTreeNode for the new root task
+        # 2. Create new peer TreeItems
         self.root = TaskTreeNode(new_root_task)
         self.tree.root = self.root.tree_node
     
@@ -573,7 +577,7 @@ class TaskTreeNode:
             )
             
             # Commit changes to the children list
-            new_children = []  # type: List[NodeView1]
+            new_children = []  # type: List[NodeView]
             if first_more_node.more_count != 0:
                 new_children.append(first_more_node)
             new_children.extend(intermediate_nodes)
