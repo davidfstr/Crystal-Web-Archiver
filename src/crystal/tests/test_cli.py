@@ -11,7 +11,7 @@ import signal
 from crystal.model import Project, Resource
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, read_until,
+    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_literal, read_until,
     crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
@@ -73,8 +73,8 @@ def test_can_open_project_as_writable() -> None:
             wait_for_main_window(crystal)
             
             # Verify project is writable by checking readonly property
-            result = py_eval(crystal, 'project.readonly')
-            assertIn('False', result)
+            result = py_eval_literal(crystal, 'project.readonly')
+            assert False == result
 
 
 def test_can_open_project_as_readonly() -> None:
@@ -88,8 +88,8 @@ def test_can_open_project_as_readonly() -> None:
             wait_for_main_window(crystal)
             
             # Verify project is readonly
-            result = py_eval(crystal, 'project.readonly')
-            assertIn('True', result)
+            result = py_eval_literal(crystal, 'project.readonly')
+            assert True == result
 
 
 def test_when_opened_project_filepath_does_not_exist_then_creates_new_project_at_filepath() -> None:
@@ -101,12 +101,12 @@ def test_when_opened_project_filepath_does_not_exist_then_creates_new_project_at
             wait_for_main_window(crystal)
             
             # Verify the project was created at the specified path
-            result = py_eval(crystal, 'project.path')
-            assertIn(project_path, result)
+            result = py_eval_literal(crystal, 'project.path')
+            assertEqual(project_path, result)
             
             # Verify it's a new project (writable by default)
-            result = py_eval(crystal, 'project.readonly')
-            assertIn('False', result)
+            result = py_eval_literal(crystal, 'project.readonly')
+            assert False == result
         
         # Verify the project directory was actually created on disk
         assert os.path.exists(project_path)
@@ -127,8 +127,8 @@ def test_can_open_crystalopen_file() -> None:
             wait_for_main_window(crystal)
             
             # Verify it opened the underlying project
-            result = py_eval(crystal, 'project.path')
-            assertIn(project_path, result)
+            result = py_eval_literal(crystal, 'project.path')
+            assertEqual(project_path, result)
 
 
 def test_when_launched_with_readonly_and_no_project_filepath_then_open_or_create_dialog_defaults_to_readonly_checked() -> None:
@@ -370,10 +370,10 @@ def test_when_launched_with_shell_and_no_project_filepath_then_shell_starts_with
     # ...and `window` variable is an unset proxy
     with crystal_shell() as (crystal, banner):
         # Verify project and window variables are unset proxies (not real objects)
-        result = py_eval(crystal, 'project')
+        result = py_eval_literal(crystal, 'repr(project)')
         assertIn('<unset crystal.model.Project proxy>', result)
         
-        result = py_eval(crystal, 'window')
+        result = py_eval_literal(crystal, 'repr(window)')
         assertIn('<unset crystal.browser.MainWindow proxy>', result)
         
         # Clean up by closing the open/create dialog
@@ -393,16 +393,16 @@ def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_op
             wait_for_main_window(crystal)
             
             # Verify project variable is set to a real Project object
-            result = py_eval(crystal, 'project')
+            result = py_eval_literal(crystal, 'repr(project)')
             assertIn('<crystal.model.Project object at 0x', result)
             
             # Verify window variable is set to a real MainWindow object
-            result = py_eval(crystal, 'window')
+            result = py_eval_literal(crystal, 'repr(window)')
             assertIn('<crystal.browser.MainWindow object at 0x', result)
             
             # Verify the project path is correct
-            result = py_eval(crystal, 'project.path')
-            assertIn(project_path, result)
+            result = py_eval_literal(crystal, 'project.path')
+            assertEqual(project_path, result)
 
 
 async def test_when_launched_with_shell_and_ctrl_d_pressed_then_exits() -> None:
@@ -493,9 +493,9 @@ def test_when_headless_shell_with_project_then_starts_shell_without_gui() -> Non
             args=['--headless', '--shell', project_path],
             expects=['version', 'help', 'variables', 'exit', 'prompt']
         ) as (crystal, banner_metadata):
-            assertIn('<crystal.model.Project object at 0x', py_eval(crystal, 'project'))
-            assertIn(project_path, py_eval(crystal, 'project.path'))
-            assertIn('<unset crystal.browser.MainWindow proxy>', py_eval(crystal, 'window'))
+            assertIn('<crystal.model.Project object at 0x', py_eval_literal(crystal, 'repr(project)'))
+            assertEqual(project_path, py_eval_literal(crystal, 'project.path'))
+            assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
             
             # Simulate Ctrl-D to exit the shell
             assert crystal.stdin is not None
@@ -514,8 +514,8 @@ def test_when_headless_shell_without_project_then_starts_shell_without_gui() -> 
             'version', 'help', 'variables', 'exit', 'prompt'
         ]
     ) as (crystal, banner_metadata):
-        assertIn('<unset crystal.model.Project proxy>', py_eval(crystal, 'project'))
-        assertIn('<unset crystal.browser.MainWindow proxy>', py_eval(crystal, 'window'))
+        assertIn('<unset crystal.model.Project proxy>', py_eval_literal(crystal, 'repr(project)'))
+        assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
 
 
 def test_when_headless_serve_shell_with_project_then_starts_both_server_and_shell() -> None:
@@ -527,9 +527,9 @@ def test_when_headless_serve_shell_with_project_then_starts_both_server_and_shel
                 'server_started', 'ctrl_c',
             ]
         ) as (crystal, banner_metadata):
-            assertIn('<crystal.model.Project object at 0x', py_eval(crystal, 'project'))
-            assertIn(project_path, py_eval(crystal, 'project.path'))
-            assertIn('<unset crystal.browser.MainWindow proxy>', py_eval(crystal, 'window'))
+            assertIn('<crystal.model.Project object at 0x', py_eval_literal(crystal, 'repr(project)'))
+            assertEqual(project_path, py_eval_literal(crystal, 'project.path'))
+            assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
             
             assert banner_metadata.server_url is not None
             _ensure_server_is_accessible(banner_metadata.server_url)
@@ -575,8 +575,8 @@ async def test_when_project_opened_with_stale_before_then_old_revisions_consider
                 # Get the resource revision and verify it's NOT stale
                 py_eval(crystal, f'r = project.get_resource({atom_feed_url!r})')
                 py_eval(crystal, 'rr = r.default_revision()')
-                result = py_eval(crystal, 'rr.is_stale')
-                assert 'False' in result, f"Expected resource revision to NOT be stale with past min_fetch_date, got: {result}"
+                result = py_eval_literal(crystal, 'rr.is_stale')
+                assert False == result, f"Expected resource revision to NOT be stale with past min_fetch_date, got: {result}"
         
         with subtests.test(msg='reopen with future date - revision should be stale'):
             future_date = '2099-01-01T00:00:00+00:00'
@@ -584,19 +584,21 @@ async def test_when_project_opened_with_stale_before_then_old_revisions_consider
                 wait_for_main_window(crystal)
                 
                 # Verify the project's min_fetch_date is set correctly
-                result = py_eval(crystal, 'project.min_fetch_date')
+                result = py_eval_literal(crystal, 'repr(project.min_fetch_date)')
                 assert 'datetime.datetime(2099, 1, 1' in result, f"Expected min_fetch_date to be set to 2099, got: {result}"
                 
                 # Get the resource and its revision
+                # TODO: Rewrite to use more-reliable py_eval_literal()
                 result = py_eval(crystal, f'r = project.get_resource({atom_feed_url!r}); r')
                 assert 'Resource(' in result, f"Expected to find resource, got: {result}"
                 
+                # TODO: Rewrite to use more-reliable py_eval_literal()
                 result = py_eval(crystal, 'rr = r.default_revision(); rr')
                 assert 'ResourceRevision' in result, f"Expected to find resource revision, got: {result}"
                 
                 # Verify the revision is now considered stale
-                result = py_eval(crystal, 'rr.is_stale')
-                assert 'True' in result, f"Expected resource revision to be stale with future min_fetch_date, got: {result}"
+                result = py_eval_literal(crystal, 'rr.is_stale')
+                assert True == result, f"Expected resource revision to be stale with future min_fetch_date, got: {result}"
 
 
 @with_subtests
