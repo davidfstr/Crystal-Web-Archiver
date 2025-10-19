@@ -24,6 +24,10 @@ Release Notes ⋮
     * Show correct Dock icon on macOS when run from source.
     * Code coverage statistics can now be gathered using the `coverage` tool.
 
+* Minor fixes
+    * Fix rare IndexError that could occur when starting new downloads at the
+      same time as other downloads are running.
+
 ### v2.0.0 (September 26, 2025)
 
 Crystal 2.0 is a huge release with many new features and all-new tutorials!

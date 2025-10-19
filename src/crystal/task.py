@@ -574,9 +574,6 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         """
         Clears all of this task's children which are complete.
         """
-        if self._next_child_index != 0:
-            raise ValueError('Unsafe to call clear_completed_children unless _next_child_index == 0')
-        
         child_indexes_to_remove = [i for (i, c) in enumerate(self._children) if c.complete]  # capture
         if len(child_indexes_to_remove) == 0:
             return
@@ -588,6 +585,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
                 )
         self._children = [c for c in self.children if not c.complete]
         self._num_children_complete = 0
+        self._next_child_index = 0
         
         # Notify listeners last, which can run arbitrary code
         # NOTE: Call these listeners also inside the lock
@@ -674,18 +672,21 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
                 else:
                     return None
             elif self.scheduling_style == SCHEDULING_STYLE_ROUND_ROBIN:
-                if self._next_child_index == 0:
-                    # NOTE: Ignore known-slow operation that has no further obvious optimizations
-                    with ignore_runtime_from_enclosing_warn_if_slow():
-                        schedule_check_result = self._notify_did_schedule_all_children()
-                    if not isinstance(schedule_check_result, bool):
-                        return schedule_check_result
                 any_incomplete_interactive_children = any(
                     c.interactive and not c.complete
                     for c in self.children
                 )  # cache
                 cur_child_index = self._next_child_index
                 while True:
+                    if cur_child_index == 0:
+                        # NOTE: Ignore known-slow operation that has no further obvious optimizations
+                        with ignore_runtime_from_enclosing_warn_if_slow():
+                            self._notify_did_schedule_all_children()
+                            # (self.children and self._next_child_index may have changed)
+                        if len(self.children) == 0:
+                            # Handle zero-children case in usual manner
+                            return self.try_get_next_task_unit()
+                        assert cur_child_index == 0
                     cur_child = self.children[cur_child_index]
                     if any_incomplete_interactive_children and not cur_child.interactive:
                         # If there are any interactive priority children
@@ -708,37 +709,12 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
                                 # as one of the crashed children.
                                 self.crash_reason = first_crashed_child.crash_reason
                         return None
-                    if cur_child_index == 0:
-                        # Temporarily force self._next_child_index to appear as 0
-                        # because some listeners called by self._notify_did_schedule_all_children()
-                        # may expect it to be exactly 0. Notably RootTask.did_schedule_all_children().
-                        old_next_child_index = self._next_child_index
-                        self._next_child_index = 0
-                        try:
-                            # NOTE: Ignore known-slow operation that has no further obvious optimizations
-                            with ignore_runtime_from_enclosing_warn_if_slow():
-                                schedule_check_result = self._notify_did_schedule_all_children()
-                        finally:
-                            self._next_child_index = old_next_child_index
-                        if not isinstance(schedule_check_result, bool):
-                            return schedule_check_result
-                        elif schedule_check_result == True:
-                            # Invalidate self._next_child_index,
-                            # because children may have changed
-                            self._next_child_index = 0
             else:
                 raise ValueError('Container task has an unknown scheduling style (%s).' % self.scheduling_style)
     
-    def _notify_did_schedule_all_children(self) -> bool | Callable[[], None] | None:
+    def _notify_did_schedule_all_children(self) -> None:
         if hasattr(self, 'did_schedule_all_children'):
             self.did_schedule_all_children()  # type: ignore[attr-defined]
-            # (Children may have changed)
-            if len(self.children) == 0:
-                # Handle zero-children case in usual manner
-                return self.try_get_next_task_unit()
-            return True  # children may have changed
-        else:
-            return False  # children did not change
     
     @bg_affinity
     @capture_crashes_to_self
