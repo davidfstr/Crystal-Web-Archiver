@@ -358,8 +358,6 @@ def _main(args: list[str]) -> None:
             from crystal.util.xos import is_mac_os
             import wx
             
-            self._keepalive_frame = None
-            self._did_finish_launch = False
             super().__init__(*args, **kwargs)
             
             # macOS: Define app name used by the "Quit X" and "Hide X" menuitems
@@ -412,19 +410,7 @@ def _main(args: list[str]) -> None:
                 # Auto-detect appropriate locale based on os.environ['LANG']
                 locale.setlocale(locale.LC_ALL, '')
             
-            # Activate wx keepalive until self._finish_launch() is called
-            self._keepalive_frame = wx.Frame(None, -1, 'Crystal')
-            
-            # Call self._finish_launch() after a short delay if it isn't
-            # called in the meantime by MacOpenFile
-            def wait_for_maybe_open_file():
-                time.sleep(float(os.environ.get('CRYSTAL_OPEN_FILE_DELAY', '.2')))
-                
-                if not self._did_finish_launch:
-                    from crystal.util.xthreading import fg_call_later
-                    fg_call_later(self._finish_launch)
-            thread = threading.Thread(target=wait_for_maybe_open_file, daemon=False)
-            thread.start()
+            self._finish_launch()
             
             return True
         
@@ -433,34 +419,28 @@ def _main(args: list[str]) -> None:
         @capture_crashes_to_stderr
         @override
         def MacOpenFile(self, filepath):
-            if self._did_finish_launch:
-                # App is already running
-                
-                # Open the project at the next available opportunity
-                global _project_path_to_open_soon
-                _project_path_to_open_soon = filepath
-                
-                # If the open/create dialog is currently showing,
-                # interrupt it to observe the project we are requesting
-                # to open and open it.
-                global _interrupt_prompt_for_project_to_open_project
-                if _interrupt_prompt_for_project_to_open_project is not None:
-                    _interrupt_prompt_for_project_to_open_project()
-                
-                # If a project window is open, try to close it.
-                # After it closes the open/create dialog will prepare to appear
-                # again, observe the project we are requesting to open,
-                # and open it.
-                nonlocal last_window
-                current_window = last_window  # capture
-                if current_window is not None:
-                    success = current_window.try_close()
-                    if not success:
-                        # Cancel the open operation
-                        _project_path_to_open_soon = None
-            else:
-                # App is starting
-                self._finish_launch(filepath)
+            # Open the project at the next available opportunity
+            global _project_path_to_open_soon
+            _project_path_to_open_soon = filepath
+            
+            # If the open/create dialog is currently showing,
+            # interrupt it to observe the project we are requesting
+            # to open and open it.
+            global _interrupt_prompt_for_project_to_open_project
+            if _interrupt_prompt_for_project_to_open_project is not None:
+                _interrupt_prompt_for_project_to_open_project()
+            
+            # If a project window is open, try to close it.
+            # After it closes the open/create dialog will prepare to appear
+            # again, observe the project we are requesting to open,
+            # and open it.
+            nonlocal last_window
+            current_window = last_window  # capture
+            if current_window is not None:
+                success = current_window.try_close()
+                if not success:
+                    # Cancel the open operation
+                    _project_path_to_open_soon = None
         
         @capture_crashes_to_stderr
         def _finish_launch(self, filepath: str | None=None) -> None:
@@ -470,8 +450,6 @@ def _main(args: list[str]) -> None:
                 _capture_crashes_to_stderr_and_capture_systemexit_to_quit)
         
         async def _do_finish_launch(self, filepath: str | None) -> None:
-            self._did_finish_launch = True
-            
             try:
                 nonlocal last_window
                 last_window = await _did_launch(parsed_args, shell, filepath)
@@ -485,9 +463,6 @@ def _main(args: list[str]) -> None:
                 import traceback
                 traceback.print_exc()
                 return
-            finally:
-                # Deactivate wx keepalive
-                self._keepalive_frame.Destroy()
         
         @capture_crashes_to_stderr
         @fg_affinity
