@@ -344,6 +344,11 @@ def _main(args: list[str]) -> None:
     else:
         shell = None
     
+    # If will run tests then immediately enter testing mode
+    if parsed_args.test is not None:
+        from crystal.util.test_mode import set_tests_are_running
+        set_tests_are_running()
+    
     last_window = None  # type: Optional[MainWindow]
     systemexit_during_first_launch = None  # type: Optional[SystemExit]
     
@@ -532,10 +537,6 @@ def _main(args: list[str]) -> None:
                 'because tests expect to be able to schedule callables on '
                 'the foreground thread'
             )
-            
-            # Immediately enter testing mode
-            from crystal.util.test_mode import set_tests_are_running
-            set_tests_are_running()
             
             from crystal.util.tqdm_debug import patch_tqdm_to_debug_deadlocks
             patch_tqdm_to_debug_deadlocks(on_deadlock='keep_trying')
