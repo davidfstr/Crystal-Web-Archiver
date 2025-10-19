@@ -1634,9 +1634,6 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
     
     This task may be complete immediately after initialization.
     """
-    # TODO: Always lazy-load children, inlining this constant
-    _LAZY_LOAD_CHILDREN = True
-    
     icon_name = 'tasktree_download_group_members'
     scheduling_style = SCHEDULING_STYLE_SEQUENTIAL
     all_children_complete_implies_this_task_complete = False
@@ -1690,58 +1687,36 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
         
         group = self.group  # cache
         
-        if self._LAZY_LOAD_CHILDREN:
-            def createitem(i: int) -> DownloadResourceTask:
-                return group.members[i].create_download_task(needs_result=False, is_embedded=False)
-            def materializeitem(t: DownloadResourceTask) -> None:
-                self.materialize_child(t, already_complete_ok=True)
-                if t.complete:
-                    self.task_did_complete(t)
-            def unmaterializeitem(t: DownloadResourceTask) -> None:
-                t.dispose()
-            
-            notify_task_did_set_children = self.initialize_children(
-                AppendableLazySequence[DownloadResourceTask](
-                    createitem_func=createitem,
-                    materializeitem_func=materializeitem,
-                    unmaterializeitem_func=unmaterializeitem,
-                    len_func=lambda: len(group.members)
-                )
-            )
-            
-            self._pbc = ProgressBarCalculator(
-                initial=0,
-                total=len(self.children),
-            )
-            self._children_loaded = True  # after self._pbc = ...; before self._update_subtitle()
-            self._update_subtitle()
-            
-            # NOTE: The children list may be accessed immediately by "task_did_set_children"
-            #       listeners and therefore may immediately materialize children
-            #       and may immediately call child-complete actions
-            notify_task_did_set_children()
-            # (NOTE: self.complete might be True now)
-        else:
-            with gc_disabled():  # don't garbage collect while allocating many objects
-                member_download_tasks = [
-                    member.create_download_task(needs_result=False, is_embedded=False)
-                    for member in group.members
-                ]
-                
-                for t in member_download_tasks:
-                    self.append_child(t, already_complete_ok=True)
-        
-            self._pbc = ProgressBarCalculator(
-                initial=0,
-                total=len(self.children),
-            )
-            self._children_loaded = True  # after self._pbc = ...; before self._update_subtitle()
-            self._update_subtitle()
-        
-            # Apply deferred child-complete actions
-            for t in [t for t in member_download_tasks if t.complete]:
+        def createitem(i: int) -> DownloadResourceTask:
+            return group.members[i].create_download_task(needs_result=False, is_embedded=False)
+        def materializeitem(t: DownloadResourceTask) -> None:
+            self.materialize_child(t, already_complete_ok=True)
+            if t.complete:
                 self.task_did_complete(t)
-            # (NOTE: self.complete might be True now)
+        def unmaterializeitem(t: DownloadResourceTask) -> None:
+            t.dispose()
+        
+        notify_task_did_set_children = self.initialize_children(
+            AppendableLazySequence[DownloadResourceTask](
+                createitem_func=createitem,
+                materializeitem_func=materializeitem,
+                unmaterializeitem_func=unmaterializeitem,
+                len_func=lambda: len(group.members)
+            )
+        )
+        
+        self._pbc = ProgressBarCalculator(
+            initial=0,
+            total=len(self.children),
+        )
+        self._children_loaded = True  # after self._pbc = ...; before self._update_subtitle()
+        self._update_subtitle()
+        
+        # NOTE: The children list may be accessed immediately by "task_did_set_children"
+        #       listeners and therefore may immediately materialize children
+        #       and may immediately call child-complete actions
+        notify_task_did_set_children()
+        # (NOTE: self.complete might be True now)
         
         assert self._children_loaded  # because set earlier in this function
     
@@ -1760,20 +1735,10 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
         
         assert self._pbc is not None
         
-        if self._LAZY_LOAD_CHILDREN:
-            self.notify_did_append_child(None)
-        else:
-            download_task = member.create_download_task(needs_result=False, is_embedded=False)
-            self.append_child(download_task, already_complete_ok=True)
+        self.notify_did_append_child(None)
         
         self._pbc.total += 1
         self._update_subtitle()
-        
-        if not self._LAZY_LOAD_CHILDREN:
-            # Apply deferred child-complete actions
-            if download_task.complete:
-                self.task_did_complete(download_task)
-            # (NOTE: self.complete might be True now)
     
     @capture_crashes_to_self
     def group_did_finish_updating(self) -> None:

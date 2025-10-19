@@ -233,42 +233,7 @@ class TaskTreeNode:
         task_children_count = len(self.task.children)  # capture
         @capture_crashes_to(task)
         def fg_task() -> None:
-            # Update current progress dialog, if found,
-            # in preparation for appending tasks
-            # 
-            # HACK: Reaches into a progress dialog managed elsewhere,
-            #       in MainWindow._on_download_entity()
-            progress_dialog_old_message = None  # type: Optional[str]
-            if DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
-                progress_dialog = None  # type: Optional[wx.Window]
-            else:
-                if task_children_count >= 100:
-                    assert is_foreground_thread()
-                    progress_dialog = wx.FindWindowByName('cr-starting-download')
-                    if progress_dialog is not None:
-                        assert isinstance(progress_dialog, wx.ProgressDialog)
-                        
-                        # Try remove elapsed time from progress dialog,
-                        # since we won't be able to keep it up to date soon
-                        # 
-                        # NOTE: This has no effect on macOS
-                        progress_dialog.WindowStyleFlag &= ~wx.PD_ELAPSED_TIME
-                        
-                        # Change progress dialog message
-                        progress_dialog_old_message = progress_dialog.Message
-                        progress_dialog.Pulse(f'Adding {task_children_count:n} tasks...')
-                else:
-                    progress_dialog = None
-            
             self.task_did_set_children(self.task, task_children_count)
-            
-            if progress_dialog is not None:
-                assert isinstance(progress_dialog, wx.ProgressDialog)
-                
-                # Restore old message in progress dialog
-                assert is_foreground_thread()
-                assert progress_dialog_old_message is not None
-                progress_dialog.Pulse(progress_dialog_old_message)
         fg_call_and_wait(fg_task)
     
     @staticmethod

@@ -1205,70 +1205,8 @@ class MainWindow(CloakMixin):
             except CancelLoadUrls:
                 return
         
-        # Show progress dialog if it will likely take a long time to start the download
-        if DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
-            progress_dialog = None  # type: Optional[wx.ProgressDialog]
-        else:
-            if (isinstance(selected_entity, ResourceGroup) and
-                    len(selected_entity.members) >= 2000):  # TODO: Tune threshold
-                progress_dialog = wx.ProgressDialog(
-                    title='Starting download',
-                    message=f'Starting download of {len(selected_entity.members):n} members...',
-                    parent=self._frame,
-                    style=wx.PD_ELAPSED_TIME)
-                progress_dialog.Name = 'cr-starting-download'
-                progress_dialog.Pulse(progress_dialog.Message)  # make progress bar indeterminate
-                progress_dialog.Show()
-                
-                # Update the elapsed time every 1 second
-                # 
-                # NOTE: It would be simpler to implement this logic with wx.Timer
-                #       but wx.Timer seems to not work well if very many lambdas
-                #       are scheduled with fg_call_later at the same time.
-                @capture_crashes_to_stderr
-                def elapsed_time_updater() -> None:
-                    while True:
-                        time.sleep(1.0)
-                        def fg_task() -> bool:
-                            if progress_dialog is not None:
-                                progress_dialog.Pulse(progress_dialog.Message)
-                                return True
-                            else:
-                                return False
-                        still_ticking = fg_call_and_wait(fg_task)
-                        if not still_ticking:
-                            break
-                bg_call_later(elapsed_time_updater)
-            else:
-                progress_dialog = None
-        
-        if DownloadResourceGroupMembersTask._LAZY_LOAD_CHILDREN:
-            # Start download
-            selected_entity.download(needs_result=False)
-        else:
-            # Run download() on a background thread because it can take a long time
-            # to instantiate the tree of related download tasks 
-            # (when _LAZY_LOAD_CHILDREN == False)
-            # 
-            # NOTE: Loudly crashes the entire scheduler thread upon failure.
-            #       If this failure mode ends up happening commonly,
-            #       suggest implementing a less drastic failure mode.
-            @capture_crashes_to(self.project.root_task)
-            def bg_task() -> None:
-                assert selected_entity is not None
-                
-                # Start download
-                selected_entity.download(needs_result=False)
-                
-                # Close progress dialog, if applicable
-                if progress_dialog is not None:
-                    def fg_task() -> None:
-                        nonlocal progress_dialog
-                        assert progress_dialog is not None
-                        progress_dialog.Destroy()
-                        progress_dialog = None  # unexport
-                    fg_call_and_wait(fg_task)
-            bg_call_later(bg_task)
+        # Start download
+        selected_entity.download(needs_result=False)
     
     def _on_update_group_members(self, event):
         selected_entity = self.entity_tree.selected_entity
