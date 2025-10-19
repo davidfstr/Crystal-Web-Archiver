@@ -42,7 +42,6 @@ Linux:
 Running Coverage
 ================
 
-$ coverage run -m crystal --test
-$ coverage report
-$ coverage html
+$ COVERAGE_RUN=1 python3 -m crystal --test
+$ coverage html --show-contexts
 $ open htmlcov/index.html

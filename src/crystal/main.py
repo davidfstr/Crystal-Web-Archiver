@@ -51,9 +51,16 @@ def main() -> Never:
     """
     Main function. Starts the program.
     """
+    from crystal.util import xcoverage
+    with xcoverage.collect_and_save():
+        # (NOTE: Coverage isn't actually collected until the next function call)
+        _main1(sys.argv[1:])
+
+
+def _main1(args: list[str]) -> Never:
     try:
         try:
-            _main(sys.argv[1:])
+            _main2(args)
         except SystemExit:
             raise
         except:
@@ -75,7 +82,7 @@ def main() -> Never:
         raise
 
 
-def _main(args: list[str]) -> None:
+def _main2(args: list[str]) -> None:
     # If running as Mac app or as Windows executable, redirect stdout and 
     # stderr to file, since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
@@ -323,14 +330,11 @@ def _main(args: list[str]) -> None:
             # Main thread did not set an exit code. Assume a bug.
             exit_code = 1  # default error exit code
         
-        from crystal.util.xos import is_coverage
-        if is_coverage():
-            # Exit process normally, so that coverage results are written to disk
-            pass
-        else:
-            # Exit process immediately, without bothering to run garbage collection
-            # or other cleanup processes that can take a long time
-            os._exit(exit_code)
+        # 1. Exit process immediately, without bothering to run garbage collection
+        #    or other cleanup processes that can take a long time
+        # 2. If running under code coverage and the test_bulkheads.py suite
+        #    was executed, avoid segfault on process exit
+        os._exit(exit_code)
     atexit.register(on_atexit)
     
     # Set headless mode, before anybody tries to call fg_call_later
@@ -565,6 +569,7 @@ def _main(args: list[str]) -> None:
                     if is_coverage():
                         # Exit app normally,
                         # so that coverage results are written to disk
+                        # by the main thread
                         def close_all_windows() -> None:
                             for w in list(wx.GetTopLevelWindows()):
                                 w.Close()

@@ -18,6 +18,7 @@ from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
+from crystal.util import xcoverage
 from crystal.util.xos import is_coverage, is_windows
 from crystal.util.xthreading import bg_affinity, fg_call_and_wait, has_foreground_thread, is_foreground_thread
 from crystal.util.xtime import sleep_profiled
@@ -222,6 +223,9 @@ def _run_tests(test_names: list[str]) -> bool:
     # Ensure ancestor caller did already call set_tests_are_running()
     assert tests_are_running()
     
+    is_coverage_now = is_coverage()  # cache
+    
+    # Run selected tests
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.time()  # capture
     run_count = 0
@@ -235,10 +239,6 @@ def _run_tests(test_names: list[str]) -> bool:
             test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
             test_name = f'{test_func_id[0]}.{test_func_id[1]}'
             
-            # Skip suites that cause segfaults under coverage
-            if is_coverage() and 'test_bulkheads' in test_name:
-                continue
-            
             # Only run test if it was requested (or if all tests are to be run)
             if len(test_names) > 0:
                 if test_name not in test_names and test_func.__module__ not in test_names:
@@ -249,6 +249,10 @@ def _run_tests(test_names: list[str]) -> bool:
         for (test_func_index, test_func) in enumerate(test_funcs_to_run):
             test_func_id = (test_func.__module__, test_func.__name__)
             test_name = f'{test_func_id[0]}.{test_func_id[1]}'
+            
+            if is_coverage_now:
+                # Tell code coverage that new test is starting
+                xcoverage.switch_context(test_name)
             
             run_count += 1
             
@@ -304,10 +308,13 @@ def _run_tests(test_names: list[str]) -> bool:
             # implicitly assume that it will be.
             if not is_windows():
                 gc.collect()
-    
+    if is_coverage_now:
+        # Tell code coverage that no test is now running
+        xcoverage.switch_context()
     end_time = time.time()  # capture
     delta_time = end_time - start_time
     
+    # Calculate summary of test run
     failure_count = 0
     error_count = 0
     skip_count = 0
@@ -326,51 +333,53 @@ def _run_tests(test_names: list[str]) -> bool:
             test_name = f'{test_func_id[0]}.{test_func_id[1]}'
             failed_test_names.append(test_name)
     
-    is_ok = (failure_count + error_count) == 0
-    
-    suffix_parts = []
-    if failure_count != 0:
-        suffix_parts.append(f'failures={failure_count}')
-    if error_count != 0:
-        suffix_parts.append(f'errors={error_count}')
-    if skip_count != 0:
-        suffix_parts.append(f'skipped={skip_count}')
-    suffix = (
-        f' ({", ".join(suffix_parts)})'
-        if len(suffix_parts) != 0
-        else ''
-    )
-    
-    print('=' * 70)
-    print('SUMMARY')
-    print('-' * 70)
-    for result in result_for_test_func_id.values():
-        if result is None:
-            print('.', end='')
-        elif isinstance(result, AssertionError):
-            print('F', end='')
-        elif isinstance(result, SkipTest):
-            if str(result).startswith('covered by:'):
-                print('c', end='')
+    # Print summary of test run
+    if True:
+        is_ok = (failure_count + error_count) == 0
+        
+        suffix_parts = []
+        if failure_count != 0:
+            suffix_parts.append(f'failures={failure_count}')
+        if error_count != 0:
+            suffix_parts.append(f'errors={error_count}')
+        if skip_count != 0:
+            suffix_parts.append(f'skipped={skip_count}')
+        suffix = (
+            f' ({", ".join(suffix_parts)})'
+            if len(suffix_parts) != 0
+            else ''
+        )
+        
+        print('=' * 70)
+        print('SUMMARY')
+        print('-' * 70)
+        for result in result_for_test_func_id.values():
+            if result is None:
+                print('.', end='')
+            elif isinstance(result, AssertionError):
+                print('F', end='')
+            elif isinstance(result, SkipTest):
+                if str(result).startswith('covered by:'):
+                    print('c', end='')
+                else:
+                    print('s', end='')
             else:
-                print('s', end='')
-        else:
-            print('E', end='')
-    print()
-    
-    print('-' * 70)
-    print(f'Ran {run_count} tests in {"%.3f" % delta_time}s')
-    print()
-    
-    # Handle case where no tests were run
-    if run_count == 0 and len(test_names) > 0:
-        print('FAILURE: No tests were found matching the specified names')
-        available_modules = set(test_func.__module__ for test_func in _TEST_FUNCS)
-        print(f'Available test modules: {", ".join(sorted(available_modules))}')
+                print('E', end='')
         print()
-        return False
-    
-    print(f'{"OK" if is_ok else "FAILURE"}{suffix}')
+        
+        print('-' * 70)
+        print(f'Ran {run_count} tests in {"%.3f" % delta_time}s')
+        print()
+        
+        # Handle case where no tests were run
+        if run_count == 0 and len(test_names) > 0:
+            print('FAILURE: No tests were found matching the specified names')
+            available_modules = set(test_func.__module__ for test_func in _TEST_FUNCS)
+            print(f'Available test modules: {", ".join(sorted(available_modules))}')
+            print()
+            return False
+        
+        print(f'{"OK" if is_ok else "FAILURE"}{suffix}')
     
     # Print warnings, if any
     if len(warning_list) >= 1:

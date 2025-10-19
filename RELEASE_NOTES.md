@@ -21,6 +21,9 @@ Release Notes ⋮
     * When Crystal is started with both --shell and --serve,
       always print shell prompt and server start prompt in consistent order.
 
+* Development improvements
+    * Code coverage statistics now report which tests cover each source line.
+
 ### v2.0.0 (September 26, 2025)
 
 Crystal 2.0 is a huge release with many new features and all-new tutorials!
