@@ -1267,7 +1267,13 @@ class MainWindow(CloakMixin):
         """
         if self._project_server is None:
             self._log_drawer = LogDrawer(parent=self._frame)
-            self._project_server = ProjectServer(self.project, port=port, host=host, stdout=self._log_drawer.writer)
+            self._project_server = ProjectServer(
+                self.project,
+                port=port,
+                host=host,
+                stdout=self._log_drawer.writer,
+                wait_for_banner=True,
+            )
         
         return self._project_server
     

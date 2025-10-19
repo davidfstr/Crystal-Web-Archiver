@@ -520,7 +520,7 @@ def _main(args: list[str]) -> None:
         
         # Start shell if requested
         if shell is not None:
-            shell.start(wait_for_banner=True)
+            shell.start(wait_for_banner=True)  # if not already started
         
         # Starts tests if requested
         if parsed_args.test is not None:
@@ -768,7 +768,9 @@ async def _did_launch(
         else:
             raise SystemExit()
     
+    # Start shell if requested
     if shell is not None:
+        shell.start(wait_for_banner=True)  # if not already started
         shell.attach(project, window)
 
     # Start serving immediately if requested
@@ -780,6 +782,7 @@ async def _did_launch(
         
         try:
             if window is not None:  # not headless mode
+                # NOTE: Uses wait_for_banner=True internally
                 window.start_server(port=parsed_args.port, host=parsed_args.host)
             else:  # headless mode
                 from crystal.server import ProjectServer

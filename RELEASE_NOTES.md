@@ -16,6 +16,11 @@ Release Notes ⋮
     * macOS 14+ is now the minimum macOS version.
       Drop support for macOS 13.
 
+* Minor fixes
+    * When Crystal starts, first dialog appears 0.2 seconds faster.
+    * When Crystal is started with both --shell and --serve,
+      always print shell prompt and server start prompt in consistent order.
+
 ### v2.0.0 (September 26, 2025)
 
 Crystal 2.0 is a huge release with many new features and all-new tutorials!

@@ -678,7 +678,7 @@ def _crystal_shell_with_serve(
         port: int | None = None,
         host: str | None = None,
         *, banner_timeout: float | None = None,
-        extra_args: list[str] | None = None
+        extra_args: list[str] | None = None,
         ) -> Iterator[str]:
     """
     Context which starts "crystal --serve [--port PORT] [--host HOST] [extra_args] PROJECT_PATH --shell"
@@ -688,7 +688,20 @@ def _crystal_shell_with_serve(
     """
     # NOTE: wxGTK on Ubuntu 22 can print many warning lines in the format
     #       "Unable to load X from the cursor theme", which should be ignored
-    MAX_ADDITIONAL_LINES = 7
+    MAX_BANNER_LINES = (
+        # Maximum normal banner length. Example:
+        # > Crystal 2.0.1 (Python 3.12.2)
+        # > Type "help" for more information.
+        # > Variables "project" and "window" are available.
+        # > Use exit() or Ctrl-D (i.e. EOF) to exit.
+        # > Server started at: http://0.0.0.0:2797
+        # > Read-only mode automatically enabled for remote access (--host 0.0.0.0).
+        # > To allow remote modifications, restart with --no-readonly.
+        # > Cmd click to launch VS Code Native REPL
+        8 +
+        # Maximum additional lines
+        7
+    )
     
     if banner_timeout is None:
         # macOS CI has been observed to take 6.2s
@@ -707,32 +720,51 @@ def _crystal_shell_with_serve(
     
     with crystal_shell(args=args) as (crystal, banner):
         assert isinstance(crystal.stdout, TextIOBase)
-        (server_start_message, _) = read_until(
-            crystal.stdout, '\n', timeout=banner_timeout, stacklevel_extra=2)
-        if 'Traceback ' in server_start_message:
-            raise AssertionError(
-                f'Crystal raised exception immediately after launch:\n\n'
-                f'{server_start_message}{drain(crystal.stdout)}')
         
-        # Read any additional lines:
-        # - server URL -- already read above
-        # - readonly messages (if any)
+        # Read banner until we see expected lines or reach a reasonable line limit
+        # - server URL (required)
+        # - readonly messages (optional)
         # - Ctrl-C instruction (optional)
-        additional_lines = []
-        try:
-            # Read more lines with a short timeout,
-            # until we see the Ctrl-C instruction or reach a reasonable line limit
-            while True:
+        banner_line_count = 0
+        while True:
+            if 'Traceback ' in banner:
+                raise AssertionError(
+                    f'Crystal raised exception immediately after launch:\n\n'
+                    f'{banner}{drain(crystal.stdout)}')
+            
+            seen_required_lines = 'Server started at: ' in banner
+            seen_optional_lines = 'Press Ctrl-C to stop' in banner
+            if seen_required_lines and (seen_optional_lines or banner_line_count >= MAX_BANNER_LINES):
+                break
+            try:
                 (line, _) = read_until(
-                    crystal.stdout, '\n', timeout=0.5, _drain_diagnostic=False)
-                additional_lines.append(line)
-                if 'Press Ctrl-C to stop' in line or len(additional_lines) >= MAX_ADDITIONAL_LINES:
+                    crystal.stdout,
+                    '\n',
+                    timeout=(
+                        # Wait longer time for required lines
+                        banner_timeout if not seen_required_lines
+                        # Wait shorter time for optional lines
+                        else 0.5
+                    ),
+                    stacklevel_extra=2,
+                    _drain_diagnostic=(
+                        True if not seen_required_lines
+                        else False
+                    ),
+                )
+            except ReadUntilTimedOut:
+                if not seen_required_lines:
+                    # Required lines not found after long wait. Error.
+                    raise
+                else:
+                    # Optional lines not found after short wait. OK.
                     break
-        except ReadUntilTimedOut:
-            pass  # OK
+            else:
+                # NOTE: Quadratic performance, but is OK for small N (<= MAX_BANNER_LINES)
+                banner += line
+                banner_line_count += 1
         
-        yield (server_start_message + ''.join(additional_lines))
-
+        yield banner
 
 def _ensure_server_is_accessible(server_url: str) -> None:
     """
