@@ -43,5 +43,5 @@ Running Coverage
 ================
 
 $ COVERAGE_RUN=1 python3 -m crystal --test
-$ coverage html --show-contexts
+$ coverage html
 $ open htmlcov/index.html
