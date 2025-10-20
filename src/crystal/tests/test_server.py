@@ -2930,7 +2930,10 @@ async def serve_and_fetch_xkcd_home_page(mw: MainWindow) -> tuple[WebPage, str]:
             click_button(mw.view_button)
         
         # Fetch the revision through the server
-        server_page = await fetch_archive_url(home_url)
+        server_page = await fetch_archive_url(
+            home_url,
+            timeout=4.0,  # 8.0s in ASAN; >4.0s observed in Linux ASAN
+        )
     
     return (server_page, captured_stdout.getvalue())
 

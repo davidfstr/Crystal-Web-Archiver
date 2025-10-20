@@ -191,7 +191,9 @@ def assert_does_open_webbrowser_to(request_url: str) -> Iterator[None]:
 async def is_url_not_in_archive(archive_url: str) -> bool:
     server_page = await fetch_archive_url(
         archive_url, 
-        headers={'X-Crystal-Dynamic': 'False'})
+        headers={'X-Crystal-Dynamic': 'False'},
+        timeout=4.0,  # 8.0s in ASAN; >4.0s observed in Linux ASAN
+    )
     return server_page.is_not_in_archive
 
 
