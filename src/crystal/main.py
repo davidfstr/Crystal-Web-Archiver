@@ -372,7 +372,12 @@ def _main2(args: list[str]) -> None:
             # macOS: Define app name used by the "Quit X" and "Hide X" menuitems
             self.SetAppDisplayName(APP_NAME)
             
-            # macOS + non-.app: Set Dock icon explicitly
+            # macOS + non-.app: Set application name in menu bar
+            if is_mac_os() and getattr(sys, 'frozen', None) != 'macosx_app':
+                from crystal.util.macos_app import set_application_menu_name
+                set_application_menu_name(APP_NAME)
+            
+            # macOS + non-.app: Set Dock icon
             if is_mac_os() and getattr(sys, 'frozen', None) != 'macosx_app':
                 from crystal import resources
                 import wx.adv

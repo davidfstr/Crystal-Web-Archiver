@@ -22,6 +22,7 @@ Release Notes ⋮
       always print shell prompt and server start prompt in consistent order.
 
 * Development improvements
+    * Show correct application menu title on macOS when run from source.
     * Code coverage statistics now report which tests cover each source line.
 
 ### v2.0.0 (September 26, 2025)
