@@ -1,10 +1,14 @@
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
-from crystal import server
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import Project, Resource, ResourceRevision, RootResource
-from crystal.server import _DEFAULT_SERVER_PORT, ProjectServer, get_request_url
+import crystal.server
+from crystal.server import (
+    _DEFAULT_SERVER_PORT, _HEADER_ALLOWLIST, _HEADER_DENYLIST,
+    _IGNORE_UNKNOWN_X_HEADERS,
+    get_request_url, ProjectServer,
+)
 from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
 from crystal.server.special_pages import generic_404_page_html
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
@@ -31,11 +35,13 @@ from crystal.tests.util.xplaywright import (
 )
 from crystal.util.cli import TERMINAL_FG_PURPLE, colorize
 from crystal.util.ports import is_port_in_use
+from http.client import BadStatusLine, RemoteDisconnected
 from io import StringIO
 import json
 from textwrap import dedent
 from unittest import skip
 from unittest.mock import ANY, patch
+from urllib.parse import urlparse
 
 
 # TODO: Many serving behaviors are tested indirectly by larger tests
@@ -200,15 +206,15 @@ async def test_given_welcome_page_visible_when_enter_url_then_navigates_to_url_i
 
 
 # ------------------------------------------------------------------------------
-# Test: Special Pages
+# Test: Special Pages (in general)
 
 @awith_playwright
 async def test_when_serve_special_page_and_branding_logo_cannot_load_then_replaces_logo_with_simplified_svg_fallback(pw: Playwright) -> None:
     # Use the "Not in Archive" special page, 
     # with the logo image prevented from loading successfully
-    original_public_filenames = server._RequestHandler.PUBLIC_STATIC_RESOURCE_NAMES
+    original_public_filenames = crystal.server._RequestHandler.PUBLIC_STATIC_RESOURCE_NAMES
     with patch.object(
-            server._RequestHandler,
+            crystal.server._RequestHandler,
             'PUBLIC_STATIC_RESOURCE_NAMES',
             original_public_filenames - {'appicon.png'}):
         async with _not_in_archive_page_visible() as server_page:
@@ -1429,7 +1435,7 @@ async def test_given_fetch_error_page_visible_when_press_go_back_button_then_nav
 
 async def test_when_serve_page_then_safe_headers_included() -> None:
     SAFE_HEADER_NAME = 'Date'
-    assert SAFE_HEADER_NAME.lower() in server._HEADER_ALLOWLIST
+    assert SAFE_HEADER_NAME.lower() in _HEADER_ALLOWLIST
     
     async with _xkcd_home_page_served() as (revision, server_page, _):
         # Ensure test data has header
@@ -1444,7 +1450,7 @@ async def test_when_serve_page_then_safe_headers_included() -> None:
 
 async def test_when_serve_page_then_unsafe_headers_excluded() -> None:
     UNSAFE_HEADER_NAME = 'Connection'
-    assert UNSAFE_HEADER_NAME.lower() in server._HEADER_DENYLIST
+    assert UNSAFE_HEADER_NAME.lower() in _HEADER_DENYLIST
     
     async with _xkcd_home_page_served() as (revision, server_page, _):
         # Ensure test data has header
@@ -1463,8 +1469,8 @@ async def test_when_serve_page_with_unknown_non_x_header_then_excludes_header_an
     UNKNOWN_NON_X_HEADER_NAME = 'Crystal-Test-Header'
     UNKNOWN_NON_X_HEADER_VALUE = 'some_value'
     assert (
-        UNKNOWN_NON_X_HEADER_NAME.lower() not in server._HEADER_ALLOWLIST and
-        UNKNOWN_NON_X_HEADER_NAME.lower() not in server._HEADER_DENYLIST
+        UNKNOWN_NON_X_HEADER_NAME.lower() not in _HEADER_ALLOWLIST and
+        UNKNOWN_NON_X_HEADER_NAME.lower() not in _HEADER_DENYLIST
     )
     
     # Insert header into test data
@@ -1493,10 +1499,10 @@ async def test_when_serve_page_with_unknown_non_x_header_then_excludes_header_an
 async def test_when_serve_page_with_unknown_x_header_then_excludes_header_silently() -> None:
     UNKNOWN_X_HEADER_NAME = 'X-Timer'
     assert (
-        UNKNOWN_X_HEADER_NAME.lower() not in server._HEADER_ALLOWLIST and
-        UNKNOWN_X_HEADER_NAME.lower() not in server._HEADER_DENYLIST
+        UNKNOWN_X_HEADER_NAME.lower() not in _HEADER_ALLOWLIST and
+        UNKNOWN_X_HEADER_NAME.lower() not in _HEADER_DENYLIST
     )
-    assert True == server._IGNORE_UNKNOWN_X_HEADERS
+    assert True == _IGNORE_UNKNOWN_X_HEADERS
     
     async with _xkcd_home_page_served() as (revision, server_page, captured_stdout):
         # Ensure test data has header
@@ -2539,9 +2545,9 @@ async def test_when_serve_regular_page_and_branding_logo_cannot_load_then_hides_
             await wait_for_future(revision_future)
             
             # Serve the page, with the logo image prevented from loading successfully
-            original_public_filenames = server._RequestHandler.PUBLIC_STATIC_RESOURCE_NAMES
+            original_public_filenames = crystal.server._RequestHandler.PUBLIC_STATIC_RESOURCE_NAMES
             with patch.object(
-                    server._RequestHandler,
+                    crystal.server._RequestHandler,
                     'PUBLIC_STATIC_RESOURCE_NAMES',
                     original_public_filenames - {'appicon.png'}):
                 with closing(ProjectServer(project)) as project_server:
@@ -2653,6 +2659,186 @@ async def test_js_date_always_returns_datetime_that_resource_was_downloaded() ->
     # Case 2: Date()
     # Case 3: Date.now()
     pass
+
+
+# ------------------------------------------------------------------------------
+# Test: Logging
+
+async def test_when_server_starts_then_logs_server_started_at_ellipsis() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        # Create new project, with UI
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            home_rr = RootResource(project, 'Home', Resource(project, home_url))
+            
+            # Download a new root resource
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti,) = root_ti.Children
+            home_ti.SelectItem()
+            async with wait_for_download_task_to_start_and_finish(project):
+                click_button(mw.download_button)
+            
+            with patch('crystal.server.print_success', wraps=crystal.server.print_success) as spy_print_success:
+                # Start server
+                home_ti.SelectItem()
+                with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+                    click_button(mw.view_button)
+                
+                # Ensure print_success was called with the expected message
+                success_messages = [call.args[0] for call in spy_print_success.call_args_list]
+                (message,) = success_messages
+                assertIn('Server started at: http://', message)
+                assertIn(f':{_DEFAULT_SERVER_PORT}', message)
+
+
+async def test_when_page_fetched_successfully_then_logs_url_and_status_code_200() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        # Create new project, with UI
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            home_rr = RootResource(project, 'Home', Resource(project, home_url))
+            
+            # Download a new root resource
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti,) = root_ti.Children
+            home_ti.SelectItem()
+            async with wait_for_download_task_to_start_and_finish(project):
+                click_button(mw.download_button)
+            
+            # Start server
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+                click_button(mw.view_button)
+            
+            with patch('crystal.server.print_info', wraps=crystal.server.print_info) as spy_print_info:
+                # Fetch the downloaded page
+                server_page = await fetch_archive_url(home_url)
+                assert server_page.status == 200
+                
+                # Ensure print_info was called with the expected message
+                info_messages = [call.args[0] for call in spy_print_info.call_args_list]
+                assertIn(
+                    f'"GET {urlparse(get_request_url(home_url)).path} HTTP/1.1" 200 -',
+                    info_messages)
+
+
+async def test_when_timeout_while_server_reads_request_or_writes_response_then_logs_nothing() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        # Create new project, with UI
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            home_rr = RootResource(project, 'Home', Resource(project, home_url))
+            
+            # Download a new root resource
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti,) = root_ti.Children
+            home_ti.SelectItem()
+            async with wait_for_download_task_to_start_and_finish(project):
+                click_button(mw.download_button)
+            
+            # Start server
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+                click_button(mw.view_button)
+            
+            # Spy on logging methods
+            with patch('crystal.server.print_success', wraps=crystal.server.print_success) as spy_print_success, \
+                 patch('crystal.server.print_error', wraps=crystal.server.print_error) as spy_print_error, \
+                 patch('crystal.server.print_info', wraps=crystal.server.print_info) as spy_print_info, \
+                 patch('crystal.server.print_warning', wraps=crystal.server.print_warning) as spy_print_warning:
+                
+                # Spy on log_error
+                log_error_calls = []
+                original_log_error = crystal.server._RequestHandler.log_error
+                def spy_log_error(self, format: str, *args):
+                    log_error_calls.append((format, args))
+                    return original_log_error(self, format, *args)
+                
+                # Mock rfile.readline to raise TimeoutError when handle_one_request() called
+                def mock_readline(*args, **kwargs):
+                    raise TimeoutError('timed out')
+                original_handle_one_request = crystal.server._RequestHandler.handle_one_request
+                def spy_handle_one_request(self):
+                    with patch.object(self.rfile, 'readline', mock_readline):
+                        return original_handle_one_request(self)
+                
+                with patch.object(crystal.server._RequestHandler, 'log_error', spy_log_error), \
+                     patch.object(crystal.server._RequestHandler, 'handle_one_request', spy_handle_one_request):
+                    
+                    # Try to fetch the page (this will trigger the timeout handling)
+                    try:
+                        await fetch_archive_url(home_url)
+                    except (ConnectionAbortedError, ConnectionResetError, RemoteDisconnected):
+                        pass  # expected
+                
+                # Ensure log_error() was called 1 time with the expected format string
+                assertEqual(1, len(log_error_calls))
+                (format_str, args) = log_error_calls[0]
+                assertEqual("Request timed out: %r", format_str)
+                
+                # Ensure none of the print methods were called (timeout errors are silently ignored)
+                assertEqual(0, spy_print_success.call_count)
+                assertEqual(0, spy_print_error.call_count)
+                assertEqual(0, spy_print_info.call_count)
+                assertEqual(0, spy_print_warning.call_count)
+
+
+async def test_when_server_reads_bad_status_line_in_request_then_logs_url_and_status_code_400_and_error_message() -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        # Create new project, with UI
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            home_rr = RootResource(project, 'Home', Resource(project, home_url))
+            
+            # Download a new root resource
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti,) = root_ti.Children
+            home_ti.SelectItem()
+            async with wait_for_download_task_to_start_and_finish(project):
+                click_button(mw.download_button)
+            
+            # Start server
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+                click_button(mw.view_button)
+            
+            # Patch parse_request to simulate receiving a bad request line
+            original_parse_request = crystal.server._RequestHandler.parse_request
+            def mock_parse_request(self):
+                self.raw_requestline = b'GET / Hello\r\n'
+                return original_parse_request(self)
+            
+            with patch('crystal.server.print_error', wraps=crystal.server.print_error) as spy_print_error, \
+                 patch('crystal.server.print_info', wraps=crystal.server.print_info) as spy_print_info, \
+                 patch.object(crystal.server._RequestHandler, 'parse_request', mock_parse_request):
+                
+                # Fetch the downloaded page, which will trigger parse_request()
+                try:
+                    server_page = await fetch_archive_url(home_url)
+                except BadStatusLine:
+                    pass  # expected
+                
+                # Ensure print_error was called with the expected message
+                error_messages = [call.args[0] for call in spy_print_error.call_args_list]
+                assertIn(
+                    f'"GET / Hello" 400 - "Bad request version (\'Hello\')"',
+                    error_messages)
+                
+                # Ensure print_info was called with the expected message
+                # NOTE: It's a bit strange to print an INFO line in addition to the
+                #       ERROR line above. This behavior may be modified in the future.
+                info_messages = [call.args[0] for call in spy_print_info.call_args_list]
+                assertIn(
+                    f'"GET / Hello" 400 -',
+                    info_messages)
 
 
 # ------------------------------------------------------------------------------

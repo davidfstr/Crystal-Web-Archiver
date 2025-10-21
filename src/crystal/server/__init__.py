@@ -1710,10 +1710,28 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # === Utility: Logging ===
     
-    def log_error(self, format, *args):  # override
+    @override
+    def log_error(self, format: str, *args) -> None:
+        # ex: Request timed out: TimeoutError('timed out')​
+        if format == "Request timed out: %r":  # from BaseHTTPRequestHandler.handle_one_request()
+            # Ignore uninteresting timeout while handling a request
+            return
+        
+        # ex: code 400, message Bad request version ('Hello')
+        if format == "code %d, message %s":  # from BaseHTTPRequestHandler.send_error()
+            (code, message) = args
+            format = '"%s" %s %s "%s"'  # reinterpret
+            args = (self.requestline, str(code), '-', message)  # reinterpret
+        
         self._print_error(format % args)
     
-    def log_message(self, format, *args):  # override
+    @override
+    def log_message(self, format: str, *args) -> None:
+        # ex: "GET / HTTP/1.1" 200 -​
+        if format == '"%s" %s %s':  # from BaseHTTPRequestHandler.log_request()
+            # Make no changes
+            pass
+        
         self._print_info(format % args)
     
     # === Utility: Print ===

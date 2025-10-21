@@ -12,6 +12,9 @@ Release Notes ⋮
 
 ### main
 
+* Serving improvements
+    * Ignore timeout errors when responding to a request.
+
 * Support changes **(Breaking Change)**
     * macOS 14+ is now the minimum macOS version.
       Drop support for macOS 13.
