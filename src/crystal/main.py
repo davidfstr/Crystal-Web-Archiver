@@ -681,7 +681,7 @@ async def _did_launch(
     # brought to the front on macOS when run outside of an .app bundle.
     # For more info: https://github.com/wxWidgets/Phoenix/issues/2499
     if is_mac_os() and getattr(sys, 'frozen', None) != 'macosx_app':
-        from crystal.util.bring_app_to_front import bring_app_to_front
+        from crystal.util.macos_app import bring_app_to_front
         bring_app_to_front()
     
     # Open/create a project
