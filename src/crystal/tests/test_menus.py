@@ -17,7 +17,7 @@ from unittest.mock import patch
 import wx
 
 
-# === Test: New Project ===
+# === Test: File: New Project ===
 
 async def test_can_create_project_with_menuitem_given_clean_untitled_project_visible() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw1, project1):
@@ -216,7 +216,7 @@ async def _wait_for_main_window_to_reopen(project1: Project) -> AsyncIterator[Pr
         await mw2.close()
 
 
-# === Test: Close Project ===
+# === Test: File: Close Project ===
 
 async def test_can_close_project_with_menuitem_given_clean_untitled_project_visible() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, _):
@@ -287,7 +287,7 @@ async def test_can_close_project_with_menuitem_given_titled_project_visible() ->
             
         await OpenOrCreateDialog.wait_for()
 
-# === Test: Quit ===
+# === Test: File: Quit ===
 
 async def test_can_quit_with_menuitem() -> None:
     with crystal_shell() as (crystal, _):
@@ -315,9 +315,17 @@ async def test_can_quit_with_menuitem() -> None:
             timeout=3.0)  # took 4.4s on macOS ASAN CI (after 2x multiplier)
 
 
-# === Test: Preferences... ===
+# === Test: Edit: Preferences... ===
 
 async def test_can_open_preferences_with_menuitem() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
         prefs_dialog = await mw.open_preferences_with_menuitem()
         await prefs_dialog.ok()
+
+
+# === Test: Help: About Crystal ===
+
+async def test_can_open_about_with_menuitem() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
+        about_dialog = await mw.open_about_with_menuitem()
+        await about_dialog.ok()

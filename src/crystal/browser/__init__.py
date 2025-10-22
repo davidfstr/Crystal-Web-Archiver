@@ -2,11 +2,9 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 import sys
 from crystal import __version__ as CRYSTAL_VERSION
-from crystal import APP_NAME, resources
+from crystal import APP_NAME
 from crystal.app_preferences import app_prefs
-from crystal.browser.entitytree import (
-    EntityTree, ResourceGroupNode, RootResourceNode,
-)
+from crystal.browser.entitytree import EntityTree
 from crystal.browser.icons import TREE_NODE_ICONS
 from crystal.browser.new_group import NewGroupDialog
 from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
@@ -20,16 +18,18 @@ from crystal.progress import (
     OpenProjectProgressListener, SaveAsProgressDialog,
 )
 from crystal.server import ProjectServer
-from crystal.task import DownloadResourceGroupMembersTask, RootTask
+from crystal.task import RootTask
 from crystal.ui.actions import Action
+from crystal.ui.branding import (
+    AUTHORS_1_TEXT, AUTHORS_2_TEXT, AUTHORS_2_URL, 
+    create_program_name_control, get_font_size_scale, load_app_icon,
+)
 from crystal.ui.callout import Callout
 from crystal.ui.clickable_text import ClickableText
 from crystal.ui.log_drawer import LogDrawer
 from crystal.ui.tree import DEFAULT_FOLDER_ICON_SET
 from crystal.ui.tree2 import NodeView
-from crystal.util.bulkheads import (
-    capture_crashes_to, capture_crashes_to_stderr,
-)
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cloak import CloakMixin, cloak
 from crystal.util.ellipsis import EllipsisType
 from crystal.util.finderinfo import get_hide_file_extension
@@ -55,7 +55,7 @@ from crystal.util.xsqlite3 import (
     is_database_closed_error, is_database_gone_error,
 )
 from crystal.util.xthreading import (
-    bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, fg_trampoline, fg_wait_for,
+    fg_affinity, fg_call_later, fg_trampoline, fg_wait_for,
 )
 from functools import partial
 import os
@@ -345,6 +345,15 @@ class MainWindow(CloakMixin):
             enabled=False,
             button_label=decorate_label('👀', '&View', ' '))
         
+        # Help
+        self._about_action = Action(
+            wx.ID_ABOUT,
+            f'About {APP_NAME}',
+            accel=None,
+            # NOTE: Action is bound to self._on_about later manually
+            action_func=None,
+            enabled=True)
+        
         # HACK: Gather all actions indirectly by inspecting fields
         self._actions = [a for a in self.__dict__.values() if isinstance(a, Action)]
     
@@ -414,6 +423,19 @@ class MainWindow(CloakMixin):
         menubar.Append(file_menu, 'File')
         menubar.Append(edit_menu, 'Edit')
         menubar.Append(entity_menu, 'Entity')
+        
+        # Help menu
+        help_menu = wx.Menu()
+        # Append About menuitem
+        if True:
+            # NOTE: On macOS the About menuitem will actually be positioned
+            #       in the [Application Name] menu rather than the Help menu.
+            self._about_action.append_menuitem_to(help_menu)
+            # NOTE: Can only intercept wx.EVT_MENU for wx.ID_ABOUT on an wx.Frame
+            #       on macOS. In particular cannot intercept on the Help wx.Menu.
+            bind(raw_frame, wx.EVT_MENU, self._on_about)
+        menubar.Append(help_menu, 'Help')
+        
         return menubar
     
     def _on_entity_menu_open(self, event: wx.MenuEvent) -> None:
@@ -743,11 +765,12 @@ class MainWindow(CloakMixin):
         """
         self.task_tree.change_root_task(new_root_task)
     
-    # === File Menu: Events ===
+    # === System: Events ===
     
     @fg_affinity
     def _on_system_appearance_changed(self, event: wx.SysColourChangedEvent) -> None:
         """Update UI when system transitions to/from dark mode."""
+        # NOTE: Duplicated in every handler for wx.SysColourChangedEvent
         SetDark(IsDarkNow())
         
         self.entity_tree.root.update_icon_set_of_descendants_supporting_dark_mode()
@@ -756,6 +779,8 @@ class MainWindow(CloakMixin):
         
         # Keep processing the event
         event.Skip()
+    
+    # === File Menu: Events ===
     
     def _on_save_as_project(self, event: wx.MenuEvent) -> None:
         """
@@ -997,6 +1022,15 @@ class MainWindow(CloakMixin):
         error_dialog.Name = 'cr-save-error-dialog'
         with error_dialog:
             ShowModal(error_dialog)
+    
+    # === Help Menu: Events ===
+    
+    def _on_about(self, event: wx.MenuEvent) -> None:
+        if event.Id == wx.ID_ABOUT:
+            from crystal.browser.about import AboutDialog
+            AboutDialog(self._frame)
+        else:
+            event.Skip()
     
     # === Entity Pane: New/Edit Root Url ===
     
@@ -1507,21 +1541,10 @@ class MainWindow(CloakMixin):
     
     def _create_branding_area(self, parent: wx.Window) -> wx.Window:
         """Create the branding area with Crystal icon, program name, version, and authors."""
-        PROGRAM_NAME = 'Crystal'
-        PROGRAM_NAME_USES_BITMAP = True
         PROGRAM_VERSION = f'v{CRYSTAL_VERSION}'
-        AUTHORS_1_TEXT = 'By David Foster and '
-        AUTHORS_2_TEXT = 'contributors'
-        AUTHORS_2_URL = 'https://github.com/davidfstr/Crystal-Web-Archiver/graphs/contributors'
         
-        if is_mac_os():
-            font_size_scale = 1.0
-        elif is_windows() or is_linux():
-            font_size_scale = 72 / 96
-        else:
-            raise AssertionError('Unknown operating system')
-        
-        is_dark_mode = IsDark()
+        font_size_scale = get_font_size_scale()  # cache
+        is_dark_mode = IsDark()  # cache
         
         # Create branding area with icon and text
         branding_area = wx.Panel(parent)
@@ -1530,12 +1553,7 @@ class MainWindow(CloakMixin):
         
         # Program icon (42x42)
         try:
-            app_icon = self._load_app_icon()
-            # Scale to 42x42 if needed
-            if app_icon.GetSize() != (42, 42):
-                image = app_icon.ConvertToImage()
-                image = image.Scale(42, 42, wx.IMAGE_QUALITY_HIGH)
-                app_icon = wx.Bitmap(image)
+            app_icon = load_app_icon(wx.Size(42, 42))
             
             icon_ctrl = wx.StaticBitmap(branding_area, bitmap=app_icon)
             branding_sizer.Add(
@@ -1558,26 +1576,9 @@ class MainWindow(CloakMixin):
                 program_line_sizer = wx.BoxSizer(wx.HORIZONTAL)
                 program_line.SetSizer(program_line_sizer)
                 
-                # Program name (bitmap logotext for consistent cross-platform rendering)
-                try:
-                    if not PROGRAM_NAME_USES_BITMAP:
-                        # TODO: Avoid using exceptions purely for control flow
-                        raise Exception('Forcing text fallback for logotext bitmap')
-                    logotext_bundle = self._load_logotext_bitmap(is_dark_mode)
-                    if logotext_bundle:
-                        program_name = wx.StaticBitmap(program_line, bitmap=logotext_bundle)
-                        logotext_height = program_name.Size.Height
-                    else:
-                        raise RuntimeError("Failed to create logotext bundle")
-                except Exception as e:
-                    # Fallback to text if bitmap loading fails
-                    print(f"Warning: Failed to load logotext bitmap, using text fallback: {e}")
-                    program_name = wx.StaticText(program_line, label=PROGRAM_NAME)
-                    program_name_font = self._load_app_name_font(int(23 * font_size_scale))
-                    program_name.SetFont(program_name_font)
-                    logotext_height = program_name.GetTextExtent(PROGRAM_NAME)[1]
-                
-                # Add program name to sizer
+                # Program name
+                program_name = create_program_name_control(program_line)
+                logotext_height = program_name.GetSize().Height
                 program_line_sizer.Add(program_name, flag=wx.ALIGN_BOTTOM)
                 
                 # Space between name and version
@@ -1608,8 +1609,8 @@ class MainWindow(CloakMixin):
                             raise AssertionError('Unknown operating system')
                         logotext_baseline_from_bottom = int(logotext_height * 0.2) + fudge_offset
                     else:
-                        dc.SetFont(program_name_font)
-                        _, _, program_descent, _ = dc.GetFullTextExtent(PROGRAM_NAME)
+                        dc.SetFont(program_name.GetFont())
+                        _, _, program_descent, _ = dc.GetFullTextExtent(program_name.LabelText)
                         logotext_baseline_from_bottom = program_descent
                     
                     # Calculate offset to align version baseline with logotext baseline
@@ -1664,12 +1665,12 @@ class MainWindow(CloakMixin):
         
         # Find the branding area in its parent's sizer. Store its position and flags.
         old_item = None
-        sizer_position = -1
+        sizer_index = -1
         for i in range(sizer.GetItemCount()):
             item = sizer.GetItem(i)
             if item.GetWindow() == self._branding_area:
                 old_item = item
-                sizer_position = i
+                sizer_index = i
                 break
         assert old_item is not None
         proportion = old_item.GetProportion()
@@ -1677,77 +1678,13 @@ class MainWindow(CloakMixin):
         border = old_item.GetBorder()
         
         # Remove the old branding area
-        sizer.Remove(sizer_position)
+        sizer.Remove(sizer_index)
         self._branding_area.Destroy()
         
         # Create/insert new branding area with updated appearance
         self._branding_area = self._create_branding_area(parent)
-        sizer.Insert(sizer_position, self._branding_area, proportion, flag, border)
+        sizer.Insert(sizer_index, self._branding_area, proportion, flag, border)
         parent.Layout()
-    
-    @staticmethod
-    def _load_app_icon() -> wx.Bitmap:
-        """Load the Crystal application icon from resources."""
-        with resources.open_binary('appicon.png') as f:
-            bitmap = wx.Bitmap.FromPNGData(f.read())
-        if not bitmap.IsOk():
-            raise Exception('Failed to load app icon')
-        return bitmap
-    
-    @staticmethod
-    def _load_logotext_bitmap(is_dark_mode: bool = False) -> wx.BitmapBundle:
-        """Load the Crystal logotext bitmap bundle with 1x and 2x versions."""
-        bitmaps = []
-        
-        # Choose filenames based on mode
-        if is_dark_mode:
-            filename_1x = 'logotext-dark.png'
-            filename_2x = 'logotext-dark@2x.png'
-        else:
-            filename_1x = 'logotext.png'
-            filename_2x = 'logotext@2x.png'
-        
-        # Load 1x version
-        try:
-            with resources.open_binary(filename_1x) as f:
-                bitmap_1x = wx.Bitmap.FromPNGData(f.read())
-            if bitmap_1x.IsOk():
-                bitmaps.append(bitmap_1x)
-        except Exception:
-            pass
-        
-        # Load 2x version
-        try:
-            with resources.open_binary(filename_2x) as f:
-                bitmap_2x = wx.Bitmap.FromPNGData(f.read())
-            if bitmap_2x.IsOk():
-                bitmaps.append(bitmap_2x)
-        except Exception:
-            pass
-        
-        if not bitmaps:
-            raise Exception('Failed to load logotext bitmaps')
-        
-        # Create bitmap bundle from available bitmaps
-        return wx.BitmapBundle.FromBitmaps(bitmaps)
-    
-    @staticmethod
-    def _load_app_name_font(base_size: int) -> wx.Font:
-        """Create a Futura Medium font with fallback to system fonts."""
-        # Try Futura Medium first
-        font = wx.Font(base_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_MEDIUM, faceName='Futura')
-        if font.IsOk() and font.GetFaceName() == 'Futura' and font.GetWeight() == wx.FONTWEIGHT_MEDIUM:
-            return font
-        
-        # Try Futura Normal
-        font = wx.Font(base_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, faceName='Futura')
-        if font.IsOk() and font.GetFaceName() == 'Futura':
-            return font
-         
-        # Fallback to System Bold
-        font = wx.Font(base_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        assert font.IsOk(), 'Failed to create fallback font'
-        return font
     
     def _update_read_write_icon_for_readonly_status(self) -> None:
         readonly = self._readonly  # cache

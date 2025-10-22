@@ -377,6 +377,12 @@ class MainWindow:
     
     # === Menubar: Menuitems ===
     
+    async def open_about_with_menuitem(self) -> AboutDialog:
+        about_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_ABOUT)
+        wx.PostEvent(self.main_window, wx.CommandEvent(wx.EVT_MENU.typeId, about_menuitem.Id))
+        
+        return await AboutDialog.wait_for()
+    
     async def open_preferences_with_menuitem(self) -> PreferencesDialog:
         prefs_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_PREFERENCES)
         wx.PostEvent(self.main_window, wx.CommandEvent(wx.EVT_MENU.typeId, prefs_menuitem.Id))
@@ -756,6 +762,47 @@ class NewGroupDialog:
     async def cancel(self) -> None:
         click_button(self.cancel_button)
         await wait_for(not_condition(window_condition('cr-new-group-dialog')), stacklevel_extra=1)
+
+
+class AboutDialog:
+    _dialog: wx.Dialog
+    ok_button: wx.Button
+    
+    @staticmethod
+    async def wait_for() -> AboutDialog:
+        self = AboutDialog(_ready=True)
+        self._dialog = await wait_for(
+            window_condition('cr-about-dialog'),
+            timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            stacklevel_extra=1,
+        )
+        assert isinstance(self._dialog, wx.Dialog)
+        self.ok_button = self._dialog.FindWindow(id=wx.ID_OK)
+        assert isinstance(self.ok_button, wx.Button)
+        return self
+    
+    def __init__(self, *, _ready: bool=False) -> None:
+        assert _ready, 'Did you mean to use AboutDialog.wait_for()?'
+    
+    async def press_enter(self) -> None:
+        # Simulate pressing Enter key
+        key_event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+        key_event.SetKeyCode(wx.WXK_RETURN)
+        key_event.SetId(self._dialog.GetId())
+        key_event.SetEventObject(self._dialog)
+        self._dialog.ProcessEvent(key_event)
+        
+        await self._wait_for_close(stacklevel_extra=1)
+    
+    async def ok(self) -> None:
+        click_button(self.ok_button)
+        await self._wait_for_close(stacklevel_extra=1)
+    
+    async def _wait_for_close(self, *, stacklevel_extra: int) -> None:
+        await wait_for(
+            not_condition(window_condition('cr-about-dialog')),
+            stacklevel_extra=1 + stacklevel_extra,
+        )
 
 
 class PreferencesDialog:

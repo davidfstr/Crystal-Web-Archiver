@@ -162,7 +162,8 @@ def ShowModalAsync(dialog: wx.Dialog) -> Generator[FgCommand, ContinueSoonFunc |
 # ------------------------------------------------------------------------------
 # ShowWindowModal
 
-def ShowWindowModal(dialog: wx.Dialog) -> None:
+# TODO: Alter modal_fallback to default to True, since it is safer than False.
+def ShowWindowModal(dialog: wx.Dialog, *, modal_fallback: bool=False) -> None:
     """
     Shows a dialog as window-modal, preventing interaction with the parent window
     but allowing interaction with other application windows.
@@ -176,12 +177,18 @@ def ShowWindowModal(dialog: wx.Dialog) -> None:
     application windows and the system.
     """
     if is_wx_gtk() or (is_windows() and tests_are_running()):
-        # 1. GTK sometimes segfaults when closing a dialog displayed as window-modal.
-        #    So don't use ShowWindowModal() on GTK.
+        # 1a. GTK sometimes segfaults when closing a dialog displayed as window-modal.
+        #     So don't use ShowWindowModal() on GTK.
+        # 1b. GTK raises an assertion error closing a dialog displayed as modal
+        #     while tests are running. So don't use ShowModal() on GTK
+        #     while tests are running.
         # 2. Windows won't process wx events properly when a window-modal
         #    dialog is open, which blocks automated tests from executing.
         #    So don't use ShowWindowModal() on Windows during tests.
-        dialog.Show()
+        if modal_fallback and not (is_wx_gtk() and tests_are_running()):
+            dialog.ShowModal()
+        else:
+            dialog.Show()
     else:
         # 1. macOS fully supports window-modal dialogs
         # 2. Windows partially supports window-modal dialogs,

@@ -13,10 +13,12 @@ Release Notes ⋮
 ### main
 
 * Workflow improvements
-    * The "New Project..." menuitem can be used to create a different project
-      when another project is already open.
-    * The "Open Project..." menuitem can be used to open a different project
-      when another project is already open.
+    * Several standard menuitems are now present and work:
+        * The "New Project..." menuitem can be used to create a different project
+          when another project is already open.
+        * The "Open Project..." menuitem can be used to open a different project
+          when another project is already open.
+        * The "About Crystal" menuitem shows information about Crystal.
 
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.

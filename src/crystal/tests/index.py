@@ -2,6 +2,7 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import Future
 from contextlib import contextmanager
 from crystal.tests import (
+    test_about_box,
     test_bulkheads, test_callout, test_cli, test_disk_io_errors, test_do_not_download_groups,
     test_download, test_download_body, test_edit_group, test_edit_root_url,
     test_entitytree, test_file_extension_visibility, test_hibernate,
@@ -47,6 +48,7 @@ def _test_functions_in_module(mod) -> list[Callable]:
 
 # TODO: Avoid the need to manually enumerate all test modules individually
 _TEST_FUNCS = (
+    _test_functions_in_module(test_about_box) +
     _test_functions_in_module(test_bulkheads) +
     _test_functions_in_module(test_callout) +
     _test_functions_in_module(test_cli) +

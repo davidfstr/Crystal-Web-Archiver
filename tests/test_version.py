@@ -1,7 +1,14 @@
-from crystal import __version__
+from crystal import _build_year, __version__
+import datetime
 import os
 import pytest
 import re
+
+
+def test_build_year_for_version_is_correct() -> None:
+    current_year = datetime.date.today().year
+    if _build_year != current_year:
+        raise Exception(f'crystal._build_year needs to be updated to {current_year}')
 
 
 def test_version_in_pyproject_toml_is_consistent_with_package_version() -> None:

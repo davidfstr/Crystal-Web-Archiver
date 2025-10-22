@@ -7,9 +7,10 @@ except ImportError:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
     import crystal
 
-from crystal import __version__
-import datetime
+from crystal import APP_NAME, APP_COPYRIGHT_STRING, __version__
 
-APP_NAME = 'Crystal'
+
+# Settings
+APP_NAME = APP_NAME  # reexport
 VERSION_STRING = __version__
-COPYRIGHT_STRING = f'Copyright © 2011-{datetime.date.today().year} David Foster. Licensed under PolyForm NC 1.0.0'
+COPYRIGHT_STRING = APP_COPYRIGHT_STRING
