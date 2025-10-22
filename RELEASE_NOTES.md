@@ -12,6 +12,9 @@ Release Notes ⋮
 
 ### main
 
+* Parsing improvements
+    * New projects default to using the faster lxml parser rather than BeautifulSoup.
+
 * Serving improvements
     * Ignore timeout errors when responding to a request.
 

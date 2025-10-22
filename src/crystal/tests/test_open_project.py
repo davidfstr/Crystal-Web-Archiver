@@ -71,6 +71,19 @@ async def test_can_create_project_with_url_unsafe_characters() -> None:
             assert os.path.exists(os.path.join(project_dirpath, Project._DB_FILENAME))
 
 
+async def test_when_create_project_then_uses_lxml_html_parser_by_default() -> None:
+    with xtempfile.TemporaryDirectory() as tmp_dirpath:
+        project_dirpath = os.path.join(tmp_dirpath, 'TestProject.crystalproj')
+        
+        # Create project. Ensure parser type is lxml.
+        with Project(project_dirpath) as project:
+            assert 'lxml' == project.html_parser_type
+        
+        # Reopen project. Ensure parser type is still lxml.
+        with Project(project_dirpath) as project:
+            assert 'lxml' == project.html_parser_type
+
+
 # === Test: Start Open Project ===
 
 @skip_if_not_macos

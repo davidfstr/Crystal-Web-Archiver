@@ -861,7 +861,7 @@ class Project(ListenableMixin):
             self._set_major_version(2, c, db.commit)
             
             # Define default HTML parser for new projects, for Crystal >1.5.0
-            self.html_parser_type = 'lxml'
+            self._set_html_parser_type('lxml', _change_while_loading=True)
     
     def _load(self,
             c: DatabaseCursor,
@@ -1083,8 +1083,8 @@ class Project(ListenableMixin):
     
     def _get_property(self, name: str, default: _OptionalStr) -> str | _OptionalStr:
         return self._properties.get(name) or default
-    def _set_property(self, name: str, value: str | None) -> None:
-        if not self._loading:
+    def _set_property(self, name: str, value: str | None, *, _change_while_loading: bool = False) -> None:
+        if not self._loading or _change_while_loading:
             if self._properties.get(name) == value:
                 return
             if self.readonly:
@@ -1151,11 +1151,11 @@ class Project(ListenableMixin):
         if value not in HTML_PARSER_TYPE_CHOICES:
             raise ValueError(f'Project requests HTML parser of unknown type: {value}')
         return cast('HtmlParserType', value)
-    def _set_html_parser_type(self, value: HtmlParserType) -> None:
+    def _set_html_parser_type(self, value: HtmlParserType, *, _change_while_loading: bool=False) -> None:
         from crystal.doc.html import HTML_PARSER_TYPE_CHOICES
         if value not in HTML_PARSER_TYPE_CHOICES:
             raise ValueError(f'Unknown type of HTML parser: {value}')
-        self._set_property('html_parser_type', value)
+        self._set_property('html_parser_type', value, _change_while_loading=_change_while_loading)
     html_parser_type = property(_get_html_parser_type, _set_html_parser_type, doc=
         """
         The type of parser used for parsing links from HTML documents.
