@@ -365,7 +365,7 @@ class MainWindow:
     def __init__(self, *, _ready: bool=False) -> None:
         assert _ready, 'Did you mean to use MainWindow.wait_for()?'
     
-    # === Menubar ===
+    # === Menubar: Menus ===
     
     @property
     def entity_menu(self) -> wx.Menu:
@@ -374,6 +374,24 @@ class MainWindow:
         assert entity_menu_index != wx.NOT_FOUND
         entity_menu = mb.GetMenu(entity_menu_index)
         return entity_menu
+    
+    # === Menubar: Menuitems ===
+    
+    async def open_preferences_with_menuitem(self) -> PreferencesDialog:
+        prefs_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_PREFERENCES)
+        wx.PostEvent(self.main_window, wx.CommandEvent(wx.EVT_MENU.typeId, prefs_menuitem.Id))
+        
+        return await PreferencesDialog.wait_for()
+    
+    async def quit_with_menuitem(self) -> None:
+        quit_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_EXIT)
+        wx.PostEvent(self.main_window, wx.CommandEvent(wx.EVT_MENU.typeId, quit_menuitem.Id))
+        
+        await self.wait_for_close()
+    
+    async def start_open_project_with_menuitem(self) -> None:
+        open_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_OPEN)
+        wx.PostEvent(open_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, open_menuitem.Id))
     
     # === Properties ===
     
@@ -468,17 +486,6 @@ class MainWindow:
             timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
             stacklevel_extra=1 + stacklevel_extra,
         )
-    
-    async def open_preferences_with_menuitem(self) -> PreferencesDialog:
-        prefs_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_PREFERENCES)
-        wx.PostEvent(self.main_window, wx.CommandEvent(wx.EVT_MENU.typeId, prefs_menuitem.Id))
-        return await PreferencesDialog.wait_for()
-    
-    async def quit_with_menuitem(self) -> None:
-        quit_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_EXIT)
-        wx.PostEvent(self.main_window, wx.CommandEvent(wx.EVT_MENU.typeId, quit_menuitem.Id))
-        
-        await self.wait_for_close()
 
 
 class NewRootUrlDialog:

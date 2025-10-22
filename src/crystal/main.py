@@ -676,6 +676,7 @@ async def _did_launch(
     from crystal.util.ports import is_port_in_use_error
     from crystal.util.test_mode import tests_are_running
     from crystal.util.xos import is_mac_os
+    import wx
 
     # If MacOpenFile queued a project to be opened, open it
     global _project_path_to_open_soon
@@ -761,6 +762,10 @@ async def _did_launch(
                         # NOTE: Can raise SystemExit
                         retry_on_cancel = True
                         project = await _prompt_for_project(progress_listener, **project_kwargs)
+                elif filepath == '__open__':
+                    # NOTE: Can raise SystemExit
+                    retry_on_cancel = True
+                    project = await _prompt_for_project(progress_listener, initial_choice=wx.ID_NO, **project_kwargs)
                 else:
                     # NOTE: Can raise CancelOpenProject
                     retry_on_cancel = False
@@ -834,6 +839,7 @@ async def _did_launch(
 
 async def _prompt_for_project(
         progress_listener: OpenProjectProgressListener,
+        *, initial_choice: int | None = None,
         **project_kwargs: object
         ) -> Project:
     """
@@ -902,6 +908,13 @@ async def _prompt_for_project(
                 wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
                 wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O'), wx.ID_NO),
             ]))
+            
+            # If an initial choice is provided, automatically press that button
+            if initial_choice is not None:
+                wx.PostEvent(dialog, wx.CommandEvent(
+                    wx.wxEVT_COMMAND_BUTTON_CLICKED,
+                    initial_choice
+                ))
             
             while True:
                 from crystal.util.wx_dialog import ShowModalAsync

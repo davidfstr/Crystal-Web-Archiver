@@ -245,9 +245,8 @@ class MainWindow(CloakMixin):
             wx.ID_OPEN,
             '&Open Project...',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O')),
-            # TODO: Support multiple open projects
-            action_func=None,
-            enabled=False)
+            action_func=self._on_open_project,
+            enabled=True)
         self._close_project_action = Action(
             wx.ID_CLOSE,
             '',
@@ -813,6 +812,11 @@ class MainWindow(CloakMixin):
             self._save_project_action.label = s_label
             self._save_project_action.enabled = s_enabled
         future.add_done_callback(lambda _: fg_call_later(on_save_complete))
+    
+    def _on_open_project(self, event: wx.MenuEvent) -> None:
+        # 1. Try to close this MainWindow, saving any changes
+        # 2. Upon success, prompt to open a different project
+        wx.GetApp().MacOpenFile('__open__')
     
     def _on_close_window(self, event: wx.CommandEvent) -> None:
         self._frame.Close()  # will trigger call to _on_close_frame()

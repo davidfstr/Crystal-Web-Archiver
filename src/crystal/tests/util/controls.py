@@ -52,18 +52,20 @@ def click_checkbox(checkbox: wx.CheckBox) -> None:
 # Utility: Controls: wx.FileDialog
 
 @contextmanager
-def file_dialog_returning(filepath: str) -> Iterator[None]:
+def file_dialog_returning(filepath: str | list[str]) -> Iterator[None]:
+    filepaths = filepath if isinstance(filepath, list) else [filepath]
+    
     with patch('wx.FileDialog', spec=True) as MockFileDialog:
         instance = MockFileDialog.return_value
         instance.ShowModal.return_value = wx.ID_OK
-        instance.GetPath.return_value = filepath
+        instance.GetPath.side_effect = filepaths
         
         yield
         
-        if instance.ShowModal.call_count != 1:
+        if instance.ShowModal.call_count != len(filepaths):
             raise AssertionError(
-                f'Expected wx.FileDialog.ShowModal to be called exactly once, '
-                f'but it was called {instance.ShowModal.call_count} times')
+                f'Expected wx.FileDialog.ShowModal to be called exactly {len(filepaths)} time(s), '
+                f'but it was called {instance.ShowModal.call_count} time(s)')
 
 
 # ------------------------------------------------------------------------------

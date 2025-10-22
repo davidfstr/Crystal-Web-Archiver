@@ -12,6 +12,10 @@ Release Notes ⋮
 
 ### main
 
+* Workflow improvements
+    * The "Open Project..." menuitem can be used to open a different project
+      when another project is already open.
+
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
 
