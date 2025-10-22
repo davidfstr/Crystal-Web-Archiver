@@ -11,7 +11,7 @@ import signal
 from crystal.model import Project, Resource
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_literal, read_until,
+    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_literal, py_exec, read_until,
     crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
@@ -573,8 +573,8 @@ async def test_when_project_opened_with_stale_before_then_old_revisions_consider
                 wait_for_main_window(crystal)
                 
                 # Get the resource revision and verify it's NOT stale
-                py_eval(crystal, f'r = project.get_resource({atom_feed_url!r})')
-                py_eval(crystal, 'rr = r.default_revision()')
+                py_exec(crystal, f'r = project.get_resource({atom_feed_url!r})')
+                py_exec(crystal, 'rr = r.default_revision()')
                 result = py_eval_literal(crystal, 'rr.is_stale')
                 assert False == result, f"Expected resource revision to NOT be stale with past min_fetch_date, got: {result}"
         

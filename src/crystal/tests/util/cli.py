@@ -294,11 +294,28 @@ def crystal_shell(*, args=[], env_extra={}, reopen_projects_enabled: bool=False)
 _VSC_ESCAPE_SEQUENCE = '\x1b]633;E;0\x07\x1b]633;A\x07'
 
 
+def py_exec(
+        python: subprocess.Popen,
+        py_code: str,
+        stop_suffix: str | tuple[str, ...] | None=None,
+        *, timeout: float | None=None) -> None:
+    """
+    Evaluates the provided Python code in the specified Crystal process,
+    expecting that it will neither evaluate to a non-None result
+    nor will it print to stdout.
+    
+    See also:
+    - py_eval()
+    """
+    assertEqual('', py_eval(python, py_code, stop_suffix, timeout=timeout, empty_ok=True))
+
+
 def py_eval(
         python: subprocess.Popen,
         py_code: str,
         stop_suffix: str | tuple[str, ...] | None=None,
-        *, timeout: float | None=None) -> str:
+        *, timeout: float | None=None,
+        empty_ok: bool=False) -> str:
     """
     Evaluates the provided Python code in the specified Crystal process
     and returns anything printed to stdout.
@@ -365,6 +382,10 @@ def py_eval(
         # HACK: VS Code inserts terminal integration escape sequences (OSC 633).
         #       Remove them.
         result_no_suffix = result_no_suffix.removesuffix(_VSC_ESCAPE_SEQUENCE)
+    if result_no_suffix == '' and not empty_ok and stop_suffix == '>>> ':
+        # HACK: Try again (1 time)
+        (result, _) = read_until(python.stdout, '>>> ', timeout=timeout)
+        result_no_suffix = result.removesuffix('>>> ')
     return result_no_suffix
 
 
@@ -378,11 +399,6 @@ def py_eval_literal(
     printed by the code.
     """
     expr_str = py_eval(python, py_code, timeout=timeout)
-    if expr_str == '':
-        # HACK: Try again
-        assert isinstance(python.stdout, TextIOBase)
-        (result_str, _) = read_until(python.stdout, '>>> ', timeout=timeout)
-        expr_str = result_str.removesuffix('>>> ')
     try:
         return literal_eval(expr_str)
     except SyntaxError as e:
@@ -418,7 +434,7 @@ def py_eval_await(
     See also:
     - py_eval_await_literal()
     """
-    py_eval(python, define_async_func_code)
+    py_exec(python, define_async_func_code)
     stdout_str = py_eval(python, textwrap.dedent(f'''\
         from crystal.tests.util.runner import run_test
         from threading import Thread
@@ -739,13 +755,13 @@ def close_main_window(crystal: subprocess.Popen, *, after_delay: float | None=No
 @contextmanager
 def delay_between_downloads_minimized(crystal: subprocess.Popen) -> Iterator[None]:
     # NOTE: Uses private API, including the entire crystal.tests package
-    py_eval(crystal, 'from crystal.tests.util.downloads import delay_between_downloads_minimized as D')
-    py_eval(crystal, 'download_ctx = D()')
-    py_eval(crystal, 'download_ctx.__enter__()')
+    py_exec(crystal, 'from crystal.tests.util.downloads import delay_between_downloads_minimized as D')
+    py_exec(crystal, 'download_ctx = D()')
+    py_exec(crystal, 'download_ctx.__enter__()')
     try:
         yield
     finally:
-        py_eval(crystal, 'download_ctx.__exit__(None, None, None)')
+        py_exec(crystal, '_ = download_ctx.__exit__(None, None, None)')
 
 
 # ------------------------------------------------------------------------------

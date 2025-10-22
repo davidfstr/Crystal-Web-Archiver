@@ -1,7 +1,7 @@
 from typing import List
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_literal, read_until, wait_for_crystal_to_exit, crystal_shell
+from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, crystal_shell
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
@@ -300,9 +300,9 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
         with crystal_shell() as (crystal, _):
             with subtests.test(case='test can open project', return_if_failure=True):
                 # Test can import Project
-                assertEqual('', py_eval(crystal, 'from crystal.model import Project'))
+                py_exec(crystal, 'from crystal.model import Project')
                 # Test can open project
-                assertEqual('', py_eval(crystal, f'p = Project({sp.project.path!r})'))
+                py_exec(crystal, f'p = Project({sp.project.path!r})')
             
             with subtests.test(case='test can list project entities'):
                 assertEqual(
@@ -353,22 +353,20 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                         'headers': ANY
                     },
                     py_eval_literal(crystal, f'rr.metadata'))
-                py_eval(crystal, f'with rr.open() as f:\n    body = f.read()\n', stop_suffix='>>> ')
+                py_exec(crystal, f'with rr.open() as f:\n    body = f.read()\n', stop_suffix='>>> ')
                 assertEqual(
                     r"""b'<!DOCTYPE html>\n<html>\n<head>\n<link rel="stylesheet" type="text/css" href="/s/7d94e0.css" title="Default"/>\n<title>xkcd: Air Gap</title>\n'""" + '\n',
                     py_eval(crystal, f'body[:137]'))
             
             with subtests.test(case='test can serve resource revision'):
                 # Test can import ProjectServer
-                assertEqual('', py_eval(crystal, 'from crystal.server import ProjectServer'))
-                assertEqual('', py_eval(crystal, 'from io import StringIO'))
+                py_exec(crystal, 'from crystal.server import ProjectServer')
+                py_exec(crystal, 'from io import StringIO')
                 # Test can start ProjectServer
-                assertEqual(
-                    "",
-                    py_eval(
-                        crystal, f'server = ProjectServer(p, stdout=StringIO())',
-                        timeout=8.0  # 2.0s and 4.0s isn't long enough for macOS test runners on GitHub Actions
-                    ))
+                py_exec(
+                    crystal, f'server = ProjectServer(p, stdout=StringIO())',
+                    timeout=8.0  # 2.0s and 4.0s isn't long enough for macOS test runners on GitHub Actions
+                )
                 port = py_eval_literal(crystal, f'server.port')
                 request_url = py_eval_literal(crystal, f'server.get_request_url({home_url!r})')
                 
@@ -403,22 +401,22 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
         with crystal_shell() as (crystal, _):
             with subtests.test(case='test can create project', return_if_failure=True):
                 # Test can import Project
-                assertEqual('', py_eval(crystal, 'from crystal.model import Project'))
+                py_exec(crystal, 'from crystal.model import Project')
                 # Test can create project
-                assertEqual('', py_eval(crystal, f'p = Project({project_dirpath!r})',
+                py_exec(crystal, f'p = Project({project_dirpath!r})',
                     # 2.0s isn't long enough for macOS test runners on GitHub Actions
-                    timeout=4.0))
+                    timeout=4.0)
             
             with subtests.test(case='test can create project entities', return_if_failure=True):
                 # Test can import Resource
-                assertEqual('', py_eval(crystal, 'from crystal.model import Resource'))
+                py_exec(crystal, 'from crystal.model import Resource')
                 # Test can create Resource
                 assertEqual(
                     "Resource('http://127.0.0.1:2798/_/https/xkcd.com/')\n",
                     py_eval(crystal, f'r = Resource(p, {home_url!r}); r'))
                 
                 # Test can import RootResource
-                assertEqual('', py_eval(crystal, 'from crystal.model import RootResource'))
+                py_exec(crystal, 'from crystal.model import RootResource')
                 # Test can create RootResource
                 assertEqual(
                     "RootResource('Home','http://127.0.0.1:2798/_/https/xkcd.com/')\n",
@@ -426,7 +424,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 
                 # Test can download ResourceRevision
                 with delay_between_downloads_minimized(crystal):
-                    assertEqual('', py_eval(crystal, 'rr_future = r.download()'))
+                    py_exec(crystal, 'rr_future = r.download()')
                     # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (py_eval_literal(crystal, 'rr_future.done()') == True)
@@ -436,7 +434,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                     assertIn('<ResourceRevision ', py_eval(crystal, 'rr = rr_future.result(); rr'))
                 
                 # Test can import ResourceGroup
-                assertEqual('', py_eval(crystal, 'from crystal.model import ResourceGroup'))
+                py_exec(crystal, 'from crystal.model import ResourceGroup')
                 # Test can create ResourceGroup
                 assertEqual(
                     "ResourceGroup('Comic','http://127.0.0.1:2798/_/https/xkcd.com/#/')\n",
@@ -450,32 +448,32 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
             
             with subtests.test(case='test can delete project entities', return_if_failure=True):
                 # Test can delete ResourceGroup
-                assertEqual('', py_eval(crystal, f'rg_m = list(rg.members)[0]'))
-                assertEqual('', py_eval(crystal, f'rg.delete()'))
+                py_exec(crystal, f'rg_m = list(rg.members)[0]')
+                py_exec(crystal, f'rg.delete()')
                 # Ensure ResourceGroup itself is deleted
-                assertEqual('', py_eval(crystal, f'p.get_resource_group(rg.name)'))
+                py_exec(crystal, f'p.get_resource_group(rg.name)')
                 # Ensure former members of ResourceGroup still exist
                 assertEqual('True\n', py_eval(crystal, f'p.get_resource(rg_m.url) == rg_m'))
                 
                 # Test can delete RootResource
-                assertEqual('', py_eval(crystal, f'root_r_r = root_r.resource'))
-                assertEqual('', py_eval(crystal, f'root_r.delete()'))
+                py_exec(crystal, f'root_r_r = root_r.resource')
+                py_exec(crystal, f'root_r.delete()')
                 # Ensure RootResource itself is deleted
-                assertEqual('', py_eval(crystal, f'p.get_root_resource(root_r_r)'))
+                py_exec(crystal, f'p.get_root_resource(root_r_r)')
                 # Ensure former target of RootResource still exists
                 assertEqual('True\n', py_eval(crystal, f'p.get_resource(root_r_r.url) == root_r_r'))
                 
                 # Test can delete ResourceRevision
-                assertEqual('', py_eval(crystal, f'rr_r = rr.resource'))
+                py_exec(crystal, f'rr_r = rr.resource')
                 assertEqual('1\n', py_eval(crystal, f'len(list(rr_r.revisions()))'))
-                assertEqual('', py_eval(crystal, f'rr.delete()'))
+                py_exec(crystal, f'rr.delete()')
                 # Ensure ResourceRevision itself is deleted
                 assertEqual('0\n', py_eval(crystal, f'len(list(rr_r.revisions()))'))
                 
                 # Test can delete Resource
-                assertEqual('', py_eval(crystal, f'r.delete()'))
+                py_exec(crystal, f'r.delete()')
                 # Ensure Resource itself is deleted
-                assertEqual('', py_eval(crystal, f'p.get_resource(r.url)'))
+                py_exec(crystal, f'p.get_resource(r.url)')
             
             with subtests.test(case='test can download project entities', return_if_failure=True):
                 # Recreate home Resource
@@ -489,7 +487,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 
                 # Test can download RootResource
                 with delay_between_downloads_minimized(crystal):
-                    assertEqual('', py_eval(crystal, 'rr_future = root_r.download()'))
+                    py_exec(crystal, 'rr_future = root_r.download()')
                     # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (py_eval_literal(crystal, 'rr_future.done()') == True)
@@ -502,9 +500,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 assertEqual(
                     "ResourceGroup('Feed','http://127.0.0.1:2798/_/https/xkcd.com/*.xml')\n",
                     py_eval(crystal, f'rg = ResourceGroup(p, "Feed", {feed_pattern!r}); rg'))
-                assertEqual(
-                    "",
-                    py_eval(crystal, f'rg.source = root_r'))
+                py_exec(crystal, f'rg.source = root_r')
                 # Ensure ResourceGroup includes some members discovered by downloading resource Home
                 assertEqual(
                     2,
@@ -512,7 +508,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 
                 # Test can download ResourceGroup
                 with delay_between_downloads_minimized(crystal):
-                    assertEqual('', py_eval(crystal, 'drgt = rg.download()'))
+                    py_exec(crystal, 'drgt = rg.download()')
                     # TODO: Use wait_for_sync() rather than a manual loop
                     while True:
                         is_done = (py_eval_literal(crystal, 'drgt.complete') == True)
@@ -556,14 +552,14 @@ def test_can_import_guppy_in_shell() -> None:
         assert isinstance(import_result, str)
         
         # Ensure can create hpy instance
-        assertEqual('', py_eval(crystal, 'from guppy import hpy; h = hpy()'))
+        py_exec(crystal, 'from guppy import hpy; h = hpy()')
         
         # Ensure can take memory sample
         result = py_eval(crystal, 'import gc; gc.collect(); heap = h.heap(); heap; _.more')
         assertNotIn('Traceback', result)
         
         # Ensure can create checkpoint
-        assertEqual('', py_eval(crystal, 'h.setref()'))
+        py_exec(crystal, 'h.setref()')
         
         # Ensure can take memory sample since checkpoint
         result = py_eval(crystal, 'import gc; gc.collect(); heap = h.heap(); heap; _.more')

@@ -9,7 +9,7 @@ from crystal.progress import CancelSaveAs, SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
 from crystal.tests.util import xtempfile
 from crystal.tests.util.cli import (
-    PROJECT_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, crystal_shell, py_eval, py_eval_literal, wait_for_main_window, _OK_THREAD_STOP_SUFFIX,
+    PROJECT_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, crystal_shell, py_eval, py_eval_literal, py_exec, wait_for_main_window, _OK_THREAD_STOP_SUFFIX,
 )
 from crystal.tests.util.controls import (
     TreeItem, file_dialog_returning,
@@ -1299,7 +1299,7 @@ async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then
             create_new_empty_project(crystal)
             
             # Prepare save location
-            py_eval(crystal, textwrap.dedent('''\
+            py_exec(crystal, textwrap.dedent('''\
                 import tempfile
                 import os
                 tmp_dir = tempfile.mkdtemp()
