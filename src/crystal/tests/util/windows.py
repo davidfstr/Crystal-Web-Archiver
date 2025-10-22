@@ -397,6 +397,10 @@ class MainWindow:
         open_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_OPEN)
         wx.PostEvent(open_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, open_menuitem.Id))
     
+    async def start_close_project_with_menuitem(self) -> None:
+        close_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_CLOSE)
+        wx.PostEvent(close_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, close_menuitem.Id))
+    
     # === Properties ===
     
     @property
@@ -460,8 +464,7 @@ class MainWindow:
         await self.wait_for_close()
     
     async def close_with_menuitem(self) -> None:
-        close_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_CLOSE)
-        wx.PostEvent(close_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, close_menuitem.Id))
+        await self.start_close_project_with_menuitem()
         await self.wait_for_close()
     
     async def wait_for_close(self) -> None:

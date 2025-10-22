@@ -218,14 +218,74 @@ async def _wait_for_main_window_to_reopen(project1: Project) -> AsyncIterator[Pr
 
 # === Test: Close Project ===
 
-# TODO: Additionally test all the cases covered by the
-#       test_can_open_project_with_menuitem_given_* tests.
-#       Or reference existing close-related tests elsewhere that provide
-#       similar coverage.
-async def test_can_close_project_with_menuitem() -> None:
+async def test_can_close_project_with_menuitem_given_clean_untitled_project_visible() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw, _):
-        await mw.close_with_menuitem()
+        await mw.start_close_project_with_menuitem()
+    
+    await OpenOrCreateDialog.wait_for()
 
+
+async def test_can_close_project_with_menuitem_given_dirty_untitled_project_visible() -> None:
+    # Case 1: Don't Save the current project
+    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw1, project1):
+        # Create a RootResource to make the project dirty
+        RootResource(project1, '', Resource(project1, 'https://example.com/'))
+        
+        with patch('crystal.browser.ShowModal',
+                mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
+            await mw1.start_close_project_with_menuitem()
+            
+            # (Save changes dialog will be shown and "Don't Save" will be clicked)
+            
+            await OpenOrCreateDialog.wait_for()
+    
+    # Case 2: Save the current project
+    async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw1, project1):
+        # Create a RootResource to make the project dirty
+        RootResource(project1, '', Resource(project1, 'https://example.com/'))
+        
+        with xtempfile.TemporaryDirectory() as tmp_dir:
+            save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
+            with file_dialog_returning(save_path):
+                with patch('crystal.browser.ShowModal',
+                        mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)):
+                    await mw1.start_close_project_with_menuitem()
+                    
+                    # (Save changes dialog will be shown and "Save" will be clicked)
+                    # (Save file dialog will be shown and populated)
+                    
+                    await OpenOrCreateDialog.wait_for()
+
+    # Case 3: Cancel close of the current project
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw1, project1):
+        # Create a RootResource to make the project dirty
+        RootResource(project1, '', Resource(project1, 'https://example.com/'))
+        
+        with patch('crystal.browser.ShowModal',
+                mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)):
+            await mw1.start_close_project_with_menuitem()
+            
+            # (Save changes dialog will be shown and "Cancel" will be clicked)
+            # (Project 1 should remain open)
+            
+            # Verify that project 1 is still the active project
+            assert Project._last_opened_project is project1
+        
+        # (Close project 1)
+
+
+async def test_can_close_project_with_menuitem_given_titled_project_visible() -> None:
+    with xtempfile.TemporaryDirectory() as tmp_dir:
+        # Create a titled project
+        project1_dirpath = os.path.join(tmp_dir, 'Project1.crystalproj')
+        with Project(project1_dirpath) as project1:
+            pass
+        
+        # Open the titled project
+        async with (await OpenOrCreateDialog.wait_for()).open(project1_dirpath, autoclose=False) as (mw1, project1):
+            await mw1.start_close_project_with_menuitem()
+            
+        await OpenOrCreateDialog.wait_for()
 
 # === Test: Quit ===
 
