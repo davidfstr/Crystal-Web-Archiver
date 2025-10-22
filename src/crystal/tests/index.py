@@ -100,11 +100,6 @@ def run_tests(test_names: list[str]) -> bool:
     The format of the summary report is designed to be similar
     to that used by Python's unittest module.
     """
-    # Disable auto-reopening of untitled projects during tests by default.
-    # This prevents tests from unexpectedly auto-opening unsaved untitled projects
-    # that were created outside of the test environment.
-    os.environ.setdefault('CRYSTAL_NO_REOPEN_PROJECTS', 'True')
-    
     with delay_between_downloads_minimized(), sleep_profiled(), \
             _future_result_deadlock_detection(), _tqdm_locks_disabled():
         # 1. Normalize test names to handle various input formats

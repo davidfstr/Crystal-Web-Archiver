@@ -352,6 +352,11 @@ def _main2(args: list[str]) -> None:
     if parsed_args.test is not None:
         from crystal.util.test_mode import set_tests_are_running
         set_tests_are_running()
+        
+        # Disable auto-reopening of untitled projects during tests by default.
+        # This prevents tests from unexpectedly auto-opening unsaved untitled projects
+        # that were created outside of the test environment.
+        os.environ.setdefault('CRYSTAL_NO_REOPEN_PROJECTS', 'True')
     
     last_window = None  # type: Optional[MainWindow]
     systemexit_during_first_launch = None  # type: Optional[SystemExit]
