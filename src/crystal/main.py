@@ -762,6 +762,10 @@ async def _did_launch(
                         # NOTE: Can raise SystemExit
                         retry_on_cancel = True
                         project = await _prompt_for_project(progress_listener, **project_kwargs)
+                elif filepath == '__new__':
+                    # NOTE: Can raise SystemExit
+                    retry_on_cancel = True
+                    project = await _prompt_for_project(progress_listener, initial_choice=wx.ID_YES, **project_kwargs)
                 elif filepath == '__open__':
                     # NOTE: Can raise SystemExit
                     retry_on_cancel = True

@@ -389,6 +389,10 @@ class MainWindow:
         
         await self.wait_for_close()
     
+    async def start_new_project_with_menuitem(self) -> None:
+        new_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_NEW)
+        wx.PostEvent(new_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, new_menuitem.Id))
+    
     async def start_open_project_with_menuitem(self) -> None:
         open_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_OPEN)
         wx.PostEvent(open_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, open_menuitem.Id))

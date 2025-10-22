@@ -13,6 +13,8 @@ Release Notes ⋮
 ### main
 
 * Workflow improvements
+    * The "New Project..." menuitem can be used to create a different project
+      when another project is already open.
     * The "Open Project..." menuitem can be used to open a different project
       when another project is already open.
 
