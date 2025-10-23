@@ -190,6 +190,8 @@ class NewGroupDialog:
         self.source_choice_box = wx.Choice(
             parent,
             name='cr-new-group-dialog__source-field')
+        # NOTE: Source choice computation duplicated in NewGroupDialog._create_fields
+        #       and _RequestHandler._calculate_create_group_form_data
         self.source_choice_box.Append('none', None)
         for rr in self._project.root_resources:
             self.source_choice_box.Append(

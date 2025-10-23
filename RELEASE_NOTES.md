@@ -22,6 +22,8 @@ Release Notes ⋮
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
 
 * Serving improvements
+    * The Source dropdown on the Not in Archive page uses the same labels
+      as the Source dropdown in the New Group Dialog.
     * Ignore timeout errors when responding to a request.
 
 * Support changes **(Breaking Change)**

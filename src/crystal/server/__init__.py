@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Generator
 from concurrent.futures import Future
-import threading
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
@@ -28,6 +27,7 @@ from crystal.util.cli import (
 from crystal.util.minify import minify_svg
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.test_mode import tests_are_running
+from crystal.util.unicode_labels import decorate_label
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_wait_for,
     is_foreground_thread,
@@ -47,6 +47,7 @@ import socket
 import socketserver
 import sys
 from textwrap import dedent
+import threading
 import time
 import traceback
 import trycast
@@ -1252,23 +1253,32 @@ class _RequestHandler(BaseHTTPRequestHandler):
             archive_url: str,
             referrer_archive_url: str | None,
             ) -> CreateGroupFormData:
-        # Format Source choices,
-        # matching the choices computed for NewGroupDialog.source_choice_box
+        from crystal.browser.entitytree import ResourceGroupNode, RootResourceNode
+        
+        # Format Source choices
+        # NOTE: Source choice computation duplicated in NewGroupDialog._create_fields
+        #       and _RequestHandler._calculate_create_group_form_data
         source_choices = [SourceChoice({
             'display_name': 'none',
             'value': None
         })]
         for rr in project.root_resources:
-            display_name = rr.display_name
             source_choices.append(SourceChoice({
-                'display_name': display_name,
+                'display_name': decorate_label(
+                    RootResourceNode.ICON,
+                    RootResourceNode.calculate_title_of(rr),
+                    # NOTE: Browsers do not require a truncation fix
+                    truncation_fix=''),
                 'value': SourceChoiceValue(
                     {'type': 'root_resource', 'id': intstr_from(rr._id)})
             }))
         for rg in project.resource_groups:
-            display_name = rg.display_name
             source_choices.append(SourceChoice({
-                'display_name': display_name,
+                'display_name': decorate_label(
+                    ResourceGroupNode.ICON,
+                    ResourceGroupNode.calculate_title_of(rg),
+                    # NOTE: Browsers do not require a truncation fix
+                    truncation_fix=''),
                 'value': SourceChoiceValue(
                     {'type': 'resource_group', 'id': intstr_from(rg._id)})
             }))

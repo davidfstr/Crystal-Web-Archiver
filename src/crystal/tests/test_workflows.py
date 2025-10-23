@@ -689,8 +689,10 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
         # Define URLs
         if True:
             home_url = sp.get_request_url('https://xkcd.com/')
+            home_url_in_archive_suffix = '/_/https/xkcd.com/'
             
             comic1_url = sp.get_request_url('https://xkcd.com/1/')
+            comic1_url_in_archive_suffix = '/_/https/xkcd.com/1/'
             comic2_url = sp.get_request_url('https://xkcd.com/2/')
             comic_pattern = sp.get_request_url('https://xkcd.com/#/')
         
@@ -743,7 +745,7 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 # Verify that DetectedRegularGroup from the navigation is correct
                 page.create_group_checkbox.check()
                 expect(page.url_pattern_field).to_have_value(comic_pattern)
-                expect(page.source_dropdown.locator('option:checked')).to_have_text(home_url)
+                expect(page.source_dropdown.locator('option:checked')).to_contain_text(home_url_in_archive_suffix)
                 page.wait_for_initial_preview_urls()
                 expect(page.preview_urls_container).to_contain_text('xkcd.com')
                 page.create_group_checkbox.uncheck()
@@ -775,7 +777,7 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 # Verify that DetectedSequentialGroup from the navigation is correct
                 page.create_group_checkbox.check()
                 expect(page.url_pattern_field).to_have_value(comic_pattern)
-                expect(page.source_dropdown.locator('option:checked')).to_have_text(comic1_url)
+                expect(page.source_dropdown.locator('option:checked')).to_contain_text(comic1_url_in_archive_suffix)
                 page.wait_for_initial_preview_urls()
                 expect(page.preview_urls_container).to_contain_text('xkcd.com')
                 
