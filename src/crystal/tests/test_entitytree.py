@@ -1,3 +1,4 @@
+from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import (
     DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
 )
@@ -333,6 +334,79 @@ async def test_can_reset_permanent_dismissal_from_preferences_dialog() -> None:
                 'Callout should be created after reset'
             assert view_callout.IsShown(), \
                 'Callout should be visible after resetting dismissal'
+
+
+# ------------------------------------------------------------------------------
+# Test: EntityTree: Entity Title Format
+
+async def test_when_change_entity_title_format_to_name_url_then_titles_update() -> None:
+    """
+    Tests that changing the entity_title_format from 'url_name' to 'name_url'
+    updates the titles of root resources and resource groups in the entity tree.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Create a root resource with both URL and name
+        home_r = Resource(project, 'https://example.com/')
+        home_rr = RootResource(project, 'Home Page', home_r)
+        
+        # Create a resource group with both URL pattern and name
+        ResourceGroup(project, 'Comics', 'https://example.com/comic/#/')
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        (home_ti, comic_ti) = root_ti.Children
+        
+        entity_menu = mw.entity_menu
+        
+        # 1. Ensure initial title format is 'url_name'
+        # 2. Ensure titles in 'url_name' format are as expected
+        assertEqual('url_name', project.entity_title_format)
+        assertEqual('https://example.com/ - Home Page', home_ti.Text)
+        assertEqual('https://example.com/comic/#/ - Comics', comic_ti.Text)
+        
+        # Ensure titles in 'name_url' format are as expected
+        entity_menu.ProcessEvent(wx.MenuEvent(
+            type=wx.EVT_MENU.typeId, id=RealMainWindow._ID_VIEW_AS_NAME_URL, menu=None))
+        assertEqual('name_url', project.entity_title_format)
+        assertEqual('Home Page - https://example.com/', home_ti.Text)
+        assertEqual('Comics - https://example.com/comic/#/', comic_ti.Text)
+        
+        # Ensure titles in 'url_name' format are as expected
+        entity_menu.ProcessEvent(wx.MenuEvent(
+            type=wx.EVT_MENU.typeId, id=RealMainWindow._ID_VIEW_AS_URL_NAME, menu=None))
+        assertEqual('url_name', project.entity_title_format)
+        assertEqual('https://example.com/ - Home Page', home_ti.Text)
+        assertEqual('https://example.com/comic/#/ - Comics', comic_ti.Text)
+
+
+async def test_when_entity_has_no_name_then_title_format_does_not_affect_display() -> None:
+    """
+    Tests that when an entity has no name, the title format doesn't affect
+    the display (only the URL is shown).
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Create a root resource without a name
+        home_r = Resource(project, 'https://example.com/')
+        home_rr = RootResource(project, '', home_r)
+        
+        # Create a resource group without a name
+        ResourceGroup(project, '', 'https://example.com/comic/#/')
+        
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        (home_ti, comic_ti) = root_ti.Children
+        
+        entity_menu = mw.entity_menu
+        
+        # 1. Ensure initial title format is 'url_name'
+        # 2. Ensure titles in 'url_name' format are as expected
+        assertEqual('url_name', project.entity_title_format)
+        assertEqual('https://example.com/', home_ti.Text)
+        assertEqual('https://example.com/comic/#/', comic_ti.Text)
+            
+        # Ensure titles in 'url_name' format are as expected, and unchanged
+        entity_menu.ProcessEvent(wx.MenuEvent(
+            type=wx.EVT_MENU.typeId, id=RealMainWindow._ID_VIEW_AS_NAME_URL, menu=None))
+        assertEqual('https://example.com/', home_ti.Text)
+        assertEqual('https://example.com/comic/#/', comic_ti.Text)
 
 
 # ------------------------------------------------------------------------------

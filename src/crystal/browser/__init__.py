@@ -73,6 +73,10 @@ class MainWindow(CloakMixin):
     _AUTOHIBERNATE_PERIOD = 1000 * 60 * 5  # 5 min, in milliseconds
     _PROJECT_SERVER_SHUTDOWN_TIMEOUT = 2.0  # seconds; short
     
+    # (1xx IDs in the same Entity menu are taken by EntityTree._ID_*)
+    _ID_VIEW_AS_URL_NAME = 201
+    _ID_VIEW_AS_NAME_URL = 202
+    
     project: Project
     _frame: wx.Frame
     entity_tree: EntityTree
@@ -398,6 +402,24 @@ class MainWindow(CloakMixin):
             bind(raw_frame, wx.EVT_MENU, self._on_preferences)
         
         self._entity_menu = entity_menu = wx.Menu()
+        if True:
+            view_label_mi = entity_menu.Append(wx.ID_ANY, 'View:')
+            view_label_mi.Enable(False)
+            
+            self._view_as_url_name_mi = entity_menu.AppendRadioItem(
+                self._ID_VIEW_AS_URL_NAME, 'as URL - Name')
+            self._view_as_url_name_mi.Accel = \
+                wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('1'))
+            
+            self._view_as_name_url_mi = entity_menu.AppendRadioItem(
+                self._ID_VIEW_AS_NAME_URL, 'as Name - URL')
+            self._view_as_name_url_mi.Accel = \
+                wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('2'))
+            
+            entity_menu.AppendSeparator()
+            
+            bind(entity_menu, wx.EVT_MENU, self._on_view_format_menuitem_selected)
+        entity_menu.AppendSeparator()
         self._new_root_url_action.append_menuitem_to(entity_menu)
         self._new_group_action.append_menuitem_to(entity_menu)
         self._edit_action.append_menuitem_to(entity_menu)
@@ -441,27 +463,44 @@ class MainWindow(CloakMixin):
     def _on_entity_menu_open(self, event: wx.MenuEvent) -> None:
         menu = self._entity_menu  # cache
         
-        # Locate old _change_url_prefix_menuitems
-        assert len(self._change_url_prefix_menuitems) >= 1
-        first_old_mi = self._change_url_prefix_menuitems[0]
-        (first_old_mi2, first_old_mi_offset) = \
-            menu.FindChildItem(first_old_mi.Id)
-        assert first_old_mi2 == first_old_mi
+        # Update View format checkmarks
+        entity_title_format = self.project.entity_title_format
+        self._view_as_url_name_mi.Check(entity_title_format == 'url_name')
+        self._view_as_name_url_mi.Check(entity_title_format == 'name_url')
         
-        # Remove/dispose old _change_url_prefix_menuitems
-        for mi in reversed(self._change_url_prefix_menuitems):
-            menu.Remove(mi.Id)
-        self._change_url_prefix_menuitems.clear()
-        
-        # Create new _change_url_prefix_menuitems
-        (cup_mis, on_attach_menuitems) = \
-            self.entity_tree.create_change_url_prefix_menuitems_for(
-                node=self.entity_tree.selected_node,
-                menu_type='top_level')
-        for (mi_offset, mi) in enumerate(cup_mis, start=first_old_mi_offset):
-            menu.Insert(mi_offset, mi)
-        on_attach_menuitems()
-        self._change_url_prefix_menuitems = cup_mis
+        # Update change URL prefix menuitems
+        if True:
+            # Locate old _change_url_prefix_menuitems
+            assert len(self._change_url_prefix_menuitems) >= 1
+            first_old_mi = self._change_url_prefix_menuitems[0]
+            (first_old_mi2, first_old_mi_offset) = \
+                menu.FindChildItem(first_old_mi.Id)
+            assert first_old_mi2 == first_old_mi
+            
+            # Remove/dispose old _change_url_prefix_menuitems
+            for mi in reversed(self._change_url_prefix_menuitems):
+                menu.Remove(mi.Id)
+            self._change_url_prefix_menuitems.clear()
+            
+            # Create new _change_url_prefix_menuitems
+            (cup_mis, on_attach_menuitems) = \
+                self.entity_tree.create_change_url_prefix_menuitems_for(
+                    node=self.entity_tree.selected_node,
+                    menu_type='top_level')
+            for (mi_offset, mi) in enumerate(cup_mis, start=first_old_mi_offset):
+                menu.Insert(mi_offset, mi)
+            on_attach_menuitems()
+            self._change_url_prefix_menuitems = cup_mis
+    
+    def _on_view_format_menuitem_selected(self, event: wx.MenuEvent) -> None:
+        if event.Id == self._ID_VIEW_AS_URL_NAME:
+            self.project.entity_title_format = 'url_name'
+            self.entity_tree.root.update_title_of_descendants()
+        elif event.Id == self._ID_VIEW_AS_NAME_URL:
+            self.project.entity_title_format = 'name_url'
+            self.entity_tree.root.update_title_of_descendants()
+        else:
+            event.Skip()
     
     def _on_change_url_prefix_menuitem_selected(self, event: wx.MenuEvent) -> None:
         self.entity_tree.on_change_url_prefix_menuitem_selected(

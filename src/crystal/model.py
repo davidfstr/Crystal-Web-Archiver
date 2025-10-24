@@ -123,6 +123,9 @@ class _Missing(Enum):
     VALUE = 1
 
 
+EntityTitleFormat = Literal['url_name', 'name_url']
+
+
 class Project(ListenableMixin):
     """
     Groups together a set of resources that are downloaded and any associated settings.
@@ -1128,6 +1131,21 @@ class Project(ListenableMixin):
     def _set_default_url_prefix(self, value: str | None) -> None:
         self._set_property('default_url_prefix', value)
     default_url_prefix = cast(Optional[str], property(_get_default_url_prefix, _set_default_url_prefix))
+    
+    def _get_entity_title_format(self) -> EntityTitleFormat:
+        value = self._get_property('entity_title_format', 'url_name')
+        if value not in ('url_name', 'name_url'):
+            # Replace unrecognized value with default value
+            value = 'url_name'
+        return value  # type: ignore[return-value]
+    def _set_entity_title_format(self, value: EntityTitleFormat) -> None:
+        if value not in ('url_name', 'name_url'):
+            raise ValueError(f'Invalid entity_title_format: {value}')
+        self._set_property('entity_title_format', value)
+    entity_title_format = cast(EntityTitleFormat, property(
+        _get_entity_title_format,
+        _set_entity_title_format,
+        doc="""Format for displaying entity titles in the Entity Tree."""))
     
     def get_display_url(self, url):
         """

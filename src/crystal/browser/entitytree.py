@@ -35,8 +35,9 @@ from crystal.util.wx_treeitem_gettooltip import (
 )
 from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
+import sys
 import time
-from typing import cast, Dict, final, Literal, Optional, Tuple, Union
+from typing import assert_never, cast, Dict, final, Literal, Optional, Tuple, Union
 from typing_extensions import override
 from urllib.parse import urljoin
 import wx
@@ -1149,7 +1150,13 @@ class RootResourceNode(_ResourceNode):
         project = root_resource.project
         display_url = project.get_display_url(root_resource.url)
         if root_resource.name != '':
-            return '{} - {}'.format(display_url, root_resource.name)
+            entity_title_format = project.entity_title_format  # cache
+            if entity_title_format == 'name_url':
+                return '{} - {}'.format(root_resource.name, display_url)
+            elif entity_title_format == 'url_name':
+                return '{} - {}'.format(display_url, root_resource.name)
+            else:
+                assert_never(entity_title_format)
         else:
             return '{}'.format(display_url)
     
@@ -1400,7 +1407,13 @@ class ResourceGroupNode(_GroupedNode):
         project = resource_group.project
         display_url = project.get_display_url(resource_group.url_pattern)
         if resource_group.name != '':
-            return '{} - {}'.format(display_url, resource_group.name)
+            entity_title_format = project.entity_title_format  # cache
+            if entity_title_format == 'name_url':
+                return '{} - {}'.format(resource_group.name, display_url)
+            elif entity_title_format == 'url_name':
+                return '{} - {}'.format(display_url, resource_group.name)
+            else:
+                assert_never(entity_title_format)
         else:
             return '{}'.format(display_url)
     

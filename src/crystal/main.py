@@ -658,7 +658,7 @@ def _main2(args: list[str]) -> None:
         if app.HasPendingEvents():
             app.ProcessPendingEvents()
             if app.HasPendingEvents():
-                print('Warning: Exiting app while some pending events still exist')
+                print('Warning: Exiting app while some pending events still exist', file=sys.stderr)
 
 
 async def _did_launch(
