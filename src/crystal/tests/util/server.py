@@ -18,6 +18,7 @@ from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 import re
+import sys
 from typing import List, Optional
 import unittest.mock
 from zipfile import ZipFile
@@ -58,7 +59,8 @@ def served_project_from_filepath(
                         if rr.metadata is None:
                             print(
                                 f'Warning: Unable to alter fetch date of '
-                                f'resource revision lacking HTTP headers: {rr}')
+                                f'resource revision lacking HTTP headers: {rr}',
+                                file=sys.stderr)
                             continue
                         
                         assert fetch_date_of_resources_set_to is not None

@@ -5,6 +5,7 @@ Utilities for displaying the Crystal program name with consistent branding.
 from crystal import APP_NAME, resources
 from crystal.util.wx_system_appearance import IsDark
 from crystal.util.xos import is_linux, is_mac_os, is_windows
+import sys
 import wx
 
 
@@ -48,7 +49,9 @@ def create_program_name_control(parent: wx.Window) -> wx.StaticBitmap | wx.Stati
             raise RuntimeError("Failed to create logotext bundle")
     except Exception as e:
         # Fallback to text if bitmap loading fails
-        print(f"Warning: Failed to load logotext bitmap, using text fallback: {e}")
+        print(
+            f"Warning: Failed to load logotext bitmap, using text fallback: {e}",
+            file=sys.stderr)
         program_name = wx.StaticText(parent, label=PROGRAM_NAME)
         program_name_font = load_app_name_font(int(23 * font_size_scale))
         program_name.SetFont(program_name_font)

@@ -28,6 +28,7 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'add_task',
     'close',
     'default_url_prefix',
+    'entity_title_format',
     'get_display_url',
     'get_resource',
     'get_resource_group',

@@ -19,6 +19,9 @@ Release Notes ⋮
         * The "Open Project..." menuitem can be used to open a different project
           when another project is already open.
         * The "About Crystal" menuitem shows information about Crystal.
+    * For projects that consistently give names to Root URLs and Groups,
+      make it easier to distinguish Root URLs and Groups by allowing
+      the title format to be changed from "URL - Name" to "Name - URL".
 
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
