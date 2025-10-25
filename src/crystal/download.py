@@ -8,10 +8,12 @@ from crystal.model import (
     ProjectHasTooManyRevisionsError, Resource, ResourceRevision,
     ResourceRevisionMetadata,
 )
+from crystal.util.cli import print_warning
 from crystal.util.xos import is_mac_os, is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
 import ssl
+import sys
 import truststore
 from typing import BinaryIO, cast, Collection, Dict, TYPE_CHECKING
 import urllib.error
@@ -80,20 +82,29 @@ def download_resource_revision(
             known_etags,
         )()
         try:
-            # If an HTTP 304 response was received without an ETag,
-            # try to populate the ETag value so that future calls to
-            # ResourceRevision.resolve_http_304() will actually be
-            # able to find the original revision
-            if metadata is not None and metadata['status_code'] == 304:
-                response_etags = [
-                    cur_value
-                    for (cur_name, cur_value) in metadata['headers']
-                    if cur_name.lower() == 'etag'
-                ]
-                response_etag = response_etags[0] if len(response_etags) > 0 else None
-                if response_etag is None and len(known_etags) == 1:
-                    (known_etag,) = known_etags
-                    metadata['headers'].append(['ETag', known_etag])
+            if metadata is not None:
+                status_code = metadata['status_code']  # cache
+                
+                # If an HTTP 304 response was received without an ETag,
+                # try to populate the ETag value so that future calls to
+                # ResourceRevision.resolve_http_304() will actually be
+                # able to find the original revision
+                if status_code == 304:
+                    response_etags = [
+                        cur_value
+                        for (cur_name, cur_value) in metadata['headers']
+                        if cur_name.lower() == 'etag'
+                    ]
+                    response_etag = response_etags[0] if len(response_etags) > 0 else None
+                    if response_etag is None and len(known_etags) == 1:
+                        (known_etag,) = known_etags
+                        metadata['headers'].append(['ETag', known_etag])
+                
+                # Warn if HTTP 4xx or 5xx error while downloading
+                # TODO: Automatically throttle future requests to the domain
+                if ((400 <= status_code <= 499) or (500 <= status_code <= 599)) \
+                        and status_code != 404:
+                    print_warning(f'HTTP {status_code} while downloading {resource.url!r}', file=sys.stderr)
             
             # TODO: Provide incremental feedback such as '7 KB of 15 KB'
             progress_listener.subtitle = 'Receiving response...'

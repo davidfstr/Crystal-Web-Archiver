@@ -28,6 +28,10 @@ Release Notes ⋮
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
 
+* Downloading improvements
+    * Warn if HTTP 4xx or 5xx error while downloading a URL, on stderr,
+      to make it easy to notice when a domain starts repeatedly refusing requests.
+
 * Serving improvements
     * When visiting a page that hasn't been downloaded,
       a progress bar is now shown in the browser.
