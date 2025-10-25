@@ -10,7 +10,7 @@ from enum import Enum
 from functools import cached_property
 from io import TextIOBase
 from threading import Lock
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TextIO, cast
 import wx
 from wx.richtext import RichTextCtrl
 
@@ -176,14 +176,14 @@ class LogDrawer(wx.Frame):
     # === Properties ===
     
     @cached_property
-    def writer(self) -> TextIOBase:
+    def writer(self) -> TextIO:
         """
         Returns a file-like object representing this drawer's content that can be written to.
         
         Writing to the file will write to this drawer's content and will also
         write to sys.stdout.
         """
-        return _LogDrawerWriter(self)
+        return cast(TextIO, _LogDrawerWriter(self))
     
     # === Shape ===
     

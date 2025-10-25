@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
+from typing import Any, TextIO, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
 from typing_extensions import override
 
 if TYPE_CHECKING:
@@ -817,7 +817,7 @@ async def _did_launch(
                     host=parsed_args.host,
                     # TODO: Alter ProjectServer to accept the more-general TextIO
                     #       instead of insisting on a TextIOBase
-                    stdout=cast(TextIOBase, sys.stdout),
+                    stdout=cast(TextIO, sys.stdout),
                     # NOTE: Print special exit instruction in headless mode
                     exit_instruction='Press Ctrl-C to stop.',
                     wait_for_banner=True,

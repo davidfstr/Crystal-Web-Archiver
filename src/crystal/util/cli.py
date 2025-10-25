@@ -1,4 +1,4 @@
-from io import TextIOBase
+from typing import TextIO
 
 # ------------------------------------------------------------------------------
 # Terminal Colors
@@ -22,20 +22,24 @@ TERMINAL_FG_BOLD_PURPLE =   '\033[1;35m'
 TERMINAL_RESET =            '\033[0m'
 
 
-def print_success(message: str, file: TextIOBase | None=None) -> None:
+def print_success(message: str, file: TextIO | None=None) -> None:
     print(colorize(TERMINAL_FG_GREEN, message), file=file)
 
 
-def print_error(message: str, file: TextIOBase | None=None) -> None:
+def print_error(message: str, file: TextIO | None=None) -> None:
     print(colorize(TERMINAL_FG_RED, message), file=file)
 
 
-def print_warning(message: str, file: TextIOBase | None=None) -> None:
+def print_warning(message: str, file: TextIO | None=None) -> None:
     print(colorize(TERMINAL_FG_YELLOW, message), file=file)
 
 
-def print_info(message: str, file: TextIOBase | None=None) -> None:
+def print_info(message: str, file: TextIO | None=None) -> None:
     print(colorize(TERMINAL_FG_CYAN, message), file=file)
+
+
+def print_special(message: str, file: TextIO | None=None) -> None:
+    print(colorize(TERMINAL_FG_PURPLE, message), file=file)
 
 
 def colorize(color_code: str, str_value: str) -> str:

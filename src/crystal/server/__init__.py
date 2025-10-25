@@ -22,7 +22,7 @@ from crystal.server.api import CreateGroupErrorResponse, CreateGroupFormData, Cr
 from crystal.server.special_pages import fetch_error_html, not_found_page_html, not_in_archive_html, welcome_page_html
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
-    TERMINAL_FG_PURPLE, colorize, print_error, print_info, print_success, print_warning,
+    print_error, print_info, print_special, print_success, print_warning,
 )
 from crystal.util.minify import minify_svg
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
@@ -39,7 +39,6 @@ from functools import cache
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from io import TextIOBase
 import json
 import os
 import re
@@ -53,7 +52,7 @@ import traceback
 import trycast
 from trycast import checkcast
 from typing import (
-    Literal, Mapping, Optional, TYPE_CHECKING, TypeAlias, TypedDict,
+    Literal, Mapping, Optional, TextIO, TYPE_CHECKING, TypeAlias, TypedDict,
     assert_never,
 )
 from typing_extensions import override
@@ -96,7 +95,7 @@ class ProjectServer:
             port: int | None=None,
             host: str | None=None,
             *, verbosity: Verbosity='normal',
-            stdout: TextIOBase | None=None,
+            stdout: TextIO | None=None,
             exit_instruction: str | None=None,
             wait_for_banner: bool=True,
             ) -> None:
@@ -451,7 +450,7 @@ _HTTP_COLON_SLASH_SLASH_RE = re.compile(r'(?i)https?://')
 class _HttpServer(HTTPServer):
     project: Project
     verbosity: Verbosity
-    stdout: TextIOBase | None
+    stdout: TextIO | None
     
     @override
     def handle_error(self, request, client_address):
@@ -1765,14 +1764,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def _print_special(self, message: str) -> None:
         if self._verbosity == 'indent':
             message = '    ' + message  # reinterpret
-        print(colorize(TERMINAL_FG_PURPLE, message), file=self._stdout)
+        print_special(message, file=self._stdout)
     
     @property
     def _verbosity(self) -> Verbosity:
         return self.server.verbosity
     
     @property
-    def _stdout(self) -> TextIOBase | None:
+    def _stdout(self) -> TextIO | None:
         return self.server.stdout
 
 
