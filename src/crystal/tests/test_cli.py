@@ -155,71 +155,61 @@ def test_when_launched_with_readonly_and_no_project_filepath_then_open_or_create
 def test_when_ctrl_r_pressed_in_open_or_create_dialog_then_readonly_checkbox_is_toggled() -> None:
     with crystal_shell(args=[]) as (crystal, banner):
         # Test Ctrl+R key toggles readonly checkbox
-        result = py_eval(crystal, textwrap.dedent('''\
-            if True:
-                from crystal.tests.util.runner import run_test
-                from crystal.tests.util.windows import OpenOrCreateDialog
-                from threading import Thread
-                import wx
+        result = py_eval_await(crystal, textwrap.dedent('''\
+            from crystal.tests.util.windows import OpenOrCreateDialog
+            import wx
+            
+            async def crystal_task() -> None:
+                ocd = await OpenOrCreateDialog.wait_for()
                 #
-                async def test_ctrl_r_toggle():
-                    ocd = await OpenOrCreateDialog.wait_for()
-                    #
-                    # Spy on calls to ocd.open_as_readonly.SetFocus()
-                    setfocus_call_count_cell = [0]
-                    original_setfocus = ocd.open_as_readonly.SetFocus
-                    def patched_setfocus():
-                        setfocus_call_count_cell[0] += 1
-                        return original_setfocus()
-                    ocd.open_as_readonly.SetFocus = patched_setfocus
-                    #
-                    # Initial state should be unchecked
-                    initial_checked = ocd.open_as_readonly.Value
-                    initial_create_enabled = ocd.create_button.Enabled
-                    print(f"initial_checked={initial_checked}")
-                    print(f"initial_create_enabled={initial_create_enabled}")
-                    #
-                    # Simulate Ctrl+R key press using EVT_CHAR_HOOK
-                    key_event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
-                    key_event.SetControlDown(True)
-                    key_event.SetKeyCode(ord('R'))
-                    key_event.SetId(ocd.open_or_create_project_dialog.GetId())
-                    key_event.SetEventObject(ocd.open_or_create_project_dialog)
-                    ocd.open_or_create_project_dialog.ProcessEvent(key_event)
-                    #
-                    # Check new state after Ctrl+R press
-                    after_r_checked = ocd.open_as_readonly.Value
-                    after_r_create_enabled = ocd.create_button.Enabled
-                    print(f"after_r_checked={after_r_checked}")
-                    print(f"after_r_create_enabled={after_r_create_enabled}")
-                    print(f"setfocus_called_after_first_toggle={setfocus_call_count_cell[0] >= 1}")
-                    #
-                    # Press Alt+r to toggle back (test different modifier and lowercase)
-                    key_event2 = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
-                    key_event2.SetAltDown(True)
-                    key_event2.SetKeyCode(ord('r'))  # test lowercase too
-                    key_event2.SetId(ocd.open_or_create_project_dialog.GetId())
-                    key_event2.SetEventObject(ocd.open_or_create_project_dialog)
-                    ocd.open_or_create_project_dialog.ProcessEvent(key_event2)
-                    #
-                    # Check final state
-                    final_checked = ocd.open_as_readonly.Value
-                    final_create_enabled = ocd.create_button.Enabled
-                    print(f"final_checked={final_checked}")
-                    print(f"final_create_enabled={final_create_enabled}")
-                    print(f"setfocus_called_after_second_toggle={setfocus_call_count_cell[0] >= 2}")
-                    # 
-                    # Cleanup spy on ocd.open_as_readonly.SetFocus()
-                    ocd.open_as_readonly.SetFocus = original_setfocus
+                # Spy on calls to ocd.open_as_readonly.SetFocus()
+                setfocus_call_count_cell = [0]
+                original_setfocus = ocd.open_as_readonly.SetFocus
+                def patched_setfocus():
+                    setfocus_call_count_cell[0] += 1
+                    return original_setfocus()
+                ocd.open_as_readonly.SetFocus = patched_setfocus
                 #
-                result_cell = [Ellipsis]
-                def get_result(result_cell):
-                    result_cell[0] = run_test(lambda: test_ctrl_r_toggle())
-                    print('OK')
+                # Initial state should be unchecked
+                initial_checked = ocd.open_as_readonly.Value
+                initial_create_enabled = ocd.create_button.Enabled
+                print(f"initial_checked={initial_checked}")
+                print(f"initial_create_enabled={initial_create_enabled}")
                 #
-                t = Thread(target=lambda: get_result(result_cell))
-                t.start()
-        '''), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
+                # Simulate Ctrl+R key press using EVT_CHAR_HOOK
+                key_event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+                key_event.SetControlDown(True)
+                key_event.SetKeyCode(ord('R'))
+                key_event.SetId(ocd.open_or_create_project_dialog.GetId())
+                key_event.SetEventObject(ocd.open_or_create_project_dialog)
+                ocd.open_or_create_project_dialog.ProcessEvent(key_event)
+                #
+                # Check new state after Ctrl+R press
+                after_r_checked = ocd.open_as_readonly.Value
+                after_r_create_enabled = ocd.create_button.Enabled
+                print(f"after_r_checked={after_r_checked}")
+                print(f"after_r_create_enabled={after_r_create_enabled}")
+                print(f"setfocus_called_after_first_toggle={setfocus_call_count_cell[0] >= 1}")
+                #
+                # Press Alt+r to toggle back (test different modifier and lowercase)
+                key_event2 = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+                key_event2.SetAltDown(True)
+                key_event2.SetKeyCode(ord('r'))  # test lowercase too
+                key_event2.SetId(ocd.open_or_create_project_dialog.GetId())
+                key_event2.SetEventObject(ocd.open_or_create_project_dialog)
+                ocd.open_or_create_project_dialog.ProcessEvent(key_event2)
+                #
+                # Check final state
+                final_checked = ocd.open_as_readonly.Value
+                final_create_enabled = ocd.create_button.Enabled
+                print(f"final_checked={final_checked}")
+                print(f"final_create_enabled={final_create_enabled}")
+                print(f"setfocus_called_after_second_toggle={setfocus_call_count_cell[0] >= 2}")
+                # 
+                # Cleanup spy on ocd.open_as_readonly.SetFocus()
+                ocd.open_as_readonly.SetFocus = original_setfocus
+            '''
+        ), 'crystal_task', [], timeout=8.0)
         
         # Verify Ctrl+R properly toggled the checkbox
         assertIn('initial_checked=False', result)
