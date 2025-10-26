@@ -709,23 +709,13 @@ def close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: float
 
 def wait_for_main_window(crystal: subprocess.Popen) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
-    py_eval(crystal, textwrap.dedent(f'''\
-        if True:
-            from crystal.tests.util.runner import run_test
-            from crystal.tests.util.windows import MainWindow
-            from threading import Thread
-            #
-            async def wait_for_main_window():
-                mw = await MainWindow.wait_for()
-                #
-                print('OK')
-            #
-            t = Thread(target=lambda: run_test(wait_for_main_window))
-            t.start()
-        '''),
-        stop_suffix=_OK_THREAD_STOP_SUFFIX,
-        timeout=MainWindow.CLOSE_TIMEOUT,
-    )
+    py_eval_await(crystal, textwrap.dedent('''\
+        from crystal.tests.util.windows import MainWindow
+        
+        async def crystal_task() -> None:
+            mw = await MainWindow.wait_for()
+        '''
+    ), 'crystal_task', [])
 
 
 def close_main_window(crystal: subprocess.Popen, *, after_delay: float | None=None) -> None:
