@@ -415,6 +415,7 @@ def py_eval_await(
         func_name: str,
         func_args: Sequence[str]=(),
         *, timeout: float|None=None,
+        stop_suffix: str | tuple[str, ...] | None=None,
         ) -> str:
     """
     Evaluates an async function in the specified Crystal process
@@ -447,7 +448,7 @@ def py_eval_await(
         t = Thread(target=lambda: get_result(result_cell))
         t.start()
         '''
-    ), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=timeout)
+    ), stop_suffix=stop_suffix or _OK_THREAD_STOP_SUFFIX, timeout=timeout)
     stdout_str = stdout_str.removeprefix(_VSC_ESCAPE_SEQUENCE)
     stdout_str = stdout_str.removeprefix('>>>')
     return stdout_str

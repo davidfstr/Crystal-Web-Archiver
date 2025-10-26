@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from crystal.model import Project, Resource, RootResource
 from crystal.tests.util.cli import (
-    create_new_empty_project, py_eval, crystal_shell,
+    create_new_empty_project, py_eval, crystal_shell, py_eval_await,
 )
 from crystal.tests.util.controls import file_dialog_returning
 from crystal.tests.util.server import extracted_project
@@ -293,24 +293,16 @@ async def test_can_quit_with_menuitem() -> None:
     with crystal_shell() as (crystal, _):
         create_new_empty_project(crystal)
         
-        py_eval(crystal,
-            textwrap.dedent(f'''\
-                from crystal.tests.util.runner import run_test
+        py_eval_await(crystal, textwrap.dedent('''\
+                from crystal.tests.util.runner import bg_sleep
                 from crystal.tests.util.windows import MainWindow
-                from threading import Thread
-                import wx
-
-                async def quit_with_menuitem():
+                
+                async def crystal_task() -> None:
                     mw = await MainWindow.wait_for()
-                    #
                     await mw.quit_with_menuitem()
-                    #
-                    print('OK')
-
-                t = Thread(target=lambda: run_test(quit_with_menuitem))
-                t.start()
                 '''
             ),
+            'crystal_task', [],
             stop_suffix=('crystal.util.xthreading.NoForegroundThreadError\n',),
             timeout=3.0)  # took 4.4s on macOS ASAN CI (after 2x multiplier)
 
