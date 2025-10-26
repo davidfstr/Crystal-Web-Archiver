@@ -16,9 +16,9 @@ from crystal.tests.util.tasks import (
 )
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
+    mark_as_complete,
+    ttn_for_task,
 )
-from crystal.tests.util.tasks import mark_as_complete as _mark_as_complete
-from crystal.tests.util.tasks import ttn_for_task as _ttn_for_task
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.ui.tree2 import NodeView as NodeView2
 from crystal.ui.tree import NodeView
@@ -57,7 +57,7 @@ async def test_when_start_downloading_large_group_then_show_100_children_plus_tr
         # Ensure leading "# more" placeholder inserted after M+1 tasks complete
         if True:
             for i in range(M):
-                _mark_as_complete(children_tasks[i])
+                mark_as_complete(children_tasks[i])
                 assert 0 == _viewport_offset(parent_ttn)
                 assert 0 + N == _materialized_child_task_count(parent_ttn)
                 assert 0 == _unmaterialized_child_task_count(parent_ttn)
@@ -68,7 +68,7 @@ async def test_when_start_downloading_large_group_then_show_100_children_plus_tr
                 assert _is_more_node(children_tns[-1])
                 assert M + 1 == _value_of_more_node(children_tns[-1])
             
-            _mark_as_complete(children_tasks[M])
+            mark_as_complete(children_tasks[M])
             assert 1 == _viewport_offset(parent_ttn)
             assert 1 + N == _materialized_child_task_count(parent_ttn)
             assert 1 == _unmaterialized_child_task_count(parent_ttn)
@@ -85,7 +85,7 @@ async def test_when_start_downloading_large_group_then_show_100_children_plus_tr
         # Ensure leading/trailing "# more" placeholder increments/decrements
         # as each task completes, until trailing "# more" placeholder disappears
         for i in range(M+1, M+M):
-            _mark_as_complete(children_tasks[i])
+            mark_as_complete(children_tasks[i])
             assert (i - M + 1) == _viewport_offset(parent_ttn)
             assert (i - M + 1) + N == _materialized_child_task_count(parent_ttn)
             assert (i - M + 1) == _unmaterialized_child_task_count(parent_ttn)
@@ -110,7 +110,7 @@ async def test_when_start_downloading_large_group_then_show_100_children_plus_tr
         if True:
             # Complete remaining tasks up to but not including the last task
             for (i, j) in zip(range(M+M, M+N), range(0, M)):
-                _mark_as_complete(parent_ttn.task.children[i])
+                mark_as_complete(parent_ttn.task.children[i])
                 assert (i - M + 1) == _viewport_offset(parent_ttn)
                 assert M + N + 1 == _materialized_child_task_count(parent_ttn)
                 assert (i - M + 1) == _unmaterialized_child_task_count(parent_ttn)
@@ -124,7 +124,7 @@ async def test_when_start_downloading_large_group_then_show_100_children_plus_tr
             # Complete the last task
             assert parent_ttn.task.children[-2].complete
             assert not parent_ttn.task.children[-1].complete
-            _mark_as_complete(parent_ttn.task.children[-1])
+            mark_as_complete(parent_ttn.task.children[-1])
             assert parent_ttn.task.complete
 
 
@@ -235,7 +235,7 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
         )
         
         # Case: test_given_showing_less_than_5_leading_completed_children_when_new_leading_child_completes_then_maintain_viewport_position_and_show_one_more_leading_completed_children
-        _mark_as_complete(children_tasks[0])
+        mark_as_complete(children_tasks[0])
         assert 0 == _viewport_offset(parent_ttn)
         assert 0 + N == _materialized_child_task_count(parent_ttn)
         assert 0 == _unmaterialized_child_task_count(parent_ttn)
@@ -251,7 +251,7 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
         
         # Case: test_given_showing_less_than_5_leading_completed_children_when_new_nonleading_child_completes_then_maintain_viewport_position_and_show_same_number_of_leading_completed_children
         assert M >= 3
-        _mark_as_complete(children_tasks[2])
+        mark_as_complete(children_tasks[2])
         assert 0 == _viewport_offset(parent_ttn)
         assert 0 + N == _materialized_child_task_count(parent_ttn)
         assert 0 == _unmaterialized_child_task_count(parent_ttn)
@@ -269,7 +269,7 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
         assert N >= M + 1
         for t in children_tasks[:M]:
             if not t.complete:
-                _mark_as_complete(t)
+                mark_as_complete(t)
         assert 0 == _viewport_offset(parent_ttn)
         assert 0 + N == _materialized_child_task_count(parent_ttn)
         assert 0 == _unmaterialized_child_task_count(parent_ttn)
@@ -284,7 +284,7 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
         )
         
         # Case: test_given_showing_5_leading_completed_children_when_new_leading_child_completes_with_a_following_noncompleted_child_then_shift_viewport_down_once_and_still_show_5_leading_completed_children
-        _mark_as_complete(children_tasks[M])
+        mark_as_complete(children_tasks[M])
         assert 1 == _viewport_offset(parent_ttn)
         assert 1 + N == _materialized_child_task_count(parent_ttn)
         assert 1 == _unmaterialized_child_task_count(parent_ttn)
@@ -301,7 +301,7 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
         
         # Case: test_given_showing_5_leading_completed_children_when_new_nonleading_child_completes_then_maintain_viewport_position_and_still_show_5_leading_completed_children
         assert N >= M + 2
-        _mark_as_complete(children_tasks[M + 2])
+        mark_as_complete(children_tasks[M + 2])
         assert 1 == _viewport_offset(parent_ttn)
         assert 1 + N == _materialized_child_task_count(parent_ttn)
         assert 1 == _unmaterialized_child_task_count(parent_ttn)
@@ -317,7 +317,7 @@ async def test_given_showing_less_than_5_leading_completed_children_when_new_lea
         )
         
         # Case: test_given_showing_5_leading_completed_children_when_new_leading_child_completes_with_a_following_completed_child_then_shift_viewport_down_multiple_times_and_still_show_5_leading_completed_children
-        _mark_as_complete(children_tasks[M + 1])
+        mark_as_complete(children_tasks[M + 1])
         assert 3 == _viewport_offset(parent_ttn)
         assert 3 + N == _materialized_child_task_count(parent_ttn)
         assert 3 == _unmaterialized_child_task_count(parent_ttn)
@@ -373,7 +373,7 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
             assert N >= M + 1
             for t in children_tasks[:N-1]:
                 if not t.complete:
-                    _mark_as_complete(t)
+                    mark_as_complete(t)
             assert 1 == _viewport_offset(parent_ttn)
             (children_tns, children_tasks) = \
                 (parent_ttn.tree_node.children, parent_ttn.task.children)
@@ -388,7 +388,7 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
             # - once for completed child (N) and
             # - once for completed child (N + 1) that becomes materialized
             # - once for completed child (N + 2) that becomes materialized
-            _mark_as_complete(children_tasks[N - 1])
+            mark_as_complete(children_tasks[N - 1])
             assert 4 == _viewport_offset(parent_ttn)
             (children_tns, children_tasks) = \
                 (parent_ttn.tree_node.children, parent_ttn.task.children)
@@ -407,7 +407,7 @@ def _children_marked_as_complete_upon_creation(ordinals: list[int]) -> Iterator[
         
         for n in ordinals:
             if task.resource.url.endswith(f'/https/xkcd.com/{n}/'):
-                _mark_as_complete(task)
+                mark_as_complete(task)
                 break
         
         return (task, created)
@@ -454,7 +454,7 @@ async def test_given_downloading_group_and_many_uncompleted_children_remaining_w
         # but adding a task will cause it to reappear
         assert N >= M+2
         for t in parent_ttn.task.children[:M+3]:
-            _mark_as_complete(t)
+            mark_as_complete(t)
         (children_tns, children_tasks) = \
             (parent_ttn.tree_node.children, parent_ttn.task.children)
         assert len(children_tns) == 1 + N
@@ -478,7 +478,7 @@ async def test_given_downloading_group_and_many_uncompleted_children_remaining_w
         # Complete tasks until more node disappears,
         # but adding a task will NOT cause it to reappear
         for t in parent_ttn.task.children[M+3:(M+3)+2]:
-            _mark_as_complete(t)
+            mark_as_complete(t)
         (children_tns, children_tasks) = \
             (parent_ttn.tree_node.children, parent_ttn.task.children)
         assert len(children_tns) == 1 + (N - 1)
@@ -574,8 +574,8 @@ async def _project_with_resource_group_starting_to_download(
                     next_resource_ordinal += 1
                     return r
                 
-                download_rg_ttn = _ttn_for_task(download_rg_task)
-                download_rg_members_ttn = _ttn_for_task(download_rg_members_task)
+                download_rg_ttn = ttn_for_task(download_rg_task)
+                download_rg_members_ttn = ttn_for_task(download_rg_members_task)
                 try:
                     yield (
                         mw,
@@ -610,7 +610,7 @@ def _cleanup_download_of_resource_group(
     )
     for t in materialized_children:
         if not t.complete:
-            _mark_as_complete(t)
+            mark_as_complete(t)
     assert _is_complete(download_rg_members_ttn.tree_node)
     assert _is_complete(download_rg_ttn.tree_node)
     assert None == project.root_task.try_get_next_task_unit()  # clear root task
