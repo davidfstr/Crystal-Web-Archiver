@@ -11,7 +11,7 @@ import signal
 from crystal.model import Project, Resource
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_literal, py_exec, read_until,
+    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until,
     crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
@@ -134,27 +134,17 @@ def test_can_open_crystalopen_file() -> None:
 def test_when_launched_with_readonly_and_no_project_filepath_then_open_or_create_dialog_defaults_to_readonly_checked() -> None:
     with crystal_shell(args=['--readonly']) as (crystal, banner):
         # Check readonly checkbox state
-        result = py_eval(crystal, textwrap.dedent('''\
-            if True:
-                from crystal.tests.util.runner import run_test
-                from crystal.tests.util.windows import OpenOrCreateDialog
-                from threading import Thread
-                #
-                async def check_readonly_state():
-                    ocd = await OpenOrCreateDialog.wait_for()
-                    readonly_checked = ocd.open_as_readonly.Value
-                    create_enabled = ocd.create_button.Enabled
-                    print(f"readonly_checked={readonly_checked}")
-                    print(f"create_enabled={create_enabled}")
-                #
-                result_cell = [Ellipsis]
-                def get_result(result_cell):
-                    result_cell[0] = run_test(lambda: check_readonly_state())
-                    print('OK')
-                #
-                t = Thread(target=lambda: get_result(result_cell))
-                t.start()
-        '''), stop_suffix=_OK_THREAD_STOP_SUFFIX, timeout=8.0)
+        result = py_eval_await(crystal, textwrap.dedent('''\
+            from crystal.tests.util.windows import OpenOrCreateDialog
+            
+            async def crystal_task() -> None:
+                ocd = await OpenOrCreateDialog.wait_for()
+                readonly_checked = ocd.open_as_readonly.Value
+                create_enabled = ocd.create_button.Enabled
+                print(f"readonly_checked={readonly_checked}")
+                print(f"create_enabled={create_enabled}")
+            '''
+        ), 'crystal_task', [], timeout=8.0)
         assertIn('readonly_checked=True', result)
         assertIn('create_enabled=False', result)
         
