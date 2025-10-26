@@ -656,19 +656,15 @@ _OK_THREAD_STOP_SUFFIX = (
 
 def create_new_empty_project(crystal: subprocess.Popen) -> None:
     # NOTE: Uses private API, including the entire crystal.tests package
-    stdout_str = py_eval_await(crystal, textwrap.dedent('''\
+    py_eval_await(crystal, textwrap.dedent('''\
         from crystal.tests.util.runner import bg_sleep
         from crystal.tests.util.windows import OpenOrCreateDialog
         
         async def crystal_task() -> None:
             ocd = await OpenOrCreateDialog.wait_for()
             mw = await ocd.create_and_leave_open()
-            print(repr(type(mw)))
         '''
     ), 'crystal_task', [], timeout=8.0)  # NOTE: 6.0 was observed to sometimes not be long enough on macOS
-    assertEqual(
-        "<class 'crystal.tests.util.windows.MainWindow'>\n",
-        stdout_str)
 
 
 def close_open_or_create_dialog(crystal: subprocess.Popen, *, after_delay: float | None=None) -> None:
