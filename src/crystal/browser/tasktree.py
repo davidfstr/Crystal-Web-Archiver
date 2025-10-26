@@ -1,6 +1,7 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from crystal.browser.icons import TREE_NODE_ICONS
+from crystal.model import Resource, ResourceGroup
 from crystal.task import (
     CrashedTask, DownloadResourceGroupMembersTask, RootTask,
     scheduler_affinity,
@@ -15,6 +16,7 @@ from crystal.util.bulkheads import Bulkhead, BulkheadCell, capture_crashes_to
 from crystal.util.bulkheads import capture_crashes_to_bulkhead_arg
 from crystal.util.bulkheads import capture_crashes_to_stderr, CrashReason
 from crystal.util.wx_bind import bind
+from crystal.util.wx_clipboard import copy_text_to_clipboard
 from crystal.util.wx_system_appearance import IsDark
 from crystal.util.wx_treeitem_gettooltip import (
     EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent,
@@ -26,11 +28,13 @@ from crystal.util.xthreading import (
     fg_call_and_wait, fg_call_later, is_foreground_thread,
 )
 from crystal.util.xtraceback import format_exception_for_user
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, assert_never
 import wx
 
 
 _ID_DISMISS = 101
+_ID_COPY_URL_OR_URL_PATTERN = 102
+_ID_VIEW = 103
 
 _INTERACTIVE_SUFFIX = ' ⚡️'
 
@@ -39,13 +43,18 @@ class TaskTree:
     """
     View controller for the task tree
     """
-    def __init__(self, parent_peer: wx.Window, root_task: Task) -> None:
+    def __init__(self,
+            parent_peer: wx.Window,
+            root_task: Task,
+            view_url_func: Callable[[str], None],
+            ) -> None:
         self.tree = TreeView(parent_peer, name='cr-task-tree')
         self.tree.delegate = self
         
         self.root = TaskTreeNode(root_task)
         self.tree.root = self.root.tree_node
         
+        self._view_url_func = view_url_func
         self._right_clicked_node = None  # type: Optional[TaskTreeNode]
         
         self.tree.peer.SetInitialSize((750, 200))
@@ -66,16 +75,37 @@ class TaskTree:
         node = TaskTreeNode.for_node_view(node_view)
         self._right_clicked_node = node
         
+        related_entity = node.task.related_entity if node is not None else None
+        
+        if node is not None and isinstance(node.task, CrashedTask):
+            dismiss_action_title = node.task.dismiss_action_title
+        else:
+            dismiss_action_title = 'Dismiss'
+        is_dismissable = (
+            node is not None and (
+                isinstance(node.task, CrashedTask) or
+                self._is_dismissable_top_level_task(node.task)
+            )
+        )
+        
         # Create popup menu
         menu = wx.Menu()
-        bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
-        if node is not None and isinstance(node.task, CrashedTask):
-            menu.Append(_ID_DISMISS, node.task.dismiss_action_title)
-        elif node is not None and self._is_dismissable_top_level_task(node.task):
-            menu.Append(_ID_DISMISS, 'Dismiss')
+        if related_entity is None:
+            pass
+        elif isinstance(related_entity, Resource):
+            menu.Append(_ID_COPY_URL_OR_URL_PATTERN, 'Copy URL')
+            menu.Append(_ID_VIEW, 'View')
+            menu.AppendSeparator()
+        elif isinstance(related_entity, ResourceGroup):
+            menu.Append(_ID_COPY_URL_OR_URL_PATTERN, 'Copy URL Pattern')
+            menu.Append(_ID_VIEW, 'View')
+            menu.Enable(_ID_VIEW, False)
+            menu.AppendSeparator()
         else:
-            menu.Append(_ID_DISMISS, 'Dismiss')
-            menu.Enable(_ID_DISMISS, False)
+            assert_never(related_entity)
+        menu.Append(_ID_DISMISS, dismiss_action_title)
+        menu.Enable(_ID_DISMISS, is_dismissable)
+        bind(menu, wx.EVT_MENU, self._on_popup_menuitem_selected)
         
         # Show popup menu
         self.peer.PopupMenu(menu)
@@ -85,14 +115,36 @@ class TaskTree:
         node = self._right_clicked_node
         assert node is not None
         
-        item_id = event.GetId()
-        if item_id == _ID_DISMISS:
+        item_id = event.Id  # cache
+        if item_id == _ID_COPY_URL_OR_URL_PATTERN:
+            related_entity = node.task.related_entity
+            if related_entity is None:
+                raise AssertionError('_ID_COPY_URL_OR_URL_PATTERN menuitem should not exist')
+            elif isinstance(related_entity, Resource):
+                copy_text_to_clipboard(related_entity.url)
+            elif isinstance(related_entity, ResourceGroup):
+                copy_text_to_clipboard(related_entity.url_pattern)
+            else:
+                assert_never(related_entity)
+        elif item_id == _ID_VIEW:
+            related_entity = node.task.related_entity
+            if related_entity is None:
+                raise AssertionError('_ID_VIEW menuitem should not exist')
+            elif isinstance(related_entity, Resource):
+                self._view_url_func(related_entity.url)
+            elif isinstance(related_entity, ResourceGroup):
+                raise AssertionError('_ID_VIEW menuitem should not be enabled')
+            else:
+                assert_never(related_entity)
+        elif item_id == _ID_DISMISS:
             if isinstance(node.task, CrashedTask):
                 node.task.dismiss()
             elif self._is_dismissable_top_level_task(node.task):
                 self._dismiss_top_level_task(node.task)
             else:
                 raise AssertionError(f'Do not know how to dismiss: {node.task}')
+        else:
+            raise AssertionError(f'Unrecognized menuitem selected: {item_id}')
     
     @classmethod
     def _is_dismissable_top_level_task(cls, task: Task) -> bool:

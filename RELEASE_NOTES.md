@@ -22,6 +22,8 @@ Release Notes ⋮
     * For projects that consistently give names to Root URLs and Groups,
       make it easier to distinguish Root URLs and Groups by allowing
       the title format to be changed from "URL - Name" to "Name - URL".
+    * Download tasks can be right-clicked to copy their related URL (pattern)
+      or view the related URL in a browser.
 
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.

@@ -243,6 +243,13 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         lambda self, value: self._set_subtitle(value)
     )
     
+    @property
+    def related_entity(self) -> Resource | ResourceGroup | None:
+        """
+        The entity related to this task, or None if not applicable.
+        """
+        return None
+    
     # TODO: Alter parent tracking to support multiple parents,
     #       since in truth a Task can already have multiple parents,
     #       but we currently only remember one parent at a time.
@@ -596,7 +603,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
             if hasattr(lis, 'task_did_clear_children'):
                 run_bulkhead_call(lis.task_did_clear_children, self, child_indexes_to_remove)  # type: ignore[attr-defined]
     
-    # === Public Operations ===
+    # === Public Operations: Run ===
     
     @capture_crashes_to_self
     @fg_affinity
@@ -972,6 +979,15 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
         self._resource = abstract_resource.resource  # type: Resource
         self.did_download = None  # type: Optional[bool]
     
+    # === Properties ===
+    
+    @override
+    @property
+    def related_entity(self) -> Resource | ResourceGroup | None:
+        return self._resource
+    
+    # === Public Operations: Run ===
+    
     @bg_affinity
     def __call__(self) -> ResourceRevision:
         """
@@ -1029,6 +1045,8 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
                     self.subtitle = 'Waiting before performing next request...'
                     assert not is_foreground_thread()
                     sleep(DELAY_BETWEEN_DOWNLOADS)
+    
+    # === Utility ===
     
     def __repr__(self) -> str:
         return f'<DownloadResourceBodyTask for {self._resource.url!r}>'
@@ -1152,6 +1170,11 @@ class DownloadResourceTask(Task['ResourceRevision']):
     @property
     def resource(self) -> Resource:
         return self._abstract_resource.resource
+    
+    @override
+    @property
+    def related_entity(self) -> Resource | ResourceGroup | None:
+        return self.resource
     
     # === Events ===
     
@@ -1421,6 +1444,8 @@ class DownloadResourceTask(Task['ResourceRevision']):
             self._pbc = None  # garbage collect
         super().finish()
     
+    # === Utility ===
+    
     def __repr__(self) -> str:
         return f'<DownloadResourceTask for {self.resource.url!r}>'
 
@@ -1608,6 +1633,15 @@ class UpdateResourceGroupMembersTask(_PureContainerTask):
                 self.task_did_complete(download_task)
         # (NOTE: self.complete might be True now)
     
+    # === Properties ===
+    
+    @override
+    @property
+    def related_entity(self) -> Resource | ResourceGroup | None:
+        return self.group
+    
+    # === Events ===
+    
     @capture_crashes_to_self
     def child_task_subtitle_did_change(self, task: Task) -> None:
         if not task.complete:
@@ -1619,6 +1653,8 @@ class UpdateResourceGroupMembersTask(_PureContainerTask):
         
         if self.num_children_complete == len(self.children):
             self.finish()
+    
+    # === Utility ===
     
     def __repr__(self) -> str:
         # TODO: Consider including just the group pattern,
@@ -1652,6 +1688,15 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
         if self._use_extra_listener_assertions:
             assert self not in self.group.listeners
         self.group.listeners.append(self)  # publicize self (to other threads)
+    
+    # === Properties ===
+    
+    @override
+    @property
+    def related_entity(self) -> Resource | ResourceGroup | None:
+        return self.group
+    
+    # === Public Operations: Run ===
     
     @override
     @capture_crashes_to_self
@@ -1719,6 +1764,8 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
         # (NOTE: self.complete might be True now)
         
         assert self._children_loaded  # because set earlier in this function
+    
+    # === Events ===
     
     @capture_crashes_to_self
     def group_did_add_member(self, group: ResourceGroup, member: Resource) -> None:
@@ -1796,6 +1843,8 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
         
         super().finish()
     
+    # === Utility ===
+    
     def __repr__(self) -> str:
         # TODO: Consider including just the group pattern,
         #       and surrounding the result with <>.
@@ -1830,9 +1879,18 @@ class DownloadResourceGroupTask(_PureContainerTask):
             self.task_did_complete(t)
         # (NOTE: self.complete might be True now)
     
+    # === Properties ===
+    
     @property
     def group(self) -> ResourceGroup:
         return self._update_members_task.group
+    
+    @override
+    @property
+    def related_entity(self) -> Resource | ResourceGroup | None:
+        return self.group
+    
+    # === Events ===
     
     @capture_crashes_to_self
     def child_task_subtitle_did_change(self, task: Task) -> None:
@@ -1861,6 +1919,8 @@ class DownloadResourceGroupTask(_PureContainerTask):
         Caffeination.remove_caffeine()
         
         super().finish()
+    
+    # === Utility ===
     
     def __repr__(self) -> str:
         # TODO: Consider including just the group pattern,
@@ -2047,7 +2107,7 @@ class RootTask(_PureContainerTask):
             assert len(self._children_to_add_soon) == 0, \
                 'RootTask._children_to_add_soon was modified concurrently unexpectedly'
     
-    # === Public Operations ===
+    # === Public Operations: Run ===
     
     @override
     @capture_crashes_to_self

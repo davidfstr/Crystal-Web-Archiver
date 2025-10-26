@@ -3,14 +3,16 @@ from contextlib import (
     AbstractContextManager, asynccontextmanager, contextmanager, nullcontext,
 )
 from crystal.browser.tasktree import _MoreNodeView, TaskTreeNode
-from crystal.model import Project, Resource, ResourceGroup
+from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.server import get_request_url
 from crystal.task import (
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
     DownloadResourceTask,
 )
 from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.controls import select_menuitem_now, TreeItem
 from crystal.tests.util.downloads import load_children_of_drg_task
-from crystal.tests.util.server import served_project
+from crystal.tests.util.server import assert_does_open_webbrowser_to, served_project
 from crystal.tests.util.tasks import (
     scheduler_disabled,
 )
@@ -28,6 +30,8 @@ from crystal.util.xcollections.lazy import (
 from typing import cast, Tuple
 from unittest import skip
 from unittest.mock import patch
+import wx
+
 
 # === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit visible children ===
 
@@ -512,6 +516,126 @@ async def test_given_downloading_group_and_few_uncompleted_children_remaining_wh
 
 @skip('not yet automated')
 async def test_when_top_level_task_finishes_then_is_removed_from_ui_soon(self) -> None:
+    pass
+
+
+# === Test: Right-Click Menu ===
+
+@skip('covered by: ' + ','.join([
+    'test_the_copy_url_menuitem_actually_copies_the_resource_url',
+    'test_the_view_menuitem_actually_opens_the_resource_in_a_browser',
+]))
+async def test_when_right_click_a_task_related_to_a_resource_than_shows_a_copy_url_and_view_menuitem() -> None:
+    pass
+
+
+@skip('covered by: ' + ','.join([
+    'test_the_copy_url_pattern_menuitem_actually_copies_the_resource_group_url_pattern',
+]))
+async def test_when_right_click_a_task_related_to_a_resource_group_than_shows_a_copy_url_pattern_and_disabled_view_menuitem() -> None:
+    pass
+
+
+async def test_the_copy_url_menuitem_actually_copies_the_resource_url() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URL
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create RootResource and start downloading it
+            rr = RootResource(project, '', Resource(project, home_url))
+            rr.download()
+            append_deferred_top_level_tasks(project)
+            
+            # Locate the task tree node for the DownloadResourceTask
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (download_r_ti,) = root_ti.Children
+            
+            with patch('crystal.browser.tasktree.copy_text_to_clipboard') as mock_copy:
+                # Right-click the task tree node and select "Copy URL"
+                def show_popup(menu: wx.Menu) -> None:
+                    (copy_url_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Copy URL'
+                    ]
+                    select_menuitem_now(menu, copy_url_menuitem.Id)
+                await download_r_ti.right_click_showing_popup_menu(show_popup)
+                
+                # Ensure did copy the expected URL value
+                mock_copy.assert_called_once_with(home_url)
+
+async def test_the_view_menuitem_actually_opens_the_resource_in_a_browser() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URL
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create RootResource and start downloading it
+            rr = RootResource(project, '', Resource(project, home_url))
+            rr.download()
+            append_deferred_top_level_tasks(project)
+            
+            # Locate the task tree node for the DownloadResourceTask
+            (download_r_task,) = project.root_task.children
+            assert isinstance(download_r_task, DownloadResourceTask)
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (download_r_ti,) = root_ti.Children
+            
+            with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                # Right-click the task tree node and select "View"
+                def show_popup(menu: wx.Menu) -> None:
+                    (view_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'View'
+                    ]
+                    select_menuitem_now(menu, view_menuitem.Id)
+                await download_r_ti.right_click_showing_popup_menu(show_popup)
+
+
+async def test_the_copy_url_pattern_menuitem_actually_copies_the_resource_group_url_pattern() -> None:
+    with scheduler_disabled(), \
+            served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URL pattern
+        comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create ResourceGroup and start downloading it
+            g = ResourceGroup(project, 'Comic', comic_pattern)
+            g.download()
+            append_deferred_top_level_tasks(project)
+            
+            # Locate the task tree node for the DownloadResourceGroupTask
+            (download_rg_task,) = project.root_task.children
+            assert isinstance(download_rg_task, DownloadResourceGroupTask)
+            root_ti = TreeItem.GetRootItem(mw.task_tree)
+            (download_rg_ti,) = root_ti.Children
+            
+            with patch('crystal.browser.tasktree.copy_text_to_clipboard') as mock_copy:
+                # Right-click the task tree node and select "Copy URL Pattern"
+                def show_popup(menu: wx.Menu) -> None:
+                    (copy_url_pattern_menuitem,) = [
+                        mi for mi in menu.MenuItems
+                        if mi.ItemLabelText == 'Copy URL Pattern'
+                    ]
+                    select_menuitem_now(menu, copy_url_pattern_menuitem.Id)
+                await download_rg_ti.right_click_showing_popup_menu(show_popup)
+                
+                # Ensure did copy the expected URL pattern value
+                mock_copy.assert_called_once_with(comic_pattern)
+
+
+@skip('not yet automated')
+async def test_when_right_click_a_task_then_always_shows_a_dismiss_menuitem() -> None:
+    # ...which may or may not be enabled
+    pass
+
+
+@skip('covered by: "Test: Dismissing Crashes"')
+async def test_dismiss_menuitem_actually_works() -> None:
     pass
 
 

@@ -64,6 +64,7 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
     'start_server',
     'task_tree',
     'try_close',
+    'view_url',
 ]
 
 # ------------------------------------------------------------------------------

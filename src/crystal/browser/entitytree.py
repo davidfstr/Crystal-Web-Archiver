@@ -515,7 +515,10 @@ class Node(Bulkhead):
     @staticmethod
     def for_node_view(node_view: NodeView) -> Node:
         node = node_view.delegate
-        assert isinstance(node, Node)
+        if not isinstance(node, Node):
+            raise AssertionError(
+                f'Expected NodeView delegate to be a Node. '
+                f'{node_view=}, delegate={node_view.delegate}')
         return node
     
     # === Properties ===

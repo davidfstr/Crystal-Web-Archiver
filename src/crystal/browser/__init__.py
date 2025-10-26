@@ -1295,13 +1295,17 @@ class MainWindow(CloakMixin):
         selected_entity.update_members()
     
     def _on_view_entity(self, event) -> None:
+        selected_entity = self.entity_tree.selected_entity
+        assert isinstance(selected_entity, (Resource, RootResource))
+        archive_url = selected_entity.resource.url
+        
+        self.view_url(archive_url)
+    
+    def view_url(self, archive_url: str, /) -> None:
         # TODO: If the server couldn't be started (ex: due to the default port being in
         #       use), report an appropriate error.
         project_server = self.start_server()
         
-        selected_entity = self.entity_tree.selected_entity
-        assert isinstance(selected_entity, (Resource, RootResource))
-        archive_url = selected_entity.resource.url
         request_url = project_server.get_request_url(archive_url)
         
         def open_browser_to_url() -> None:
@@ -1327,8 +1331,9 @@ class MainWindow(CloakMixin):
             #       deferred inside wx.CallLater
             open_browser_to_url()
     
+    @staticmethod
     @contextmanager
-    def _cwd_set_to_writable_dir(self) -> Iterator[None]:
+    def _cwd_set_to_writable_dir() -> Iterator[None]:
         assert is_linux(), 'This function only supports Linux'
         new_cwd = os.environ.get('HOME', '/')
         old_cwd = os.getcwd()  # capture
@@ -1463,7 +1468,7 @@ class MainWindow(CloakMixin):
         return content_sizer
     
     def _create_task_tree(self, parent: wx.Window) -> wx.Window:
-        self.task_tree = TaskTree(parent, self.project.root_task)
+        self.task_tree = TaskTree(parent, self.project.root_task, self.view_url)
         self._set_task_tree_background_color()
         
         return self.task_tree.peer
