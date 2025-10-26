@@ -2,23 +2,20 @@ from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import (
     AbstractContextManager, asynccontextmanager, contextmanager, nullcontext,
 )
-from crystal.browser.tasktree import _INTERACTIVE_SUFFIX, _MoreNodeView, TaskTreeNode
-from crystal.model import Project, Resource, ResourceGroup, RootResource
+from crystal.browser.tasktree import _MoreNodeView, TaskTreeNode
+from crystal.model import Project, Resource, ResourceGroup
 from crystal.task import (
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
     DownloadResourceTask,
 )
-from crystal.tests.util.asserts import assertEqual, assertIn
-from crystal.tests.util.console import console_output_copied
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.downloads import load_children_of_drg_task
-from crystal.tests.util.server import assert_does_open_webbrowser_to, fetch_archive_url, served_project
-from crystal.tests.util.slow import slow
+from crystal.tests.util.server import served_project
 from crystal.tests.util.tasks import (
-    scheduler_disabled, step_scheduler,
+    scheduler_disabled,
 )
 from crystal.tests.util.tasks import (
-    append_deferred_top_level_tasks, downloads_patched_to_return_empty_revision,
+    append_deferred_top_level_tasks,
 )
 from crystal.tests.util.tasks import mark_as_complete as _mark_as_complete
 from crystal.tests.util.tasks import ttn_for_task as _ttn_for_task
@@ -30,7 +27,7 @@ from crystal.util.xcollections.lazy import (
 )
 from typing import cast, Tuple
 from unittest import skip
-from unittest.mock import ANY, patch
+from unittest.mock import patch
 
 # === Test: SCHEDULING_STYLE_SEQUENTIAL tasks: Limit visible children ===
 
@@ -509,317 +506,6 @@ async def test_given_downloading_group_and_few_uncompleted_children_remaining_wh
 @skip('covered by: test_given_downloading_group_and_many_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_shows_download_task_for_member_added')
 async def test_given_downloading_group_and_few_uncompleted_children_remaining_when_group_member_added_then_trailing_more_node_added_with_value_1() -> None:
     pass
-
-
-# === Test: Interactive Priority Tasks ===
-
-# TODO: Move this section to test_tasks.py because its tests don't really relate
-#       to the Task Tree.
-
-# --- Test: Interactive Priority Tasks: Task Becomes Interactive ===
-
-async def test_when_resource_node_in_entity_tree_expanded_then_related_resource_downloaded_at_interactive_priority() -> None:
-    with served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            scheduler_disabled():
-        # Define URLs
-        home_url = sp.get_request_url('https://xkcd.com/')
-        
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            home_resource = Resource(project, home_url)
-            home_rr = RootResource(project, 'Home', home_resource)
-            
-            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            (home_ti,) = root_ti.Children
-            
-            # Expand the resource node to create a DownloadResourceTask.
-            # Should trigger Resource.download(interactive=True).
-            () = project.root_task.children
-            home_ti.Expand(); append_deferred_top_level_tasks(project)
-            (download_task,) = project.root_task.children
-            assert isinstance(download_task, DownloadResourceTask)
-            assertEqual(home_resource, download_task.resource)
-            
-            # Ensure DownloadResourceTask has interactive=True priority
-            assertEqual(True, download_task.interactive)
-            
-            # test_interactive_tasks_are_marked_in_the_task_tree_ui
-            download_ttn = _ttn_for_task(download_task)
-            assert download_ttn.tree_node.subtitle.endswith(_INTERACTIVE_SUFFIX)
-
-
-async def test_when_resource_matching_root_resource_or_resource_group_requested_from_project_server_then_related_resource_downloaded_at_interactive_priority() -> None:
-    with served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            scheduler_disabled():
-        # Define URLs
-        home_url = sp.get_request_url('https://xkcd.com/')
-        comic1_url = sp.get_request_url('https://xkcd.com/1/')
-        comic2_url = sp.get_request_url('https://xkcd.com/2/')
-        comic_url_pattern = sp.get_request_url('https://xkcd.com/#/')
-        
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            home_r = Resource(project, home_url)
-            home_rr = RootResource(project, 'Home', home_r)
-            
-            comic_group = ResourceGroup(project, 'Comics', comic_url_pattern, source=home_rr)
-            
-            # Start the project server
-            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            (home_ti, comic_group_ti) = root_ti.Children
-            home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(ANY):
-                click_button(mw.view_button)
-            
-            # Case 1: Test dynamic download of RootResource at interactive priority
-            if True:
-                () = project.root_task.children
-                
-                # Request the root resource URL, which should trigger dynamic download
-                with console_output_copied() as console_output, \
-                        downloads_patched_to_return_empty_revision():
-                    home_page = await fetch_archive_url(home_url)
-                assertIn(
-                    f"*** Dynamically downloading root resource 'Home':",
-                    console_output.getvalue())
-                
-                # Verify the created download task has interactive=True priority
-                append_deferred_top_level_tasks(project)
-                (home_download_task,) = [
-                    task for task in project.root_task.children
-                    if isinstance(task, DownloadResourceTask) and task.resource == home_r
-                ]
-                assertEqual(True, home_download_task.interactive)
-            
-            # Case 2: Test dynamic download of ResourceGroup member at interactive priority
-            if True:
-                # Request a comic URL that matches the resource group
-                with console_output_copied() as console_output, \
-                        downloads_patched_to_return_empty_revision():
-                    comic1_page = await fetch_archive_url(comic1_url)
-                assertIn(
-                    f"*** Dynamically downloading new resource in group 'Comics':",
-                    console_output.getvalue())
-                
-                # Verify the created download task has interactive=True priority
-                append_deferred_top_level_tasks(project)
-                comic1_resource = project.get_resource(comic1_url)
-                assert comic1_resource is not None
-                (comic1_download_task,) = [
-                    task for task in project.root_task.children
-                    if isinstance(task, DownloadResourceTask) and task.resource == comic1_resource
-                ]
-                assertEqual(True, comic1_download_task.interactive)
-
-
-@skip('not yet automated')
-async def test_when_partially_downloaded_resource_requested_from_project_server_then_existing_download_task_escalated_to_interactive_priority() -> None:
-    pass
-
-
-@skip('not yet automated')
-async def test_when_not_in_archive_page_served_and_groups_are_predicted_then_related_resource_bodies_are_downloaded_at_interactive_priority() -> None:
-    pass
-
-
-@skip('not yet automated')
-async def test_when_download_button_pressed_on_not_in_archive_page_then_related_resource_downloaded_at_interactive_priority() -> None:
-    # However any created ResourceGroup (if any) is NOT downloaded at interactive priority.
-    pass
-
-
-# --- Test: Interactive Priority Tasks: Interactive Task Behavior ===
-
-@slow  # 22s on Apple M3 2024
-async def test_when_top_level_task_is_interactive_priority_then_is_scheduled_before_any_non_interactive_tasks() -> None:
-    # NOTE: Test both cases because there's a rare branch tested by the False case,
-    #       where DownloadResourceGroupMembersTask.group_did_add_member() is called
-    #       self._children_loaded == False.
-    for populate_download_group_task_members in [True, False]:
-        with served_project('testdata_xkcd.crystalproj.zip') as sp, \
-                scheduler_disabled():
-            # Define URLs
-            comic_url_pattern = sp.get_request_url('https://xkcd.com/#/')
-            comic1_url = sp.get_request_url('https://xkcd.com/1/')
-            comic2_url = sp.get_request_url('https://xkcd.com/2/')
-            comic3_url = sp.get_request_url('https://xkcd.com/3/')
-            
-            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-                # Create comic ResourceGroup and some Resources to make it downloadable
-                comic_group = ResourceGroup(project, 'Comics', comic_url_pattern)
-                Resource(project, comic1_url)
-                Resource(project, comic3_url)
-                
-                # Create comic #2 RootResource
-                comic2_rr = RootResource(project, 'Comic #2', Resource(project, comic2_url))
-                
-                # Get entity tree nodes
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                comic_group_ti = root_ti.find_child(comic_url_pattern, project.default_url_prefix)
-                comic2_ti = root_ti.find_child(comic2_url, project.default_url_prefix)
-                
-                # Start download of comic group at non-interactive priority
-                comic_group_ti.SelectItem()
-                click_button(mw.download_button)
-                
-                if populate_download_group_task_members:
-                    # Populate download tasks for the group's members
-                    await step_scheduler(project)
-                    
-                    # Ensure that inside the DownloadGroupTask that there is a DownloadResourceTask
-                    # matching the DownloadResourceTask that will be added to the top-level later
-                    (download_group_task,) = project.root_task.children
-                    assert isinstance(download_group_task, DownloadResourceGroupTask)
-                    (urgm_task, drgm_task) = download_group_task.children
-                    assert isinstance(drgm_task, DownloadResourceGroupMembersTask)
-                    (dr_task,) = [
-                        t for t in drgm_task.children
-                        if isinstance(t, DownloadResourceTask) and t.resource.url == comic2_url
-                    ]
-                    assertEqual(False, dr_task.interactive)
-                
-                # Start download of comic #2 at interactive priority
-                comic2_ti.SelectItem()
-                comic2_ti.Expand(); append_deferred_top_level_tasks(project)
-                
-                # Ensure tasks are scheduled at top-level with correct priority
-                (download_group_task, download_resource_task) = project.root_task.children
-                assertEqual(False, download_group_task.interactive)
-                assertEqual(True, download_resource_task.interactive)
-                
-                with patch.object(download_group_task, 'try_get_next_task_unit', 
-                            wraps=download_group_task.try_get_next_task_unit) as spy_group_try_get_next, \
-                        patch.object(download_resource_task, 'try_get_next_task_unit', 
-                            wraps=download_resource_task.try_get_next_task_unit) as spy_resource_try_get_next:
-                    
-                    # Step the scheduler until DownloadResourceTask complete
-                    while not download_resource_task.complete:
-                        await step_scheduler(project)
-                        assert spy_resource_try_get_next.call_count > 0, \
-                            'DownloadResourceTask should have been called'
-                        assertEqual(0, spy_group_try_get_next.call_count,
-                            'DownloadResourceGroupTask should not be called while interactive task is running')
-                    
-                    # Step the scheduler until DownloadResourceGroupTask complete
-                    while not download_group_task.complete:
-                        await step_scheduler(project)
-                    assert spy_group_try_get_next.call_count > 0, \
-                        'DownloadResourceGroupTask should be called after interactive task completes'
-
-
-@skip('not yet automated')
-async def test_when_top_level_task_is_interactive_priority_then_descendent_download_tasks_do_not_delay_between_downloads() -> None:
-    pass
-
-
-@skip('covered by: test_when_resource_node_in_entity_tree_expanded_then_related_resource_downloaded_at_interactive_priority')
-async def test_interactive_tasks_are_marked_in_the_task_tree_ui() -> None:
-    pass
-
-
-# --- Test: Interactive Priority Tasks: Interactive Tasks Always (Aliased) at Top Level ===
-
-async def test_when_download_resource_at_interactive_priority_given_same_resource_not_already_in_task_tree_then_new_task_scheduled_as_top_level_task_at_interactive_priority() -> None:
-    with served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            scheduler_disabled():
-        # Define URLs
-        comic1_url = sp.get_request_url('https://xkcd.com/1/')
-        comic2_url = sp.get_request_url('https://xkcd.com/2/')
-        
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            # Create comic #1 RootResource
-            comic1_resource = Resource(project, comic1_url)
-            comic1_rr = RootResource(project, 'Comic #1', comic1_resource)
-            
-            # Create comic #2 RootResource
-            comic2_resource = Resource(project, comic2_url)
-            comic2_rr = RootResource(project, 'Comic #2', comic2_resource)
-            
-            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            comic1_ti = root_ti.find_child(comic1_url, project.default_url_prefix)
-            comic2_ti = root_ti.find_child(comic2_url, project.default_url_prefix)
-            
-            () = project.root_task.children
-            
-            # Start download of comic #1 at non-interactive priority
-            comic1_ti.SelectItem()
-            click_button(mw.download_button)
-            
-            # Start download of comic #2 at interactive priority
-            comic2_ti.SelectItem()
-            comic2_ti.Expand(); append_deferred_top_level_tasks(project)
-            
-            # Ensure both DownloadResourceTasks are scheduled at top-level with correct priority
-            if True:
-                (comic1_download_task, comic2_download_task) = project.root_task.children
-                
-                assert isinstance(comic1_download_task, DownloadResourceTask)
-                assertEqual(comic1_resource, comic1_download_task.resource)
-                assertEqual(False, comic1_download_task.interactive)
-                
-                assert isinstance(comic2_download_task, DownloadResourceTask)
-                assertEqual(comic2_resource, comic2_download_task.resource)
-                assertEqual(True, comic2_download_task.interactive)
-
-
-# NOTE: See the (populate_download_group_task_members == True) case of the referenced test
-@skip('covered by: test_when_top_level_task_is_interactive_priority_then_is_scheduled_before_any_non_interactive_tasks')
-async def test_when_download_resource_at_interactive_priority_given_same_resource_already_in_task_tree_but_not_at_top_level_then_task_alias_scheduled_as_top_level_task_at_interactive_priority() -> None:
-    pass
-
-
-async def test_when_download_resource_at_interactive_priority_given_same_resource_already_in_task_tree_at_top_level_then_either_top_level_task_upgraded_to_interactive_priority_or_new_top_level_task_created_at_interactive_priority() -> None:
-    # - If the same resource is requested with needs_result=False first and then
-    #   needs_result=True second then two top-level tasks will be created.
-    #   (This is the only scenario currently exercised by this test.)
-    # - In all other combinations a single top-level task will be shared.
-    
-    with served_project('testdata_xkcd.crystalproj.zip') as sp, \
-            scheduler_disabled():
-        # Define URLs
-        comic1_url = sp.get_request_url('https://xkcd.com/1/')
-        
-        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            # Create comic #1 RootResource
-            comic1_resource = Resource(project, comic1_url)
-            comic1_rr = RootResource(project, 'Comic #1', comic1_resource)
-            
-            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-            comic1_ti = root_ti.find_child(comic1_url, project.default_url_prefix)
-            
-            # Start download of comic #1 RootResource at non-interactive priority
-            # by selecting corresponding entity tree node and pressing Download button
-            () = project.root_task.children
-            comic1_ti.SelectItem()
-            click_button(mw.download_button)
-            append_deferred_top_level_tasks(project)
-            
-            # Ensure DownloadResourceTask for comic #1 scheduled at top-level of task tree
-            # with interactive=False priority
-            (comic1_download_task,) = project.root_task.children
-            assert isinstance(comic1_download_task, DownloadResourceTask)
-            assertEqual(comic1_resource, comic1_download_task.resource)
-            assertEqual(False, comic1_download_task.interactive)
-            
-            # Restart download of comic #1 RootResource at interactive priority
-            # by selecting corresponding entity tree node and expanding it
-            comic1_ti.SelectItem()
-            comic1_ti.Expand(); append_deferred_top_level_tasks(project)
-            
-            # Either:
-            # 1. Ensure the same DownloadResourceTask is still at top-level of task tree
-            #    but now upgraded to interactive=True priority
-            # 2. A new DownloadResourceTask is at top-level of task tree
-            #    with interactive=True priority
-            if len(project.root_task.children) == 1:
-                (same_comic1_download_task,) = project.root_task.children
-                assert same_comic1_download_task is comic1_download_task  # same instance
-                assert isinstance(same_comic1_download_task, DownloadResourceTask)
-                assertEqual(comic1_resource, same_comic1_download_task.resource)
-                assertEqual(True, same_comic1_download_task.interactive)  # upgraded priority
-            else:
-                (_, new_comic1_download_task) = project.root_task.children
-                assert isinstance(new_comic1_download_task, DownloadResourceTask)
-                assertEqual(comic1_resource, new_comic1_download_task.resource)
-                assertEqual(True, new_comic1_download_task.interactive)
 
 
 # === Test: RootTask ===
