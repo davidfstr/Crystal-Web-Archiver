@@ -587,7 +587,7 @@ def _main2(args: list[str]) -> None:
                     else:
                         # Exit app immediately
                         os._exit(exit_code)
-            bg_call_later(bg_task)
+            bg_call_later(bg_task, name='main.run_tests')
         
         # 1. Run main loop
         # 2. Clean up

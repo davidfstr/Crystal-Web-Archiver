@@ -182,7 +182,7 @@ class ProjectServer:
                 self._server.serve_forever()
             finally:
                 self._server.server_close()
-        bg_call_later(bg_task, daemon=True)
+        bg_call_later(bg_task, name='ProjectServer.serve', daemon=True)
         
         if wait_for_banner:
             banner_printed._cr_declare_no_deadlocks = True  # type: ignore[attr-defined]

@@ -143,7 +143,7 @@ class MockHttpServer:
                 self._server.serve_forever()
             finally:
                 self._server.server_close()
-        bg_call_later(bg_task, daemon=True)
+        bg_call_later(bg_task, name='MockHttpServer.serve', daemon=True)
     
     def get_url(self, path: str) -> str:
         return f'http://127.0.0.1:{self._port}' + path

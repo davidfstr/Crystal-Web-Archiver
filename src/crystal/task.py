@@ -2278,7 +2278,11 @@ def start_scheduler_thread(root_task: RootTask) -> threading.Thread:
             if _PROFILE_SCHEDULER:
                 assert profiler is not None
                 profiler.dump_stats('scheduler.prof')
-    return bg_call_later(bg_daemon_task, daemon=True)
+    return bg_call_later(
+        bg_daemon_task,
+        name='SchedulerThread.run',
+        daemon=True,
+    )
 
 
 # Automated tests may patch this function

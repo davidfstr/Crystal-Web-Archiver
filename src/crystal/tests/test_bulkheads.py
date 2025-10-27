@@ -43,11 +43,11 @@ from crystal.util.bulkheads import (
     run_bulkhead_call,
 )
 from crystal.util.bulkheads import BulkheadCell, capture_crashes_to
-from crystal.util.ellipsis import Ellipsis, EllipsisType
+from crystal.util.ellipsis import Ellipsis
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_asan, is_ci, is_mac_os
 from crystal.util.xthreading import (
-    bg_call_later, fg_call_and_wait, is_foreground_thread,
+    fg_call_and_wait, is_foreground_thread,
 )
 from io import StringIO
 import sys

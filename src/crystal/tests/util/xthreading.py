@@ -31,7 +31,10 @@ async def bg_call_and_wait(callable: Callable[[], _R], *, timeout: float | None=
             result_cell.set_result(callable())
         except BaseException as e:
             result_cell.set_exception(e)
-    bg_call_later(bg_task)
+    bg_call_later(
+        bg_task,
+        name=f'bg_call_and_wait ({getattr(callable, "__name__", callable)})',
+    )
     # NOTE: Releases foreground thread while waiting
     await wait_for(
         lambda: result_cell.done() or None, timeout,

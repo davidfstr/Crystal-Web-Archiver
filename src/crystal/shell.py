@@ -75,7 +75,11 @@ class Shell:
         banner_printed = Future()  # type: Future[Literal[True]]
         
         # NOTE: Keep the process alive while the shell is running
-        bg_call_later(partial2(self._run, banner_printed), daemon=False)
+        bg_call_later(
+            partial2(self._run, banner_printed),
+            name='Shell.run',
+            daemon=False,
+        )
         self._started = True
         
         # Wait for banner to be printed

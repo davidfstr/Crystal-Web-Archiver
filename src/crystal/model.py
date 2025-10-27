@@ -2322,7 +2322,11 @@ class Project(ListenableMixin):
             except OSError:
                 # Give up
                 pass
-        bg_call_later(bg_delete_old_path, daemon=True)
+        bg_call_later(
+            bg_delete_old_path,
+            name='Project.delete_in_background',
+            daemon=True,
+        )
     
     # === Close & Reopen ===
     

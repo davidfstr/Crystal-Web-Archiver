@@ -967,7 +967,7 @@ class _ResourceNode(Node):
                                 'Cannot list links: Unexpected error')
                         else:
                             fg_call_later(self.update_children)
-                    bg_call_later(bg_task)
+                    bg_call_later(bg_task, name='ResourceNode.parse_links')
             self.download_future.add_done_callback(download_done)
     
     # === Updates ===
@@ -1502,7 +1502,7 @@ class ResourceGroupNode(_GroupedNode):
                 #       In the future it would be ideal to move database operations
                 #       off of the foreground thread.
                 fg_call_later(fg_task_later, profile=False)
-            bg_call_later(bg_task)
+            bg_call_later(bg_task, name='ResourceGroupNode.wait_for_loading_node')
     
     # NOTE: If the more-node crashes while expanding, replace the entire list
     #       of sibling children with a single error node. A bit of an extreme

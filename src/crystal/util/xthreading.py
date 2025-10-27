@@ -387,9 +387,9 @@ def fg_waiting_calling_thread() -> threading.Thread | None:
 # Call on Background Thread
 
 def bg_call_later(
-        callable: Callable[_P, None],
-        # TODO: Give `args` the type `_P` once that can be spelled in Python's type system
-        *, args=(),
+        callable: Callable[[], None],
+        *,
+        name: str,
         daemon: bool=False,
         ) -> threading.Thread:
     """
@@ -409,10 +409,9 @@ def bg_call_later(
     # interacting with wxPython COM objects do not print the warning
     # "Windows fatal exception: code 0x800401f0"
     if is_windows():
-        callable = _com_initialized()(partial2(callable, *args))  # reinterpret
-        args = ()  # reinterpret
+        callable = _com_initialized()(callable)  # reinterpret
     
-    thread = threading.Thread(target=callable, args=args, daemon=daemon)
+    thread = threading.Thread(target=callable, args=(), name=name, daemon=daemon)
     thread.start()
     return thread
 
@@ -559,7 +558,10 @@ def start_thread_switching_coroutine(
                 raise
         else:
             future.set_result(result)
-    bg_call_later(bg_task)
+    bg_call_later(
+        bg_task,
+        name=f'thread_switching_coro.run ({getattr(coro, "__name__", coro)})',
+    )
     
     return future
 
