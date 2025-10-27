@@ -1800,6 +1800,10 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
         assert isinstance(task, DownloadResourceTask)
         self.group.last_downloaded_member = task.resource
         
+        # Ensure finish() hasn't left this task in the state where
+        # (self._children_loaded == True) and (self._pbc == None)
+        assert not self.complete
+        
         assert self._children_loaded
         assert self._pbc is not None
         self._pbc.update(1)  # self._pbc.n += 1
