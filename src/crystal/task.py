@@ -1415,19 +1415,18 @@ class DownloadResourceTask(Task['ResourceRevision']):
                 if self.any_ancestor_is_interactive():
                     # Do not delay
                     pass
+                elif task.cancelled:
+                    # Download did not actually finish. Do not wait.
+                    pass
                 else:
                     self.subtitle = 'Waiting before performing next request...'
-                    if task.cancelled:
-                        # Download did not actually finish. Do not wait.
-                        pass
-                    else:
-                        if is_foreground_thread():
-                            raise AssertionError(
-                                'DownloadResourceTask.child_task_did_complete() '
-                                'called unexpectedly on foreground thread. '
-                                'Cannot safely wait between downloads without '
-                                'blocking the foreground thread.')
-                        sleep(DELAY_BETWEEN_DOWNLOADS)
+                    if is_foreground_thread():
+                        raise AssertionError(
+                            'DownloadResourceTask.child_task_did_complete() '
+                            'called unexpectedly on foreground thread. '
+                            'Cannot safely wait between downloads without '
+                            'blocking the foreground thread.')
+                    sleep(DELAY_BETWEEN_DOWNLOADS)
             
             self.finish()
     

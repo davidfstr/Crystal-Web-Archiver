@@ -7,7 +7,7 @@ from crystal.task import (
     DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
     DownloadResourceTask,
 )
-from crystal.tests.util.asserts import assertEqual, assertNotIn
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
 from crystal.tests.util.slow import slow
@@ -424,11 +424,11 @@ async def test_given_download_resource_task_running_when_close_project_then_drt_
             # Close the window, cancelling the last child of the DownloadResourceTask,
             # hopefully triggering this logic:
             # 
-            #     self.subtitle = 'Waiting before performing next request...'  # ⭐ WANT
             #     if task.cancelled:
             #         # Download did not actually finish. Do not wait.
             #         pass  # ⭐ WANT
             #     else:
+            #         self.subtitle = 'Waiting before performing next request...'  # ⚠️ do not want
             #         if is_foreground_thread():
             #             raise AssertionError(...)  # ⚠️ do not want
             #         sleep(DELAY_BETWEEN_DOWNLOADS)  # ⚠️ do not want
@@ -445,7 +445,9 @@ async def test_given_download_resource_task_running_when_close_project_then_drt_
                 rmw.close()
                 
                 assert spy_child_task_did_complete.call_count >= 1
-                spy_set_subtitle.assert_any_call('Waiting before performing next request...')
+                titles = [c.args[0] for c in spy_set_subtitle.call_args_list]
+                assertNotIn('Waiting before performing next request...', titles)
+                assertIn('Complete', titles)
                 assertEqual(0, spy_sleep.call_count)
                 assertNotIn('AssertionError', captured_stderr.getvalue())
                 assertNotIn('Traceback', captured_stderr.getvalue())
