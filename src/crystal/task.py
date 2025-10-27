@@ -171,6 +171,8 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         '_did_yield_self',
         '_future',
         # NOTE: Used differently by SCHEDULING_STYLE_SEQUENTIAL and SCHEDULING_STYLE_ROUND_ROBIN
+        # 1. _next_child_index == 0, if len(children) == 0
+        # 2. 0 <= _next_child_index < len(children), if len(children) >= 1
         '_next_child_index',
         
         # Necessary to support weak references to task objects,
