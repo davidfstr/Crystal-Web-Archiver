@@ -5,8 +5,9 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterator
 from concurrent.futures import Future
+from contextlib import contextmanager
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
@@ -72,6 +73,9 @@ _DEFAULT_SERVER_HOST = '127.0.0.1'
 Verbosity = Literal['normal', 'indent']
 
 
+_default_port_in_use_warnings_enabled = True
+
+
 class ProjectServer:
     """
     Runs the project server on a thread. The server can be accessed via HTTP,
@@ -135,7 +139,8 @@ class ProjectServer:
                 else:
                     break
             
-            if port == _DEFAULT_SERVER_PORT and tests_are_running():
+            if port == _DEFAULT_SERVER_PORT and tests_are_running() and \
+                    _default_port_in_use_warnings_enabled:
                 print(
                     '*** Default port for project server is in use. '
                     'Is a real Crystal app running in the background? '
@@ -279,6 +284,17 @@ def get_request_url(
     request_host = f'{host}:{port}'
     return _RequestHandler.get_request_url_with_host(
         archive_url, request_host, project_default_url_prefix)
+
+
+@contextmanager
+def default_port_in_use_warnings_disabled() -> Iterator[None]:
+    global _default_port_in_use_warnings_enabled
+    old_value = _default_port_in_use_warnings_enabled
+    _default_port_in_use_warnings_enabled = False
+    try:
+        yield
+    finally:
+        _default_port_in_use_warnings_enabled = old_value
 
 
 # ------------------------------------------------------------------------------

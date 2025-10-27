@@ -6,7 +6,7 @@ from crystal.model import Project, Resource, ResourceRevision, RootResource
 import crystal.server
 from crystal.server import (
     _DEFAULT_SERVER_PORT, _HEADER_ALLOWLIST, _HEADER_DENYLIST,
-    _IGNORE_UNKNOWN_X_HEADERS,
+    _IGNORE_UNKNOWN_X_HEADERS, default_port_in_use_warnings_disabled,
     get_request_url, ProjectServer,
 )
 from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
@@ -58,7 +58,8 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
         skipTest('_DEFAULT_SERVER_PORT + 1 is already in use outside of tests')
     
     assert not is_port_in_use(_DEFAULT_SERVER_PORT)
-    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp:
+    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp, \
+            default_port_in_use_warnings_disabled():
         assert is_port_in_use(_DEFAULT_SERVER_PORT)
         
         # Define URLs
