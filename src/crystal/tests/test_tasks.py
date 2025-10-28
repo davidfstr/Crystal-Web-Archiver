@@ -305,17 +305,22 @@ async def test_given_download_resource_group_members_when_add_group_member_via_d
                         # Trigger start of dynamic download of new group member
                         # 
                         # Meanwhile:
-                        # - Patch Resource.download() to start download and return an
-                        #   already-completed Future with an arbitrary result,
-                        #   rather than blocking on the foreground thread
+                        # - Patch Resource.download_with_task() to start download
+                        #   and return a Task with an already-completed Future
+                        #   with an arbitrary result, rather than blocking on 
+                        #   the foreground thread
                         # - Prevent foreground thread from being detected as the scheduler thread
-                        super_resource_download = Resource.download
-                        def resource_download(self: Resource, *args, **kwargs) -> 'Future[ResourceRevision]':
-                            _ = super_resource_download(self, *args, **kwargs)
-                            result = Future()  # type: Future[ResourceRevision]
-                            result.set_result(ResourceRevision.create_from_error(self, Exception('Simulated error')))
-                            return result
-                        with patch.object(Resource, 'download', resource_download):
+                        super_download_with_task = Resource.download_with_task
+                        def spy_download_with_task(self: Resource, *args, **kwargs) -> DownloadResourceTask:
+                            task = super_download_with_task(self, *args, **kwargs)
+                            
+                            def get_future(*args, **kwargs) -> Future[ResourceRevision]:
+                                result = Future()  # type: Future[ResourceRevision]
+                                result.set_result(ResourceRevision.create_from_error(self, Exception('Simulated error')))
+                                return result
+                            task.get_future = get_future  # type: ignore[method-assign]
+                            return task
+                        with patch.object(Resource, 'download_with_task', spy_download_with_task):
                             assert is_foreground_thread()
                             with scheduler_thread_context(enabled=False):
                                 _ = await fetch_archive_url(comic2_url)

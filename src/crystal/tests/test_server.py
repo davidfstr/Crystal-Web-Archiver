@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
 from crystal.doc.html.soup import HtmlDocument
-from crystal.model import Project, Resource, ResourceRevision, RootResource
+from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
 import crystal.server
 from crystal.server import (
     _DEFAULT_SERVER_PORT, _HEADER_ALLOWLIST, _HEADER_DENYLIST,
@@ -625,6 +625,12 @@ async def test_when_404_page_exported_by_crystal_is_downloaded_and_served_by_cry
 # ------------------------------------------------------------------------------
 # Test: "Not in Archive" Page (send_resource_not_in_archive)
 
+# See also: test_when_navigate_in_browser_to_undownloaded_page_matching_a_resource_group_or_a_root_resource_then_starts_downloading_and_shows_dip_page
+@skip('covered by: test_given_nia_page_visible_then_crystal_branding_and_error_message_and_url_is_visible')
+async def test_when_navigate_in_browser_to_undownloaded_page_not_matching_a_resource_group_or_a_root_resource_then_shows_nia_page() -> None:
+    pass
+
+
 async def test_given_nia_page_visible_then_crystal_branding_and_error_message_and_url_is_visible() -> None:
     async with _not_in_archive_page_visible() as server_page:
         # Verify Crystal branding is visible
@@ -766,7 +772,8 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
             assert not reloaded_comic_page.is_not_in_archive
 
 
-# TODO: Implement discrete test that actually checks that the progress bar updates
+# TODO: Implement discrete test that actually checks that the progress bar updates.
+#       An existing test which does this is: test_given_dip_page_visible_then_progress_bar_runs_until_download_completes_and_page_reloads
 @skip('covered by: test_given_nia_page_visible_when_download_button_pressed_then_download_starts_and_runs_with_progress_bar')
 async def test_when_download_complete_and_successful_download_with_content_then_page_reloads_to_reveal_downloaded_page() -> None:
     pass
@@ -1402,6 +1409,101 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
                 expect(page.download_url_button).to_be_visible()
                 expect(page.download_url_button).to_contain_text('⬇ Download')
             await pw.run(pw_task)
+
+
+# TODO: Implement
+# See also: test_when_page_embeds_undownloaded_image_matching_a_resource_group_or_a_root_resource_then_downloads_image_and_displays_image
+@skip('fails: not yet implemented')
+async def test_when_page_embeds_undownloaded_image_not_matching_a_resource_group_or_a_root_resource_then_displays_image_with_nia_error_message() -> None:
+    pass
+
+
+# ------------------------------------------------------------------------------
+# Test: "Download in Progress" Page (send_download_in_progress)
+
+# See also: test_when_navigate_in_browser_to_undownloaded_page_not_matching_a_resource_group_or_a_root_resource_then_shows_nia_page
+@skip('covered by: test_given_dip_page_visible_then_progress_bar_runs_until_download_completes_and_page_reloads')
+async def test_when_navigate_in_browser_to_undownloaded_page_matching_a_resource_group_or_a_root_resource_then_starts_downloading_and_shows_dip_page() -> None:
+    pass
+
+
+@awith_playwright
+async def test_given_dip_page_visible_then_progress_bar_runs_until_download_completes_and_page_reloads(pw: Playwright) -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        # Create a new project in the UI
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            rr = RootResource(project, 'Home', Resource(project, home_url))
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti,) = root_ti.Children
+            
+            # Start the project server
+            home_ti.SelectItem()
+            home_url_in_archive = get_request_url(
+                home_url,
+                project_default_url_prefix=project.default_url_prefix)
+            with assert_does_open_webbrowser_to(home_url_in_archive):
+                click_button(mw.view_button)
+            
+            # Patch download_in_progress_html to ignore reload requests,
+            # so that we can control exactly when it reloads
+            original_dip_html = crystal.server.download_in_progress_html
+            def patched_dip_html(**kwargs):
+                kwargs['ignore_reload_requests'] = True
+                return original_dip_html(**kwargs)
+            with patch(
+                    'crystal.server.download_in_progress_html',
+                    patched_dip_html):
+                
+                def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                    # Navigate to the home URL, which should trigger a download
+                    # and show the Download In Progress page
+                    raw_page.goto(home_url_in_archive)
+                    
+                    # Wait for the DIP page to be visible
+                    expect(raw_page).to_have_title('Download In Progress | Crystal')
+                    expect(raw_page.locator('#cr-download-progress-bar')).to_be_visible()
+                    
+                    # Wait for page to attempt reload
+                    raw_page.wait_for_function('() => window.crDidCallReload')
+                    
+                    # Verify that the progress bar is at 100%
+                    progress_fill = raw_page.locator('#cr-download-progress-bar__fill')
+                    fill_width = progress_fill.evaluate('(el) => el.style.width')
+                    assert fill_width == '100%', f'Expected progress bar to be 100%, got {fill_width}'
+                    
+                    # Continue the page reload to show the downloaded content
+                    raw_page.reload()
+                    
+                    # Ensure downloaded page appears
+                    expect(raw_page).to_have_title('xkcd: Air Gap')
+                await pw.run(pw_task)
+
+
+# See also: test_when_page_embeds_undownloaded_image_not_matching_a_resource_group_or_a_root_resource_then_displays_image_with_nia_error_message
+@awith_playwright
+async def test_when_page_embeds_undownloaded_image_matching_a_resource_group_or_a_root_resource_then_downloads_image_and_displays_image(pw: Playwright) -> None:
+    # In particular, a dynamically downloaded image should block until the image
+    # download is complete before responding. A Download in Progress page should
+    # NOT be sent as a response.
+    
+    # Case 1: RootResource matches undownloaded image
+    def create_matching_root_resource(embedded_image_r: Resource) -> None:
+        # Create a RootResource matching the embedded_image_url
+        project = embedded_image_r.project
+        RootResource(project, 'Comic Image', embedded_image_r)
+    await _view_xkcd_home_page_when_embedded_image_is_undownloaded(pw,
+        before_view=create_matching_root_resource)
+    
+    # Case 2: ResourceGroup matches undownloaded image
+    def create_matching_resource_group(embedded_image_r: Resource) -> None:
+        # Create a ResourceGroup matching the embedded_image_url
+        project = embedded_image_r.project
+        ResourceGroup(project, 'Comic Image', embedded_image_r.url)
+    await _view_xkcd_home_page_when_embedded_image_is_undownloaded(pw,
+        before_view=create_matching_resource_group)
 
 
 # ------------------------------------------------------------------------------
@@ -3137,6 +3239,73 @@ def _navigate_from_home_to_comic_1_nia_page(
     expect(raw_page).to_have_url(comic1_url_in_archive)
     page = NotInArchivePage.wait_for(raw_page)
     return page
+
+
+async def _view_xkcd_home_page_when_embedded_image_is_undownloaded(
+        pw: Playwright,
+        before_view: Callable[[Resource], None],
+        ) -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        embedded_image_url = sp.get_request_url('https://imgs.xkcd.com/comics/air_gap.png')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Download the xkcd home page, including embedded resources
+            home_rr = RootResource(project, 'Home', Resource(project, home_url))
+            await wait_for_future(home_rr.resource.download(wait_for_embedded=True))
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti,) = root_ti.Children
+            
+            # Delete the embedded image Resource's ResourceRevision
+            embedded_image_r = project.get_resource(embedded_image_url)
+            assert embedded_image_r is not None, 'Embedded image should exist'
+            embedded_image_rr = embedded_image_r.default_revision()
+            assert embedded_image_rr is not None, 'Embedded image should have a revision'
+            embedded_image_rr.delete()
+            
+            # Maybe: Create an entity matching the embedded_image_url
+            before_view(embedded_image_r)
+            
+            # Start the ProjectServer
+            home_ti.SelectItem()
+            home_url_in_archive = get_request_url(
+                home_url,
+                project_default_url_prefix=project.default_url_prefix)
+            with assert_does_open_webbrowser_to(home_url_in_archive):
+                click_button(mw.view_button)
+            
+            with patch.object(
+                        crystal.server._RequestHandler, 'send_revision', autospec=True,
+                        side_effect=crystal.server._RequestHandler.send_revision
+                    ) as spy_send_revision, \
+                    patch.object(
+                        crystal.server._RequestHandler, 'send_download_in_progress', autospec=True,
+                        side_effect=crystal.server._RequestHandler.send_download_in_progress
+                        ) as spy_send_download_in_progress:
+                
+                # Navigate to the home page in the browser
+                def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                    raw_page.goto(home_url_in_archive)
+                    
+                    # Wait for the embedded image to load
+                    comic_img = raw_page.locator('#comic img')
+                    expect(comic_img).to_be_visible()
+                    
+                    # Wait for the image to finish loading successfully
+                    raw_page.wait_for_function(
+                        '() => document.querySelector("#comic img").naturalWidth > 0'
+                    )
+                await pw.run(pw_task)
+            
+            # Ensure that the embedded image was loaded and returned,
+            # without ever returning a Download in Progress page
+            send_revision_archive_urls = [call.args[2] for call in spy_send_revision.call_args_list]
+            send_download_in_progress_archive_urls = [call.args[1] for call in spy_send_download_in_progress.call_args_list]
+            assertIn(embedded_image_url, send_revision_archive_urls,
+                'Image should have been returned when requesting the embedded image')
+            assertNotIn(embedded_image_url, send_download_in_progress_archive_urls,
+                'Download in Progress page should NOT have been returned when requesting the embedded image')
 
 
 # ------------------------------------------------------------------------------

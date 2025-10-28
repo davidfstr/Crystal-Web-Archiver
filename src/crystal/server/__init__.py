@@ -20,7 +20,10 @@ from crystal.predict_group import (
     detect_regular_group, detect_sequential_groups,
 )
 from crystal.server.api import CreateGroupErrorResponse, CreateGroupFormData, CreateGroupRequest, CreateGroupResponse, CreateGroupSuccessResponse, SourceChoice, SourceChoiceValue
-from crystal.server.special_pages import fetch_error_html, not_found_page_html, not_in_archive_html, welcome_page_html
+from crystal.server.special_pages import (
+    download_in_progress_html, fetch_error_html, not_found_page_html, 
+    not_in_archive_html, welcome_page_html,
+)
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
     print_error, print_info, print_special, print_success, print_warning,
@@ -34,9 +37,9 @@ from crystal.util.xthreading import (
     is_foreground_thread,
     run_thread_switching_coroutine, SwitchToThread,
 )
-from crystal.util.xtyping import IntStr, intstr_from
+from crystal.util.xtyping import intstr_from
 import datetime
-from functools import cache
+from email.message import Message
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -53,7 +56,7 @@ import traceback
 import trycast
 from trycast import checkcast
 from typing import (
-    Literal, Mapping, Optional, TextIO, TYPE_CHECKING, TypeAlias, TypedDict,
+    Literal, Mapping, Optional, TextIO, TYPE_CHECKING,
     assert_never,
 )
 from typing_extensions import override
@@ -715,14 +718,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     archive_url,
                 ))
                 
-                # Try download resource immediately
-                def create_resource() -> Resource:
-                    assert archive_url is not None
-                    return Resource(self.project, archive_url)
-                resource = fg_call_and_wait(create_resource)
-                yield SwitchToThread.BACKGROUND
-                self._try_download_revision_dynamically(resource, needs_result=False)
-                # (continue to serve downloaded resource revision)
+                yield from self._download_revision_dynamically(
+                    archive_url,
+                    request_headers=self.headers,
+                )
+                return
             else:
                 yield SwitchToThread.BACKGROUND
                 self.send_resource_not_in_archive(archive_url)
@@ -763,13 +763,15 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     ))
                 
                 if matching_rr is not None or matching_rg is not None:
-                    # Try download resource immediately
-                    revision = self._try_download_revision_dynamically(resource, needs_result=True)
-                    # (continue to serve downloaded resource revision)
+                    yield from self._download_revision_dynamically(
+                        archive_url,
+                        request_headers=self.headers,
+                    )
+                    return
             
-            if revision is None:
-                self.send_resource_not_in_archive(archive_url)
-                return
+            assert revision is None  # still
+            self.send_resource_not_in_archive(archive_url)
+            return
         
         # HACK: Don't wait for subresources to download if there is no real
         #       scheduler thread to run the downloads
@@ -814,26 +816,69 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 return rg
         return None
     
-    @staticmethod
-    @bg_affinity
-    def _try_download_revision_dynamically(resource: Resource, *, needs_result: bool) -> ResourceRevision | None:
-        try:
-            return resource.download(
-                # NOTE: Need to wait for embedded resources as well.
-                #       If we were to serve a downloaded HTML page with
-                #       embedded links that were not yet downloaded,
-                #       they would be served as HTTP 404 until they
-                #       finished downloading. To avoid serving a broken
-                #       page we must wait longer for the embedded resources
-                #       to finish downloading.
-                wait_for_embedded=True,
-                needs_result=needs_result,
+    def _download_revision_dynamically(self,
+            archive_url: str,
+            *, request_headers: Message,
+            ) -> Generator[SwitchToThread, None, None]:
+        from crystal.task import DownloadResourceTask
+        
+        # If the Accept header is missing or doesn't contain "text/html",
+        # assume it's potentially an embedded resource and block when downloading
+        # to ensure it's fully downloaded before being served.
+        accept_header = request_headers.get('Accept')
+        is_likely_embedded_resource = (
+            accept_header is None or
+            'text/html' not in accept_header.lower()
+        )
+        
+        # For requestors that are aware they are potentially talking to
+        # a Crystal backend and don't want to handle an intermediate
+        # DIP page, block when downloading so that only the final
+        # downloaded revision is served.
+        blocking_download_requested = (
+            request_headers.get('X-Crystal-Block-When-Downloading') == '1'
+        )
+        
+        block_when_downloading = (
+            is_likely_embedded_resource or
+            blocking_download_requested
+        )
+        
+        # Start downloading the resource
+        def start_download_task() -> DownloadResourceTask:
+            resource = Resource(self.project, archive_url)
+            task = resource.download_with_task(
+                needs_result=block_when_downloading,
                 # Download at interactive priority
                 interactive=True,
-            ).result()
-        except Exception:
-            # Don't care if there was an error downloading
-            return None
+            )
+            return task
+        task = fg_call_and_wait(start_download_task)
+        yield SwitchToThread.BACKGROUND
+        
+        if block_when_downloading:
+            try:
+                # Wait for download to complete
+                revision = task.get_future(
+                    # NOTE: Need to wait for embedded resources as well.
+                    #       If we were to serve a downloaded HTML page with
+                    #       embedded links that were not yet downloaded,
+                    #       they would be served as HTTP 404 until they
+                    #       finished downloading. To avoid serving a broken
+                    #       page we must wait longer for the embedded resources
+                    #       to finish downloading.
+                    wait_for_embedded=True
+                ).result()
+            except Exception:
+                # Error downloading? Serve a Not in Archive page.
+                self.send_resource_not_in_archive(archive_url)
+            else:
+                # Send the downloaded revision
+                self.send_revision(revision, archive_url)
+        else:
+            # Send a Download in Progress page immediately
+            task_id = task.resource.url
+            self.send_download_in_progress(archive_url, task_id)
     
     # --- Handle: Redirect to Archive URL ---
     
@@ -1260,6 +1305,26 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(html_content.encode('utf-8'))
         
         self._print_error('*** Requested resource not in archive: ' + archive_url)
+    
+    @bg_affinity
+    def send_download_in_progress(self, archive_url: str, task_id: str) -> None:
+        # Send HTTP 503 Service Unavailable so that non-human user-agents know to retry
+        self.send_response(503)
+        self.send_header('Content-Type', 'text/html')
+        # Set Retry-After header so that non-human user-agents know to retry
+        self.send_header('Retry-After', '2')
+        # After the download completes,
+        # the DIP page will be replaced with the downloaded page,
+        # so don't cache the DIP page
+        self.send_header('Cache-Control', 'no-cache')
+        self.end_headers()
+        
+        html_content = download_in_progress_html(
+            archive_url=archive_url,
+            task_id=task_id,
+            default_url_prefix=self.project.default_url_prefix,
+        )
+        self.wfile.write(html_content.encode('utf-8'))
     
     @classmethod
     @bg_affinity
