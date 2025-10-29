@@ -2754,13 +2754,6 @@ async def test_when_timeout_while_server_reads_request_or_writes_response_then_l
                  patch('crystal.server.print_info', wraps=crystal.server.print_info) as spy_print_info, \
                  patch('crystal.server.print_warning', wraps=crystal.server.print_warning) as spy_print_warning:
                 
-                # Spy on log_error
-                log_error_calls = []
-                original_log_error = crystal.server._RequestHandler.log_error
-                def spy_log_error(self, format: str, *args):
-                    log_error_calls.append((format, args))
-                    return original_log_error(self, format, *args)
-                
                 # Mock rfile.readline to raise TimeoutError when handle_one_request() called
                 def mock_readline(*args, **kwargs):
                     raise TimeoutError('timed out')
@@ -2769,8 +2762,10 @@ async def test_when_timeout_while_server_reads_request_or_writes_response_then_l
                     with patch.object(self.rfile, 'readline', mock_readline):
                         return original_handle_one_request(self)
                 
-                with patch.object(crystal.server._RequestHandler, 'log_error', spy_log_error), \
-                     patch.object(crystal.server._RequestHandler, 'handle_one_request', spy_handle_one_request):
+                with patch.object(
+                            crystal.server._RequestHandler, 'log_error', autospec=True,
+                            side_effect=crystal.server._RequestHandler.log_error) as spy_log_error, \
+                        patch.object(crystal.server._RequestHandler, 'handle_one_request', spy_handle_one_request):
                     
                     # Try to fetch the page (this will trigger the timeout handling)
                     try:
@@ -2779,8 +2774,8 @@ async def test_when_timeout_while_server_reads_request_or_writes_response_then_l
                         pass  # expected
                 
                 # Ensure log_error() was called 1 time with the expected format string
-                assertEqual(1, len(log_error_calls))
-                (format_str, args) = log_error_calls[0]
+                assertEqual(1, spy_log_error.call_count)
+                (_, format_str, args) = spy_log_error.call_args_list[0].args
                 assertEqual("Request timed out: %r", format_str)
                 
                 # Ensure none of the print methods were called (timeout errors are silently ignored)
