@@ -393,17 +393,12 @@ async def test_can_download_empty_group() -> None:
             comic_ti = root_ti.find_child(comic_pattern)
             comic_ti.SelectItem()
             
-            class DownloadResourceGroupTaskSpy(crystal.task.DownloadResourceGroupTask):
-                finish_call_count = 0
-                
-                def finish(self, *args, **kwargs):
-                    DownloadResourceGroupTaskSpy.finish_call_count += 1
-                    return super().finish(*args, **kwargs)
-            
-            with patch('crystal.task.DownloadResourceGroupTask', DownloadResourceGroupTaskSpy):
+            with patch.object(
+                    crystal.task.DownloadResourceGroupTask, 'finish', autospec=True,
+                    side_effect=crystal.task.DownloadResourceGroupTask.finish) as spy_finish:
                 click_button(mw.download_button)
-                await wait_for(lambda: DownloadResourceGroupTaskSpy.finish_call_count >= 1 or None)
-                assert 1 == DownloadResourceGroupTaskSpy.finish_call_count
+                await wait_for(lambda: spy_finish.call_count >= 1 or None)
+                assert 1 == spy_finish.call_count
 
 
 # ------------------------------------------------------------------------------
