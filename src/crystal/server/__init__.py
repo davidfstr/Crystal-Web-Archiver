@@ -46,6 +46,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
 import re
+import shutil
 import socket
 import socketserver
 import sys
@@ -1279,32 +1280,43 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @bg_affinity
     def send_resource_not_in_archive(self, archive_url: str) -> None:
+        accept_header = self.headers.get('Accept')
+        wants_image_response = (
+            accept_header is not None and
+            'image/*' in accept_header.lower()
+        )
+        
         self._predict_groups(
             archive_url=archive_url
         )
         
+        create_group_form_data = self._calculate_create_group_form_data(
+            self.project, archive_url, self.referer_archive_url)
+        
+        self._print_error('*** Requested resource not in archive: ' + archive_url)
+        
         self.send_response(404)
-        self.send_header('Content-Type', 'text/html')
+        if wants_image_response:
+            self.send_header('Content-Type', 'image/svg+xml')
+        else:
+            self.send_header('Content-Type', 'text/html')
         # If the Download button on the NIA page is pressed,
         # the page will be replaced with the downloaded page,
         # so don't cache the NIA page
         self.send_header('Cache-Control', 'no-cache')
         self.end_headers()
         
-        readonly = self.project.readonly  # cache
-        
-        create_group_form_data = self._calculate_create_group_form_data(
-            self.project, archive_url, self.referer_archive_url)
-        
-        html_content = not_in_archive_html(
-            archive_url=archive_url,
-            create_group_form_data=create_group_form_data,
-            readonly=readonly,
-            default_url_prefix=self.project.default_url_prefix,
-        )
-        self.wfile.write(html_content.encode('utf-8'))
-        
-        self._print_error('*** Requested resource not in archive: ' + archive_url)
+        if wants_image_response:
+            with resources.open_binary('not_in_archive_image.svg') as f:
+                shutil.copyfileobj(f, self.wfile)  # type: ignore[misc]
+        else:
+            html_content = not_in_archive_html(
+                archive_url=archive_url,
+                create_group_form_data=create_group_form_data,
+                readonly=self.project.readonly,
+                default_url_prefix=self.project.default_url_prefix,
+            )
+            self.wfile.write(html_content.encode('utf-8'))
     
     @bg_affinity
     def send_download_in_progress(self, archive_url: str, task_id: str) -> None:

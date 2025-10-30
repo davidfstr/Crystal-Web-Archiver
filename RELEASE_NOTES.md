@@ -33,6 +33,9 @@ Release Notes ⋮
       a progress bar is now shown in the browser.
     * The Source dropdown on the Not in Archive page uses the same labels
       as the Source dropdown in the New Group Dialog.
+    * When a served page tries to display an undownloaded image
+      that isn't covered by a URL or a Group, show a prominent red box with
+      an X rather than showing the browser's generic broken image icon.
     * Ignore timeout errors when responding to a request.
 
 * Support changes **(Breaking Change)**

@@ -1411,11 +1411,30 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
             await pw.run(pw_task)
 
 
-# TODO: Implement
 # See also: test_when_page_embeds_undownloaded_image_matching_a_resource_group_or_a_root_resource_then_downloads_image_and_displays_image
-@skip('fails: not yet implemented')
-async def test_when_page_embeds_undownloaded_image_not_matching_a_resource_group_or_a_root_resource_then_displays_image_with_nia_error_message() -> None:
-    pass
+@awith_playwright
+async def test_when_page_embeds_undownloaded_image_not_matching_a_resource_group_or_a_root_resource_then_displays_image_with_nia_error_symbol(pw: Playwright) -> None:
+    did_send_nia_for_embedded_image = False
+    super_send_resource_not_in_archive = crystal.server._RequestHandler.send_resource_not_in_archive
+    def spy_send_resource_not_in_archive(*args):
+        [_, archive_url] = args
+        if archive_url.endswith('/air_gap.png'):
+            nonlocal did_send_nia_for_embedded_image
+            did_send_nia_for_embedded_image = True
+        
+        return super_send_resource_not_in_archive(*args)
+    
+    with patch.object(
+            crystal.server._RequestHandler, 'send_resource_not_in_archive',
+            spy_send_resource_not_in_archive):
+        def do_nothing(embedded_image_r: Resource) -> None:
+            pass
+        # NOTE: Internally ensures the response is an image
+        await _view_xkcd_home_page_when_embedded_image_is_undownloaded(pw,
+            before_view=do_nothing,
+            expect_revision_response=False)
+        assert did_send_nia_for_embedded_image, \
+            'Expected a Not in Archive response for the embedded image'
 
 
 # ------------------------------------------------------------------------------
@@ -3243,7 +3262,8 @@ def _navigate_from_home_to_comic_1_nia_page(
 
 async def _view_xkcd_home_page_when_embedded_image_is_undownloaded(
         pw: Playwright,
-        before_view: Callable[[Resource], None],
+        *, before_view: Callable[[Resource], None],
+        expect_revision_response: bool=True,
         ) -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
@@ -3292,20 +3312,30 @@ async def _view_xkcd_home_page_when_embedded_image_is_undownloaded(
                     comic_img = raw_page.locator('#comic img')
                     expect(comic_img).to_be_visible()
                     
-                    # Wait for the image to finish loading successfully
-                    raw_page.wait_for_function(
-                        '() => document.querySelector("#comic img").naturalWidth > 0'
-                    )
+                    # 1. Ensure the embedded image is actually an image
+                    #    (and not some other Content-Type)
+                    # 2. Wait for the image to finish loading successfully
+                    from playwright.sync_api import TimeoutError as PwTimeoutError
+                    try:
+                        raw_page.wait_for_function(
+                            '() => document.querySelector("#comic img").naturalWidth > 0'
+                        )
+                    except PwTimeoutError:
+                        raise PwTimeoutError(
+                            'Returned embedded image is not a valid image '
+                            'or did not load successfully'
+                        ) from None
                 await pw.run(pw_task)
             
-            # Ensure that the embedded image was loaded and returned,
-            # without ever returning a Download in Progress page
-            send_revision_archive_urls = [call.args[2] for call in spy_send_revision.call_args_list]
-            send_download_in_progress_archive_urls = [call.args[1] for call in spy_send_download_in_progress.call_args_list]
-            assertIn(embedded_image_url, send_revision_archive_urls,
-                'Image should have been returned when requesting the embedded image')
-            assertNotIn(embedded_image_url, send_download_in_progress_archive_urls,
-                'Download in Progress page should NOT have been returned when requesting the embedded image')
+            if expect_revision_response:
+                # Ensure that the embedded image was loaded and returned,
+                # without ever returning a Download in Progress page
+                send_revision_archive_urls = [call.args[2] for call in spy_send_revision.call_args_list]
+                send_download_in_progress_archive_urls = [call.args[1] for call in spy_send_download_in_progress.call_args_list]
+                assertIn(embedded_image_url, send_revision_archive_urls,
+                    'Image should have been returned when requesting the embedded image')
+                assertNotIn(embedded_image_url, send_download_in_progress_archive_urls,
+                    'Download in Progress page should NOT have been returned when requesting the embedded image')
 
 
 # ------------------------------------------------------------------------------
