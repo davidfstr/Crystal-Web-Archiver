@@ -47,6 +47,10 @@ Release Notes ⋮
       Drop support for macOS 13.
 
 * Minor fixes
+    * A callout appears over the View button after adding the first URL to a
+      project. This callout now hides itself when scrolling the entity tree
+      underneath it on Windows rather than flickering and showing visual
+      artifacts.
     * When Crystal starts, first dialog appears 0.2 seconds faster.
     * When Crystal is started with both --shell and --serve,
       always print shell prompt and server start prompt in consistent order.
