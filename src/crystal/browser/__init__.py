@@ -77,6 +77,8 @@ class MainWindow(CloakMixin):
     _ID_VIEW_AS_URL_NAME = 201
     _ID_VIEW_AS_NAME_URL = 202
     
+    _DEBUG_ENTITY_TREE_SCROLL = False
+    
     project: Project
     _frame: wx.Frame
     entity_tree: EntityTree
@@ -623,11 +625,16 @@ class MainWindow(CloakMixin):
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
         self.entity_tree.peer.Hide()
         bind(self.entity_tree.peer, wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
+        self._entity_tree_scroll_end_timer = None  # type: Optional[Timer]
         if is_windows():
             # On Windows, repaint callout when tree is scrolled or repainted,
             # because tree draws over callout despite its z-order position
-            bind(self.entity_tree.peer, wx.EVT_PAINT, self._on_tree_paint)
-            bind(self.entity_tree.peer, wx.EVT_SCROLLWIN, self._on_tree_scroll)
+            bind(self.entity_tree.peer, wx.EVT_PAINT, self._on_entity_tree_paint)
+            bind(self.entity_tree.peer, wx.EVT_SCROLLWIN, self._on_entity_tree_scroll)
+            # NOTE: Windows sometimes does NOT fire wx.EVT_SCROLLWIN events when
+            #       scrolling is triggered by mousewheel gestures. So listen to
+            #       mousewheel gestures explicitly because they could result in scrolling.
+            bind(self.entity_tree.peer, wx.EVT_MOUSEWHEEL, self._on_entity_tree_scroll)
         self._on_selected_entity_changed()
         
         return self.entity_tree.peer
@@ -1007,6 +1014,12 @@ class MainWindow(CloakMixin):
         
         if self._autohibernate_timer is not None:
             self._autohibernate_timer.stop()
+            self._autohibernate_timer = None
+        
+        # Stop scroll end timer if active
+        if self._entity_tree_scroll_end_timer is not None:
+            self._entity_tree_scroll_end_timer.stop()
+            self._entity_tree_scroll_end_timer = None
         
         self._hibernate()
         
@@ -1411,10 +1424,10 @@ class MainWindow(CloakMixin):
             isinstance(selected_entity, (Resource, RootResource)))
     
     @capture_crashes_to_stderr
-    def _on_tree_paint(self, event: wx.PaintEvent) -> None:
-        if is_windows():
+    def _on_entity_tree_paint(self, event: wx.PaintEvent) -> None:
+        if is_windows() and hasattr(self, '_view_button_callout'):
             # Repaint callout after the tree finishes repainting
-            if hasattr(self, '_view_button_callout') and self._view_button_callout.IsShown():
+            if self._view_button_callout.IsShown():
                 @capture_crashes_to_stderr
                 def repaint_callout() -> None:
                     self._view_button_callout.Refresh()
@@ -1424,19 +1437,52 @@ class MainWindow(CloakMixin):
         event.Skip()
     
     @capture_crashes_to_stderr
-    def _on_tree_scroll(self, event: wx.ScrollWinEvent) -> None:
-        """Handle tree scroll events to fix Windows callout artifacts during scrolling."""
-        if is_windows():
-            # Repaint callout after tree scrolling to fix visual artifacts
-            if hasattr(self, '_view_button_callout') and self._view_button_callout.IsShown():
-                @capture_crashes_to_stderr
-                def repaint_tree_and_callout() -> None:
-                    self.entity_tree.peer.Refresh()
-                    self._view_button_callout.Refresh()
-                fg_call_later(repaint_tree_and_callout, force_later=True)
+    @fg_affinity
+    def _on_entity_tree_scroll(self, event: wx.ScrollWinEvent | wx.MouseEvent) -> None:
+        # Hide view button callout on Windows while entity tree is scrolling
+        # to fix visual artifacts
+        if self._DEBUG_ENTITY_TREE_SCROLL:
+            print('.')
+        if is_windows() and hasattr(self, '_view_button_callout'):
+            if self._view_button_callout.IsShown():
+                # Tree scroll start
+                try:
+                    self._entity_tree_scroll_end_timer = Timer(self._on_entity_tree_scroll_end, 200)
+                except TimerError:
+                    # Unable to start timer. Don't hide callout at all.
+                    pass
+                else:
+                    if self._DEBUG_ENTITY_TREE_SCROLL:
+                        print('[')
+                    self._view_button_callout.Hide()
+                    
+                    # TODO: Is this needed?
+                    @capture_crashes_to_stderr
+                    def refresh_entity_tree() -> None:
+                        self.entity_tree.peer.Refresh()
+                    fg_call_later(
+                        refresh_entity_tree,
+                        force_later=True)
+            elif self._entity_tree_scroll_end_timer is not None:
+                # Tree scroll continue
+                
+                # Restart any pending scroll end timer
+                self._entity_tree_scroll_end_timer.restart()
         
         # Keep processing the event normally
         event.Skip()
+    
+    @capture_crashes_to_stderr
+    @fg_affinity
+    def _on_entity_tree_scroll_end(self) -> None:
+        if self._DEBUG_ENTITY_TREE_SCROLL:
+            print(']')
+        
+        # Show the callout again (if appropriate) and repaint both the tree and callout
+        self._update_view_button_callout_visibility()
+        
+        # Clean up
+        self._entity_tree_scroll_end_timer = None
     
     # === Task Pane: Init/Refresh ===
     
