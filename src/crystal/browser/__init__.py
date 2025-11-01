@@ -625,10 +625,10 @@ class MainWindow(CloakMixin):
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
         self.entity_tree.peer.Hide()
         bind(self.entity_tree.peer, wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
+        self._entity_tree_scroll_end_timer = None  # type: Optional[Timer]
         if is_windows():
             # On Windows, repaint callout when tree is scrolled or repainted,
             # because tree draws over callout despite its z-order position
-            self._entity_tree_scroll_end_timer = None  # type: Optional[Timer]
             bind(self.entity_tree.peer, wx.EVT_PAINT, self._on_entity_tree_paint)
             bind(self.entity_tree.peer, wx.EVT_SCROLLWIN, self._on_entity_tree_scroll)
             # NOTE: Windows sometimes does NOT fire wx.EVT_SCROLLWIN events when
