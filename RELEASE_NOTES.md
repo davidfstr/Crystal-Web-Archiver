@@ -25,6 +25,14 @@ Release Notes ⋮
     * Download tasks can be right-clicked to copy their related URL (pattern)
       or view the related URL in a browser.
 
+* Browsing improvements
+    * The Not in Archive page now offers three action modes via radio buttons:
+        * Create Root URL (default): Creates a named root URL in your project and optionally downloads it.
+        * Create Group for Similar Pages: Creates a group for the URL pattern and optionally downloads it.
+        * Download Only: Downloads the current page without creating a root URL or group.
+    * When creating a Root URL from the Not in Archive page,
+      you can now provide a name for the root URL, similar to the New Root URL dialog.
+
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
 

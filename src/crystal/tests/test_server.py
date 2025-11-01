@@ -625,6 +625,9 @@ async def test_when_404_page_exported_by_crystal_is_downloaded_and_served_by_cry
 # ------------------------------------------------------------------------------
 # Test: "Not in Archive" Page (send_resource_not_in_archive)
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Test: "Not in Archive" Page: Top of Page
+
 # See also: test_when_navigate_in_browser_to_undownloaded_page_matching_a_resource_group_or_a_root_resource_then_starts_downloading_and_shows_dip_page
 @skip('covered by: test_given_nia_page_visible_then_crystal_branding_and_error_message_and_url_is_visible')
 async def test_when_navigate_in_browser_to_undownloaded_page_not_matching_a_resource_group_or_a_root_resource_then_shows_nia_page() -> None:
@@ -656,7 +659,7 @@ async def test_given_nia_page_visible_when_press_go_back_button_then_navigates_t
             "Go back button should be present on NIA page"
 
 
-async def test_given_nia_page_visible_and_project_is_readonly_then_download_button_is_disabled_and_readonly_warning_visible() -> None:
+async def test_given_nia_page_visible_and_project_is_readonly_then_create_form_is_disabled_and_readonly_warning_visible() -> None:
     async with _not_in_archive_page_visible(readonly=True) as server_page:
         content = server_page.content
         
@@ -665,13 +668,13 @@ async def test_given_nia_page_visible_and_project_is_readonly_then_download_butt
             "Readonly warning should be visible when project is readonly"
         
         # Download button should be present but disabled
-        assert '<button id="cr-download-url-button" ' in content, \
+        assert '<button id="cr-action-button" ' in content, \
             "Download button should be present in readonly mode"
-        assert '<button id="cr-download-url-button" disabled ' in content, \
+        assert '<button id="cr-action-button" disabled ' in content, \
             "Download button should be disabled in readonly mode"
 
 
-async def test_given_nia_page_visible_and_project_is_writable_then_download_button_is_enabled_and_readonly_warning_is_not_visible() -> None:
+async def test_given_nia_page_visible_and_project_is_writable_then_create_form_is_enabled_and_readonly_warning_is_not_visible() -> None:
     async with _not_in_archive_page_visible(readonly=False) as server_page:
         content = server_page.content
         
@@ -680,13 +683,44 @@ async def test_given_nia_page_visible_and_project_is_writable_then_download_butt
             "Readonly warning should NOT be visible when project is writable"
         
         # Download button should be present and enabled
-        assert '<button id="cr-download-url-button" ' in content, \
+        assert '<button id="cr-action-button" ' in content, \
             "Download button should be present when project is writable"
-        assert '<button id="cr-download-url-button" disabled ' not in content, \
+        assert '<button id="cr-action-button" disabled ' not in content, \
             "Download button should NOT be disabled when project is writable"
 
 
-async def test_given_nia_page_visible_when_download_button_pressed_then_download_starts_and_runs_with_progress_bar() -> None:
+async def test_given_readonly_project_then_all_action_type_radio_buttons_disabled() -> None:
+    async with _not_in_archive_page_visible(readonly=True) as server_page:
+        content = server_page.content
+        
+        # Create Root URL radio button should be present but disabled
+        assert '<input type="radio" name="cr-action-type" id="cr-create-root-url-radio"' in content, \
+            "Create Root URL radio button should be present even in readonly mode"
+        assert 'id="cr-create-root-url-radio" value="create-root-url" disabled ' in content, \
+            "Create Root URL radio button should be disabled in readonly mode"
+        
+        # Create Group radio button should be present but disabled
+        assert '<input type="radio" name="cr-action-type" id="cr-create-group-radio"' in content, \
+            "Create Group radio button should be present even in readonly mode"
+        assert 'id="cr-create-group-radio" value="create-group" disabled ' in content, \
+            "Create Group radio button should be disabled in readonly mode"
+        
+        # Download Only radio button should be present but disabled
+        assert '<input type="radio" name="cr-action-type" id="cr-download-only-radio"' in content, \
+            "Download Only radio button should be present even in readonly mode"
+        assert 'id="cr-download-only-radio" value="download-only" disabled ' in content, \
+            "Download Only radio button should be disabled in readonly mode"
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Test: "Not in Archive" Page: Create Root URL + Download Progress Bar
+
+@skip('covered by: test_given_create_root_url_selected_when_download_button_pressed_then_download_starts_and_runs_with_progress_bar')
+async def test_given_writable_project_then_create_root_url_is_initially_selected() -> None:
+    pass
+
+
+async def test_given_create_root_url_selected_when_download_button_pressed_then_download_starts_and_runs_with_progress_bar() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -740,16 +774,25 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
             # Ensure that page IS a "Not in Archive" page
             assert first_comic_page.is_not_in_archive
             
+            # Verify the "Create Root URL" radio button is checked by default
+            assert 'id="cr-create-root-url-radio" value="create-root-url"' in first_comic_page.content
+            assert 'id="cr-create-root-url-radio" value="create-root-url" onchange="onActionTypeChanged()" checked' in first_comic_page.content, \
+                "Create Root URL radio button should be checked by default"
+            
+            EXPECTED_ROOT_URL_NAME = 'Comic #1'
+            
             async with wait_for_download_task_to_start_and_finish(project):
                 # Simulate press of the "Download" button on the "Not in Archive" page
                 # by directly querying the related endpoint
                 server_port = _DEFAULT_SERVER_PORT
                 download_response = await bg_fetch_url(
-                    f'http://127.0.0.1:{server_port}/_/crystal/download-url',
+                    f'http://127.0.0.1:{server_port}/_/crystal/create-url',
                     method='POST',
                     data=json.dumps({
                         'url': comic1_url,
                         'is_root': True,
+                        'name': EXPECTED_ROOT_URL_NAME,
+                        'download_immediately': True,
                     }).encode('utf-8'),
                     headers={'Content-Type': 'application/json'}
                 )
@@ -770,6 +813,12 @@ async def test_given_nia_page_visible_when_download_button_pressed_then_download
             # Ensure that the fetched page is now no longer a "Not In Archive" page
             assert reloaded_comic_page.status == 200
             assert not reloaded_comic_page.is_not_in_archive
+            
+            # Verify the created RootResource has the expected name
+            created_rr = project.get_root_resource(url=comic1_url)
+            assert created_rr is not None, "RootResource should have been created"
+            assert created_rr.name == EXPECTED_ROOT_URL_NAME, \
+                f"RootResource name should be {EXPECTED_ROOT_URL_NAME!r}, got {created_rr.name!r}"
 
 
 # TODO: Implement discrete test that actually checks that the progress bar updates.
@@ -838,7 +887,7 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                 async with wait_for_download_task_to_start_and_finish(project):
                     server_port = _DEFAULT_SERVER_PORT
                     download_response = await bg_fetch_url(
-                        f'http://127.0.0.1:{server_port}/_/crystal/download-url',
+                        f'http://127.0.0.1:{server_port}/_/crystal/create-url',
                         method='POST',
                         data=json.dumps({
                             'url': comic1_url,
@@ -878,24 +927,24 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
             
             with network_down_after_delay(page):  # for frontend
                 # Ensure download button is initially enabled
-                expect(page.download_url_button).to_be_enabled()
-                expect(page.download_url_button).to_contain_text('⬇ Download')
+                expect(page.action_button).to_be_enabled()
+                expect(page.action_button).to_contain_text('⬇ Download')
                 
                 # Ensure progress bar is initially hidden
                 expect(page.progress_bar).not_to_be_visible()
                 
                 # Start download
-                page.download_url_button.click()
+                page.action_button.click()
                 # TODO: Pause something to prevent download from immediately completing
-                expect(page.download_url_button).to_be_disabled()
-                expect(page.download_url_button).to_contain_text('⬇ Downloading...')
+                expect(page.action_button).to_be_disabled()
+                expect(page.action_button).to_contain_text('Creating & Starting Download...')
                 page.progress_bar.wait_for(state='visible')
                 
                 # Wait for download failure. Then:
                 # 1. Ensure the page did NOT reload
                 # 2. Wait for the download button to be re-enabled
-                expect(page.download_url_button).to_be_enabled()
-                expect(page.download_url_button).to_contain_text('⬇ Download')
+                expect(page.action_button).to_be_enabled()
+                expect(page.action_button).to_contain_text('⬇ Download')
                 
                 # Ensure error message is displayed
                 progress_bar_message = page.progress_bar_message
@@ -904,19 +953,11 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
         await pw.run(pw_task)
 
 
-async def test_given_readonly_project_then_create_group_checkbox_is_disabled() -> None:
-    async with _not_in_archive_page_visible(readonly=True) as server_page:
-        content = server_page.content
-        
-        # Create group checkbox should be present but disabled
-        assert '<input type="checkbox" id="cr-create-group-checkbox"' in content, \
-            "Create group checkbox should be present even in readonly mode"
-        assert '<input type="checkbox" id="cr-create-group-checkbox" disabled ' in content, \
-            "Create group checkbox should be disabled in readonly mode"
-
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Test: "Not in Archive" Page: Create Group
 
 @skip('covered by: test_given_create_group_form_visible_when_download_group_checkbox_unticked_then_download_button_is_replaced_with_create_button')
-async def test_given_writable_project_when_create_group_checkbox_ticked_then_shows_create_group_form() -> None:
+async def test_given_writable_project_when_create_group_selected_then_shows_create_group_form() -> None:
     # ...and URL Pattern is populated with a suggestion
     # ...and Source is populated with a suggestion
     # ...and Preview Members are populated
@@ -932,16 +973,17 @@ async def test_given_create_group_form_visible_when_download_group_checkbox_unti
             page = _navigate_from_home_to_comic_1_nia_page(
                 raw_page, home_url_in_archive, comic1_url_in_archive)
 
-            # Ensure create group checkbox exists and is unchecked initially
-            expect(page.create_group_checkbox).to_be_visible()
-            expect(page.create_group_checkbox).not_to_be_checked()
+            # Ensure create group radio button exists and Create Root URL is selected initially
+            expect(page.create_group_radio).to_be_visible()
+            expect(page.create_root_url_radio).to_be_checked()
+            expect(page.create_group_radio).not_to_be_checked()
             
             # Ensure form is initially hidden
             expect(page.create_group_form).not_to_be_visible()
             
-            # Click the create group checkbox to show the form
-            page.create_group_checkbox.click()
-            expect(page.create_group_checkbox).to_be_checked()
+            # Click the create group radio button to show the form
+            page.create_group_radio.click()
+            expect(page.create_group_radio).to_be_checked()
             expect(page.create_group_form).to_be_visible()
             
             # Verify that URL Pattern is populated with a suggestion
@@ -961,22 +1003,22 @@ async def test_given_create_group_form_visible_when_download_group_checkbox_unti
             expect(page.preview_urls_container).to_contain_text('xkcd.com')
             
             # Verify that the download immediately checkbox is checked by default
-            expect(page.download_immediately_checkbox).to_be_checked()
+            expect(page.download_group_immediately_checkbox).to_be_checked()
             
             # Verify that the group action button shows "Download" initially
             expect(page.download_or_create_group_button).to_be_visible()
             expect(page.download_or_create_group_button).to_contain_text('⬇ Download')
             
             # Uncheck the download immediately checkbox
-            page.download_immediately_checkbox.click()
-            expect(page.download_immediately_checkbox).not_to_be_checked()
+            page.download_group_immediately_checkbox.click()
+            expect(page.download_group_immediately_checkbox).not_to_be_checked()
             
             # Verify that the group action button now shows "Create"
             expect(page.download_or_create_group_button).to_contain_text('✚ Create')
             
             # Check the download immediately checkbox again
-            page.download_immediately_checkbox.click()
-            expect(page.download_immediately_checkbox).to_be_checked()
+            page.download_group_immediately_checkbox.click()
+            expect(page.download_group_immediately_checkbox).to_be_checked()
             
             # Verify that the group action button shows "Download" again
             expect(page.download_or_create_group_button).to_contain_text('⬇ Download')
@@ -997,8 +1039,8 @@ async def test_given_create_group_form_visible_when_reload_page_then_is_still_on
             page = NotInArchivePage.open(raw_page, url_in_archive=comic1_url_in_archive)
             
             # Show the create group form
-            page.create_group_checkbox.click()
-            expect(page.create_group_checkbox).to_be_checked()
+            page.create_group_radio.click()
+            expect(page.create_group_radio).to_be_checked()
             expect(page.create_group_form).to_be_visible()
             
             # Reload the page
@@ -1007,8 +1049,9 @@ async def test_given_create_group_form_visible_when_reload_page_then_is_still_on
             # Verify we're still on a "Not in Archive" page
             page_after_reload = NotInArchivePage.wait_for(raw_page)
             
-            # The form should be hidden again after reload (checkbox unchecked)
-            expect(page_after_reload.create_group_checkbox).not_to_be_checked()
+            # The form should be hidden again after reload (Create Root URL selected by default)
+            expect(page_after_reload.create_root_url_radio).to_be_checked()
+            expect(page_after_reload.create_group_radio).not_to_be_checked()
             expect(page_after_reload.create_group_form).not_to_be_visible()
             
             # The original download button should still be present
@@ -1018,102 +1061,23 @@ async def test_given_create_group_form_visible_when_reload_page_then_is_still_on
 
 
 @awith_playwright
-async def test_given_create_group_form_visible_when_cancel_button_pressed_then_hides_create_group_form(pw: Playwright) -> None:
-    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, *_):
-        def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
-            # Navigate to comic #1, which should be a "Not in Archive" page
-            page = NotInArchivePage.open(raw_page, url_in_archive=comic1_url_in_archive)
-            
-            # Show the create group form
-            page.create_group_checkbox.click()
-            expect(page.create_group_checkbox).to_be_checked()
-            expect(page.create_group_form).to_be_visible()
-            expect(page.cancel_group_button).to_be_visible()
-            
-            # Click the cancel button
-            page.cancel_group_button.click()
-            
-            # Verify the checkbox is unchecked and form is hidden
-            expect(page.create_group_checkbox).not_to_be_checked()
-            expect(page.create_group_form).not_to_be_visible()
-            
-            # Verify the original download button is still present and functional
-            expect(page.download_url_button).to_be_visible()
-            expect(page.download_url_button).to_contain_text('⬇ Download')
-        await pw.run(pw_task)
-
-
-@awith_playwright
-async def test_given_create_group_form_visible_when_any_download_button_clicked_then_disables_form_and_creates_group_and_starts_downloading_group_and_displays_success_message_and_downloads_url_and_reloads_page(pw: Playwright) -> None:
-    # Test Case 1: Download button above the create group form is clicked
-    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, project, *_):
-        def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
-            page = _navigate_from_home_to_comic_1_nia_page(
-                raw_page, home_url_in_archive, comic1_url_in_archive)
-            
-            # Show the create group form
-            page.create_group_checkbox.click()
-            expect(page.create_group_checkbox).to_be_checked()
-            expect(page.create_group_form).to_be_visible()
-            
-            # Keep the download immediately checkbox checked (default state)
-            expect(page.download_immediately_checkbox).to_be_checked()
-            expect(page.download_or_create_group_button).to_contain_text('⬇ Download')
-            
-            # Verify form is initially enabled
-            page.create_group_form_enabled.expect()
-            page.create_group_form_collapsed.expect_not()
-            
-            # Ensure progress bar is initially hidden
-            expect(page.progress_bar).not_to_be_visible()
-            
-            # Click the download URL button (above the form)
-            expect(page.download_url_button).to_be_enabled()
-            expect(page.download_url_button).to_contain_text('⬇ Download')
-            with reloads_paused(raw_page):
-                page.download_url_button.click()
-                
-                # Verify download button gets disabled and progress bar appears
-                expect(page.download_url_button).to_be_disabled()
-                expect(page.download_url_button).to_contain_text('⬇ Downloading...')
-                page.progress_bar.wait_for(state='visible')
-            
-            # Wait for the page to reload after download completes.
-            # The group should be created automatically and the page should reload to the comic.
-            expect(raw_page).to_have_title('xkcd: Barrel - Part 1')
-        await pw.run(pw_task)
-        
-        # Ensure expected entities created
-        if True:
-            home_url = sp.get_request_url('https://xkcd.com/')
-            comic1_url = sp.get_request_url('https://xkcd.com/1/')
-            comic_url_pattern = sp.get_request_url('https://xkcd.com/#/')
-            
-            assert project.get_root_resource(url=home_url) is not None
-            assert project.get_root_resource(url=comic1_url) is None, (
-                'Should not have created RootResource for comic 1 '
-                'because created ResourceGroup covers it'
-            )
-            assert project.get_resource_group(url_pattern=comic_url_pattern) is not None
-
-    # Test Case 2: Download button at the bottom of the create group form
+async def test_given_create_group_form_visible_when_download_button_clicked_then_disables_form_and_creates_group_and_starts_downloading_group_and_displays_success_message_and_downloads_url_and_reloads_page(pw: Playwright) -> None:
     async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, project, *_):
         def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
             page = _navigate_from_home_to_comic_1_nia_page(
                 raw_page, home_url_in_archive, comic1_url_in_archive)
             
             # Show the create group form again
-            page.create_group_checkbox.click()
-            expect(page.create_group_checkbox).to_be_checked()
+            page.create_group_radio.click()
+            expect(page.create_group_radio).to_be_checked()
             expect(page.create_group_form).to_be_visible()
             
             # Keep the download immediately checkbox checked (default state)
-            expect(page.download_immediately_checkbox).to_be_checked()
+            expect(page.download_group_immediately_checkbox).to_be_checked()
             expect(page.download_or_create_group_button).to_contain_text('⬇ Download')
             
             # Verify form is initially enabled
             page.create_group_form_enabled.expect()
-            page.create_group_form_collapsed.expect_not()
             
             # Ensure progress bar is initially hidden
             expect(page.progress_bar).not_to_be_visible()
@@ -1158,18 +1122,17 @@ async def test_given_create_group_form_visible_and_group_previously_created_when
                 raw_page, home_url_in_archive, comic1_url_in_archive)
             
             # Show the create group form
-            page.create_group_checkbox.click()
-            expect(page.create_group_checkbox).to_be_checked()
+            page.create_group_radio.click()
+            expect(page.create_group_radio).to_be_checked()
             expect(page.create_group_form).to_be_visible()
             
             # Uncheck the download immediately checkbox to get "Create" button
-            page.download_immediately_checkbox.click()
-            expect(page.download_immediately_checkbox).not_to_be_checked()
+            page.download_group_immediately_checkbox.click()
+            expect(page.download_group_immediately_checkbox).not_to_be_checked()
             expect(page.download_or_create_group_button).to_contain_text('✚ Create')
             
             # Verify form is initially enabled
             page.create_group_form_enabled.expect()
-            page.create_group_form_collapsed.expect_not()
             
             # Click the create button
             page.download_or_create_group_button.click()
@@ -1179,14 +1142,11 @@ async def test_given_create_group_form_visible_and_group_previously_created_when
             
             # Wait for the creation to complete and success message to appear
             expect(page.action_message).to_be_visible()
-            expect(page.action_message).to_contain_text('Group created successfully')
+            expect(page.action_message).to_contain_text('Group created')
             expect(page.action_message).to_contain_class('success')
             
             # Verify form becomes collapsed with animation
             page.create_group_form_collapsed.expect()
-            
-            # Verify form remains disabled after creation
-            page.create_group_form_enabled.expect_not()
             
             # Ensure progress bar is initially hidden
             expect(page.progress_bar).not_to_be_visible()
@@ -1230,13 +1190,13 @@ async def test_given_create_group_form_visible_when_download_or_create_button_cl
             
             with network_down_after_delay(page):
                 # Show the create group form
-                page.create_group_checkbox.click()
-                expect(page.create_group_checkbox).to_be_checked()
+                page.create_group_radio.click()
+                expect(page.create_group_radio).to_be_checked()
                 expect(page.create_group_form).to_be_visible()
                 
                 # Uncheck the download immediately checkbox to get "Create" button
-                page.download_immediately_checkbox.click()
-                expect(page.download_immediately_checkbox).not_to_be_checked()
+                page.download_group_immediately_checkbox.click()
+                expect(page.download_group_immediately_checkbox).not_to_be_checked()
                 expect(page.download_or_create_group_button).to_contain_text('✚ Create')
                 
                 # Verify form is initially enabled
@@ -1278,8 +1238,8 @@ async def test_given_create_group_form_visible_when_type_in_url_pattern_field_th
                 raw_page, home_url_in_archive, comic1_url_in_archive)
             
             # Show the create group form
-            page.create_group_checkbox.click()
-            expect(page.create_group_checkbox).to_be_checked()
+            page.create_group_radio.click()
+            expect(page.create_group_radio).to_be_checked()
             expect(page.create_group_form).to_be_visible()
             
             # Wait for initial preview to load
@@ -1313,8 +1273,8 @@ async def test_given_create_group_form_visible_when_type_in_url_pattern_field_an
                 raw_page, home_url_in_archive, comic1_url_in_archive)
             
             # Show the create group form
-            page.create_group_checkbox.click()
-            expect(page.create_group_checkbox).to_be_checked()
+            page.create_group_radio.click()
+            expect(page.create_group_radio).to_be_checked()
             expect(page.create_group_form).to_be_visible()
             
             # Wait for initial preview to load
@@ -1343,8 +1303,8 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
                     raw_page, home_url_in_archive, comic1_url_in_archive)
                 
                 # Show the create group form
-                page.create_group_checkbox.click()
-                expect(page.create_group_checkbox).to_be_checked()
+                page.create_group_radio.click()
+                expect(page.create_group_radio).to_be_checked()
                 expect(page.create_group_form).to_be_visible()
                 
                 # Wait for initial preview to load
@@ -1371,45 +1331,47 @@ async def test_given_create_group_form_visible_and_text_field_focused_when_press
             await pw.run(pw_task)
 
 
-@awith_playwright
-async def test_given_create_group_form_visible_and_text_field_focused_when_press_escape_then_presses_cancel_button(pw: Playwright) -> None:
-    # Case 1: URL Pattern text field
-    # Case 2: Name text field
-    for field_func in [lambda page: page.url_pattern_field, lambda page: page.name_field]:
-        async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, sp, *_):
-            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
-                page = _navigate_from_home_to_comic_1_nia_page(
-                    raw_page, home_url_in_archive, comic1_url_in_archive)
-                
-                # Show the create group form
-                page.create_group_checkbox.click()
-                expect(page.create_group_checkbox).to_be_checked()
-                expect(page.create_group_form).to_be_visible()
-                
-                # Wait for initial preview to load
-                page.wait_for_initial_preview_urls()
-                
-                # Focus the URL pattern field and press Escape
-                text_field = field_func(page)  # cache
-                text_field.click()  # Focus the field
-                expect(text_field).to_be_focused()
-                
-                # Verify the form is initially visible
-                expect(page.create_group_form).to_be_visible()
-                expect(page.create_group_checkbox).to_be_checked()
-                
-                # Press Escape and verify it activates the cancel button
-                text_field.press('Escape')
-                
-                # Verify the checkbox is unchecked and form is hidden (same effect as clicking cancel)
-                expect(page.create_group_checkbox).not_to_be_checked()
-                expect(page.create_group_form).not_to_be_visible()
-                
-                # Verify the original download button is still present and functional
-                expect(page.download_url_button).to_be_visible()
-                expect(page.download_url_button).to_contain_text('⬇ Download')
-            await pw.run(pw_task)
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Test: "Not in Archive" Page: Download Only
 
+@awith_playwright
+async def test_given_writable_project_when_download_only_selected_then_shows_no_form(pw: Playwright) -> None:
+    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, home_url_in_archive, *_):
+        def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+            # Navigate to comic #1, which should be a "Not in Archive" page
+            page = NotInArchivePage.open(raw_page, url_in_archive=comic1_url_in_archive)
+            
+            # Verify the "Create Root URL" radio button is checked by default
+            expect(page.create_root_url_radio).to_be_checked()
+            expect(page.create_group_radio).not_to_be_checked()
+            expect(page.download_only_radio).not_to_be_checked()
+            
+            # Verify the Create Root URL form is visible initially
+            expect(page.create_root_url_form).to_be_visible()
+            expect(page.create_group_form).not_to_be_visible()
+            
+            # Click the "Download Only" radio button
+            page.download_only_radio.click()
+            
+            # Verify the "Download Only" radio button is now checked
+            expect(page.download_only_radio).to_be_checked()
+            expect(page.create_root_url_radio).not_to_be_checked()
+            expect(page.create_group_radio).not_to_be_checked()
+            
+            # Verify the Create Root URL form is now hidden
+            expect(page.create_root_url_form).not_to_be_visible()
+            expect(page.create_group_form).not_to_be_visible()
+            
+            # Verify the action button is visible
+            expect(page.action_button).to_be_visible()
+            
+            # Verify the button text is "⬇ Download"
+            expect(page.action_button).to_contain_text('⬇ Download')
+        await pw.run(pw_task)
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+# Test: "Not in Archive" Page: Image Version
 
 # See also: test_when_page_embeds_undownloaded_image_matching_a_resource_group_or_a_root_resource_then_downloads_image_and_displays_image
 @awith_playwright

@@ -655,9 +655,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     def _do_POST(self) -> Generator[SwitchToThread, None, None]:
         # Handle: "Not in Archive" Endpoints
-        if self.path == '/_/crystal/download-url':
+        if self.path == '/_/crystal/create-url':
             yield SwitchToThread.BACKGROUND
-            self._handle_start_download_url()
+            self._handle_create_url()
             return
         elif self.path == '/_/crystal/create-group':
             yield SwitchToThread.BACKGROUND
@@ -929,7 +929,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     # --- Handle: "Not in Archive" Endpoints ---
     
     @bg_affinity
-    def _handle_start_download_url(self) -> None:
+    def _handle_create_url(self) -> None:
         try:
             # Ensure project is not readonly
             if self.project.readonly:
@@ -949,6 +949,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 request_data = json.loads(post_data)
                 url = request_data.get('url')
                 is_root = request_data.get('is_root')
+                root_url_name = request_data.get('name', '')
+                download_immediately = request_data.get('download_immediately', True)
             except json.JSONDecodeError:
                 self._send_json_response(400, {"error": "Invalid JSON"})
                 return
@@ -958,30 +960,43 @@ class _RequestHandler(BaseHTTPRequestHandler):
             if not isinstance(url, str) or not isinstance(is_root, bool):
                 self._send_json_response(400, {"error": "Invalid parameter type"})
                 return
+            if not isinstance(root_url_name, str):
+                self._send_json_response(400, {"error": "Invalid parameter type for name"})
+                return
+            if not isinstance(download_immediately, bool):
+                self._send_json_response(400, {"error": "Invalid parameter type for download_immediately"})
+                return
             
-            def create_and_start_download_task() -> str:
+            @fg_affinity
+            def create_root_url_and_optionally_start_download() -> dict:
                 # Get or create a Resource for the URL
                 r = Resource(self.project, url)
                 
                 # Get or create RootResource for the URL, if requested
                 if is_root:
-                    rr = self.project.get_root_resource(r)
-                    if rr is None:
-                        rr = RootResource(self.project, '', r)
+                    existing_rr = self.project.get_root_resource(r)
+                    if existing_rr is None:
+                        rr = RootResource(self.project, root_url_name, r)
                 
-                # Create download task and start downloading
-                task = r.download_with_task(interactive=True, needs_result=False)
-                
-                # Return task ID for progress tracking
-                return task.resource.url
-            task_id = fg_call_and_wait(create_and_start_download_task)
+                # Start download if requested
+                if download_immediately:
+                    # Create download task and start downloading
+                    task = r.download_with_task(interactive=True, needs_result=False)
+                    return {
+                        "status": "success", 
+                        "message": "Download started",
+                        "task_id": task.resource.url
+                    }
+                else:
+                    # Just created a root URL without downloading
+                    return {
+                        "status": "success",
+                        "message": "Root URL created successfully"
+                    }
+            result = fg_call_and_wait(create_root_url_and_optionally_start_download)
             
-            # Send success response with task ID
-            self._send_json_response(200, {
-                "status": "success", 
-                "message": "Download started",
-                "task_id": task_id
-            })
+            # Send success response
+            self._send_json_response(200, result)
 
         except Exception as e:
             self._print_error(f'Error handling download request: {str(e)}')

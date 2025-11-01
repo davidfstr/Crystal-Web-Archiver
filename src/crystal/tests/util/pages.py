@@ -18,7 +18,7 @@ See also:
 from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.tests.util.asserts import assertEqual
-from crystal.tests.util.xplaywright import Condition, CountToBeZeroCondition, HasClassCondition, expect, Locator, RawPage
+from crystal.tests.util.xplaywright import Condition, CountToBeZeroCondition, ContainsClassCondition, expect, Locator, RawPage
 
 
 # ------------------------------------------------------------------------------
@@ -44,29 +44,45 @@ class NotInArchivePage(AbstractPage):
         assert _ready, 'Did you mean to use NotInArchivePage.open() or .wait_for()?'
         super().__init__(raw_page)
     
-    # === URL Information ===
+    # === Action Type Radio Buttons ===
     
     @property
-    def download_url_button(self) -> Locator:
-        return self.raw_page.locator('#cr-download-url-button')
-    
-    # === Progress Bar ===
+    def create_root_url_radio(self) -> Locator:
+        return self.raw_page.locator('#cr-create-root-url-radio')
     
     @property
-    def progress_bar(self) -> Locator:
-        return self.raw_page.locator('#cr-download-progress-bar')
+    def create_group_radio(self) -> Locator:
+        return self.raw_page.locator('#cr-create-group-radio')
     
     @property
-    def progress_bar_message(self) -> str:
-        progress_bar_message = self.raw_page.locator('#cr-download-progress-bar__message')
-        progress_bar_message_str = progress_bar_message.text_content() or ''
-        return progress_bar_message_str
+    def download_only_radio(self) -> Locator:
+        return self.raw_page.locator('#cr-download-only-radio')
+    
+    # === Create Root URL Form ===
+    
+    @property
+    def create_root_url_form(self) -> Locator:
+        return self.raw_page.locator('#cr-create-root-url-form')
+    
+    @property
+    def create_root_url_form_enabled(self) -> Condition:
+        disabled_inputs = self.raw_page.locator('#cr-create-root-url-form input:disabled, #cr-create-root-url-form button:disabled')
+        return CountToBeZeroCondition(disabled_inputs)
+    
+    @property
+    def create_root_url_form_collapsed(self) -> Condition:
+        collapsible_content = self.raw_page.locator('#cr-create-root-url-form__collapsible-content')
+        return ContainsClassCondition(collapsible_content, 'slide-up')
+    
+    @property
+    def root_url_name_field(self) -> Locator:
+        return self.raw_page.locator('#cr-root-url-name')
+    
+    @property
+    def download_root_url_immediately_checkbox(self) -> Locator:
+        return self.raw_page.locator('#cr-download-root-url-immediately-checkbox')
     
     # === Create Group Form ===
-    
-    @property
-    def create_group_checkbox(self) -> Locator:
-        return self.raw_page.locator('#cr-create-group-checkbox')
     
     @property
     def create_group_form(self) -> Locator:
@@ -79,8 +95,8 @@ class NotInArchivePage(AbstractPage):
     
     @property
     def create_group_form_collapsed(self) -> Condition:
-        collapsible_content = self.raw_page.locator('#cr-create-group-form__collapsible-content')
-        return HasClassCondition(collapsible_content, 'slide-up')
+        collapsible_content = self.raw_page.locator('#cr-create-group-form')
+        return ContainsClassCondition(collapsible_content, 'slide-up')
     
     @property
     def url_pattern_field(self) -> Locator:
@@ -110,21 +126,46 @@ class NotInArchivePage(AbstractPage):
         self.wait_for_initial_preview_urls()
     
     @property
-    def download_immediately_checkbox(self) -> Locator:
-        return self.raw_page.locator('#cr-download-immediately-checkbox')
+    def download_group_immediately_checkbox(self) -> Locator:
+        return self.raw_page.locator('#cr-download-group-immediately-checkbox')
+    
+    # === Action Button ===
     
     @property
-    def cancel_group_button(self) -> Locator:
-        return self.raw_page.locator('#cr-cancel-group-button')
+    def action_button(self) -> Locator:
+        return self.raw_page.locator('#cr-action-button')
+    
+    @property
+    def download_url_button(self) -> Locator:
+        """Alias for action_button when used to download a URL."""
+        return self.action_button
+    
+    @property
+    def download_or_create_root_url_button(self) -> Locator:
+        """Alias for action_button when used in the create root URL form."""
+        return self.action_button
     
     @property
     def download_or_create_group_button(self) -> Locator:
-        return self.raw_page.locator('#cr-group-action-button')
+        """Alias for action_button when used in the create group form."""
+        return self.action_button
     
     @property
     def action_message(self) -> Locator:
         """The success/error message displayed in the form actions area."""
         return self.raw_page.locator('.cr-action-message')
+    
+    # === Progress Bar ===
+    
+    @property
+    def progress_bar(self) -> Locator:
+        return self.raw_page.locator('#cr-download-progress-bar')
+    
+    @property
+    def progress_bar_message(self) -> str:
+        progress_bar_message = self.raw_page.locator('#cr-download-progress-bar__message')
+        progress_bar_message_str = progress_bar_message.text_content() or ''
+        return progress_bar_message_str
 
 
 # ------------------------------------------------------------------------------
@@ -199,7 +240,7 @@ def network_down_after_delay(page: AbstractPage | RawPage) -> Iterator[None]:
         window.crOriginalFetch = window.fetch;
         window.fetch = function(url, options) {
             if (url && typeof url === 'string' && (
-                url.includes('/_/crystal/download-url') ||
+                url.includes('/_/crystal/create-url') ||
                 url.includes('/_/crystal/create-group') ||
                 url.includes('/_/crystal/preview-urls')
             )) {

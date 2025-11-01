@@ -743,23 +743,23 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     already_at_home=True)
                 
                 # Verify that DetectedRegularGroup from the navigation is correct
-                page.create_group_checkbox.check()
+                page.create_group_radio.click()
                 expect(page.url_pattern_field).to_have_value(comic_pattern)
                 expect(page.source_dropdown.locator('option:checked')).to_contain_text(home_url_in_archive_suffix)
                 page.wait_for_initial_preview_urls()
                 expect(page.preview_urls_container).to_contain_text('xkcd.com')
-                page.create_group_checkbox.uncheck()
+                page.create_root_url_radio.click()
                 
                 # Download home page URL and refresh page
                 if True:
                     # Click the download URL button (above the form)
-                    expect(page.download_url_button).to_be_enabled()
-                    expect(page.download_url_button).to_contain_text('⬇ Download')
-                    page.download_url_button.click()
+                    expect(page.action_button).to_be_enabled()
+                    expect(page.action_button).to_contain_text('⬇ Download')
+                    page.action_button.click()
                     
                     # Verify download button gets disabled and progress bar appears
-                    expect(page.download_url_button).to_be_disabled()
-                    expect(page.download_url_button).to_contain_text('⬇ Downloading...')
+                    expect(page.action_button).to_be_disabled()
+                    expect(page.action_button).to_contain_text('Creating & Starting Download...')
                     page.progress_bar.wait_for(state='visible')
                     
                     # Wait for the page to reload after download completes.
@@ -775,7 +775,7 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 page = NotInArchivePage.wait_for(raw_page)
                 
                 # Verify that DetectedSequentialGroup from the navigation is correct
-                page.create_group_checkbox.check()
+                page.create_group_radio.click()
                 expect(page.url_pattern_field).to_have_value(comic_pattern)
                 expect(page.source_dropdown.locator('option:checked')).to_contain_text(comic1_url_in_archive_suffix)
                 page.wait_for_initial_preview_urls()
@@ -783,7 +783,7 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 
                 # Download URL, start downloading group, and refresh page
                 if True:
-                    expect(page.download_immediately_checkbox).to_be_checked()
+                    expect(page.download_group_immediately_checkbox).to_be_checked()
                     
                     expect(page.download_or_create_group_button).to_contain_text('⬇ Download')
                     expect(page.download_or_create_group_button).to_be_enabled()

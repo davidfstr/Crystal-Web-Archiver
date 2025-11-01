@@ -382,6 +382,70 @@ def not_in_archive_html(
         }
         
         /* ------------------------------------------------------------------ */
+        /* Create Section */
+        
+        .cr-create-section {
+            margin-top: 20px;
+            padding: 16px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .cr-create-section {
+                background: #2d3748;
+                border-color: #4a5568;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Root URL Form */
+        
+        .cr-create-root-url-form {
+            border-top: 1px solid #e9ecef;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .cr-create-root-url-form {
+                border-color: #4a5568;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Create Group Form */
+        
+        .cr-create-group-form {
+            border-top: 1px solid #e9ecef;
+            padding-top: 16px;
+            padding-bottom: 16px;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .cr-create-group-form {
+                border-color: #4a5568;
+            }
+        }
+        
+        /* ------------------------------------------------------------------ */
+        /* Action Message */
+        
+        .cr-action-message {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .cr-action-message.success {
+            color: #28a745;
+        }
+        
+        .cr-action-message.error {
+            color: #dc3545;
+        }
+        
+        /* ------------------------------------------------------------------ */
         /* Download Progress Bar */
         
         .cr-download-progress-bar {
@@ -426,60 +490,10 @@ def not_in_archive_html(
         }
         
         /* ------------------------------------------------------------------ */
-        /* Create Group Section: Top */
+        /* Utility: Form Inputs */
         
-        .cr-create-group-section {
-            margin-top: 20px;
-            padding: 16px;
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-        }
-
         .cr-form-row {
             margin-bottom: 16px;
-        }
-        
-        /* Remove bottom margin from checkbox row when checkbox is unchecked
-         * the following #cr-create-group-form is hidden */
-        .cr-form-row:has(input#cr-create-group-checkbox:not(:checked)) {
-            margin-bottom: 0;
-        }
-        
-        .cr-checkbox {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        .cr-checkbox input[type="checkbox"] {
-            margin-right: 8px;
-            width: 16px;
-            height: 16px;
-        }
-        
-        .cr-checkbox:has(input[type="checkbox"]:disabled) {
-            cursor: not-allowed;
-        }
-        .cr-checkbox:has(input[type="checkbox"]:disabled) span {
-            opacity: 0.5;
-        }
-        
-        @media (prefers-color-scheme: dark) {
-            .cr-create-group-section {
-                background: #2d3748;
-                border-color: #4a5568;
-            }
-        }
-        
-        /* ------------------------------------------------------------------ */
-        /* Create Group Section: Form */
-        
-        .cr-create-group-form {
-            border-top: 1px solid #e9ecef;
-            padding-top: 16px;
         }
         
         .cr-form-row__label {
@@ -516,33 +530,47 @@ def not_in_archive_html(
             margin-top: 4px;
         }
         
-        @media (prefers-color-scheme: dark) {
-            .cr-create-group-form {
-                border-color: #4a5568;
-            }
-            
-            .cr-form-row__label {
-                color: #e2e8f0;
-            }
-            
-            .cr-form-row__input {
-                background: #4a5568;
-                border-color: #555;
-                color: #e0e0e0;
-            }
-            
-            .cr-form-row__input:focus {
-                border-color: #6BB6FF;
-                box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
-            }
-            
-            .cr-form-row__help-text {
-                color: #a0aec0;
-            }
+        .cr-checkbox {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
         }
         
-        /* ------------------------------------------------------------------ */
-        /* Create Group Section: Form: Preview Members */
+        .cr-checkbox input[type="checkbox"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+        }
+        
+        .cr-checkbox:has(input[type="checkbox"]:disabled) {
+            cursor: not-allowed;
+        }
+        .cr-checkbox:has(input[type="checkbox"]:disabled) span {
+            opacity: 0.5;
+        }
+        
+        .cr-radio {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .cr-radio input[type="radio"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+        }
+        
+        .cr-radio:has(input[type="radio"]:disabled) {
+            cursor: not-allowed;
+        }
+        .cr-radio:has(input[type="radio"]:disabled) span {
+            opacity: 0.5;
+        }
         
         .cr-form__section {
             margin-top: 16px;
@@ -599,6 +627,25 @@ def not_in_archive_html(
                 color: #a0aec0;
             }
             
+            .cr-form-row__label {
+                color: #e2e8f0;
+            }
+            
+            .cr-form-row__input {
+                background: #4a5568;
+                border-color: #555;
+                color: #e0e0e0;
+            }
+            
+            .cr-form-row__input:focus {
+                border-color: #6BB6FF;
+                box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
+            }
+            
+            .cr-form-row__help-text {
+                color: #a0aec0;
+            }
+            
             .cr-list-ctrl {
                 background: #2d3748;
                 border-color: #555;
@@ -611,35 +658,7 @@ def not_in_archive_html(
         }
         
         /* ------------------------------------------------------------------ */
-        /* Create Group Section: Form: Action Buttons */
-        
-        .cr-create-group-form__actions {
-            margin-top: 16px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            transition: margin-top 0.6s ease-out;
-        }
-        /* Remove top margin from form actions when collapsible content is collapsed */
-        .slide-up + .cr-create-group-form__actions {
-            margin-top: 0;
-        }
-        
-        .cr-action-message {
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        .cr-action-message.success {
-            color: #28a745;
-        }
-        
-        .cr-action-message.error {
-            color: #dc3545;
-        }
-        
-        /* ------------------------------------------------------------------ */
-        /* Animations */
+        /* Utility: Animations */
         
         @keyframes slideDown {
             from {
@@ -658,10 +677,16 @@ def not_in_archive_html(
             from {
                 opacity: 1;
                 max-height: 1000px;
+                margin-bottom: 16px;
+                padding-top: 16px;
+                padding-bottom: 16px;
             }
             to {
                 opacity: 0;
                 max-height: 0;
+                margin-bottom: 0;
+                padding-top: 0;
+                padding-bottom: 0px;
                 overflow: hidden;
             }
         }
@@ -693,77 +718,99 @@ def not_in_archive_html(
             '<div class="cr-readonly-warning">⚠️ This project is opened in read-only mode. No new pages can be downloaded.</div>' 
             if readonly else ''
         }
-        
-        <div class="cr-page__actions">
-            <button onclick="history.back()" class="cr-button cr-button--secondary">
-                ← Go Back
-            </button>
-            <button id="cr-download-url-button" {'disabled ' if readonly else ''}onclick="onDownloadUrlButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
-        </div>
         """
     ).strip()
     
     content_bottom_html = dedent(
         f"""
-        <div id="cr-download-progress-bar" class="cr-download-progress-bar">
-            <div class="cr-download-progress-bar__outline">
-                <div id="cr-download-progress-bar__fill" class="cr-download-progress-bar__fill"></div>
-            </div>
-            <div id="cr-download-progress-bar__message" class="cr-download-progress-bar__message">Preparing download...</div>
-        </div>
-        
-        <div class="cr-create-group-section">
+        <div class="cr-create-section">
             <div class="cr-form-row">
-                <label class="cr-checkbox">
-                    <input type="checkbox" id="cr-create-group-checkbox" {'disabled ' if readonly else ''}onchange="onCreateGroupCheckboxClicked()">
+                <label class="cr-radio">
+                    <input type="radio" name="cr-action-type" id="cr-create-root-url-radio" value="create-root-url" {'disabled ' if readonly else ''}onchange="onActionTypeChanged()" checked>
+                    <span>Create Root URL</span>
+                </label>
+            </div>
+            
+            <div class="cr-form-row">
+                <label class="cr-radio">
+                    <input type="radio" name="cr-action-type" id="cr-create-group-radio" value="create-group" {'disabled ' if readonly else ''}onchange="onActionTypeChanged()">
                     <span>Create Group for Similar Pages</span>
                 </label>
             </div>
             
+            <div class="cr-form-row">
+                <label class="cr-radio">
+                    <input type="radio" name="cr-action-type" id="cr-download-only-radio" value="download-only" {'disabled ' if readonly else ''}onchange="onActionTypeChanged()">
+                    <span>Download Only</span>
+                </label>
+            </div>
+            
+            <div id="cr-create-root-url-form" class="cr-create-root-url-form">
+                <div class="cr-form-row">
+                    <label class="cr-form-row__label">Name:</label>
+                    <input type="text" id="cr-root-url-name" class="cr-form-row__input" placeholder="e.g. Home">
+                </div>
+                
+                <div class="cr-form__section">
+                    <div class="cr-form__section-header">New URL Options</div>
+                    <label class="cr-checkbox">
+                        <input type="checkbox" id="cr-download-root-url-immediately-checkbox" checked onchange="onDownloadImmediatelyCheckboxChange()">
+                        <span>Download URL Immediately</span>
+                    </label>
+                </div>
+            </div>
+            
             <div id="cr-create-group-form" class="cr-create-group-form" style="display: none;">
-                <div id="cr-create-group-form__collapsible-content">
-                    <div class="cr-form-row">
-                        <label class="cr-form-row__label">URL Pattern:</label>
-                        <div class="cr-form-input-container">
-                            <input type="text" id="cr-group-url-pattern" class="cr-form-row__input" placeholder="https://example.com/post/*" value="{html_escape(create_group_form_data['predicted_url_pattern'])}">
-                            <div class="cr-form-row__help-text"># = numbers, @ = letters, * = anything but /, ** = anything</div>
-                        </div>
-                    </div>
-                    
-                    <div class="cr-form-row">
-                        <label class="cr-form-row__label">Source:</label>
-                        <select id="cr-group-source" class="cr-form-row__input">
-                            <!-- Source options will be populated by JavaScript -->
-                        </select>
-                    </div>
-                    
-                    <div class="cr-form-row">
-                        <label class="cr-form-row__label">Name:</label>
-                        <input type="text" id="cr-group-name" class="cr-form-row__input" placeholder="e.g. Post" value="{html_escape(create_group_form_data['predicted_name'])}">
-                    </div>
-                    
-                    <div class="cr-form__section">
-                        <div class="cr-form__section-header">Preview Members</div>
-                        <div class="cr-form__static-text">Known matching URLs:</div>
-                        <div id="cr-preview-urls" class="cr-list-ctrl">
-                            <!-- URLs will be populated by JavaScript -->
-                        </div>
-                    </div>
-                    
-                    <div class="cr-form__section">
-                        <div class="cr-form__section-header">New Group Options</div>
-                        <label class="cr-checkbox">
-                            <input type="checkbox" id="cr-download-immediately-checkbox" checked onchange="updateDownloadOrCreateGroupButtonTitleAndStyle()">
-                            <span>Download Group Immediately</span>
-                        </label>
+                <div class="cr-form-row">
+                    <label class="cr-form-row__label">URL Pattern:</label>
+                    <div class="cr-form-input-container">
+                        <input type="text" id="cr-group-url-pattern" class="cr-form-row__input" placeholder="https://example.com/post/*" value="{html_escape(create_group_form_data['predicted_url_pattern'])}">
+                        <div class="cr-form-row__help-text"># = numbers, @ = letters, * = anything but /, ** = anything</div>
                     </div>
                 </div>
                 
-                <div class="cr-create-group-form__actions">
-                    <button id="cr-cancel-group-button" class="cr-button cr-button--secondary" onclick="onCancelCreateGroupButtonClicked()">Cancel</button>
-                    <button id="cr-group-action-button" class="cr-button cr-button--primary" onclick="onDownloadOrCreateGroupButtonClicked()">⬇ Download</button>
-                    <span id="cr-group-action-message" class="cr-action-message"></span>
+                <div class="cr-form-row">
+                    <label class="cr-form-row__label">Source:</label>
+                    <select id="cr-group-source" class="cr-form-row__input">
+                        <!-- Source options will be populated by JavaScript -->
+                    </select>
                 </div>
+                
+                <div class="cr-form-row">
+                    <label class="cr-form-row__label">Name:</label>
+                    <input type="text" id="cr-group-name" class="cr-form-row__input" placeholder="e.g. Post" value="{html_escape(create_group_form_data['predicted_name'])}">
+                </div>
+                
+                <div class="cr-form__section">
+                    <div class="cr-form__section-header">Preview Members</div>
+                    <div class="cr-form__static-text">Known matching URLs:</div>
+                    <div id="cr-preview-urls" class="cr-list-ctrl">
+                        <!-- URLs will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div class="cr-form__section">
+                    <div class="cr-form__section-header">New Group Options</div>
+                    <label class="cr-checkbox">
+                        <input type="checkbox" id="cr-download-group-immediately-checkbox" checked onchange="onDownloadImmediatelyCheckboxChange()">
+                        <span>Download Group Immediately</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="cr-page__actions">
+                <button onclick="history.back()" class="cr-button cr-button--secondary">
+                    ← Go Back
+                </button>
+                <button id="cr-action-button" {'disabled ' if readonly else ''}onclick="onActionButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
+                <span id="cr-action-message" class="cr-action-message"></span>
+            </div>
+            
+            <div id="cr-download-progress-bar" class="cr-download-progress-bar">
+                <div class="cr-download-progress-bar__outline">
+                    <div id="cr-download-progress-bar__fill" class="cr-download-progress-bar__fill"></div>
+                </div>
+                <div id="cr-download-progress-bar__message" class="cr-download-progress-bar__message">Preparing download...</div>
             </div>
         </div>
         """
@@ -778,202 +825,115 @@ def not_in_archive_html(
             };
             
             // -----------------------------------------------------------------
-            // Download URL Button
+            // Create Form: Action Type Radio Buttons
             
-            // Used to receive download progress updates
-            let eventSource = null;
-            
-            async function onDownloadUrlButtonClicked() {
-                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
-                const groupShouldBeCreated = (
-                    createGroupCheckbox.checked &&
-                    isFormEnabled()  // form action not already performed
-                );
-                if (groupShouldBeCreated) {
-                    const downloadImmediatelyCheckbox = document.getElementById('cr-download-immediately-checkbox');
-                    if (downloadImmediatelyCheckbox.checked) {
-                        // Press "Download" button in the group form
-                        await onDownloadOrCreateGroupButtonClicked();
-                        return;
-                    } else {
-                        // Press "Create" button in the group form,
-                        // then download the individual URL if successful
-                        await onDownloadOrCreateGroupButtonClicked(
-                            /*downloadUrlImmediately=*/true);
-                        return;
-                    }
-                } else {
-                    const groupWasCreated = createGroupCheckbox.checked;
-                    const rootUrlShouldBeCreated = !groupWasCreated;
-                    await startUrlDownload(/*isRoot=*/rootUrlShouldBeCreated);
-                }
+            function onActionTypeChanged() {
+                updateWhichFormVisible();
+                updateActionButtonTitleAndStyle();
             }
             
-            async function startUrlDownload(isRoot) {
-                const downloadButton = document.getElementById('cr-download-url-button');
-                const progressDiv = document.getElementById('cr-download-progress-bar');
-                const progressFill = document.getElementById('cr-download-progress-bar__fill');
-                const progressText = document.getElementById('cr-download-progress-bar__message');
+            // Shows/hides the appropriate form based on selected action type
+            function updateWhichFormVisible() {
+                const actionType = document.querySelector('input[name="cr-action-type"]:checked').value;
+                const createRootUrlForm = document.getElementById('cr-create-root-url-form');
+                const createGroupForm = document.getElementById('cr-create-group-form');
+                const actionButton = document.getElementById('cr-action-button');
                 
-                // Disable the download button
-                downloadButton.disabled = true;
-                downloadButton.textContent = '⬇ Downloading...';
-                
-                // Show progress with animation
-                progressDiv.style.display = 'block';
-                // Force a reflow to ensure display: block is applied before adding the animation class
-                progressDiv.offsetHeight;
-                progressDiv.classList.add('show');
-                progressFill.style.width = '0%%';
-                progressText.textContent = 'Starting download...';
-                
-                try {
-                    // Start the download
-                    const downloadUrl = '/_/crystal/download-url';
-                    const response = await fetch(downloadUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            url: %(archive_url_json)s,
-                            is_root: isRoot,
-                        })
-                    });
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to start download');
-                    }
-                    
-                    const result = await response.json();
-                    const taskId = result.task_id;
-                    
-                    // Listen for download progress updates
-                    const progressUrl = `/_/crystal/download-progress?task_id=${encodeURIComponent(taskId)}`;
-                    eventSource = new EventSource(progressUrl);
-                    
-                    eventSource.onmessage = function(event) {
-                        const data = JSON.parse(event.data);
-                        
-                        if (data.error) {
-                            // Update progress with error
-                            progressFill.style.width = '0%%';
-                            progressText.textContent = `Error: ${data.error}`;
-                            
-                            eventSource.close();
-                            
-                            // Enable the download button
-                            downloadButton.disabled = false;
-                            downloadButton.textContent = '⬇ Download';
-                            
-                            return;
-                        }
-                        
-                        if (data.status === 'complete') {
-                            // Update progress with success
-                            progressFill.style.width = '100%%';
-                            progressText.textContent = 'Download completed! Reloading page...';
-                            
-                            eventSource.close();
-                            
-                            // Reload the page ASAP
-                            window.crReload();
-                        } else if (data.status === 'in_progress') {
-                            progressFill.style.width = `${data.progress}%%`;
-                            progressText.textContent = data.message;
-                        } else {
-                            console.warn(`Unknown download status: ${data.status}`);
-                        }
-                    };
-                    
-                    eventSource.onerror = function(event) {
-                        // Update progress with error
-                        progressFill.style.width = '0%%';
-                        progressText.textContent = 'Download failed.';
-                        
-                        eventSource.close();
-                        
-                        // Enable the download button
-                        downloadButton.disabled = false;
-                        downloadButton.textContent = '⬇ Download';
-                    };
-                } catch (error) {
-                    console.error('Download error:', error);
-                    
-                    // Update progress with error
-                    progressFill.style.width = '0%%';
-                    progressText.textContent = `Download failed: ${error.message}`;
-                    
-                    if (eventSource) {
-                        eventSource.close();
-                    }
-                    
-                    // Enable the download button
-                    downloadButton.disabled = false;
-                    downloadButton.textContent = '⬇ Download';
-                }
-            }
-            
-            // Close event source when page unloads
-            window.addEventListener('beforeunload', function() {
-                if (eventSource) {
-                    eventSource.close();
-                }
-            });
-            
-            // -----------------------------------------------------------------
-            // Create Group Form: Show/Hide
-            
-            const createGroupFormData = %(create_group_form_data_json)s;
-            
-            function onCreateGroupCheckboxClicked() {
-                // (Browser already toggled the checked state of the checkbox)
-                updateCreateGroupFormVisible();
-            }
-            
-            // Shows the Create Group Form iff the Create Group checkbox is ticked.
-            function updateCreateGroupFormVisible() {
-                const checkbox = document.getElementById('cr-create-group-checkbox');
-                const form = document.getElementById('cr-create-group-form');
-                
-                if (checkbox.checked) {
-                    form.style.display = 'block';
+                if (actionType === 'create-root-url') {
+                    createRootUrlForm.style.display = 'block';
+                    createGroupForm.style.display = 'none';
+                } else if (actionType === 'create-group') {
+                    createRootUrlForm.style.display = 'none';
+                    createGroupForm.style.display = 'block';
                     populateSourceDropdown();
                     updatePreviewUrls();
-                    updateDownloadOrCreateGroupButtonTitleAndStyle();
-                } else {
-                    form.style.display = 'none';
+                } else if (actionType === 'download-only') {
+                    createRootUrlForm.style.display = 'none';
+                    // Skip hiding the form if it's currently animating with slide-up,
+                    // since the animation will handle the hiding
+                    if (!createGroupForm.classList.contains('slide-up')) {
+                        createGroupForm.style.display = 'none';
+                    }
                 }
             }
             
-            // Collapses the Create Group Form after a Create actions succeeded,
+            // Collapses the Create Root URL Form after a Create action succeeded,
+            // leaving the success message visible.
+            function collapseCreateRootUrlForm() {
+                const createRootUrlForm = document.getElementById('cr-create-root-url-form');
+                createRootUrlForm.classList.add('slide-up');
+                
+                // Switch to Download Only radio button
+                document.getElementById('cr-download-only-radio').checked = true;
+                onActionTypeChanged();
+            }
+            
+            // Collapses the Create Group Form after a Create action succeeded,
             // leaving the success message visible.
             function collapseCreateGroupForm() {
-                const collapsibleContent = document.getElementById('cr-create-group-form__collapsible-content');
-                collapsibleContent.classList.add('slide-up');
+                const createGroupForm = document.getElementById('cr-create-group-form');
+                createGroupForm.classList.add('slide-up');
+                
+                // Switch to Download Only radio button
+                document.getElementById('cr-download-only-radio').checked = true;
+                onActionTypeChanged();
             }
+            
+            function updateActionTypeRadioButtonsEnabled() {
+                document.getElementById('cr-create-root-url-radio').disabled = actionInProgress || createRootUrlActionSuccess;
+                document.getElementById('cr-create-group-radio').disabled = actionInProgress || createGroupActionSuccess;
+                document.getElementById('cr-download-only-radio').disabled = actionInProgress;
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Root URL Form: Fields
+            
+            // Respond to Enter keys
+            document.addEventListener('DOMContentLoaded', function() {
+                const nameInput = document.getElementById('cr-root-url-name');
+                nameInput.addEventListener('keydown', handleRootUrlFormKeydown);
+            });
+            
+            function handleRootUrlFormKeydown(event) {
+                if (event.key === 'Enter') {
+                    // Trigger the action button
+                    onActionButtonClicked();
+                    
+                    event.preventDefault();
+                }
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Root URL Form: Enabled State
+            
+            function updateRootUrlFormInputsEnabled() {
+                const inputs = document.querySelectorAll('#cr-create-root-url-form input, #cr-create-root-url-form button');
+                inputs.forEach(input => {
+                    input.disabled = actionInProgress;
+                });
+            }
+            
+            // -----------------------------------------------------------------
+            // Create Group Form
+            
+            const createGroupFormData = %(create_group_form_data_json)s;
             
             // -----------------------------------------------------------------
             // Create Group Form: Fields
             
-            // Respond to Enter/Escape keys
+            // Respond to Enter keys
             document.addEventListener('DOMContentLoaded', function() {
                 const urlPatternInput = document.getElementById('cr-group-url-pattern');
-                urlPatternInput.addEventListener('keydown', handleFormKeydown);
+                urlPatternInput.addEventListener('keydown', handleGroupFormKeydown);
                 
                 const nameInput = document.getElementById('cr-group-name');
-                nameInput.addEventListener('keydown', handleFormKeydown);
+                nameInput.addEventListener('keydown', handleGroupFormKeydown);
             });
             
-            function handleFormKeydown(event) {
+            function handleGroupFormKeydown(event) {
                 if (event.key === 'Enter') {
                     // Trigger the primary button, which is always a Download button
-                    onDownloadUrlButtonClicked();
-                    
-                    event.preventDefault();
-                } else if (event.key === 'Escape') {
-                    // Trigger the cancel button
-                    onCancelCreateGroupButtonClicked();
+                    onActionButtonClicked();
                     
                     event.preventDefault();
                 }
@@ -1085,43 +1045,99 @@ def not_in_archive_html(
             }
             
             // -----------------------------------------------------------------
-            // Create Group Form: Cancel Button
+            // Create Group Form: Enabled State
             
-            function onCancelCreateGroupButtonClicked() {
-                const checkbox = document.getElementById('cr-create-group-checkbox');
-                checkbox.checked = false;
-                updateCreateGroupFormVisible();
+            function updateGroupFormInputsEnabled() {
+                const inputs = document.querySelectorAll('#cr-create-group-form input, #cr-create-group-form select, #cr-create-group-form button');
+                inputs.forEach(input => {
+                    input.disabled = actionInProgress;
+                });
             }
             
             // -----------------------------------------------------------------
-            // Create Group Form: Download/Create Group Button
+            // Action Button
             
-            // Initialize Download/Create button on page load
-            document.addEventListener('DOMContentLoaded', function() {
-                updateDownloadOrCreateGroupButtonTitleAndStyle();
-            });
-            
-            // Updates the Download/Create button at the bottom of the
-            // Create Group Form to display the appropriate title,
-            // depending on whether the Download Immediately checkbox is ticked.
-            function updateDownloadOrCreateGroupButtonTitleAndStyle() {
-                const downloadImmediatelyCheckbox = document.getElementById('cr-download-immediately-checkbox');
-                const actionButton = document.getElementById('cr-group-action-button');
+            async function onActionButtonClicked() {
+                const actionType = document.querySelector('input[name="cr-action-type"]:checked').value;
                 
-                if (downloadImmediatelyCheckbox && downloadImmediatelyCheckbox.checked) {
-                    actionButton.textContent = '⬇ Download';
-                    actionButton.className = 'cr-button cr-button--primary';
-                } else {
-                    actionButton.textContent = '✚ Create';
-                    actionButton.className = 'cr-button cr-button--secondary';
+                if (actionType === 'create-root-url') {
+                    // Press "Download" or "Create" button in the root form
+                    await onDownloadOrCreateRootUrlButtonClicked();
+                } else if (actionType === 'create-group') {
+                    // Press "Download" or "Create" button in the group form
+                    await onDownloadOrCreateGroupButtonClicked();
+                } else if (actionType === 'download-only') {
+                    await startUrlDownload(/*isRoot=*/false);
                 }
             }
             
-            async function onDownloadOrCreateGroupButtonClicked(downloadUrlImmediately/*=false*/) {
+            // -----------------------------------------------------------------
+            // Action Button: Download/Create Root URL
+            
+            async function onDownloadOrCreateRootUrlButtonClicked() {
+                const name = document.getElementById('cr-root-url-name').value.trim();
+                const downloadRootImmediately = document.getElementById('cr-download-root-url-immediately-checkbox').checked;
+                
+                clearActionMessage();
+                setActionInProgress(true);
+                
+                try {
+                    // If download was requested, start individual URL download
+                    // (which will create the root URL automatically)
+                    // Otherwise create the root URL without downloading
+                    if (downloadRootImmediately) {
+                        await startUrlDownload(/*isRoot=*/true, /*rootName=*/name);
+                    } else {
+                        // Create root URL without downloading
+                        const createUrl = '/_/crystal/create-url';
+                        const response = await fetch(createUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                url: %(archive_url_json)s,
+                                is_root: true,
+                                name: name,
+                                download_immediately: false,
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || 'Failed to create root URL');
+                        }
+                        
+                        // Disable only Create Root URL radio button
+                        setCreateRootUrlActionSuccess(true);
+                        
+                        showActionMessage('✅ Root URL created successfully!', /*isSuccess=*/true);
+                        
+                        collapseCreateRootUrlForm();
+                    }
+                } catch (error) {
+                    console.error('Root action error:', error);
+                    showActionMessage('✖️ Failed to create root URL', /*isSuccess=*/false);
+                } finally {
+                    setActionInProgress(false);
+                }
+            }
+            
+            let createRootUrlActionSuccess = false;
+            
+            function setCreateRootUrlActionSuccess(success) {
+                createRootUrlActionSuccess = success;
+                updateActionTypeRadioButtonsEnabled();
+            }
+            
+            // -----------------------------------------------------------------
+            // Action Button: Download/Create Group
+            
+            async function onDownloadOrCreateGroupButtonClicked() {
                 const urlPattern = document.getElementById('cr-group-url-pattern').value.trim();
                 const sourceValue = document.getElementById('cr-group-source').value;
                 const name = document.getElementById('cr-group-name').value.trim();
-                const downloadGroupImmediately = document.getElementById('cr-download-immediately-checkbox').checked;
+                const downloadGroupImmediately = document.getElementById('cr-download-group-immediately-checkbox').checked;
                 
                 if (!urlPattern) {
                     showActionMessage('✖️ Please enter a URL pattern.', /*isSuccess=*/false);
@@ -1129,11 +1145,7 @@ def not_in_archive_html(
                 }
                 
                 clearActionMessage();
-                setFormEnabled(false);
-                
-                const actionButton = document.getElementById('cr-group-action-button');
-                const originalText = actionButton.textContent;
-                actionButton.textContent = downloadGroupImmediately ? 'Creating & Starting Download...' : 'Creating...';
+                setActionInProgress(true);
                 
                 try {
                     const createUrl = '/_/crystal/create-group';
@@ -1156,55 +1168,247 @@ def not_in_archive_html(
                     }
                     
                     const result = await response.json();
+                    
+                    // Disable only Create Group radio button
+                    setCreateGroupActionSuccess(true);
+                    
                     showActionMessage('✅ Group created successfully!', /*isSuccess=*/true);
                     
                     // If download was requested, start individual URL download
                     // otherwise collapse the disabled form to show only essential elements
-                    if (downloadGroupImmediately || downloadUrlImmediately) {
-                        await startUrlDownload(/*isRoot=*/false);
+                    if (downloadGroupImmediately) {
+                        await startUrlDownload(/*isRoot=*/false, /*rootName=*/'');
                     } else {
                         collapseCreateGroupForm();
                     }
                 } catch (error) {
                     console.error('Group action error:', error);
                     showActionMessage('✖️ Failed to create group', /*isSuccess=*/false);
-                    setFormEnabled(true);
                 } finally {
-                    actionButton.textContent = originalText;
+                    setActionInProgress(false);
                 }
             }
             
+            let createGroupActionSuccess = false;
+            
+            function setCreateGroupActionSuccess(success) {
+                createGroupActionSuccess = success;
+                updateActionTypeRadioButtonsEnabled();
+            }
+            
             // -----------------------------------------------------------------
-            // Create Group Form: Action Message
+            // Action Button: Download Only
+            
+            // Used to receive download progress updates
+            let eventSource = null;
+            
+            async function startUrlDownload(isRoot, rootName/*=''*/) {
+                const actionButton = document.getElementById('cr-action-button');
+                const progressDiv = document.getElementById('cr-download-progress-bar');
+                const progressFill = document.getElementById('cr-download-progress-bar__fill');
+                const progressText = document.getElementById('cr-download-progress-bar__message');
+                
+                // Disable the action button
+                setActionInProgress(true);
+                
+                // Show progress with animation
+                progressDiv.style.display = 'block';
+                // Force a reflow to ensure display: block is applied before adding the animation class
+                progressDiv.offsetHeight;
+                progressDiv.classList.add('show');
+                progressFill.style.width = '0%%';
+                progressText.textContent = 'Starting download...';
+                
+                try {
+                    // Start the download
+                    const createUrl = '/_/crystal/create-url';
+                    const requestBody = {
+                        url: %(archive_url_json)s,
+                        is_root: isRoot,
+                        download_immediately: true,
+                    };
+                    if (rootName !== undefined && rootName !== '') {
+                        requestBody.name = rootName;
+                    }
+                    const response = await fetch(createUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to start download');
+                    }
+                    
+                    const result = await response.json();
+                    const taskId = result.task_id;
+                    
+                    // Listen for download progress updates
+                    const progressUrl = `/_/crystal/download-progress?task_id=${encodeURIComponent(taskId)}`;
+                    eventSource = new EventSource(progressUrl);
+                    
+                    eventSource.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.error) {
+                            // Update progress with error
+                            progressFill.style.width = '0%%';
+                            progressText.textContent = `Error: ${data.error}`;
+                            
+                            eventSource.close();
+                            
+                            // Enable the action button
+                            setActionInProgress(false);
+                            
+                            return;
+                        }
+                        
+                        if (data.status === 'complete') {
+                            // Update progress with success
+                            progressFill.style.width = '100%%';
+                            progressText.textContent = 'Download completed! Reloading page...';
+                            
+                            eventSource.close();
+                            
+                            // Reload the page ASAP
+                            window.crReload();
+                        } else if (data.status === 'in_progress') {
+                            progressFill.style.width = `${data.progress}%%`;
+                            progressText.textContent = data.message;
+                        } else {
+                            console.warn(`Unknown download status: ${data.status}`);
+                        }
+                    };
+                    
+                    eventSource.onerror = function(event) {
+                        // Update progress with error
+                        progressFill.style.width = '0%%';
+                        progressText.textContent = 'Download failed.';
+                        
+                        eventSource.close();
+                        
+                        // Enable the action button
+                        setActionInProgress(false);
+                    };
+                } catch (error) {
+                    console.error('Download error:', error);
+                    
+                    // Update progress with error
+                    progressFill.style.width = '0%%';
+                    progressText.textContent = `Download failed: ${error.message}`;
+                    
+                    if (eventSource) {
+                        eventSource.close();
+                    }
+                    
+                    // Enable the action button
+                    setActionInProgress(false);
+                }
+            }
+            
+            // Close event source when page unloads
+            window.addEventListener('beforeunload', function() {
+                if (eventSource) {
+                    eventSource.close();
+                }
+            });
+            
+            // -----------------------------------------------------------------
+            // Action Button: State
+            
+            // Initialize action button on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                updateActionButtonEnabled();
+                updateActionButtonTitleAndStyle();
+            });
+            
+            function updateActionButtonEnabled() {
+                const actionButton = document.getElementById('cr-action-button');
+                actionButton.disabled = actionInProgress;
+            }
+            
+            function updateActionButtonTitleAndStyle() {
+                const actionType = document.querySelector('input[name="cr-action-type"]:checked').value;
+                const actionButton = document.getElementById('cr-action-button');
+                if (actionType === 'create-root-url') {
+                    const downloadImmediatelyCheckbox = document.getElementById('cr-download-root-url-immediately-checkbox');
+                    if (!actionInProgress) {
+                        if (downloadImmediatelyCheckbox.checked) {
+                            actionButton.textContent = '⬇ Download';
+                            actionButton.className = 'cr-button cr-button--primary';
+                        } else {
+                            actionButton.textContent = '✚ Create';
+                            actionButton.className = 'cr-button cr-button--secondary';
+                        }
+                    } else {
+                        if (downloadImmediatelyCheckbox.checked) {
+                            actionButton.textContent = 'Creating & Starting Download...';
+                            actionButton.className = 'cr-button cr-button--primary';
+                        } else {
+                            actionButton.textContent = 'Creating...';
+                            actionButton.className = 'cr-button cr-button--secondary';
+                        }
+                    }
+                } else if (actionType === 'create-group') {
+                    const downloadImmediatelyCheckbox = document.getElementById('cr-download-group-immediately-checkbox');
+                    if (!actionInProgress) {
+                        if (downloadImmediatelyCheckbox.checked) {
+                            actionButton.textContent = '⬇ Download';
+                            actionButton.className = 'cr-button cr-button--primary';
+                        } else {
+                            actionButton.textContent = '✚ Create';
+                            actionButton.className = 'cr-button cr-button--secondary';
+                        }
+                    } else {
+                        if (downloadImmediatelyCheckbox.checked) {
+                            actionButton.textContent = 'Creating & Starting Download...';
+                            actionButton.className = 'cr-button cr-button--primary';
+                        } else {
+                            actionButton.textContent = 'Creating...';
+                            actionButton.className = 'cr-button cr-button--secondary';
+                        }
+                    }
+                } else if (actionType === 'download-only') {
+                    if (!actionInProgress) {
+                        actionButton.textContent = '⬇ Download';
+                    } else {
+                        actionButton.textContent = '⬇ Downloading...';
+                    }
+                    actionButton.className = 'cr-button cr-button--primary';
+                }
+            }
+            
+            let actionInProgress = false;
+            
+            function setActionInProgress(inProgress) {
+                actionInProgress = inProgress;
+                
+                updateActionTypeRadioButtonsEnabled();
+                updateRootUrlFormInputsEnabled();
+                updateGroupFormInputsEnabled();
+                updateActionButtonEnabled();
+                updateActionButtonTitleAndStyle();
+            }
+            
+            function onDownloadImmediatelyCheckboxChange() {
+                updateActionButtonTitleAndStyle();
+            }
+            
+            // -----------------------------------------------------------------
+            // Action Message
             
             function showActionMessage(message, isSuccess) {
-                const messageElement = document.getElementById('cr-group-action-message');
+                const messageElement = document.getElementById('cr-action-message');
                 messageElement.textContent = message;
                 messageElement.className = `cr-action-message ${isSuccess ? 'success' : 'error'}`;
             }
             
             function clearActionMessage() {
-                const messageElement = document.getElementById('cr-group-action-message');
+                const messageElement = document.getElementById('cr-action-message');
                 messageElement.textContent = '';
                 messageElement.className = 'cr-action-message';
-            }
-            
-            // -----------------------------------------------------------------
-            // Create Group Form: Enabled State
-            
-            function setFormEnabled(enabled) {
-                const inputs = document.querySelectorAll('#cr-create-group-form input, #cr-create-group-form select, #cr-create-group-form button');
-                inputs.forEach(input => {
-                    input.disabled = !enabled;
-                });
-                
-                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
-                createGroupCheckbox.disabled = !enabled;
-            }
-            
-            function isFormEnabled() {
-                const createGroupCheckbox = document.getElementById('cr-create-group-checkbox');
-                return !createGroupCheckbox.disabled;
             }
             
             // -----------------------------------------------------------------
@@ -1667,10 +1871,7 @@ _BASE_PAGE_STYLE_TEMPLATE = dedent(
     }
     
     .cr-page__actions {
-        margin: 30px 0;
-    }
-    .cr-page__actions:last-child {
-        margin-bottom: 0;
+        margin: 0 0;
     }
     
     .cr-button {
