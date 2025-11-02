@@ -5,7 +5,10 @@ from crystal.ui.branding import (
 )
 from crystal.ui.clickable_text import ClickableText
 from crystal.util.wx_bind import bind
-from crystal.util.wx_dialog import ShowWindowModal, position_dialog_initially, set_dialog_or_frame_icon_if_appropriate
+from crystal.util.wx_dialog import (
+    ShowModal, ShowWindowModal, position_dialog_initially, 
+    set_dialog_or_frame_icon_if_appropriate,
+)
 from crystal.util.wx_system_appearance import IsDarkNow, SetDark
 import wx
 
@@ -19,7 +22,7 @@ class AboutDialog:
     including the program icon, name, version, and authors.
     """
     
-    def __init__(self, parent: wx.Window) -> None:
+    def __init__(self, parent: wx.Window | None) -> None:
         dialog = self.dialog = wx.Dialog(
             parent,
             title=f'About {APP_NAME}',
@@ -149,7 +152,10 @@ class AboutDialog:
         
         position_dialog_initially(dialog)
         dialog.Fit()
-        ShowWindowModal(dialog, modal_fallback=True)
+        if parent is not None:
+            ShowWindowModal(dialog, modal_fallback=True)
+        else:
+            ShowModal(dialog)
     
     @staticmethod
     def _copyright_text() -> str:
@@ -182,9 +188,11 @@ class AboutDialog:
     def _on_button(self, event: wx.CommandEvent) -> None:
         btn_id = event.GetEventObject().GetId()
         if btn_id == wx.ID_OK:
-            self.dialog.Destroy()
+            self.dialog.Close()
     
     def _on_close(self, event: wx.CloseEvent) -> None:
+        if self.dialog.Parent is None:
+            self.dialog.EndModal(wx.OK)
         self.dialog.Destroy()
     
     def _on_char_hook(self, event: wx.KeyEvent) -> None:

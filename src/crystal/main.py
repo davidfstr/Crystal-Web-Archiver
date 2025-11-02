@@ -850,109 +850,130 @@ async def _prompt_for_project(
     Raises:
     * SystemExit -- if the user quits rather than providing a project
     """
+    from crystal.browser import MainWindow
     from crystal.progress import CancelOpenProject
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     from crystal.util.wx_bind import bind
     from crystal.util.xos import is_mac_os
     import wx
     
-    readonly_default = bool(project_kwargs.get('readonly', False))
-    
-    def on_checkbox_clicked(event: wx.CommandEvent | None = None) -> None:
-        readonly_checkbox_checked = dialog.IsCheckBoxChecked()
-        create_button = dialog.FindWindow(id=wx.ID_YES)
-        create_button.Enabled = not readonly_checkbox_checked
-    
-    def on_char_hook(event: wx.KeyEvent) -> None:
-        key_code = event.GetKeyCode()
-        if (key_code == ord('R') or key_code == ord('r')) and \
-                event.GetModifiers() in (wx.MOD_ALT, wx.MOD_CONTROL):
-            # Toggle the checkbox when Alt+R or Ctrl+R is pressed
-            assert dialog._checkbox is not None
-            # NOTE: Calls on_checkbox_clicked() internally
-            dialog.CheckBoxChecked = not dialog.CheckBoxChecked
-            
-            # Focus the checkbox manually on macOS to prevent dialog from losing focus
-            if is_mac_os():
-                dialog._checkbox.SetFocus()
-        else:
-            event.Skip()
-    
-    dialog = BetterMessageDialog(None,
-        message='Create a new project or open an existing project?',
-        title='Select a Project',
-        checkbox_label='Open as &read only',
-        checkbox_checked=readonly_default,
-        on_checkbox_clicked=on_checkbox_clicked,
-        style=wx.YES_NO,
-        yes_label='&New Project',
-        no_label='&Open',
-        escape_is_cancel=True,
-        name='cr-open-or-create-project')
-    with dialog:
-        def interrupt_dialog_to_open_project() -> None:
-            import wx
+    # Create a hidden parent frame for the Open or Create Project dialog
+    # so that it can have a menubar on macOS
+    menubar_frame = wx.Frame(None, -1, '')
+    try:
+        def select_choice_in_dialog(choice_id) -> None:
             wx.PostEvent(dialog, wx.CommandEvent(
                 wx.wxEVT_COMMAND_BUTTON_CLICKED,
-                wx.ID_NO  # "Open" button
+                choice_id,
             ))
         
-        global _interrupt_prompt_for_project_to_open_project
-        _interrupt_prompt_for_project_to_open_project = interrupt_dialog_to_open_project
-        try:
-            # Set initial state of Create button based on checkbox state
-            on_checkbox_clicked()
-            
-            # Configure Ctrl+R (and Alt+R) key to toggle readonly checkbox.
-            # NOTE: Use wx.EVT_CHAR_HOOK rather than wx.EVT_KEY_DOWN so that
-            #       works on macOS where wx.EVT_KEY_DOWN does not work in dialogs.
-            dialog.Bind(wx.EVT_CHAR_HOOK, on_char_hook)
-
-            dialog.SetAcceleratorTable(wx.AcceleratorTable([
-                wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
-                wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O'), wx.ID_NO),
-            ]))
-            
-            # If an initial choice is provided, automatically press that button
-            if initial_choice is not None:
+        (menubar, on_menu) = MainWindow._create_minimal_menu_bar(
+            on_new_project=lambda: select_choice_in_dialog(wx.ID_YES),  # "New Project" button
+            on_open_project=lambda: select_choice_in_dialog(wx.ID_NO),  # "Open" button
+            on_quit=lambda: select_choice_in_dialog(wx.ID_CANCEL),  # Close dialog + Quit
+        )
+        menubar_frame.SetMenuBar(menubar)
+        bind(menubar_frame, wx.EVT_MENU, on_menu)
+        
+        readonly_default = bool(project_kwargs.get('readonly', False))
+        
+        def on_checkbox_clicked(event: wx.CommandEvent | None = None) -> None:
+            readonly_checkbox_checked = dialog.IsCheckBoxChecked()
+            create_button = dialog.FindWindow(id=wx.ID_YES)
+            create_button.Enabled = not readonly_checkbox_checked
+        
+        def on_char_hook(event: wx.KeyEvent) -> None:
+            key_code = event.GetKeyCode()
+            if (key_code == ord('R') or key_code == ord('r')) and \
+                    event.GetModifiers() in (wx.MOD_ALT, wx.MOD_CONTROL):
+                # Toggle the checkbox when Alt+R or Ctrl+R is pressed
+                assert dialog._checkbox is not None
+                # NOTE: Calls on_checkbox_clicked() internally
+                dialog.CheckBoxChecked = not dialog.CheckBoxChecked
+                
+                # Focus the checkbox manually on macOS to prevent dialog from losing focus
+                if is_mac_os():
+                    dialog._checkbox.SetFocus()
+            else:
+                event.Skip()
+        
+        dialog = BetterMessageDialog(menubar_frame,
+            message='Create a new project or open an existing project?',
+            title='Select a Project',
+            checkbox_label='Open as &read only',
+            checkbox_checked=readonly_default,
+            on_checkbox_clicked=on_checkbox_clicked,
+            style=wx.YES_NO,
+            yes_label='&New Project',
+            no_label='&Open',
+            escape_is_cancel=True,
+            name='cr-open-or-create-project')
+        with dialog:
+            def interrupt_dialog_to_open_project() -> None:
+                import wx
                 wx.PostEvent(dialog, wx.CommandEvent(
                     wx.wxEVT_COMMAND_BUTTON_CLICKED,
-                    initial_choice
+                    wx.ID_NO  # "Open" button
                 ))
             
-            while True:
-                from crystal.util.wx_dialog import ShowModalAsync
-                choice = await ShowModalAsync(dialog)
+            global _interrupt_prompt_for_project_to_open_project
+            _interrupt_prompt_for_project_to_open_project = interrupt_dialog_to_open_project
+            try:
+                # Set initial state of Create button based on checkbox state
+                on_checkbox_clicked()
                 
-                project_kwargs = {
-                    **project_kwargs,
-                    **dict(readonly=dialog.IsCheckBoxChecked()),
-                }  # reinterpret
+                # Configure Ctrl+R (and Alt+R) key to toggle readonly checkbox.
+                # NOTE: Use wx.EVT_CHAR_HOOK rather than wx.EVT_KEY_DOWN so that
+                #       works on macOS where wx.EVT_KEY_DOWN does not work in dialogs.
+                dialog.Bind(wx.EVT_CHAR_HOOK, on_char_hook)
+
+                dialog.SetAcceleratorTable(wx.AcceleratorTable([
+                    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
+                    wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O'), wx.ID_NO),
+                ]))
                 
-                try:
-                    if choice == wx.ID_YES:  # New Project
-                        return _create_untitled_project(dialog, progress_listener, **project_kwargs)
-                    elif choice == wx.ID_NO:  # Open
-                        # If MacOpenFile queued a project to be opened, open it
-                        global _project_path_to_open_soon
-                        if _project_path_to_open_soon is not None:
-                            filepath = _project_path_to_open_soon
-                            _project_path_to_open_soon = None  # consume
-                            return _load_project(
-                                filepath,
-                                progress_listener,
-                                **project_kwargs)  # type: ignore[arg-type]
-                        
-                        return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
-                    elif choice == wx.ID_CANCEL:
-                        raise SystemExit()
-                    else:
-                        raise AssertionError()
-                except CancelOpenProject:
-                    progress_listener.reset()
-                    continue
-        finally:
-            _interrupt_prompt_for_project_to_open_project = None
+                # If an initial choice is provided, automatically press that button
+                if initial_choice is not None:
+                    wx.PostEvent(dialog, wx.CommandEvent(
+                        wx.wxEVT_COMMAND_BUTTON_CLICKED,
+                        initial_choice
+                    ))
+                
+                while True:
+                    from crystal.util.wx_dialog import ShowModalAsync
+                    choice = await ShowModalAsync(dialog)
+                    
+                    project_kwargs = {
+                        **project_kwargs,
+                        **dict(readonly=dialog.IsCheckBoxChecked()),
+                    }  # reinterpret
+                    
+                    try:
+                        if choice == wx.ID_YES:  # New Project
+                            return _create_untitled_project(dialog, progress_listener, **project_kwargs)
+                        elif choice == wx.ID_NO:  # Open
+                            # If MacOpenFile queued a project to be opened, open it
+                            global _project_path_to_open_soon
+                            if _project_path_to_open_soon is not None:
+                                filepath = _project_path_to_open_soon
+                                _project_path_to_open_soon = None  # consume
+                                return _load_project(
+                                    filepath,
+                                    progress_listener,
+                                    **project_kwargs)  # type: ignore[arg-type]
+                            
+                            return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
+                        elif choice == wx.ID_CANCEL:
+                            raise SystemExit()
+                        else:
+                            raise AssertionError()
+                    except CancelOpenProject:
+                        progress_listener.reset()
+                        continue
+            finally:
+                _interrupt_prompt_for_project_to_open_project = None
+    finally:
+        menubar_frame.Destroy()
 
 
 def _create_untitled_project(

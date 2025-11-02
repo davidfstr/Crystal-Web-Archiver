@@ -1,8 +1,9 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from crystal.model import Project, Resource, RootResource
+from crystal.tests.test_open_project import skip_if_not_macos
 from crystal.tests.util.cli import (
-    create_new_empty_project, py_eval, crystal_shell, py_eval_await,
+    create_new_empty_project, crystal_shell, py_eval_await,
 )
 from crystal.tests.util.controls import file_dialog_returning
 from crystal.tests.util.server import extracted_project
@@ -18,6 +19,20 @@ import wx
 
 
 # === Test: File: New Project ===
+
+@skip_if_not_macos  # dialog's menubar only visible on macOS
+async def test_can_create_project_with_menuitem_given_open_or_create_dialog_visible() -> None:
+    dialog = await OpenOrCreateDialog.wait_for()
+    await dialog.start_new_project_with_menuitem()
+    mw = await MainWindow.wait_for(timeout=OpenOrCreateDialog._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
+    try:
+        # Verify a new project was created
+        project = Project._last_opened_project
+        assert project is not None
+        assert project.is_untitled
+    finally:
+        await mw.close()
+
 
 async def test_can_create_project_with_menuitem_given_clean_untitled_project_visible() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create(autoclose=False) as (mw1, project1):
@@ -102,6 +117,22 @@ async def _wait_for_main_window_to_reopen_to_untitled_project(project1: Project)
 
 
 # === Test: Open Project ===
+
+@skip_if_not_macos  # dialog's menubar only visible on macOS
+async def test_can_open_project_with_menuitem_given_open_or_create_dialog_visible() -> None:
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        dialog = await OpenOrCreateDialog.wait_for()
+        with file_dialog_returning(project_dirpath):
+            await dialog.start_open_project_with_menuitem()
+            mw = await MainWindow.wait_for(timeout=OpenOrCreateDialog._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
+        try:
+            # Verify the xkcd project was opened
+            project = Project._last_opened_project
+            assert project is not None
+            assert project.get_root_resource(url='https://xkcd.com/') is not None
+        finally:
+            await mw.close()
+
 
 async def test_can_open_project_with_menuitem_given_clean_untitled_project_visible() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project2_dirpath:
@@ -287,9 +318,25 @@ async def test_can_close_project_with_menuitem_given_titled_project_visible() ->
             
         await OpenOrCreateDialog.wait_for()
 
+
 # === Test: File: Quit ===
 
-async def test_can_quit_with_menuitem() -> None:
+@skip_if_not_macos  # dialog's menubar only visible on macOS
+async def test_can_quit_with_menuitem_given_open_or_create_dialog_visible() -> None:
+    with crystal_shell() as (crystal, _):
+        py_eval_await(crystal, textwrap.dedent('''\
+                from crystal.tests.util.windows import OpenOrCreateDialog
+                
+                async def crystal_task() -> None:
+                    dialog = await OpenOrCreateDialog.wait_for()
+                    await dialog.quit_with_menuitem()
+                '''
+            ),
+            'crystal_task', [],
+            timeout=3.0)
+
+
+async def test_can_quit_with_menuitem_given_project_visible() -> None:
     with crystal_shell() as (crystal, _):
         create_new_empty_project(crystal)
         
@@ -309,7 +356,15 @@ async def test_can_quit_with_menuitem() -> None:
 
 # === Test: Edit: Preferences... ===
 
-async def test_can_open_preferences_with_menuitem() -> None:
+@skip('not yet automated')
+@skip_if_not_macos  # dialog's menubar only visible on macOS
+async def test_cannot_open_preferences_with_menuitem_given_open_or_create_dialog_visible() -> None:
+    # ...because selecting the menuitem is possible yet currently has no effect,
+    #    despite it being marked as Enabled=False
+    pass
+
+
+async def test_can_open_preferences_with_menuitem_given_project_visible() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
         prefs_dialog = await mw.open_preferences_with_menuitem()
         await prefs_dialog.ok()
@@ -317,7 +372,14 @@ async def test_can_open_preferences_with_menuitem() -> None:
 
 # === Test: Help: About Crystal ===
 
-async def test_can_open_about_with_menuitem() -> None:
+@skip_if_not_macos  # dialog's menubar only visible on macOS
+async def test_can_open_about_box_with_menuitem_given_open_or_create_dialog_visible() -> None:
+    dialog = await OpenOrCreateDialog.wait_for()
+    about_dialog = await dialog.open_about_with_menuitem()
+    await about_dialog.ok()
+
+
+async def test_can_open_about_box_with_menuitem_given_project_visible() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create() as (mw, _):
         about_dialog = await mw.open_about_with_menuitem()
         await about_dialog.ok()

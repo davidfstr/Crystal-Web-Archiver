@@ -283,6 +283,31 @@ class OpenOrCreateDialog:
                     window_condition('cr-main-window'),
                     window_condition(next_window_name)),
                 stacklevel_extra=1)
+    
+    async def start_new_project_with_menuitem(self) -> None:
+        """Selects File > New Project menu item from the dialog's menubar."""
+        wx.PostEvent(
+            self.open_or_create_project_dialog.Parent,
+            wx.MenuEvent(wx.EVT_MENU.typeId, wx.ID_NEW))
+    
+    async def start_open_project_with_menuitem(self) -> None:
+        """Selects File > Open Project menu item from the dialog's menubar."""
+        wx.PostEvent(
+            self.open_or_create_project_dialog.Parent,
+            wx.MenuEvent(wx.EVT_MENU.typeId, wx.ID_OPEN))
+    
+    async def quit_with_menuitem(self) -> None:
+        """Selects File > Quit menu item from the dialog's menubar."""
+        wx.PostEvent(
+            self.open_or_create_project_dialog.Parent,
+            wx.MenuEvent(wx.EVT_MENU.typeId, wx.ID_EXIT))
+    
+    async def open_about_with_menuitem(self) -> AboutDialog:
+        """Selects Help > About Crystal menu item from the dialog's menubar."""
+        wx.PostEvent(
+            self.open_or_create_project_dialog.Parent,
+            wx.MenuEvent(wx.EVT_MENU.typeId, wx.ID_ABOUT))
+        return await AboutDialog.wait_for()
 
 
 class MainWindow:

@@ -371,6 +371,16 @@ class MainWindow(CloakMixin):
     # === Menubar ===
     
     def _create_menu_bar(self, raw_frame: wx.Frame) -> wx.MenuBar:
+        """
+        Creates the menubar that appears when Crystal's main window is open.
+        
+        On macOS this appears at the top of the screen.
+        On Windows and Linux it appears at the top of the window itself.
+        
+        See also:
+        - create_minimal_menu_bar()
+        """
+        # File menu
         file_menu = wx.Menu()
         self._new_project_action.append_menuitem_to(file_menu)
         self._open_project_action.append_menuitem_to(file_menu)
@@ -385,6 +395,7 @@ class MainWindow(CloakMixin):
             #       on macOS. In particular cannot intercept on the File wx.Menu.
             bind(raw_frame, wx.EVT_MENU, self._on_quit)
         
+        # Edit menu
         edit_menu = wx.Menu()
         edit_menu.Append(wx.ID_UNDO, '').Enabled = False
         edit_menu.Append(wx.ID_REDO, '').Enabled = False
@@ -403,6 +414,7 @@ class MainWindow(CloakMixin):
             #       on macOS. In particular cannot intercept on the Edit wx.Menu.
             bind(raw_frame, wx.EVT_MENU, self._on_preferences)
         
+        # Entity menu
         self._entity_menu = entity_menu = wx.Menu()
         if True:
             view_label_mi = entity_menu.Append(wx.ID_ANY, 'View:')
@@ -443,11 +455,6 @@ class MainWindow(CloakMixin):
             bind(entity_menu, wx.EVT_MENU_OPEN, self._on_entity_menu_open)
             bind(entity_menu, wx.EVT_MENU, self._on_change_url_prefix_menuitem_selected)
         
-        menubar = wx.MenuBar()
-        menubar.Append(file_menu, 'File')
-        menubar.Append(edit_menu, 'Edit')
-        menubar.Append(entity_menu, 'Entity')
-        
         # Help menu
         help_menu = wx.Menu()
         # Append About menuitem
@@ -458,9 +465,110 @@ class MainWindow(CloakMixin):
             # NOTE: Can only intercept wx.EVT_MENU for wx.ID_ABOUT on an wx.Frame
             #       on macOS. In particular cannot intercept on the Help wx.Menu.
             bind(raw_frame, wx.EVT_MENU, self._on_about)
+        
+        menubar = wx.MenuBar()
+        menubar.Append(file_menu, 'File')
+        menubar.Append(edit_menu, 'Edit')
+        menubar.Append(entity_menu, 'Entity')
         menubar.Append(help_menu, 'Help')
         
         return menubar
+    
+    # NOTE: Private to the crystal package, not just this class
+    @classmethod
+    def _create_minimal_menu_bar(cls,
+            *, on_new_project: Callable[[], None],
+            on_open_project: Callable[[], None],
+            on_quit: Callable[[], None],
+            ) -> tuple[wx.MenuBar, Callable[[wx.MenuEvent], None]]:
+        """
+        Creates the menubar that appears when Crystal's main window is NOT open.
+        
+        On macOS this appears at the top of the screen.
+        On Windows and Linux it does not appear at all.
+        
+        See also:
+        - _create_menu_bar()
+        """
+        handler_for_id = {}
+        def Set(
+                mi: wx.MenuItem,
+                *, Accel: wx.AcceleratorEntry,
+                Handler: Callable[[], None] | None,
+                ) -> wx.MenuItem:
+            mi.Accel = Accel
+            mi.Enabled = Handler is not None
+            handler_for_id[mi.Id] = Handler
+            return mi
+        
+        # File menu
+        file_menu = wx.Menu()
+        Set(file_menu.Append(wx.ID_NEW, '&New Project...'),
+            Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N')),
+            Handler=on_new_project)
+        Set(file_menu.Append(wx.ID_OPEN, '&Open Project...'),
+            Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O')),
+            Handler=on_open_project)
+        file_menu.AppendSeparator()
+        Set(file_menu.Append(wx.ID_CLOSE, '&Close Project'),
+            Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W')),
+            Handler=None)
+        Set(file_menu.Append(wx.ID_SAVE, '&Save...'),
+            Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('S')),
+            Handler=None)
+        Set(file_menu.Append(wx.ID_SAVEAS, 'Save &As...'),
+            Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL|wx.ACCEL_SHIFT, ord('S')),
+            Handler=None)
+        Set(file_menu.Append(wx.ID_EXIT),
+            Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('Q')),
+            Handler=on_quit)
+        
+        # Edit menu
+        edit_menu = wx.Menu()
+        edit_menu.Append(wx.ID_UNDO, '').Enabled = False
+        edit_menu.Append(wx.ID_REDO, '').Enabled = False
+        edit_menu.AppendSeparator()
+        edit_menu.Append(wx.ID_CUT, '').Enabled = False
+        edit_menu.Append(wx.ID_COPY, '').Enabled = False
+        edit_menu.Append(wx.ID_PASTE, '').Enabled = False
+        # Append Preferences menuitem
+        if True:
+            if not is_mac_os():
+                edit_menu.AppendSeparator()
+            if preferences_are_called_settings_in_this_os():
+                preferences_label = 'Settings...'
+            else:
+                preferences_label = ''  # 'Preferences...' (or OS default)
+            # NOTE: On macOS the Preferences menuitem will actually be positioned
+            #       in the [Application Name] menu rather than the Edit menu.
+            Set(edit_menu.Append(wx.ID_PREFERENCES, preferences_label),
+                Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL, ord(',')),
+                # NOTE: macOS refuses to actually disable the preferences menuitem.
+                #       Currently selecting the menuitem does nothing.
+                # TODO: Show the PreferencesDialog with all non-app preferences disabled.
+                Handler=None)
+        
+        # Help menu
+        help_menu = wx.Menu()
+        # NOTE: On macOS the About menuitem will actually be positioned
+        #       in the [Application Name] menu rather than the Help menu.
+        Set(help_menu.Append(wx.ID_ABOUT, f'About {APP_NAME}'),
+            Accel=None,
+            Handler=lambda: cls._show_about_box(parent=None))
+        
+        menubar = wx.MenuBar()
+        menubar.Append(file_menu, '&File')
+        menubar.Append(edit_menu, 'Edit')
+        menubar.Append(help_menu, 'Help')
+        
+        def on_menu(event: wx.MenuEvent):
+            handler = handler_for_id.get(event.Id)
+            if handler is not None:
+                handler()
+            else:
+                event.Skip()
+        
+        return (menubar, on_menu)
     
     def _on_entity_menu_open(self, event: wx.MenuEvent) -> None:
         menu = self._entity_menu  # cache
@@ -1079,10 +1187,14 @@ class MainWindow(CloakMixin):
     
     def _on_about(self, event: wx.MenuEvent) -> None:
         if event.Id == wx.ID_ABOUT:
-            from crystal.browser.about import AboutDialog
-            AboutDialog(self._frame)
+            self._show_about_box(self._frame)
         else:
             event.Skip()
+    
+    @classmethod
+    def _show_about_box(cls, parent: wx.Window | None) -> None:
+        from crystal.browser.about import AboutDialog
+        AboutDialog(parent)
     
     # === Entity Pane: New/Edit Root Url ===
     
