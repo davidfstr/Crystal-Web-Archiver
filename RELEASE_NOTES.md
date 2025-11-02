@@ -26,12 +26,19 @@ Release Notes ⋮
       or view the related URL in a browser.
 
 * Browsing improvements
+    * When visiting a page that hasn't been downloaded,
+      a progress bar is now shown in the browser.
     * The Not in Archive page now offers three action modes via radio buttons:
         * Create Root URL (default): Creates a named root URL in your project and optionally downloads it.
         * Create Group for Similar Pages: Creates a group for the URL pattern and optionally downloads it.
         * Download Only: Downloads the current page without creating a root URL or group.
     * When creating a Root URL from the Not in Archive page,
       you can now provide a name for the root URL, similar to the New Root URL dialog.
+    * The Source dropdown on the Not in Archive page uses the same labels
+      as the Source dropdown in the New Group Dialog.
+    * When a served page tries to display an undownloaded image
+      that isn't covered by a URL or a Group, show a prominent red box with
+      an X rather than showing the browser's generic broken image icon.
 
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
@@ -41,13 +48,6 @@ Release Notes ⋮
       to make it easy to notice when a domain starts repeatedly refusing requests.
 
 * Serving improvements
-    * When visiting a page that hasn't been downloaded,
-      a progress bar is now shown in the browser.
-    * The Source dropdown on the Not in Archive page uses the same labels
-      as the Source dropdown in the New Group Dialog.
-    * When a served page tries to display an undownloaded image
-      that isn't covered by a URL or a Group, show a prominent red box with
-      an X rather than showing the browser's generic broken image icon.
     * Ignore timeout errors when responding to a request.
 
 * Support changes **(Breaking Change)**
