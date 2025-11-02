@@ -279,10 +279,20 @@ def get_request_url(
     """
     Given the absolute URL of a resource, returns the URL that should be used to
     request it from the project server.
+    
+    If no port is specified then the port of the most recently started ProjectServer
+    will be used. Therefore note that calls to this function without a port
+    cannot be safely reordered relative to the start of context managers like 
+    `with served_project(...):` and `with ProjectServer(...):`.
     """
     if port is None:
-        port = _DEFAULT_SERVER_PORT
+        if not tests_are_running():
+            raise ValueError('get_request_url() requires an explicit port outside of test code')
+        from crystal.tests.util.server import get_most_recently_started_server_port
+        port = get_most_recently_started_server_port()
     if host is None:
+        if not tests_are_running():
+            raise ValueError('get_request_url() requires an explicit host outside of test code')
         host = _DEFAULT_SERVER_HOST
     
     request_host = f'{host}:{port}'

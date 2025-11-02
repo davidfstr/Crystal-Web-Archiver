@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from concurrent.futures import Future
 from contextlib import contextmanager
 from copy import deepcopy
 from crystal import resources
 from crystal.model import Project
-from crystal.server import get_request_url, ProjectServer
+from crystal.server import _DEFAULT_SERVER_PORT, get_request_url, ProjectServer
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 import crystal.tests.util.xtempfile as xtempfile
@@ -22,6 +23,24 @@ import sys
 from typing import List, Optional
 import unittest.mock
 from zipfile import ZipFile
+
+# ------------------------------------------------------------------------------
+# Utility: Port Detection
+
+def get_most_recently_started_server_port() -> int:
+    """
+    Returns the port of the most recently started ProjectServer during tests.
+    Falls back to _DEFAULT_SERVER_PORT if no server has been started yet.
+    
+    This function enables test utilities to auto-detect which port a ProjectServer
+    is running on, eliminating the need for tests to hardcode the port.
+    
+    Only works when tests are running.
+    """
+    if ProjectServer._last_created is not None:
+        return ProjectServer._last_created.port
+    return _DEFAULT_SERVER_PORT
+
 
 # ------------------------------------------------------------------------------
 # Utility: Server
@@ -184,15 +203,43 @@ def extracted_project(
 # Utility: Server Requests
 
 @contextmanager
-def assert_does_open_webbrowser_to(request_url: str) -> Iterator[None]:
+def assert_does_open_webbrowser_to(request_url: str | Callable[[], str]) -> Iterator[Future[str]]:
+    """
+    Asserts that webbrowser.open() is called with the specified URL.
+    
+    Yields a Future that will contain the URL that webbrowser.open() was called with.
+    This allows the URL to be computed after the context block executes (e.g., after
+    a server starts), and then retrieved afterward:
+        
+        with assert_does_open_webbrowser_to(lambda: ...) as url_future:
+            click_button(mw.view_button)
+        actual_url = url_future.result()
+    """
+    url_future: Future[str] = Future()
+    
     with unittest.mock.patch('webbrowser.open', spec=True) as mock_open:
-        yield
+        # NOTE: Likely starts a ProjectServer, which is likely to affect the
+        #       calculated request_url if it is a callable
+        yield url_future
+        if callable(request_url):
+            request_url = request_url()
         mock_open.assert_called_with(request_url)
+        url_future.set_result(request_url)
 
 
-async def is_url_not_in_archive(archive_url: str) -> bool:
+async def is_url_not_in_archive(archive_url: str, port: int | None=None) -> bool:
+    """
+    Checks whether the specified Resource URL is in a Project that is open
+    by checking whether its running ProjectServer is serving a
+    Not in Archive Page for the URL.
+    
+    If no port is specified then the port of the most recently started ProjectServer
+    will be used. Therefore note that calls to this function without a port
+    cannot be safely reordered relative to the start of context managers like 
+    `with served_project(...):` and `with ProjectServer(...):`.
+    """
     server_page = await fetch_archive_url(
-        archive_url, 
+        archive_url, port,
         headers={'X-Crystal-Dynamic': 'False'},
         timeout=4.0,  # 8.0s in ASAN; >4.0s observed in Linux ASAN
     )
@@ -205,6 +252,15 @@ async def fetch_archive_url(
         *, headers: dict[str, str] | None=None,
         timeout: float | None=None,
         ) -> WebPage:
+    """
+    Fetches the served version of the latest revision of the specified Resource URL
+    from a Project that is open and whose ProjectServer is running.
+    
+    If no port is specified then the port of the most recently started ProjectServer
+    will be used. Therefore note that calls to this function without a port
+    cannot be safely reordered relative to the start of context managers like 
+    `with served_project(...):` and `with ProjectServer(...):`.
+    """
     if timeout is None:
         timeout = DEFAULT_WAIT_TIMEOUT
     return await bg_fetch_url(get_request_url(archive_url, port), headers=headers, timeout=timeout)

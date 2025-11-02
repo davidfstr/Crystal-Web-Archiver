@@ -21,7 +21,7 @@ from crystal.tests.util.pages import (
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, extracted_project, fetch_archive_url,
-    MockHttpServer, served_project, WebPage,
+    get_most_recently_started_server_port, MockHttpServer, served_project, WebPage,
 )
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
@@ -38,6 +38,7 @@ from crystal.util.ports import is_port_in_use
 from http.client import BadStatusLine, RemoteDisconnected
 from io import StringIO
 import json
+import re
 from textwrap import dedent
 from unittest import skip
 from unittest.mock import ANY, patch
@@ -181,18 +182,19 @@ async def test_given_welcome_page_visible_when_enter_url_then_navigates_to_url_i
             home_ti = root_ti.GetFirstChild()
             assert home_ti is not None
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
+            with assert_does_open_webbrowser_to(lambda: get_request_url('https://xkcd.com/')):
                 click_button(mw.view_button)
+            port = get_most_recently_started_server_port()  # capture
             
             target_url = 'https://xkcd.com/'
             target_url_in_archive = get_request_url(
                 target_url,
-                _DEFAULT_SERVER_PORT,
+                port,
                 project_default_url_prefix=project.default_url_prefix)
             
             # Simulate form submit of target_url. Expect redirect.
             redirect_response = await bg_fetch_url(
-                f'http://127.0.0.1:{_DEFAULT_SERVER_PORT}/?url={target_url}',
+                f'http://127.0.0.1:{port}/?url={target_url}',
                 follow_redirects=False
             )
             assertEqual(307, redirect_response.status)
@@ -219,6 +221,8 @@ async def test_when_serve_special_page_and_branding_logo_cannot_load_then_replac
             'PUBLIC_STATIC_RESOURCE_NAMES',
             original_public_filenames - {'appicon.png'}):
         async with _not_in_archive_page_visible() as server_page:
+            port = get_most_recently_started_server_port()  # capture
+            
             # Verify the NIA page contains branding header
             assert server_page.is_not_in_archive
             assert server_page.status == 404
@@ -227,7 +231,7 @@ async def test_when_serve_special_page_and_branding_logo_cannot_load_then_replac
             # Use Playwright to verify the fallback logo is displayed
             def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
                 # Navigate to the NIA page 
-                raw_page.goto(f'http://127.0.0.1:{_DEFAULT_SERVER_PORT}/https://xkcd.com/missing-page/')
+                raw_page.goto(f'http://127.0.0.1:{port}/https://xkcd.com/missing-page/')
                 
                 # Ensure the brand header exists
                 brand_header = raw_page.locator('.cr-brand-header')
@@ -277,14 +281,14 @@ async def test_given_not_found_page_visible_then_crystal_branding_and_exit_butto
 
 async def test_when_invalid_internal_crystal_url_is_requested_then_always_serves_not_found_page() -> None:
     with Project() as project:
-        with closing(ProjectServer(project, _DEFAULT_SERVER_PORT)) as sp:
-            invalid_page = await bg_fetch_url('http://127.0.0.1:2797/_/')
+        with closing(ProjectServer(project, port=None)) as sp:
+            invalid_page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/_/')
             assertEqual('Not Found | Crystal', invalid_page.title)  # not_found_page_html
             
-            invalid_page = await bg_fetch_url('http://127.0.0.1:2797/_/https/')
+            invalid_page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/_/https/')
             assertEqual('Not Found | Crystal', invalid_page.title)  # not_found_page_html
             
-            missing_page = await bg_fetch_url('http://127.0.0.1:2797/_/https/xkcd.com/')
+            missing_page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/_/https/xkcd.com/')
             assertEqual('Not in Archive | Crystal', missing_page.title)  # not_in_archive_html
 
 
@@ -293,8 +297,8 @@ async def test_when_404_html_at_site_root_is_requested_then_always_serves_not_fo
     
     # Case 1: A more-direct test
     with Project() as project:
-        with closing(ProjectServer(project, _DEFAULT_SERVER_PORT)) as sp:
-            reserved_404_page = await bg_fetch_url('http://127.0.0.1:2797/404.html')
+        with closing(ProjectServer(project, port=None)) as sp:
+            reserved_404_page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/404.html')
             assertEqual('Not Found | Crystal', reserved_404_page.title)  # not_found_page_html
     
     # Case 2: A more-realistic test
@@ -329,20 +333,20 @@ async def test_when_404_html_at_site_root_is_requested_then_always_serves_not_fo
                 await wait_for_future(home_rr.download())
                 await wait_for_future(_404_rr.download())
                 
-                with closing(ProjectServer(project, _DEFAULT_SERVER_PORT)) as sp:
+                with closing(ProjectServer(project, port=None)) as sp:
                     home_url_in_archive = sp.get_request_url(home_url)
                     _404_url_in_archive = sp.get_request_url(_404_url)
                     
                     assertEqual(
-                        'http://127.0.0.1:2797/',
+                        f'http://127.0.0.1:{sp.port}/',
                         home_url_in_archive)
                     assertEqual(
-                        # NOT: 'http://127.0.0.1:2797/404.html'
+                        # NOT: f'http://127.0.0.1:{sp.port}/404.html'
                         #      even though it is in the default URL prefix "http://127.0.0.1:2798/"
-                        'http://127.0.0.1:2797/_/http/127.0.0.1:2798/404.html',
+                        f'http://127.0.0.1:{sp.port}/_/http/127.0.0.1:2798/404.html',
                         _404_url_in_archive)
                     reserved_404_html_url_in_archive = \
-                        'http://127.0.0.1:2797/404.html'
+                        f'http://127.0.0.1:{sp.port}/404.html'
                     
                     home_page = await bg_fetch_url(home_url_in_archive)
                     assertIn('Comic!', home_page.content)
@@ -543,11 +547,11 @@ async def test_when_404_page_downloaded_and_served_by_crystal_then_url_box_links
             root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
             (home_ti,) = root_ti.Children
             home_ti.SelectItem()
-            served_404_url_in_archive = get_request_url(
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
                 served_404_url,
-                project_default_url_prefix=project.default_url_prefix)
-            with assert_does_open_webbrowser_to(served_404_url_in_archive):
+                project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
+            served_404_url_in_archive = url_future.result()
             
             def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
                 raw_page.goto(served_404_url_in_archive)
@@ -749,14 +753,14 @@ async def test_given_create_root_url_selected_when_download_button_pressed_then_
                 async with wait_for_download_task_to_start_and_finish(project):
                     click_button(mw.download_button)
             
-            home_url_in_archive = get_request_url(
-                home_url,
-                project_default_url_prefix=project.default_url_prefix)
-            
             # Start the project server by clicking View button
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(home_url_in_archive):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
+                    home_url,
+                    project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
+            home_url_in_archive = url_future.result()
+            server_port = get_most_recently_started_server_port()  # capture
             
             # Verify that the home page is NOT a "Not in Archive" page
             home_page = await fetch_archive_url(home_url)
@@ -784,7 +788,6 @@ async def test_given_create_root_url_selected_when_download_button_pressed_then_
             async with wait_for_download_task_to_start_and_finish(project):
                 # Simulate press of the "Download" button on the "Not in Archive" page
                 # by directly querying the related endpoint
-                server_port = _DEFAULT_SERVER_PORT
                 download_response = await bg_fetch_url(
                     f'http://127.0.0.1:{server_port}/_/crystal/create-url',
                     method='POST',
@@ -856,14 +859,14 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                 async with wait_for_download_task_to_start_and_finish(project):
                     click_button(mw.download_button)
             
-            home_url_in_archive = get_request_url(
-                home_url,
-                project_default_url_prefix=project.default_url_prefix)
-            
             # Start the project server by clicking View button
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(home_url_in_archive):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
+                    home_url,
+                    project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
+            home_url_in_archive = url_future.result()
+            server_port = get_most_recently_started_server_port()  # capture
             
             # Verify that the home page is NOT a "Not in Archive" page
             home_page = await fetch_archive_url(home_url)
@@ -885,7 +888,6 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
             # by directly querying the related endpoint
             with network_down():  # for backend
                 async with wait_for_download_task_to_start_and_finish(project):
-                    server_port = _DEFAULT_SERVER_PORT
                     download_response = await bg_fetch_url(
                         f'http://127.0.0.1:{server_port}/_/crystal/create-url',
                         method='POST',
@@ -1422,11 +1424,11 @@ async def test_given_dip_page_visible_then_progress_bar_runs_until_download_comp
             
             # Start the project server
             home_ti.SelectItem()
-            home_url_in_archive = get_request_url(
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
                 home_url,
-                project_default_url_prefix=project.default_url_prefix)
-            with assert_does_open_webbrowser_to(home_url_in_archive):
+                project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
+            home_url_in_archive = url_future.result()
             
             # Patch download_in_progress_html to ignore reload requests,
             # so that we can control exactly when it reloads
@@ -2767,14 +2769,14 @@ async def test_when_server_starts_then_logs_server_started_at_ellipsis() -> None
             with patch('crystal.server.print_success', wraps=crystal.server.print_success) as spy_print_success:
                 # Start server
                 home_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
                     click_button(mw.view_button)
                 
                 # Ensure print_success was called with the expected message
                 success_messages = [call.args[0] for call in spy_print_success.call_args_list]
                 (message,) = success_messages
                 assertIn('Server started at: http://', message)
-                assertIn(f':{_DEFAULT_SERVER_PORT}', message)
+                assert re.search(r':\d+', message), f'Expected port number in message: {message}'
 
 
 async def test_when_page_fetched_successfully_then_logs_url_and_status_code_200() -> None:
@@ -2795,7 +2797,7 @@ async def test_when_page_fetched_successfully_then_logs_url_and_status_code_200(
             
             # Start server
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
                 click_button(mw.view_button)
             
             with patch('crystal.server.print_info', wraps=crystal.server.print_info) as spy_print_info:
@@ -2828,7 +2830,7 @@ async def test_when_timeout_while_server_reads_request_or_writes_response_then_l
             
             # Start server
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
                 click_button(mw.view_button)
             
             # Spy on logging methods
@@ -2886,7 +2888,7 @@ async def test_when_server_reads_bad_status_line_in_request_then_logs_url_and_st
             
             # Start server
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
                 click_button(mw.view_button)
             
             # Patch parse_request to simulate receiving a bad request line
@@ -2939,11 +2941,12 @@ async def _welcome_page_visible(*, readonly: bool=False) -> AsyncIterator[WebPag
             home_ti = root_ti.GetFirstChild()
             assert home_ti is not None
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
+            with assert_does_open_webbrowser_to(lambda: get_request_url('https://xkcd.com/')):
                 click_button(mw.view_button)
+            port = get_most_recently_started_server_port()  # capture
             
             # Fetch the welcome page by requesting the root path directly
-            welcome_page = await bg_fetch_url(f'http://127.0.0.1:{_DEFAULT_SERVER_PORT}/')
+            welcome_page = await bg_fetch_url(f'http://127.0.0.1:{port}/')
             assert welcome_page.title == 'Welcome | Crystal'
             assert welcome_page.status == 200
             
@@ -2966,11 +2969,12 @@ async def _not_found_page_visible(*, readonly: bool=False) -> AsyncIterator[WebP
             home_ti = root_ti.GetFirstChild()
             assert home_ti is not None
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
+            with assert_does_open_webbrowser_to(lambda: get_request_url('https://xkcd.com/')):
                 click_button(mw.view_button)
+            port = get_most_recently_started_server_port()  # capture
             
             # Fetch a not found page by requesting a non-existent path directly
-            not_found_page = await bg_fetch_url(f'http://127.0.0.1:{_DEFAULT_SERVER_PORT}/non-existent-path')
+            not_found_page = await bg_fetch_url(f'http://127.0.0.1:{port}/non-existent-path')
             assert not_found_page.title == 'Not Found | Crystal'
             assert not_found_page.status == 404
             
@@ -2993,7 +2997,7 @@ async def _generic_404_page_visible(
         
         if headless:
             with Project(project_dirpath, readonly=True) as project:
-                with closing(ProjectServer(project, _DEFAULT_SERVER_PORT+1)) as sp:
+                with closing(ProjectServer(project, port=None)) as sp:
                     request_url = sp.get_request_url(f'https://xkcd.com{request_path}')
                     g404_page = await bg_fetch_url(request_url)
                     assert g404_page.title == 'Not in Archive'
@@ -3043,7 +3047,7 @@ async def _not_in_archive_page_visible(*, readonly: bool=False) -> AsyncIterator
             home_ti = root_ti.GetFirstChild()
             assert home_ti is not None
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url('https://xkcd.com/')):
+            with assert_does_open_webbrowser_to(lambda: get_request_url('https://xkcd.com/')):
                 click_button(mw.view_button)
             
             # Verify that "Not in Archive" page reached
@@ -3101,8 +3105,18 @@ async def _not_in_archive_page_visible_temporarily() -> AsyncIterator[tuple[str,
             
             # Start the project server by clicking View button
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(home_url_in_archive):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
+                    home_url,
+                    project_default_url_prefix=project.default_url_prefix)):
                 click_button(mw.view_button)
+            
+            # Recalculate archive URLs now that the ProjectServer has started
+            home_url_in_archive = get_request_url(
+                home_url,
+                project_default_url_prefix=project.default_url_prefix)
+            comic1_url_in_archive = get_request_url(
+                comic1_url,
+                project_default_url_prefix=project.default_url_prefix)
             
             yield (comic1_url_in_archive, home_url_in_archive, sp, project)
 
@@ -3140,14 +3154,13 @@ async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
                     async with wait_for_download_task_to_start_and_finish(project):
                         click_button(mw.download_button)
             
-            home_url_in_archive = get_request_url(
-                home_url,
-                project_default_url_prefix=project.default_url_prefix)
-            
             # Start the project server by clicking View button
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(home_url_in_archive):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
+                    home_url,
+                    project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
+            home_url_in_archive = url_future.result()
             
             # Verify that "Fetch Error" page reached
             fetch_error_page = await fetch_archive_url(home_url)
@@ -3191,7 +3204,7 @@ async def serve_and_fetch_xkcd_home_page(mw: MainWindow) -> tuple[WebPage, str]:
         assert home_ti is not None
         assert f'{home_url} - Home' == home_ti.Text
         home_ti.SelectItem()
-        with assert_does_open_webbrowser_to(get_request_url(home_url)):
+        with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)):
             click_button(mw.view_button)
         
         # Fetch the revision through the server
@@ -3251,11 +3264,11 @@ async def _view_xkcd_home_page_when_embedded_image_is_undownloaded(
             
             # Start the ProjectServer
             home_ti.SelectItem()
-            home_url_in_archive = get_request_url(
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
                 home_url,
-                project_default_url_prefix=project.default_url_prefix)
-            with assert_does_open_webbrowser_to(home_url_in_archive):
+                project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
+            home_url_in_archive = url_future.result()
             
             with patch.object(
                         crystal.server._RequestHandler, 'send_revision', autospec=True,

@@ -18,7 +18,8 @@ from crystal.tests.util.controls import (
 from crystal.tests.util.pages import NotInArchivePage
 from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
-    assert_does_open_webbrowser_to, fetch_archive_url, is_url_not_in_archive,
+    assert_does_open_webbrowser_to, fetch_archive_url,
+    get_most_recently_started_server_port, is_url_not_in_archive,
     MockHttpServer, served_project,
 )
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
@@ -120,13 +121,13 @@ async def test_first_time_user_can_easily_download_and_view_first_url() -> None:
                 
                 assert home_ti.IsSelected(), \
                     'First created root resource should already be selected'
-                home_url_in_archive = get_request_url(
-                    home_url,
-                    project_default_url_prefix=project.default_url_prefix)
-                with assert_does_open_webbrowser_to(home_url_in_archive):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(
+                        home_url,
+                        project_default_url_prefix=project.default_url_prefix)) as url_future:
                     # Action 6 (Click): "View"
                     action_count += 1
                     click_button(mw.view_button)
+                home_url_in_archive = url_future.result()
                 
                 # Ensure downloaded page looks correct
                 page = await bg_fetch_url(home_url_in_archive)
@@ -403,13 +404,14 @@ async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> No
                 
                 # Test can view resource (that has zero downloaded revisions)
                 home_ti.SelectItem()
-                home_request_url = get_request_url(home_url)
-                expected_home_request_url = (
-                    f"http://127.0.0.1:{_DEFAULT_SERVER_PORT}/_/{home_url.replace('://', '/')}"
-                )
-                assert expected_home_request_url == home_request_url
-                with assert_does_open_webbrowser_to(home_request_url):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)) as url_future:
                     click_button(mw.view_button)
+                home_request_url = url_future.result()
+                # Verify the request URL has the expected pattern (with any port number)
+                assertRegex(
+                    home_request_url,
+                    rf"http://127\.0\.0\.1:\d+/_/{re.escape(home_url.replace('://', '/'))}"
+                )
                 # NOTE: A real user browsing to the root resource would cause it
                 #       to be dynamically downloaded.
                 assert True == (await is_url_not_in_archive(home_url))
@@ -598,7 +600,7 @@ async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> No
                 # Start server
                 home_ti = root_ti.find_child(home_url)
                 home_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)):
                     click_button(mw.view_button)
                 
                 # Test can still view resource (that has a downloaded revision)
@@ -670,7 +672,7 @@ async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> No
                 
                 # Start server
                 atom_feed_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(atom_feed_url)):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(atom_feed_url)):
                     click_button(mw.view_button)
                 
                 # Test can still view resource (that has a downloaded revision)
@@ -716,11 +718,11 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
             
             # Test can view resource
             home_ti.SelectItem()
-            home_url_in_archive = get_request_url(
-                home_url,
-                project_default_url_prefix=project.default_url_prefix)
-            with assert_does_open_webbrowser_to(home_url_in_archive):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
+                    home_url,
+                    project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
+            home_url_in_archive = url_future.result()
             
             # Extract values before defining the closure
             # to avoid capturing the unserializable Project object
@@ -863,7 +865,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
             #       this URL does exist in the <script> tag. However it is NOT 
             #       smart enough to determine that the link should be considered
             #       EMBEDDED, so Crystal will not automatically download it.
-            target_reference = f'''client.open("GET", "{get_request_url(target_url)}", true);'''
+            target_reference = lambda: f'''client.open("GET", "{get_request_url(target_url)}", true);'''
             
             target_group_name = 'Target Group'
             target_group_pattern = target_url + '*'
@@ -894,7 +896,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                     click_button(mw.download_button)
                 
                 # Start server
-                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)):
                     click_button(mw.view_button)
                 
                 assert False == (await is_url_not_in_archive(home_url))
@@ -903,7 +905,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 if True:
                     # Ensure home page has <script> reference to target
                     home_page = await fetch_archive_url(home_url)
-                    assert target_reference in home_page.content
+                    assert target_reference() in home_page.content
                     
                     # Ensure target was not discovered as embedded resource of home page
                     assert False == (await is_url_not_in_archive(home_url))
@@ -917,7 +919,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None
                 home_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)):
                     click_button(mw.view_button)
             
             # View the home page.
@@ -1150,7 +1152,7 @@ async def test_can_download_and_serve_a_site_requiring_dynamic_link_rewriting() 
             
             # Start server
             home_ti.SelectItem()
-            with assert_does_open_webbrowser_to(get_request_url(
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
                     home_url,
                     project_default_url_prefix=new_default_url_prefix)):
                 click_button(mw.view_button)
@@ -1285,14 +1287,14 @@ async def test_cannot_download_anything_given_project_is_opened_as_readonly() ->
                 
                 # Ensure can serve downloaded resource (Home)
                 home_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(home_url)):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)):
                     click_button(mw.view_button)
                 assert False == (await is_url_not_in_archive(home_url))
                 
                 # Ensure does NOT dynamically download a resource (Comic #1)
                 # matching an existing group (Comic) when in read-only mode
                 comic1_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(comic1_url)):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(comic1_url)):
                     click_button(mw.view_button)
                 assert True == (await is_url_not_in_archive(comic1_url))
 
@@ -1362,12 +1364,13 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 
                 # Start server
                 home_ti.SelectItem()
-                with assert_does_open_webbrowser_to(get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(home_url, project_default_url_prefix=project.default_url_prefix)):
                     click_button(mw.view_button)
+                project_port = get_most_recently_started_server_port()  # capture
                 
                 # Verify etag is v1 for both
-                assert home_v1_etag == (await fetch_archive_url(home_url)).etag
-                assert comic1_v1_etag == (await fetch_archive_url(comic1_url)).etag
+                assert home_v1_etag == (await fetch_archive_url(home_url, port=project_port)).etag
+                assert comic1_v1_etag == (await fetch_archive_url(comic1_url, port=project_port)).etag
             
             # Start xkcd v2
             with served_project(
@@ -1390,8 +1393,8 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                         await bg_sleep(DEFAULT_WAIT_PERIOD)
                 
                 # Verify etag is still v1 for both
-                assert home_v1_etag == (await fetch_archive_url(home_url)).etag
-                assert comic1_v1_etag == (await fetch_archive_url(comic1_url)).etag
+                assert home_v1_etag == (await fetch_archive_url(home_url, port=project_port)).etag
+                assert comic1_v1_etag == (await fetch_archive_url(comic1_url, port=project_port)).etag
                 
                 # Ensure resource status badge says URL is fresh
                 await _assert_tree_item_icon_tooltip_contains(home_ti, 'Fresh')
@@ -1428,8 +1431,8 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 await pd.ok()
                 
                 # Verify etag is v2 for Home, but still v1 for Comic #1
-                assert home_v2_etag == (await fetch_archive_url(home_url)).etag
-                assert comic1_v1_etag == (await fetch_archive_url(comic1_url)).etag
+                assert home_v2_etag == (await fetch_archive_url(home_url, port=project_port)).etag
+                assert comic1_v1_etag == (await fetch_archive_url(comic1_url, port=project_port)).etag
         
         with Project(project_dirpath) as project:
             # Ensure Home was downloaded twice, each time with HTTP 200

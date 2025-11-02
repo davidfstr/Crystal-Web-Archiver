@@ -7,14 +7,14 @@ See also:
 
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
-import signal
 from crystal.model import Project, Resource
-from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn, assertRegex
 from crystal.tests.util.cli import (
     _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until,
     crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
+from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_subtests
 from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
@@ -24,11 +24,22 @@ from crystal.util.xos import is_mac_os
 from io import TextIOBase
 import datetime
 import os
+import signal
 import socket
 import tempfile
 import textwrap
 from unittest import skip
 import urllib.request
+
+
+def _is_port_in_use(port: int, hostname: str = '127.0.0.1') -> bool:
+    """Check if a port is already in use."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((hostname, port))
+            return False
+        except OSError:
+            return True
 
 
 # === Basic Launch Tests (<nothing>, --help) ===
@@ -241,7 +252,7 @@ def test_when_launched_with_multiple_filepaths_then_prints_error_and_exits() -> 
 def test_when_launched_with_serve_and_project_filepath_then_opens_project_and_serves_immediately() -> None:
     with _temporary_project() as project_path:
         with _crystal_shell_with_serve(project_path) as server_start_message:
-            assertIn('Server started at: http://127.0.0.1:2797', server_start_message)
+            assertRegex(server_start_message, r'Server started at: http://127\.0\.0\.1:\d+')
 
 
 def test_when_launched_with_serve_and_port_then_binds_to_specified_port() -> None:
@@ -258,7 +269,7 @@ def test_when_launched_with_serve_and_host_then_binds_to_specified_host() -> Non
         
         # Open empty project (as --readonly by default)
         with _crystal_shell_with_serve(project_path, host='0.0.0.0') as server_start_message:
-            assertIn('Server started at: http://0.0.0.0:2797', server_start_message)
+            assertRegex(server_start_message, r'Server started at: http://0\.0\.0\.0:\d+')
 
 
 def test_when_launched_with_port_but_no_serve_then_prints_error_and_exits() -> None:
@@ -283,6 +294,9 @@ def test_given_launched_with_serve_and_port_when_port_already_in_use_then_fails_
 
 
 def test_given_launched_with_serve_and_no_port_and_default_port_in_use_then_uses_next_higher_open_port() -> None:
+    if _is_port_in_use(2797) or _is_port_in_use(2798):
+        skipTest('Port 2797 or 2798 already in use, cannot run test')
+    
     with port_in_use(2797, '127.0.0.1'):
         with _temporary_project() as project_path:
             with _crystal_shell_with_serve(project_path) as server_start_message:
@@ -292,7 +306,7 @@ def test_given_launched_with_serve_and_no_port_and_default_port_in_use_then_uses
 def test_when_launched_with_serve_and_without_readonly_then_serves_as_writable() -> None:
     with _temporary_project() as project_path:
         with _crystal_shell_with_serve(project_path) as server_start_message:
-            assertIn('Server started at: http://127.0.0.1:2797', server_start_message)
+            assertRegex(server_start_message, r'Server started at: http://127\.0\.0\.1:\d+')
             
             # Should not contain readonly messages for default 127.0.0.1 host
             assertNotIn('Read-only mode automatically enabled', server_start_message)
@@ -302,7 +316,7 @@ def test_when_launched_with_serve_and_without_readonly_then_serves_as_writable()
 def test_when_launched_with_serve_and_host_equal_to_127_0_0_1_and_without_readonly_then_serves_as_writable() -> None:
     with _temporary_project() as project_path:
         with _crystal_shell_with_serve(project_path, host='127.0.0.1') as server_start_message:
-            assertIn('Server started at: http://127.0.0.1:2797', server_start_message)
+            assertRegex(server_start_message, r'Server started at: http://127\.0\.0\.1:\d+')
             
             # Should not contain readonly messages for explicit 127.0.0.1 host
             assertNotIn('Read-only mode automatically enabled', server_start_message)
@@ -317,7 +331,7 @@ def test_when_launched_with_serve_and_host_other_than_127_0_0_1_and_without_no_r
         
         # Open empty project (as --readonly by default for remote host)
         with _crystal_shell_with_serve(project_path, host='0.0.0.0') as server_start_message:
-            assertIn('Server started at: http://0.0.0.0:2797', server_start_message)
+            assertRegex(server_start_message, r'Server started at: http://0\.0\.0\.0:\d+')
             
             # Should contain readonly messages for remote host
             assertIn('Read-only mode automatically enabled for remote access (--host 0.0.0.0)', server_start_message)
@@ -334,7 +348,7 @@ def test_when_launched_with_serve_and_host_other_than_127_0_0_1_and_with_no_read
         with _crystal_shell_with_serve(
                 project_path, host='0.0.0.0', extra_args=['--no-readonly']
                 ) as server_start_message:
-            assertIn('Server started at: http://0.0.0.0:2797', server_start_message)
+            assertRegex(server_start_message, r'Server started at: http://0\.0\.0\.0:\d+')
             
             # Should not contain readonly messages when --no-readonly is specified
             assertNotIn('Read-only mode automatically enabled', server_start_message)

@@ -585,7 +585,7 @@ async def test_the_view_menuitem_actually_opens_the_resource_in_a_browser() -> N
             root_ti = TreeItem.GetRootItem(mw.task_tree)
             (download_r_ti,) = root_ti.Children
             
-            with assert_does_open_webbrowser_to(get_request_url(home_url)):
+            with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)):
                 # Right-click the task tree node and select "View"
                 def show_popup(menu: wx.Menu) -> None:
                     (view_menuitem,) = [

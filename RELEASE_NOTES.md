@@ -68,6 +68,11 @@ Release Notes ⋮
     * Code coverage statistics now report which tests cover each source line.
     * Threads are now always created with a name, to assist with multi-threading debugging.
 
+* Testing improvements
+    * Tests no longer assume that the default server port is free.
+      Therefore an independent Crystal app running in the background will
+      no longer cause tests to fail.
+
 ### v2.0.0 (September 26, 2025)
 
 Crystal 2.0 is a huge release with many new features and all-new tutorials!
