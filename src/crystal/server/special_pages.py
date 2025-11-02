@@ -861,7 +861,7 @@ def not_in_archive_html(
             }
             
             function updateActionTypeRadioButtonsEnabled() {
-                document.getElementById('cr-create-root-url-radio').disabled = actionInProgress;
+                document.getElementById('cr-create-root-url-radio').disabled = actionInProgress || createGroupActionSuccess;
                 document.getElementById('cr-create-group-radio').disabled = actionInProgress || createGroupActionSuccess;
                 document.getElementById('cr-download-only-radio').disabled = actionInProgress;
             }
