@@ -78,10 +78,6 @@ class NotInArchivePage(AbstractPage):
     def root_url_name_field(self) -> Locator:
         return self.raw_page.locator('#cr-root-url-name')
     
-    @property
-    def download_root_url_immediately_checkbox(self) -> Locator:
-        return self.raw_page.locator('#cr-download-root-url-immediately-checkbox')
-    
     # === Create Group Form ===
     
     @property

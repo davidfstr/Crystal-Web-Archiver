@@ -750,14 +750,6 @@ def not_in_archive_html(
                     <label class="cr-form-row__label">Name:</label>
                     <input type="text" id="cr-root-url-name" class="cr-form-row__input" placeholder="e.g. Home">
                 </div>
-                
-                <div class="cr-form__section">
-                    <div class="cr-form__section-header">New URL Options</div>
-                    <label class="cr-checkbox">
-                        <input type="checkbox" id="cr-download-root-url-immediately-checkbox" checked onchange="onDownloadImmediatelyCheckboxChange()">
-                        <span>Download URL Immediately</span>
-                    </label>
-                </div>
             </div>
             
             <div id="cr-create-group-form" class="cr-create-group-form" style="display: none;">
@@ -857,17 +849,6 @@ def not_in_archive_html(
                 }
             }
             
-            // Collapses the Create Root URL Form after a Create action succeeded,
-            // leaving the success message visible.
-            function collapseCreateRootUrlForm() {
-                const createRootUrlForm = document.getElementById('cr-create-root-url-form');
-                createRootUrlForm.classList.add('slide-up');
-                
-                // Switch to Download Only radio button
-                document.getElementById('cr-download-only-radio').checked = true;
-                onActionTypeChanged();
-            }
-            
             // Collapses the Create Group Form after a Create action succeeded,
             // leaving the success message visible.
             function collapseCreateGroupForm() {
@@ -880,7 +861,7 @@ def not_in_archive_html(
             }
             
             function updateActionTypeRadioButtonsEnabled() {
-                document.getElementById('cr-create-root-url-radio').disabled = actionInProgress || createRootUrlActionSuccess;
+                document.getElementById('cr-create-root-url-radio').disabled = actionInProgress;
                 document.getElementById('cr-create-group-radio').disabled = actionInProgress || createGroupActionSuccess;
                 document.getElementById('cr-download-only-radio').disabled = actionInProgress;
             }
@@ -1076,58 +1057,16 @@ def not_in_archive_html(
             
             async function onDownloadOrCreateRootUrlButtonClicked() {
                 const name = document.getElementById('cr-root-url-name').value.trim();
-                const downloadRootImmediately = document.getElementById('cr-download-root-url-immediately-checkbox').checked;
                 
                 clearActionMessage();
                 setActionInProgress(true);
                 
                 try {
-                    // If download was requested, start individual URL download
-                    // (which will create the root URL automatically)
-                    // Otherwise create the root URL without downloading
-                    if (downloadRootImmediately) {
-                        await startUrlDownload(/*isRoot=*/true, /*rootName=*/name);
-                    } else {
-                        // Create root URL without downloading
-                        const createUrl = '/_/crystal/create-url';
-                        const response = await fetch(createUrl, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                url: %(archive_url_json)s,
-                                is_root: true,
-                                name: name,
-                                download_immediately: false,
-                            })
-                        });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.error || 'Failed to create root URL');
-                        }
-                        
-                        // Disable only Create Root URL radio button
-                        setCreateRootUrlActionSuccess(true);
-                        
-                        showActionMessage('✅ Root URL created successfully!', /*isSuccess=*/true);
-                        
-                        collapseCreateRootUrlForm();
-                    }
-                } catch (error) {
-                    console.error('Root action error:', error);
-                    showActionMessage('✖️ Failed to create root URL', /*isSuccess=*/false);
+                    // Start individual URL download (which will create the root URL automatically)
+                    await startUrlDownload(/*isRoot=*/true, /*rootName=*/name);
                 } finally {
                     setActionInProgress(false);
                 }
-            }
-            
-            let createRootUrlActionSuccess = false;
-            
-            function setCreateRootUrlActionSuccess(success) {
-                createRootUrlActionSuccess = success;
-                updateActionTypeRadioButtonsEnabled();
             }
             
             // -----------------------------------------------------------------
@@ -1172,7 +1111,7 @@ def not_in_archive_html(
                     // Disable only Create Group radio button
                     setCreateGroupActionSuccess(true);
                     
-                    showActionMessage('✅ Group created successfully!', /*isSuccess=*/true);
+                    showActionMessage('✅ Group created', /*isSuccess=*/true);
                     
                     // If download was requested, start individual URL download
                     // otherwise collapse the disabled form to show only essential elements
@@ -1242,6 +1181,10 @@ def not_in_archive_html(
                         throw new Error(errorData.error || 'Failed to start download');
                     }
                     
+                    if (isRoot) {
+                        showActionMessage('✅ Root URL created', /*isSuccess=*/true);
+                    }
+                    
                     const result = await response.json();
                     const taskId = result.task_id;
                     
@@ -1295,6 +1238,10 @@ def not_in_archive_html(
                 } catch (error) {
                     console.error('Download error:', error);
                     
+                    if (isRoot) {
+                        showActionMessage('✖️ Failed to create root URL', /*isSuccess=*/false);
+                    }
+                    
                     // Update progress with error
                     progressFill.style.width = '0%%';
                     progressText.textContent = `Download failed: ${error.message}`;
@@ -1333,23 +1280,12 @@ def not_in_archive_html(
                 const actionType = document.querySelector('input[name="cr-action-type"]:checked').value;
                 const actionButton = document.getElementById('cr-action-button');
                 if (actionType === 'create-root-url') {
-                    const downloadImmediatelyCheckbox = document.getElementById('cr-download-root-url-immediately-checkbox');
                     if (!actionInProgress) {
-                        if (downloadImmediatelyCheckbox.checked) {
-                            actionButton.textContent = '⬇ Download';
-                            actionButton.className = 'cr-button cr-button--primary';
-                        } else {
-                            actionButton.textContent = '✚ Create';
-                            actionButton.className = 'cr-button cr-button--secondary';
-                        }
+                        actionButton.textContent = '⬇ Download';
+                        actionButton.className = 'cr-button cr-button--primary';
                     } else {
-                        if (downloadImmediatelyCheckbox.checked) {
-                            actionButton.textContent = 'Creating & Starting Download...';
-                            actionButton.className = 'cr-button cr-button--primary';
-                        } else {
-                            actionButton.textContent = 'Creating...';
-                            actionButton.className = 'cr-button cr-button--secondary';
-                        }
+                        actionButton.textContent = 'Creating & Starting Download...';
+                        actionButton.className = 'cr-button cr-button--primary';
                     }
                 } else if (actionType === 'create-group') {
                     const downloadImmediatelyCheckbox = document.getElementById('cr-download-group-immediately-checkbox');
