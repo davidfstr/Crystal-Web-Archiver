@@ -88,8 +88,6 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
             
             # Try to start second server, also on _DEFAULT_SERVER_PORT.
             # Expect it to actually start on (_DEFAULT_SERVER_PORT + 1).
-            # 
-            # TODO: Suppress warning: '*** Default port for project server is in use. Is a real Crystal app running in the background?'
             expected_port = _DEFAULT_SERVER_PORT + 1
             home_ti.SelectItem()
             try:

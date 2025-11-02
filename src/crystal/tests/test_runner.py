@@ -70,28 +70,3 @@ async def test_when_main_window_left_open_then_mw_connect_does_recover_gracefull
     finally:
         await main_window.close()
 
-
-# === ProjectServer Tests ===
-
-async def test_given_default_project_server_port_in_use_when_press_view_button_then_warns_default_port_in_use() -> None:
-    with port_in_use(_DEFAULT_SERVER_PORT, '127.0.0.1'):    
-        # Open a project 
-        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as \
-                    (mw, project):
-                # Select the home URL
-                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
-                home_ti = root_ti.GetFirstChild()
-                assert home_ti is not None
-                home_ti.SelectItem()
-                
-                # Press the "View" button to start a ProjectServer
-                with redirect_stderr(io.StringIO()) as captured_stderr:
-                    with assert_does_open_webbrowser_to(ANY):
-                        click_button(mw.view_button)
-                
-                # Ensure that a warning was printed
-                assertIn(
-                    '*** Default port for project server is in use.',
-                    captured_stderr.getvalue()
-                )

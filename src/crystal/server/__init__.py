@@ -143,17 +143,6 @@ class ProjectServer:
                 else:
                     break
             
-            if port == _DEFAULT_SERVER_PORT and tests_are_running() and \
-                    _default_port_in_use_warnings_enabled:
-                print(
-                    '*** Default port for project server is in use. '
-                    'Is a real Crystal app running in the background? '
-                    'Will continue with a different open port, '
-                    'but the current automated test may not expect '
-                    'the server to be running on a non-default port.',
-                    file=sys.stderr
-                )
-            
             # Try another port
             port += 1
             continue
