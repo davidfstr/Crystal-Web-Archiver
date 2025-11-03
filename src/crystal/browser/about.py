@@ -155,7 +155,8 @@ class AboutDialog:
         if parent is not None:
             ShowWindowModal(dialog, modal_fallback=True)
         else:
-            ShowModal(dialog)
+            with dialog:
+                ShowModal(dialog)
     
     @staticmethod
     def _copyright_text() -> str:
@@ -191,9 +192,17 @@ class AboutDialog:
             self.dialog.Close()
     
     def _on_close(self, event: wx.CloseEvent) -> None:
+        # Return wx.OK to caller of ShowModal or ShowWindowModal
+        suppress_destroy = False
         if self.dialog.Parent is None:
             self.dialog.EndModal(wx.OK)
-        self.dialog.Destroy()
+            if getattr(self.dialog, 'cr_simulated_modal', False):
+                # ShowModal in wx_dialog.py still needs to interact with the dialog object
+                suppress_destroy = True
+        
+        # Dispose dialog, unless suppressed
+        if not suppress_destroy:
+            self.dialog.Destroy()
     
     def _on_char_hook(self, event: wx.KeyEvent) -> None:
         """Handle keyboard shortcuts, especially Return key for OK button."""

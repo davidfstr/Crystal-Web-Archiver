@@ -21,6 +21,17 @@ def ShowModal(dialog: wx.Dialog) -> int:
     
     Automated tests should patch this function to replace it with a
     `mocked_show_modal()` function rather than setting a return value directly.
+    
+    This function, like the native wx.Dialog.ShowModal, should always be called
+    inside a context manager for the dialog, to ensure the dialog is destroyed:
+    
+        Yes:
+            with dialog:
+                return_code = ShowModal(dialog)
+                ...
+        No:
+            return_code = ShowModal(dialog)
+            ...
     """
     is_running_tests = tests_are_running()  # cache
     
@@ -52,17 +63,21 @@ def ShowModal(dialog: wx.Dialog) -> int:
     #       as admitted by the wxPython test suite in test_dialog.py.
     #       So simulate its effect in a way that does NOT hang while running tests.
     if is_running_tests and is_mac_os():
-        dialog.SetReturnCode(0)
-        dialog.Show()
-        
-        loop = wx.GetApp().GetTraits().CreateEventLoop()
-        with wx.EventLoopActivator(loop):
-            while dialog.GetReturnCode() == 0:
-                loop.Dispatch()
-                if not dialog.IsShown() and dialog.GetReturnCode() == 0:
-                    dialog.SetReturnCode(wx.ID_CANCEL)
-        
-        return dialog.GetReturnCode()
+        dialog.cr_simulated_modal = True
+        try:
+            dialog.SetReturnCode(0)
+            dialog.Show()
+            
+            loop = wx.GetApp().GetTraits().CreateEventLoop()
+            with wx.EventLoopActivator(loop):
+                while dialog.GetReturnCode() == 0:
+                    loop.Dispatch()
+                    if not dialog.IsShown() and dialog.GetReturnCode() == 0:
+                        dialog.SetReturnCode(wx.ID_CANCEL)
+            
+            return dialog.GetReturnCode()
+        finally:
+            del dialog.cr_simulated_modal
     else:
         return dialog.ShowModal()
 
@@ -112,6 +127,17 @@ def ShowModalAsync(dialog: wx.Dialog) -> Generator[FgCommand, ContinueSoonFunc |
             ...  # do something with the return code
         
         start_fg_coroutine(my_fg_coroutine)
+     
+    This function, unlike ShowModal, should NEVER be called inside a 
+    context manager for the dialog, to ensure the dialog stays alive:
+    
+        Yes:
+            return_code = await ShowModalAsync(dialog)
+            ...
+        No:
+            with dialog:
+                return_code = await ShowModalAsync(dialog)
+                ...
     """
     continue_soon_func = yield FgCommand.GET_CONTINUE_SOON_FUNC
     assert callable(continue_soon_func)  # is a ContinueSoonFunc
@@ -175,6 +201,18 @@ def ShowWindowModal(dialog: wx.Dialog, *, modal_fallback: bool=False) -> None:
     Window-modal dialogs prevent the user from interacting with the parent
     window until the dialog is closed, but still allow interaction with other
     application windows and the system.
+    
+    This function, unlike ShowModal, should NEVER be called inside a 
+    context manager for the dialog, because this function will manage
+    the destruction of the dialog internally:
+    
+        Yes:
+            ShowWindowModal(dialog)
+            ...
+        No:
+            with dialog:
+                ShowWindowModal(dialog)
+                ...
     """
     if is_wx_gtk() or (is_windows() and tests_are_running()):
         # 1a. GTK sometimes segfaults when closing a dialog displayed as window-modal.
@@ -186,7 +224,8 @@ def ShowWindowModal(dialog: wx.Dialog, *, modal_fallback: bool=False) -> None:
         #    dialog is open, which blocks automated tests from executing.
         #    So don't use ShowWindowModal() on Windows during tests.
         if modal_fallback and not (is_wx_gtk() and tests_are_running()):
-            dialog.ShowModal()
+            with dialog:
+                dialog.ShowModal()
         else:
             dialog.Show()
     else:
@@ -194,6 +233,7 @@ def ShowWindowModal(dialog: wx.Dialog, *, modal_fallback: bool=False) -> None:
         # 2. Windows partially supports window-modal dialogs,
         #    disabling interactions on the parent window,
         #    but NOT visually disabling any controls.
+        # NOTE: Does NOT block until the dialog closes
         dialog.ShowWindowModal()
 
 
