@@ -9,7 +9,8 @@ from crystal.tests import (
     test_icons, test_install_to_desktop, test_load_urls, test_log_drawer,
     test_main_window,
     test_menus, test_new_group, test_new_root_url, test_open_project,
-    test_parse_html, test_profile, test_project_migrate, test_readonly_mode,
+    test_parse_html, test_preferences,
+    test_profile, test_project_migrate, test_readonly_mode,
     test_runner, test_server, test_shell, test_ssd, test_tasks, test_tasktree,
     test_untitled_projects,
     test_window_modal_titles, test_workflows, test_xthreading,
@@ -71,6 +72,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_new_root_url) +
     _test_functions_in_module(test_open_project) +
     _test_functions_in_module(test_parse_html) +
+    _test_functions_in_module(test_preferences) +
     _test_functions_in_module(test_profile) +
     _test_functions_in_module(test_project_migrate) +
     _test_functions_in_module(test_readonly_mode) +

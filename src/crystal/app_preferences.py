@@ -125,6 +125,46 @@ class AppPreferences:
             """
         )
     ))
+    
+    proxy_type = cast(Optional[str], _define_property(
+        'proxy_type',
+        validator=lambda pt: pt in ['none', 'socks5'],
+        doc=(
+            """
+            The type of proxy to use for network connections.
+            
+            Valid values:
+            - 'none': No proxy
+            - 'socks5': SOCKS5 proxy
+            
+            Returns 'none' if not set or invalid.
+            """
+        )
+    ))
+    
+    socks5_proxy_host = cast(Optional[str], _define_property(
+        'socks5_proxy_host',
+        doc=(
+            """
+            The hostname or IP address of the SOCKS5 proxy server.
+            
+            Only used when proxy_type is 'socks5'.
+            """
+        )
+    ))
+    
+    socks5_proxy_port = cast(Optional[int], _define_property(
+        'socks5_proxy_port',
+        validator=lambda port: isinstance(port, int) and 1 <= port <= 65535,
+        doc=(
+            """
+            The port number of the SOCKS5 proxy server.
+            
+            Only used when proxy_type is 'socks5'.
+            Must be between 1 and 65535.
+            """
+        )
+    ))
 
 
 app_prefs = AppPreferences(_ready=True)  # singleton

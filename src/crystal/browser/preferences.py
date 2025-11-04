@@ -139,6 +139,86 @@ class PreferencesDialog:
             flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
             border=5 if is_windows() else 0)
         
+        # Proxy configuration
+        fields_sizer.Add(
+            wx.StaticText(parent, label='Proxy:'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2),
+            border=8)
+        if True:
+            # No proxy radio button
+            self.no_proxy_radio = wx.RadioButton(
+                parent,
+                label='No proxy',
+                name='cr-preferences-dialog__no-proxy-radio',
+                style=wx.RB_GROUP)
+            bind(self.no_proxy_radio, wx.EVT_RADIOBUTTON, self._on_proxy_type_changed)
+            fields_sizer.Add(
+                self.no_proxy_radio,
+                flag=wx.EXPAND, pos=wx.GBPosition(2, 0), span=wx.GBSpan(1, 2))
+            
+            # HTTP/HTTPS proxy radio button (disabled, not yet supported)
+            self.http_proxy_radio = wx.RadioButton(
+                parent,
+                label='HTTP/HTTPS proxy (not yet supported)',
+                name='cr-preferences-dialog__http-proxy-radio')
+            self.http_proxy_radio.Enabled = False
+            fields_sizer.Add(
+                self.http_proxy_radio,
+                flag=wx.EXPAND, pos=wx.GBPosition(3, 0), span=wx.GBSpan(1, 2))
+            
+            # SOCKS5 proxy radio button
+            self.socks5_proxy_radio = wx.RadioButton(
+                parent,
+                label='SOCKS5 proxy',
+                name='cr-preferences-dialog__socks5-proxy-radio')
+            bind(self.socks5_proxy_radio, wx.EVT_RADIOBUTTON, self._on_proxy_type_changed)
+            fields_sizer.Add(
+                self.socks5_proxy_radio,
+                flag=wx.EXPAND, pos=wx.GBPosition(4, 0), span=wx.GBSpan(1, 2))
+            
+            # SOCKS5 proxy host and port fields (indented)
+            socks5_fields_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            if True:
+                socks5_fields_sizer.Add(
+                    wx.StaticText(parent, label='Host:'),
+                    flag=wx.CENTER|wx.LEFT, border=20)
+                socks5_fields_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+                
+                self.socks5_host_field = wx.TextCtrl(
+                    parent,
+                    name='cr-preferences-dialog__socks5-host-field',
+                    size=(200, -1))
+                socks5_fields_sizer.Add(self.socks5_host_field, flag=wx.CENTER)
+                
+                socks5_fields_sizer.AddSpacer(10)
+                socks5_fields_sizer.Add(
+                    wx.StaticText(parent, label='Port:'),
+                    flag=wx.CENTER)
+                socks5_fields_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+                
+                self.socks5_port_field = wx.TextCtrl(
+                    parent,
+                    name='cr-preferences-dialog__socks5-port-field',
+                    size=(60, -1))
+                socks5_fields_sizer.Add(self.socks5_port_field, flag=wx.CENTER)
+            fields_sizer.Add(
+                socks5_fields_sizer,
+                flag=wx.EXPAND, pos=wx.GBPosition(5, 0), span=wx.GBSpan(1, 2))
+            
+            # Load proxy preferences
+            proxy_type = app_prefs.proxy_type or 'none'
+            if proxy_type == 'socks5':
+                self.socks5_proxy_radio.Value = True
+                self.socks5_host_field.Value = app_prefs.socks5_proxy_host or ''
+                socks5_port = app_prefs.socks5_proxy_port
+                self.socks5_port_field.Value = str(socks5_port) if socks5_port is not None else ''
+            else:
+                self.no_proxy_radio.Value = True
+                self.socks5_host_field.Value = ''
+                self.socks5_port_field.Value = ''
+            
+            self._update_proxy_fields_enabled()
+        
         # Reset dismissed callouts button
         self.reset_callouts_button = wx.Button(
             parent, 
@@ -147,7 +227,8 @@ class PreferencesDialog:
         bind(self.reset_callouts_button, wx.EVT_BUTTON, self._on_reset_callouts)
         fields_sizer.Add(
             self.reset_callouts_button,
-            flag=0, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2))
+            flag=wx.TOP, pos=wx.GBPosition(6, 0), span=wx.GBSpan(1, 2),
+            border=8)
         
         return fields_sizer
     
@@ -221,6 +302,16 @@ class PreferencesDialog:
     def _update_stale_before_date_picker_enabled(self, event: wx.CommandEvent | None=None) -> None:
         self.stale_before_date_picker.Enabled = self.stale_before_checkbox.Value
     
+    def _update_proxy_fields_enabled(self) -> None:
+        """Enable/disable SOCKS5 host and port fields based on selected proxy type."""
+        is_socks5_selected = self.socks5_proxy_radio.Value
+        self.socks5_host_field.Enabled = is_socks5_selected
+        self.socks5_port_field.Enabled = is_socks5_selected
+    
+    def _on_proxy_type_changed(self, event: wx.CommandEvent) -> None:
+        """Handle proxy type radio button selection changes."""
+        self._update_proxy_fields_enabled()
+    
     def _on_reset_callouts(self, event: wx.CommandEvent) -> None:
         # Reset all dismissed help callouts so they will appear again
         del app_prefs.view_button_callout_dismissed
@@ -263,6 +354,29 @@ class PreferencesDialog:
             self._project.min_fetch_date = stale_before_dt_local
         else:
             self._project.min_fetch_date = None
+        
+        # Save app fields
+        if self.socks5_proxy_radio.Value:
+            app_prefs.proxy_type = 'socks5'
+            app_prefs.socks5_proxy_host = self.socks5_host_field.Value or None
+            
+            # Parse and validate port
+            port_str = self.socks5_port_field.Value.strip()
+            if port_str:
+                try:
+                    port = int(port_str)
+                    if 1 <= port <= 65535:
+                        app_prefs.socks5_proxy_port = port
+                    else:
+                        # Invalid port range, clear it
+                        app_prefs.socks5_proxy_port = None
+                except ValueError:
+                    # Invalid port format, clear it
+                    app_prefs.socks5_proxy_port = None
+            else:
+                app_prefs.socks5_proxy_port = None
+        else:
+            app_prefs.proxy_type = 'none'
         
         self.dialog.Destroy()
         self._on_close_callback()
