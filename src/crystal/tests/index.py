@@ -225,6 +225,9 @@ def _run_tests(test_names: list[str]) -> bool:
     # Ensure ancestor caller did already call set_tests_are_running()
     assert tests_are_running()
     
+    # Disable autoflush during tests for better performance
+    app_prefs.autoflush = False
+    
     is_coverage_now = is_coverage()  # cache
     
     # Run selected tests

@@ -4,6 +4,7 @@ from crystal.util.wx_dialog import (
     position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
 )
 from crystal.util.xos import is_wx_gtk
+from typing import cast
 import wx
 
 _WINDOW_INNER_PADDING = 10
@@ -104,9 +105,9 @@ class BetterMessageDialog(wx.Dialog):
         self._checkbox.Value = checked
         self._checkbox.ProcessEvent(wx.CommandEvent(
             wx.wxEVT_CHECKBOX, self._checkbox.GetId()))
-    CheckBoxChecked = property(
+    CheckBoxChecked = cast(bool, property(
         IsCheckBoxChecked, SetCheckBoxChecked,
-        doc="Whether the checkbox is checked (True) or not (False).")
+        doc="Whether the checkbox is checked (True) or not (False)."))
 
     def _on_button(self, event: wx.CommandEvent) -> None:
         self.EndModal(event.GetId())

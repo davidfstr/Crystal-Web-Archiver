@@ -297,8 +297,8 @@ async def test_can_reset_permanent_dismissal_from_preferences_dialog() -> None:
                 assert prefs_dialog.reset_callouts_button.Enabled == False
                 
                 # Verify the preference was reset
-                assert app_prefs.view_button_callout_dismissed == None, \
-                    'App preference should be reset to None'
+                assert app_prefs.view_button_callout_dismissed == False, \
+                    'App preference should be reset to False'
             finally:
                 # Close preferences dialog
                 await prefs_dialog.ok()

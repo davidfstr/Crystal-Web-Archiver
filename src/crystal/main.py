@@ -330,6 +330,17 @@ def _main2(args: list[str]) -> None:
             # Main thread did not set an exit code. Assume a bug.
             exit_code = 1  # default error exit code
         
+        # Flush any pending app preferences changes to disk
+        from crystal.app_preferences import app_prefs
+        try:
+            app_prefs.flush()
+        except:
+            import traceback
+            traceback.print_exc()
+            
+            if exit_code == 0:
+                exit_code = 1
+        
         # 1. Exit process immediately, without bothering to run garbage collection
         #    or other cleanup processes that can take a long time
         # 2. If running under code coverage and the test_bulkheads.py suite

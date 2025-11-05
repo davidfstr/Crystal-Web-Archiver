@@ -112,6 +112,10 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> It
     try:
         assert isinstance(crystal.stdout, TextIOBase)
         
+        # Flush app preferences before starting subprocess,
+        # so subprocess inherits the current preferences
+        app_prefs.flush()
+        
         yield crystal
     finally:
         assert crystal.stdin is not None
@@ -120,6 +124,10 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> It
         crystal.stdout.close()
         crystal.kill()
         crystal.wait()
+        
+        # Sync app preferences after subprocess exits,
+        # in case the subprocess modified them
+        app_prefs.sync(immediately=False)
 
 
 BannerLineType = Literal[
