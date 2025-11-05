@@ -31,7 +31,7 @@ async def test_given_preferences_dialog_when_no_proxy_selected_then_socks5_field
             # Verify "No proxy" is selected by default
             assert prefs.no_proxy_radio.Value == True
             
-            # Verify SOCKS5 fields are disabled
+            # Verify SOCKS v5 fields are disabled
             assert prefs.socks5_host_field.Enabled == False
             assert prefs.socks5_port_field.Enabled == False
             
@@ -43,10 +43,10 @@ async def test_given_preferences_dialog_when_socks5_selected_then_socks5_fields_
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             prefs = await mw.open_preferences_with_menuitem()
             
-            # Select SOCKS5 proxy
+            # Select SOCKS v5 proxy
             click_radio_button(prefs.socks5_proxy_radio)
             
-            # Verify SOCKS5 fields are now enabled
+            # Verify SOCKS v5 fields are now enabled
             assert prefs.socks5_host_field.Enabled == True
             assert prefs.socks5_port_field.Enabled == True
             
@@ -58,7 +58,7 @@ async def test_given_preferences_dialog_when_socks5_configured_then_preferences_
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             prefs = await mw.open_preferences_with_menuitem()
             
-            # Configure SOCKS5 proxy
+            # Configure SOCKS v5 proxy
             click_radio_button(prefs.socks5_proxy_radio)
             prefs.socks5_host_field.Value = 'localhost'
             prefs.socks5_port_field.Value = '1080'
@@ -97,7 +97,7 @@ async def test_given_preferences_dialog_when_invalid_port_then_port_cleared() ->
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             prefs = await mw.open_preferences_with_menuitem()
             
-            # Configure SOCKS5 proxy with invalid port
+            # Configure SOCKS v5 proxy with invalid port
             click_radio_button(prefs.socks5_proxy_radio)
             prefs.socks5_host_field.Value = 'localhost'
             prefs.socks5_port_field.Value = '999999'  # Invalid: too large

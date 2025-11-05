@@ -166,17 +166,17 @@ class PreferencesDialog:
                 self.http_proxy_radio,
                 flag=wx.EXPAND, pos=wx.GBPosition(3, 0), span=wx.GBSpan(1, 2))
             
-            # SOCKS5 proxy radio button
+            # SOCKS proxy radio button
             self.socks5_proxy_radio = wx.RadioButton(
                 parent,
-                label='SOCKS5 proxy',
+                label='SOCKS v5 proxy',
                 name='cr-preferences-dialog__socks5-proxy-radio')
             bind(self.socks5_proxy_radio, wx.EVT_RADIOBUTTON, self._on_proxy_type_changed)
             fields_sizer.Add(
                 self.socks5_proxy_radio,
                 flag=wx.EXPAND, pos=wx.GBPosition(4, 0), span=wx.GBSpan(1, 2))
             
-            # SOCKS5 proxy host and port fields (indented)
+            # SOCKS proxy host and port fields (indented)
             socks5_fields_sizer = wx.BoxSizer(wx.HORIZONTAL)
             if True:
                 socks5_fields_sizer.Add(
@@ -310,7 +310,7 @@ class PreferencesDialog:
         self.stale_before_date_picker.Enabled = self.stale_before_checkbox.Value
     
     def _update_proxy_fields_enabled(self) -> None:
-        """Enable/disable SOCKS5 host and port fields based on selected proxy type."""
+        """Enable/disable SOCKS v5 host and port fields based on selected proxy type."""
         is_socks5_selected = self.socks5_proxy_radio.Value
         self.socks5_host_field.Enabled = is_socks5_selected
         self.socks5_port_field.Enabled = is_socks5_selected

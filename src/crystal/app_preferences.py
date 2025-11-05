@@ -370,7 +370,7 @@ class AppPreferences:
             
             Valid values:
             - 'none': No proxy
-            - 'socks5': SOCKS5 proxy
+            - 'socks5': SOCKS v5 proxy
             
             Returns 'none' if not set or invalid.
             """
@@ -383,7 +383,7 @@ class AppPreferences:
         validator=lambda host: isinstance(host, str) and host.strip() != '',
         doc=(
             """
-            The hostname or IP address of the SOCKS5 proxy server.
+            The hostname or IP address of the SOCKS v5 proxy server.
             
             Only used when proxy_type is 'socks5'.
             """
@@ -397,7 +397,7 @@ class AppPreferences:
         validator=lambda port: isinstance(port, int) and 1 <= port <= 65535,
         doc=(
             """
-            The port number of the SOCKS5 proxy server.
+            The port number of the SOCKS v5 proxy server.
             
             Only used when proxy_type is 'socks5'.
             Must be between 1 and 65535.
