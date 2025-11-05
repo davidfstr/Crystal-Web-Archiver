@@ -54,44 +54,6 @@ import wx
 # TODO: Reorder the test "===" sections in this file to be in a more logical order,
 #       with similar sections grouped together.
 
-# === Decorators ===
-
-def reopen_projects_enabled(test_func):
-    """
-    Decorator for tests that specifically test auto-reopen functionality.
-    
-    Temporarily disables the CRYSTAL_NO_REOPEN_PROJECTS environment variable
-    and ensures state is cleaned up before and after the test.
-    """
-    @wraps(test_func)
-    async def wrapper(*args, **kwargs):
-        # Save original environment state
-        original_env_value = os.environ.get('CRYSTAL_NO_REOPEN_PROJECTS')
-        
-        try:
-            # Enable auto-reopen functionality for this test
-            if 'CRYSTAL_NO_REOPEN_PROJECTS' in os.environ:
-                del os.environ['CRYSTAL_NO_REOPEN_PROJECTS']
-            
-            # Clean up state before test
-            del app_prefs.unsaved_untitled_project_path
-            _cleanup_untitled_projects()
-            
-            # Run the test
-            return await test_func(*args, **kwargs)
-        finally:
-            # Restore original environment state
-            if original_env_value is not None:
-                os.environ['CRYSTAL_NO_REOPEN_PROJECTS'] = original_env_value
-            elif 'CRYSTAL_NO_REOPEN_PROJECTS' in os.environ:
-                del os.environ['CRYSTAL_NO_REOPEN_PROJECTS']
-            
-            # Clean up state after test
-            del app_prefs.unsaved_untitled_project_path
-            _cleanup_untitled_projects()
-    
-    return wrapper
-
 
 # === Untitled Project: Clean/Dirty State Tests ===
 
@@ -1205,7 +1167,6 @@ async def test_when_save_as_project_with_missing_revision_files_then_ignores_mis
 # === Untitled Project: Auto-Reopen Tests ===
 # TODO: Move this section after the "=== Untitled Project: Logout Tests ==="
 
-@reopen_projects_enabled
 @awith_subtests
 async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_then_untitled_project_reopened(subtests: SubtestsContext) -> None:
     with subtests.test('mark for reopen'):
@@ -1228,7 +1189,7 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
     
     with subtests.test('actually reopen'):
         # Create untitled project in subprocess to simulate unexpected quit
-        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+        with crystal_shell() as (crystal, banner):
             # Create an untitled project through the UI
             create_new_empty_project(crystal)
             
@@ -1248,7 +1209,7 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             crystal.wait()
         
         # Now start Crystal again and verify it reopens the untitled project
-        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+        with crystal_shell() as (crystal, banner):
             # Ensure project was auto-opened
             # TODO: Eliminate race condition that requires this wait
             import time; time.sleep(0.5)
@@ -1275,7 +1236,6 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             crystal.wait()
 
 
-@reopen_projects_enabled
 @awith_subtests
 async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then_no_project_reopened(subtests: SubtestsContext) -> None:
     with subtests.test('mark for reopen'):
@@ -1294,7 +1254,7 @@ async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then
     
     with subtests.test('actually reopen'):
         # Create untitled project in subprocess, save it, then simulate unexpected quit
-        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+        with crystal_shell() as (crystal, banner):
             # Create an untitled project through the UI
             create_new_empty_project(crystal)
             
@@ -1340,7 +1300,7 @@ async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then
             crystal.wait()
         
         # Now start Crystal again and verify no project is reopened
-        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+        with crystal_shell() as (crystal, banner):
             # Should show open/create dialog, not auto-reopen any project
             close_open_or_create_dialog(crystal)
             
@@ -1348,7 +1308,6 @@ async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then
             assert not _project_is_available(crystal)
 
 
-@reopen_projects_enabled
 @awith_subtests
 async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_reopened(subtests: SubtestsContext) -> None:
     with subtests.test('mark for reopen'):
@@ -1361,7 +1320,7 @@ async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_
     
     with subtests.test('actually reopen'):
         # Create untitled project in subprocess and close it cleanly
-        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+        with crystal_shell() as (crystal, banner):
             # Create an untitled project through the UI
             create_new_empty_project(crystal)
             
@@ -1380,7 +1339,7 @@ async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_
         assert app_prefs.unsaved_untitled_project_path is None
 
         # Now start Crystal again and verify no project is reopened
-        with crystal_shell(reopen_projects_enabled=True) as (crystal, banner):
+        with crystal_shell() as (crystal, banner):
             # Should show open/create dialog, not auto-reopen any project
             close_open_or_create_dialog(crystal)
             
@@ -1391,7 +1350,6 @@ async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_
 # NOTE: Crystal isn't currently designed to handle multiple open projects gracefully.
 #       So this behavior may be changed when prompt multiple projects support is
 #       added, as part of: https://github.com/davidfstr/Crystal-Web-Archiver/issues/101
-@reopen_projects_enabled
 async def test_given_multiple_untitled_projects_when_crystal_unexpectedly_quits_then_only_reopen_last_untitled_project() -> None:
     project1 = None
     project2 = None

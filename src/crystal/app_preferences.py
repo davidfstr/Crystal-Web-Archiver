@@ -4,11 +4,14 @@ independent of any particular Project, or session where a project is opened.
 """
 
 from collections.abc import Callable
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xappdirs import user_state_dir
+from functools import cache
 import json
 import os
 import os.path
-from typing import Any, Dict, Optional, cast
+from tempfile import mkstemp
+from typing import Any, Optional, cast
 
 
 # NOTE: Use the `app_prefs` singleton instance rather than attempting
@@ -22,12 +25,19 @@ class AppPreferences:
 
     # === State Management ===
     
+    @cache
     def _get_state_filepath(self) -> str:
-        # During tests, optionally disable persistence to avoid interfering with real app preferences
-        if os.environ.get('CRYSTAL_NO_PERSIST_APP_PREFS', 'False') == 'True':
-            # Return a temporary file path that won't affect real preferences
-            import tempfile
-            return os.path.join(tempfile.gettempdir(), 'crystal_test_app_preferences.json')
+        # Allow overriding the preferences file. Useful during automated tests.
+        maybe_filepath = os.environ.get('CRYSTAL_PREFS_FILEPATH')
+        if maybe_filepath is not None:
+            return maybe_filepath
+        
+        # During tests, use isolated preferences to avoid interfering with real app preferences
+        if tests_are_running():
+            (_, filepath) = mkstemp(prefix=f'crystal_{os.getpid()}_prefs', suffix='.json')
+            return filepath
+        
+        # Otherwise use the usual location
         return os.path.join(user_state_dir(), 'app_preferences.json')
     
     def _load_state(self) -> dict[str, Any]:
@@ -51,6 +61,13 @@ class AppPreferences:
             # If we can't save state, continue silently.
             # The worst case is we lose some preferences.
             pass
+    
+    def reset(self) -> None:
+        """Resets preferences to their default state. Useful during automated tests."""
+        try:
+            os.remove(self._get_state_filepath())
+        except FileNotFoundError:
+            pass  # OK
     
     # === Properties ===
     

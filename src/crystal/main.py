@@ -352,11 +352,6 @@ def _main2(args: list[str]) -> None:
     if parsed_args.test is not None:
         from crystal.util.test_mode import set_tests_are_running
         set_tests_are_running()
-        
-        # Disable auto-reopening of untitled projects during tests by default.
-        # This prevents tests from unexpectedly auto-opening unsaved untitled projects
-        # that were created outside of the test environment.
-        os.environ.setdefault('CRYSTAL_NO_REOPEN_PROJECTS', 'True')
     
     last_window = None  # type: Optional[MainWindow]
     systemexit_during_first_launch = None  # type: Optional[SystemExit]
@@ -734,10 +729,8 @@ async def _did_launch(
                 if filepath is None:
                     from crystal.app_preferences import app_prefs
                     last_untitled_project_path = app_prefs.unsaved_untitled_project_path
-                    reopen_projects_disabled = os.environ.get('CRYSTAL_NO_REOPEN_PROJECTS', 'False') == 'True'
                     if (last_untitled_project_path is not None and 
-                            os.path.exists(last_untitled_project_path) and
-                            not reopen_projects_disabled):
+                            os.path.exists(last_untitled_project_path)):
                         # Try to open the last untitled project
                         try:
                             # NOTE: Can raise CancelOpenProject

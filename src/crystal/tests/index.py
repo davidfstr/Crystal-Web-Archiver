@@ -219,6 +219,9 @@ def _normalize_test_names(raw_test_names: list[str]) -> list[str]:
 
 
 def _run_tests(test_names: list[str]) -> bool:
+    # Import preferences
+    from crystal.app_preferences import app_prefs
+    
     # Ensure ancestor caller did already call set_tests_are_running()
     assert tests_are_running()
     
@@ -256,6 +259,8 @@ def _run_tests(test_names: list[str]) -> bool:
             run_count += 1
             
             os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
+            
+            app_prefs.reset()
             
             print('=' * 70)
             (numer, denom) = (test_func_index+1, num_test_funcs_to_run)

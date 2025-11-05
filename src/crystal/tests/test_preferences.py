@@ -54,11 +54,6 @@ async def test_given_preferences_dialog_when_socks5_selected_then_socks5_fields_
 
 
 async def test_given_preferences_dialog_when_socks5_configured_then_preferences_saved() -> None:
-    # Clear any existing proxy preferences
-    app_prefs.proxy_type = 'none'
-    app_prefs.socks5_proxy_host = None
-    app_prefs.socks5_proxy_port = None
-    
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             prefs = await mw.open_preferences_with_menuitem()
@@ -81,34 +76,23 @@ async def test_given_preferences_dialog_when_socks5_preferences_exist_then_loade
     app_prefs.socks5_proxy_host = '192.168.1.100'
     app_prefs.socks5_proxy_port = 9050
     
-    try:
-        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
-                prefs = await mw.open_preferences_with_menuitem()
-                
-                # Verify preferences are loaded
-                assert prefs.socks5_proxy_radio.Value == True
-                assert prefs.socks5_host_field.Value == '192.168.1.100'
-                assert prefs.socks5_port_field.Value == '9050'
-                
-                # Verify fields are enabled
-                assert prefs.socks5_host_field.Enabled == True
-                assert prefs.socks5_port_field.Enabled == True
-                
-                await prefs.cancel()
-    finally:
-        # Clean up
-        app_prefs.proxy_type = 'none'
-        app_prefs.socks5_proxy_host = None
-        app_prefs.socks5_proxy_port = None
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+            prefs = await mw.open_preferences_with_menuitem()
+            
+            # Verify preferences are loaded
+            assert prefs.socks5_proxy_radio.Value == True
+            assert prefs.socks5_host_field.Value == '192.168.1.100'
+            assert prefs.socks5_port_field.Value == '9050'
+            
+            # Verify fields are enabled
+            assert prefs.socks5_host_field.Enabled == True
+            assert prefs.socks5_port_field.Enabled == True
+            
+            await prefs.cancel()
 
 
 async def test_given_preferences_dialog_when_invalid_port_then_port_cleared() -> None:
-    # Clear any existing proxy preferences
-    app_prefs.proxy_type = 'none'
-    app_prefs.socks5_proxy_host = None
-    app_prefs.socks5_proxy_port = None
-    
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             prefs = await mw.open_preferences_with_menuitem()
