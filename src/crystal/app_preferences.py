@@ -23,22 +23,27 @@ class AppPreferences:
     Every individual app preference value can be read/written using a property
     defined on this class.
     
-    By default any change to app preferences is immediately written to disk.
-    It is possible to opt-in to lower durability (for increased performance)
-    by setting autoflush=False explicitly. Then callers must remember to
-    eventually call flush() so that preferences are eventually written to disk.
+    Durability:
+    - By default any change to app preferences is immediately written to disk.
+      It is possible to opt-in to lower durability (for increased performance)
+      by setting autoflush=False explicitly. Then callers must remember to
+      eventually call flush() so that preferences are eventually written to disk.
     
-    All properties of this class (including autoflush) do NOT report I/O
-    errors to the caller by default, to make them easy to use in code that
-    has no reasonable way of handling such errors.
+    Error reporting:
+    - All properties of this class (including autoflush) do NOT report I/O
+      errors to the caller by default, to make them easy to use in code that
+      has no reasonable way of handling such errors.
+    - Methods that explicitly write preferences (notably flush) DO report I/O
+      errors to the caller by default, since those callers are likely to want
+      to know if writes fail.
+    - Methods that explicitly read preferences (notably sync) do NOT report I/O
+      errors to the caller since there is no reasonable way for callers to
+      recover. Instead, a fresh set of preferences will be loaded silently.
     
-    Methods that explicitly write preferences (notably flush) DO report I/O
-    errors to the caller by default, since those callers are likely to want
-    to know if writes fail.
-    
-    Methods that explicitly read preferences (notably sync) do NOT report I/O
-    errors to the caller since there is no reasonable way for callers to
-    recover. Instead, a fresh set of preferences will be loaded silently.
+    Automated test behavior:
+    - App preferences are cleared between each end-to-end test by the test runner.
+      Therefore end-to-end tests should not redundantly save/restore app prefs
+      at their beginning and end.
     """
     
     # Whether to log all side effects that occur during API calls
