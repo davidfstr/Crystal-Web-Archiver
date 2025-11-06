@@ -8,7 +8,7 @@ from crystal.util.wx_dialog import (
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_windows, preferences_are_called_settings_in_this_os
 import datetime
-from typing import Callable, Dict, TYPE_CHECKING
+from typing import Callable, Dict, TYPE_CHECKING, assert_never
 from tzlocal import get_localzone
 import wx
 
@@ -188,6 +188,7 @@ class PreferencesDialog:
                     parent,
                     name='cr-preferences-dialog__socks5-host-field',
                     size=(200, -1))
+                self.socks5_host_field.Hint = 'localhost'
                 socks5_fields_sizer.Add(self.socks5_host_field, flag=wx.CENTER)
                 
                 socks5_fields_sizer.AddSpacer(10)
@@ -200,22 +201,28 @@ class PreferencesDialog:
                     parent,
                     name='cr-preferences-dialog__socks5-port-field',
                     size=(60, -1))
+                self.socks5_port_field.Hint = '1080'
                 socks5_fields_sizer.Add(self.socks5_port_field, flag=wx.CENTER)
             fields_sizer.Add(
                 socks5_fields_sizer,
                 flag=wx.EXPAND, pos=wx.GBPosition(5, 0), span=wx.GBSpan(1, 2))
             
             # Load proxy preferences
-            proxy_type = app_prefs.proxy_type or 'none'
-            if proxy_type == 'socks5':
-                self.socks5_proxy_radio.Value = True
-                self.socks5_host_field.Value = app_prefs.socks5_proxy_host or ''
-                socks5_port = app_prefs.socks5_proxy_port
-                self.socks5_port_field.Value = str(socks5_port) if socks5_port is not None else ''
-            else:
+            proxy_type = app_prefs.proxy_type
+            if proxy_type == 'none':
                 self.no_proxy_radio.Value = True
-                self.socks5_host_field.Value = ''
-                self.socks5_port_field.Value = ''
+            elif proxy_type == 'socks5':
+                self.socks5_proxy_radio.Value = True
+            else:
+                assert_never(proxy_type)
+            self.socks5_host_field.Value = (
+                app_prefs.socks5_proxy_host
+                if app_prefs.socks5_proxy_host_is_set else ''
+            )
+            self.socks5_port_field.Value = (
+                str(app_prefs.socks5_proxy_port)
+                if app_prefs.socks5_proxy_port_is_set else ''
+            )   
             
             self._update_proxy_fields_enabled()
         
@@ -356,27 +363,25 @@ class PreferencesDialog:
             self._project.min_fetch_date = None
         
         # Save app fields
-        if self.socks5_proxy_radio.Value:
-            app_prefs.proxy_type = 'socks5'
-            app_prefs.socks5_proxy_host = self.socks5_host_field.Value or None
-            
-            # Parse and validate port
-            port_str = self.socks5_port_field.Value.strip()
-            if port_str:
-                try:
-                    port = int(port_str)
-                    if 1 <= port <= 65535:
-                        app_prefs.socks5_proxy_port = port
-                    else:
-                        # Invalid port range, clear it
-                        app_prefs.socks5_proxy_port = None
-                except ValueError:
-                    # Invalid port format, clear it
-                    app_prefs.socks5_proxy_port = None
+        if True:
+            if self.no_proxy_radio.Value:
+                app_prefs.proxy_type = 'none'
+            elif self.socks5_proxy_radio.Value:
+                app_prefs.proxy_type = 'socks5'
             else:
-                app_prefs.socks5_proxy_port = None
-        else:
-            app_prefs.proxy_type = 'none'
+                raise AssertionError()
+            
+            try:
+                app_prefs.socks5_proxy_host = self.socks5_host_field.Value.strip()
+            except ValueError:  # invalid format
+                del app_prefs.socks5_proxy_host
+            
+            port_str = self.socks5_port_field.Value.strip()
+            try:
+                port = int(port_str)
+                app_prefs.socks5_proxy_port = port
+            except ValueError:  # invalid format
+                del app_prefs.socks5_proxy_port
         
         self.dialog.Destroy()
         self._on_close_callback()

@@ -242,7 +242,7 @@ class AppPreferences:
         #       The worst case is we lose some preferences.
         self._mark_dirty_and_maybe_flush(flush=flush, raise_on_error=False)
     
-    # === Properties ===
+    # === Property Definitions ===
     
     @staticmethod
     def _define_property(
@@ -277,8 +277,17 @@ class AppPreferences:
                 else default
             )
         def _set_property_value(self: 'AppPreferences', prop_value: Any, *, flush: bool | None = None) -> None:
+            """
+            Raises:
+            * ValueError -- if the value is not valid for the property
+            """
             state = self._load_state()
             if prop_name not in state or state[prop_name] != prop_value:
+                prop_value_is_valid = validator is None or validator(prop_value)
+                if not prop_value_is_valid:
+                    raise ValueError(
+                        f'Value {prop_value!r} for property {prop_name!r} '
+                        f'is not valid')
                 if self._VERBOSE_EFFECTS:
                     print(
                         f'AppPreferences: Property change: '
@@ -305,6 +314,13 @@ class AppPreferences:
             doc=doc
         )
         return prop
+    
+    def is_set(self, prop_name: str) -> bool:
+        """Returns whether the specified property has been set to a value."""
+        state = self._load_state()
+        return prop_name in state
+    
+    # === Properties ===
     
     unsaved_untitled_project_path = cast(Optional[str], _define_property(
         'unsaved_untitled_project_path',
@@ -356,10 +372,10 @@ class AppPreferences:
         )
     ))
     
-    socks5_proxy_host = cast(Optional[str], _define_property(
+    socks5_proxy_host = cast(str, _define_property(
         'socks5_proxy_host',
-        default=None,
-        validator=lambda host: isinstance(host, str),
+        default='localhost',
+        validator=lambda host: isinstance(host, str) and host.strip() != '',
         doc=(
             """
             The hostname or IP address of the SOCKS5 proxy server.
@@ -368,10 +384,11 @@ class AppPreferences:
             """
         )
     ))
+    socks5_proxy_host_is_set = property(lambda self: self.is_set('socks5_proxy_host'))
     
-    socks5_proxy_port = cast(Optional[int], _define_property(
+    socks5_proxy_port = cast(int, _define_property(
         'socks5_proxy_port',
-        default=None,
+        default=1080,
         validator=lambda port: isinstance(port, int) and 1 <= port <= 65535,
         doc=(
             """
@@ -382,6 +399,7 @@ class AppPreferences:
             """
         )
     ))
+    socks5_proxy_port_is_set = property(lambda self: self.is_set('socks5_proxy_port'))
 
 
 app_prefs = AppPreferences(_ready=True)  # singleton
