@@ -49,6 +49,14 @@ def click_checkbox(checkbox: wx.CheckBox) -> None:
 
 
 # ------------------------------------------------------------------------------
+# Utility: Controls: wx.RadioButton
+
+def click_radio_button(radio: wx.RadioButton) -> None:
+    radio.Value = True
+    radio.ProcessEvent(wx.CommandEvent(wx.wxEVT_RADIOBUTTON, radio.Id))
+
+
+# ------------------------------------------------------------------------------
 # Utility: Controls: wx.FileDialog
 
 @contextmanager

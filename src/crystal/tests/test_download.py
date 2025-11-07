@@ -1,22 +1,31 @@
 """Tests for DownloadResourceTask and DownloadResourceGroupTask"""
 
 from contextlib import redirect_stderr
-from crystal.model import Project, Resource
+from crystal.app_preferences import app_prefs
+from crystal.model import Resource, RootResource
 import crystal.task
-from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_sleep
-from crystal.tests.util.server import MockHttpServer, served_project
+from crystal.tests.util.server import MockHttpServer, MockFtpServer, served_project
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for
+from crystal.tests.util.wait import (
+    DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
+    wait_for, wait_for_future,
+)
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
 import crystal.tests.util.xtempfile as xtempfile
 import io
 import os
-import tempfile
+import socks
+import sockshandler
+import socket
+import ssl
 from textwrap import dedent
 from unittest import skip
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import urllib.request
+
 
 _FAVICON_PATH = '/favicon.ico'
 
@@ -399,6 +408,216 @@ async def test_can_download_empty_group() -> None:
                 click_button(mw.download_button)
                 await wait_for(lambda: spy_finish.call_count >= 1 or None)
                 assert 1 == spy_finish.call_count
+
+
+# ------------------------------------------------------------------------------
+# Proxy Tests
+
+@skip('covered by nearly all automated tests implicitly')
+async def test_can_download_resource_with_no_proxy() -> None:
+    pass
+
+
+async def test_can_download_http_resource_with_socks_proxy() -> None:
+    server = MockHttpServer({
+        '/': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=b'<!DOCTYPE html><html><body>Hello World</body></html>'
+        )
+    })
+    with server:
+        # Create a mock socksocket that delegates all I/O to a real socket
+        # which connects directly to the test server,
+        # bypassing the real SOCKS protocol
+        mock_socksocket = MagicMock(spec=socket.socket)
+        if True:
+            mock_socksocket.set_proxy = MagicMock()  # method that socks.socksocket has
+            
+            real_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            mock_socksocket.connect = real_socket.connect
+            mock_socksocket.send = real_socket.send
+            mock_socksocket.sendall = real_socket.sendall
+            mock_socksocket.recv = real_socket.recv
+            mock_socksocket.settimeout = real_socket.settimeout
+            mock_socksocket.close = real_socket.close
+            mock_socksocket.makefile = real_socket.makefile
+        
+        with patch('socks.socksocket', return_value=mock_socksocket):
+            # Configure app preferences to use SOCKS v5 proxy
+            app_prefs.proxy_type = 'socks5'
+            app_prefs.socks5_proxy_host = 'test-proxy-host'
+            app_prefs.socks5_proxy_port = 9999
+            
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                r = Resource(project, server.get_url('/'))
+                revision_future = r.download()
+                await wait_for_future(revision_future)
+                
+                # Verify SOCKS proxy was configured correctly.
+                # (It may be called multiple times due to fetch of favicon
+                #  and other embedded resources.)
+                assert mock_socksocket.set_proxy.call_count >= 1
+                mock_socksocket.set_proxy.assert_any_call(
+                    socks.SOCKS5, 'test-proxy-host', 9999, rdns=True
+                )
+                
+                # Verify the server received the request
+                assert '/' in server.requested_paths
+                
+                # Verify the download succeeded
+                rr = revision_future.result()
+                assert rr is not None
+                assert rr.metadata is not None
+                assertEqual(200, rr.metadata['status_code'])
+
+
+async def test_can_download_https_resource_with_socks_proxy() -> None:
+    server = MockHttpServer({
+        '/': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=b'<!DOCTYPE html><html><body>Hello Secure World</body></html>'
+        )
+    })
+    with server:
+        # Create a mock socksocket that delegates all I/O to a real socket
+        # which connects directly to the test server,
+        # bypassing the real SOCKS protocol
+        mock_socksocket = MagicMock(spec=socket.socket)
+        if True:
+            mock_socksocket.set_proxy = MagicMock()  # method that socks.socksocket has
+            
+            real_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            mock_socksocket.connect = real_socket.connect
+            mock_socksocket.send = real_socket.send
+            mock_socksocket.sendall = real_socket.sendall
+            mock_socksocket.recv = real_socket.recv
+            mock_socksocket.settimeout = real_socket.settimeout
+            mock_socksocket.close = real_socket.close
+            mock_socksocket.makefile = real_socket.makefile
+        
+        # Create a mock SSL context that bypasses SSL wrapping
+        mock_ssl_context = MagicMock(spec=ssl.SSLContext)
+        mock_ssl_context.wrap_socket = MagicMock(side_effect=lambda sock, **kwargs: sock)
+        
+        with patch('socks.socksocket', return_value=mock_socksocket), \
+                patch('crystal.download.get_ssl_context', return_value=mock_ssl_context):
+            # Configure app preferences to use SOCKS v5 proxy
+            app_prefs.proxy_type = 'socks5'
+            app_prefs.socks5_proxy_host = 'test-proxy-host'
+            app_prefs.socks5_proxy_port = 9999
+            
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                # Use an HTTPS URL (which will be handled by _SocksHTTPSConnection)
+                # but connect to the HTTP test server
+                r = Resource(project, server.get_url('/').replace('http://', 'https://'))
+                revision_future = r.download()
+                await wait_for_future(revision_future)
+                
+                # Verify SOCKS proxy was configured correctly.
+                # (It may be called multiple times due to fetch of favicon
+                #  and other embedded resources.)
+                assert mock_socksocket.set_proxy.call_count >= 1
+                mock_socksocket.set_proxy.assert_any_call(
+                    socks.SOCKS5, 'test-proxy-host', 9999, rdns=True
+                )
+                
+                # Verify SSL context's wrap_socket was called (but it just returned the socket as-is)
+                assert mock_ssl_context.wrap_socket.call_count >= 1
+                
+                # Verify the server received the request
+                assert '/' in server.requested_paths
+                
+                # Verify the download succeeded
+                rr = revision_future.result()
+                assert rr is not None
+                assert rr.metadata is not None
+                assertEqual(200, rr.metadata['status_code'])
+
+
+async def test_can_download_ftp_resource_with_socks_proxy() -> None:
+    server = MockFtpServer({
+        '/test.txt': b'Hello FTP World'
+    })
+    with server:
+        socks_handler_init_calls = []
+        def mock_init(self, *args, **kwargs):
+            socks_handler_init_calls.append((args, kwargs))
+            # Don't actually use SOCKS. Just create a normal handler
+            # that will connect directly to our test FTP server.
+            urllib.request.HTTPHandler.__init__(self)
+        
+        with patch.object(sockshandler.SocksiPyHandler, '__init__', mock_init):
+            # Configure app preferences to use SOCKS v5 proxy
+            app_prefs.proxy_type = 'socks5'
+            app_prefs.socks5_proxy_host = 'test-proxy-host'
+            app_prefs.socks5_proxy_port = 9999
+            
+            async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+                r = Resource(project, server.get_url('/test.txt'))
+                revision_future = r.download()
+                await wait_for_future(revision_future)
+                
+                # Verify SOCKS proxy handler was created with correct settings
+                assert len(socks_handler_init_calls) >= 1
+                (args, kwargs) = socks_handler_init_calls[0]
+                assert len(args) >= 3
+                assert args[0] == socks.SOCKS5
+                assert args[1] == 'test-proxy-host'
+                assert args[2] == 9999
+                
+                # Verify the server received the request
+                assert '/test.txt' in server.requested_paths
+                
+                # Verify the download succeeded
+                rr = revision_future.result()
+                assert rr is not None
+                with rr.open() as body:
+                    assert body.read() == b'Hello FTP World'
+
+
+async def test_cannot_download_resource_with_socks_proxy_if_connect_to_socks_proxy_fails() -> None:
+    server = MockHttpServer({
+        '/': dict(
+            status_code=200,
+            headers=[('Content-Type', 'text/html')],
+            content=b'<!DOCTYPE html><html><body>Hello World</body></html>'
+        )
+    })
+    with server:
+        # Reserve a random port by opening and closing a server socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', 0))  # bind to any free port
+            reserved_port = s.getsockname()[1]
+            # (Socket closes when exiting 'with' block,
+            #  but port will be unavailable for a few seconds afterward)
+        
+        # Configure app preferences to use SOCKS v5 proxy pointing to the reserved port
+        # (which has nothing listening on it)
+        app_prefs.proxy_type = 'socks5'
+        app_prefs.socks5_proxy_host = '127.0.0.1'
+        app_prefs.socks5_proxy_port = reserved_port
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create a RootResource pointing at the simple resource
+            r = Resource(project, server.get_url('/'))
+            home_rr = RootResource(project, 'Home', r)
+            
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            (home_ti,) = root_ti.Children
+            
+            # Try to download it by expanding its node in the Entity Tree
+            home_ti.Expand()
+            await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+            
+            # Ensure that, after the loading child goes away, there is a unique
+            # error node child that mentions a proxy-related error.
+            (error_ti,) = home_ti.Children
+            assertIn('Error downloading URL:', error_ti.Text)
+            assertIn('ProxyConnectionError:', error_ti.Text)
+            assertIn('Error connecting to SOCKS5 proxy', error_ti.Text)
+            assertIn('Connection refused', error_ti.Text)
 
 
 # ------------------------------------------------------------------------------

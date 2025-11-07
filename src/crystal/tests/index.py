@@ -9,7 +9,8 @@ from crystal.tests import (
     test_icons, test_install_to_desktop, test_load_urls, test_log_drawer,
     test_main_window,
     test_menus, test_new_group, test_new_root_url, test_open_project,
-    test_parse_html, test_profile, test_project_migrate, test_readonly_mode,
+    test_parse_html, test_preferences,
+    test_profile, test_project_migrate, test_readonly_mode,
     test_runner, test_server, test_shell, test_ssd, test_tasks, test_tasktree,
     test_untitled_projects,
     test_window_modal_titles, test_workflows, test_xthreading,
@@ -71,6 +72,7 @@ _TEST_FUNCS = (
     _test_functions_in_module(test_new_root_url) +
     _test_functions_in_module(test_open_project) +
     _test_functions_in_module(test_parse_html) +
+    _test_functions_in_module(test_preferences) +
     _test_functions_in_module(test_profile) +
     _test_functions_in_module(test_project_migrate) +
     _test_functions_in_module(test_readonly_mode) +
@@ -217,8 +219,14 @@ def _normalize_test_names(raw_test_names: list[str]) -> list[str]:
 
 
 def _run_tests(test_names: list[str]) -> bool:
+    # Import preferences
+    from crystal.app_preferences import app_prefs
+    
     # Ensure ancestor caller did already call set_tests_are_running()
     assert tests_are_running()
+    
+    # Disable autoflush during tests for better performance
+    app_prefs.autoflush = False
     
     is_coverage_now = is_coverage()  # cache
     
@@ -254,6 +262,8 @@ def _run_tests(test_names: list[str]) -> bool:
             run_count += 1
             
             os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
+            
+            app_prefs.reset()
             
             print('=' * 70)
             (numer, denom) = (test_func_index+1, num_test_funcs_to_run)

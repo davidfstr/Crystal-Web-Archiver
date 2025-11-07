@@ -4,18 +4,20 @@ Provides services for downloading a ResourceRevision.
 
 from collections.abc import Iterable
 from crystal import __version__
+from crystal.app_preferences import app_prefs
 from crystal.model import (
     ProjectHasTooManyRevisionsError, Resource, ResourceRevision,
     ResourceRevisionMetadata,
 )
 from crystal.util.cli import print_warning
-from crystal.util.xos import is_mac_os, is_windows
 from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
+import socks
+import sockshandler
 import ssl
 import sys
 import truststore
-from typing import BinaryIO, cast, Collection, Dict, TYPE_CHECKING
+from typing import BinaryIO, assert_never, cast, Collection, Dict, TYPE_CHECKING
 import urllib.error
 from urllib.parse import urlparse
 import urllib.request
@@ -47,6 +49,9 @@ _VERBOSE_HTTP_REQUESTS_AND_RESPONSES = False
 #          the future to get a more up-to-date version of a prior revision.
 _EXTRA_HEADERS = dict()  # type: Dict[str, str]
 
+
+# ------------------------------------------------------------------------------
+# download_resource_revision
 
 def download_resource_revision(
         resource: Resource,
@@ -129,6 +134,9 @@ def download_resource_revision(
         )
 
 
+# ------------------------------------------------------------------------------
+# ResourceRequest
+
 class ResourceRequest:
     """
     Encapsulates a request to fetch a resource.
@@ -163,6 +171,9 @@ class ResourceRequest:
         raise NotImplementedError
 
 
+# ------------------------------------------------------------------------------
+# HttpResourceRequest
+
 class HttpResourceRequest(ResourceRequest):
     def __init__(self, 
             url: str,
@@ -184,17 +195,40 @@ class HttpResourceRequest(ResourceRequest):
             ('' if url_parts.query == '' else f'?{url_parts.query}')
         )
         
+        conn: HTTPConnection | HTTPSConnection | _SocksHTTPConnection | _SocksHTTPSConnection
+        proxy_type = app_prefs.proxy_type  # cache
         if scheme == 'http':
-            conn = HTTPConnection(
-                host_and_port,
-                timeout=HTTP_REQUEST_TIMEOUT,
-            )
+            if proxy_type == 'none':
+                conn = HTTPConnection(
+                    host_and_port,
+                    timeout=HTTP_REQUEST_TIMEOUT,
+                )
+            elif proxy_type == 'socks5':
+                conn = _SocksHTTPConnection(
+                    host_and_port,
+                    timeout=HTTP_REQUEST_TIMEOUT,
+                    proxy_host=app_prefs.socks5_proxy_host,
+                    proxy_port=app_prefs.socks5_proxy_port,
+                )
+            else:
+                assert_never(proxy_type)
         elif scheme == 'https':
-            conn = HTTPSConnection(
-                host_and_port,
-                timeout=HTTP_REQUEST_TIMEOUT,
-                context=get_ssl_context(),
-            )
+            if proxy_type == 'none':
+                conn = HTTPSConnection(
+                    host_and_port,
+                    timeout=HTTP_REQUEST_TIMEOUT,
+                    context=get_ssl_context(),
+                )
+            elif proxy_type == 'socks5':
+                conn = _SocksHTTPSConnection(
+                    host_and_port,
+                    timeout=HTTP_REQUEST_TIMEOUT,
+                    context=get_ssl_context(),
+                    proxy_host=app_prefs.socks5_proxy_host,
+                    proxy_port=app_prefs.socks5_proxy_port,
+                )
+            else:
+                assert_never(proxy_type)
         else:
             raise ValueError('Not an HTTP(S) URL.')
         
@@ -233,6 +267,75 @@ class HttpResourceRequest(ResourceRequest):
         return 'HttpResourceRequest(%s)' % repr(self.url)
 
 
+class _SocksHTTPConnection(HTTPConnection):
+    """
+    HTTPConnection that connects through a SOCKS proxy.
+    """
+    def __init__(self, *args, proxy_host: str, proxy_port: int, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._proxy_host = proxy_host
+        self._proxy_port = proxy_port
+    
+    def connect(self) -> None:
+        self.sock = _create_socks5_socket(
+            self._proxy_host,
+            self._proxy_port,
+            self.timeout,
+            self.host,
+            self.port,
+            context=None,
+        )
+
+
+class _SocksHTTPSConnection(HTTPSConnection):
+    """
+    HTTPSConnection that connects through a SOCKS proxy.
+    """
+    def __init__(self, *args, proxy_host: str, proxy_port: int, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._proxy_host = proxy_host
+        self._proxy_port = proxy_port
+    
+    def connect(self) -> None:
+        self.sock = _create_socks5_socket(
+            self._proxy_host,
+            self._proxy_port,
+            self.timeout,
+            self.host,
+            self.port,
+            self._context,  # type: ignore[attr-defined]
+        )
+
+
+def _create_socks5_socket(
+        proxy_host: str,
+        proxy_port: int,
+        timeout: float | None,
+        host: str,
+        port: int,
+        context: ssl.SSLContext | None,
+        ) -> socks.socksocket:
+    # Create a SOCKS v5 socket
+    sock = socks.socksocket()
+    # TODO: Consider supporting proxy authentication with
+    #       username=... and password=... parameters.
+    # rdns=True: Perform DNS resolving remotely through the proxy
+    sock.set_proxy(socks.SOCKS5, proxy_host, proxy_port, rdns=True)
+    
+    # Set timeout
+    if timeout is not None:
+        sock.settimeout(timeout)
+    
+    # Connect to the destination server through the proxy
+    sock.connect((host, port))
+    
+    # Wrap the socket with SSL, if context provided
+    if context is not None:
+        sock = context.wrap_socket(sock, server_hostname=host)  # type: ignore[attr-defined]
+    
+    return sock
+
+
 class _HttpResourceBodyStream:
     """
     File-like object for reading from an HTTP resource.
@@ -245,18 +348,40 @@ class _HttpResourceBodyStream:
         self.mode = mode
 
 
+# ------------------------------------------------------------------------------
+# UrlResourceRequest
+
 class UrlResourceRequest(ResourceRequest):
     def __init__(self, url):
         self.url = url
     
     def __call__(self):
         request = urllib.request.Request(self.url)
-        response = urllib.request.urlopen(request, context=get_ssl_context())
+        
+        proxy_type = app_prefs.proxy_type  # cache
+        if proxy_type == 'none':
+            response = urllib.request.urlopen(request, context=get_ssl_context())
+        elif proxy_type == 'socks5':
+            opener = urllib.request.build_opener(
+                sockshandler.SocksiPyHandler(
+                    socks.SOCKS5,
+                    app_prefs.socks5_proxy_host,
+                    app_prefs.socks5_proxy_port,
+                    context=get_ssl_context(),
+                )
+            )
+            response = opener.open(request)
+        else:
+            assert_never(proxy_type)
+        
         return (None, response)
     
     def __repr__(self):
         return 'UrlResourceRequest(%s)' % repr(self.url)
 
+
+# ------------------------------------------------------------------------------
+# Utility: SSL
 
 _SSL_CONTEXT = None
 
@@ -286,3 +411,6 @@ def get_ssl_context() -> ssl.SSLContext:
         
         _SSL_CONTEXT = ctx  # export
     return _SSL_CONTEXT
+
+
+# ------------------------------------------------------------------------------

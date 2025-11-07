@@ -836,6 +836,11 @@ class PreferencesDialog:
     stale_before_checkbox: wx.CheckBox
     stale_before_date_picker: wx.adv.DatePickerCtrl
     cookie_field: wx.ComboBox
+    no_proxy_radio: wx.RadioButton
+    http_proxy_radio: wx.RadioButton
+    socks5_proxy_radio: wx.RadioButton
+    socks5_host_field: wx.TextCtrl
+    socks5_port_field: wx.TextCtrl
     reset_callouts_button: wx.Button
     cancel_button: wx.Button
     ok_button: wx.Button
@@ -863,6 +868,21 @@ class PreferencesDialog:
         self.cookie_field = self._dialog.FindWindow(name=
             'cr-preferences-dialog__cookie-field')
         assert isinstance(self.cookie_field, wx.ComboBox)
+        self.no_proxy_radio = self._dialog.FindWindow(name=
+            'cr-preferences-dialog__no-proxy-radio')
+        assert isinstance(self.no_proxy_radio, wx.RadioButton)
+        self.http_proxy_radio = self._dialog.FindWindow(name=
+            'cr-preferences-dialog__http-proxy-radio')
+        assert isinstance(self.http_proxy_radio, wx.RadioButton)
+        self.socks5_proxy_radio = self._dialog.FindWindow(name=
+            'cr-preferences-dialog__socks5-proxy-radio')
+        assert isinstance(self.socks5_proxy_radio, wx.RadioButton)
+        self.socks5_host_field = self._dialog.FindWindow(name=
+            'cr-preferences-dialog__socks5-host-field')
+        assert isinstance(self.socks5_host_field, wx.TextCtrl)
+        self.socks5_port_field = self._dialog.FindWindow(name=
+            'cr-preferences-dialog__socks5-port-field')
+        assert isinstance(self.socks5_port_field, wx.TextCtrl)
         self.reset_callouts_button = self._dialog.FindWindow(name=
             'cr-preferences-dialog__reset-callouts-button')
         assert isinstance(self.reset_callouts_button, wx.Button)

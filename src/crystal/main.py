@@ -330,6 +330,17 @@ def _main2(args: list[str]) -> None:
             # Main thread did not set an exit code. Assume a bug.
             exit_code = 1  # default error exit code
         
+        # Flush any pending app preferences changes to disk
+        from crystal.app_preferences import app_prefs
+        try:
+            app_prefs.flush()
+        except:
+            import traceback
+            traceback.print_exc()
+            
+            if exit_code == 0:
+                exit_code = 1
+        
         # 1. Exit process immediately, without bothering to run garbage collection
         #    or other cleanup processes that can take a long time
         # 2. If running under code coverage and the test_bulkheads.py suite
@@ -352,11 +363,6 @@ def _main2(args: list[str]) -> None:
     if parsed_args.test is not None:
         from crystal.util.test_mode import set_tests_are_running
         set_tests_are_running()
-        
-        # Disable auto-reopening of untitled projects during tests by default.
-        # This prevents tests from unexpectedly auto-opening unsaved untitled projects
-        # that were created outside of the test environment.
-        os.environ.setdefault('CRYSTAL_NO_REOPEN_PROJECTS', 'True')
     
     last_window = None  # type: Optional[MainWindow]
     systemexit_during_first_launch = None  # type: Optional[SystemExit]
@@ -734,10 +740,8 @@ async def _did_launch(
                 if filepath is None:
                     from crystal.app_preferences import app_prefs
                     last_untitled_project_path = app_prefs.unsaved_untitled_project_path
-                    reopen_projects_disabled = os.environ.get('CRYSTAL_NO_REOPEN_PROJECTS', 'False') == 'True'
                     if (last_untitled_project_path is not None and 
-                            os.path.exists(last_untitled_project_path) and
-                            not reopen_projects_disabled):
+                            os.path.exists(last_untitled_project_path)):
                         # Try to open the last untitled project
                         try:
                             # NOTE: Can raise CancelOpenProject

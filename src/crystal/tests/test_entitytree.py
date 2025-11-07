@@ -29,29 +29,6 @@ import os
 
 
 # ------------------------------------------------------------------------------
-# Decorators
-
-def isolated_app_prefs(test_func):
-    """
-    Decorator for tests that need to modify app preferences without interfering
-    with the real Crystal app's preferences.
-    
-    Uses a temporary file for app preferences storage during the test.
-    """
-    @wraps(test_func)
-    async def wrapper(*args, **kwargs):
-        # Create a temporary file for test preferences
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
-            temp_prefs_path = temp_file.name
-            
-            # Patch the app preferences to use the temporary file
-            with patch.object(app_prefs, '_get_state_filepath', return_value=temp_prefs_path):
-                # Run the test
-                return await test_func(*args, **kwargs)
-    return wrapper
-
-
-# ------------------------------------------------------------------------------
 # Test: Entity Tree Empty State
 
 async def test_when_create_empty_project_then_entity_tree_empty_state_is_visible() -> None:
@@ -237,7 +214,6 @@ async def test_when_view_callout_temporarily_dismissed_then_stays_hidden() -> No
                 'Callout should remain hidden after temporary dismissal'
 
 
-@isolated_app_prefs
 async def test_when_view_callout_permanently_dismissed_then_stays_hidden() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -295,7 +271,6 @@ async def test_when_view_callout_permanently_dismissed_then_stays_hidden() -> No
                 'Callout should remain hidden in new session after permanent dismissal'
 
 
-@isolated_app_prefs
 async def test_can_reset_permanent_dismissal_from_preferences_dialog() -> None:
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -322,8 +297,8 @@ async def test_can_reset_permanent_dismissal_from_preferences_dialog() -> None:
                 assert prefs_dialog.reset_callouts_button.Enabled == False
                 
                 # Verify the preference was reset
-                assert app_prefs.view_button_callout_dismissed == None, \
-                    'App preference should be reset to None'
+                assert app_prefs.view_button_callout_dismissed == False, \
+                    'App preference should be reset to False'
             finally:
                 # Close preferences dialog
                 await prefs_dialog.ok()

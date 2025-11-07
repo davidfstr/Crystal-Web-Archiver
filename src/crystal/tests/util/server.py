@@ -19,7 +19,9 @@ from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 import re
+import socket
 import sys
+import threading
 from typing import List, Optional
 import unittest.mock
 from zipfile import ZipFile
@@ -171,6 +173,191 @@ class MockHttpServer:
         self._server.shutdown()
     
     def __enter__(self) -> MockHttpServer:
+        return self
+    
+    def __exit__(self, *args) -> None:
+        self.close()
+
+
+class MockFtpServer:
+    """
+    A minimal FTP server for testing purposes.
+    
+    Supports basic FTP commands needed by urllib to download a file.
+    
+    Logs all commands received when _VERBOSE=True to help debug which
+    FTP commands are actually used by the caller.
+    """
+    
+    # Enable verbose logging of FTP commands for debugging
+    _VERBOSE = False
+    
+    def __init__(self, files: dict[str, bytes]) -> None:
+        """
+        Arguments:
+        * files -- Dictionary mapping file paths to their content bytes.
+                   Example: {'/test.txt': b'Hello World'}
+        """
+        self.files = files
+        self.requested_paths = []  # type: List[str]
+        
+        self._port = 2121  # Non-standard FTP port for testing
+        self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.bind(('127.0.0.1', self._port))
+        self._server_socket.listen(5)
+        
+        self._running = True
+        self._server_thread = threading.Thread(
+            target=self._serve,
+            daemon=True,
+            name='MockFtpServer.serve'
+        )
+        self._server_thread.start()
+    
+    def _serve(self) -> None:
+        """Main server loop that accepts connections."""
+        while self._running:
+            try:
+                self._server_socket.settimeout(0.5)
+                try:
+                    client_socket, address = self._server_socket.accept()
+                except socket.timeout:
+                    continue
+                
+                # Handle client in a separate thread
+                client_thread = threading.Thread(
+                    target=self._handle_client,
+                    args=(client_socket,),
+                    daemon=True,
+                    name='MockFtpServer.handle_client'
+                )
+                client_thread.start()
+            except Exception as e:
+                if self._running:
+                    print(f'MockFtpServer error: {e}', file=sys.stderr)
+                break
+    
+    def _handle_client(self, client_socket: socket.socket) -> None:
+        """Handle a single FTP client connection."""
+        try:
+            # Send welcome message
+            self._send_response(client_socket, '220 MockFTP Server Ready\r\n')
+            
+            # Track state
+            data_socket = None
+            
+            while True:
+                # Receive command
+                data = client_socket.recv(1024)
+                if not data:
+                    break
+                
+                command_line = data.decode('ascii').strip()
+                if self._VERBOSE:
+                    print(f'[MockFtpServer] Received: {command_line}', file=sys.stderr)
+                
+                parts = command_line.split(None, 1)
+                if not parts:
+                    continue
+                
+                command = parts[0].upper()
+                argument = parts[1] if len(parts) > 1 else ''
+                
+                # Handle commands
+                if command == 'USER':
+                    self._send_response(client_socket, '331 User name okay, need password\r\n')
+                
+                elif command == 'PASS':
+                    self._send_response(client_socket, '230 User logged in\r\n')
+                
+                elif command == 'CWD':
+                    # Change working directory
+                    # (NOTE: Requested dirpath ignored. Assumed to be "/" or ".")
+                    self._send_response(client_socket, '250 Directory changed\r\n')
+                
+                elif command == 'TYPE':
+                    # TYPE I = binary mode, TYPE A = ASCII mode
+                    self._send_response(client_socket, '200 Type set\r\n')
+                
+                elif command == 'PASV':
+                    # Enter passive mode - create data socket
+                    data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    data_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    data_socket.bind(('127.0.0.1', 0))  # Let OS assign port
+                    data_socket.listen(1)
+                    
+                    data_port = data_socket.getsockname()[1]
+                    # Format: 227 Entering Passive Mode (h1,h2,h3,h4,p1,p2)
+                    # where port = p1*256 + p2
+                    p1 = data_port // 256
+                    p2 = data_port % 256
+                    self._send_response(
+                        client_socket,
+                        f'227 Entering Passive Mode (127,0,0,1,{p1},{p2})\r\n'
+                    )
+                
+                elif command == 'RETR':
+                    # Retrieve (download) a file
+                    file_path = argument
+                    # Normalize path: ensure it starts with /
+                    # NOTE: Assumes current directory is "/"
+                    if not file_path.startswith('/'):
+                        file_path = '/' + file_path
+                    self.requested_paths.append(file_path)
+                    
+                    if file_path not in self.files:
+                        self._send_response(client_socket, '550 File not found\r\n')
+                        continue
+                    
+                    if data_socket is None:
+                        self._send_response(client_socket, '425 Use PASV first\r\n')
+                        continue
+                    
+                    # Accept data connection
+                    self._send_response(client_socket, '150 Opening data connection\r\n')
+                    data_conn, _ = data_socket.accept()
+                    
+                    # Send file content
+                    data_conn.sendall(self.files[file_path])
+                    data_conn.close()
+                    data_socket.close()
+                    data_socket = None
+                    
+                    self._send_response(client_socket, '226 Transfer complete\r\n')
+                
+                elif command == 'QUIT':
+                    self._send_response(client_socket, '221 Goodbye\r\n')
+                    break
+                
+                else:
+                    if self._VERBOSE:
+                        print(f'[MockFtpServer] Unknown command: {command}', file=sys.stderr)
+                    self._send_response(client_socket, f'502 Command not implemented: {command}\r\n')
+            
+        except Exception as e:
+            if self._VERBOSE:
+                print(f'[MockFtpServer] Client handler error: {e}', file=sys.stderr)
+        finally:
+            client_socket.close()
+    
+    def _send_response(self, sock: socket.socket, message: str) -> None:
+        """Send a response message to the client."""
+        if self._VERBOSE:
+            print(f'[MockFtpServer] Sending: {message.strip()}', file=sys.stderr)
+        sock.sendall(message.encode('ascii'))
+    
+    def get_url(self, path: str) -> str:
+        """Get the FTP URL for a given path."""
+        return f'ftp://127.0.0.1:{self._port}{path}'
+    
+    def close(self) -> None:
+        """Shut down the server."""
+        self._running = False
+        self._server_socket.close()
+        self._server_thread.join(timeout=2.0)
+    
+    def __enter__(self) -> 'MockFtpServer':
         return self
     
     def __exit__(self, *args) -> None:
