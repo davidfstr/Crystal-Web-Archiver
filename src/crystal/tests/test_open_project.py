@@ -299,7 +299,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                 ), 'crystal_task', [titled_project_dirpath], timeout=6.0)
                 assertEqual(True, did_keep_untitled_project_open)
             from crystal.app_preferences import app_prefs
-            app_prefs.unsaved_untitled_project_path = None
+            del app_prefs.unsaved_untitled_project_path
     
     # Case 3: Crystal was running and no other project was open
     #         (i.e. an OpenOrCreateDialog is visible)
