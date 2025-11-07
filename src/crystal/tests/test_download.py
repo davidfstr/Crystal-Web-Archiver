@@ -26,6 +26,8 @@ from unittest import skip
 from unittest.mock import MagicMock, patch
 import urllib.request
 
+from crystal.util.xos import is_windows
+
 
 _FAVICON_PATH = '/favicon.ico'
 
@@ -617,7 +619,14 @@ async def test_cannot_download_resource_with_socks_proxy_if_connect_to_socks_pro
             assertIn('Error downloading URL:', error_ti.Text)
             assertIn('ProxyConnectionError:', error_ti.Text)
             assertIn('Error connecting to SOCKS5 proxy', error_ti.Text)
-            assertIn('Connection refused', error_ti.Text)
+            if is_windows():
+                assertIn(
+                    'No connection could be made because the target machine actively refused it',
+                    error_ti.Text)
+            else:
+                assertIn(
+                    'Connection refused',
+                    error_ti.Text)
 
 
 # ------------------------------------------------------------------------------
