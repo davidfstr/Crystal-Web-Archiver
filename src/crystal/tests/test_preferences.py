@@ -106,7 +106,7 @@ async def test_given_preferences_dialog_when_invalid_port_then_port_cleared() ->
             # Verify port was cleared due to being invalid
             assert app_prefs.proxy_type == 'socks5'
             assert app_prefs.socks5_proxy_host == 'localhost'
-            assert app_prefs.socks5_proxy_port is None
+            assert app_prefs.socks5_proxy_port_is_set == False
 
 
 async def test_given_preferences_dialog_then_http_proxy_option_is_disabled() -> None:
