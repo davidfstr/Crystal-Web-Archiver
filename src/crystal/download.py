@@ -29,7 +29,12 @@ if TYPE_CHECKING:
 HTTP_REQUEST_TIMEOUT = 10  # seconds
 
 # The User-Agent string to use for downloads, or None to omit.
-_USER_AGENT_STRING = 'Crystal/%s (https://dafoster.net/projects/crystal-web-archiver/)' % __version__
+_USER_AGENT_STRING = (
+    #'Crystal/%s (https://dafoster.net/projects/crystal-web-archiver/)' % __version__
+    
+    # Chrome
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
+)
 
 # Whether to log verbose output related to HTTP requests and responses.
 # Can be used to inspect the exact request & response lines and headers exchanged.
