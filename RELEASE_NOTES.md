@@ -13,38 +13,35 @@ Release Notes ⋮
 ### main
 
 * Workflow improvements
+    * For projects that consistently give names to Root URLs and Groups,
+      it is now possible to distinguish Root URLs and Groups more easily
+      by changing the title format from "URL - Name" to "Name - URL".
+    * Download tasks can be right-clicked to copy their related URL (pattern)
+      or view the related URL in a browser.
     * Several standard menuitems are now present and work:
         * The "New Project..." menuitem can be used to create a different project
           when another project is already open.
         * The "Open Project..." menuitem can be used to open a different project
           when another project is already open.
         * The "About Crystal" menuitem shows information about Crystal.
-    * For projects that consistently give names to Root URLs and Groups,
-      make it easier to distinguish Root URLs and Groups by allowing
-      the title format to be changed from "URL - Name" to "Name - URL".
-    * Download tasks can be right-clicked to copy their related URL (pattern)
-      or view the related URL in a browser.
 
 * Browsing improvements
     * When visiting a page that hasn't been downloaded,
       a progress bar is now shown in the browser.
-    * The Not in Archive page now offers three action modes via radio buttons:
-        * Create Root URL (default): Creates a named root URL in your project and optionally downloads it.
-        * Create Group for Similar Pages: Creates a group for the URL pattern and optionally downloads it.
-        * Download Only: Downloads the current page without creating a root URL or group.
-    * When creating a Root URL from the Not in Archive page,
-      you can now provide a name for the root URL, similar to the New Root URL dialog.
-    * The Source dropdown on the Not in Archive page uses the same labels
-      as the Source dropdown in the New Group Dialog.
-    * When a served page tries to display an undownloaded image
-      that isn't covered by a URL or a Group, show a prominent red box with
-      an X rather than showing the browser's generic broken image icon.
+    * Not in Archive page improvements:
+        * The Not in Archive page now allows you to provide a name when creating
+          a new root URL.
+        * The Source dropdown on the Not in Archive page uses the same labels
+          as the Source dropdown in the New Group Dialog.
+        * When a served page tries to display an undownloaded image
+          that isn't covered by a URL or a Group, show a prominent red box with
+          an X rather than showing the browser's generic broken image icon.
 
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
 
 * Downloading improvements
-    * SOCKS v5 proxies are supported for downloading URLs through a
+    * SOCKS v5 proxies are supported for tunneling downloads through a
       remote network location.
     * Warn if HTTP 4xx or 5xx error while downloading a URL, on stderr,
       to make it easy to notice when a domain starts repeatedly refusing requests.
@@ -63,9 +60,9 @@ Release Notes ⋮
       artifacts.
     * Show menubar on macOS when Open or Create Dialog is visible.
       In particular ⌘Q now quits the app correctly when that dialog is visible.
-    * When Crystal starts, first dialog appears 0.2 seconds faster.
+    * When Crystal starts, the first dialog appears 0.2 seconds faster.
     * When Crystal is started with both --shell and --serve,
-      always print shell prompt and server start prompt in consistent order.
+      always print shell prompt and server start prompt in a consistent order.
 
 * Development improvements
     * Show correct application menu title on macOS when run from source.
@@ -76,6 +73,8 @@ Release Notes ⋮
     * Tests no longer assume that the default server port is free.
       Therefore an independent Crystal app running in the background will
       no longer cause tests to fail.
+    * Tests use app preferences isolated from each other and from any
+      independent Crystal app running in the background.
 
 ### v2.0.0 (September 26, 2025)
 
