@@ -385,8 +385,9 @@ def _main2(args: list[str]) -> None:
             
             # macOS + non-.app: Set application name in menu bar
             if is_mac_os() and getattr(sys, 'frozen', None) != 'macosx_app':
-                from crystal.util.macos_app import set_application_menu_name
+                from crystal.util.macos_app import set_application_menu_name, warn_if_application_menu_name_changes_from
                 set_application_menu_name(APP_NAME)
+                warn_if_application_menu_name_changes_from(APP_NAME)
             
             # macOS + non-.app: Set Dock icon
             if is_mac_os() and getattr(sys, 'frozen', None) != 'macosx_app':
