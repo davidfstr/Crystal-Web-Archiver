@@ -55,6 +55,9 @@ include = [
     "README/logo@2x.png",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.isort]
 src_paths = ["src/crystal", "setup/*.py", "tests"]
 skip = ["lib", "test_data"]
@@ -148,6 +151,3 @@ coverage = "^7.11.0"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
