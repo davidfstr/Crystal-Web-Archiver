@@ -52,7 +52,14 @@ class CrystalBannedApiChecker(BaseChecker):
             'no-direct-setfocus',
             "Direct SetFocus() call is not allowed. Use SetFocus() from crystal.util.wx_window instead.",
         ),
+        'C9007': (
+            "Crystal does not use asyncio. Async functions may only be called inside an async end-to-end test function or inside an async callable passed to run_test() in crystal.tests.util.runner.",
+            'no-asyncio',
+            "Asyncio imports are not allowed. Use async end-to-end tests or async callables with run_test() instead.",
+        ),
     }
+    
+    # === Visit Call ===
     
     def visit_call(self, node: astroid.Call) -> None:
         """Check for banned API patterns in function calls."""
@@ -144,6 +151,23 @@ class CrystalBannedApiChecker(BaseChecker):
                 return True
         
         return False
+    
+    # === Visit Import ===
+    
+    def visit_import(self, node: astroid.Import) -> None:
+        """Check for banned imports."""
+        
+        # import asyncio
+        for module_name, _ in node.names:
+            if module_name == 'asyncio':
+                self.add_message('no-asyncio', node=node)
+    
+    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
+        """Check for banned from imports."""
+        
+        # from asyncio import ...
+        if node.modname == 'asyncio':
+            self.add_message('no-asyncio', node=node)
 
 
 def register(linter):

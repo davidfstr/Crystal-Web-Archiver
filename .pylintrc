@@ -6,7 +6,7 @@ load-plugins=crystal_banned_api
 disable=all
 
 # Enable only crystal_banned_api messages
-enable=C9001,C9002,C9003,C9004,C9005,C9006
+enable=C9001,C9002,C9003,C9004,C9005,C9006,C9007
 
 [REPORTS]
 score=no
