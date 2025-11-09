@@ -39,6 +39,16 @@ Linux:
 * Figure it out and let me know.
 
 
+Running Code Quality Checks
+============================
+
+Type Checking:
+$ mypy
+
+Linting:
+$ pylint src tests
+
+
 Running Coverage
 ================
 

@@ -147,6 +147,7 @@ playwright = "^1.48.0"
 # For serializing local function closures in Playwright tests
 dill = "^0.3.8"
 coverage = "^7.11.0"
+pylint = "^4.0.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
