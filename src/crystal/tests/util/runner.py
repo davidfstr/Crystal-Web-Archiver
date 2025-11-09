@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+import asyncio  # pylint: disable=no-asyncio
 from collections.abc import Awaitable, Callable, Generator
 from crystal.util.xthreading import bg_affinity, fg_affinity, fg_call_and_wait
 import sys

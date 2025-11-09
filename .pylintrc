@@ -1,0 +1,12 @@
+[MAIN]
+load-plugins=crystal_banned_api
+
+[MESSAGES CONTROL]
+# Disable default checks
+disable=all
+
+# Enable only crystal_banned_api messages
+enable=C9001,C9002,C9003,C9004,C9005,C9006,C9007
+
+[REPORTS]
+score=no

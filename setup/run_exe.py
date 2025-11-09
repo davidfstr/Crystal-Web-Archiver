@@ -61,7 +61,10 @@ def main(args: list[str]) -> None:
             nonlocal process_returncode
             process = subprocess.run([exe_filepath], check=False)
             process_returncode = process.returncode
-        process_thread = threading.Thread(target=run_process, daemon=False)
+        process_thread = threading.Thread(  # pylint: disable=no-direct-thread
+            target=run_process,
+            daemon=False
+        )
         process_thread.start()
         
         try:

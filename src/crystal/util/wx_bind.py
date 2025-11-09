@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     import wx
 
 
+# TODO: Consider rename as "Bind" to be consistent with the PascalCase used
+#       by other functions that replace same-named wx functions.
 def bind(
         window: 'wx.Window', 
         event_type, 
@@ -18,7 +20,11 @@ def bind(
     """
     Equivalent to wx.Window.Bind(), but safer.
     """
-    window.Bind(event_type, _bind_target()(target), *args)
+    window.Bind(  # pylint: disable=no-direct-bind
+        event_type,
+        _bind_target()(target),
+        *args
+    )
 
 
 @contextmanager

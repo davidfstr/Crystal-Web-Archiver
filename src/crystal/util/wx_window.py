@@ -1,11 +1,15 @@
+import sys
+from types import EllipsisType
 from typing import Literal
 from crystal.util.xos import is_wx_gtk
 import wx
 
 
+# TODO: Is it necessary to pass an explicit `previously_focused` value
+#       if that information can already be determined automatically?
 def SetFocus(
         window: wx.Window,
-        previously_focused: wx.Window | None,
+        previously_focused: wx.Window | None | EllipsisType = Ellipsis,
         *, simulate_events: Literal[True] | None=None) -> wx.Window:
     """
     Replacement for wx.Window.SetFocus() that works properly even on Linux.
@@ -15,13 +19,16 @@ def SetFocus(
     
     Returns the window that was focused.
     """
+    if previously_focused is Ellipsis:
+        previously_focused = wx.Window.FindFocus()
+    
     if is_wx_gtk() or simulate_events:
         # Simulate focus and blur events, 
         # since wxGTK's SetFocus() doesn't appear to have any effect
         
         # Keep focus state in UI up-to-date so that UI doesn't issue
         # its own focus/blur events unexpectedly later
-        window.SetFocus()
+        window.SetFocus()  # pylint: disable=no-direct-setfocus
         
         # Simulate blur event
         if previously_focused is not None:
@@ -38,6 +45,14 @@ def SetFocus(
         event.SetWindow(previously_focused)  # yes, the previous window
         window.HandleWindowEvent(event)
     else:
-        window.SetFocus()
+        actual_previously_focused = wx.Window.FindFocus()
+        if previously_focused != actual_previously_focused:
+            print(
+                f'*** SetFocus: Expected previously focused window to be '
+                f'{previously_focused} but was instead '
+                f'{actual_previously_focused}',
+                file=sys.stderr)
+        
+        window.SetFocus()  # pylint: disable=no-direct-setfocus
     
     return window

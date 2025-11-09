@@ -14,6 +14,7 @@ from crystal.util.wx_dialog import (
     position_dialog_initially, ShowModal, ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
+from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xthreading import fg_affinity
 import wx
@@ -130,9 +131,9 @@ class NewGroupDialog:
         if not fields_hide_hint_when_focused():
             # Initialize focus
             if not is_edit:
-                self.pattern_field.SetFocus()
+                SetFocus(self.pattern_field)
             else:
-                self.name_field.SetFocus()
+                SetFocus(self.name_field)
         self._update_preview_urls()
         
         position_dialog_initially(dialog)

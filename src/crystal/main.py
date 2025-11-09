@@ -859,6 +859,7 @@ async def _prompt_for_project(
     from crystal.progress import CancelOpenProject
     from crystal.ui.BetterMessageDialog import BetterMessageDialog
     from crystal.util.wx_bind import bind
+    from crystal.util.wx_window import SetFocus
     from crystal.util.xos import is_mac_os
     import wx
     
@@ -898,7 +899,7 @@ async def _prompt_for_project(
                 
                 # Focus the checkbox manually on macOS to prevent dialog from losing focus
                 if is_mac_os():
-                    dialog._checkbox.SetFocus()
+                    SetFocus(dialog._checkbox)
             else:
                 event.Skip()
         
@@ -930,7 +931,7 @@ async def _prompt_for_project(
                 # Configure Ctrl+R (and Alt+R) key to toggle readonly checkbox.
                 # NOTE: Use wx.EVT_CHAR_HOOK rather than wx.EVT_KEY_DOWN so that
                 #       works on macOS where wx.EVT_KEY_DOWN does not work in dialogs.
-                dialog.Bind(wx.EVT_CHAR_HOOK, on_char_hook)
+                bind(dialog, wx.EVT_CHAR_HOOK, on_char_hook)
 
                 dialog.SetAcceleratorTable(wx.AcceleratorTable([
                     wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('N'), wx.ID_YES),
@@ -1009,7 +1010,7 @@ def _prompt_to_open_project(
     from crystal.model import Project
     from crystal.progress import CancelOpenProject
     from crystal.util.wx_bind import bind
-    from crystal.util.wx_dialog import position_dialog_initially, ShowModal
+    from crystal.util.wx_dialog import ShowFileDialogModal
     from crystal.util.xos import is_linux, is_mac_os, is_windows
     import wx
     
@@ -1065,12 +1066,12 @@ def _prompt_to_open_project(
     #       needs to be provided here.
     if is_linux():
         file_dialog.SetCustomizeHook(file_dialog_customize_hook)
-    with file_dialog:
-        if not file_dialog.ShowModal() == wx.ID_OK:
-            raise CancelOpenProject()
-        if project_path is None:
-            project_path = file_dialog.GetPath()
-        assert project_path is not None
+    (return_code, dialog_path) = ShowFileDialogModal(file_dialog)
+    if return_code != wx.ID_OK:
+        raise CancelOpenProject()
+    if project_path is None:
+        project_path = dialog_path
+    assert project_path is not None
     del file_dialog_customize_hook  # keep hook alive until after dialog closed
     
     if not os.path.exists(project_path):

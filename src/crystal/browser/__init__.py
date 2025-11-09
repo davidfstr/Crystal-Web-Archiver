@@ -41,11 +41,12 @@ from crystal.util.url_prefix import (
 from crystal.util.quitting import set_is_quitting
 from crystal.util.wx_bind import bind
 from crystal.util.wx_dialog import (
-    position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
+    ShowFileDialogModal, position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,
     ShowModal,
 )
 from crystal.util.wx_system_appearance import IsDark, IsDarkNow, SetDark
 from crystal.util.wx_timer import Timer, TimerError
+from crystal.util.wx_window import SetFocus
 from crystal.util.xcollections.iterables import is_iterable_empty, is_iterable_len_1
 from crystal.util.xos import (
     is_kde_or_non_gnome, is_linux, is_mac_os, is_windows,
@@ -666,7 +667,7 @@ class MainWindow(CloakMixin):
         if is_empty_state_visible_initially and is_mac_os():
             # Focus CTA button, since macOS does not do so automatically
             cta_button = parent.FindWindowByName('cr-empty-state-new-root-url-button')
-            cta_button.SetFocus()
+            SetFocus(cta_button)
         
         # Defer callout visibility update until after layout is complete
         fg_call_later(self._update_view_button_callout_visibility, force_later=True)
@@ -942,17 +943,15 @@ class MainWindow(CloakMixin):
         2. Handle Save As menu item for all projects.
         """
         # Prompt for a save location
-        dialog = wx.FileDialog(self._frame,
+        file_dialog = wx.FileDialog(self._frame,
             message='',
             wildcard='*' + Project.FILE_EXTENSION,
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
-        with dialog:
-            if dialog.ShowModal() != wx.ID_OK:
-                return
-            
-            new_project_path = dialog.GetPath()  # capture
-            if not new_project_path.endswith(self.project.FILE_EXTENSION):
-                new_project_path += self.project.FILE_EXTENSION
+        (return_code, new_project_path) = ShowFileDialogModal(file_dialog)
+        if return_code != wx.ID_OK:
+            return
+        if not new_project_path.endswith(self.project.FILE_EXTENSION):
+            new_project_path += self.project.FILE_EXTENSION
         
         # Save the project
         progress_dialog = SaveAsProgressDialog(self._frame)
@@ -1089,31 +1088,30 @@ class MainWindow(CloakMixin):
                     message='',
                     wildcard='*' + Project.FILE_EXTENSION,
                     style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
-                with file_dialog:
-                    if file_dialog.ShowModal() != wx.ID_OK:
-                        return False
-                    
-                    new_project_path = file_dialog.GetPath()
-                    if not new_project_path.endswith(self.project.FILE_EXTENSION):
-                        new_project_path += self.project.FILE_EXTENSION
-                    
-                    # Save the project
-                    progress_dialog = SaveAsProgressDialog(self._frame)
-                    future = self.project.save_as(new_project_path, progress_dialog)
-                    
-                    # Wait for save to complete
-                    try:
-                        fg_wait_for(lambda: future.done(), timeout=None, poll_interval=0.1)
-                        future.result()
-                    except CancelSaveAs:
-                        return False
-                    # TODO: Handle ProjectReadOnlyError more gracefully,
-                    #       by providing a more-targeted error message
-                    except (ProjectReadOnlyError, Exception) as e:
-                        self._show_save_error_dialog(e)
-                        return False
-                    finally:
-                        progress_dialog.reset()
+                (return_code, new_project_path) = ShowFileDialogModal(file_dialog)
+                if return_code != wx.ID_OK:
+                    return False
+                
+                if not new_project_path.endswith(self.project.FILE_EXTENSION):
+                    new_project_path += self.project.FILE_EXTENSION
+                
+                # Save the project
+                progress_dialog = SaveAsProgressDialog(self._frame)
+                future = self.project.save_as(new_project_path, progress_dialog)
+                
+                # Wait for save to complete
+                try:
+                    fg_wait_for(lambda: future.done(), timeout=None, poll_interval=0.1)
+                    future.result()
+                except CancelSaveAs:
+                    return False
+                # TODO: Handle ProjectReadOnlyError more gracefully,
+                #       by providing a more-targeted error message
+                except (ProjectReadOnlyError, Exception) as e:
+                    self._show_save_error_dialog(e)
+                    return False
+                finally:
+                    progress_dialog.reset()
             elif result == wx.ID_NO:
                 # Do not save, just close
                 pass

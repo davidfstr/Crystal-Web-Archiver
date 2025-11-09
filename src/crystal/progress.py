@@ -787,7 +787,7 @@ class DeferredProgressDialog:
                 self._dialog.Show()
             else:
                 # macOS fully supports window-modal dialogs
-                self._dialog.ShowWindowModal()
+                self._dialog.ShowWindowModal()  # pylint: disable=no-direct-showwindowmodal
         for call in self._calls[1:]:
             self._call(call)
         self._calls.clear()

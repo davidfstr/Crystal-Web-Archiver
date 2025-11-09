@@ -362,7 +362,7 @@ async def test_given_inside_background_thread_when_exception_raised_then_traceba
         #       is wrapped with @capture_crashes_to* and reports any
         #       unhandled exceptions somewhere sensible, but bare
         #       Threads don't.
-        thread = threading.Thread(target=bg_task)
+        thread = threading.Thread(target=bg_task)  # pylint: disable=no-direct-thread
         thread.start()
         thread.join()
     assert 'Exception in background thread:' in captured_stderr.getvalue()

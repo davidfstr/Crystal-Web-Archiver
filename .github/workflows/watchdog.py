@@ -96,16 +96,19 @@ class SubprocessWatchdog:
             )
             
             # Start monitoring thread
-            monitor_thread = threading.Thread(target=self._monitor_timeout, daemon=True)
+            monitor_thread = threading.Thread(  # pylint: disable=no-direct-thread
+                target=self._monitor_timeout,
+                daemon=True
+            )
             monitor_thread.start()
             
             # Start output streaming threads
-            stdout_thread = threading.Thread(
+            stdout_thread = threading.Thread(  # pylint: disable=no-direct-thread
                 target=self._stream_output, 
                 args=(self._process.stdout, sys.stdout),
                 daemon=True
             )
-            stderr_thread = threading.Thread(
+            stderr_thread = threading.Thread(  # pylint: disable=no-direct-thread
                 target=self._stream_output, 
                 args=(self._process.stderr, sys.stderr),
                 daemon=True
