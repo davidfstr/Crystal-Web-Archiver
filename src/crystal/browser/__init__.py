@@ -617,6 +617,61 @@ class MainWindow(CloakMixin):
         self.entity_tree.on_change_url_prefix_menuitem_selected(
             event, self.entity_tree.selected_node)
     
+    def _disable_menus_during_showwindowmodal(self) -> Callable[[], None]:
+        """
+        Disables menuitems that are inappropriate when a dialog is being
+        shown as window-modal inside this MainWindow.
+        
+        In particular any menuitem with Return (wx.WXK_RETURN) as an 
+        accelerator is disabled, as it is very easy to trigger accidentally.
+        
+        Returns a function that restores menuitems to their previous state.
+        """
+        # NOTE: On macOS the following IDs are treated specially and will NOT
+        #       be disabled even if they do not appear in this list, due to
+        #       wxPython limitations:
+        #           - wx.ID_ABOUT
+        #           - wx.ID_PREFERENCES
+        #           - wx.ID_EXIT
+        #       See: https://github.com/davidfstr/Crystal-Web-Archiver/issues/272
+        # TODO: When support for multiple MainWindows is added in the future,
+        #       the following menuitems will possible to leave enabled safely:
+        #           - wx.ID_NEW
+        #           - wx.ID_OPEN
+        #           - wx.ID_CLOSE
+        #       See: https://github.com/davidfstr/Crystal-Web-Archiver/issues/101
+        IDS_TO_REMAIN_ENABLED = {
+            # File
+            wx.ID_EXIT,
+            
+            # Edit
+            wx.ID_UNDO,
+            wx.ID_REDO,
+            wx.ID_CUT,
+            wx.ID_COPY,
+            wx.ID_PASTE,
+        }  # type: set[int]
+        
+        # Save and disable all menu items
+        was_enabled_states: dict[wx.Menu, dict[int, bool]] = {}
+        for (menu, _) in self._frame.MenuBar.Menus:
+            was_enabled_states[menu] = {}
+            for mi in menu.MenuItems:
+                was_enabled_states[menu][mi.Id] = mi.Enabled
+                if mi.Id not in IDS_TO_REMAIN_ENABLED:
+                    mi.Enabled = False
+        
+        def restore_menuitems() -> None:
+            # Restore the enabled states of all menu items
+            for (menu, _) in self._frame.MenuBar.Menus:
+                if menu not in was_enabled_states:
+                    continue
+                for mi in menu.MenuItems:
+                    was_enabled = was_enabled_states[menu].get(mi.Id)
+                    if was_enabled is not None:
+                        mi.Enabled = was_enabled
+        return restore_menuitems
+    
     # === Entity Pane: Init ===
     
     def _create_entity_pane(self, parent, progress_listener: OpenProjectProgressListener):
@@ -1185,18 +1240,24 @@ class MainWindow(CloakMixin):
     
     def _on_about(self, event: wx.MenuEvent) -> None:
         if event.Id == wx.ID_ABOUT:
-            self._show_about_box(self._frame)
+            self._show_about_box(self)
         else:
             event.Skip()
     
-    @classmethod
-    def _show_about_box(cls, parent: wx.Window | None) -> None:
+    @staticmethod
+    def _show_about_box(parent: 'MainWindow | None') -> None:
         from crystal.browser.about import AboutDialog
-        AboutDialog(parent)
+        
+        if parent is not None:
+            restore_menuitems = parent._disable_menus_during_showwindowmodal()
+            AboutDialog(parent=parent._frame, on_close=restore_menuitems)
+        else:
+            AboutDialog(parent=None, on_close=None)
     
     # === Entity Pane: New/Edit Root Url ===
     
     def _on_new_root_url(self, event: wx.CommandEvent) -> None:
+        restore_menuitems = self._disable_menus_during_showwindowmodal()
         NewRootUrlDialog(
             self._frame,
             self._on_new_root_url_dialog_ok,
@@ -1205,6 +1266,7 @@ class MainWindow(CloakMixin):
             initial_name=self._suggested_name_for_selection or '',
             initial_set_as_default_domain=(self.project.default_url_prefix is None),
             initial_set_as_default_directory=False,
+            on_close=restore_menuitems,
         )
     
     def _root_url_exists(self, url: str) -> bool:
@@ -1279,15 +1341,21 @@ class MainWindow(CloakMixin):
     # === Entity Pane: New/Edit Group ===
     
     def _on_new_group(self, event: wx.CommandEvent) -> None:
+        restore_menuitems = self._disable_menus_during_showwindowmodal()
         try:
-            NewGroupDialog(
-                self._frame,
-                self._on_new_group_dialog_ok,
-                self.project,
-                saving_source_would_create_cycle_func=lambda source: False,
-                initial_url_pattern=self._suggested_url_or_url_pattern_for_selection or '',
-                initial_source=self._suggested_source_for_selection,
-                initial_name=self._suggested_name_for_selection or '')
+            try:
+                NewGroupDialog(
+                    self._frame,
+                    self._on_new_group_dialog_ok,
+                    self.project,
+                    saving_source_would_create_cycle_func=lambda source: False,
+                    initial_url_pattern=self._suggested_url_or_url_pattern_for_selection or '',
+                    initial_source=self._suggested_source_for_selection,
+                    initial_name=self._suggested_name_for_selection or '',
+                    on_close=restore_menuitems)
+            except:
+                restore_menuitems()
+                raise
         except CancelLoadUrls:
             pass
     
@@ -1350,44 +1418,56 @@ class MainWindow(CloakMixin):
             selection_urllike = rr.resource.url
             selection_domain_prefix = get_url_domain_prefix_for(selection_urllike)
             selection_dir_prefix = get_url_directory_prefix_for(selection_urllike)
-            NewRootUrlDialog(
-                self._frame,
-                partial(self._on_edit_root_url_dialog_ok, rr),
-                url_exists_func=self._root_url_exists,
-                initial_url=rr.url,
-                initial_name=rr.name,
-                initial_set_as_default_domain=(
-                    selection_domain_prefix is not None and
-                    self.project.default_url_prefix == selection_domain_prefix
-                ),
-                initial_set_as_default_directory=(
-                    selection_dir_prefix is not None and
-                    selection_dir_prefix != selection_domain_prefix and
-                    self.project.default_url_prefix == selection_dir_prefix
-                ),
-                allow_set_as_default_domain_or_directory=(
-                    selection_domain_prefix is not None or
-                    selection_dir_prefix is not None
-                ),
-                is_edit=True,
-                readonly=self._readonly,
-            )
+            restore_menuitems = self._disable_menus_during_showwindowmodal()
+            try:
+                NewRootUrlDialog(
+                    self._frame,
+                    partial(self._on_edit_root_url_dialog_ok, rr),
+                    url_exists_func=self._root_url_exists,
+                    initial_url=rr.url,
+                    initial_name=rr.name,
+                    initial_set_as_default_domain=(
+                        selection_domain_prefix is not None and
+                        self.project.default_url_prefix == selection_domain_prefix
+                    ),
+                    initial_set_as_default_directory=(
+                        selection_dir_prefix is not None and
+                        selection_dir_prefix != selection_domain_prefix and
+                        self.project.default_url_prefix == selection_dir_prefix
+                    ),
+                    allow_set_as_default_domain_or_directory=(
+                        selection_domain_prefix is not None or
+                        selection_dir_prefix is not None
+                    ),
+                    is_edit=True,
+                    readonly=self._readonly,
+                    on_close=restore_menuitems,
+                )
+            except:
+                restore_menuitems()
+                raise
         elif isinstance(selected_entity, ResourceGroup):
             rg = selected_entity
+            restore_menuitems = self._disable_menus_during_showwindowmodal()
             try:
-                NewGroupDialog(
-                    self._frame,
-                    partial(self._on_edit_group_dialog_ok, rg),
-                    self.project,
-                    saving_source_would_create_cycle_func=
-                        partial(self._saving_source_would_create_cycle, rg),
-                    initial_url_pattern=rg.url_pattern,
-                    initial_source=rg.source,
-                    initial_name=rg.name,
-                    initial_do_not_download=rg.do_not_download,
-                    is_edit=True,
-                    readonly=self._readonly
-                )
+                try:
+                    NewGroupDialog(
+                        self._frame,
+                        partial(self._on_edit_group_dialog_ok, rg),
+                        self.project,
+                        saving_source_would_create_cycle_func=
+                            partial(self._saving_source_would_create_cycle, rg),
+                        initial_url_pattern=rg.url_pattern,
+                        initial_source=rg.source,
+                        initial_name=rg.name,
+                        initial_do_not_download=rg.do_not_download,
+                        is_edit=True,
+                        readonly=self._readonly,
+                        on_close=restore_menuitems,
+                    )
+                except:
+                    restore_menuitems()
+                    raise
             except CancelLoadUrls:
                 pass
         else:
@@ -1903,11 +1983,16 @@ class MainWindow(CloakMixin):
     
     def _on_preferences(self, event: wx.MenuEvent | wx.CommandEvent) -> None:
         if event.Id == wx.ID_PREFERENCES or isinstance(event.EventObject, wx.Button):
-            PreferencesDialog(self._frame, self.project, self._on_preferences_dialog_close)
+            restore_menuitems = self._disable_menus_during_showwindowmodal()
+            def on_preferences_dialog_close() -> None:
+                restore_menuitems()
+                self._on_preferences_dialog_close()
+            
+            PreferencesDialog(self._frame, self.project, on_preferences_dialog_close)
         else:
             event.Skip()
     
     @fg_affinity
     def _on_preferences_dialog_close(self) -> None:
-        # Update callout visibility in callout were reset in app preferences
+        # Update callout visibility if was reset in app preferences
         self._update_view_button_callout_visibility()

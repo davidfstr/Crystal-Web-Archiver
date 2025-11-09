@@ -47,7 +47,7 @@ class PreferencesDialog:
         Arguments:
         * parent -- parent wx.Window that this dialog is attached to.
         * project -- the project whose preferences are being edited.
-        * on_close -- optional callback called when dialog is closed (OK or Cancel).
+        * on_close -- optional callback called when dialog is closed.
         """
         self._project = project
         self._on_close_callback = on_close or (lambda: None)
@@ -334,7 +334,9 @@ class PreferencesDialog:
             self._on_cancel(event)
     
     def _on_close(self, event: wx.CloseEvent) -> None:
-        self._on_cancel(event)
+        self._on_close_callback()
+        
+        self.dialog.Destroy()
     
     def _on_ok(self, event: wx.CommandEvent) -> None:
         # Save project fields
@@ -383,9 +385,7 @@ class PreferencesDialog:
             except ValueError:  # invalid format
                 del app_prefs.socks5_proxy_port
         
-        self.dialog.Destroy()
-        self._on_close_callback()
+        self.dialog.Close()  # will call _on_close()
     
     def _on_cancel(self, event: wx.Event) -> None:
-        self.dialog.Destroy()
-        self._on_close_callback()
+        self.dialog.Close()  # will call _on_close()

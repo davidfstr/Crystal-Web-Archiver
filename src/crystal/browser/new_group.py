@@ -47,6 +47,7 @@ class NewGroupDialog:
             initial_do_not_download: bool=False,
             is_edit: bool=False,
             readonly: bool=False,
+            on_close: Callable[[], None] | None = None,
             ) -> None:
         """
         Arguments:
@@ -56,6 +57,7 @@ class NewGroupDialog:
         * initial_url_pattern -- overrides the initial URL pattern displayed.
         * initial_source -- overrides the initial source displayed.
         * initial_name -- overrides the initial name displayed.
+        * on_close -- optional callback called when dialog is closed.
         
         Raises:
         * CancelLoadUrls
@@ -65,6 +67,8 @@ class NewGroupDialog:
         self._saving_source_would_create_cycle_func = saving_source_would_create_cycle_func
         self._is_edit = is_edit
         self._readonly = readonly
+        self._on_close_callback = on_close or (lambda: None)
+        
         self._is_destroying_or_destroyed = False
         
         # Show progress dialog in advance if will need to load all project URLs
@@ -496,7 +500,9 @@ class NewGroupDialog:
     
     @fg_affinity
     def _on_close(self, event: wx.CloseEvent) -> None:
-        self._on_cancel()
+        self._on_close_callback()
+        
+        self.dialog.Destroy()
     
     @fg_affinity
     def _on_destroyed(self, event) -> None:
@@ -541,11 +547,11 @@ class NewGroupDialog:
             name, url_pattern, source, do_not_download,
             download_immediately)
         
-        self.dialog.Destroy()
+        self.dialog.Close()  # will call _on_close()
     
     @fg_affinity
     def _on_cancel(self) -> None:
-        self.dialog.Destroy()
+        self.dialog.Close()  # will call _on_close()
     
     @fg_affinity
     def _on_options_toggle(self) -> None:

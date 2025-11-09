@@ -10,6 +10,7 @@ from crystal.util.wx_dialog import (
     set_dialog_or_frame_icon_if_appropriate,
 )
 from crystal.util.wx_system_appearance import IsDarkNow, SetDark
+from typing import Callable
 import wx
 
 
@@ -22,7 +23,9 @@ class AboutDialog:
     including the program icon, name, version, and authors.
     """
     
-    def __init__(self, parent: wx.Window | None) -> None:
+    def __init__(self, parent: wx.Window | None, on_close: Callable[[], None] | None=None) -> None:
+        self._on_close_callback = on_close or (lambda: None)
+        
         dialog = self.dialog = wx.Dialog(
             parent,
             title=f'About {APP_NAME}',
@@ -192,6 +195,8 @@ class AboutDialog:
             self.dialog.Close()
     
     def _on_close(self, event: wx.CloseEvent) -> None:
+        self._on_close_callback()
+        
         # Return wx.OK to caller of ShowModal or ShowWindowModal
         suppress_destroy = False
         if self.dialog.Parent is None:

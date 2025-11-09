@@ -73,12 +73,14 @@ class NewRootUrlDialog:
             allow_set_as_default_domain_or_directory: bool=True,
             is_edit: bool=False,
             readonly: bool=False,
+            on_close: Callable[[], None] | None = None,
             ) -> None:
         """
         Arguments:
         * parent -- parent wx.Window that this dialog is attached to.
         * on_finish -- called when OK pressed on dialog.
         * initial_url -- overrides the initial URL displayed.
+        * on_close -- optional callback called when dialog is closed.
         """
         self._on_finish = on_finish
         self._url_exists_func = url_exists_func
@@ -88,6 +90,7 @@ class NewRootUrlDialog:
         )
         self._is_edit = is_edit
         self._readonly = readonly
+        self._on_close_callback = on_close or (lambda: None)
         
         self._url_field_focused = False
         self._last_cleaned_url = initial_url if is_edit else None  # type: Optional[str]
@@ -500,7 +503,19 @@ class NewRootUrlDialog:
     
     @fg_affinity
     def _on_close(self, event: wx.CloseEvent) -> None:
-        self._on_cancel(event)
+        # Stop cleaning any old URL input
+        if self._url_cleaner is not None:
+            self._url_cleaner.cancel()
+            self._url_cleaner = None
+        
+        self._on_close_callback()
+        
+        self._is_destroying_or_destroyed = True
+        self.dialog.Destroy()
+    
+    @fg_affinity
+    def _on_destroyed(self, event) -> None:
+        self._is_destroying_or_destroyed = True
     
     @fg_affinity
     def _on_ok(self, event: wx.CommandEvent | None=None) -> None:
@@ -554,16 +569,11 @@ class NewRootUrlDialog:
             name, url, change_prefix_command,
             download_immediately, create_group)
         
-        self._destroy()
+        self.dialog.Close()  # will call _on_close()
     
     @fg_affinity
     def _on_cancel(self, event: wx.CommandEvent) -> None:
-        # Stop cleaning any old URL input
-        if self._url_cleaner is not None:
-            self._url_cleaner.cancel()
-            self._url_cleaner = None
-        
-        self._destroy()
+        self.dialog.Close()  # will call _on_close()
     
     @fg_affinity
     def _on_advanced_options_toggle(self) -> None:
@@ -592,15 +602,6 @@ class NewRootUrlDialog:
                 width=wx.DefaultCoord,
                 height=self.dialog.Size.Height + options_height,
                 sizeFlags=wx.SIZE_USE_EXISTING)
-    
-    @fg_affinity
-    def _destroy(self) -> None:
-        self._is_destroying_or_destroyed = True
-        self.dialog.Destroy()
-    
-    @fg_affinity
-    def _on_destroyed(self, event) -> None:
-        self._is_destroying_or_destroyed = True
     
     # === Updates ===
     
