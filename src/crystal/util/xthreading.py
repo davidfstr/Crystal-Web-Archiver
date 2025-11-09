@@ -411,7 +411,12 @@ def bg_call_later(
     if is_windows():
         callable = _com_initialized()(callable)  # reinterpret
     
-    thread = threading.Thread(target=callable, args=(), name=name, daemon=daemon)
+    thread = threading.Thread(  # pylint: disable=no-direct-thread
+        target=callable,
+        args=(),
+        name=name,
+        daemon=daemon
+    )
     thread.start()
     return thread
 

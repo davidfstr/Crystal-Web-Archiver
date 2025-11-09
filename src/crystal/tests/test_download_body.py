@@ -11,6 +11,7 @@ from crystal.tests.util.server import served_project
 from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
 from crystal.tests.util.windows import OpenOrCreateDialog
 import crystal.tests.util.xtempfile as xtempfile
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.db import DatabaseCursor
 import errno
 from http.client import HTTPConnection, HTTPResponse
@@ -22,6 +23,8 @@ import threading
 from typing import BinaryIO, cast, NoReturn, Self
 from unittest import skip
 from unittest.mock import ANY, Mock, patch
+
+from crystal.util.xthreading import bg_call_later
 
 # ------------------------------------------------------------------------------
 # Tests: Success Cases
@@ -120,6 +123,7 @@ def _file_served(headers: list[list[str]], content_bytes: bytes) -> Iterator[int
     with HTTPServer(('', 0), RequestHandler) as server:
         (_, server_port) = server.server_address
         
+        @capture_crashes_to_stderr
         def do_serve_forever() -> None:
             try:
                 server.serve_forever()
@@ -130,8 +134,11 @@ def _file_served(headers: list[list[str]], content_bytes: bytes) -> Iterator[int
                     pass
                 else:
                     raise
-        server_thread = threading.Thread(target=do_serve_forever, daemon=True)
-        server_thread.start()
+        bg_call_later(
+            do_serve_forever,
+            name='file_served.serve',
+            daemon=True
+        )
         try:
             yield server_port
         finally:

@@ -1,4 +1,4 @@
-
+from crystal.util.wx_bind import bind
 import webbrowser
 import wx
 
@@ -11,9 +11,9 @@ class ClickableText(wx.StaticText):
         self._url = url
         self.SetForegroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HOTLIGHT))
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-        self.Bind(wx.EVT_LEFT_UP, self._on_click)
-        self.Bind(wx.EVT_ENTER_WINDOW, self._on_enter)
-        self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
+        bind(self, wx.EVT_LEFT_UP, self._on_click)
+        bind(self, wx.EVT_ENTER_WINDOW, self._on_enter)
+        bind(self, wx.EVT_LEAVE_WINDOW, self._on_leave)
     
     def _on_click(self, event: wx.MouseEvent) -> None:
         webbrowser.open(self._url)

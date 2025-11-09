@@ -37,4 +37,4 @@ def IsDarkNow() -> bool:
     Safe replacement for wx.SystemSettings.GetAppearance().IsDark(),
     which enforces use on the foreground thread.
     """
-    return wx.SystemSettings.GetAppearance().IsDark()
+    return wx.SystemSettings.GetAppearance().IsDark()  # pylint: disable=no-direct-isdark

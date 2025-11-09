@@ -159,9 +159,9 @@ class NewRootUrlDialog:
         if not fields_hide_hint_when_focused():
             # Initialize focus
             if not is_edit:
-                self._url_field.SetFocus()
+                SetFocus(self._url_field)
             else:
-                self._name_field.SetFocus()
+                SetFocus(self._name_field)
         
         position_dialog_initially(dialog)
         dialog.Fit()

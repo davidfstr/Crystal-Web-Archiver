@@ -32,6 +32,9 @@ def ShowModal(dialog: wx.Dialog) -> int:
         No:
             return_code = ShowModal(dialog)
             ...
+    
+    See also:
+    - ShowFileDialogModal
     """
     is_running_tests = tests_are_running()  # cache
     
@@ -79,7 +82,7 @@ def ShowModal(dialog: wx.Dialog) -> int:
         finally:
             del dialog.cr_simulated_modal
     else:
-        return dialog.ShowModal()
+        return dialog.ShowModal()  # pylint: disable=no-direct-showmodal
 
 
 class ShowModalFunc(Protocol):
@@ -107,6 +110,17 @@ def mocked_show_modal(
             return return_code
     ShowModal.call_count = 0
     return ShowModal
+
+
+def ShowFileDialogModal(file_dialog: wx.FileDialog) -> tuple[int, str]:
+    """
+    Replacement for wx.FileDialog.ShowModal().
+    """
+    with file_dialog:
+        return_code = file_dialog.ShowModal()  # pylint: disable=no-direct-showmodal
+        path = file_dialog.GetPath()
+        return (return_code, path)
+
 
 # ------------------------------------------------------------------------------
 # ShowModalAsync
@@ -225,7 +239,7 @@ def ShowWindowModal(dialog: wx.Dialog, *, modal_fallback: bool=False) -> None:
         #    So don't use ShowWindowModal() on Windows during tests.
         if modal_fallback and not (is_wx_gtk() and tests_are_running()):
             with dialog:
-                dialog.ShowModal()
+                dialog.ShowModal()  # pylint: disable=no-direct-showmodal
         else:
             dialog.Show()
     else:
@@ -234,7 +248,7 @@ def ShowWindowModal(dialog: wx.Dialog, *, modal_fallback: bool=False) -> None:
         #    disabling interactions on the parent window,
         #    but NOT visually disabling any controls.
         # NOTE: Does NOT block until the dialog closes
-        dialog.ShowWindowModal()
+        dialog.ShowWindowModal()  # pylint: disable=no-direct-showwindowmodal
 
 
 # ------------------------------------------------------------------------------

@@ -13,6 +13,7 @@ import crystal.tests.util.xtempfile as xtempfile
 from crystal.util import http_date
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.xdatetime import datetime_is_aware
+from crystal.util.xfunctools import partial2
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait
 import datetime
 from email.message import EmailMessage
@@ -208,13 +209,13 @@ class MockFtpServer:
         self._server_socket.listen(5)
         
         self._running = True
-        self._server_thread = threading.Thread(
-            target=self._serve,
+        self._server_thread = bg_call_later(
+            self._serve,
+            name='MockFtpServer.serve',
             daemon=True,
-            name='MockFtpServer.serve'
         )
-        self._server_thread.start()
     
+    @capture_crashes_to_stderr
     def _serve(self) -> None:
         """Main server loop that accepts connections."""
         while self._running:
@@ -226,18 +227,17 @@ class MockFtpServer:
                     continue
                 
                 # Handle client in a separate thread
-                client_thread = threading.Thread(
-                    target=self._handle_client,
-                    args=(client_socket,),
+                bg_call_later(
+                    partial2(self._handle_client, client_socket),
+                    name='MockFtpServer.handle_client',
                     daemon=True,
-                    name='MockFtpServer.handle_client'
                 )
-                client_thread.start()
             except Exception as e:
                 if self._running:
                     print(f'MockFtpServer error: {e}', file=sys.stderr)
                 break
     
+    @capture_crashes_to_stderr
     def _handle_client(self, client_socket: socket.socket) -> None:
         """Handle a single FTP client connection."""
         try:
