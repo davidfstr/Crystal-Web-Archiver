@@ -6,7 +6,7 @@ Crystal to accomplish high-level user goals.
 from __future__ import annotations
 
 from crystal.model import Project, Resource
-from crystal.server import _DEFAULT_SERVER_PORT, get_request_url
+from crystal.server import get_request_url
 from crystal.task import DownloadResourceGroupTask
 # TODO: Move to crystal.tests.util.data
 from crystal.tests.test_server import _navigate_from_home_to_comic_1_nia_page
@@ -24,26 +24,38 @@ from crystal.tests.util.server import (
 )
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
-    DEFAULT_WAIT_PERIOD, DEFAULT_WAIT_TIMEOUT,
-    first_child_of_tree_item_is_not_loading_condition,
-    tree_has_no_children_condition, wait_for,
+    DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
+    is_focused_condition, not_condition,
+    tree_has_no_children_condition,
+    wait_for, window_condition,
 )
 from crystal.tests.util.windows import (
     EntityTree, MainWindow, NewGroupDialog, NewRootUrlDialog,
     OpenOrCreateDialog, PreferencesDialog,
+)
+from crystal.tests.util.wx_keyboard_actions import (
+    press_arrow_key_in_treectrl, 
+    press_key_in_window_triggering_menu_item, 
+    press_return_in_window_triggering_default_button, 
+    press_tab_in_window_to_navigate_focus,
 )
 from crystal.tests.util.xplaywright import (
     Playwright, RawPage, awith_playwright, expect,
 )
 import crystal.tests.util.xtempfile as xtempfile
 from crystal.tests.util.xtzutils import localtime_fallback_for_get_localzone
-from crystal.util.xos import is_windows
+from crystal.util.wx_dialog import mocked_show_modal
+from crystal.util.wx_window import SetFocus
+from crystal.util.xos import is_ci, is_linux, is_mac_os
+from crystal.util.xtyping import not_none
 import datetime
 import re
-import tempfile
 from textwrap import dedent
 from unittest import skip
+from unittest.mock import patch
 from urllib.parse import urljoin, urlparse
+import wx
+
 
 # ------------------------------------------------------------------------------
 # Tests
@@ -815,7 +827,9 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 await _assert_tree_item_icon_tooltip_contains(m, 'Fresh')
 
 
-@skip('not yet automated')
+# TODO: Also test:
+#       - Command-R (New Root URL)
+#       - Command-Delete (Forget)
 async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> None:
     """
     Test that can successfully download and serve a mostly-static site,
@@ -827,7 +841,205 @@ async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> No
     
     Example site: https://xkcd.com/
     """
-    pass
+    # Disable focus checking in headless environments like macOS and Linux CI
+    check_focused_windows = not (
+        is_ci() and (is_mac_os() or is_linux())
+    )
+    
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        comic_pattern = sp.get_request_url('https://xkcd.com/#/')
+        
+        # Wait for Open or Create Dialog to be visible
+        ocd = await OpenOrCreateDialog.wait_for()
+        
+        # - Press Return to trigger the "New Project" button
+        # - Wait for MainWindow to appear
+        press_return_in_window_triggering_default_button(ocd.open_or_create_project_dialog)
+        mw = await MainWindow.wait_for()
+        project = Project._last_opened_project
+        assert project is not None
+        
+        # Create a new root URL, using the call-to-action button
+        # using only the keyboard
+        # 
+        # TODO: Also try to create a new root URL using a keyboard accelerator,
+        #       somewhere else in this test
+        if True:
+            # - Press Return to trigger the call-to-action "New Root URL..." button
+            # - Wait for New Root URL dialog to appear
+            press_return_in_window_triggering_default_button(mw.main_window)
+            nud = await NewRootUrlDialog.wait_for()
+            
+            # - Ensure URL field is focused
+            # - Type the home URL
+            if check_focused_windows:
+                await wait_for(is_focused_condition(nud.url_field))
+            else:
+                SetFocus(nud.url_field)
+            nud.url_field.Value = home_url
+            
+            # Press Tab <= 2 times until Name field is focused
+            if check_focused_windows:
+                for i in range(2):
+                    press_tab_in_window_to_navigate_focus(nud._dialog)
+                    if nud.name_field.HasFocus():
+                        break
+                else:
+                    raise AssertionError('Name field did not focus within 2 tab key presses')
+            else:
+                SetFocus(nud.name_field)
+            
+            # Type "Home"
+            if check_focused_windows:
+                assert nud.name_field.HasFocus()
+            else:
+                SetFocus(nud.name_field)
+            nud.name_field.Value = 'Home'
+            
+            # - Press Return
+            # - Wait for dialog to disappear
+            async with wait_for_download_task_to_start_and_finish(project):
+                press_return_in_window_triggering_default_button(nud._dialog)
+                
+                await wait_for(
+                    not_condition(window_condition('cr-new-root-url-dialog')),
+                )
+        
+            # - Ensure a unique tree item exists in the Entity Tree for the home URL
+            # - Ensure it is focused
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            home_ti = root_ti.find_child(home_url, project.default_url_prefix)
+            if check_focused_windows:
+                await wait_for(is_focused_condition(home_ti.tree))
+            else:
+                SetFocus(home_ti.tree)
+        
+        # View a URL, using only the keyboard
+        if True:
+            # Press Command-Shift-O to trigger the View action.
+            assert home_ti.IsSelected()
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
+                    home_url,
+                    project_default_url_prefix=not_none(project).default_url_prefix)):
+                press_key_in_window_triggering_menu_item(
+                    mw.main_window, ord('O'), ctrl=True, shift=True)
+            
+            # (Browser switches to the foreground, in front of the Crystal app.)
+            
+            # (User uses Command-Tab to switch back to the Crystal app)
+            
+            # Ensure the home URL tree item is still focused
+            if check_focused_windows:
+                await wait_for(is_focused_condition(home_ti.tree), \
+                    message=lambda: f'Unexpectedly focused: {wx.Window.FindFocus()}')
+            else:
+                SetFocus(home_ti.tree)
+        
+        # Create a group (based on a link), using only the keyboard
+        if True:
+            # Press right arrow key to expand the home URL tree item
+            assert home_ti.IsSelected()
+            press_arrow_key_in_treectrl(mw.entity_tree.window, wx.WXK_RIGHT)
+            await wait_for(first_child_of_tree_item_is_not_loading_condition(home_ti))
+            
+            # Press down until a child that is a comic is selected
+            for i in range(30):
+                press_arrow_key_in_treectrl(mw.entity_tree.window, wx.WXK_DOWN)
+                
+                selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
+                assert selected_ti is not None
+                if selected_ti.Text.startswith('/_/https/xkcd.com/150/ - '):
+                    break
+            else:
+                raise AssertionError('Did not select comic URL within 30 arrow key presses')
+            
+            # - Press Command-G to trigger the New Group action
+            # - Wait for New Group dialog to appear
+            press_key_in_window_triggering_menu_item(
+                mw.main_window, ord('G'), ctrl=True)
+            ngd = await NewGroupDialog.wait_for()
+            
+            # Ensure URL Pattern field is focused.
+            # Should be something like "https://xkcd.com/150/"
+            if check_focused_windows:
+                await wait_for(is_focused_condition(ngd.pattern_field))
+            else:
+                SetFocus(ngd.pattern_field)
+            
+            # - Use arrow keys to navigate insertion point to after the "150" part
+            #   of the URL pattern.
+            # - Press Backspace until the "150" is deleted.
+            # - Press "#" to insert "#" in place of the deleted "150".
+            original_pattern = ngd.pattern_field.Value
+            modified_pattern = re.sub(r'/\d+/', '/#/', original_pattern)
+            ngd.pattern_field.Value = modified_pattern
+            
+            # Press Tab <= 3 times until the Name field is focused
+            if check_focused_windows:
+                for i in range(3):
+                    press_tab_in_window_to_navigate_focus(ngd._dialog)
+                    if ngd.name_field.HasFocus():
+                        break
+                else:
+                    raise AssertionError('Name field did not focus within 3 tab key presses')
+            else:
+                SetFocus(ngd.name_field)
+            
+            # Type "Comic" as the name
+            ngd.name_field.Value = 'Comic'
+            
+            # - Press Return to trigger the "New" button
+            # - Wait for dialog to close
+            press_return_in_window_triggering_default_button(ngd._dialog)
+            await wait_for(not_condition(window_condition('cr-new-group-dialog')))
+            
+            # (TODO: Check which entity in the Entity Tree is now focused)
+            
+            # Press left arrow <= 4 times until the home tree item is collapsed
+            if check_focused_windows:
+                await wait_for(is_focused_condition(home_ti.tree))
+                for i in range(4):
+                    press_arrow_key_in_treectrl(mw.entity_tree.window, wx.WXK_LEFT)
+                    if not home_ti.IsExpanded():
+                        break
+                else:
+                    raise AssertionError('Name field did not focus within 3 tab key presses')
+            else:
+                home_ti.Collapse()
+                home_ti.SelectItem()
+            
+            # Ensure a tree item for the Comic group exists, after the home tree item
+            root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+            comic_group_ti = root_ti.find_child(comic_pattern, project.default_url_prefix)
+            
+            # Press down arrow. Ensure Comic group tree item is focused.
+            press_arrow_key_in_treectrl(mw.entity_tree.window, wx.WXK_DOWN)
+            if check_focused_windows:
+                await wait_for(is_focused_condition(comic_group_ti.tree))
+            else:
+                SetFocus(comic_group_ti.tree)
+        
+        # Download a group, using only the keyboard
+        if True:
+            # Press Command-Enter to trigger "Download" action
+            assert comic_group_ti.IsSelected()
+            async with wait_for_download_task_to_start_and_finish(project):
+                press_key_in_window_triggering_menu_item(
+                    mw.main_window, wx.WXK_RETURN, ctrl=True)
+        
+        # Close project, using only the keyboard
+        if True:
+            # - Press Command-W to trigger "Close" action.
+            # - When prompted whether to save the project, answer "Don't Save".
+            with patch('crystal.browser.ShowModal',
+                    mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
+                press_key_in_window_triggering_menu_item(
+                    mw.main_window, ord('W'), ctrl=True)
+                
+                # Wait for MainWindow to close and OpenOrCreateDialog to appear
+                await OpenOrCreateDialog.wait_for()
 
 
 async def test_can_download_and_serve_a_site_requiring_dynamic_url_discovery() -> None:

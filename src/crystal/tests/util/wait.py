@@ -318,6 +318,13 @@ def is_enabled_condition(window: wx.Window) -> Callable[[], Literal[True] | None
     return is_enabled
 
 
+def is_focused_condition(window: wx.Window) -> Callable[[], Literal[True] | None]:
+    """Whether the specified window is enabled."""
+    def is_focused() -> Literal[True] | None:
+        return window.HasFocus() or None
+    return is_focused
+
+
 def not_condition(
         condition: Callable[[], _T | None]
         ) -> Callable[[], Literal[True] | None]:
