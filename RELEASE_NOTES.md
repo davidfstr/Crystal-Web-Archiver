@@ -75,6 +75,8 @@ Release Notes ⋮
     * Show correct application menu title on macOS when run from source.
     * Code coverage statistics now report which tests cover each source line.
     * Threads are now always created with a name, to assist with multi-threading debugging.
+    * Custom lint rules now ban direct use of certain unsafe wx APIs in favor
+      of Crystal's internal wrapper APIs.
 
 * Testing improvements
     * Tests no longer assume that the default server port is free.
