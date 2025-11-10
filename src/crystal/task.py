@@ -900,7 +900,7 @@ from urllib.parse import urljoin
 
 # Limit how fast Crystal can download from a remote server to avoid overwhelming
 # any particular remote server.
-DELAY_BETWEEN_DOWNLOADS = 2 * 60  # secs
+DELAY_BETWEEN_DOWNLOADS = 1 * 60  # secs
 
 # Configures where the DELAY_BETWEEN_DOWNLOADS delay is inserted
 # into the download process. Options are:
