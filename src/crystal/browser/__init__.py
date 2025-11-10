@@ -669,7 +669,10 @@ class MainWindow(CloakMixin):
                 for mi in menu.MenuItems:
                     was_enabled = was_enabled_states[menu].get(mi.Id)
                     if was_enabled is not None:
-                        mi.Enabled = was_enabled
+                        # HACK: If a menuitem became enabled while it was
+                        #       temporarily disabled, presume that it should
+                        #       stay enabled
+                        mi.Enabled = was_enabled or mi.Enabled
         return restore_menuitems
     
     # === Entity Pane: Init ===
