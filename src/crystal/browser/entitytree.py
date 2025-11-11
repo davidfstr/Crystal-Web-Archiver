@@ -33,6 +33,7 @@ from crystal.util.wx_system_appearance import IsDark
 from crystal.util.wx_treeitem_gettooltip import (
     EVT_TREE_ITEM_GETTOOLTIP, GetTooltipEvent,
 )
+from crystal.util.wx_window import SetFocus
 from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import sys
@@ -243,6 +244,18 @@ class EntityTree(Bulkhead):
                 if child.entity == root_resource:
                     child.view.peer.SelectItem()
                     break
+            
+            # Focus the entity tree if nothing else already focused
+            # NOTE: Must defer so that dialog which created the RootResource
+            #       (if any) has a chance to close first
+            @capture_crashes_to(self)
+            def maybe_focus_entity_tree() -> None:
+                focused_window = wx.Window.FindFocus()
+                # NOTE: Windows sometimes moves the focus to the frame
+                #       rather than unfocusing, as macOS and Linux do.
+                if focused_window is None or isinstance(focused_window, wx.Frame):
+                    SetFocus(self.view.peer)
+            fg_call_later(maybe_focus_entity_tree, force_later=True)
     
     @capture_crashes_to_self
     # TODO: Do not recommend asserting that a listener method will be called
