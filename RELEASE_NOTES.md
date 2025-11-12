@@ -68,6 +68,8 @@ Release Notes ⋮
     * When Crystal starts, the first dialog appears 0.2 seconds faster.
     * When Crystal is started with both --shell and --serve,
       always print shell prompt and server start prompt in a consistent order.
+    * Don't wait more than 2 seconds to determine whether a project is being
+      opened on an SSD or an HDD, on macOS.
 
 * Development improvements
     * Show correct application menu title on macOS when run from source.

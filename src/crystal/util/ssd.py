@@ -5,6 +5,7 @@ import json
 import os
 import os.path
 import subprocess
+import sys
 
 
 # NOTE: Neither the "ssd" nor "ssd_checker" projects on PyPI,
@@ -42,9 +43,17 @@ def _is_mac_ssd(itempath: str) -> bool:
     import plistlib
     
     mountpoint_dirpath = _mountpoint(os.path.realpath(itempath))
-    mountpoint_info = plistlib.loads(subprocess.check_output(
-        ['diskutil', 'info', '-plist', mountpoint_dirpath],
-    ))
+    try:
+        mountpoint_info = plistlib.loads(subprocess.check_output(
+            ['diskutil', 'info', '-plist', mountpoint_dirpath],
+            timeout=2.0,  # seconds
+        ))
+    except subprocess.TimeoutExpired:
+        print(
+            f'*** Timed out waiting for SSD status from diskutil. '
+            f'Assuming not an SSD.',
+            file=sys.stderr)
+        return False
     return mountpoint_info.get('SolidState', False)
 
 

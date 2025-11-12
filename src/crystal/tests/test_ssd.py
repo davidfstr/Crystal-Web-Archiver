@@ -305,7 +305,7 @@ def _test_given_macos_and_ellipsis(DISKUTIL_OUTPUT: bytes, on_ssd: bool) -> None
     def fake_ismount(itempath: str) -> bool:
         is_root = (itempath == '/')
         return is_root
-    def fake_check_output(cmd: list[str]) -> bytes:
+    def fake_check_output(cmd: list[str], *, timeout: float) -> bytes:
         assert 'diskutil' == cmd[0]
         return DISKUTIL_OUTPUT
     with patch('os.path.ismount', fake_ismount), \
