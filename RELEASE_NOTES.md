@@ -24,6 +24,11 @@ Release Notes ⋮
         * The "Open Project..." menuitem can be used to open a different project
           when another project is already open.
         * The "About Crystal" menuitem shows information about Crystal.
+    * Some focus bugs were fixed, making keyboard-only navigation smoother:
+        * After the first root URL is created it is now focused in the
+          Entity Tree. Previously it was selected but not focused.
+        * When the View action is triggered by a keyboard accelerator
+          the focused UI element will no longer unfocus.
 
 * Browsing improvements
     * When visiting a page that hasn't been downloaded,

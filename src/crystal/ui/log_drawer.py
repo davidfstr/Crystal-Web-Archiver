@@ -2,6 +2,7 @@ from collections import OrderedDict
 from crystal.util import cli
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.wx_bind import bind
+from crystal.util.wx_window import SetFocus
 from crystal.util.xos import (
     is_linux, is_mac_os, is_windows, windows_major_version,
 )
@@ -267,6 +268,10 @@ class LogDrawer(wx.Frame):
         
         was_closed = not self.is_open  # capture
         
+        # Save focused window, because will likely be un-focused
+        # when shuffling the window hierarchy
+        original_focused_window = wx.Window.FindFocus()
+        
         # Install wx.SplitterWindow in parent
         if True:
             self._parent_content_container = wx.SplitterWindow(self.Parent, style=wx.SP_3D|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE)
@@ -305,6 +310,10 @@ class LogDrawer(wx.Frame):
             self._toggle_open()
             assert not self.is_open
             self._height_before_closed = old_height_before_closed  # restore
+        
+        # Restore focused window
+        if original_focused_window is not None:
+            SetFocus(original_focused_window)
     
     @property
     def _is_maximized(self) -> bool:
