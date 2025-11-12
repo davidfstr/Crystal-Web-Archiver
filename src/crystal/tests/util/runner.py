@@ -121,7 +121,7 @@ def bg_breakpoint() -> Generator[Command, object, None]:
     
     Example usage:
         from crystal.tests.util.runner import bg_breakpoint
-        await bg_breakpoint()
+        await bg_breakpoint()  # FIXME
     """
     yield BreakpointCommand(sys._getframe(1))
 
