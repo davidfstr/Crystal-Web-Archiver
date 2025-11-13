@@ -226,7 +226,7 @@ def fg_call_later(
     try:
         # NOTE: wx.CallAfter can be used on any thread
         # NOTE: Schedules a wx.PyEvent with category wx.EVT_CATEGORY_UI
-        wx.CallAfter(_run_deferred_fg_calls)
+        wx.CallAfter(_run_deferred_fg_calls)  # pylint: disable=no-direct-callafter
     except Exception as e:
         if not has_foreground_thread():
             raise NoForegroundThreadError()
@@ -264,7 +264,7 @@ def _run_deferred_fg_calls() -> bool:
     if _deferred_fg_calls_paused:
         # NOTE: wx.CallLater can be used on the foreground thread only
         # NOTE: Schedules a wx.TimerEvent with category wx.EVT_CATEGORY_TIMER
-        wx.CallLater(1, _run_deferred_fg_calls)
+        wx.CallLater(1, _run_deferred_fg_calls)  # pylint: disable=no-direct-calllater
         return False
     
     # Don't run more than the number of calls that were initially scheduled

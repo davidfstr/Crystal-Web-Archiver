@@ -2,8 +2,10 @@
 
 from collections.abc import Callable
 from crystal.util.wx_bind import bind
+from crystal.util.wx_timer import Timer
 from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_linux
+from crystal.util.xthreading import fg_affinity
 import wx
 
 
@@ -23,6 +25,7 @@ def create_copy_button(
     copy_button = wx.Button(parent, label='📋', size=size, name=name)
     copy_button.SetToolTip(f'Copy to clipboard')
     
+    @fg_affinity
     def on_copy_click(event: wx.CommandEvent | None = None, *, already_focused: bool=False) -> None:
         if parent_is_disposed():
             return
@@ -34,7 +37,11 @@ def create_copy_button(
             if not already_focused:
                 # Blur the field being copied
                 SetFocus(copy_button, previously_focused_func(), simulate_events=True)
-            wx.CallLater(200, lambda: on_copy_click(already_focused=True))  # try again
+            Timer(
+                lambda: on_copy_click(already_focused=True),
+                200,
+                one_shot=True,
+            )  # try again
             return
         
         copy_text_to_clipboard(text)
@@ -46,7 +53,7 @@ def create_copy_button(
             if parent_is_disposed():
                 return
             copy_button.SetLabel('📋')
-        wx.CallLater(500, reset_label)
+        Timer(reset_label, 500, one_shot=True)
     bind(copy_button, wx.EVT_BUTTON, on_copy_click)
     
     return copy_button

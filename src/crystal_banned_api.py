@@ -57,6 +57,16 @@ class CrystalBannedApiChecker(BaseChecker):
             'no-asyncio',
             "Asyncio imports are not allowed. Use async end-to-end tests or async callables with run_test() instead.",
         ),
+        'C9008': (
+            "Don't call wx.CallAfter() directly; use fg_call_later() from crystal.util.xthreading instead",
+            'no-direct-callafter',
+            "Direct CallAfter() call is not allowed. Use fg_call_later() from crystal.util.xthreading instead.",
+        ),
+        'C9009': (
+            "Don't call wx.CallLater() directly; use Timer(..., one_shot=True) from crystal.util.wx_timer instead.",
+            'no-direct-calllater',
+            "Direct CallLater() call is not allowed. Use Timer from crystal.util.wx_timer instead.",
+        ),
     }
     
     # === Visit Call ===
@@ -87,6 +97,14 @@ class CrystalBannedApiChecker(BaseChecker):
         # window.SetFocus(...)
         if self._is_window_setfocus_call(node):
             self.add_message('no-direct-setfocus', node=node)
+        
+        # wx.CallAfter(...)
+        if self._is_callafter_call(node):
+            self.add_message('no-direct-callafter', node=node)
+        
+        # wx.CallLater(...)
+        if self._is_calllater_call(node):
+            self.add_message('no-direct-calllater', node=node)
     
     def _is_thread_call(self, node: astroid.Call) -> bool:
         # Thread(...)
@@ -149,6 +167,26 @@ class CrystalBannedApiChecker(BaseChecker):
                 # This is a call to SetFocus() method on some object,
                 # presumably a wx.Window. Ban it.
                 return True
+        
+        return False
+    
+    def _is_callafter_call(self, node: astroid.Call) -> bool:
+        # wx.CallAfter(...)
+        if isinstance(node.func, astroid.Attribute):
+            if node.func.attrname == 'CallAfter':
+                if isinstance(node.func.expr, astroid.Name):
+                    if node.func.expr.name == 'wx':
+                        return True
+        
+        return False
+    
+    def _is_calllater_call(self, node: astroid.Call) -> bool:
+        # wx.CallLater(...)
+        if isinstance(node.func, astroid.Attribute):
+            if node.func.attrname == 'CallLater':
+                if isinstance(node.func.expr, astroid.Name):
+                    if node.func.expr.name == 'wx':
+                        return True
         
         return False
     

@@ -1424,6 +1424,7 @@ class MainWindow(CloakMixin):
         
         self.view_url(archive_url)
     
+    @fg_affinity
     def view_url(self, archive_url: str, /) -> None:
         # TODO: If the server couldn't be started (ex: due to the default port being in
         #       use), report an appropriate error.
@@ -1448,7 +1449,7 @@ class MainWindow(CloakMixin):
         #       make sure the log drawer is done bringing itself and MainWindow to front
         #       before bringing a browser to the front on top of them
         if os.environ.get('CRYSTAL_RUNNING_TESTS', 'False') == 'False':
-            wx.CallLater(10, open_browser_to_url)
+            Timer(open_browser_to_url, 10, one_shot=True)
         else:
             # NOTE: During tests it's easier to spy on this call if it's NOT
             #       deferred inside wx.CallLater
