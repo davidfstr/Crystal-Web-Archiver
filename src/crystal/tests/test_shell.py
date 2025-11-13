@@ -1,7 +1,7 @@
 from typing import List
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, crystal_shell
+from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, crystal_shell
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
@@ -68,7 +68,7 @@ _EXPECTED_WINDOW_PUBLIC_MEMBERS = [
 ]
 
 # ------------------------------------------------------------------------------
-# Tests
+# Tests: Launch Shell
 
 @with_subtests
 def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
@@ -136,6 +136,9 @@ def test_can_use_pythonstartup_file() -> None:
             )
 
 
+# ------------------------------------------------------------------------------
+# Tests: Shell API Stability
+
 # NOTE: This test code was split out of the test_can_launch_with_shell() test above
 #       because it is particularly easy to break and having a separate test function
 #       makes the break type quicker to identify.
@@ -156,28 +159,11 @@ def test_builtin_globals_have_stable_public_api(subtests: SubtestsContext) -> No
                 'Public API of MainWindow class has changed')
 
 
+# ------------------------------------------------------------------------------
+# Tests: Shell Messages
+
 @with_subtests
 def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
-    with subtests.test(case='test when first open/create dialog is closed given shell is running then shell remains running'):
-        with crystal_shell() as (crystal, _):
-            close_open_or_create_dialog(crystal)
-            
-            try:
-                assertEqual('4\n', py_eval(crystal, '2 + 2'))
-            except AssertionError as e:
-                raise AssertionError(f'{e} Trailing output: {drain(crystal)!r}') from None
-    
-    with subtests.test(case='test when main window or non-first open/create dialog is closed given shell is running then shell remains running'):
-        with crystal_shell() as (crystal, _):
-            create_new_empty_project(crystal)
-            close_main_window(crystal)
-            
-            close_open_or_create_dialog(crystal)
-            assertEqual(
-                4,
-                py_eval_literal(crystal, '2 + 2', timeout=5.0)  # took >4.0s in Linux CI
-            )
-    
     for exit_method in ('exit()', 'Ctrl-D'):
         with subtests.test(case=f'test when {exit_method} given first open/create dialog is already closed then exits'):
             with crystal_shell() as (crystal, _):
@@ -289,6 +275,9 @@ def test_when_typed_code_raises_exception_then_print_traceback() -> None:
         )
         assertEqual(expected_traceback, py_eval(crystal, 'Resource'))
 
+
+# ------------------------------------------------------------------------------
+# Tests: Shell Capabilities
 
 @with_subtests
 def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
@@ -566,6 +555,53 @@ def test_can_import_guppy_in_shell() -> None:
         # Ensure can take memory sample since checkpoint
         result = py_eval(crystal, 'import gc; gc.collect(); heap = h.heap(); heap; _.more')
         assertNotIn('Traceback', result)
+
+
+# ------------------------------------------------------------------------------
+# Tests: Waiting for Shell to Close
+
+@with_subtests
+def test_given_shell_running_when_all_windows_closed_then_shell_exits_and_app_exits(subtests: SubtestsContext) -> None:
+    with subtests.test(case='The Open Or Create Dialog is closed immediately after app launch'):
+        with crystal_shell(kill=False) as (crystal, _):
+            assert isinstance(crystal.stdout, TextIOBase)
+            
+            result = py_eval_await(crystal, textwrap.dedent('''\
+                from crystal.tests.util.wait import wait_for, window_condition
+                from crystal.tests.util.windows import OpenOrCreateDialog
+                
+                async def crystal_task() -> None:
+                    ocd = await OpenOrCreateDialog.wait_for()
+                    ocd.open_or_create_project_dialog.Close()
+                '''
+            ), 'crystal_task', [])
+            
+            wait_for_crystal_to_exit(
+                crystal,
+                timeout=DEFAULT_WAIT_TIMEOUT)
+    
+    with subtests.test(case='A project is opened & closed, then the Open Or Create Dialog reappears and is closed'):
+        with crystal_shell(kill=False) as (crystal, _):
+            assert isinstance(crystal.stdout, TextIOBase)
+            
+            result = py_eval_await(crystal, textwrap.dedent('''\
+                from crystal.tests.util.windows import OpenOrCreateDialog
+                
+                async def crystal_task() -> None:
+                    # Create and close a project
+                    ocd = await OpenOrCreateDialog.wait_for()
+                    mw = await ocd.create_and_leave_open()
+                    await mw.close()
+                    
+                    # Close the Open Or Create Dialog that reappears
+                    ocd2 = await OpenOrCreateDialog.wait_for()
+                    ocd2.open_or_create_project_dialog.Close()
+                '''
+            ), 'crystal_task', [], timeout=8.0)
+            
+            wait_for_crystal_to_exit(
+                crystal,
+                timeout=DEFAULT_WAIT_TIMEOUT)
 
 
 # ------------------------------------------------------------------------------

@@ -1301,11 +1301,11 @@ async def test_given_untitled_project_saved_when_crystal_unexpectedly_quits_then
         
         # Now start Crystal again and verify no project is reopened
         with crystal_shell() as (crystal, banner):
-            # Should show open/create dialog, not auto-reopen any project
-            close_open_or_create_dialog(crystal)
-            
             # Verify no project is automatically available
             assert not _project_is_available(crystal)
+            
+            # Should show open/create dialog, not auto-reopen any project
+            close_open_or_create_dialog(crystal)
 
 
 @awith_subtests
@@ -1340,11 +1340,11 @@ async def test_given_crystal_quit_cleanly_when_crystal_launched_then_no_project_
 
         # Now start Crystal again and verify no project is reopened
         with crystal_shell() as (crystal, banner):
-            # Should show open/create dialog, not auto-reopen any project
-            close_open_or_create_dialog(crystal)
-            
             # Verify no project is automatically available
             assert not _project_is_available(crystal)
+            
+            # Should show open/create dialog, not auto-reopen any project
+            close_open_or_create_dialog(crystal)
 
 
 # NOTE: Crystal isn't currently designed to handle multiple open projects gracefully.

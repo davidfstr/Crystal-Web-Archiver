@@ -337,7 +337,7 @@ async def test_can_quit_with_menuitem_given_open_or_create_dialog_visible() -> N
 
 
 async def test_can_quit_with_menuitem_given_project_visible() -> None:
-    with crystal_shell() as (crystal, _):
+    with crystal_shell(kill=False) as (crystal, _):
         create_new_empty_project(crystal)
         
         py_eval_await(crystal, textwrap.dedent('''\
@@ -350,7 +350,7 @@ async def test_can_quit_with_menuitem_given_project_visible() -> None:
                 '''
             ),
             'crystal_task', [],
-            stop_suffix=('crystal.util.xthreading.NoForegroundThreadError\n',),
+            stop_suffix=('>>>', '>>> '),
             timeout=3.0)  # took 4.4s on macOS ASAN CI (after 2x multiplier)
 
 

@@ -621,7 +621,8 @@ def _main2(args: list[str]) -> None:
                 #       without calling atexit handlers.
                 app.MainLoop()
                 if systemexit_during_first_launch is not None:
-                    raise systemexit_during_first_launch
+                    # Defer reraise of systemexit_during_first_launch
+                    break
                 
                 # Clean up
                 if shell is not None:
@@ -649,6 +650,14 @@ def _main2(args: list[str]) -> None:
                 start_fg_coroutine(
                     relaunch(),
                     _capture_crashes_to_stderr_and_capture_systemexit_to_quit)
+            
+            # If shell is still running after all windows closed then exit it
+            if shell is not None and shell.is_running():
+                shell.stop_soon()
+            
+            # Raise deferred systemexit_during_first_launch
+            if systemexit_during_first_launch is not None:
+                raise systemexit_during_first_launch
     except SystemExit as e:
         if e.code not in [None, 0]:
             # Exit with error

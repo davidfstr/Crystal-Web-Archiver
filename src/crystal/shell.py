@@ -16,6 +16,7 @@ from crystal.util.xthreading import (
 import os
 import signal
 import sys
+import threading
 from typing import Literal, Optional
 from typing_extensions import override
 
@@ -28,6 +29,7 @@ class Shell:
         Start the shell by calling start().
         """
         self._started = False
+        self._shell_thread = None  # type: Optional[threading.Thread]
         
         # Setup proxy variables for shell
         _Proxy._patch_help()
@@ -75,7 +77,7 @@ class Shell:
         banner_printed = Future()  # type: Future[Literal[True]]
         
         # NOTE: Keep the process alive while the shell is running
-        bg_call_later(
+        self._shell_thread = bg_call_later(
             partial2(self._run, banner_printed),
             name='Shell.run',
             daemon=False,
@@ -86,6 +88,37 @@ class Shell:
         if wait_for_banner:
             banner_printed._cr_declare_no_deadlocks = True  # type: ignore[attr-defined]
             banner_printed.result()
+    
+    def is_running(self) -> bool:
+        """
+        Returns True if the shell thread is currently running, False otherwise.
+        """
+        if not self._started:
+            return False
+        if self._shell_thread is None:
+            return False
+        return self._shell_thread.is_alive()
+    
+    def join(self) -> None:
+        """
+        Waits for the shell thread to stop running.
+        """
+        if not self.is_running():
+            return
+        assert self._shell_thread is not None
+        self._shell_thread.join()
+    
+    def stop_soon(self) -> None:
+        """
+        Requests that the shell exit.
+        """
+        if not self.is_running():
+            return
+        
+        # Send SIGINT to the process to interrupt the shell REPL
+        # TODO: Better to wait until the next >>> prompt appears,
+        #       rather than interrupting any code that is already running
+        os.kill(os.getpid(), signal.SIGINT)
     
     @capture_crashes_to_stderr
     def _run(self, banner_printed: Future[Literal[True]]) -> None:

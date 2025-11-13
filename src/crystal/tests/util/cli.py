@@ -53,7 +53,7 @@ def run_crystal(args: list[str]) -> subprocess.CompletedProcess[str]:
 # Start CLI
 
 @contextmanager
-def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> Iterator[subprocess.Popen]:
+def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill: bool=True) -> Iterator[subprocess.Popen]:
     """
     Context which starts "crystal" upon enter
     and cleans up the associated process upon exit.
@@ -118,11 +118,12 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False) -> It
         
         yield crystal
     finally:
-        assert crystal.stdin is not None
-        crystal.stdin.close()
-        assert crystal.stdout is not None
-        crystal.stdout.close()
-        crystal.kill()
+        if kill:
+            assert crystal.stdin is not None
+            crystal.stdin.close()
+            assert crystal.stdout is not None
+            crystal.stdout.close()
+            crystal.kill()
         crystal.wait()
         
         # Sync app preferences after subprocess exits,
@@ -264,7 +265,7 @@ def _ensure_can_use_crystal_cli() -> None:
 
 
 @contextmanager
-def crystal_shell(*, args=[], env_extra={}) -> Iterator[tuple[subprocess.Popen, str]]:
+def crystal_shell(*, args=[], env_extra={}, kill: bool=True) -> Iterator[tuple[subprocess.Popen, str]]:
     """
     Context which starts "crystal --shell" upon enter
     and cleans up the associated process upon exit.
@@ -272,7 +273,7 @@ def crystal_shell(*, args=[], env_extra={}) -> Iterator[tuple[subprocess.Popen, 
     Raises:
     * SkipTest -- if Crystal CLI cannot be used in the current environment
     """
-    with crystal_running(args=['--shell', *args], env_extra=env_extra) as crystal:
+    with crystal_running(args=['--shell', *args], env_extra=env_extra, kill=kill) as crystal:
         assert isinstance(crystal.stdout, TextIOBase)
         (banner, _) = read_until(
             crystal.stdout, '\n>>> ',

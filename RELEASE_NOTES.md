@@ -54,6 +54,10 @@ Release Notes ⋮
 * Serving improvements
     * Ignore timeout errors when responding to a request.
 
+* CLI improvements
+    * When Crystal is started with `--shell` and all windows are closed,
+      the shell and app exit automatically.
+
 * Support changes **(Breaking Change)**
     * macOS 14+ is now the minimum macOS version.
       Drop support for macOS 13.
