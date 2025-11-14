@@ -9,6 +9,10 @@ def proxy_enabled() -> bool:
     return _is_feature_enabled('Proxy')
 
 
+def sequential_groups_enabled() -> bool:
+    return _is_feature_enabled('SequentialGroups')
+
+
 # ------------------------------------------------------------------------------
 # General Features
 

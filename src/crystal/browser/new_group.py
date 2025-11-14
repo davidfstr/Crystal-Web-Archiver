@@ -6,6 +6,7 @@ from crystal.browser.new_root_url import (
 )
 from crystal.model import Project, ResourceGroup, ResourceGroupSource
 from crystal.progress import CancelLoadUrls
+from crystal.util import features
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind
 from crystal.util.wx_clipboard import create_copy_button
@@ -32,7 +33,6 @@ _OPTIONS_NOT_SHOWN_LABEL = 'Advanced Options'
 class NewGroupDialog:
     _INITIAL_URL_PATTERN_WIDTH = NewRootUrlDialog._INITIAL_URL_WIDTH
     _MAX_VISIBLE_PREVIEW_URLS = 100
-    _SHOW_SEQUENTIAL_OPTION = False  # hide feature until it is finished
     
     # === Init ===
     
@@ -333,7 +333,7 @@ class NewGroupDialog:
             flag=wx.BOTTOM,
             border=_FORM_LABEL_INPUT_SPACING)
         
-        if self._SHOW_SEQUENTIAL_OPTION:
+        if features.sequential_groups_enabled():
             options_sizer.AddSpacer(_FORM_ROW_SPACING)
             
             sequential_row = wx.BoxSizer(wx.HORIZONTAL)
