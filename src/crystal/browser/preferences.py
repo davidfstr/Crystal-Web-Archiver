@@ -130,6 +130,71 @@ class PreferencesDialog:
         
         return fields_sizer
     
+    def _create_session_fields(self, parent: wx.Window) -> wx.Sizer:
+        fields_sizer = wx.GridBagSizer(
+            vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
+        
+        fields_sizer.Add(
+            wx.StaticText(parent, label='These preferences reset when Crystal quits.'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
+            border=5 if is_windows() else 0)
+        
+        fields_sizer.Add(
+            wx.StaticText(parent, label='To redownload URLs, provide:'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2),
+            border=8)
+        fields_sizer.Add(
+            self._create_stale_before_field(parent),
+            flag=wx.EXPAND, pos=wx.GBPosition(2, 0), span=wx.GBSpan(1, 2))
+        
+        fields_sizer.Add(
+            wx.StaticText(parent, label='To download a site requiring login, provide:'),
+            flag=wx.EXPAND, pos=wx.GBPosition(3, 0), span=wx.GBSpan(1, 2))
+        fields_sizer.Add(
+            wx.StaticText(parent, label='Cookie:'),
+            flag=wx.EXPAND, pos=wx.GBPosition(4, 0))
+        self.cookie_field = wx.ComboBox(
+            parent,
+            name='cr-preferences-dialog__cookie-field')
+        self.cookie_field.SetItems(
+            self._project.request_cookies_in_use(most_recent_first=True))
+        self.cookie_field.Value = self._project.request_cookie or ''
+        fields_sizer.Add(
+            self.cookie_field,
+            flag=wx.EXPAND, pos=wx.GBPosition(4, 1))
+        
+        return fields_sizer
+    
+    def _create_stale_before_field(self, parent: wx.Window) -> wx.Sizer:
+        import wx.adv  # import late because does print spurious messages on macOS
+        
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        self.stale_before_checkbox = wx.CheckBox(
+            parent, label='Treat URLs as stale older than:',
+            name='cr-preferences-dialog__stale-before-checkbox')
+        bind(self.stale_before_checkbox, wx.EVT_CHECKBOX, self._update_stale_before_date_picker_enabled)
+        sizer.Add(self.stale_before_checkbox, flag=wx.CENTER)
+        
+        self.stale_before_date_picker = wx.adv.DatePickerCtrl(
+            parent, dt=wx.DefaultDateTime,  # default to today
+            name='cr-preferences-dialog__stale-before-date-picker')
+        sizer.Add(self.stale_before_date_picker, flag=wx.CENTER)
+        fix_date_picker_size(self.stale_before_date_picker)
+        
+        stale_before_dt = self._project.min_fetch_date
+        if stale_before_dt is not None:
+            stale_before_dt_local = stale_before_dt.astimezone(tz=None)  # local timezone
+            self.stale_before_checkbox.Value = True
+            self.stale_before_date_picker.Value = wx.DateTime(
+                year=stale_before_dt_local.year,
+                month=stale_before_dt_local.month - 1,
+                day=stale_before_dt_local.day)
+        
+        self._update_stale_before_date_picker_enabled()
+        
+        return sizer
+    
     def _create_app_fields(self, parent: wx.Window) -> wx.Sizer:
         fields_sizer = wx.GridBagSizer(
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
@@ -238,71 +303,6 @@ class PreferencesDialog:
             border=8)
         
         return fields_sizer
-    
-    def _create_session_fields(self, parent: wx.Window) -> wx.Sizer:
-        fields_sizer = wx.GridBagSizer(
-            vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
-        
-        fields_sizer.Add(
-            wx.StaticText(parent, label='These preferences reset when Crystal quits.'),
-            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
-            border=5 if is_windows() else 0)
-        
-        fields_sizer.Add(
-            wx.StaticText(parent, label='To redownload URLs, provide:'),
-            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2),
-            border=8)
-        fields_sizer.Add(
-            self._create_stale_before_field(parent),
-            flag=wx.EXPAND, pos=wx.GBPosition(2, 0), span=wx.GBSpan(1, 2))
-        
-        fields_sizer.Add(
-            wx.StaticText(parent, label='To download a site requiring login, provide:'),
-            flag=wx.EXPAND, pos=wx.GBPosition(3, 0), span=wx.GBSpan(1, 2))
-        fields_sizer.Add(
-            wx.StaticText(parent, label='Cookie:'),
-            flag=wx.EXPAND, pos=wx.GBPosition(4, 0))
-        self.cookie_field = wx.ComboBox(
-            parent,
-            name='cr-preferences-dialog__cookie-field')
-        self.cookie_field.SetItems(
-            self._project.request_cookies_in_use(most_recent_first=True))
-        self.cookie_field.Value = self._project.request_cookie or ''
-        fields_sizer.Add(
-            self.cookie_field,
-            flag=wx.EXPAND, pos=wx.GBPosition(4, 1))
-        
-        return fields_sizer
-    
-    def _create_stale_before_field(self, parent: wx.Window) -> wx.Sizer:
-        import wx.adv  # import late because does print spurious messages on macOS
-        
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        self.stale_before_checkbox = wx.CheckBox(
-            parent, label='Treat URLs as stale older than:',
-            name='cr-preferences-dialog__stale-before-checkbox')
-        bind(self.stale_before_checkbox, wx.EVT_CHECKBOX, self._update_stale_before_date_picker_enabled)
-        sizer.Add(self.stale_before_checkbox, flag=wx.CENTER)
-        
-        self.stale_before_date_picker = wx.adv.DatePickerCtrl(
-            parent, dt=wx.DefaultDateTime,  # default to today
-            name='cr-preferences-dialog__stale-before-date-picker')
-        sizer.Add(self.stale_before_date_picker, flag=wx.CENTER)
-        fix_date_picker_size(self.stale_before_date_picker)
-        
-        stale_before_dt = self._project.min_fetch_date
-        if stale_before_dt is not None:
-            stale_before_dt_local = stale_before_dt.astimezone(tz=None)  # local timezone
-            self.stale_before_checkbox.Value = True
-            self.stale_before_date_picker.Value = wx.DateTime(
-                year=stale_before_dt_local.year,
-                month=stale_before_dt_local.month - 1,
-                day=stale_before_dt_local.day)
-        
-        self._update_stale_before_date_picker_enabled()
-        
-        return sizer
     
     # === Events ===
     
