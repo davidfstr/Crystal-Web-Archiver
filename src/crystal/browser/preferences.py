@@ -1,4 +1,5 @@
 from crystal.app_preferences import app_prefs
+from crystal.util import features
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
 from crystal.util.wx_dialog import (
@@ -205,7 +206,10 @@ class PreferencesDialog:
             border=5 if is_windows() else 0)
         
         # Proxy configuration
-        next_row = self._create_proxy_fieldset(parent, fields_sizer, start_row=1)
+        if features.proxy_enabled():
+            next_row = self._create_proxy_fieldset(parent, fields_sizer, start_row=1)
+        else:
+            next_row = 1
         
         # Reset dismissed callouts button
         self.reset_callouts_button = wx.Button(
@@ -215,7 +219,8 @@ class PreferencesDialog:
         bind(self.reset_callouts_button, wx.EVT_BUTTON, self._on_reset_callouts)
         fields_sizer.Add(
             self.reset_callouts_button,
-            flag=wx.TOP, pos=wx.GBPosition(next_row, 0), span=wx.GBSpan(1, 2),
+            flag=(wx.TOP if features.proxy_enabled() else 0),
+            pos=wx.GBPosition(next_row, 0), span=wx.GBSpan(1, 2),
             border=8)
         
         return fields_sizer
@@ -386,7 +391,7 @@ class PreferencesDialog:
             self._project.min_fetch_date = None
         
         # Save app fields
-        if True:
+        if features.proxy_enabled():
             if self.no_proxy_radio.Value:
                 app_prefs.proxy_type = 'none'
             elif self.socks5_proxy_radio.Value:

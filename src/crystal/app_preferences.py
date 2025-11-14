@@ -4,6 +4,7 @@ independent of any particular Project, or session where a project is opened.
 """
 
 from collections.abc import Callable
+from crystal.util import features
 from crystal.util.test_mode import tests_are_running
 from crystal.util.xappdirs import user_state_dir
 from functools import cache
@@ -363,7 +364,12 @@ class AppPreferences:
     proxy_type = cast(Literal['none', 'socks5'], _define_property(
         'proxy_type',
         default='none',
-        validator=lambda pt: pt in ['none', 'socks5'],
+        validator=lambda pt: (
+            pt in ['none', 'socks5']
+            if features.proxy_enabled()
+            # Force proxy_type == 'none' if not features.proxy_enabled()
+            else pt == 'none'
+        ),
         doc=(
             """
             The type of proxy to use for network connections.

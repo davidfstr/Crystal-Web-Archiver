@@ -8,6 +8,8 @@ from crystal.tests.util.server import extracted_project
 from crystal.tests.util.windows import OpenOrCreateDialog
 from unittest import skip
 
+from crystal.util.features import feature_enabled
+
 
 # === Test: Project Preferences ===
 
@@ -23,6 +25,7 @@ def test_html_parser_saves_and_loads_correctly() -> None:
 
 # === Test: Application Preferences: Proxy ===
 
+@feature_enabled('Proxy')
 async def test_given_preferences_dialog_when_no_proxy_selected_then_socks5_fields_disabled() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -38,6 +41,7 @@ async def test_given_preferences_dialog_when_no_proxy_selected_then_socks5_field
             await prefs.cancel()
 
 
+@feature_enabled('Proxy')
 async def test_given_preferences_dialog_when_socks5_selected_then_socks5_fields_enabled() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -53,6 +57,7 @@ async def test_given_preferences_dialog_when_socks5_selected_then_socks5_fields_
             await prefs.cancel()
 
 
+@feature_enabled('Proxy')
 async def test_given_preferences_dialog_when_socks5_configured_then_preferences_saved() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -70,6 +75,7 @@ async def test_given_preferences_dialog_when_socks5_configured_then_preferences_
             assert app_prefs.socks5_proxy_port == 1080
 
 
+@feature_enabled('Proxy')
 async def test_given_preferences_dialog_when_socks5_preferences_exist_then_loaded_correctly() -> None:
     # Set up proxy preferences
     app_prefs.proxy_type = 'socks5'
@@ -92,6 +98,7 @@ async def test_given_preferences_dialog_when_socks5_preferences_exist_then_loade
             await prefs.cancel()
 
 
+@feature_enabled('Proxy')
 async def test_given_preferences_dialog_when_invalid_port_then_port_cleared() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -109,6 +116,7 @@ async def test_given_preferences_dialog_when_invalid_port_then_port_cleared() ->
             assert app_prefs.socks5_proxy_port_is_set == False
 
 
+@feature_enabled('Proxy')
 async def test_given_preferences_dialog_then_http_proxy_option_is_disabled() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -117,6 +125,7 @@ async def test_given_preferences_dialog_then_http_proxy_option_is_disabled() -> 
             assert prefs.http_proxy_radio.Enabled == False
             
             await prefs.cancel()
+
 
 # === Test: Application Preferences: Other ===
 

@@ -49,8 +49,10 @@ Release Notes ⋮
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
 
 * Downloading improvements
-    * SOCKS v5 proxies are supported for tunneling downloads through a
-      remote network location.
+    * **Experimental**: SOCKS v5 proxies are supported for tunneling downloads 
+      through a remote network location. Proxy authentication is not yet supported.
+        * You must start Crystal with `--enable-incomplete-feature=Proxy`
+          to use this feature.
     * Warn if HTTP 4xx or 5xx error while downloading a URL, on stderr,
       to make it easy to notice when a domain starts repeatedly refusing requests.
 

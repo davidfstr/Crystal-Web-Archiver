@@ -31,6 +31,7 @@ from crystal.tests.util.wait import (
     WaitTimedOut, window_condition, window_disposed_condition,
 )
 import crystal.tests.util.xtempfile as xtempfile
+from crystal.util import features
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_mac_os
 import os.path
@@ -868,21 +869,22 @@ class PreferencesDialog:
         self.cookie_field = self._dialog.FindWindow(name=
             'cr-preferences-dialog__cookie-field')
         assert isinstance(self.cookie_field, wx.ComboBox)
-        self.no_proxy_radio = self._dialog.FindWindow(name=
-            'cr-preferences-dialog__no-proxy-radio')
-        assert isinstance(self.no_proxy_radio, wx.RadioButton)
-        self.http_proxy_radio = self._dialog.FindWindow(name=
-            'cr-preferences-dialog__http-proxy-radio')
-        assert isinstance(self.http_proxy_radio, wx.RadioButton)
-        self.socks5_proxy_radio = self._dialog.FindWindow(name=
-            'cr-preferences-dialog__socks5-proxy-radio')
-        assert isinstance(self.socks5_proxy_radio, wx.RadioButton)
-        self.socks5_host_field = self._dialog.FindWindow(name=
-            'cr-preferences-dialog__socks5-host-field')
-        assert isinstance(self.socks5_host_field, wx.TextCtrl)
-        self.socks5_port_field = self._dialog.FindWindow(name=
-            'cr-preferences-dialog__socks5-port-field')
-        assert isinstance(self.socks5_port_field, wx.TextCtrl)
+        if features.proxy_enabled():
+            self.no_proxy_radio = self._dialog.FindWindow(name=
+                'cr-preferences-dialog__no-proxy-radio')
+            assert isinstance(self.no_proxy_radio, wx.RadioButton)
+            self.http_proxy_radio = self._dialog.FindWindow(name=
+                'cr-preferences-dialog__http-proxy-radio')
+            assert isinstance(self.http_proxy_radio, wx.RadioButton)
+            self.socks5_proxy_radio = self._dialog.FindWindow(name=
+                'cr-preferences-dialog__socks5-proxy-radio')
+            assert isinstance(self.socks5_proxy_radio, wx.RadioButton)
+            self.socks5_host_field = self._dialog.FindWindow(name=
+                'cr-preferences-dialog__socks5-host-field')
+            assert isinstance(self.socks5_host_field, wx.TextCtrl)
+            self.socks5_port_field = self._dialog.FindWindow(name=
+                'cr-preferences-dialog__socks5-port-field')
+            assert isinstance(self.socks5_port_field, wx.TextCtrl)
         self.reset_callouts_button = self._dialog.FindWindow(name=
             'cr-preferences-dialog__reset-callouts-button')
         assert isinstance(self.reset_callouts_button, wx.Button)
