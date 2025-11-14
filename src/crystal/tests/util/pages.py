@@ -164,6 +164,44 @@ class NotInArchivePage(AbstractPage):
         return progress_bar_message_str
 
 
+class FetchErrorPage(AbstractPage):
+    @classmethod
+    def open(cls, raw_page: RawPage, *, url_in_archive: str) -> 'FetchErrorPage':
+        raw_page.goto(url_in_archive)
+        return FetchErrorPage.wait_for(raw_page)
+    
+    @classmethod
+    def wait_for(cls, raw_page: RawPage) -> 'FetchErrorPage':
+        expect(raw_page).to_have_title('Fetch Error | Crystal')
+        return FetchErrorPage(raw_page, _ready=True)
+    
+    def __init__(self, raw_page: RawPage, _ready: bool=False) -> None:
+        assert _ready, 'Did you mean to use FetchErrorPage.open() or .wait_for()?'
+        super().__init__(raw_page)
+    
+    # === Action Buttons ===
+    
+    @property
+    def go_back_button(self) -> Locator:
+        return self.raw_page.locator('button:has-text("← Go Back")')
+    
+    @property
+    def retry_button(self) -> Locator:
+        return self.raw_page.locator('#cr-retry-button')
+    
+    # === Progress Bar ===
+    
+    @property
+    def progress_bar(self) -> Locator:
+        return self.raw_page.locator('#cr-download-progress-bar')
+    
+    @property
+    def progress_bar_message(self) -> str:
+        progress_bar_message = self.raw_page.locator('#cr-download-progress-bar__message')
+        progress_bar_message_str = progress_bar_message.text_content() or ''
+        return progress_bar_message_str
+
+
 # ------------------------------------------------------------------------------
 # Utility: Reload
 

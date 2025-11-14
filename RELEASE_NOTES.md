@@ -41,6 +41,9 @@ Release Notes ⋮
         * When a served page tries to display an undownloaded image
           that isn't covered by a URL or a Group, show a prominent red box with
           an X rather than showing the browser's generic broken image icon.
+    * When visiting a Fetch Error for a page that didn't download successfully,
+      there is now a "Retry Download" button that will delete the error and
+      try to download the page again.
 
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.

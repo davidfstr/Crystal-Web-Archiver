@@ -666,6 +666,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
             yield SwitchToThread.BACKGROUND
             self._handle_preview_urls()
             return
+        elif self.path == '/_/crystal/retry-download':
+            yield SwitchToThread.BACKGROUND
+            self._handle_retry_download()
+            return
         
         # For all other POST requests, return 405 Method Not Allowed
         self.send_response(405)
@@ -1192,6 +1196,72 @@ class _RequestHandler(BaseHTTPRequestHandler):
 
         except Exception as e:
             self._print_error(f'Error handling preview URLs request: {str(e)}')
+            self._send_json_response(500, {
+                "error": f"Internal server error: {str(e)}"
+            })
+
+    @bg_affinity
+    def _handle_retry_download(self) -> None:
+        try:
+            # Ensure project is not readonly
+            if self.project.readonly:
+                self._send_json_response(403, {"error": "Project is read-only"})
+                return
+            
+            # Parse arguments
+            content_length = int(self.headers.get('Content-Length', -1))
+            if content_length > 0:
+                post_data = self.rfile.read(content_length).decode('utf-8')
+            else:
+                post_data = self.rfile.read().decode('utf-8')
+            if not post_data:
+                self._send_json_response(400, {"error": "Missing request body"})
+                return
+            try:
+                request_data = json.loads(post_data)
+                url = request_data.get('url')
+            except json.JSONDecodeError:
+                self._send_json_response(400, {"error": "Invalid JSON"})
+                return
+            if url is None:
+                self._send_json_response(400, {"error": "Missing url parameter"})
+                return
+            if not isinstance(url, str):
+                self._send_json_response(400, {"error": "Invalid parameter type for url"})
+                return
+            
+            @fg_affinity
+            def retry_download() -> dict:
+                resource = Resource(self.project, url)
+                default_revision = resource.default_revision()
+                if default_revision is None:
+                    return {
+                        "error": "No revision found for this URL"
+                    }
+                if default_revision.error_dict is None:
+                    return {
+                        "error": "Current revision is not an error - cannot retry"
+                    }
+                
+                # Delete the error revision
+                default_revision.delete()
+                
+                # Start a new download
+                task = resource.download_with_task(interactive=True, needs_result=False)
+                return {
+                    "status": "success", 
+                    "message": "Retry download started",
+                    "task_id": task.resource.url
+                }
+            result = fg_call_and_wait(retry_download)
+            
+            if 'error' in result:
+                self._send_json_response(400, result)
+            else:
+                self._send_json_response(200, result)
+
+        except Exception as e:
+            self._print_error(f'Error handling retry download request: {str(e)}')
             self._send_json_response(500, {
                 "error": f"Internal server error: {str(e)}"
             })

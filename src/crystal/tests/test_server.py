@@ -16,7 +16,7 @@ from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.data import LOREM_IPSUM_LONG, LOREM_IPSUM_SHORT
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.pages import (
-    NotInArchivePage, network_down_after_delay, reloads_paused
+    FetchErrorPage, NotInArchivePage, network_down_after_delay, reloads_paused
 )
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
@@ -1512,6 +1512,91 @@ async def test_given_fetch_error_page_visible_when_press_go_back_button_then_nav
         content = server_page.content
         assert '← Go Back' in content and 'onclick="history.back()"' in content, \
             "Go back button should be present on fetch error page"
+
+
+async def test_given_fetch_error_page_visible_then_retry_download_button_is_present() -> None:
+    async with _fetch_error_page_visible() as (server_page, failing_url):
+        # Verify the retry download button is present in the content
+        content = server_page.content
+        assert '⟳ Retry Download' in content, \
+            "Retry download button should be present on fetch error page"
+        assert 'id="cr-retry-button"' in content, \
+            "Retry button should have proper ID for JavaScript interaction"
+        assert 'onclick="onRetryDownload()"' in content, \
+            "Retry button should have proper onclick handler"
+
+
+@awith_playwright
+async def test_given_fetch_error_page_visible_when_click_retry_button_then_retry_download_starts_and_page_reloads(pw: Playwright) -> None:
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        # Define URLs
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create fetch error by downloading while network is down
+            if True:
+                root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+                assert root_ti.GetFirstChild() is None  # no entities
+                
+                # Add home URL as root resource
+                click_button(mw.new_root_url_button)
+                if True:
+                    nud = await NewRootUrlDialog.wait_for()
+                    
+                    nud.name_field.Value = 'Home'
+                    nud.url_field.Value = home_url
+                    nud.do_not_download_immediately()
+                    await nud.ok()
+                (home_ti,) = root_ti.Children
+                
+                # Download the home page when network is down to cause fetch error
+                with network_down():
+                    home_ti.SelectItem()
+                    async with wait_for_download_task_to_start_and_finish(project):
+                        click_button(mw.download_button)
+            
+            # Start the project server by clicking View button
+            home_ti.SelectItem()
+            with assert_does_open_webbrowser_to(lambda: get_request_url(
+                    home_url,
+                    project_default_url_prefix=project.default_url_prefix)) as url_future:
+                click_button(mw.view_button)
+            home_url_in_archive = url_future.result()
+            
+            # Verify resource has error revision before retry
+            resource = Resource(project, home_url)
+            error_revision = resource.default_revision()
+            assert error_revision is not None
+            assert error_revision.error_dict is not None, "Should have an error revision before retry"
+            
+            def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+                fetch_error_page = FetchErrorPage.open(raw_page, url_in_archive=home_url_in_archive)
+                
+                # Verify retry button is present and enabled
+                expect(fetch_error_page.retry_button).to_be_visible()
+                expect(fetch_error_page.retry_button).to_be_enabled()
+                expect(fetch_error_page.retry_button).to_contain_text('⟳ Retry Download')
+                
+                # Verify progress bar is initially hidden
+                expect(fetch_error_page.progress_bar).not_to_be_visible()
+                
+                with reloads_paused(raw_page):
+                    # Click the retry button
+                    fetch_error_page.retry_button.click()
+                    
+                    # Verify button state changes during retry
+                    expect(fetch_error_page.retry_button).to_be_disabled()
+                    expect(fetch_error_page.retry_button).to_contain_text('⟳ Retrying...')
+                    
+                    # Verify progress bar becomes visible
+                    expect(fetch_error_page.progress_bar).to_be_visible()
+                    
+                    # (Wait for progress to complete. And reload.)
+                
+                # After reload, we should be on the successfully downloaded page
+                expect(raw_page).to_have_title('xkcd: Air Gap')
+            
+            await pw.run(pw_task)
 
 
 # ------------------------------------------------------------------------------

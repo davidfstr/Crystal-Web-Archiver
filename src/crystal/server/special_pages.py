@@ -12,7 +12,7 @@ from textwrap import dedent
 # ------------------------------------------------------------------------------
 # Pages
 
-# Whether to show _generic_404_page_html() when _not_in_archive_html() page
+# Whether to show generic_404_page_html() when not_in_archive_html() page
 # is requested. Useful for debugging the _generic_404_page_html() page.
 SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE = (
     os.environ.get('CRYSTAL_USE_GENERIC_404_PAGE', 'False') == 'True'
@@ -338,7 +338,7 @@ def generic_404_page_html(default_url_prefix: str | None) -> str:
     
     return _base_page_html(
         title_html='Not in Archive',
-        style_html=_URL_BOX_STYLE_TEMPLATE,
+        style_html=_URL_BOX_STYLES,
         content_html=content_top_html,
         script_html=script_html,
         include_brand_header=False,
@@ -446,47 +446,15 @@ def not_in_archive_html(
         }
         
         /* ------------------------------------------------------------------ */
-        /* Download Progress Bar */
+        /* Download Progress Bar (Customizations) */
         
         .cr-download-progress-bar {
             display: none;
-            margin-top: 15px;
         }
         
         .cr-download-progress-bar.show {
             display: block;
             animation: slideDown 0.6s ease-out;
-        }
-        
-        .cr-download-progress-bar__outline {
-            width: 100%;
-            height: 8px;
-            background: #e9ecef;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        
-        .cr-download-progress-bar__fill {
-            height: 100%;
-            background: #4A90E2;
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-        
-        .cr-download-progress-bar__message {
-            font-size: 14px;
-            margin-top: 8px;
-            text-align: center;
-        }
-        
-        @media (prefers-color-scheme: dark) {
-            .cr-download-progress-bar__outline {
-                background: #404040;
-            }
-            
-            .cr-download-progress-bar__fill {
-                background: #6BB6FF;
-            }
         }
         
         /* ------------------------------------------------------------------ */
@@ -798,12 +766,7 @@ def not_in_archive_html(
                 <span id="cr-action-message" class="cr-action-message"></span>
             </div>
             
-            <div id="cr-download-progress-bar" class="cr-download-progress-bar">
-                <div class="cr-download-progress-bar__outline">
-                    <div id="cr-download-progress-bar__fill" class="cr-download-progress-bar__fill"></div>
-                </div>
-                <div id="cr-download-progress-bar__message" class="cr-download-progress-bar__message">Preparing download...</div>
-            </div>
+            {_DOWNLOAD_PROGRESS_BAR_HTML()}
         </div>
         """
     ).strip()
@@ -815,6 +778,8 @@ def not_in_archive_html(
             window.crReload = function() {
                 window.location.reload();
             };
+            
+            %(_DOWNLOAD_PROGRESS_BAR_JS)s
             
             // -----------------------------------------------------------------
             // Create Form: Action Type Radio Buttons
@@ -1138,25 +1103,11 @@ def not_in_archive_html(
             // -----------------------------------------------------------------
             // Action Button: Download Only
             
-            // Used to receive download progress updates
-            let eventSource = null;
-            
             async function startUrlDownload(isRoot, rootName/*=''*/) {
                 const actionButton = document.getElementById('cr-action-button');
-                const progressDiv = document.getElementById('cr-download-progress-bar');
-                const progressFill = document.getElementById('cr-download-progress-bar__fill');
-                const progressText = document.getElementById('cr-download-progress-bar__message');
                 
                 // Disable the action button
                 setActionInProgress(true);
-                
-                // Show progress with animation
-                progressDiv.style.display = 'block';
-                // Force a reflow to ensure display: block is applied before adding the animation class
-                progressDiv.offsetHeight;
-                progressDiv.classList.add('show');
-                progressFill.style.width = '0%%';
-                progressText.textContent = 'Starting download...';
                 
                 try {
                     // Start the download
@@ -1188,53 +1139,20 @@ def not_in_archive_html(
                     const result = await response.json();
                     const taskId = result.task_id;
                     
-                    // Listen for download progress updates
-                    const progressUrl = `/_/crystal/download-progress?task_id=${encodeURIComponent(taskId)}`;
-                    eventSource = new EventSource(progressUrl);
-                    
-                    eventSource.onmessage = function(event) {
-                        const data = JSON.parse(event.data);
-                        
-                        if (data.error) {
-                            // Update progress with error
-                            progressFill.style.width = '0%%';
-                            progressText.textContent = `Error: ${data.error}`;
-                            
-                            eventSource.close();
-                            
-                            // Enable the action button
-                            setActionInProgress(false);
-                            
-                            return;
-                        }
-                        
-                        if (data.status === 'complete') {
-                            // Update progress with success
-                            progressFill.style.width = '100%%';
-                            progressText.textContent = 'Download completed! Reloading page...';
-                            
-                            eventSource.close();
-                            
-                            // Reload the page ASAP
+                    // Start progress tracking using shared functionality
+                    runDownloadProgressBar(taskId, {
+                        onStart: (progressText) => {
+                            progressText.textContent = 'Starting download...';
+                        },
+                        onSuccess: () => {
                             window.crReload();
-                        } else if (data.status === 'in_progress') {
-                            progressFill.style.width = `${data.progress}%%`;
-                            progressText.textContent = data.message;
-                        } else {
-                            console.warn(`Unknown download status: ${data.status}`);
-                        }
-                    };
+                        },
+                        onError: () => {
+                            setActionInProgress(false);
+                        },
+                        errorMessage: 'Download failed.'
+                    });
                     
-                    eventSource.onerror = function(event) {
-                        // Update progress with error
-                        progressFill.style.width = '0%%';
-                        progressText.textContent = 'Download failed.';
-                        
-                        eventSource.close();
-                        
-                        // Enable the action button
-                        setActionInProgress(false);
-                    };
                 } catch (error) {
                     console.error('Download error:', error);
                     
@@ -1242,25 +1160,14 @@ def not_in_archive_html(
                         showActionMessage('✖️ Failed to create root URL', /*isSuccess=*/false);
                     }
                     
-                    // Update progress with error
+                    // Update progress with error using shared functionality
+                    const { progressFill, progressText } = showDownloadProgressBar();
                     progressFill.style.width = '0%%';
                     progressText.textContent = `Download failed: ${error.message}`;
                     
-                    if (eventSource) {
-                        eventSource.close();
-                    }
-                    
-                    // Enable the action button
                     setActionInProgress(false);
                 }
             }
-            
-            // Close event source when page unloads
-            window.addEventListener('beforeunload', function() {
-                if (eventSource) {
-                    eventSource.close();
-                }
-            });
             
             // -----------------------------------------------------------------
             // Action Button: State
@@ -1351,13 +1258,18 @@ def not_in_archive_html(
         </script>
         """ % {
             'archive_url_json': archive_url_json,
-            'create_group_form_data_json': json.dumps(create_group_form_data)
+            'create_group_form_data_json': json.dumps(create_group_form_data),
+            '_DOWNLOAD_PROGRESS_BAR_JS': _DOWNLOAD_PROGRESS_BAR_JS
         }
     ).strip()
     
     return _base_page_html(
         title_html='Not in Archive | Crystal',
-        style_html=(_URL_BOX_STYLE_TEMPLATE + '\n' + not_in_archive_styles),
+        style_html=(
+            _URL_BOX_STYLES + '\n\n' + 
+            _DOWNLOAD_PROGRESS_BAR_STYLES + '\n\n' + 
+            not_in_archive_styles
+        ),
         content_html=(content_top_html + content_bottom_html),
         script_html=script_html,
     )
@@ -1376,42 +1288,10 @@ def download_in_progress_html(
     download_in_progress_styles = dedent(
         """
         /* ------------------------------------------------------------------ */
-        /* Download Progress Bar */
+        /* Download Progress Bar (Customizations) */
         
         .cr-download-progress-bar {
             display: block;
-            margin-top: 15px;
-        }
-        
-        .cr-download-progress-bar__outline {
-            width: 100%;
-            height: 8px;
-            background: #e9ecef;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        
-        .cr-download-progress-bar__fill {
-            height: 100%;
-            background: #4A90E2;
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-        
-        .cr-download-progress-bar__message {
-            font-size: 14px;
-            margin-top: 8px;
-            text-align: center;
-        }
-        
-        @media (prefers-color-scheme: dark) {
-            .cr-download-progress-bar__outline {
-                background: #404040;
-            }
-            
-            .cr-download-progress-bar__fill {
-                background: #6BB6FF;
-            }
         }
         """
     ).strip()
@@ -1424,12 +1304,7 @@ def download_in_progress_html(
             <strong>Download In Progress</strong>
         </div>
         
-        <div id="cr-download-progress-bar" class="cr-download-progress-bar">
-            <div class="cr-download-progress-bar__outline">
-                <div id="cr-download-progress-bar__fill" class="cr-download-progress-bar__fill"></div>
-            </div>
-            <div id="cr-download-progress-bar__message" class="cr-download-progress-bar__message">Preparing download...</div>
-        </div>
+        {_DOWNLOAD_PROGRESS_BAR_HTML()}
         """
     ).strip()
     
@@ -1446,78 +1321,28 @@ def download_in_progress_html(
                 }
             };
             
+            %(_DOWNLOAD_PROGRESS_BAR_JS)s
+            
             // -----------------------------------------------------------------
             // Download Progress Polling
             
-            let eventSource = null;
-            
             async function startProgressPolling() {
                 const taskId = %(task_id_json)s;
-                const progressDiv = document.getElementById('cr-download-progress-bar');
-                const progressFill = document.getElementById('cr-download-progress-bar__fill');
-                const progressText = document.getElementById('cr-download-progress-bar__message');
                 
-                try {
-                    // Listen for download progress updates
-                    const progressUrl = `/_/crystal/download-progress?task_id=${encodeURIComponent(taskId)}`;
-                    eventSource = new EventSource(progressUrl);
-                    
-                    eventSource.onmessage = function(event) {
-                        const data = JSON.parse(event.data);
-                        
-                        if (data.error) {
-                            // Update progress with error
-                            progressFill.style.width = '0%%';
-                            progressText.textContent = `Error: ${data.error}`;
-                            
-                            eventSource.close();
-                            
-                            return;
-                        }
-                        
-                        if (data.status === 'complete') {
-                            // Update progress with success
-                            progressFill.style.width = '100%%';
-                            progressText.textContent = 'Download completed! Reloading page...';
-                            
-                            eventSource.close();
-                            
-                            // Reload the page ASAP
-                            window.crReload();
-                        } else if (data.status === 'in_progress') {
-                            progressFill.style.width = `${data.progress}%%`;
-                            progressText.textContent = data.message;
-                        } else {
-                            console.warn(`Unknown download status: ${data.status}`);
-                        }
-                    };
-                    
-                    eventSource.onerror = function(event) {
-                        // Update progress with error
-                        progressFill.style.width = '0%%';
-                        progressText.textContent = 'Download failed.';
-                        
-                        eventSource.close();
-                    };
-                } catch (error) {
-                    console.error('Progress polling error:', error);
-                    
-                    // Update progress with error
-                    progressFill.style.width = '0%%';
-                    progressText.textContent = `Download failed: ${error.message}`;
-                    
-                    if (eventSource) {
-                        eventSource.close();
-                    }
-                }
+                // Start progress tracking using shared functionality
+                runDownloadProgressBar(taskId, {
+                    onStart: (progressText) => {
+                        progressText.textContent = 'Preparing download...';
+                    },
+                    onSuccess: () => {
+                        window.crReload();
+                    },
+                    onError: () => {
+                        // nothing
+                    },
+                    errorMessage: 'Download failed.'
+                });
             }
-            
-            // Close event source when page unloads
-            window.addEventListener('beforeunload', function() {
-                if (eventSource) {
-                    eventSource.close();
-                }
-            });
             
             // -----------------------------------------------------------------
             
@@ -1527,12 +1352,16 @@ def download_in_progress_html(
         """ % {
             'task_id_json': task_id_json,
             'ignore_reload_requests_json': ignore_reload_requests_json,
+            '_DOWNLOAD_PROGRESS_BAR_JS': _DOWNLOAD_PROGRESS_BAR_JS,
         }
     ).strip()
     
     return _base_page_html(
         title_html='Download In Progress | Crystal',
-        style_html=download_in_progress_styles,
+        style_html=(
+            _DOWNLOAD_PROGRESS_BAR_STYLES + '\n\n' + 
+            download_in_progress_styles
+        ),
         content_html=content_html,
         script_html=script_html,
     )
@@ -1542,7 +1371,36 @@ def fetch_error_html(
         *, archive_url: str,
         error_type_html: str,
         error_message_html: str,
-        ) -> str:    
+        ) -> str:
+    archive_url_json = json.dumps(archive_url)
+    
+    fetch_error_styles = dedent(
+        """
+        /* ------------------------------------------------------------------ */
+        /* Download Progress Bar (Customizations) */
+        
+        .cr-download-progress-bar {
+            display: none;
+        }
+        
+        .cr-download-progress-bar.show {
+            display: block;
+            animation: slideDown 0.6s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        """
+    ).strip()
+    
     content_html = dedent(
         f"""
         <div class="cr-page__icon">⚠️</div>
@@ -1565,17 +1423,112 @@ def fetch_error_html(
             <button onclick="history.back()" class="cr-button cr-button--secondary">
                 ← Go Back
             </button>
+            <button id="cr-retry-button" onclick="onRetryDownload()" class="cr-button cr-button--primary">
+                ⟳ Retry Download
+            </button>
         </div>
+        
+        {_DOWNLOAD_PROGRESS_BAR_HTML('Preparing retry...')}
         """
+    ).strip()
+    
+    script_html = dedent(
+        """
+        <script>
+            // NOTE: Patched by tests
+            window.crReload = function() {
+                window.location.reload();
+            };
+            
+            %(_DOWNLOAD_PROGRESS_BAR_JS)s
+            
+            let retryInProgress = false;
+            
+            function setRetryInProgress(inProgress) {
+                retryInProgress = inProgress;
+                
+                const retryButton = document.getElementById('cr-retry-button');
+                retryButton.disabled = inProgress;
+                
+                if (inProgress) {
+                    retryButton.textContent = '⟳ Retrying...';
+                    retryButton.className = 'cr-button cr-button--primary';
+                } else {
+                    retryButton.textContent = '⟳ Retry Download';
+                    retryButton.className = 'cr-button cr-button--primary';
+                }
+            }
+            
+            async function onRetryDownload() {
+                if (retryInProgress) {
+                    return;
+                }
+                
+                // Show retry in progress state
+                setRetryInProgress(true);
+                
+                try {
+                    // Start the retry download
+                    const retryUrl = '/_/crystal/retry-download';
+                    const requestBody = {
+                        url: %(archive_url_json)s
+                    };
+                    const response = await fetch(retryUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to start retry');
+                    }
+                    
+                    const result = await response.json();
+                    const taskId = result.task_id;
+                    
+                    // Start progress tracking using shared functionality
+                    runDownloadProgressBar(taskId, {
+                        onStart: (progressText) => {
+                            progressText.textContent = 'Starting retry...';
+                        },
+                        onSuccess: () => {
+                            window.crReload();
+                        },
+                        onError: () => {
+                            setRetryInProgress(false);
+                        },
+                        errorMessage: 'Retry failed.'
+                    });
+                    
+                } catch (error) {
+                    console.error('Retry error:', error);
+                    
+                    // Update progress with error using shared functionality
+                    const { progressFill, progressText } = showDownloadProgressBar();
+                    progressFill.style.width = '0%%';
+                    progressText.textContent = `Retry failed: ${error.message}`;
+                    
+                    setRetryInProgress(false);
+                }
+            }
+        </script>
+        """ % {
+            'archive_url_json': archive_url_json,
+            '_DOWNLOAD_PROGRESS_BAR_JS': _DOWNLOAD_PROGRESS_BAR_JS,
+        }
     ).strip()
     
     return _base_page_html(
         title_html='Fetch Error | Crystal',
         style_html=(
-            _URL_BOX_STYLE_TEMPLATE
+            _URL_BOX_STYLES + '\n\n' + 
+            _DOWNLOAD_PROGRESS_BAR_STYLES + '\n\n' + 
+            fetch_error_styles
         ),
         content_html=content_html,
-        script_html='',
+        script_html=script_html,
     )
 
 
@@ -1929,7 +1882,7 @@ def _BRAND_HEADER_HTML_TEMPLATE() -> str:
 # ------------------------------------------------------------------------------
 # URL Info Box
 
-_URL_BOX_STYLE_TEMPLATE = dedent(
+_URL_BOX_STYLES = dedent(
     """
     .cr-url-box {
         background: #f8f9fa;
@@ -1988,6 +1941,163 @@ def _url_box_html(label_html: str, url: str | None) -> str:
             <a{(' href="' + url + '"') if url is not None else ''} class="cr-url-box__link" target="_blank" rel="noopener">
                 {html_escape(url) if url is not None else "See browser's URL"}
             </a>
+        </div>
+        """
+    ).strip()
+
+
+# ------------------------------------------------------------------------------
+# Download Progress Bar
+
+_DOWNLOAD_PROGRESS_BAR_STYLES = dedent(
+    """
+    /* ------------------------------------------------------------------ */
+    /* Download Progress Bar */
+    
+    .cr-download-progress-bar {
+        margin-top: 15px;
+    }
+    
+    .cr-download-progress-bar__outline {
+        width: 100%;
+        height: 8px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .cr-download-progress-bar__fill {
+        height: 100%;
+        background: #4A90E2;
+        width: 0%;
+        transition: width 0.3s ease;
+    }
+    
+    .cr-download-progress-bar__message {
+        font-size: 14px;
+        margin-top: 8px;
+        text-align: center;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+        .cr-download-progress-bar__outline {
+            background: #404040;
+        }
+        
+        .cr-download-progress-bar__fill {
+            background: #6BB6FF;
+        }
+    }
+    """
+).lstrip()  # type: str
+
+
+_DOWNLOAD_PROGRESS_BAR_JS = dedent(
+    """
+    // Download Progress Bar JavaScript
+    
+    let crProgressEventSource = null;
+    
+    function showDownloadProgressBar() {
+        const progressDiv = document.getElementById('cr-download-progress-bar');
+        const progressFill = document.getElementById('cr-download-progress-bar__fill');
+        const progressText = document.getElementById('cr-download-progress-bar__message');
+        
+        // Show progress with animation
+        progressDiv.style.display = 'block';
+        // Force a reflow to ensure display: block is applied before adding the animation class
+        progressDiv.offsetHeight;
+        progressDiv.classList.add('show');
+        progressFill.style.width = '0%';
+        
+        return { progressDiv, progressFill, progressText };
+    }
+    
+    function runDownloadProgressBar(taskId, callbacks) {
+        const progressUrl = `/_/crystal/download-progress?task_id=${encodeURIComponent(taskId)}`;
+        const { progressDiv, progressFill, progressText } = showDownloadProgressBar();
+        
+        // Set initial message
+        if (callbacks.onStart) {
+            callbacks.onStart(progressText);
+        } else {
+            progressText.textContent = 'Starting download...';
+        }
+        
+        crProgressEventSource = new EventSource(progressUrl);
+        
+        crProgressEventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            if (data.error) {
+                // Update progress with error
+                progressFill.style.width = '0%';
+                progressText.textContent = `Error: ${data.error}`;
+                
+                crProgressEventSource.close();
+                
+                if (callbacks.onError) {
+                    callbacks.onError();
+                }
+                
+                return;
+            }
+            
+            if (data.status === 'complete') {
+                // Update progress with success
+                progressFill.style.width = '100%';
+                progressText.textContent = 'Download completed! Reloading page...';
+                
+                crProgressEventSource.close();
+                
+                if (callbacks.onSuccess) {
+                    callbacks.onSuccess();
+                } else {
+                    // Default behavior: reload the page
+                    window.crReload();
+                }
+            } else if (data.status === 'in_progress') {
+                progressFill.style.width = `${data.progress}%`;
+                progressText.textContent = data.message;
+            } else {
+                console.warn(`Unknown download status: ${data.status}`);
+            }
+        };
+        
+        crProgressEventSource.onerror = function(event) {
+            // Update progress with error
+            progressFill.style.width = '0%';
+            
+            const errorMessage = callbacks.errorMessage || 'Download failed.';
+            progressText.textContent = errorMessage;
+            
+            crProgressEventSource.close();
+            
+            if (callbacks.onError) {
+                callbacks.onError();
+            }
+        };
+    }
+    
+    // Close event source when page unloads
+    window.addEventListener('beforeunload', () => {
+        if (crProgressEventSource) {
+            crProgressEventSource.close();
+            crProgressEventSource = null;
+        }
+    });
+    """
+).strip()
+
+
+def _DOWNLOAD_PROGRESS_BAR_HTML(message: str = 'Preparing download...') -> str:
+    return dedent(
+        f"""
+        <div id="cr-download-progress-bar" class="cr-download-progress-bar">
+            <div class="cr-download-progress-bar__outline">
+                <div id="cr-download-progress-bar__fill" class="cr-download-progress-bar__fill"></div>
+            </div>
+            <div id="cr-download-progress-bar__message" class="cr-download-progress-bar__message">{html_escape(message)}</div>
         </div>
         """
     ).strip()
