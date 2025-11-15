@@ -114,6 +114,9 @@ class ProjectServer:
         if port is None:
             port = _DEFAULT_SERVER_PORT
             try_other_ports = True
+        elif port == 0:
+            # Port 0 means: let OS assign an available port
+            try_other_ports = False
         else:
             try_other_ports = False
         if host is None:
@@ -151,7 +154,8 @@ class ProjectServer:
         server.stdout = stdout
         
         self._server = server
-        self._port = port
+        # Get the actual port that was bound (important when port=0)
+        self._port = server.server_port
         
         banner_printed = Future()  # type: Future[Literal[True]]
         

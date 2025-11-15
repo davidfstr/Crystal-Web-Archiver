@@ -101,8 +101,10 @@ def served_project_from_filepath(
             fg_call_and_wait(fg_task)
         
         # Start server
+        # Use port 0 by default to let OS assign an available port,
+        # avoiding conflicts when tests run in parallel
         project_server = ProjectServer(project,
-            port=(port or 2798),  # CRYT on telephone keypad
+            port=(port if port is not None else 0),
             host='127.0.0.1',
             verbosity='indent',
         )
@@ -155,9 +157,10 @@ class MockHttpServer:
                 assert isinstance(content, bytes)
                 self.wfile.write(content)
         
-        self._port = 2798  # CRYT on telephone keypad
-        address = ('', self._port)
+        # Bind to port 0 to get an OS-assigned available port
+        address = ('127.0.0.1', 0)
         self._server = HTTPServer(address, RequestHandler)
+        self._port = self._server.server_port
         
         @capture_crashes_to_stderr
         def bg_task() -> None:
