@@ -101,8 +101,9 @@ def served_project_from_filepath(
             fg_call_and_wait(fg_task)
         
         # Start server
+        # Use port=None to let ProjectServer choose an available port
         project_server = ProjectServer(project,
-            port=(port or 2798),  # CRYT on telephone keypad
+            port=port,  # None by default, which lets ProjectServer auto-select a port
             host='127.0.0.1',
             verbosity='indent',
         )
@@ -155,9 +156,11 @@ class MockHttpServer:
                 assert isinstance(content, bytes)
                 self.wfile.write(content)
         
-        self._port = 2798  # CRYT on telephone keypad
-        address = ('', self._port)
+        # Use port 0 to let the OS assign an available port
+        address = ('', 0)
         self._server = HTTPServer(address, RequestHandler)
+        # Get the actual port that was assigned
+        self._port = self._server.server_address[1]
         
         @capture_crashes_to_stderr
         def bg_task() -> None:
@@ -166,6 +169,11 @@ class MockHttpServer:
             finally:
                 self._server.server_close()
         bg_call_later(bg_task, name='MockHttpServer.serve', daemon=True)
+    
+    @property
+    def port(self) -> int:
+        """Returns the actual port number this server is listening on."""
+        return self._port
     
     def get_url(self, path: str) -> str:
         return f'http://127.0.0.1:{self._port}' + path
@@ -202,11 +210,13 @@ class MockFtpServer:
         self.files = files
         self.requested_paths = []  # type: List[str]
         
-        self._port = 2121  # Non-standard FTP port for testing
+        # Use port 0 to let the OS assign an available port
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._server_socket.bind(('127.0.0.1', self._port))
+        self._server_socket.bind(('127.0.0.1', 0))
         self._server_socket.listen(5)
+        # Get the actual port that was assigned
+        self._port = self._server_socket.getsockname()[1]
         
         self._running = True
         self._server_thread = bg_call_later(
@@ -346,6 +356,11 @@ class MockFtpServer:
         if self._VERBOSE:
             print(f'[MockFtpServer] Sending: {message.strip()}', file=sys.stderr)
         sock.sendall(message.encode('ascii'))
+    
+    @property
+    def port(self) -> int:
+        """Returns the actual port number this server is listening on."""
+        return self._port
     
     def get_url(self, path: str) -> str:
         """Get the FTP URL for a given path."""

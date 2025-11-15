@@ -294,12 +294,13 @@ def test_given_launched_with_serve_and_port_when_port_already_in_use_then_fails_
 
 
 def test_given_launched_with_serve_and_no_port_and_default_port_in_use_then_uses_next_higher_open_port() -> None:
-    if _is_port_in_use(2797) or _is_port_in_use(2798):
-        skipTest('Port 2797 or 2798 already in use, cannot run test')
+    if _is_port_in_use(2797):
+        skipTest('Port 2797 already in use, cannot run test')
     
     with port_in_use(2797, '127.0.0.1'):
         with _temporary_project() as project_path:
             with _crystal_shell_with_serve(project_path) as server_start_message:
+                # Should use 2798 (next port after 2797)
                 assertIn('Server started at: http://127.0.0.1:2798', server_start_message)
 
 

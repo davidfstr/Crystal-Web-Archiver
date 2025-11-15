@@ -403,14 +403,14 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 py_exec(crystal, 'from crystal.model import Resource')
                 # Test can create Resource
                 assertEqual(
-                    "Resource('http://127.0.0.1:2798/_/https/xkcd.com/')\n",
+                    f"Resource('http://127.0.0.1:{sp.port}/_/https/xkcd.com/')\n",
                     py_eval(crystal, f'r = Resource(p, {home_url!r}); r'))
                 
                 # Test can import RootResource
                 py_exec(crystal, 'from crystal.model import RootResource')
                 # Test can create RootResource
                 assertEqual(
-                    "RootResource('Home','http://127.0.0.1:2798/_/https/xkcd.com/')\n",
+                    f"RootResource('Home','http://127.0.0.1:{sp.port}/_/https/xkcd.com/')\n",
                     py_eval(crystal, f'root_r = RootResource(p, "Home", r); root_r'))
                 
                 # Test can download ResourceRevision
@@ -428,7 +428,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 py_exec(crystal, 'from crystal.model import ResourceGroup')
                 # Test can create ResourceGroup
                 assertEqual(
-                    "ResourceGroup('Comic','http://127.0.0.1:2798/_/https/xkcd.com/#/')\n",
+                    f"ResourceGroup('Comic','http://127.0.0.1:{sp.port}/_/https/xkcd.com/#/')\n",
                     py_eval(crystal, f'rg = ResourceGroup(p, "Comic", {comic_pattern!r}); rg'))
                 # Ensure ResourceGroup includes some members discovered by downloading resource Home
                 def rg_member_count() -> int:
@@ -469,11 +469,11 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
             with subtests.test(case='test can download project entities', return_if_failure=True):
                 # Recreate home Resource
                 assertEqual(
-                    "Resource('http://127.0.0.1:2798/_/https/xkcd.com/')\n",
+                    f"Resource('http://127.0.0.1:{sp.port}/_/https/xkcd.com/')\n",
                     py_eval(crystal, f'r = Resource(p, {home_url!r}); r'))
                 # Recreate home RootResource
                 assertEqual(
-                    "RootResource('Home','http://127.0.0.1:2798/_/https/xkcd.com/')\n",
+                    f"RootResource('Home','http://127.0.0.1:{sp.port}/_/https/xkcd.com/')\n",
                     py_eval(crystal, f'root_r = RootResource(p, "Home", r); root_r'))
                 
                 # Test can download RootResource
@@ -489,7 +489,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 
                 # Create feed ResourceGroup
                 assertEqual(
-                    "ResourceGroup('Feed','http://127.0.0.1:2798/_/https/xkcd.com/*.xml')\n",
+                    f"ResourceGroup('Feed','http://127.0.0.1:{sp.port}/_/https/xkcd.com/*.xml')\n",
                     py_eval(crystal, f'rg = ResourceGroup(p, "Feed", {feed_pattern!r}); rg'))
                 py_exec(crystal, f'rg.source = root_r')
                 # Ensure ResourceGroup includes some members discovered by downloading resource Home
