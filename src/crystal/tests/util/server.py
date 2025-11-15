@@ -205,10 +205,11 @@ class MockFtpServer:
         self.files = files
         self.requested_paths = []  # type: List[str]
         
-        self._port = 2121  # Non-standard FTP port for testing
+        # Bind to port 0 to get an OS-assigned available port
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._server_socket.bind(('127.0.0.1', self._port))
+        self._server_socket.bind(('127.0.0.1', 0))
+        self._port = self._server_socket.getsockname()[1]
         self._server_socket.listen(5)
         
         self._running = True
