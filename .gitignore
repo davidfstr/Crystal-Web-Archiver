@@ -33,3 +33,6 @@ tmpdir_*
 
 # Coverage
 .coverage
+
+# Large wxPython wheels
+*.wgn
