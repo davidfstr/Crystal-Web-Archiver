@@ -88,7 +88,9 @@ Release Notes ⋮
       of Crystal's internal wrapper APIs.
 
 * Testing improvements
-    * Tests no longer assume that the default server port is free.
+    * Test utilities now use dynamic port allocation instead of fixed ports,
+      enabling parallel test execution and eliminating port conflicts.
+      Tests no longer assume that specific ports (2797, 2798, 2121) are free.
       Therefore an independent Crystal app running in the background will
       no longer cause tests to fail.
     * Tests use app preferences isolated from each other and from any
