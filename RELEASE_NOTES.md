@@ -89,9 +89,12 @@ Release Notes ⋮
       of Crystal's internal wrapper APIs.
 
 * Testing improvements
-    * Tests no longer assume that the default server port is free.
-      Therefore an independent Crystal app running in the background will
-      no longer cause tests to fail.
+    * Tests no longer assume that the default server port (2797) or any other
+      fixed port numbers (like 2798) are free.
+        * Thus an independent Crystal app running in the background will
+          no longer cause tests to fail.
+        * Thus multiple copies of Crystal can now run automated tests without
+          their ports interfering with each other.
     * Tests use app preferences isolated from each other and from any
       independent Crystal app running in the background.
 
