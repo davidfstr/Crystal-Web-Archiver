@@ -78,6 +78,7 @@ Error Handling:
 * Use single quotes for strings, e.g. `my_string = 'hello'`.
 * Use double quotes for docstrings, e.g. `"""This is a docstring."""`
 
-## Limitations
+## Getting Started
 
-* Be sure to activate the Python virtual environment before running any `python` or `crystal` commands: `source venv3.12/bin/activate`
+* Run `crystal --version` and ensure you see a result like `Crystal 2.0.2`.
+    * If you see `crystal: command not found` then you probably need to activate the Python virtual environment. Try: `source venv3.12/bin/activate`
