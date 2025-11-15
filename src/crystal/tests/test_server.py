@@ -338,10 +338,12 @@ async def test_when_404_html_at_site_root_is_requested_then_always_serves_not_fo
                     assertEqual(
                         f'http://127.0.0.1:{sp.port}/',
                         home_url_in_archive)
+                    # Extract the port from the mock server URL
+                    mock_server_port = urlparse(_404_url).port
                     assertEqual(
                         # NOT: f'http://127.0.0.1:{sp.port}/404.html'
-                        #      even though it is in the default URL prefix "http://127.0.0.1:2798/"
-                        f'http://127.0.0.1:{sp.port}/_/http/127.0.0.1:2798/404.html',
+                        #      even though it is in the default URL prefix
+                        f'http://127.0.0.1:{sp.port}/_/http/127.0.0.1:{mock_server_port}/404.html',
                         _404_url_in_archive)
                     reserved_404_html_url_in_archive = \
                         f'http://127.0.0.1:{sp.port}/404.html'

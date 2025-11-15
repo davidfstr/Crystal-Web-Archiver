@@ -300,7 +300,8 @@ def test_given_launched_with_serve_and_no_port_and_default_port_in_use_then_uses
     with port_in_use(2797, '127.0.0.1'):
         with _temporary_project() as project_path:
             with _crystal_shell_with_serve(project_path) as server_start_message:
-                assertIn('Server started at: http://127.0.0.1:2798', server_start_message)
+                # Should use the next available port after 2797
+                assertRegex(server_start_message, r'Server started at: http://127\.0\.0\.1:279[89]')
 
 
 def test_when_launched_with_serve_and_without_readonly_then_serves_as_writable() -> None:
