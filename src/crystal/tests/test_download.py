@@ -15,6 +15,8 @@ from crystal.tests.util.wait import (
 )
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
 import crystal.tests.util.xtempfile as xtempfile
+from crystal.util.features import feature_enabled
+from crystal.util.xos import is_windows
 import io
 import os
 import socks
@@ -25,8 +27,6 @@ from textwrap import dedent
 from unittest import skip
 from unittest.mock import MagicMock, patch
 import urllib.request
-
-from crystal.util.xos import is_windows
 
 
 _FAVICON_PATH = '/favicon.ico'
@@ -420,6 +420,7 @@ async def test_can_download_resource_with_no_proxy() -> None:
     pass
 
 
+@feature_enabled('Proxy')
 async def test_can_download_http_resource_with_socks_proxy() -> None:
     server = MockHttpServer({
         '/': dict(
@@ -474,6 +475,7 @@ async def test_can_download_http_resource_with_socks_proxy() -> None:
                 assertEqual(200, rr.metadata['status_code'])
 
 
+@feature_enabled('Proxy')
 async def test_can_download_https_resource_with_socks_proxy() -> None:
     server = MockHttpServer({
         '/': dict(
@@ -538,6 +540,7 @@ async def test_can_download_https_resource_with_socks_proxy() -> None:
                 assertEqual(200, rr.metadata['status_code'])
 
 
+@feature_enabled('Proxy')
 async def test_can_download_ftp_resource_with_socks_proxy() -> None:
     server = MockFtpServer({
         '/test.txt': b'Hello FTP World'
@@ -579,6 +582,7 @@ async def test_can_download_ftp_resource_with_socks_proxy() -> None:
                     assert body.read() == b'Hello FTP World'
 
 
+@feature_enabled('Proxy')
 async def test_cannot_download_resource_with_socks_proxy_if_connect_to_socks_proxy_fails() -> None:
     server = MockHttpServer({
         '/': dict(

@@ -261,6 +261,12 @@ def _main2(args: list[str]) -> None:
             action='store_true',
         )
     parser.add_argument(
+        '--enable-incomplete-feature',
+        help=argparse.SUPPRESS,  # 'Enables one or more unfinished features.'
+        type=str,  # format: 'FeatureA,FeatureB'; see features.py for available names
+        default=None,
+    )
+    parser.add_argument(
         '--help', '-h',
         action='help',
         help='Show this help message and exit.'
@@ -304,6 +310,12 @@ def _main2(args: list[str]) -> None:
             from tzlocal import get_localzone
             parsed_args.stale_before = parsed_args.stale_before.replace(
                 tzinfo=get_localzone())  # reinterpret
+    
+    # Process --enable-incomplete-feature
+    if parsed_args.enable_incomplete_feature is not None:
+        from crystal.util.features import set_enabled_features
+        feature_names = parsed_args.enable_incomplete_feature.split(',')
+        set_enabled_features(set(feature_names))
     
     # Profile garbage collection
     from crystal.util.xgc import PROFILE_GC, start_profiling_gc

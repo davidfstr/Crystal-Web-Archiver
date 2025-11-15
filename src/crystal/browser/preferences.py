@@ -1,4 +1,5 @@
 from crystal.app_preferences import app_prefs
+from crystal.util import features
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
 from crystal.util.wx_dialog import (
@@ -130,115 +131,6 @@ class PreferencesDialog:
         
         return fields_sizer
     
-    def _create_app_fields(self, parent: wx.Window) -> wx.Sizer:
-        fields_sizer = wx.GridBagSizer(
-            vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
-        
-        fields_sizer.Add(
-            wx.StaticText(parent, label='These preferences apply to all projects.'),
-            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
-            border=5 if is_windows() else 0)
-        
-        # Proxy configuration
-        fields_sizer.Add(
-            wx.StaticText(parent, label='Proxy:'),
-            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(1, 0), span=wx.GBSpan(1, 2),
-            border=8)
-        if True:
-            # No proxy radio button
-            self.no_proxy_radio = wx.RadioButton(
-                parent,
-                label='No proxy',
-                name='cr-preferences-dialog__no-proxy-radio',
-                style=wx.RB_GROUP)
-            bind(self.no_proxy_radio, wx.EVT_RADIOBUTTON, self._on_proxy_type_changed)
-            fields_sizer.Add(
-                self.no_proxy_radio,
-                flag=wx.EXPAND, pos=wx.GBPosition(2, 0), span=wx.GBSpan(1, 2))
-            
-            # HTTP/HTTPS proxy radio button (disabled, not yet supported)
-            self.http_proxy_radio = wx.RadioButton(
-                parent,
-                label='HTTP/HTTPS proxy (not yet supported)',
-                name='cr-preferences-dialog__http-proxy-radio')
-            self.http_proxy_radio.Enabled = False
-            fields_sizer.Add(
-                self.http_proxy_radio,
-                flag=wx.EXPAND, pos=wx.GBPosition(3, 0), span=wx.GBSpan(1, 2))
-            
-            # SOCKS proxy radio button
-            self.socks5_proxy_radio = wx.RadioButton(
-                parent,
-                label='SOCKS v5 proxy',
-                name='cr-preferences-dialog__socks5-proxy-radio')
-            bind(self.socks5_proxy_radio, wx.EVT_RADIOBUTTON, self._on_proxy_type_changed)
-            fields_sizer.Add(
-                self.socks5_proxy_radio,
-                flag=wx.EXPAND, pos=wx.GBPosition(4, 0), span=wx.GBSpan(1, 2))
-            
-            # SOCKS proxy host and port fields (indented)
-            socks5_fields_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            if True:
-                socks5_fields_sizer.Add(
-                    wx.StaticText(parent, label='Host:'),
-                    flag=wx.CENTER|wx.LEFT, border=20)
-                socks5_fields_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING)
-                
-                self.socks5_host_field = wx.TextCtrl(
-                    parent,
-                    name='cr-preferences-dialog__socks5-host-field',
-                    size=(200, -1))
-                self.socks5_host_field.Hint = 'localhost'
-                socks5_fields_sizer.Add(self.socks5_host_field, flag=wx.CENTER)
-                
-                socks5_fields_sizer.AddSpacer(10)
-                socks5_fields_sizer.Add(
-                    wx.StaticText(parent, label='Port:'),
-                    flag=wx.CENTER)
-                socks5_fields_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING)
-                
-                self.socks5_port_field = wx.TextCtrl(
-                    parent,
-                    name='cr-preferences-dialog__socks5-port-field',
-                    size=(60, -1))
-                self.socks5_port_field.Hint = '1080'
-                socks5_fields_sizer.Add(self.socks5_port_field, flag=wx.CENTER)
-            fields_sizer.Add(
-                socks5_fields_sizer,
-                flag=wx.EXPAND, pos=wx.GBPosition(5, 0), span=wx.GBSpan(1, 2))
-            
-            # Load proxy preferences
-            proxy_type = app_prefs.proxy_type
-            if proxy_type == 'none':
-                self.no_proxy_radio.Value = True
-            elif proxy_type == 'socks5':
-                self.socks5_proxy_radio.Value = True
-            else:
-                assert_never(proxy_type)
-            self.socks5_host_field.Value = (
-                app_prefs.socks5_proxy_host
-                if app_prefs.socks5_proxy_host_is_set else ''
-            )
-            self.socks5_port_field.Value = (
-                str(app_prefs.socks5_proxy_port)
-                if app_prefs.socks5_proxy_port_is_set else ''
-            )   
-            
-            self._update_proxy_fields_enabled()
-        
-        # Reset dismissed callouts button
-        self.reset_callouts_button = wx.Button(
-            parent, 
-            label='Reset Dismissed Help Messages',
-            name='cr-preferences-dialog__reset-callouts-button')
-        bind(self.reset_callouts_button, wx.EVT_BUTTON, self._on_reset_callouts)
-        fields_sizer.Add(
-            self.reset_callouts_button,
-            flag=wx.TOP, pos=wx.GBPosition(6, 0), span=wx.GBSpan(1, 2),
-            border=8)
-        
-        return fields_sizer
-    
     def _create_session_fields(self, parent: wx.Window) -> wx.Sizer:
         fields_sizer = wx.GridBagSizer(
             vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
@@ -304,6 +196,140 @@ class PreferencesDialog:
         
         return sizer
     
+    def _create_app_fields(self, parent: wx.Window) -> wx.Sizer:
+        fields_sizer = wx.GridBagSizer(
+            vgap=_FORM_ROW_SPACING, hgap=_FORM_LABEL_INPUT_SPACING)
+        
+        fields_sizer.Add(
+            wx.StaticText(parent, label='These preferences apply to all projects.'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
+            border=5 if is_windows() else 0)
+        
+        # Proxy configuration
+        if features.proxy_enabled():
+            next_row = self._create_proxy_fieldset(parent, fields_sizer, start_row=1)
+        else:
+            next_row = 1
+        
+        # Reset dismissed callouts button
+        self.reset_callouts_button = wx.Button(
+            parent, 
+            label='Reset Dismissed Help Messages',
+            name='cr-preferences-dialog__reset-callouts-button')
+        bind(self.reset_callouts_button, wx.EVT_BUTTON, self._on_reset_callouts)
+        fields_sizer.Add(
+            self.reset_callouts_button,
+            flag=(wx.TOP if features.proxy_enabled() else 0),
+            pos=wx.GBPosition(next_row, 0), span=wx.GBSpan(1, 2),
+            border=8)
+        
+        return fields_sizer
+    
+    def _create_proxy_fieldset(
+            self, 
+            parent: wx.Window, 
+            fields_sizer: wx.GridBagSizer, 
+            start_row: int,
+            ) -> int:
+        """
+        Create proxy configuration fields in the given sizer.
+        
+        Returns the row index after the created fields.
+        
+        Arguments:
+        * parent -- parent wx.Window that will contain the proxy fields.
+        * fields_sizer -- the GridBagSizer to add the proxy fields to.
+        * start_row -- the row number where the proxy fields should start.
+        """
+        # Proxy configuration heading
+        fields_sizer.Add(
+            wx.StaticText(parent, label='Proxy:'),
+            flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(start_row, 0), span=wx.GBSpan(1, 2),
+            border=8)
+        
+        # No proxy radio button
+        self.no_proxy_radio = wx.RadioButton(
+            parent,
+            label='No proxy',
+            name='cr-preferences-dialog__no-proxy-radio',
+            style=wx.RB_GROUP)
+        bind(self.no_proxy_radio, wx.EVT_RADIOBUTTON, self._on_proxy_type_changed)
+        fields_sizer.Add(
+            self.no_proxy_radio,
+            flag=wx.EXPAND, pos=wx.GBPosition(start_row + 1, 0), span=wx.GBSpan(1, 2))
+        
+        # HTTP/HTTPS proxy radio button (disabled, not yet supported)
+        self.http_proxy_radio = wx.RadioButton(
+            parent,
+            label='HTTP/HTTPS proxy (not yet supported)',
+            name='cr-preferences-dialog__http-proxy-radio')
+        self.http_proxy_radio.Enabled = False
+        fields_sizer.Add(
+            self.http_proxy_radio,
+            flag=wx.EXPAND, pos=wx.GBPosition(start_row + 2, 0), span=wx.GBSpan(1, 2))
+        
+        # SOCKS proxy radio button
+        self.socks5_proxy_radio = wx.RadioButton(
+            parent,
+            label='SOCKS v5 proxy',
+            name='cr-preferences-dialog__socks5-proxy-radio')
+        bind(self.socks5_proxy_radio, wx.EVT_RADIOBUTTON, self._on_proxy_type_changed)
+        fields_sizer.Add(
+            self.socks5_proxy_radio,
+            flag=wx.EXPAND, pos=wx.GBPosition(start_row + 3, 0), span=wx.GBSpan(1, 2))
+        
+        # SOCKS proxy host and port fields (indented)
+        socks5_fields_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        if True:
+            socks5_fields_sizer.Add(
+                wx.StaticText(parent, label='Host:'),
+                flag=wx.CENTER|wx.LEFT, border=20)
+            socks5_fields_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+            
+            self.socks5_host_field = wx.TextCtrl(
+                parent,
+                name='cr-preferences-dialog__socks5-host-field',
+                size=(200, -1))
+            self.socks5_host_field.Hint = 'localhost'
+            socks5_fields_sizer.Add(self.socks5_host_field, flag=wx.CENTER)
+            
+            socks5_fields_sizer.AddSpacer(10)
+            socks5_fields_sizer.Add(
+                wx.StaticText(parent, label='Port:'),
+                flag=wx.CENTER)
+            socks5_fields_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+            
+            self.socks5_port_field = wx.TextCtrl(
+                parent,
+                name='cr-preferences-dialog__socks5-port-field',
+                size=(60, -1))
+            self.socks5_port_field.Hint = '1080'
+            socks5_fields_sizer.Add(self.socks5_port_field, flag=wx.CENTER)
+        fields_sizer.Add(
+            socks5_fields_sizer,
+            flag=wx.EXPAND, pos=wx.GBPosition(start_row + 4, 0), span=wx.GBSpan(1, 2))
+        
+        # Load proxy preferences
+        proxy_type = app_prefs.proxy_type
+        if proxy_type == 'none':
+            self.no_proxy_radio.Value = True
+        elif proxy_type == 'socks5':
+            self.socks5_proxy_radio.Value = True
+        else:
+            assert_never(proxy_type)
+        self.socks5_host_field.Value = (
+            app_prefs.socks5_proxy_host
+            if app_prefs.socks5_proxy_host_is_set else ''
+        )
+        self.socks5_port_field.Value = (
+            str(app_prefs.socks5_proxy_port)
+            if app_prefs.socks5_proxy_port_is_set else ''
+        )   
+        
+        self._update_proxy_fields_enabled()
+        
+        return start_row + 5
+    
     # === Events ===
     
     def _update_stale_before_date_picker_enabled(self, event: wx.CommandEvent | None=None) -> None:
@@ -365,7 +391,7 @@ class PreferencesDialog:
             self._project.min_fetch_date = None
         
         # Save app fields
-        if True:
+        if features.proxy_enabled():
             if self.no_proxy_radio.Value:
                 app_prefs.proxy_type = 'none'
             elif self.socks5_proxy_radio.Value:
