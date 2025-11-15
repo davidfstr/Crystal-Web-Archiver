@@ -33,3 +33,6 @@ tmpdir_*
 
 # Coverage
 .coverage
+
+# Downloaded wheel files
+*.wgn
