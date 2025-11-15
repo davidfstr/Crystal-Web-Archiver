@@ -33,3 +33,4 @@ tmpdir_*
 
 # Coverage
 .coverage
+*.wgn
