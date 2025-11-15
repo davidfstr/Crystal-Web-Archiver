@@ -4,14 +4,17 @@ Tests functionality of the MainWindow which isn't covered by more-specific suite
 For high-level tests of complete user workflows, see test_workflows.py
 """
 
+from crystal import __version__ as CRYSTAL_VERSION
 from crystal.tests.util.cli import (
     crystal_shell, py_eval, py_eval_await, wait_for_crystal_to_exit,
 )
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
+from crystal.ui.branding import AUTHORS_1_TEXT, AUTHORS_2_TEXT
 from crystal.util.xos import is_wx_gtk
 import textwrap
 from unittest import SkipTest, skip
+import wx
 
 
 # === Test: Open ===
@@ -50,9 +53,38 @@ from unittest import SkipTest, skip
 
 # === Test: Status Bar ===
 
-@skip('not yet automated')
 async def test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors() -> None:
-    pass
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Verify app icon is present
+        app_icon = mw.main_window.FindWindow(name='cr-branding-area__icon')
+        assert app_icon is not None, 'Should have app icon'
+        assert isinstance(app_icon, wx.StaticBitmap)
+        
+        # Verify program name (Crystal) is present (either as bitmap or text)
+        program_name_bitmap = mw.main_window.FindWindow(name='cr-branding-area__program-name-bitmap')
+        program_name_text = mw.main_window.FindWindow(name='cr-branding-area__program-name-text')
+        assert (program_name_bitmap is not None or program_name_text is not None), \
+            'Should have program name (as bitmap or text)'
+        
+        # Verify version number is present
+        version_label = mw.main_window.FindWindow(name='cr-branding-area__version')
+        assert version_label is not None, 'Should have version label'
+        assert isinstance(version_label, wx.StaticText)
+        assert f'v{CRYSTAL_VERSION}' in version_label.GetLabel(), \
+            f'Version label should contain v{CRYSTAL_VERSION}'
+        
+        # Verify author text is present
+        authors_1 = mw.main_window.FindWindow(name='cr-branding-area__authors-1')
+        assert authors_1 is not None, 'Should have authors-1 text'
+        assert isinstance(authors_1, wx.StaticText)
+        assert AUTHORS_1_TEXT.strip() in authors_1.GetLabel(), \
+            f'Should display author text: {AUTHORS_1_TEXT}'
+        
+        # Verify contributors link is present
+        authors_2 = mw.main_window.FindWindow(name='cr-branding-area__authors-2')
+        assert authors_2 is not None, 'Should have contributors link'
+        assert AUTHORS_2_TEXT in authors_2.GetLabel(), \
+            f'Should display contributors link: {AUTHORS_2_TEXT}'
 
 
 @skip('not yet automated')
