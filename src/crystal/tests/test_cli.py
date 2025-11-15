@@ -7,6 +7,7 @@ See also:
 
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
+from crystal import APP_NAME, __version__
 from crystal.model import Project, Resource
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn, assertRegex
 from crystal.tests.util.cli import (
@@ -62,6 +63,13 @@ def test_when_launched_with_help_argument_then_prints_help_and_exits() -> None:
     assertIn('--shell', result.stdout)
     assertIn('--serve', result.stdout)
     assertIn('project_filepath', result.stdout)
+
+
+def test_when_launched_with_version_argument_then_prints_version_and_exits() -> None:
+    result = run_crystal(['--version'])
+    assert result.returncode == 0
+    assertIn(APP_NAME, result.stdout)
+    assertIn(__version__, result.stdout)
 
 
 def test_when_launched_with_invalid_argument_then_prints_error_and_exits() -> None:

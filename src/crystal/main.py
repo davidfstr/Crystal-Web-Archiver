@@ -190,6 +190,7 @@ def _main2(args: list[str]) -> None:
     # binary downloaded from the internet.
     args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
     
+    from crystal import APP_NAME, __version__
     from crystal.server import _DEFAULT_SERVER_HOST, _DEFAULT_SERVER_PORT
     from crystal.util.xos import is_linux
 
@@ -270,6 +271,12 @@ def _main2(args: list[str]) -> None:
         '--help', '-h',
         action='help',
         help='Show this help message and exit.'
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'{APP_NAME} {__version__}',
+        help='Show the version and exit.'
     )
     parser.add_argument(
         '--test',

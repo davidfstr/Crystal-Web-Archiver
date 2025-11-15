@@ -62,6 +62,7 @@ Release Notes ⋮
 * CLI improvements
     * When Crystal is started with `--shell` and all windows are closed,
       the shell and app exit automatically.
+    * `crystal --version` will print Crystal's version number.
 
 * Support changes **(Breaking Change)**
     * macOS 14+ is now the minimum macOS version.
