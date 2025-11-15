@@ -14,6 +14,7 @@ venv*
 
 # GitHub Actions
 /setup/arguments.txt
+/*.wgn
 
 # PyCharm
 .idea

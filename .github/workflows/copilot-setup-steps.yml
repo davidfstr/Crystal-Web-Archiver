@@ -79,6 +79,7 @@ jobs:
           poetry run pip3 install wagon
           wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py313-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.3-py313-none-linux_x86_64.wgn
+          rm wxPython-4.2.3-py313-none-linux_x86_64.wgn
 
       - name: Install remaining dependencies with Poetry
         # If build takes a very long time, the precompiled .wgn in the 

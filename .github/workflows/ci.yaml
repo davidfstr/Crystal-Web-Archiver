@@ -265,6 +265,7 @@ jobs:
           poetry run pip3 install wagon
           wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py311-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.3-py311-none-linux_x86_64.wgn
+          rm wxPython-4.2.3-py311-none-linux_x86_64.wgn
 
       - name: Install dependency wxPython from wagon (Python 3.12)
         if: startsWith(matrix.python-version, '3.12.')
@@ -272,6 +273,7 @@ jobs:
           poetry run pip3 install wagon
           wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py312-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.3-py312-none-linux_x86_64.wgn
+          rm wxPython-4.2.3-py312-none-linux_x86_64.wgn
 
       - name: Install dependency wxPython from wagon (Python 3.13)
         if: startsWith(matrix.python-version, '3.13.')
@@ -279,6 +281,7 @@ jobs:
           poetry run pip3 install wagon
           wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py313-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.3-py313-none-linux_x86_64.wgn
+          rm wxPython-4.2.3-py313-none-linux_x86_64.wgn
 
       - name: Fail if wxPython wagon is not available for this Python version
         if: ${{ !startsWith(matrix.python-version, '3.11.') && !startsWith(matrix.python-version, '3.12.') && !startsWith(matrix.python-version, '3.13.') }}
@@ -631,6 +634,7 @@ jobs:
           poetry run pip3 install wagon
           wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py311-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.3-py311-none-linux_x86_64.wgn
+          rm wxPython-4.2.3-py311-none-linux_x86_64.wgn
 
       - name: Install dependency wxPython from wagon (Python 3.12)
         if: startsWith(matrix.python-version, '3.12.')
@@ -638,6 +642,7 @@ jobs:
           poetry run pip3 install wagon
           wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py312-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.3-py312-none-linux_x86_64.wgn
+          rm wxPython-4.2.3-py312-none-linux_x86_64.wgn
 
       - name: Install dependency wxPython from wagon (Python 3.13)
         if: startsWith(matrix.python-version, '3.13.')
@@ -645,6 +650,7 @@ jobs:
           poetry run pip3 install wagon
           wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py313-none-linux_x86_64.wgn
           poetry run wagon install wxPython-4.2.3-py313-none-linux_x86_64.wgn
+          rm wxPython-4.2.3-py313-none-linux_x86_64.wgn
 
       - name: Fail if wxPython wagon is not available for this Python version
         if: ${{ !startsWith(matrix.python-version, '3.11.') && !startsWith(matrix.python-version, '3.12.') && !startsWith(matrix.python-version, '3.13.') }}
