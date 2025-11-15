@@ -212,7 +212,7 @@ def _normalize_test_names(raw_test_names: list[str]) -> list[str]:
         if closest_matches:
             error_msg += f'\n\nDid you mean one of: {", ".join(sorted(set(closest_matches)))}'
         else:
-            error_msg += f'\n\nAvailable test modules: {", ".join(sorted(available_modules))}'
+            error_msg += f'\n\nAvailable test modules: {_available_modules_str(available_modules)}'
         raise ValueError(error_msg)
     
     return normalized
@@ -382,7 +382,7 @@ def _run_tests(test_names: list[str]) -> bool:
         if run_count == 0 and len(test_names) > 0:
             print('FAILURE: No tests were found matching the specified names')
             available_modules = set(test_func.__module__ for test_func in _TEST_FUNCS)
-            print(f'Available test modules: {", ".join(sorted(available_modules))}')
+            print(f'Available test modules: {_available_modules_str(available_modules)}')
             print()
             return False
         
@@ -416,6 +416,10 @@ def _run_tests(test_names: list[str]) -> bool:
     return is_ok
 
 # === Utility ===
+
+def _available_modules_str(available_modules: set[str]) -> str:
+    return ", ".join(sorted(available_modules)).replace("crystal.tests.", "")
+
 
 @contextmanager
 def _future_result_deadlock_detection():
