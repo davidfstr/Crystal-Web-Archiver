@@ -29,7 +29,7 @@ def load_app_icon(size: wx.Size) -> wx.Bitmap:
 
 # === Program Name / Logotext ===
 
-def create_program_name_control(parent: wx.Window) -> wx.StaticBitmap | wx.StaticText:
+def create_program_name_control(parent: wx.Window, *, name_prefix: str) -> wx.StaticBitmap | wx.StaticText:
     """Creates a control displaying the Crystal program name using a logotext bitmap."""
     PROGRAM_NAME = APP_NAME
     PROGRAM_NAME_USES_BITMAP = True
@@ -44,7 +44,7 @@ def create_program_name_control(parent: wx.Window) -> wx.StaticBitmap | wx.Stati
             raise Exception('Forcing text fallback for logotext bitmap')
         logotext_bundle = load_logotext_bitmap(is_dark_mode)
         if logotext_bundle:
-            program_name = wx.StaticBitmap(parent, bitmap=logotext_bundle)
+            program_name = wx.StaticBitmap(parent, bitmap=logotext_bundle, name=f'{name_prefix}__program-name-bitmap')
         else:
             raise RuntimeError("Failed to create logotext bundle")
     except Exception as e:
@@ -52,7 +52,7 @@ def create_program_name_control(parent: wx.Window) -> wx.StaticBitmap | wx.Stati
         print(
             f"Warning: Failed to load logotext bitmap, using text fallback: {e}",
             file=sys.stderr)
-        program_name = wx.StaticText(parent, label=PROGRAM_NAME)
+        program_name = wx.StaticText(parent, label=PROGRAM_NAME, name=f'{name_prefix}__program-name-text')
         program_name_font = load_app_name_font(int(23 * font_size_scale))
         program_name.SetFont(program_name_font)
     

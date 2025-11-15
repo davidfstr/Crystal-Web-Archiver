@@ -6,8 +6,8 @@ import wx
 class ClickableText(wx.StaticText):
     """A StaticText control that acts like a hyperlink."""
     
-    def __init__(self, parent: wx.Window, label: str, url: str) -> None:
-        super().__init__(parent, label=label)
+    def __init__(self, parent: wx.Window, label: str, url: str, name: str) -> None:
+        super().__init__(parent, label=label, name=name)
         self._url = url
         self.SetForegroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_HOTLIGHT))
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))

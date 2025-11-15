@@ -49,7 +49,11 @@ class AboutDialog:
         try:
             app_icon = load_app_icon(wx.Size(64, 64))
             
-            icon_ctrl = wx.StaticBitmap(dialog, bitmap=app_icon)
+            icon_ctrl = wx.StaticBitmap(
+                dialog,
+                bitmap=app_icon,
+                name='cr-about-dialog__icon',
+            )
             content_sizer.Add(
                 icon_ctrl,
                 flag=wx.ALIGN_CENTER|wx.BOTTOM,
@@ -76,7 +80,10 @@ class AboutDialog:
         less_prominent_color = wx.Colour(128, 128, 128)  # gray
         
         # Program name
-        self._program_name = program_name = create_program_name_control(dialog)
+        self._program_name = program_name = create_program_name_control(
+            dialog,
+            name_prefix='cr-about-dialog',
+        )
         self._program_name_sizer_index = len(content_sizer.GetChildren())
         content_sizer.Add(
             program_name,
@@ -85,7 +92,11 @@ class AboutDialog:
         )
         
         # Version
-        version_label = wx.StaticText(dialog, label=f'Version {CRYSTAL_VERSION}')
+        version_label = wx.StaticText(
+            dialog,
+            label=f'Version {CRYSTAL_VERSION}',
+            name='cr-about-dialog__version',
+        )
         version_label.SetFont(more_prominent_font)
         content_sizer.Add(
             version_label,
@@ -94,7 +105,11 @@ class AboutDialog:
         )
         
         # Description
-        description_label = wx.StaticText(dialog, label='Archiving websites since 2011!')
+        description_label = wx.StaticText(
+            dialog,
+            label='Archiving websites since 2011!',
+            name='cr-about-dialog__description',
+        )
         description_label.SetFont(more_prominent_font)
         content_sizer.Add(
             description_label,
@@ -112,7 +127,11 @@ class AboutDialog:
                 authors_area.SetSizer(authors_sizer)
                 
                 # "By David Foster and " part
-                by_text = wx.StaticText(authors_area, label=AUTHORS_1_TEXT)
+                by_text = wx.StaticText(
+                    authors_area,
+                    label=AUTHORS_1_TEXT,
+                    name='cr-about-dialog__authors-1',
+                )
                 by_text.SetFont(less_prominent_font)
                 by_text.SetForegroundColour(less_prominent_color)
                 authors_sizer.Add(by_text)
@@ -121,7 +140,8 @@ class AboutDialog:
                 contributors_link = ClickableText(
                     authors_area,
                     label=AUTHORS_2_TEXT,
-                    url=AUTHORS_2_URL
+                    url=AUTHORS_2_URL,
+                    name='cr-about-dialog__authors-2',
                 )
                 contributors_link.SetFont(less_prominent_font)
                 authors_sizer.Add(contributors_link)
@@ -132,7 +152,11 @@ class AboutDialog:
             )
         
         # Copyright (multi-line)
-        copyright_label = wx.StaticText(dialog, label=self._copyright_text())
+        copyright_label = wx.StaticText(
+            dialog,
+            label=self._copyright_text(),
+            name='cr-about-dialog__copyright',
+        )
         copyright_label.SetFont(less_prominent_font)
         copyright_label.SetForegroundColour(less_prominent_color)
         content_sizer.Add(
@@ -183,7 +207,10 @@ class AboutDialog:
         self._program_name.Destroy()
         
         # Create/insert new program name with updated appearance
-        self._program_name = create_program_name_control(self.dialog)
+        self._program_name = create_program_name_control(
+            self.dialog,
+            name_prefix='cr-about-dialog',
+        )
         self._program_name_sizer.Insert(sizer_index, self._program_name, flag=flag, border=border)
         self.dialog.Layout()
     

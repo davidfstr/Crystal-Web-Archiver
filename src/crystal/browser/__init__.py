@@ -1839,7 +1839,11 @@ class MainWindow(CloakMixin):
         try:
             app_icon = load_app_icon(wx.Size(42, 42))
             
-            icon_ctrl = wx.StaticBitmap(branding_area, bitmap=app_icon)
+            icon_ctrl = wx.StaticBitmap(
+                branding_area,
+                bitmap=app_icon,
+                name='cr-branding-area__icon',
+            )
             branding_sizer.Add(
                 icon_ctrl,
                 flag=wx.CENTER|wx.RIGHT,
@@ -1861,7 +1865,10 @@ class MainWindow(CloakMixin):
                 program_line.SetSizer(program_line_sizer)
                 
                 # Program name
-                program_name = create_program_name_control(program_line)
+                program_name = create_program_name_control(
+                    program_line,
+                    name_prefix='cr-branding-area',
+                )
                 logotext_height = program_name.GetSize().Height
                 program_line_sizer.Add(program_name, flag=wx.ALIGN_BOTTOM)
                 
@@ -1869,7 +1876,11 @@ class MainWindow(CloakMixin):
                 program_line_sizer.AddSpacer(8)
                 
                 # Version, with precise baseline alignment
-                version_label = wx.StaticText(program_line, label=PROGRAM_VERSION)
+                version_label = wx.StaticText(
+                    program_line,
+                    label=PROGRAM_VERSION,
+                    name='cr-branding-area__version',
+                )
                 if True:
                     version_font = wx.Font(int(14 * font_size_scale), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
                     version_label.SetFont(version_font)
@@ -1915,7 +1926,11 @@ class MainWindow(CloakMixin):
                 authors_font = wx.Font(int(14 * font_size_scale), wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
                 
                 # "By David Foster and " part
-                by_text = wx.StaticText(authors_area, label=AUTHORS_1_TEXT)
+                by_text = wx.StaticText(
+                    authors_area,
+                    label=AUTHORS_1_TEXT,
+                    name='cr-branding-area__authors-1',
+                )
                 by_text.SetFont(authors_font)
                 if is_dark_mode:
                     by_text.SetForegroundColour(wx.Colour(0xD8, 0xD8, 0xD8))
@@ -1927,7 +1942,8 @@ class MainWindow(CloakMixin):
                 contributors_link = ClickableText(
                     authors_area, 
                     label=AUTHORS_2_TEXT, 
-                    url=AUTHORS_2_URL
+                    url=AUTHORS_2_URL,
+                    name='cr-branding-area__authors-2',
                 )
                 contributors_link.SetFont(authors_font)
                 authors_sizer.Add(contributors_link)
