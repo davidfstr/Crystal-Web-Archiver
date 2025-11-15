@@ -1,6 +1,6 @@
 [project]
 name = "crystal-web"
-version = "2.0.2"
+version = "2.1.0"
 description = "Downloads websites for long-term archival."
 authors = [
     { name = "David Foster", email = "david@dafoster.net" },
