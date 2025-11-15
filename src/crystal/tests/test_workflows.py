@@ -1583,12 +1583,16 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 # Verify etag is v1 for both
                 assert home_v1_etag == (await fetch_archive_url(home_url, port=project_port)).etag
                 assert comic1_v1_etag == (await fetch_archive_url(comic1_url, port=project_port)).etag
+                
+                # Capture the port from sp1 before it closes, so sp2 can use the same port
+                sp1_port = sp1.port
             
-            # Start xkcd v2
+            # Start xkcd v2 (on the same port as sp1 was using)
             with served_project(
                     'testdata_xkcd-v2.crystalproj.zip',
-                    fetch_date_of_resources_set_to=datetime.datetime.now(datetime.UTC)) as sp2:
-                # Define URLs
+                    fetch_date_of_resources_set_to=datetime.datetime.now(datetime.UTC),
+                    port=sp1_port) as sp2:
+                # Define URLs (should match sp1's URLs since we're using the same port)
                 assert home_url == sp2.get_request_url(home_original_url)
                 assert comic1_url == sp2.get_request_url(comic1_original_url)
                 

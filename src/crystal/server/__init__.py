@@ -28,6 +28,7 @@ from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
     print_error, print_info, print_special, print_success, print_warning,
 )
+from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.minify import minify_svg
 from crystal.util.ports import is_port_in_use, is_port_in_use_error
 from crystal.util.test_mode import tests_are_running
@@ -100,7 +101,7 @@ class ProjectServer:
     
     def __init__(self,
             project: Project,
-            port: int | None=None,
+            port: int | None | EllipsisType=None,
             host: str | None=None,
             *, verbosity: Verbosity='normal',
             stdout: TextIO | None=None,
@@ -108,11 +109,22 @@ class ProjectServer:
             wait_for_banner: bool=True,
             ) -> None:
         """
+        Arguments:
+        * port -- 
+            the port to run the server on; 
+            None to pick an open port close to the Crystal's default port; or
+            Ellipsis to pick any open port
+        
         Raises:
         * OSError (errno.EADDRINUSE) -- if the host:port combination is already in use.
         """
         if port is None:
             port = _DEFAULT_SERVER_PORT
+            try_other_ports = True
+        elif port is Ellipsis:
+            # TODO: Use socket's default handling for port=0 to pick an open port.
+            #       Then _get_available_port() can be deleted.
+            port = self._get_available_port()
             try_other_ports = True
         else:
             try_other_ports = False
@@ -246,6 +258,15 @@ class ProjectServer:
         return self._host
     
     # === Utility ===
+    
+    @staticmethod
+    def _get_available_port() -> int:
+        """Returns an available port number."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', 0))
+            s.listen(1)
+            port = s.getsockname()[1]
+        return port
     
     def get_request_url(self, archive_url: str) -> str:
         """

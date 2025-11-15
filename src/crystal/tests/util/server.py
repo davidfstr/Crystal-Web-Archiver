@@ -12,6 +12,7 @@ from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 import crystal.tests.util.xtempfile as xtempfile
 from crystal.util import http_date
 from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.ellipsis import Ellipsis
 from crystal.util.xdatetime import datetime_is_aware
 from crystal.util.xfunctools import partial2
 from crystal.util.xthreading import bg_call_later, fg_call_and_wait
@@ -102,7 +103,7 @@ def served_project_from_filepath(
         
         # Start server
         project_server = ProjectServer(project,
-            port=(port or 2798),  # CRYT on telephone keypad
+            port=(port if port is not None else Ellipsis),
             host='127.0.0.1',
             verbosity='indent',
         )
@@ -116,6 +117,8 @@ def served_project_from_filepath(
 
 
 class MockHttpServer:
+    port: int
+    
     def __init__(self, routes) -> None:
         self.requested_paths = []  # type: List[str]
         
@@ -155,9 +158,9 @@ class MockHttpServer:
                 assert isinstance(content, bytes)
                 self.wfile.write(content)
         
-        self._port = 2798  # CRYT on telephone keypad
-        address = ('', self._port)
+        address = ('', 0)
         self._server = HTTPServer(address, RequestHandler)
+        self.port = self._server.server_address[1]
         
         @capture_crashes_to_stderr
         def bg_task() -> None:
@@ -168,7 +171,7 @@ class MockHttpServer:
         bg_call_later(bg_task, name='MockHttpServer.serve', daemon=True)
     
     def get_url(self, path: str) -> str:
-        return f'http://127.0.0.1:{self._port}' + path
+        return f'http://127.0.0.1:{self.port}' + path
     
     def close(self) -> None:
         self._server.shutdown()
@@ -205,8 +208,9 @@ class MockFtpServer:
         self._port = 2121  # Non-standard FTP port for testing
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._server_socket.bind(('127.0.0.1', self._port))
+        self._server_socket.bind(('127.0.0.1', 0))
         self._server_socket.listen(5)
+        self._port = self._server_socket.getsockname()[1]
         
         self._running = True
         self._server_thread = bg_call_later(
