@@ -10,7 +10,28 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### v2.1.0 (November 15, 2025)
+
+This release of Crystal focuses on improving the experience of downloading a
+website through a web browser. In particular, a progress bar is displayed when
+navigating to an undownloaded page, it is possible to create a named root URL
+on the Not in Archive Page, and the Fetch Error page provides a convenient
+button to retry downloading the page.
+
+* Browsing improvements
+    * When visiting a page that hasn't been downloaded,
+      a progress bar is now shown in the browser.
+    * Not in Archive page improvements:
+        * The Not in Archive page now allows you to provide a name when creating
+          a new root URL.
+        * The Source dropdown on the Not in Archive page uses the same labels
+          as the Source dropdown in the New Group Dialog.
+        * When a served page tries to display an undownloaded image
+          that isn't covered by a URL or a Group, show a prominent red box with
+          an X rather than showing the browser's generic broken image icon.
+    * When visiting a Fetch Error for a page that didn't download successfully,
+      there is now a "Retry Download" button that will delete the error and
+      try to download the page again.
 
 * Workflow improvements
     * For projects that consistently give names to Root URLs and Groups,
@@ -29,21 +50,6 @@ Release Notes ⋮
           Entity Tree. Previously it was selected but not focused.
         * When the View action is triggered by a keyboard accelerator
           the focused UI element will no longer unfocus.
-
-* Browsing improvements
-    * When visiting a page that hasn't been downloaded,
-      a progress bar is now shown in the browser.
-    * Not in Archive page improvements:
-        * The Not in Archive page now allows you to provide a name when creating
-          a new root URL.
-        * The Source dropdown on the Not in Archive page uses the same labels
-          as the Source dropdown in the New Group Dialog.
-        * When a served page tries to display an undownloaded image
-          that isn't covered by a URL or a Group, show a prominent red box with
-          an X rather than showing the browser's generic broken image icon.
-    * When visiting a Fetch Error for a page that didn't download successfully,
-      there is now a "Retry Download" button that will delete the error and
-      try to download the page again.
 
 * Parsing improvements
     * New projects default to using the faster lxml parser rather than BeautifulSoup.
