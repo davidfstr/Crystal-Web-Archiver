@@ -6,10 +6,11 @@ name: ci
 # Useful documentation for `on`:
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#on
 on:
-  # Run CI whenever a push is made to any branch
-  push: null
-  # Run CI on the tip of any open pull request
-  pull_request: null
+  # Run CI when a push is made to specific branches only
+  push:
+    branches:
+      - main
+      - 'copilot/*'
   # Allow CI to be run manually in GitHub Actions UI
   workflow_dispatch:
     inputs:
