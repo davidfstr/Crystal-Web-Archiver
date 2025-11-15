@@ -9,5 +9,7 @@
         "*venv*/**",
         "setup/build",
         "setup/dist"
-    ]
+    ],
+    /* Don't inject OSC 633 sequences into Python REPLs. Causes test failures. */
+    "python.terminal.shellIntegration.enabled": false
 }
