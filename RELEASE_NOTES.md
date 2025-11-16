@@ -10,6 +10,16 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* CLI improvements
+    * The `--shell` uses the new [interactive interpreter] from Python 3.13.
+
+* Support changes
+    * Embedded Python upgraded from Python 3.11 to 3.13.
+
+[interactive interpreter]: https://docs.python.org/3/whatsnew/3.13.html#whatsnew313-better-interactive-interpreter
+
 ### v2.1.0 (November 15, 2025)
 
 This release of Crystal focuses on improving the experience of downloading a

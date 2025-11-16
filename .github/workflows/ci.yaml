@@ -343,9 +343,9 @@ jobs:
           #- macos-13   # last macOS runner to run on Intel rather than arm64; no longer supported by GitHub Actions after 12/4/2025
           - macos-14  # ARM-based
           #- macos-15  # ARM-based
-        # Test the earliest supported Python version only
+        # Test the latest supported Python version only
         python-version:
-          - "3.11.9"
+          - "3.13.9"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 33  # 150% of normal time: 22 min, as of 2025-09-17
@@ -714,8 +714,9 @@ jobs:
         os:
           # NOTE: Earliest Windows supported by Crystal is Windows 11 (from the README)
           - windows-2025  # based on Windows 11 version 24H2 (Germanium)
+        # Test the latest supported Python version only
         python-version:
-          - "3.11.9"
+          - "3.13.9"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20  # 150% of normal time: 13 min, as of 2025-09-17
