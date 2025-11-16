@@ -26,11 +26,22 @@ from typing import Any, TYPE_CHECKING, Concatenate, ParamSpec, Protocol
 # These types are designed to be imported by tests without those tests
 # worrying about whether the underlying "playwright" package is available or not.
 if TYPE_CHECKING:
-    from playwright.sync_api import Locator, Page as RawPage, expect
+    from playwright.sync_api import (
+        BrowserContext,
+        Locator,
+        Page as RawPage,
+        expect,
+    )
 else:
     try:
-        from playwright.sync_api import Locator, Page as RawPage, expect
+        from playwright.sync_api import (
+            BrowserContext,
+            Locator,
+            Page as RawPage,
+            expect,
+        )
     except ImportError:
+        BrowserContext = Any
         Locator = Any
         RawPage = Any
         expect = lambda *args, **kwargs: None
@@ -282,6 +293,10 @@ def scale_timeout(timeout: float | None) -> float | None:
         return timeout
     else:
         return timeout * GLOBAL_TIMEOUT_MULTIPLIER
+
+def get_default_timeout(context: BrowserContext) -> float | None:
+    # HACK: Uses Playright private API
+    return context._timeout_settings.default_timeout()  # type: ignore[attr-defined]
 
 
 # ------------------------------------------------------------------------------
