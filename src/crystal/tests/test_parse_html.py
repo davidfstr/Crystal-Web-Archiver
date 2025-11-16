@@ -26,6 +26,7 @@ import os
 from textwrap import dedent
 from unittest import skip
 from unittest.mock import Mock, patch
+import urllib.parse
 from urllib.parse import ParseResult, urljoin, urlparse
 
 # ------------------------------------------------------------------------------
@@ -438,14 +439,23 @@ def test_does_not_recognize_mailto_or_data_or_javascript_urls_as_links() -> None
 async def test_does_recognize_invalid_relative_urls_as_links() -> None:
     # Ensure test data is detected as an invalid relative URL
     # using native urllib functions
-    assert hasattr(urlparse, '_super'), \
-        'Expected urlparse() to be patched by patch_urlparse_to_never_raise_exception()'
+    super_func = (
+        getattr(urllib.parse.urlparse, '_super', None) or
+        getattr(urllib.parse.urlsplit, '_super', None) or
+        getattr(urllib.parse._urlsplit, '_super', None)  # type: ignore[attr-defined]
+    )
+    assert super_func is not None, (
+        'Expected urlparse() or urlsplit() to be patched by '
+        'patch_urlparse_to_never_raise_valueerror()'
+    )
     assertRaises(
+        # ex: ValueError("Invalid IPv6 URL")
         ValueError,
-        lambda: urlparse._super("//*[@id='"))  # type: ignore[attr-defined]
+        lambda: super_func("//*[@id='"))  # type: ignore[attr-defined]
     
-    # Ensure test data is detected as an valid relative URL
-    # using patched urllib functions
+    # - Ensure test data is detected as an valid relative URL
+    #   using patched urllib functions.
+    # - Ensure does NOT raise ValueError("Invalid IPv6 URL")
     assertEqual(
         ParseResult(scheme='', netloc='', path="//*[@id='", params='', query='', fragment=''),
         urlparse("//*[@id='"))
