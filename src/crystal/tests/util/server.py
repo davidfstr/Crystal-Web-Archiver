@@ -43,7 +43,7 @@ def get_most_recently_started_server_port() -> int:
     """
     if ProjectServer._last_created is not None:
         return ProjectServer._last_created.port
-    return _DEFAULT_SERVER_PORT
+    raise ValueError('Unable to determine most recent ProjectServer port')
 
 
 # ------------------------------------------------------------------------------
