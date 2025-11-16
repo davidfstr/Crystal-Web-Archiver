@@ -283,13 +283,13 @@ async def test_first_time_user_can_easily_download_and_view_simple_site() -> Non
                 
                 assert home_ti.IsSelected(), \
                     'First created root resource should already be selected'
-                home_url_in_archive = get_request_url(
-                    home_url,
-                    project_default_url_prefix=project.default_url_prefix)
-                with assert_does_open_webbrowser_to(home_url_in_archive):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(
+                        home_url,
+                        project_default_url_prefix=project.default_url_prefix)) as url_future:
                     # Action 7 (Click): "View"
                     action_count += 1
                     click_button(mw.view_button)
+                home_url_in_archive = url_future.result()
                 
                 # Ensure downloaded page looks correct
                 page = await bg_fetch_url(home_url_in_archive)
