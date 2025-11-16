@@ -177,6 +177,8 @@ elif sys.platform == 'win32':
             ],
             # Would love to use mode '1' to put everything into a single exe,
             # but it breaks wxPython's default tree node icons. Don't know why.
+            # NOTE: bundle_files < 3 is not supported in Python 3.12+,
+            #       according to: https://github.com/py2exe/py2exe/issues/225
             'bundle_files': 3,
             # Enable compression.
             # Most effective when all files bundled in a single exe (18 MB -> 8 MB).
