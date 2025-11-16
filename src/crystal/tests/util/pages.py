@@ -18,7 +18,7 @@ See also:
 from collections.abc import Iterator
 from contextlib import contextmanager
 from crystal.tests.util.asserts import assertEqual
-from crystal.tests.util.xplaywright import Condition, CountToBeZeroCondition, ContainsClassCondition, expect, Locator, RawPage
+from crystal.tests.util.xplaywright import Condition, CountToBeZeroCondition, ContainsClassCondition, expect, Locator, RawPage, get_default_timeout
 
 
 # ------------------------------------------------------------------------------
@@ -236,7 +236,8 @@ def reloads_paused(page: RawPage, *, expect_reload: bool=True) -> Iterator[None]
                 page.wait_for_function('() => window.crReloadCalled')
             except PlaywrightTimeoutError:
                 raise AssertionError(
-                    'Expected window.crReload() to be called'
+                    f'Expected window.crReload() to be called '
+                    f'within {get_default_timeout(page.context)}s'
                 ) from None
     finally:
         reload_was_called = page.evaluate('() => window.crReloadCalled')  # capture
