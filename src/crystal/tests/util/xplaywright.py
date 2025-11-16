@@ -206,7 +206,11 @@ def _run_block_with_playwright(serialized_block: bytes) -> None:
     with sync_playwright() as p, \
             closing(p.chromium.launch(headless=headless)) as browser, \
             closing(browser.new_context()) as context:
-        context.set_default_timeout(int(DEFAULT_WAIT_TIMEOUT * 1000) * GLOBAL_TIMEOUT_MULTIPLIER)
+        context.set_default_timeout(
+            int(DEFAULT_WAIT_TIMEOUT * 1000) * 
+            GLOBAL_TIMEOUT_MULTIPLIER *
+            # HACK: Fudge factor. ASAN tests need an even longer timeout to pass.
+            1.5)
         page = context.new_page()
         page.on('pageerror', lambda e: print(f'*** Uncaught JavaScript exception: {e}', file=sys.stderr))
         
