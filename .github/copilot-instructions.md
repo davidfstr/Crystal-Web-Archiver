@@ -77,6 +77,8 @@ Error Handling:
 
 * Use single quotes for strings, e.g. `my_string = 'hello'`.
 * Use double quotes for docstrings, e.g. `"""This is a docstring."""`
+* Arrange functions, methods, and top-level definitions so that calls/references between functions generally go *downward*, unless there is a technical reason preventing that ordering.
+    * For example a new .py file might be organized in the order: a `# === Decorators ===` section (at file top because must be before all function definitions), a `# === Main ===` section and `main` function, other functions that `main` calls down to, a `# === Utilities ===` section with functions that many other functions call down to, and finally the `if __name__ == '__main__':` idiom (at file bottom because must be after all function definitions).
 
 ## Getting Started
 
