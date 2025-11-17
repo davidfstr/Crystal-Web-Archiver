@@ -451,7 +451,7 @@ async def test_does_recognize_invalid_relative_urls_as_links() -> None:
     assertRaises(
         # ex: ValueError("Invalid IPv6 URL")
         ValueError,
-        lambda: super_func("//*[@id='"))  # type: ignore[attr-defined]
+        lambda: super_func("//*[@id='"))  # type: ignore[attr-defined, misc]
     
     # - Ensure test data is detected as an valid relative URL
     #   using patched urllib functions.
