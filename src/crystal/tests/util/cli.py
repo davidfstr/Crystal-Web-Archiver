@@ -149,7 +149,7 @@ class BannerMetadata:
     server_url: str | None = None
 
 # Matches lines ending with '\n' or not, or the fragment '>>> '
-_LINE_OR_PROMPT_RE = re.compile(r'.*?\n|>>> |.+$')
+_LINE_OR_PROMPT_RE = re.compile(r'>>> |.*?\n|.+$')
 
 @contextmanager
 def crystal_running_with_banner(
@@ -184,7 +184,7 @@ def crystal_running_with_banner(
                 except ValueError:
                     raise AssertionError(
                         f'Unexpected banner line: {line!r} (type={expect!r}). '
-                        f'Read before: {"".join(lines_found)!r}. '
+                        f'Read before: {lines_found!r}. '
                         f'Trailing output: {drain(crystal.stdout)!r} '
                         f'Still expecting: {expects_remaining!r}'
                     ) from None
