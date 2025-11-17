@@ -2,6 +2,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 import sys
 import time
+import traceback
+
 
 _MAX_SLEEP_IMPRECISION_MULTIPLIER = 15
 
@@ -18,10 +20,12 @@ def sleep_profiled() -> Iterator[None]:
             if secs > 0:
                 delta_time = time.monotonic() - start_time
                 if delta_time > secs * _MAX_SLEEP_IMPRECISION_MULTIPLIER:
-                    print('*** {} took {:.02f}s to execute'.format(
+                    print('*** {} took {:.02f}s to execute: {}'.format(
                         f'sleep({secs})',
                         delta_time,
+                        'Stack:',
                     ), file=sys.stderr)
+                    traceback.print_stack(file=sys.stderr)
     
     time.sleep = sleep
     try:
