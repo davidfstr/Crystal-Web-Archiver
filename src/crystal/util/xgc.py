@@ -19,7 +19,7 @@ def start_profiling_gc() -> None:
     last_gc_start = None
     def on_gc(phase: str, info: dict) -> None:
         nonlocal last_gc_start
-        now = time.time()  # capture
+        now = time.monotonic()  # capture
         if phase == 'start':
             last_gc_start = now
         elif phase == 'stop':

@@ -232,7 +232,7 @@ def _run_tests(test_names: list[str]) -> bool:
     
     # Run selected tests
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
-    start_time = time.time()  # capture
+    start_time = time.monotonic()  # capture
     run_count = 0
     with warnings.catch_warnings(record=True) as warning_list, _warnings_sent_to_ci():
         assert warning_list is not None
@@ -318,7 +318,7 @@ def _run_tests(test_names: list[str]) -> bool:
     if is_coverage_now:
         # Tell code coverage that no test is now running
         xcoverage.switch_context()
-    end_time = time.time()  # capture
+    end_time = time.monotonic()  # capture
     delta_time = end_time - start_time
     
     # Calculate summary of test run

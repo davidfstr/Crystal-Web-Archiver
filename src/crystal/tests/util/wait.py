@@ -121,7 +121,7 @@ async def wait_for(
     soft_timeout = timeout
     hard_timeout = timeout * HARD_TIMEOUT_MULTIPLIER
     
-    start_time = time.time()  # capture
+    start_time = time.monotonic()  # capture
     hard_timeout_exceeded = False
     succeeded_after_one_check = True
     try:
@@ -132,7 +132,7 @@ async def wait_for(
             succeeded_after_one_check = False
             
             # Raise if hard timeout exceeded
-            delta_time = time.time() - start_time
+            delta_time = time.monotonic() - start_time
             if delta_time > hard_timeout:
                 if message is not None:
                     # Use caller-provided failure message if available
@@ -157,7 +157,7 @@ async def wait_for(
     finally:
         # Warn if soft timeout exceeded
         if not hard_timeout_exceeded and not succeeded_after_one_check:
-            delta_time = time.time() - start_time
+            delta_time = time.monotonic() - start_time
             if delta_time > soft_timeout:
                 message_suffix_str = None
                 if message is not None:

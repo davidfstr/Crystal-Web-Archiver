@@ -67,6 +67,11 @@ class CrystalBannedApiChecker(BaseChecker):
             'no-direct-calllater',
             "Direct CallLater() call is not allowed. Use Timer from crystal.util.wx_timer instead.",
         ),
+        'C9010': (
+            "Don't use time.time() when measuring durations; use time.monotonic() instead",
+            'monotonic-durations',
+            "time.time() is not suitable for measuring durations. Use time.monotonic() instead.",
+        ),
     }
     
     # === Visit Call ===
@@ -105,6 +110,10 @@ class CrystalBannedApiChecker(BaseChecker):
         # wx.CallLater(...)
         if self._is_calllater_call(node):
             self.add_message('no-direct-calllater', node=node)
+        
+        # time.time(...)
+        if self._is_time_time_call(node):
+            self.add_message('monotonic-durations', node=node)
     
     def _is_thread_call(self, node: astroid.Call) -> bool:
         # Thread(...)
@@ -187,6 +196,20 @@ class CrystalBannedApiChecker(BaseChecker):
                 if isinstance(node.func.expr, astroid.Name):
                     if node.func.expr.name == 'wx':
                         return True
+        
+        return False
+    
+    def _is_time_time_call(self, node: astroid.Call) -> bool:
+        # time.time(...)
+        if isinstance(node.func, astroid.Attribute):
+            if node.func.attrname == 'time':
+                if isinstance(node.func.expr, astroid.Name):
+                    if node.func.expr.name == 'time':
+                        return True
+        
+        # time() - assumed to be imported directly from the "time" module
+        if isinstance(node.func, astroid.Name) and node.func.name == 'time':
+            return True
         
         return False
     

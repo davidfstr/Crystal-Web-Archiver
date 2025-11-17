@@ -40,11 +40,11 @@ def warn_if_slow(
         _excluded_delta_time_stack.value = []
     _excluded_delta_time_stack.value.append(0)
     
-    start_time = time.time()  # capture
+    start_time = time.monotonic()  # capture
     try:
         yield
     finally:
-        end_time = time.time()  # capture
+        end_time = time.monotonic()  # capture
         
         excluded_delta_time = _excluded_delta_time_stack.value.pop()
         
@@ -78,11 +78,11 @@ def ignore_runtime_from_enclosing_warn_if_slow() -> Iterator[None]:
     if not hasattr(_excluded_delta_time_stack, 'value'):
         _excluded_delta_time_stack.value = []
     
-    start_time = time.time()  # capture
+    start_time = time.monotonic()  # capture
     try:
         yield
     finally:
-        end_time = time.time()  # capture
+        end_time = time.monotonic()  # capture
         delta_time = end_time - start_time  # cache
         
         # Exclude delta_time from any enclosing calls of warn_if_slow()

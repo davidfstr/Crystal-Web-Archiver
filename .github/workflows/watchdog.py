@@ -84,7 +84,7 @@ class SubprocessWatchdog:
         with self._lock:
             if self._last_output_time != self._UNINIT_OUTPUT_TIME:
                 raise ValueError('Watchdog already running or finished')
-            self._last_output_time = time.time()
+            self._last_output_time = time.monotonic()
         
         try:
             # Start the subprocess
@@ -161,7 +161,7 @@ class SubprocessWatchdog:
     def _update_last_output_time(self) -> None:
         """Update the timestamp of the last output from subprocess."""
         with self._lock:
-            self._last_output_time = time.time()
+            self._last_output_time = time.monotonic()
     
     # === Monitor Thread ===
     
@@ -176,7 +176,7 @@ class SubprocessWatchdog:
                     # Process has finished
                     break
                 
-                time_since_output = time.time() - self._last_output_time
+                time_since_output = time.monotonic() - self._last_output_time
                 if time_since_output <= self._timeout_seconds:
                     continue
                 assert not self._aborted

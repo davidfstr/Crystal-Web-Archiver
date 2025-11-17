@@ -13,7 +13,7 @@ from unittest.mock import patch
 def test_warn_if_slow_context_does_warn_appropriately(subtests: SubtestsContext) -> None:
     with _gc_disabled():
         with subtests.test(context_execution_time='fast'):
-            with patch('time.time', side_effect=[0.0, 0.1]):
+            with patch('time.monotonic', side_effect=[0.0, 0.1]):
                 with redirect_stderr(io.StringIO()) as captured_stderr:
                     with warn_if_slow(
                             'Inserting links',
@@ -25,7 +25,7 @@ def test_warn_if_slow_context_does_warn_appropriately(subtests: SubtestsContext)
                 'Expected no warning to be printed for a fast-executing context'
         
         with subtests.test(context_execution_time='slow'):
-            with patch('time.time', side_effect=[0.0, 1.1]):
+            with patch('time.monotonic', side_effect=[0.0, 1.1]):
                 with redirect_stderr(io.StringIO()) as captured_stderr:
                     with warn_if_slow(
                             'Inserting links',
@@ -45,7 +45,7 @@ def test_warn_if_slow_context_does_exclude_inner_context_runtime(subtests: Subte
         with subtests.test(nesting_level=1):
             with subtests.test(
                     inner_context_type='warn_if_slow'):
-                with patch('time.time', side_effect=[0.0, 0.1, 1.2, 1.3]):
+                with patch('time.monotonic', side_effect=[0.0, 0.1, 1.2, 1.3]):
                     with redirect_stderr(io.StringIO()) as captured_stderr:
                         with warn_if_slow('Outer context', max_duration=1.0, message='Outer'):
                             with warn_if_slow('Inner context', max_duration=1.0, message='Inner'):
@@ -57,7 +57,7 @@ def test_warn_if_slow_context_does_exclude_inner_context_runtime(subtests: Subte
             
             with subtests.test(
                     inner_context_type='ignore_runtime_from_enclosing_warn_if_slow'):
-                with patch('time.time', side_effect=[0.0, 0.1, 1.2, 1.3]):
+                with patch('time.monotonic', side_effect=[0.0, 0.1, 1.2, 1.3]):
                     with redirect_stderr(io.StringIO()) as captured_stderr:
                         with warn_if_slow('Outer context', max_duration=1.0, message='Outer'):
                             with ignore_runtime_from_enclosing_warn_if_slow():
@@ -71,7 +71,7 @@ def test_warn_if_slow_context_does_exclude_inner_context_runtime(subtests: Subte
             with subtests.test(
                     inner_context_type='warn_if_slow',
                     inner_inner_context_type='warn_if_slow'):
-                with patch('time.time', side_effect=[0.0, 0.1, 0.2, 1.3, 1.4, 1.5]):
+                with patch('time.monotonic', side_effect=[0.0, 0.1, 0.2, 1.3, 1.4, 1.5]):
                     with redirect_stderr(io.StringIO()) as captured_stderr:
                         with warn_if_slow('Outer context', max_duration=1.0, message='Outer'):
                             with warn_if_slow('Inner context', max_duration=1.0, message='Inner'):
@@ -85,7 +85,7 @@ def test_warn_if_slow_context_does_exclude_inner_context_runtime(subtests: Subte
             with subtests.test(
                     inner_context_type='warn_if_slow',
                     inner_inner_context_type='ignore_runtime_from_enclosing_warn_if_slow'):
-                with patch('time.time', side_effect=[0.0, 0.1, 0.2, 1.3, 1.4, 1.5]):
+                with patch('time.monotonic', side_effect=[0.0, 0.1, 0.2, 1.3, 1.4, 1.5]):
                     with redirect_stderr(io.StringIO()) as captured_stderr:
                         with warn_if_slow('Outer context', max_duration=1.0, message='Outer'):
                             with warn_if_slow('Inner context', max_duration=1.0, message='Inner'):
@@ -99,8 +99,8 @@ def test_warn_if_slow_context_does_exclude_inner_context_runtime(subtests: Subte
 
 @contextmanager
 def _gc_disabled() -> Iterator[None]:
-    # Disable garbage collection because it uses time.time(),
-    # and callers are mocking the use of time.time()
+    # Disable garbage collection because it uses time.time() and/or time.monotonic(),
+    # and callers are mocking the use of time.time() and time.monotonic().
     gc.disable()
     try:
         yield
