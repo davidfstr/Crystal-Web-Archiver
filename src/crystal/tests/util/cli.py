@@ -527,7 +527,7 @@ def _read_until_inner(
     
     read_buffer = b''
     found_stop_suffix = None  # type: Optional[str]
-    start_time = time.time()
+    start_time = time.monotonic()
     hard_timeout_exceeded = False
     try:
         delta_time = 0.0
@@ -564,7 +564,7 @@ def _read_until_inner(
                 break
             
             # If hard timeout exceeded then raise
-            delta_time = time.time() - start_time
+            delta_time = time.monotonic() - start_time
             if did_time_out or delta_time >= hard_timeout:
                 if not _expect_timeout:
                     # Screenshot the timeout error
@@ -580,7 +580,7 @@ def _read_until_inner(
     finally:
         # If soft timeout exceeded then warn before returning
         if not hard_timeout_exceeded:
-            delta_time = time.time() - start_time
+            delta_time = time.monotonic() - start_time
             if delta_time > soft_timeout:
                 warnings.warn(
                     ('Soft timeout exceeded (%.1fs > %.1fs) while '
@@ -740,7 +740,7 @@ def wait_for_crystal_to_exit(
         ) -> None:
     assert isinstance(crystal.stdout, TextIOBase)
     
-    start_time = time.time()  # capture
+    start_time = time.monotonic()  # capture
     try:
         crystal.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -752,7 +752,7 @@ def wait_for_crystal_to_exit(
                 f'Trailing output: {drain(crystal.stdout)!r} '
             ) from None
         else:
-            delta_time = time.time() - start_time
+            delta_time = time.monotonic() - start_time
             warnings.warn(
                 ('Soft timeout exceeded (%.1fs > %.1fs) while '
                 'waiting for Crystal to exit') % (

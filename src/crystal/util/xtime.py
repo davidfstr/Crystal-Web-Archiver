@@ -11,12 +11,12 @@ def sleep_profiled() -> Iterator[None]:
     super_sleep = time.sleep
     
     def sleep(secs: float) -> None:
-        start_time = time.time()  # capture
+        start_time = time.monotonic()  # capture
         try:
             super_sleep(secs)
         finally:
             if secs > 0:
-                delta_time = time.time() - start_time
+                delta_time = time.monotonic() - start_time
                 if delta_time > secs * _MAX_SLEEP_IMPRECISION_MULTIPLIER:
                     print('*** {} took {:.02f}s to execute'.format(
                         f'sleep({secs})',
