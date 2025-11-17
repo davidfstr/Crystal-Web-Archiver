@@ -841,9 +841,14 @@ async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> No
     
     Example site: https://xkcd.com/
     """
-    # Disable focus checking in headless environments like macOS and Linux CI
+    # Disable focus checking in:
+    # - headless environments like macOS and Linux CI,
+    #   where no control ever reports being focused
+    # - local environments like macOS and Linux,
+    #   where wiggling the mouse can cause inconsistent focus statuses
     check_focused_windows = not (
-        is_ci() and (is_mac_os() or is_linux())
+        (is_ci() or not is_ci()) and  # i.e., True
+        (is_mac_os() or is_linux())
     )
     
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
