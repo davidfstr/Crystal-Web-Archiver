@@ -3105,11 +3105,11 @@ async def _generic_404_page_visible(
                 home_ti = root_ti.GetFirstChild()
                 assert home_ti is not None
                 home_ti.SelectItem()
-                home_request_url = get_request_url(
-                    'https://xkcd.com/',
-                    project_default_url_prefix=project.default_url_prefix)
-                with assert_does_open_webbrowser_to(home_request_url):
+                with assert_does_open_webbrowser_to(lambda: get_request_url(
+                        'https://xkcd.com/',
+                        project_default_url_prefix=project.default_url_prefix)) as url_future:
                     click_button(mw.view_button)
+                home_request_url = url_future.result()
                 
                 # Verify that "Not in Archive" page reached
                 request_url = get_request_url(
