@@ -767,13 +767,13 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                 # Download home page URL and refresh page
                 if True:
                     # Click the download URL button (above the form)
-                    expect(page.action_button).to_be_enabled()
                     expect(page.action_button).to_contain_text('⬇ Download')
+                    expect(page.action_button).to_be_enabled()
                     page.action_button.click()
                     
                     # Verify download button gets disabled and progress bar appears
-                    expect(page.action_button).to_be_disabled()
                     expect(page.action_button).to_contain_text('Creating & Starting Download...')
+                    expect(page.action_button).to_be_disabled()
                     page.progress_bar.wait_for(state='visible')
                     
                     # Wait for the page to reload after download completes.
