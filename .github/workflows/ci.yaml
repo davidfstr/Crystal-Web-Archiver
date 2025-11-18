@@ -63,7 +63,9 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - "3.14.0"
+          # TODO: Upgrade to Python 3.14
+          # NOTE: py2app 0.28.8 only supports Python 3.6 - 3.13.
+          - "3.13.5"
       fail-fast: false
     # NOTE: macos-13 is the last macOS runner to run on Intel rather than arm64
     runs-on: macos-13
@@ -359,7 +361,9 @@ jobs:
           #- macos-15  # ARM-based
         # Test the latest supported Python version only
         python-version:
-          - "3.14.0"
+          # TODO: Upgrade to Python 3.14
+          # NOTE: py2app 0.28.8 only supports Python 3.6 - 3.13.
+          - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 33  # 150% of normal time: 22 min, as of 2025-09-17

@@ -101,7 +101,8 @@ python = ">=3.11,<3.15"
 #       See instructions in: doc/how_to_make_wxpython_wagon.md
 wxPython = "4.2.4"
 beautifulsoup4 = "^4.9.3"
-py2app = { version = "^0.28", markers = "sys_platform == 'darwin'" }
+# NOTE: py2app 0.28.8 supports Python 3.6 - 3.13.
+py2app = { version = "^0.28.8", markers = "sys_platform == 'darwin'" }
 # NOTE: py2exe 0.14.0.0 supports Python 3.11, 3.12, and 3.13.
 py2exe = { version = "^0.14.0.0", markers = "sys_platform == 'win32' and python_version >= '3.11' and python_version < '3.14'" }
 tinycss2 = "^1.1.0"
