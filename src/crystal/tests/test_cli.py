@@ -57,7 +57,7 @@ def test_when_launched_with_no_arguments_then_shows_open_or_create_project_dialo
 
 def test_when_launched_with_help_argument_then_prints_help_and_exits() -> None:
     result = run_crystal(['--help'])
-    assert result.returncode == 0
+    assertEqual(0, result.returncode)
     assertIn('Crystal: A tool for archiving websites in high fidelity.', result.stdout)
     assertIn('usage:', result.stdout)
     assertIn('--shell', result.stdout)
@@ -67,7 +67,7 @@ def test_when_launched_with_help_argument_then_prints_help_and_exits() -> None:
 
 def test_when_launched_with_version_argument_then_prints_version_and_exits() -> None:
     result = run_crystal(['--version'])
-    assert result.returncode == 0
+    assertEqual(0, result.returncode)
     assertIn(APP_NAME, result.stdout)
     assertIn(__version__, result.stdout)
 
@@ -608,19 +608,19 @@ def test_stale_before_option_recognizes_many_date_formats(subtests: SubtestsCont
     with _temporary_project() as project_path:
         with subtests.test(format='ISO date'):
             result = run_crystal(['--stale-before', '2022-07-17', '--help'])
-            assert result.returncode == 0, f"ISO date format failed: {result.stderr}"
+            assertEqual(0, result.returncode, f"ISO date format failed: {result.stderr}")
         
         with subtests.test(format='ISO datetime without timezone'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42', '--help'])
-            assert result.returncode == 0, f"ISO datetime format failed: {result.stderr}"
+            assertEqual(0, result.returncode, f"ISO datetime format failed: {result.stderr}")
         
         with subtests.test(format='ISO datetime with UTC timezone'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42+00:00', '--help'])
-            assert result.returncode == 0, f"ISO datetime with timezone format failed: {result.stderr}"
+            assertEqual(0, result.returncode, f"ISO datetime with timezone format failed: {result.stderr}")
         
         with subtests.test(format='ISO datetime with negative timezone offset'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42-05:00', '--help'])
-            assert result.returncode == 0, f"ISO datetime with negative timezone offset failed: {result.stderr}"
+            assertEqual(0, result.returncode, f"ISO datetime with negative timezone offset failed: {result.stderr}")
 
 
 @with_subtests
@@ -645,6 +645,58 @@ def test_when_stale_before_argument_missing_value_then_prints_error_and_exits() 
     result = run_crystal(['--stale-before'])
     assert result.returncode != 0
     assertIn('expected one argument', result.stderr)
+
+
+# === Testing Tests (test, --test) ===
+
+def test_can_run_tests_with_test_subcommand() -> None:
+    """Test that 'crystal test <test_name>' works."""
+    result = run_crystal([
+        'test',
+        # NOTE: This is a simple, fast test
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+    ])
+    assertEqual(0, result.returncode)
+    assertIn('OK', result.stdout)
+    assertIn('Ran 1 tests', result.stdout)
+
+
+def test_can_run_tests_with_test_flag() -> None:
+    """Test that 'crystal --test <test_name>' still works for backward compatibility."""
+    result = run_crystal([
+        '--test',
+        # NOTE: This is a simple, fast test
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+    ])
+    assertEqual(0, result.returncode)
+    assertIn('OK', result.stdout)
+    assertIn('Ran 1 tests', result.stdout)
+
+
+def test_can_run_multiple_tests_with_test_subcommand() -> None:
+    """Test that 'crystal test <test1> <test2>' works."""
+    result = run_crystal([
+        'test',
+        # NOTE: This is a simple, fast test
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors',
+        # NOTE: This is a skipped test
+        'crystal.tests.test_main_window.test_branding_area_looks_good_in_light_mode_and_dark_mode'
+    ])
+    assertEqual(0, result.returncode)
+    assertIn('Ran 2 tests', result.stdout)
+
+
+def test_can_run_multiple_tests_with_test_flag() -> None:
+    """Test that 'crystal --test <test1> <test2>' works for backward compatibility."""
+    result = run_crystal([
+        '--test',
+        # NOTE: This is a simple, fast test
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors',
+        # NOTE: This is a skipped test
+        'crystal.tests.test_main_window.test_branding_area_looks_good_in_light_mode_and_dark_mode'
+    ])
+    assertEqual(0, result.returncode)
+    assertIn('Ran 2 tests', result.stdout)
 
 
 # === Platform-Specific Options Tests ===

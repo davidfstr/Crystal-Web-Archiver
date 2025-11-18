@@ -18,6 +18,13 @@ Release Notes ⋮
 * Support changes
     * Embedded Python upgraded from Python 3.11 to 3.13.
 
+* Development improvements
+    * Tests can now be run using a subcommand style `crystal test <test_names>...` 
+      in addition to the legacy `crystal --test <test_names>...` syntax. 
+        * The subcommand style is recommended for future use and will enable 
+          test-specific options like `--quiet`, `--verbose`, and `--interactive` 
+          in the future.
+
 [interactive interpreter]: https://docs.python.org/3/whatsnew/3.13.html#whatsnew313-better-interactive-interpreter
 
 ### v2.1.0 (November 15, 2025)
