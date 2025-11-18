@@ -112,11 +112,16 @@ if sys.platform == 'darwin':
                 'zstandard',  # unused; hard to build universal2 version; optional urllib3 dependency
                 'playwright',  # large test dependency
             ],
-            # Workaround for py2app + Python 3.13 dylib signing issue
+            # Workaround for py2app + Python 3.13+ dylib signing issue
             # https://github.com/ronaldoussoren/py2app/issues/546
             'dylib_excludes': [
+                # Python 3.13
                 '/Library/Frameworks/Python.framework/Versions/3.13/Frameworks/Tcl.framework',
                 '/Library/Frameworks/Python.framework/Versions/3.13/Frameworks/Tk.framework',
+                
+                # Python 3.14
+                '/Library/Frameworks/Python.framework/Versions/3.14/Frameworks/Tcl.framework',
+                '/Library/Frameworks/Python.framework/Versions/3.14/Frameworks/Tk.framework',
             ],
         }},
     )

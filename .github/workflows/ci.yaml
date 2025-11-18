@@ -63,7 +63,9 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - "3.11.9"
+          # TODO: Upgrade to Python 3.14
+          # NOTE: py2app 0.28.8 only supports Python 3.6 - 3.13.
+          - "3.13.5"
       fail-fast: false
     # NOTE: macos-13 is the last macOS runner to run on Intel rather than arm64
     runs-on: macos-13
@@ -165,10 +167,10 @@ jobs:
           # Same as build-linux job
           - ubuntu-22.04
         python-version:
-          # Oldest version in the build-linux job
           - "3.11.9"
           - "3.12.9"
           - "3.13.5"
+          - "3.14.0"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 78  # 150% of normal time: 32-52 min, as of 2025-10-14
@@ -251,10 +253,20 @@ jobs:
       - name: Install wxPython dependencies
         run: sudo apt-get install -y libgtk-3-dev
 
-      # Install additional dependencies for Python 3.13 wxPython
-      - name: Install wxPython dependencies for Python 3.13
-        if: startsWith(matrix.python-version, '3.13.')
+      # Install additional dependencies for Python 3.13+ wxPython
+      - name: Install wxPython dependencies for Python 3.13+
+        if: ${{ startsWith(matrix.python-version, '3.13.') || startsWith(matrix.python-version, '3.14.') }}
         run: sudo apt-get install -y libnotify4
+
+      - name: Install wagon
+        run: poetry run pip3 install wagon
+
+      - name: Patch wagon 1.0.3 for Python 3.14+
+        if: startsWith(matrix.python-version, '3.14.')
+        run: |
+          WAGON_PATH=$(poetry run python -c 'import importlib.util; spec = importlib.util.find_spec("wagon"); print(spec.origin)')
+          sed -i 's/from urllib.request import URLopener/from urllib.request import urlopen/' $WAGON_PATH
+          sed -i 's/from urllib import urlopen/from urllib.request import urlopen/' $WAGON_PATH
 
       # Install wxPython from precompiled wagon because installing
       # wxPython from source takes about 40 minutes on GitHub Actions
@@ -263,29 +275,33 @@ jobs:
       - name: Install dependency wxPython from wagon (Python 3.11)
         if: startsWith(matrix.python-version, '3.11.')
         run: |
-          poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py311-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.3-py311-none-linux_x86_64.wgn
-          rm wxPython-4.2.3-py311-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py311-none-linux_x86_64.wgn
+          poetry run wagon install *.wgn
+          rm *.wgn
 
       - name: Install dependency wxPython from wagon (Python 3.12)
         if: startsWith(matrix.python-version, '3.12.')
         run: |
-          poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py312-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.3-py312-none-linux_x86_64.wgn
-          rm wxPython-4.2.3-py312-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py312-none-linux_x86_64.wgn
+          poetry run wagon install *.wgn
+          rm *.wgn
 
       - name: Install dependency wxPython from wagon (Python 3.13)
         if: startsWith(matrix.python-version, '3.13.')
         run: |
-          poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py313-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.3-py313-none-linux_x86_64.wgn
-          rm wxPython-4.2.3-py313-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py313-none-linux_x86_64.wgn
+          poetry run wagon install *.wgn
+          rm *.wgn
+
+      - name: Install dependency wxPython from wagon (Python 3.14)
+        if: startsWith(matrix.python-version, '3.14.')
+        run: |
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py314-none-linux_x86_64.wgn
+          poetry run wagon install *.wgn
+          rm *.wgn
 
       - name: Fail if wxPython wagon is not available for this Python version
-        if: ${{ !startsWith(matrix.python-version, '3.11.') && !startsWith(matrix.python-version, '3.12.') && !startsWith(matrix.python-version, '3.13.') }}
+        if: ${{ !startsWith(matrix.python-version, '3.11.') && !startsWith(matrix.python-version, '3.12.') && !startsWith(matrix.python-version, '3.13.') && !startsWith(matrix.python-version, '3.14.') }}
         run: |
           echo "ERROR: No precompiled wxPython wagon is available for Python ${{ matrix.python-version }} on Linux."
           echo "You must build a .wgn for this Python version and update the workflow."
@@ -343,9 +359,11 @@ jobs:
           #- macos-13   # last macOS runner to run on Intel rather than arm64; no longer supported by GitHub Actions after 12/4/2025
           - macos-14  # ARM-based
           #- macos-15  # ARM-based
-        # Test the earliest supported Python version only
+        # Test the latest supported Python version only
         python-version:
-          - "3.11.9"
+          # TODO: Upgrade to Python 3.14
+          # NOTE: py2app 0.28.8 only supports Python 3.6 - 3.13.
+          - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 33  # 150% of normal time: 22 min, as of 2025-09-17
@@ -583,6 +601,7 @@ jobs:
           - "3.11.9"
           - "3.12.9"
           - "3.13.5"
+          - "3.14.0"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 18  # 150% of normal time: 12 min, as of 2025-09-17
@@ -620,10 +639,20 @@ jobs:
       - name: Install wxPython dependencies
         run: sudo apt-get install -y libgtk-3-dev
 
-      # Install additional dependencies for Python 3.13 wxPython
-      - name: Install wxPython dependencies for Python 3.13
-        if: startsWith(matrix.python-version, '3.13.')
+      # Install additional dependencies for Python 3.13+ wxPython
+      - name: Install wxPython dependencies for Python 3.13+
+        if: ${{ startsWith(matrix.python-version, '3.13.') || startsWith(matrix.python-version, '3.14.') }}
         run: sudo apt-get install -y libnotify4
+
+      - name: Install wagon
+        run: poetry run pip3 install wagon
+
+      - name: Patch wagon 1.0.3 for Python 3.14+
+        if: startsWith(matrix.python-version, '3.14.')
+        run: |
+          WAGON_PATH=$(poetry run python -c 'import importlib.util; spec = importlib.util.find_spec("wagon"); print(spec.origin)')
+          sed -i 's/from urllib.request import URLopener/from urllib.request import urlopen/' $WAGON_PATH
+          sed -i 's/from urllib import urlopen/from urllib.request import urlopen/' $WAGON_PATH
 
       # Install wxPython from precompiled wagon because installing
       # wxPython from source takes about 40 minutes on GitHub Actions
@@ -632,29 +661,33 @@ jobs:
       - name: Install dependency wxPython from wagon (Python 3.11)
         if: startsWith(matrix.python-version, '3.11.')
         run: |
-          poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py311-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.3-py311-none-linux_x86_64.wgn
-          rm wxPython-4.2.3-py311-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py311-none-linux_x86_64.wgn
+          poetry run wagon install *.wgn
+          rm *.wgn
 
       - name: Install dependency wxPython from wagon (Python 3.12)
         if: startsWith(matrix.python-version, '3.12.')
         run: |
-          poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py312-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.3-py312-none-linux_x86_64.wgn
-          rm wxPython-4.2.3-py312-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py312-none-linux_x86_64.wgn
+          poetry run wagon install *.wgn
+          rm *.wgn
 
       - name: Install dependency wxPython from wagon (Python 3.13)
         if: startsWith(matrix.python-version, '3.13.')
         run: |
-          poetry run pip3 install wagon
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.4.0b/wxPython-4.2.3-py313-none-linux_x86_64.wgn
-          poetry run wagon install wxPython-4.2.3-py313-none-linux_x86_64.wgn
-          rm wxPython-4.2.3-py313-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py313-none-linux_x86_64.wgn
+          poetry run wagon install *.wgn
+          rm *.wgn
+
+      - name: Install dependency wxPython from wagon (Python 3.14)
+        if: startsWith(matrix.python-version, '3.14.')
+        run: |
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py314-none-linux_x86_64.wgn
+          poetry run wagon install *.wgn
+          rm *.wgn
 
       - name: Fail if wxPython wagon is not available for this Python version
-        if: ${{ !startsWith(matrix.python-version, '3.11.') && !startsWith(matrix.python-version, '3.12.') && !startsWith(matrix.python-version, '3.13.') }}
+        if: ${{ !startsWith(matrix.python-version, '3.11.') && !startsWith(matrix.python-version, '3.12.') && !startsWith(matrix.python-version, '3.13.') && !startsWith(matrix.python-version, '3.14.') }}
         run: |
           echo "ERROR: No precompiled wxPython wagon is available for Python ${{ matrix.python-version }} on Linux."
           echo "You must build a .wgn for this Python version and update the workflow."
@@ -714,8 +747,11 @@ jobs:
         os:
           # NOTE: Earliest Windows supported by Crystal is Windows 11 (from the README)
           - windows-2025  # based on Windows 11 version 24H2 (Germanium)
+        # Test the latest supported Python version only
         python-version:
-          - "3.11.9"
+          # TODO: Upgrade to Python 3.14
+          # NOTE: py2exe 0.14.0.0 only supports Python 3.11, 3.12, and 3.13.
+          - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20  # 150% of normal time: 13 min, as of 2025-09-17
