@@ -11,7 +11,7 @@ from crystal import APP_NAME, __version__
 from crystal.model import Project, Resource
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn, assertRegex
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until,
+    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, crystal_running, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until,
     crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
@@ -697,6 +697,85 @@ def test_can_run_multiple_tests_with_test_flag() -> None:
     ])
     assertEqual(0, result.returncode)
     assertIn('Ran 2 tests', result.stdout)
+
+
+def test_can_run_tests_in_interactive_mode() -> None:
+    """Test that 'crystal test --interactive' works."""
+    # Start Crystal in interactive test mode
+    with crystal_running(args=['test', '--interactive']) as crystal:
+        assert crystal.stdin is not None
+        assert isinstance(crystal.stdout, TextIOBase)
+        
+        # Read the first prompt
+        (output, _) = read_until(crystal.stdout, 'test>\n', timeout=2.0)
+        
+        # Send a test name
+        crystal.stdin.write('crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors\n')
+        crystal.stdin.flush()
+        
+        # Wait for the test to complete
+        (output, _) = read_until(crystal.stdout, 'test>\n', timeout=30.0)
+        
+        # Verify the test ran
+        assertIn('RUNNING: test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors', output)
+        assertIn('OK', output)
+        
+        # NOTE: No percentage should be in the RUNNING line in interactive mode
+        assertNotIn('[', output.split('\n')[0])  # First line shouldn't have [%]
+        
+        # Close stdin to signal end of interactive mode
+        crystal.stdin.close()
+        
+        # Wait for summary
+        (output, _) = read_until(crystal.stdout, '\x07', timeout=5.0)
+        assertIn('SUMMARY', output)
+        assertIn('OK', output)
+    
+    # Verify exit code
+    assertEqual(0, crystal.returncode)
+
+
+def test_when_test_not_found_in_interactive_mode_then_prints_error() -> None:
+    """Test that 'crystal test --interactive' handles non-existent tests gracefully."""
+    with crystal_running(args=['test', '--interactive']) as crystal:
+        assert crystal.stdin is not None
+        assert isinstance(crystal.stdout, TextIOBase)
+        
+        # Read the first prompt
+        (output, _) = read_until(crystal.stdout, 'test>\n', timeout=2.0)
+        
+        # Send a non-existent test name
+        crystal.stdin.write('crystal.tests.test_no_such_module.test_no_such_function\n')
+        crystal.stdin.flush()
+        
+        # Wait for error message and next prompt
+        (output, _) = read_until(crystal.stdout, 'test>\n', timeout=5.0)
+        
+        # Verify error was printed
+        assertIn('test: Test not found:', output)
+        
+        # Close stdin
+        crystal.stdin.close()
+        
+        # Wait for summary
+        (output, _) = read_until(crystal.stdout, '\x07', timeout=5.0)
+        assertIn('SUMMARY', output)
+        assertIn('OK', output)
+        assertIn('Ran 0 tests', output)
+    
+    # Exit code should still be 0 since no tests failed (just none were run)
+    assertEqual(0, crystal.returncode)
+
+
+def test_when_interactive_flag_used_with_test_names_then_prints_error() -> None:
+    """Test that 'crystal test --interactive <test_name>' is rejected."""
+    result = run_crystal([
+        'test',
+        '--interactive',
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+    ])
+    assert result.returncode != 0
+    assertIn('error: test names cannot be specified with --interactive', result.stderr)
 
 
 # === Platform-Specific Options Tests ===
