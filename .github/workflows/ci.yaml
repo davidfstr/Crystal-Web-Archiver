@@ -749,7 +749,9 @@ jobs:
           - windows-2025  # based on Windows 11 version 24H2 (Germanium)
         # Test the latest supported Python version only
         python-version:
-          - "3.14.0"
+          # TODO: Upgrade to Python 3.14
+          # NOTE: py2exe 0.14.0.0 only supports Python 3.11, 3.12, and 3.13.
+          - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20  # 150% of normal time: 13 min, as of 2025-09-17
