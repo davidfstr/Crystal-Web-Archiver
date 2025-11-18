@@ -228,6 +228,11 @@ def _main2(args: list[str]) -> None:
                 help=argparse.SUPPRESS,  # 'Names of tests to run.'
                 nargs='*',
             )
+            test_parser.add_argument(
+                '--interactive',
+                help=argparse.SUPPRESS,  # 'Run tests in interactive mode.'
+                action='store_true',
+            )
         
         # Define main command
         parser.add_argument(
@@ -361,6 +366,12 @@ def _main2(args: list[str]) -> None:
         # Normalize call of "test" subcommand to be stored in parsed_args.test
         if getattr(parsed_args, 'subcommand', None) == 'test':
             parsed_args.test = parsed_args.test_names
+            
+            # Validate --interactive flag
+            if hasattr(parsed_args, 'interactive') and parsed_args.interactive:
+                if parsed_args.test_names:
+                    print('error: test names cannot be specified with --interactive', file=sys.stderr)
+                    sys.exit(2)
         else:
             parsed_args.test = None
         
@@ -633,6 +644,12 @@ def _main2(args: list[str]) -> None:
             from crystal.util.bulkheads import capture_crashes_to_stderr
             from crystal.util.xos import is_coverage
             from crystal.util.xthreading import fg_call_and_wait
+            
+            # Determine if running in interactive mode
+            is_interactive = (
+                hasattr(parsed_args, 'interactive') and 
+                parsed_args.interactive
+            )
 
             # NOTE: Any unhandled exception will probably call os._exit(1)
             #       before reaching this decorator.
@@ -645,7 +662,7 @@ def _main2(args: list[str]) -> None:
                 
                 is_ok = False
                 try:
-                    is_ok = run_tests(parsed_args.test)
+                    is_ok = run_tests(parsed_args.test, interactive=is_interactive)
                 finally:
                     exit_code = 0 if is_ok else 1
                     if is_coverage():

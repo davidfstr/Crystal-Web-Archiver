@@ -1,6 +1,7 @@
 from collections.abc import Callable, Iterator
 from concurrent.futures import Future
 from contextlib import contextmanager
+from crystal.app_preferences import app_prefs
 from crystal.tests import (
     test_about_box,
     test_bulkheads, test_callout, test_cli, test_disk_io_errors, test_do_not_download_groups,
@@ -22,7 +23,7 @@ from crystal.util.test_mode import tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
 from crystal.util import xcoverage
 from crystal.util.xos import is_coverage, is_windows
-from crystal.util.xthreading import bg_affinity, fg_call_and_wait, has_foreground_thread, is_foreground_thread
+from crystal.util.xthreading import NoForegroundThreadError, bg_affinity, fg_call_and_wait, has_foreground_thread, is_foreground_thread
 from crystal.util.xtime import sleep_profiled
 from crystal.util.xtraceback import _CRYSTAL_PACKAGE_PARENT_DIRPATH
 import gc
@@ -96,25 +97,31 @@ _TestFuncId = tuple[str, str]  # (module, func_name)
 # TODO: Rename "test_names" to something more appropriate,
 #       now that items can also refer to test modules (and not just test functions)
 @bg_affinity
-def run_tests(test_names: list[str]) -> bool:
+def run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
     """
     Runs automated UI tests, printing a summary report,
     and returning whether the run was OK.
+    
+    If interactive is True, test names are read from stdin one at a time
+    instead of using the test_names parameter.
     
     The format of the summary report is designed to be similar
     to that used by Python's unittest module.
     """
     with delay_between_downloads_minimized(), sleep_profiled(), \
             _future_result_deadlock_detection(), _tqdm_locks_disabled():
-        # 1. Normalize test names to handle various input formats
-        # 2. Error if a test name cannot be resolved to a valid module or function
-        try:
-            normalized_test_names = _normalize_test_names(test_names)
-        except ValueError as e:
-            print(f'ERROR: {e}', file=sys.stderr)
-            return False
+        if not interactive:
+            # 1. Normalize test names to handle various input formats
+            # 2. Error if a test name cannot be resolved to a valid module or function
+            try:
+                normalized_test_names = _normalize_test_names(test_names)
+            except ValueError as e:
+                print(f'ERROR: {e}', file=sys.stderr)
+                return False
+        else:
+            normalized_test_names = []  # ignored
         
-        return _run_tests(normalized_test_names)
+        return _run_tests(normalized_test_names, interactive=interactive)
 
 
 def _normalize_test_names(raw_test_names: list[str]) -> list[str]:
@@ -218,10 +225,7 @@ def _normalize_test_names(raw_test_names: list[str]) -> list[str]:
     return normalized
 
 
-def _run_tests(test_names: list[str]) -> bool:
-    # Import preferences
-    from crystal.app_preferences import app_prefs
-    
+def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
     # Ensure ancestor caller did already call set_tests_are_running()
     assert tests_are_running()
     
@@ -230,6 +234,17 @@ def _run_tests(test_names: list[str]) -> bool:
     
     is_coverage_now = is_coverage()  # cache
     
+    if interactive:
+        # Build map of available test functions
+        test_func_by_name = {}  # type: dict[str, Callable]
+        for test_func in _TEST_FUNCS:
+            if not callable(test_func):
+                raise ValueError(f'Test function is not callable: {test_func}')
+            test_name = f'{test_func.__module__}.{test_func.__name__}'
+            test_func_by_name[test_name] = test_func
+    else:
+        test_func_by_name = {}  # unused
+    
     # Run selected tests
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.monotonic()  # capture
@@ -237,84 +252,96 @@ def _run_tests(test_names: list[str]) -> bool:
     with warnings.catch_warnings(record=True) as warning_list, _warnings_sent_to_ci():
         assert warning_list is not None
         
-        test_funcs_to_run = []
-        for test_func in _TEST_FUNCS:
-            if not callable(test_func):
-                raise ValueError(f'Test function is not callable: {test_func}')
-            test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
-            test_name = f'{test_func_id[0]}.{test_func_id[1]}'
-            
-            # Only run test if it was requested (or if all tests are to be run)
-            if len(test_names) > 0:
-                if test_name not in test_names and test_func.__module__ not in test_names:
-                    continue
-            test_funcs_to_run.append(test_func)
-            
-        num_test_funcs_to_run = len(test_funcs_to_run)  # cache
-        for (test_func_index, test_func) in enumerate(test_funcs_to_run):
-            test_func_id = (test_func.__module__, test_func.__name__)
-            test_name = f'{test_func_id[0]}.{test_func_id[1]}'
-            
-            if is_coverage_now:
-                # Tell code coverage that new test is starting
-                xcoverage.switch_context(test_name)
-            
-            run_count += 1
-            
-            os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
-            
-            app_prefs.reset()
-            
-            print('=' * 70)
-            (numer, denom) = (test_func_index+1, num_test_funcs_to_run)
-            print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]}.{test_func_id[1]}) [{int(numer*100/denom)}%]')
-            print('-' * 70)
-            try:
+        if interactive:
+            # Interactive mode: read test names from stdin one at a time
+            while True:
+                # Print prompt
+                print('test>', flush=True)
+                
+                # Read test name from stdin
                 try:
-                    run_test(test_func)
-                finally:
-                    # Flush any stderr output immediately,
-                    # to keep aligned with stdout output from the test
-                    sys.stderr.flush()
-            except AssertionError as e:
-                result_for_test_func_id[test_func_id] = e
+                    line = sys.stdin.readline()
+                except KeyboardInterrupt:
+                    # Ctrl-C pressed
+                    print()  # new line after ^C
+                    break
                 
-                traceback.print_exc(file=sys.stdout)
-                print('FAILURE')
-            except SkipTest as e:
-                result_for_test_func_id[test_func_id] = e
+                # Check for EOF
+                if not line:
+                    break
                 
-                print(f'SKIP ({str(e)})')
-            except Exception as e:
-                result_for_test_func_id[test_func_id] = e
+                test_name = line.strip()
                 
-                if not isinstance(e, SubtestFailed):
-                    traceback.print_exc(file=sys.stdout)
-                print(f'ERROR ({e.__class__.__name__})')
-            else:
-                result_for_test_func_id[test_func_id] = None
+                # Skip empty lines
+                if not test_name:
+                    continue
                 
-                print('OK')
-            print()
+                # Check if test exists
+                if test_name not in test_func_by_name:
+                    # Try to normalize the test name
+                    try:
+                        normalized_names = _normalize_test_names([test_name])
+                        if normalized_names and normalized_names[0] in test_func_by_name:
+                            test_name = normalized_names[0]  # reinterpret
+                        else:
+                            print(f'test: Test not found: {test_name}')
+                            continue
+                    except ValueError as e:
+                        # Normalization failed
+                        print(f'test: Test not found: {test_name}')
+                        continue
+                
+                # Get test function
+                test_func = test_func_by_name[test_name]
+                test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
+                
+                # Run the single test
+                try:
+                    _run_single_test(
+                        test_func=test_func,
+                        test_func_id=test_func_id,
+                        test_func_index=run_count,
+                        num_test_funcs_to_run=None,
+                        result_for_test_func_id=result_for_test_func_id,
+                        is_coverage_now=is_coverage_now
+                    )
+                    run_count += 1
+                except NoForegroundThreadError:
+                    # Fatal error; abort
+                    break
+        else:
+            # Batch mode: run all requested tests
+            test_funcs_to_run = []
+            for test_func in _TEST_FUNCS:
+                if not callable(test_func):
+                    raise ValueError(f'Test function is not callable: {test_func}')
+                test_name = f'{test_func.__module__}.{test_func.__name__}'
+                
+                # Only run test if it was requested (or if all tests are to be run)
+                if len(test_names) > 0:
+                    if test_name not in test_names and test_func.__module__ not in test_names:
+                        continue
+                test_funcs_to_run.append(test_func)
+                
+            num_test_funcs_to_run = len(test_funcs_to_run)  # cache
             
-            if not has_foreground_thread():
-                print('FATAL ERROR: Foreground thread is not running')
-                print()
-                break
-
-            # Garbage collect, running any finalizers in __del__() early,
-            # such as the warnings printed by ListenableMixin
-            # 
-            # However skip forced garbage collection on Windows,
-            # because it is suspected to be related to hang of the test
-            # test_when_save_as_menu_item_selected_for_titled_or_untitled_project_then_shows_save_as_dialog.
-            # 
-            # If garbage collection is really needed on Windows,
-            # then it should probably be run on the foreground thread
-            # with fg_call_and_wait(), since wxPython Windows seems to
-            # implicitly assume that it will be.
-            if not is_windows():
-                gc.collect()
+            for (test_func_index, test_func) in enumerate(test_funcs_to_run):
+                test_func_id = (test_func.__module__, test_func.__name__)
+                
+                # Run the single test
+                try:
+                    _run_single_test(
+                        test_func=test_func,
+                        test_func_id=test_func_id,
+                        test_func_index=test_func_index,
+                        num_test_funcs_to_run=num_test_funcs_to_run,
+                        result_for_test_func_id=result_for_test_func_id,
+                        is_coverage_now=is_coverage_now
+                    )
+                    run_count += 1
+                except NoForegroundThreadError:
+                    # Fatal error; abort
+                    break
     if is_coverage_now:
         # Tell code coverage that no test is now running
         xcoverage.switch_context()
@@ -414,6 +441,95 @@ def _run_tests(test_names: list[str]) -> bool:
     print('\a', end='', flush=True)
     
     return is_ok
+
+
+def _run_single_test(
+    test_func: Callable,
+    test_func_id: _TestFuncId,
+    test_func_index: int,
+    num_test_funcs_to_run: Optional[int],
+    result_for_test_func_id: Dict[_TestFuncId, Optional[Exception]],
+    is_coverage_now: bool
+) -> None:
+    """
+    Run a single test function and record its result.
+    
+    Arguments:
+    * test_func -- The test function to run
+    * test_func_id -- Tuple of (module, func_name)
+    * test_func_index -- Index of this test in the sequence
+    * num_test_funcs_to_run -- Total number of tests to run (None for interactive mode)
+    * result_for_test_func_id -- Dict to record test results in
+    * is_coverage_now -- Whether coverage is enabled
+    
+    Raises:
+    * NoForegroundThreadError
+    """
+    test_name = f'{test_func_id[0]}.{test_func_id[1]}'
+    
+    if is_coverage_now:
+        # Tell code coverage that new test is starting
+        xcoverage.switch_context(test_name)
+    
+    os.environ['CRYSTAL_SCREENSHOT_ID'] = test_name
+    
+    app_prefs.reset()
+    
+    print('=' * 70)
+    if num_test_funcs_to_run is not None:
+        (numer, denom) = (test_func_index+1, num_test_funcs_to_run)
+        suffix = f' [{int(numer*100/denom)}%]'
+    else:
+        suffix = ''
+    print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]}.{test_func_id[1]}){suffix}')
+    print('-' * 70)
+    try:
+        try:
+            run_test(test_func)
+        finally:
+            # Flush any stderr output immediately,
+            # to keep aligned with stdout output from the test
+            sys.stderr.flush()
+    except AssertionError as e:
+        result_for_test_func_id[test_func_id] = e
+        
+        traceback.print_exc(file=sys.stdout)
+        print('FAILURE')
+    except SkipTest as e:
+        result_for_test_func_id[test_func_id] = e
+        
+        print(f'SKIP ({str(e)})')
+    except Exception as e:
+        result_for_test_func_id[test_func_id] = e
+        
+        if not isinstance(e, SubtestFailed):
+            traceback.print_exc(file=sys.stdout)
+        print(f'ERROR ({e.__class__.__name__})')
+    else:
+        result_for_test_func_id[test_func_id] = None
+        
+        print('OK')
+    print()
+    
+    if not has_foreground_thread():
+        print('FATAL ERROR: Foreground thread is not running')
+        print()
+        raise NoForegroundThreadError()
+    
+    # Garbage collect, running any finalizers in __del__() early,
+    # such as the warnings printed by ListenableMixin
+    # 
+    # However skip forced garbage collection on Windows,
+    # because it is suspected to be related to hang of the test
+    # test_when_save_as_menu_item_selected_for_titled_or_untitled_project_then_shows_save_as_dialog.
+    # 
+    # If garbage collection is really needed on Windows,
+    # then it should probably be run on the foreground thread
+    # with fg_call_and_wait(), since wxPython Windows seems to
+    # implicitly assume that it will be.
+    if not is_windows():
+        gc.collect()
+
 
 # === Utility ===
 
