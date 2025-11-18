@@ -195,139 +195,173 @@ def _main2(args: list[str]) -> None:
     from crystal.util.xos import is_linux
 
     # Parse CLI arguments
-    parser = argparse.ArgumentParser(
-        description='Crystal: A tool for archiving websites in high fidelity.',
-        add_help=False,
-    )
-    parser.add_argument(
-        '--readonly',
-        help='Open projects as read-only by default rather than as writable.',
-        action='store_true',
-    )
-    parser.add_argument(
-        '--no-readonly',
-        help='Open projects as writable by default rather than as read-only.',
-        action='store_true',
-    )
-    parser.add_argument(
-        '--serve',
-        help='Start serving opened projects immediately.',
-        action='store_true',
-    )
-    parser.add_argument(
-        '--port', '-p',
-        help=f'Specify the port to bind to when using --serve (default: {_DEFAULT_SERVER_PORT}).',
-        type=int,
-        default=None,
-    )
-    parser.add_argument(
-        '--host',
-        help=f'Specify the host to bind to when using --serve (default: {_DEFAULT_SERVER_HOST}).',
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        '--shell',
-        help='Start a CLI shell when running Crystal.',
-        action='store_true',
-    )
-    parser.add_argument(
-        '--headless',
-        help='Avoid showing any GUI. Must be combined with --serve or --shell.',
-        action='store_true',
-    )
-    parser.add_argument(
-        '--cookie',
-        help='An HTTP Cookie header value to send when downloading resources.',
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        '--stale-before',
-        help=(
-            'If specified then any resource revision older than this datetime '
-            'will be considered stale and a new revision will be downloaded '
-            'if a download of the related resource is requested. '
-            
-            'Can be an ISO date like "2022-07-17", "2022-07-17T12:47:42", '
-            'or "2022-07-17T12:47:42+00:00".'
-        ),
-        type=datetime.datetime.fromisoformat,
-        default=None,
-    )
-    if is_linux():
+    if True:
+        parser = argparse.ArgumentParser(
+            description='Crystal: A tool for archiving websites in high fidelity.',
+            add_help=False,
+        )
+        
+        # Define 'test' subcommand
+        subparsers = parser.add_subparsers(
+            dest='subcommand',
+            help=argparse.SUPPRESS,
+        )
+        test_parser = subparsers.add_parser(
+            'test',
+            help=argparse.SUPPRESS,  # 'Run automated tests.'
+            add_help=False,
+        )
+        test_parser.add_argument(
+            'test_names',
+            help=argparse.SUPPRESS,  # 'Names of tests to run.'
+            nargs='*',
+        )
+        
+        # Define main command
         parser.add_argument(
-            '--install-to-desktop',
-            help='Install this app to the Linux desktop environment.',
+            '--readonly',
+            help='Open projects as read-only by default rather than as writable.',
             action='store_true',
         )
-    parser.add_argument(
-        '--enable-incomplete-feature',
-        help=argparse.SUPPRESS,  # 'Enables one or more unfinished features.'
-        type=str,  # format: 'FeatureA,FeatureB'; see features.py for available names
-        default=None,
-    )
-    parser.add_argument(
-        '--help', '-h',
-        action='help',
-        help='Show this help message and exit.'
-    )
-    parser.add_argument(
-        '--version',
-        action='version',
-        version=f'{APP_NAME} {__version__}',
-        help='Show the version and exit.'
-    )
-    parser.add_argument(
-        '--test',
-        help=argparse.SUPPRESS,  # 'Run automated tests.'
-        action='store',
-        nargs='*',
-    )
-    parser.add_argument(
-        'project_filepath',
-        # NOTE: Duplicates: Project.FILE_EXTENSION, Project.OPENER_FILE_EXTENSION
-        help='Optional. Path to a *.crystalproj or *.crystalopen to open immediately.',
-        type=str,
-        default=None,
-        nargs='?',
-    )
-    parsed_args = parser.parse_args(args)  # may raise SystemExit
+        parser.add_argument(
+            '--no-readonly',
+            help='Open projects as writable by default rather than as read-only.',
+            action='store_true',
+        )
+        parser.add_argument(
+            '--serve',
+            help='Start serving opened projects immediately.',
+            action='store_true',
+        )
+        parser.add_argument(
+            '--port', '-p',
+            help=f'Specify the port to bind to when using --serve (default: {_DEFAULT_SERVER_PORT}).',
+            type=int,
+            default=None,
+        )
+        parser.add_argument(
+            '--host',
+            help=f'Specify the host to bind to when using --serve (default: {_DEFAULT_SERVER_HOST}).',
+            type=str,
+            default=None,
+        )
+        parser.add_argument(
+            '--shell',
+            help='Start a CLI shell when running Crystal.',
+            action='store_true',
+        )
+        parser.add_argument(
+            '--headless',
+            help='Avoid showing any GUI. Must be combined with --serve or --shell.',
+            action='store_true',
+        )
+        parser.add_argument(
+            '--cookie',
+            help='An HTTP Cookie header value to send when downloading resources.',
+            type=str,
+            default=None,
+        )
+        parser.add_argument(
+            '--stale-before',
+            help=(
+                'If specified then any resource revision older than this datetime '
+                'will be considered stale and a new revision will be downloaded '
+                'if a download of the related resource is requested. '
+                
+                'Can be an ISO date like "2022-07-17", "2022-07-17T12:47:42", '
+                'or "2022-07-17T12:47:42+00:00".'
+            ),
+            type=datetime.datetime.fromisoformat,
+            default=None,
+        )
+        if is_linux():
+            parser.add_argument(
+                '--install-to-desktop',
+                help='Install this app to the Linux desktop environment.',
+                action='store_true',
+            )
+        parser.add_argument(
+            '--enable-incomplete-feature',
+            help=argparse.SUPPRESS,  # 'Enables one or more unfinished features.'
+            type=str,  # format: 'FeatureA,FeatureB'; see features.py for available names
+            default=None,
+        )
+        parser.add_argument(
+            '--help', '-h',
+            action='help',
+            help='Show this help message and exit.'
+        )
+        parser.add_argument(
+            '--version',
+            action='version',
+            version=f'{APP_NAME} {__version__}',
+            help='Show the version and exit.'
+        )
+        # NOTE: The "test" subcommand is preferred over the "--test" flag,
+        #       and supports additional arguments when used as a subcommand
+        parser.add_argument(
+            '--test',
+            help=argparse.SUPPRESS,  # 'Run automated tests.'
+            action='store',
+            nargs='*',
+        )
+        parser.add_argument(
+            'project_filepath',
+            # NOTE: Duplicates: Project.FILE_EXTENSION, Project.OPENER_FILE_EXTENSION
+            help='Optional. Path to a *.crystalproj or *.crystalopen to open immediately.',
+            type=str,
+            default=None,
+            nargs='?',
+        )
+        
+        parsed_args = parser.parse_args(args)  # may raise SystemExit
     
     # Validate CLI arguments
-    if (parsed_args.port is not None or parsed_args.host is not None) and not parsed_args.serve:
-        # NOTE: Error message format and exit code are similar to those used by argparse
-        print('error: --port and --host can only be used with --serve', file=sys.stderr)
-        sys.exit(2)
-    
-    if parsed_args.headless and not (parsed_args.serve or parsed_args.shell):
-        # NOTE: Error message format and exit code are similar to those used by argparse
-        print('error: --headless must be combined with --serve or --shell', file=sys.stderr)
-        sys.exit(2)
-    
-    if parsed_args.headless and parsed_args.serve and parsed_args.project_filepath is None:
-        # NOTE: Error message format and exit code are similar to those used by argparse
-        print('error: --headless --serve requires a project file path', file=sys.stderr)
-        sys.exit(2)
-    
-    # Interpret --stale-before datetime as in local timezone if no UTC offset specified
-    if parsed_args.stale_before is not None:
-        from crystal.util.xdatetime import datetime_is_aware
-        if not datetime_is_aware(parsed_args.stale_before):
-            from tzlocal import get_localzone
-            parsed_args.stale_before = parsed_args.stale_before.replace(
-                tzinfo=get_localzone())  # reinterpret
+    if True:
+        if (parsed_args.port is not None or parsed_args.host is not None) and not parsed_args.serve:
+            # NOTE: Error message format and exit code are similar to those used by argparse
+            print('error: --port and --host can only be used with --serve', file=sys.stderr)
+            sys.exit(2)
+        
+        if parsed_args.headless and not (parsed_args.serve or parsed_args.shell):
+            # NOTE: Error message format and exit code are similar to those used by argparse
+            print('error: --headless must be combined with --serve or --shell', file=sys.stderr)
+            sys.exit(2)
+        
+        if parsed_args.headless and parsed_args.serve and parsed_args.project_filepath is None:
+            # NOTE: Error message format and exit code are similar to those used by argparse
+            print('error: --headless --serve requires a project file path', file=sys.stderr)
+            sys.exit(2)
+        
+        # Interpret --stale-before datetime as in local timezone if no UTC offset specified
+        if parsed_args.stale_before is not None:
+            from crystal.util.xdatetime import datetime_is_aware
+            if not datetime_is_aware(parsed_args.stale_before):
+                from tzlocal import get_localzone
+                parsed_args.stale_before = parsed_args.stale_before.replace(
+                    tzinfo=get_localzone())  # reinterpret
+        
+        # Transform --test into "test" subcommand
+        if parsed_args.test is not None:
+            parsed_args.subcommand = 'test'
+            parsed_args.test_names = parsed_args.test
+        
+        # Normalize call of "test" subcommand to be stored in parsed_args.test
+        if parsed_args.subcommand == 'test':
+            parsed_args.test = parsed_args.test_names
+        else:
+            parsed_args.test = None
+        
+    # Profile garbage collection
+    from crystal.util.xgc import PROFILE_GC, start_profiling_gc
+    if PROFILE_GC:
+        start_profiling_gc()
     
     # Process --enable-incomplete-feature
     if parsed_args.enable_incomplete_feature is not None:
         from crystal.util.features import set_enabled_features
         feature_names = parsed_args.enable_incomplete_feature.split(',')
         set_enabled_features(set(feature_names))
-    
-    # Profile garbage collection
-    from crystal.util.xgc import PROFILE_GC, start_profiling_gc
-    if PROFILE_GC:
-        start_profiling_gc()
     
     # --install-to-desktop, if requested
     if is_linux() and parsed_args.install_to_desktop:
