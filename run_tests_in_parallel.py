@@ -7,8 +7,9 @@ Usage:
 
 If no test names are provided, runs all tests.
 
-This script splits the tests into 2 groups and runs them in parallel,
-streaming output as tests complete.
+This script runs tests in parallel using dynamic assignment: tests are
+assigned to workers on-demand as they become available, ensuring balanced
+load distribution.
 """
 
 import argparse
@@ -17,6 +18,7 @@ from contextlib import closing
 from dataclasses import dataclass
 import datetime
 import os
+from queue import Empty, Queue
 import re
 import subprocess
 import sys
@@ -56,36 +58,39 @@ def main(args: Sequence[str]) -> int:
         test_names = get_all_test_names()
     
     print(f'[Runner] Running {len(test_names)} tests in parallel across 2 workers...', file=sys.stderr)
-    
     # Create log directory for worker output
     log_dir = create_log_directory()
     print(f'[Runner] Worker logs in: {log_dir}', file=sys.stderr)
     
-    # Split tests into 2 groups
+    # Create work queue with all tests
     NUM_WORKERS = 2
-    test_groups = split_tests(test_names, NUM_WORKERS)
+    work_queue: Queue[Optional[str]] = Queue()
+    for test_name in test_names:
+        work_queue.put(test_name)
+    # Add sentinel values to signal workers to stop
+    for _ in range(NUM_WORKERS):
+        work_queue.put(None)
     
-    for i, group in enumerate(test_groups):
-        print(f'[Runner] Worker {i}: {len(group)} tests', file=sys.stderr)
+    print(f'[Runner] {len(test_names)} tests queued for {NUM_WORKERS} workers', file=sys.stderr)
     
     # Run workers in parallel using threads
     # (threads are sufficient since each worker runs a subprocess)
     worker_results: list[Optional[WorkerResult]] = [None] * NUM_WORKERS
     total_duration: float
     if True:
-        def run_worker_thread(worker_id: int, test_group: list[str]) -> None:
+        def run_worker_thread(worker_id: int) -> None:
             worker_results[worker_id] = \
-                run_worker(worker_id, test_group, log_dir)
+                run_worker_interactive(worker_id, work_queue, log_dir)
         
         start_time = time.monotonic()
         
         threads = []
-        for (i, test_group) in enumerate(test_groups):
+        for i in range(NUM_WORKERS):
             # NOTE: Don't use bg_call_later() here, which is part of "crystal"
             #       infrastructure, so that this module stays self-contained
             thread = threading.Thread(  # pylint: disable=no-direct-thread
                 target=run_worker_thread,
-                args=(i, test_group),
+                args=(i,),
                 name=f'Worker-{i}'
             )
             thread.start()
@@ -150,28 +155,6 @@ def create_log_directory() -> str:
     log_dir = os.path.join(tempfile.gettempdir(), f'{timestamp}-crystal-tests')
     os.makedirs(log_dir, exist_ok=True)
     return log_dir
-
-
-def split_tests(test_names: list[str], num_workers: int) -> list[list[str]]:
-    """
-    Split test names into groups for parallel execution.
-    
-    For now, this uses simple round-robin distribution.
-    In the future, this could be made smarter by considering test duration history.
-    
-    Args:
-        test_names: List of test names to split
-        num_workers: Number of worker processes
-    
-    Returns:
-        List of test name groups, one per worker
-    """
-    groups: list[list[str]] = [[] for _ in range(num_workers)]
-    
-    for i, test_name in enumerate(test_names):
-        groups[i % num_workers].append(test_name)
-    
-    return groups
 
 
 def format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tuple[str, bool]:
@@ -284,33 +267,32 @@ class PartialTestResult:
 output_lock = threading.Lock()
 
 
-def run_worker(worker_id: int, test_names: list[str], log_dir: str) -> WorkerResult:
+def run_worker_interactive(worker_id: int, work_queue: Queue[Optional[str]], log_dir: str) -> WorkerResult:
     """
-    Run a worker subprocess with the given test names, streaming output in real-time.
+    Run a worker subprocess in interactive mode, pulling tests from work_queue on-demand.
     
     Args:
         worker_id: ID of this worker (for logging)
-        test_names: List of test names to run
+        work_queue: Queue of test names to run. None sentinel indicates no more work.
         log_dir: Directory to write log files to
     
     Returns:
         WorkerResult containing test results and metadata
     """
-    if not test_names:
-        return WorkerResult(test_results=[], duration=0.0, returncode=0)
-    
-    print(f'[Worker {worker_id}] Starting with {len(test_names)} tests', file=sys.stderr)
+    print(f'[Worker {worker_id}] Starting in interactive mode', file=sys.stderr)
     
     start_time = time.monotonic()
     
-    # Start subprocess with streaming output
+    # Start subprocess in interactive test mode
     process = subprocess.Popen(
-        ['crystal', '--test'] + test_names,
+        ['crystal', 'test', '--interactive'],
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,  # Merge stderr into stdout
         text=True,
         bufsize=1,  # Line buffered
     )
+    assert process.stdin is not None
     assert process.stdout is not None
     
     # Create log file for this worker
@@ -319,155 +301,206 @@ def run_worker(worker_id: int, test_names: list[str], log_dir: str) -> WorkerRes
     
     # Wrap stdout with TeeReader to copy output to log file
     tee_reader = TeeReader(process.stdout, log_file_path)
-    with closing(tee_reader):
+    
+    # Track test results
+    test_results: list[TestResult] = []
+    tests_run = 0
+    
+    try:
+        # Read and discard the initial prompt
+        _read_until_prompt(tee_reader)
         
-        # - Read test results from subprocess stdout.
-        # - Print test results to this process's stdout.
-        worker_results = \
-            stream_and_parse_test_output(worker_id, tee_reader)
+        # Feed tests to the subprocess one at a time
+        while True:
+            # Get next test from queue (blocking)
+            test_name = work_queue.get()
+            
+            # Check for sentinel value indicating no more work
+            if test_name is None:
+                print(f'[Worker {worker_id}] No more work, shutting down', file=sys.stderr)
+                break
+            
+            print(f'[Worker {worker_id}] Running test: {test_name}', file=sys.stderr)
+            
+            # Send test name to subprocess
+            process.stdin.write(test_name + '\n')
+            process.stdin.flush()
+            
+            # Read test output until we see the next prompt
+            test_output_lines = _read_until_prompt(tee_reader)
+            
+            # Parse the test result
+            test_result = _parse_test_result(test_name, test_output_lines)
+            test_results.append(test_result)
+            tests_run += 1
+            
+            # Display the test result immediately
+            _display_test_result(test_result)
+        
+        # Close stdin to signal end of interactive mode
+        process.stdin.close()
+        
+        # Read any remaining output (summary section)
+        for line in tee_reader:
+            pass  # Discard summary output
         
         # Wait for process to complete
         returncode = process.wait()
         duration = time.monotonic() - start_time
         
-        print(f'[Worker {worker_id}] Completed in {duration:.1f}s with exit code {returncode}', file=sys.stderr)
+        print(f'[Worker {worker_id}] Completed {tests_run} tests in {duration:.1f}s with exit code {returncode}', file=sys.stderr)
         
         return WorkerResult(
-            test_results=worker_results,
+            test_results=test_results,
             duration=duration,
             returncode=returncode
         )
+    
+    finally:
+        tee_reader.close()
+        # Ensure process is terminated
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5.0)
 
 
-def stream_and_parse_test_output(
-        worker_id: int,
-        stdout: 'IO[str] | TeeReader',
-    ) -> list[TestResult]:
+def _read_until_prompt(reader: 'TeeReader') -> list[str]:
     """
-    Stream output from a worker subprocess, parsing and displaying test results in real-time.
+    Read lines from reader until we see the 'test>' prompt.
+    
+    Returns:
+        List of lines read (excluding the prompt line)
+    """
+    lines = []
+    for line in reader:
+        line = line.rstrip('\n')
+        if line == 'test>':
+            break
+        lines.append(line)
+    return lines
+
+
+def _parse_test_result(test_name: str, output_lines: list[str]) -> TestResult:
+    """
+    Parse test output to extract the result status.
     
     Expected format:
         ======================================================================
-        RUNNING: test_name (crystal.tests.test_module.test_name) [50%]
+        RUNNING: test_short_name (test_name)
         ----------------------------------------------------------------------
         ... test output ...
-        OK
-    
-    Args:
-        worker_id: ID of the worker (for debugging)
-        stdout: stdout stream from the subprocess
+        OK|SKIP|FAILURE|ERROR
     """
-    results: list[TestResult] = []
-    
-    current_test: Optional[PartialTestResult] = None
-    seen_separator = False
-    
-    def complete_current_test() -> None:
-        """Complete the current test by parsing its output and displaying it."""
-        assert current_test is not None
-        
-        # Find the last status line in the collected output
-        last_status = None
-        last_skip_reason = None
-        last_status_idx = -1
-        for i in range(len(current_test.output) - 1, -1, -1):
-            output_line = current_test.output[i].strip()
-            if output_line == 'OK':
-                last_status = 'OK'
-                last_status_idx = i
-                break
-            elif output_line.startswith('SKIP ('):
-                last_status = 'SKIP'
-                last_skip_reason = output_line[5:].strip('()')
-                last_status_idx = i
-                break
-            elif output_line == 'SKIP':
-                last_status = 'SKIP'
-                last_status_idx = i
-                break
-            elif output_line == 'FAILURE':
-                last_status = 'FAILURE'
-                last_status_idx = i
-                break
-            elif output_line.startswith('ERROR ('):
-                last_status = 'ERROR'
-                last_status_idx = i
-                break
-        if not last_status:
-            raise ValueError(
-                f'Unable to locate status line in test output: '
-                f'{current_test.output!r}')
-        
-        # Remove the status line and any separator lines from output
-        test_output = current_test.output[:last_status_idx]
-        
-        # Test complete - display it immediately
-        test_result = TestResult(
-            name=current_test.name,
-            status=last_status,
-            output='\n'.join(test_output),
-            skip_reason=last_skip_reason
-        )
-        results.append(test_result)
-        
-        # Display the test result immediately
-        with output_lock:
-            print('=' * 70)
-            print(f'RUNNING: {current_test.short_name} ({current_test.name}) {current_test.percentage}')
-            print('-' * 70)
-            for output_line in test_output:
-                print(output_line)
-            if last_status == 'SKIP' and last_skip_reason:
-                print(f'SKIP ({last_skip_reason})')
-            else:
-                print(last_status)
-            print()
-            sys.stdout.flush()
-    
-    for line in stdout:
-        line = line.rstrip('\n')
-        
-        # Check for test start marker
+    # Find the RUNNING line to extract short name
+    short_name = None
+    running_line_idx = None
+    for i, line in enumerate(output_lines):
         if line.startswith('RUNNING: '):
-            # If we were in a previous test, complete it first
-            if current_test is not None and seen_separator:
-                complete_current_test()
-            
-            # Extract test name for the new test
-            # Format: "RUNNING: test_name (crystal.tests.test_module.test_name) [50%]"
-            match = re.match(r'RUNNING: (.+) \((.+)\)\s*(.*)', line)
-            assert match, f'Unable to parse RUNNING line: {line!r}'
-            
-            current_test = PartialTestResult(
-                short_name=match.group(1),
-                name=match.group(2),
-                percentage=match.group(3).strip(),
-                output=[]
+            match = re.match(r'RUNNING: (.+) \((.+)\)\s*', line)
+            if match:
+                short_name = match.group(1)
+                running_line_idx = i
+                break
+    
+    if short_name is None:
+        # Test not found or other error
+        if any('Test not found' in line for line in output_lines):
+            return TestResult(
+                name=test_name,
+                status='ERROR',
+                output='\n'.join(output_lines),
+                skip_reason=None
             )
-            seen_separator = False
-        
-        # Check for separator line after test name
-        elif current_test is not None and not seen_separator and line.startswith('---'):
-            seen_separator = True
-        
-        # Check for summary section starting
-        elif line == 'SUMMARY':
-            # Summary section starting - process any pending test first
-            if current_test is not None and seen_separator:
-                complete_current_test()
-            
-            # Stop processing - we've reached the summary
+        else:
+            # Unexpected output format
+            return TestResult(
+                name=test_name,
+                status='ERROR',
+                output='\n'.join(output_lines),
+                skip_reason=None
+            )
+    
+    # Find the separator line
+    separator_idx = None
+    for i in range(running_line_idx + 1, len(output_lines)):
+        if output_lines[i].startswith('---'):
+            separator_idx = i
             break
-        
-        # Collect output lines while in a test
-        elif current_test is not None and seen_separator:
-            current_test.output.append(line)
     
-    # Skip remainder of summary section
-    for line in stdout:
-        pass
+    if separator_idx is None:
+        # Malformed output
+        return TestResult(
+            name=test_name,
+            status='ERROR',
+            output='\n'.join(output_lines),
+            skip_reason=None
+        )
     
-    return results
+    # Find the last status line
+    last_status = None
+    last_skip_reason = None
+    last_status_idx = -1
+    for i in range(len(output_lines) - 1, separator_idx, -1):
+        output_line = output_lines[i].strip()
+        if output_line == 'OK':
+            last_status = 'OK'
+            last_status_idx = i
+            break
+        elif output_line.startswith('SKIP ('):
+            last_status = 'SKIP'
+            last_skip_reason = output_line[5:].strip('()')
+            last_status_idx = i
+            break
+        elif output_line == 'SKIP':
+            last_status = 'SKIP'
+            last_status_idx = i
+            break
+        elif output_line == 'FAILURE':
+            last_status = 'FAILURE'
+            last_status_idx = i
+            break
+        elif output_line.startswith('ERROR ('):
+            last_status = 'ERROR'
+            last_status_idx = i
+            break
+    
+    if last_status is None:
+        # Could not find status
+        return TestResult(
+            name=test_name,
+            status='ERROR',
+            output='\n'.join(output_lines),
+            skip_reason=None
+        )
+    
+    # Extract the test output (between separator and status line)
+    test_output = output_lines[separator_idx + 1:last_status_idx]
+    
+    return TestResult(
+        name=test_name,
+        status=last_status,
+        output='\n'.join(test_output),
+        skip_reason=last_skip_reason
+    )
+
+
+def _display_test_result(test_result: TestResult) -> None:
+    """
+    Display a test result to stdout in the same format as `crystal --test`.
+    """
+    with output_lock:
+        print('=' * 70)
+        # Extract short name from full name
+        short_name = test_result.name.split('.')[-1] if '.' in test_result.name else test_result.name
+        print(f'RUNNING: {short_name} ({test_result.name})')
+        print('-' * 70)
+        print(test_result.output)
+        if test_result.status == 'SKIP' and test_result.skip_reason:
+            print(f'SKIP ({test_result.skip_reason})')
+        else:
+            print(test_result.status)
+        print()
+        sys.stdout.flush()
 
 
 # === Utility: TeeReader ===
