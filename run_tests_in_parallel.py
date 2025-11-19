@@ -65,7 +65,13 @@ def main(args: Sequence[str]) -> int:
     
     # Get test names to run
     if parsed_args.test_names:
-        test_names = parsed_args.test_names
+        raw_test_names = parsed_args.test_names
+        # Normalize test names to handle various input formats
+        try:
+            test_names = normalize_test_names(raw_test_names)
+        except ValueError as e:
+            print(f'ERROR: {e}', file=sys.stderr)
+            return 1
     else:
         # Get all available tests
         test_names = get_all_test_names()
@@ -160,6 +166,37 @@ def get_all_test_names() -> list[str]:
         test_names.append(f'{module_name}.{func_name}')
     
     return test_names
+
+
+def normalize_test_names(raw_test_names: list[str]) -> list[str]:
+    """
+    Normalize test names from various formats into the canonical format.
+    
+    Handles these input formats:
+    - crystal.tests.test_workflows (module)
+    - crystal.tests.test_workflows.test_function (function)
+    - crystal.tests.test_workflows::test_function (pytest-style function)
+    - src/crystal/tests/test_workflows.py (file path)
+    - test_workflows (unqualified module)
+    - test_function (unqualified function)
+    
+    Args:
+        raw_test_names: List of test names in various formats
+    
+    Returns:
+        List of normalized test names (fully qualified)
+    
+    Raises:
+        ValueError: if a test name cannot be resolved to a valid module or function.
+    """
+    # Add src directory to path so we can import crystal modules
+    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src')
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+    
+    from crystal.tests.index import _normalize_test_names
+    
+    return _normalize_test_names(raw_test_names)
 
 
 def create_log_directory() -> str:
