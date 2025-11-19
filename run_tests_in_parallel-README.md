@@ -35,22 +35,26 @@ The script outputs results in the same format as `crystal --test`, including:
 ### How It Works
 
 1. Discovers all tests (or uses provided test names)
-2. Splits tests into 2 groups using round-robin distribution
-3. Launches 2 `crystal --test` subprocesses in parallel
-4. Streams output from both subprocesses in real-time
-5. Displays each test result immediately as it completes
-6. Formats and displays final summary matching `crystal --test` format
+2. Creates a work queue with all tests
+3. Launches 2 `crystal test --interactive` subprocesses in parallel
+4. Each worker pulls tests from the queue on-demand as it becomes available
+5. Streams output from both subprocesses in real-time
+6. Displays each test result immediately as it completes
+7. Formats and displays final summary matching `crystal --test` format
+
+### Features
+
+- **Dynamic test assignment**: Tests are assigned to workers on-demand, ensuring balanced load distribution even when test durations vary significantly
+- **Real-time output streaming**: See test results as they complete
+- **Consistent formatting**: Output matches `crystal --test` format exactly
 
 ### Current Limitations
 
 - Fixed at 2 workers (not configurable)
-- Simple round-robin test distribution (doesn't account for test duration)
 - No fault tolerance for subprocess crashes
-- Tests are assigned to workers up-front (no dynamic redistribution)
 
 ### Future Enhancements
 
 See the plan in `parallel_tests.md` for planned improvements:
-- Dynamic test assignment for better load balancing
 - Fault tolerance for subprocess crashes
 - Configurable number of workers
