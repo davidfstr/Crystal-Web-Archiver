@@ -24,6 +24,10 @@ Release Notes ⋮
         * The subcommand style is recommended for future use and will enable 
           test-specific options like `--quiet`, `--verbose`, and `--interactive` 
           in the future.
+    * When running tests with `crystal test` or `crystal --test`, 
+      pressing Ctrl-C now prints a summary section before exiting, 
+      marking interrupted tests with "-" status and showing a 
+      "Rerun interrupted tests with:" section.
 
 [interactive interpreter]: https://docs.python.org/3/whatsnew/3.13.html#whatsnew313-better-interactive-interpreter
 
