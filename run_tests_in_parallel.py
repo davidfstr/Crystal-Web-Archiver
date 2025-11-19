@@ -65,10 +65,28 @@ def main(args: Sequence[str]) -> int:
     
     # Get test names to run
     if parsed_args.test_names:
-        test_names = parsed_args.test_names
+        raw_test_names = parsed_args.test_names
+        # Normalize test names to handle various input formats
+        try:
+            test_names = normalize_test_names(raw_test_names)
+        except ValueError as e:
+            print(f'ERROR: {e}', file=sys.stderr)
+            return 1
+        
+        test_names_to_run = []
+        for test_func in _TEST_FUNCS():
+            if not callable(test_func):
+                raise ValueError(f'Test function is not callable: {test_func}')
+            test_name = f'{test_func.__module__}.{test_func.__name__}'
+            
+            # Only run test if it was requested (or if all tests are to be run)
+            if len(test_names) > 0:
+                if test_name not in test_names and test_func.__module__ not in test_names:
+                    continue
+            test_names_to_run.append(test_name)
     else:
         # Get all available tests
-        test_names = get_all_test_names()
+        test_names_to_run = get_all_test_names()
     
     # Determine number of workers
     num_workers = parsed_args.jobs if parsed_args.jobs is not None else multiprocessing.cpu_count()
@@ -77,7 +95,7 @@ def main(args: Sequence[str]) -> int:
     verbose = parsed_args.verbose
     
     if verbose:
-        print(f'[Runner] Running {len(test_names)} tests in parallel across {num_workers} workers...', file=sys.stderr)
+        print(f'[Runner] Running {len(test_names_to_run)} tests in parallel across {num_workers} workers...', file=sys.stderr)
     # Create log directory for worker output
     log_dir = create_log_directory()
     if verbose:
@@ -85,7 +103,7 @@ def main(args: Sequence[str]) -> int:
     
     # Create work queue with all tests
     work_queue: Queue[Optional[str]] = Queue()
-    for test_name in test_names:
+    for test_name in test_names_to_run:
         work_queue.put(test_name)
     # Add sentinel values to signal workers to stop
     for _ in range(num_workers):
@@ -146,20 +164,55 @@ def get_all_test_names() -> list[str]:
     Returns:
         List of fully qualified test names (e.g., 'crystal.tests.test_workflows.test_function')
     """
-    # Add src directory to path so we can import crystal modules
-    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src')
-    if src_dir not in sys.path:
-        sys.path.insert(0, src_dir)
-    
-    from crystal.tests.index import _TEST_FUNCS
-    
     test_names = []
-    for test_func in _TEST_FUNCS:
+    for test_func in _TEST_FUNCS():
         module_name = test_func.__module__
         func_name = test_func.__name__
         test_names.append(f'{module_name}.{func_name}')
     
     return test_names
+
+
+def _TEST_FUNCS():
+    # Add src directory to path so we can import crystal modules
+    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src')
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+    
+    from crystal.tests.index import _TEST_FUNCS as _TEST_FUNCS_
+    
+    return _TEST_FUNCS_
+
+
+def normalize_test_names(raw_test_names: list[str]) -> list[str]:
+    """
+    Normalize test names from various formats into the canonical format.
+    
+    Handles these input formats:
+    - crystal.tests.test_workflows (module)
+    - crystal.tests.test_workflows.test_function (function)
+    - crystal.tests.test_workflows::test_function (pytest-style function)
+    - src/crystal/tests/test_workflows.py (file path)
+    - test_workflows (unqualified module)
+    - test_function (unqualified function)
+    
+    Args:
+        raw_test_names: List of test names in various formats
+    
+    Returns:
+        List of normalized test names (fully qualified)
+    
+    Raises:
+        ValueError: if a test name cannot be resolved to a valid module or function.
+    """
+    # Add src directory to path so we can import crystal modules
+    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src')
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+    
+    from crystal.tests.index import _normalize_test_names
+    
+    return _normalize_test_names(raw_test_names)
 
 
 def create_log_directory() -> str:
