@@ -51,6 +51,12 @@ def main(args: Sequence[str]) -> int:
         help='Number of workers to use. Defaults to the number of detected CPU cores.'
     )
     parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Whether to print additional diagnostic information.'
+    )
+    
+    parser.add_argument(
         'test_names',
         nargs='*',
         help='Optional test names to run. If not provided, runs all tests.'
@@ -67,10 +73,15 @@ def main(args: Sequence[str]) -> int:
     # Determine number of workers
     num_workers = parsed_args.jobs if parsed_args.jobs is not None else multiprocessing.cpu_count()
     
-    print(f'[Runner] Running {len(test_names)} tests in parallel across {num_workers} workers...', file=sys.stderr)
+    # Determine verbosity
+    verbose = parsed_args.verbose
+    
+    if verbose:
+        print(f'[Runner] Running {len(test_names)} tests in parallel across {num_workers} workers...', file=sys.stderr)
     # Create log directory for worker output
     log_dir = create_log_directory()
-    print(f'[Runner] Worker logs in: {log_dir}', file=sys.stderr)
+    if verbose:
+        print(f'[Runner] Worker logs in: {log_dir}', file=sys.stderr)
     
     # Create work queue with all tests
     work_queue: Queue[Optional[str]] = Queue()
@@ -80,8 +91,6 @@ def main(args: Sequence[str]) -> int:
     for _ in range(num_workers):
         work_queue.put(None)
     
-    print(f'[Runner] {len(test_names)} tests queued for {num_workers} workers', file=sys.stderr)
-    
     # Run workers in parallel using threads
     # (threads are sufficient since each worker runs a subprocess)
     worker_results: list[Optional[WorkerResult]] = [None] * num_workers
@@ -89,7 +98,7 @@ def main(args: Sequence[str]) -> int:
     if True:
         def run_worker_thread(worker_id: int) -> None:
             worker_results[worker_id] = \
-                run_worker_interactive(worker_id, work_queue, log_dir)
+                run_worker_interactive(worker_id, work_queue, log_dir, verbose)
         
         start_time = time.monotonic()
         
@@ -276,7 +285,12 @@ class PartialTestResult:
 output_lock = threading.Lock()
 
 
-def run_worker_interactive(worker_id: int, work_queue: Queue[Optional[str]], log_dir: str) -> WorkerResult:
+def run_worker_interactive(
+        worker_id: int,
+        work_queue: Queue[Optional[str]],
+        log_dir: str,
+        verbose: bool = False,
+        ) -> WorkerResult:
     """
     Run a worker subprocess in interactive mode, pulling tests from work_queue on-demand.
     
@@ -288,8 +302,6 @@ def run_worker_interactive(worker_id: int, work_queue: Queue[Optional[str]], log
     Returns:
         WorkerResult containing test results and metadata
     """
-    print(f'[Worker {worker_id}] Starting in interactive mode', file=sys.stderr)
-    
     start_time = time.monotonic()
     
     # Start subprocess in interactive test mode
@@ -306,7 +318,8 @@ def run_worker_interactive(worker_id: int, work_queue: Queue[Optional[str]], log
     
     # Create log file for this worker
     log_file_path = os.path.join(log_dir, f'worker{worker_id}-pid{process.pid}.log')
-    print(f'[Worker {worker_id}] Logging to: {log_file_path}', file=sys.stderr)
+    if verbose:
+        print(f'[Worker {worker_id}] Starting', file=sys.stderr)
     
     # Wrap stdout with TeeReader to copy output to log file
     tee_reader = TeeReader(process.stdout, log_file_path)
@@ -326,10 +339,12 @@ def run_worker_interactive(worker_id: int, work_queue: Queue[Optional[str]], log
             
             # Check for sentinel value indicating no more work
             if test_name is None:
-                print(f'[Worker {worker_id}] No more work, shutting down', file=sys.stderr)
+                if verbose:
+                    print(f'[Worker {worker_id}] No more work, shutting down', file=sys.stderr)
                 break
             
-            print(f'[Worker {worker_id}] Running test: {test_name}', file=sys.stderr)
+            if verbose:
+                print(f'[Worker {worker_id}] Running test: {test_name}', file=sys.stderr)
             
             # Send test name to subprocess
             process.stdin.write(test_name + '\n')
@@ -357,7 +372,8 @@ def run_worker_interactive(worker_id: int, work_queue: Queue[Optional[str]], log
         returncode = process.wait()
         duration = time.monotonic() - start_time
         
-        print(f'[Worker {worker_id}] Completed {tests_run} tests in {duration:.1f}s with exit code {returncode}', file=sys.stderr)
+        if verbose:
+            print(f'[Worker {worker_id}] Completed {tests_run} tests in {duration:.1f}s with exit code {returncode}', file=sys.stderr)
         
         return WorkerResult(
             test_results=test_results,
