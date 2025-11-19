@@ -202,25 +202,32 @@ def _main2(args: list[str]) -> None:
         )
         
         # Define 'test' subcommand
-        subparsers = parser.add_subparsers(
-            dest='subcommand',
-            help=argparse.SUPPRESS,
+        # NOTE: We'll only add this subparser if the first arg is actually 'test'
+        #       to avoid confusing project paths with subcommands
+        should_add_test_subcommand = (
+            len(args) >= 1 and 
+            args[0] == 'test'
         )
-        test_parser = subparsers.add_parser(
-            'test',
-            help=argparse.SUPPRESS,  # 'Run automated tests.'
-            add_help=False,
-        )
-        test_parser.add_argument(
-            'test_names',
-            help=argparse.SUPPRESS,  # 'Names of tests to run.'
-            nargs='*',
-        )
-        test_parser.add_argument(
-            '--interactive',
-            help=argparse.SUPPRESS,  # 'Run tests in interactive mode.'
-            action='store_true',
-        )
+        if should_add_test_subcommand:
+            subparsers = parser.add_subparsers(
+                dest='subcommand',
+                help=argparse.SUPPRESS,
+            )
+            test_parser = subparsers.add_parser(
+                'test',
+                help=argparse.SUPPRESS,  # 'Run automated tests.'
+                add_help=False,
+            )
+            test_parser.add_argument(
+                'test_names',
+                help=argparse.SUPPRESS,  # 'Names of tests to run.'
+                nargs='*',
+            )
+            test_parser.add_argument(
+                '--interactive',
+                help=argparse.SUPPRESS,  # 'Run tests in interactive mode.'
+                action='store_true',
+            )
         
         # Define main command
         parser.add_argument(
@@ -352,7 +359,7 @@ def _main2(args: list[str]) -> None:
             parsed_args.test_names = parsed_args.test
         
         # Normalize call of "test" subcommand to be stored in parsed_args.test
-        if parsed_args.subcommand == 'test':
+        if getattr(parsed_args, 'subcommand', None) == 'test':
             parsed_args.test = parsed_args.test_names
             
             # Validate --interactive flag
