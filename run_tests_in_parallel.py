@@ -17,6 +17,7 @@ from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 import datetime
+import multiprocessing
 import os
 from queue import Empty, Queue
 import re
@@ -41,7 +42,13 @@ def main(args: Sequence[str]) -> int:
         Exit code (0 for success, 1 for failure)
     """
     parser = argparse.ArgumentParser(
-        description='Run Crystal tests in parallel across 2 subprocesses.'
+        description='Run Crystal tests in parallel across multiple subprocesses.'
+    )
+    parser.add_argument(
+        '-j', '--jobs',
+        type=int,
+        default=None,
+        help='Number of workers to use. Defaults to the number of detected CPU cores.'
     )
     parser.add_argument(
         'test_names',
@@ -57,25 +64,27 @@ def main(args: Sequence[str]) -> int:
         # Get all available tests
         test_names = get_all_test_names()
     
-    print(f'[Runner] Running {len(test_names)} tests in parallel across 2 workers...', file=sys.stderr)
+    # Determine number of workers
+    num_workers = parsed_args.jobs if parsed_args.jobs is not None else multiprocessing.cpu_count()
+    
+    print(f'[Runner] Running {len(test_names)} tests in parallel across {num_workers} workers...', file=sys.stderr)
     # Create log directory for worker output
     log_dir = create_log_directory()
     print(f'[Runner] Worker logs in: {log_dir}', file=sys.stderr)
     
     # Create work queue with all tests
-    NUM_WORKERS = 2
     work_queue: Queue[Optional[str]] = Queue()
     for test_name in test_names:
         work_queue.put(test_name)
     # Add sentinel values to signal workers to stop
-    for _ in range(NUM_WORKERS):
+    for _ in range(num_workers):
         work_queue.put(None)
     
-    print(f'[Runner] {len(test_names)} tests queued for {NUM_WORKERS} workers', file=sys.stderr)
+    print(f'[Runner] {len(test_names)} tests queued for {num_workers} workers', file=sys.stderr)
     
     # Run workers in parallel using threads
     # (threads are sufficient since each worker runs a subprocess)
-    worker_results: list[Optional[WorkerResult]] = [None] * NUM_WORKERS
+    worker_results: list[Optional[WorkerResult]] = [None] * num_workers
     total_duration: float
     if True:
         def run_worker_thread(worker_id: int) -> None:
@@ -85,7 +94,7 @@ def main(args: Sequence[str]) -> int:
         start_time = time.monotonic()
         
         threads = []
-        for i in range(NUM_WORKERS):
+        for i in range(num_workers):
             # NOTE: Don't use bg_call_later() here, which is part of "crystal"
             #       infrastructure, so that this module stays self-contained
             thread = threading.Thread(  # pylint: disable=no-direct-thread
@@ -419,6 +428,7 @@ def _parse_test_result(test_name: str, output_lines: list[str]) -> TestResult:
                 output='\n'.join(output_lines),
                 skip_reason=None
             )
+    assert running_line_idx is not None
     
     # Find the separator line
     separator_idx = None
