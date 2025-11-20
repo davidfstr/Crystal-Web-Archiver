@@ -17,16 +17,19 @@ from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 import datetime
+import faulthandler
 import multiprocessing
 import os
 from queue import Empty, Queue
 import re
+import select
 import subprocess
 import sys
 import tempfile
 import threading
 import time
-from typing import IO, Optional
+import traceback
+from typing import IO, Literal, Optional, assert_never
 
 
 # === Main ===
@@ -109,46 +112,123 @@ def main(args: Sequence[str]) -> int:
     for _ in range(num_workers):
         work_queue.put(None)
     
-    # Run workers in parallel using threads
-    # (threads are sufficient since each worker runs a subprocess)
+    # Create shared state for interrupt handling
+    interrupted_event = threading.Event()
+    
+    # Run workers in parallel
+    start_time = time.monotonic()  # capture
     worker_results: list[Optional[WorkerResult]] = [None] * num_workers
-    total_duration: float
+    worker_results_lock = threading.Lock()
+    worker_interrupt_pipes: list[tuple[int, int]] = [
+        os.pipe() for i in range(num_workers)
+    ]  # tuples of (interrupt_read_pipe, interrupt_write_pipe)
     if True:
         def run_worker_thread(worker_id: int) -> None:
-            worker_results[worker_id] = \
-                run_worker_interactive(worker_id, work_queue, log_dir, verbose)
+            result = run_worker(
+                worker_id, work_queue, log_dir, verbose,
+                interrupted_event, worker_interrupt_pipes[worker_id][0],
+            )
+            with worker_results_lock:
+                worker_results[worker_id] = result
         
-        start_time = time.monotonic()
-        
-        threads = []
+        # Start workers
+        worker_threads = []
         for i in range(num_workers):
             # NOTE: Don't use bg_call_later() here, which is part of "crystal"
             #       infrastructure, so that this module stays self-contained
-            thread = threading.Thread(  # pylint: disable=no-direct-thread
+            worker_thread = threading.Thread(  # pylint: disable=no-direct-thread
                 target=run_worker_thread,
                 args=(i,),
                 name=f'Worker-{i}'
             )
-            thread.start()
-            threads.append(thread)
+            worker_thread.start()
+            worker_threads.append(worker_thread)
         
         # Wait for all workers to complete
-        for thread in threads:
-            thread.join()
+        try:
+            for worker_thread in worker_threads:
+                worker_thread.join()
+            all_workers_joined = True
+        except KeyboardInterrupt:
+            # Ctrl-C pressed
+            if verbose:
+                print('\n[Runner] Received Ctrl-C, shutting down workers...', file=sys.stderr)
+            
+            # Signal workers to stop
+            interrupted_event.set()
+            
+            # Signal workers via interrupt pipes to unblock any stuck reads
+            with worker_results_lock:
+                for (worker_id, (_, interrupt_write_pipe)) in enumerate(worker_interrupt_pipes):
+                    try:
+                        # Send interrupt signal byte
+                        os.write(interrupt_write_pipe, b'\x00')
+                    except Exception as e:
+                        if verbose:
+                            print(f'[Runner] Failed to signal worker {worker_id} via pipe: {e}', file=sys.stderr)
+            
+            # Wait for workers to finish gracefully
+            all_workers_joined = True  # may be overridden
+            for (worker_id, worker_thread) in enumerate(worker_threads):
+                worker_thread.join(timeout=2.0)
+                if worker_thread.is_alive():  # timed out
+                    print(
+                        f'[Runner] *** Timed out waiting for worker {worker_id} to terminate. '
+                        f'Summary below may be missing data from this worker. '
+                        f'Tracebacks of all threads:\n', file=sys.stderr)
+                    faulthandler.dump_traceback(file=sys.stderr)
+                    print('', file=sys.stderr)
+                    all_workers_joined = False
         
-        total_duration = time.monotonic() - start_time
+        end_time = time.monotonic()  # capture
     
-    # Ensure all workers completed
-    assert all(result is not None for result in worker_results)
+    # Clean up interrupt pipes
+    for (worker_id, (_, interrupt_write_pipe)) in enumerate(worker_interrupt_pipes):
+        try:
+            os.close(interrupt_write_pipe)
+        except Exception:
+            pass  # Already closed or error
     
-    # Gather all test results
+    with worker_results_lock:
+        if all_workers_joined:
+            # Ensure all workers completed (they should have all set their results)
+            missing_results = False
+            for (worker_id, worker_result) in enumerate(worker_results):
+                if worker_result is None:
+                    print(f'[Runner] *** Missing results from worker {worker_id} unexpectedly', file=sys.stderr)
+                    missing_results = True
+            if missing_results:
+                return 1
+        
+        # Gather all test results
+        completed_test_results: dict[str, TestResult] = {}
+        for worker_result in worker_results:
+            if worker_result is None:
+                # Missing data from a worker.
+                # Affected tests will be marked as interrupted.
+                continue
+            for test_result in worker_result.test_results:
+                completed_test_results[test_result.name] = test_result
+        
+        del worker_results  # prevent further accidental use
+    
+    # - Build ordered list of results, preserving the original test order.
+    # - Mark tests that were never started as interrupted.
     all_test_results: list[TestResult] = []
-    for worker_result in worker_results:
-        assert worker_result is not None
-        all_test_results.extend(worker_result.test_results)
+    for test_name in test_names_to_run:
+        if test_name in completed_test_results:
+            all_test_results.append(completed_test_results[test_name])
+        else:
+            # Test was never started (still in queue when interrupted)
+            all_test_results.append(TestResult(
+                name=test_name,
+                status='INTERRUPTED',
+                output='',
+                skip_reason=None
+            ))
     
     # Format and print summary (individual tests already printed during streaming)
-    (summary, is_ok) = format_summary(all_test_results, total_duration)
+    (summary, is_ok) = format_summary(all_test_results, end_time - start_time)
     print(summary)
     
     # Play bell sound in terminal (like crystal --test does)
@@ -263,6 +343,8 @@ def format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tupl
             summary_chars.append('F')
         elif test.status == 'ERROR':
             summary_chars.append('E')
+        elif test.status == 'INTERRUPTED':
+            summary_chars.append('-')
         else:
             summary_chars.append('?')
     
@@ -276,8 +358,9 @@ def format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tupl
     num_skip = sum(1 for t in all_tests if t.status == 'SKIP')
     num_failure = sum(1 for t in all_tests if t.status == 'FAILURE')
     num_error = sum(1 for t in all_tests if t.status == 'ERROR')
+    num_interrupted = sum(1 for t in all_tests if t.status == 'INTERRUPTED')
     
-    is_ok = (num_failure == 0 and num_error == 0)
+    is_ok = (num_failure == 0 and num_error == 0 and num_interrupted == 0)
     
     if is_ok:
         if num_skip > 0:
@@ -290,6 +373,8 @@ def format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tupl
             status_parts.append(f'failures={num_failure}')
         if num_error > 0:
             status_parts.append(f'errors={num_error}')
+        if num_interrupted > 0:
+            status_parts.append(f'interrupted={num_interrupted}')
         if num_skip > 0:
             status_parts.append(f'skipped={num_skip}')
         output_lines.append(f'FAILED ({", ".join(status_parts)})')
@@ -297,10 +382,17 @@ def format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tupl
     # Print command to rerun failed tests
     if not is_ok:
         failed_tests = [t.name for t in all_tests if t.status in ('FAILURE', 'ERROR')]
+        interrupted_tests = [t.name for t in all_tests if t.status == 'INTERRUPTED']
+        
         if failed_tests:
             output_lines.append('')
             output_lines.append('Rerun failed tests with:')
             output_lines.append(f'$ crystal --test {" ".join(failed_tests)}')
+        
+        if interrupted_tests:
+            output_lines.append('')
+            output_lines.append('Rerun interrupted tests with:')
+            output_lines.append(f'$ crystal --test {" ".join(interrupted_tests)}')
     
     return '\n'.join(output_lines), is_ok
 
@@ -319,7 +411,7 @@ class WorkerResult:
 class TestResult:
     """Result of running a single test."""
     name: str
-    status: str  # 'OK', 'SKIP', 'FAILURE', 'ERROR'
+    status: str  # 'OK', 'SKIP', 'FAILURE', 'ERROR', 'INTERRUPTED'
     output: str
     skip_reason: Optional[str] = None
 
@@ -337,11 +429,13 @@ class PartialTestResult:
 output_lock = threading.Lock()
 
 
-def run_worker_interactive(
+def run_worker(
         worker_id: int,
         work_queue: Queue[Optional[str]],
         log_dir: str,
-        verbose: bool = False,
+        verbose: bool,
+        interrupted_event: threading.Event,
+        interrupt_read_pipe: int,
         ) -> WorkerResult:
     """
     Run a worker subprocess in interactive mode, pulling tests from work_queue on-demand.
@@ -350,114 +444,171 @@ def run_worker_interactive(
         worker_id: ID of this worker (for logging)
         work_queue: Queue of test names to run. None sentinel indicates no more work.
         log_dir: Directory to write log files to
+        verbose: Whether to print verbose diagnostic information
+        interrupted_event: Event that is set when Ctrl-C is pressed
     
     Returns:
         WorkerResult containing test results and metadata
     """
     start_time = time.monotonic()
-    
-    # Start subprocess in interactive test mode
-    process = subprocess.Popen(
-        ['crystal', 'test', '--interactive'],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,  # Merge stderr into stdout
-        text=True,
-        bufsize=1,  # Line buffered
-    )
-    assert process.stdin is not None
-    assert process.stdout is not None
-    
-    # Create log file for this worker
-    log_file_path = os.path.join(log_dir, f'worker{worker_id}-pid{process.pid}.log')
-    if verbose:
-        print(f'[Worker {worker_id}] Starting', file=sys.stderr)
-    
-    # Wrap stdout with TeeReader to copy output to log file
-    tee_reader = TeeReader(process.stdout, log_file_path)
-    
-    # Track test results
     test_results: list[TestResult] = []
     tests_run = 0
     
     try:
-        # Read and discard the initial prompt
-        _read_until_prompt(tee_reader)
-        
-        # Feed tests to the subprocess one at a time
-        while True:
-            # Get next test from queue (blocking)
-            test_name = work_queue.get()
-            
-            # Check for sentinel value indicating no more work
-            if test_name is None:
-                if verbose:
-                    print(f'[Worker {worker_id}] No more work, shutting down', file=sys.stderr)
-                break
-            
-            if verbose:
-                print(f'[Worker {worker_id}] Running test: {test_name}', file=sys.stderr)
-            
-            # Send test name to subprocess
-            process.stdin.write(test_name + '\n')
-            process.stdin.flush()
-            
-            # Read test output until we see the next prompt
-            test_output_lines = _read_until_prompt(tee_reader)
-            
-            # Parse the test result
-            test_result = _parse_test_result(test_name, test_output_lines)
-            test_results.append(test_result)
-            tests_run += 1
-            
-            # Display the test result immediately
-            _display_test_result(test_result)
-        
-        # Close stdin to signal end of interactive mode
-        process.stdin.close()
-        
-        # Read any remaining output (summary section)
-        for line in tee_reader:
-            pass  # Discard summary output
-        
-        # Wait for process to complete
-        returncode = process.wait()
-        duration = time.monotonic() - start_time
-        
-        if verbose:
-            print(f'[Worker {worker_id}] Completed {tests_run} tests in {duration:.1f}s with exit code {returncode}', file=sys.stderr)
-        
-        return WorkerResult(
-            test_results=test_results,
-            duration=duration,
-            returncode=returncode
+        # Start subprocess in interactive test mode
+        process = subprocess.Popen(
+            ['crystal', 'test', '--interactive'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout
+            text=True,
+            bufsize=1,  # Line buffered
         )
-    
+        assert process.stdin is not None
+        assert process.stdout is not None
+        
+        # Create log file for this worker
+        log_file_path = os.path.join(log_dir, f'worker{worker_id}-pid{process.pid}.log')
+        if verbose:
+            print(f'[Worker {worker_id}] Starting', file=sys.stderr)
+        
+        # Wrap stdout to copy output to log file and to provide interruptability
+        reader = InterruptableTeeReader(
+            process.stdout, interrupt_read_pipe, log_file_path
+        )
+        with closing(reader):
+            
+            # Read and discard the initial prompt
+            (_, status) = _read_until_prompt(reader)
+            if status == 'interrupted' or status == 'eof':
+                # Interrupted (or crashed) before initial prompt read
+                pass
+            elif status == 'found':
+                # Feed tests to the subprocess one at a time
+                while True:
+                    # Check if we've been interrupted
+                    if interrupted_event is not None and interrupted_event.is_set():
+                        if verbose:
+                            print(f'[Worker {worker_id}] Interrupted, shutting down', file=sys.stderr)
+                        break
+                    
+                    # Get next test from queue (blocking with timeout to check for interrupts)
+                    try:
+                        test_name = work_queue.get(timeout=0.1)
+                    except:
+                        # Timeout. Check for interrupts and try again.
+                        continue
+                    
+                    # Check for sentinel value indicating no more work
+                    if test_name is None:
+                        if verbose:
+                            print(f'[Worker {worker_id}] No more work, shutting down', file=sys.stderr)
+                        break
+                    
+                    if verbose:
+                        print(f'[Worker {worker_id}] Running test: {test_name}', file=sys.stderr)
+                    
+                    # Send test name to subprocess
+                    process.stdin.write(test_name + '\n')
+                    process.stdin.flush()
+                    
+                    # Read test output until we see the next prompt
+                    (test_output_lines, status) = _read_until_prompt(reader)
+                    
+                    # Parse the test result
+                    test_result = _parse_test_result(
+                        test_name,
+                        test_output_lines,
+                        interrupted=(status == 'interrupted'),
+                    )
+                    test_results.append(test_result)
+                    tests_run += 1
+                    
+                    # Display the test result immediately
+                    _display_test_result(test_result)
+                
+                # Close stdin to signal end of interactive mode
+                process.stdin.close()
+                
+                # Read any remaining output (summary section)
+                try:
+                    while (line := reader.readline()):
+                        pass
+                except InterruptedError:
+                    pass
+            else:
+                assert_never(status)
+            
+            # Wait for process to complete
+            returncode = process.wait()
+    except Exception as e:
+        if isinstance(e, BrokenPipeError):
+            if verbose:
+                print(f'[Worker {worker_id}] Interrupted. Shutting down.', file=sys.stderr)
+        else:
+            print(f'[Worker {worker_id}] Unexpected exception. Shutting down.', file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+        # (keep going)
     finally:
-        tee_reader.close()
         # Ensure process is terminated
         if process.poll() is None:
             process.terminate()
             process.wait(timeout=5.0)
+        
+        # Close interrupt pipe read-end (write-end will be closed by main thread)
+        try:
+            os.close(interrupt_read_pipe)
+        except Exception:
+            pass  # Already closed
+    
+    duration = time.monotonic() - start_time
+    
+    maybe_returncode = process.poll()
+    returncode = maybe_returncode if maybe_returncode is not None else -1
+    
+    if verbose:
+        print(f'[Worker {worker_id}] Completed {tests_run} tests in {duration:.1f}s with exit code {returncode}', file=sys.stderr)
+    
+    return WorkerResult(
+        test_results=test_results,
+        duration=duration,
+        returncode=returncode,
+    )
 
 
-def _read_until_prompt(reader: 'TeeReader') -> list[str]:
+def _read_until_prompt(
+        reader: 'InterruptableTeeReader'
+        ) -> tuple[list[str], Literal['found', 'interrupted', 'eof']]:
     """
     Read lines from reader until we see the 'test>' prompt.
+    
+    Args:
+        reader: TeeReader to read from
     
     Returns:
         List of lines read (excluding the prompt line)
     """
-    lines = []
-    for line in reader:
+    lines = []  # type: list[str]
+    while True:
+        try:
+            line = reader.readline()
+        except InterruptedError:
+            # Interrupted
+            return (lines, 'interrupted')
+        if not line:
+            # EOF
+            return (lines, 'eof')
+        
         line = line.rstrip('\n')
         if line == 'test>':
-            break
+            return (lines, 'found')
         lines.append(line)
-    return lines
 
 
-def _parse_test_result(test_name: str, output_lines: list[str]) -> TestResult:
+_DOUBLE_SEPARATOR_LINE = '=' * 70
+_SINGLE_SEPARATOR_LINE = '-' * 70
+
+def _parse_test_result(test_name: str, output_lines: list[str], interrupted: bool) -> TestResult:
     """
     Parse test output to extract the result status.
     
@@ -466,46 +617,16 @@ def _parse_test_result(test_name: str, output_lines: list[str]) -> TestResult:
         RUNNING: test_short_name (test_name)
         ----------------------------------------------------------------------
         ... test output ...
-        OK|SKIP|FAILURE|ERROR
+        OK|SKIP|FAILURE|ERROR|INTERRUPTED
     """
-    # Find the RUNNING line to extract short name
-    short_name = None
-    running_line_idx = None
-    for i, line in enumerate(output_lines):
-        if line.startswith('RUNNING: '):
-            match = re.match(r'RUNNING: (.+) \((.+)\)\s*', line)
-            if match:
-                short_name = match.group(1)
-                running_line_idx = i
-                break
-    
-    if short_name is None:
-        # Test not found or other error
-        if any('Test not found' in line for line in output_lines):
-            return TestResult(
-                name=test_name,
-                status='ERROR',
-                output='\n'.join(output_lines),
-                skip_reason=None
-            )
-        else:
-            # Unexpected output format
-            return TestResult(
-                name=test_name,
-                status='ERROR',
-                output='\n'.join(output_lines),
-                skip_reason=None
-            )
-    assert running_line_idx is not None
-    
-    # Find the separator line
-    separator_idx = None
-    for i in range(running_line_idx + 1, len(output_lines)):
-        if output_lines[i].startswith('---'):
-            separator_idx = i
-            break
-    
-    if separator_idx is None:
+    # Validate and remove prefix lines
+    prefix_lines = output_lines[:3]
+    prefix_ok = (
+        (len(prefix_lines) >= 1 and prefix_lines[0] == _DOUBLE_SEPARATOR_LINE) and
+        (len(prefix_lines) >= 2 and prefix_lines[1].startswith('RUNNING: ')) and
+        (len(prefix_lines) >= 3 and prefix_lines[2] == _SINGLE_SEPARATOR_LINE)
+    )
+    if not prefix_ok and not interrupted:
         # Malformed output
         return TestResult(
             name=test_name,
@@ -513,46 +634,48 @@ def _parse_test_result(test_name: str, output_lines: list[str]) -> TestResult:
             output='\n'.join(output_lines),
             skip_reason=None
         )
+    del output_lines[:3]
     
-    # Find the last status line
-    last_status = None
-    last_skip_reason = None
-    last_status_idx = -1
-    for i in range(len(output_lines) - 1, separator_idx, -1):
-        output_line = output_lines[i].strip()
-        if output_line == 'OK':
-            last_status = 'OK'
-            last_status_idx = i
-            break
-        elif output_line.startswith('SKIP ('):
-            last_status = 'SKIP'
-            last_skip_reason = output_line[5:].strip('()')
-            last_status_idx = i
-            break
-        elif output_line == 'SKIP':
-            last_status = 'SKIP'
-            last_status_idx = i
-            break
-        elif output_line == 'FAILURE':
-            last_status = 'FAILURE'
-            last_status_idx = i
-            break
-        elif output_line.startswith('ERROR ('):
-            last_status = 'ERROR'
-            last_status_idx = i
-            break
+    if not interrupted:
+        # Find the last status line
+        last_status = None
+        last_skip_reason = None
+        for i in range(len(output_lines) - 1, -1, -1):
+            output_line = output_lines[i].strip()
+            if output_line == 'OK':
+                last_status = 'OK'
+                break
+            elif output_line.startswith('SKIP ('):
+                last_status = 'SKIP'
+                last_skip_reason = output_line[5:].strip('()')
+                break
+            elif output_line == 'SKIP':
+                last_status = 'SKIP'
+                break
+            elif output_line == 'FAILURE':
+                last_status = 'FAILURE'
+                break
+            elif output_line.startswith('ERROR ('):
+                last_status = 'ERROR'
+                break
+            elif output_line == 'INTERRUPTED':
+                last_status = 'INTERRUPTED'
+                break
+        
+        if last_status is None:
+            # Could not find status
+            return TestResult(
+                name=test_name,
+                status='ERROR',
+                output='\n'.join(output_lines),
+                skip_reason=None
+            )
+    else:
+        last_status = 'INTERRUPTED'
+        last_skip_reason = None
     
-    if last_status is None:
-        # Could not find status
-        return TestResult(
-            name=test_name,
-            status='ERROR',
-            output='\n'.join(output_lines),
-            skip_reason=None
-        )
-    
-    # Extract the test output (between separator and status line)
-    test_output = output_lines[separator_idx + 1:last_status_idx]
+    # Extract the test output (between prefix and status line)
+    test_output = output_lines[:last_status_idx]
     
     return TestResult(
         name=test_name,
@@ -567,6 +690,10 @@ def _display_test_result(test_result: TestResult) -> None:
     Display a test result to stdout in the same format as `crystal --test`.
     """
     with output_lock:
+        # Don't display INTERRUPTED tests that were never started
+        if test_result.status == 'INTERRUPTED' and not test_result.output:
+            return
+        
         print('=' * 70)
         # Extract short name from full name
         short_name = test_result.name.split('.')[-1] if '.' in test_result.name else test_result.name
@@ -583,25 +710,52 @@ def _display_test_result(test_result: TestResult) -> None:
 
 # === Utility: TeeReader ===
 
-class TeeReader:
+class InterruptableTeeReader:
     """
-    A wrapper around a text stream that copies everything read to a log file.
-    Similar to the Unix 'tee' command.
+    - InterruptableReader: A wrapper around a text stream which enforces that
+      every I/O operation performed in an interruptable manner.
+    - TeeReader: A wrapper around a text stream that copies everything read 
+      to a log file. Similar to the Unix 'tee' command.
     """
-    def __init__(self, source: IO[str], log_file_path: str):
+    def __init__(self,
+            source: IO[str],
+            interrupt_read_pipe: int,
+            log_file_path: str,
+            ) -> None:
+        log_file = open(log_file_path, 'w', encoding='utf-8')
+        
         self.source = source
-        self.log_file = open(log_file_path, 'w', encoding='utf-8')
+        self.interrupt_read_pipe = interrupt_read_pipe
+        self.log_file = log_file
+        self._interrupted = False
     
-    def __iter__(self):
-        return self
-    
-    def __next__(self) -> str:
-        line = next(self.source)
-        self.log_file.write(line)
-        self.log_file.flush()
+    def readline(self) -> str:
+        """
+        Reads a line from the underlying text stream.
+        
+        Raises:
+        * InterruptedError -- if the read was interrupted
+        """
+        if self._interrupted:
+            raise InterruptedError()
+        
+        (readable, _, _) = select.select([
+            self.source.fileno(),
+            self.interrupt_read_pipe
+        ], [], [])
+        if self.interrupt_read_pipe in readable:
+            self._interrupted = True
+            raise InterruptedError()
+        line = self.source.readline()
+        
+        if line:
+            self.log_file.write(line)
+            self.log_file.flush()
+        
         return line
     
     def close(self) -> None:
+        self.source.close()
         self.log_file.close()
 
 
