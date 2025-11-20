@@ -314,6 +314,8 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                     # Ctrl-C pressed while running test: Mark as interrupted
                     print()  # new line after ^C
                     
+                    print('INTERRUPTED')
+                    
                     # Mark only this single test as interrupted
                     result_for_test_func_id[test_func_id] = _TestInterrupted()
                     run_count += 1
@@ -356,6 +358,8 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                 except KeyboardInterrupt:
                     # Ctrl-C pressed while running test
                     print()  # new line after ^C
+                    
+                    print('INTERRUPTED')
                     
                     # Mark this test as interrupted
                     result_for_test_func_id[test_func_id] = _TestInterrupted()
