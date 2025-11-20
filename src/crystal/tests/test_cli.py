@@ -9,7 +9,9 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from crystal import APP_NAME, __version__
 from crystal.model import Project, Resource
-from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn, assertRegex
+from crystal.tests.util.asserts import (
+    assertEqual, assertIn, assertNotEqual, assertNotIn, assertRegex
+)
 from crystal.tests.util.cli import (
     _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, crystal_running, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until,
     crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
@@ -776,6 +778,134 @@ def test_when_interactive_flag_used_with_test_names_then_prints_error() -> None:
     ])
     assert result.returncode != 0
     assertIn('error: test names cannot be specified with --interactive', result.stderr)
+
+
+def test_when_ctrl_c_pressed_while_test_running_noninteractively_then_marks_that_test_and_all_following_tests_as_interrupted() -> None:
+    with crystal_running(
+        args=[
+            'test',
+            # Test 1: Fast test that should pass
+            'crystal.tests.test_cli.test_special_a',
+            # Test 2: Special test that simulates Ctrl-C
+            'crystal.tests.test_cli.test_special_b',
+            # Test 3: Fast test that should pass, if it wasn't interrupted
+            'crystal.tests.test_cli.test_special_c',
+        ],
+        # Enable Ctrl-C simulation in test_special_b
+        env_extra={'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '1'},
+        # Let the process exit naturally after Ctrl-C
+        kill=False,
+    ) as crystal:
+        (stdout_str, _) = crystal.communicate()
+        returncode = crystal.returncode
+    
+    # Verify "INTERRUPTED" status line was printed for the test that received Ctrl-C
+    assertIn('INTERRUPTED', stdout_str)
+    
+    # Verify SUMMARY section is still printed
+    assertIn('SUMMARY', stdout_str)
+    assertIn('-' * 70, stdout_str)
+    
+    # Verify the test that received Ctrl-C and all following tests are marked with '-'
+    # Expected pattern: '.s---' (pass, interrupted, interrupted)
+    assertIn('\n.--\n', stdout_str)
+    
+    # Verify summary status line mentions interrupted tests
+    assertIn('interrupted=2', stdout_str)
+    assertIn('FAILURE', stdout_str)
+    
+    # Verify 'Rerun interrupted tests with:' section exists
+    assertIn('Rerun interrupted tests with:', stdout_str)
+    assertIn(
+        'crystal --test '
+        'crystal.tests.test_cli.test_special_b '
+        'crystal.tests.test_cli.test_special_c', stdout_str)
+    
+    # Verify exit code indicates failure
+    assertNotEqual(0, returncode, f'Expected non-zero exit code, got {returncode}')
+
+
+def test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_test_as_interrupted_and_ignores_further_tests_on_stdin() -> None:
+    with crystal_running(
+        args=['test', '--interactive'],
+        # Enable Ctrl-C simulation in test_special_b
+        env_extra={'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '1'},
+        # Let the process exit naturally after Ctrl-C
+        kill=False,
+    ) as crystal:
+        assert crystal.stdin is not None
+        assert isinstance(crystal.stdout, TextIOBase)
+        
+        # Read the first prompt
+        (_, _) = read_until(crystal.stdout, 'test>\n', timeout=2.0)
+        
+        # Send test 1 (should pass)
+        crystal.stdin.write('crystal.tests.test_cli.test_special_a\n')
+        crystal.stdin.flush()
+        (early_stdout_str, _) = read_until(crystal.stdout, 'test>\n', timeout=30.0)
+        assertIn('OK', early_stdout_str)
+        
+        # Send test 2 (will trigger Ctrl-C simulation)
+        crystal.stdin.write('crystal.tests.test_cli.test_special_b\n')
+        crystal.stdin.flush()
+        
+        # Try to send test 3 (should be ignored after Ctrl-C)
+        # Note: We send this immediately, but after Ctrl-C it should be ignored
+        crystal.stdin.write('crystal.tests.test_cli.test_special_c\n')
+        crystal.stdin.flush()
+        
+        # Wait for process to exit
+        (late_stdout_str, _) = crystal.communicate(input='')
+        returncode = crystal.returncode
+    
+    # Verify "INTERRUPTED" status line was printed for the test that received Ctrl-C
+    assertIn('INTERRUPTED', late_stdout_str)
+    
+    # Verify SUMMARY section is still printed
+    assertIn('SUMMARY', late_stdout_str)
+    assertIn('-' * 70, late_stdout_str)
+    
+    # Verify only test_special_b is marked as interrupted (not test_special_c)
+    # Expected pattern: '.-' (pass, interrupted)
+    # test_special_c should not appear in the summary since it was ignored
+    assertIn('\n.-\n', late_stdout_str)
+    
+    # Verify summary status line mentions interrupted tests
+    assertIn('interrupted=1', late_stdout_str)
+    assertIn('FAILURE', late_stdout_str)
+    
+    # Verify 'Rerun interrupted tests with:' section exists
+    assertIn('Rerun interrupted tests with:', late_stdout_str)
+    assertIn('crystal --test crystal.tests.test_cli.test_special_b', late_stdout_str)
+    
+    # Verify test_special_c was NOT run (it was on stdin but ignored after Ctrl-C)
+    assertNotIn('test_special_c', late_stdout_str)
+    
+    # Verify exit code indicates failure
+    assertNotEqual(0, returncode, f'Expected non-zero exit code, got {returncode}')
+
+
+# NOTE: This is not a real test. It is used by:
+#       - test_when_ctrl_c_pressed_while_tests_running_then_marks_that_test_and_all_following_tests_as_interrupted
+#       - test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_test_as_interrupted_and_ignores_further_tests_on_stdin
+def test_special_a() -> None:
+    pass
+
+
+# NOTE: This is not a real test. It is used by:
+#       - test_when_ctrl_c_pressed_while_tests_running_then_marks_that_test_and_all_following_tests_as_interrupted
+#       - test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_test_as_interrupted_and_ignores_further_tests_on_stdin
+def test_special_b() -> None:
+    # Simulate pressing Ctrl-C if a special environment variable is set.
+    if os.environ.get('CRYSTAL_SIMULATE_CTRL_C_DURING_TEST') == '1':
+        raise KeyboardInterrupt
+
+
+# NOTE: This is not a real test. It is used by:
+#       - test_when_ctrl_c_pressed_while_tests_running_then_marks_that_test_and_all_following_tests_as_interrupted
+#       - test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_test_as_interrupted_and_ignores_further_tests_on_stdin
+def test_special_c() -> None:
+    pass
 
 
 # === Platform-Specific Options Tests ===

@@ -36,6 +36,8 @@ from unittest import SkipTest
 import warnings
 
 
+# === Index ===
+
 def _test_functions_in_module(mod) -> list[Callable]:
     return [
         f for f in mod.__dict__.values() 
@@ -90,6 +92,8 @@ _TEST_FUNCS = (
     []
 )
 
+
+# === Run Tests ===
 
 _TestFuncId = tuple[str, str]  # (module, func_name)
 
@@ -262,7 +266,7 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                 try:
                     line = sys.stdin.readline()
                 except KeyboardInterrupt:
-                    # Ctrl-C pressed
+                    # Ctrl-C pressed at the prompt: Exit normally
                     print()  # new line after ^C
                     break
                 
@@ -306,6 +310,18 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                         is_coverage_now=is_coverage_now
                     )
                     run_count += 1
+                except KeyboardInterrupt:
+                    # Ctrl-C pressed while running test: Mark as interrupted
+                    print()  # new line after ^C
+                    
+                    print('INTERRUPTED')
+                    
+                    # Mark only this single test as interrupted
+                    result_for_test_func_id[test_func_id] = _TestInterrupted()
+                    run_count += 1
+                    
+                    # Ignore any further tests specified on stdin
+                    break
                 except NoForegroundThreadError:
                     # Fatal error; abort
                     break
@@ -339,6 +355,22 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                         is_coverage_now=is_coverage_now
                     )
                     run_count += 1
+                except KeyboardInterrupt:
+                    # Ctrl-C pressed while running test: Mark as interrupted
+                    print()  # new line after ^C
+                    
+                    print('INTERRUPTED')
+                    
+                    # Mark this test as interrupted
+                    result_for_test_func_id[test_func_id] = _TestInterrupted()
+                    run_count += 1
+                    
+                    # Mark all remaining tests as interrupted
+                    for remaining_test_func in test_funcs_to_run[test_func_index + 1:]:
+                        remaining_test_func_id = (remaining_test_func.__module__, remaining_test_func.__name__)
+                        result_for_test_func_id[remaining_test_func_id] = _TestInterrupted()
+                    
+                    break
                 except NoForegroundThreadError:
                     # Fatal error; abort
                     break
@@ -352,10 +384,17 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
     failure_count = 0
     error_count = 0
     skip_count = 0
+    interrupted_count = 0
     failed_test_names = []
+    interrupted_test_names = []
     for (test_func_id, result) in result_for_test_func_id.items():
         if result is None:
             pass
+        elif isinstance(result, _TestInterrupted):
+            interrupted_count += 1
+            
+            test_name = f'{test_func_id[0]}.{test_func_id[1]}'
+            interrupted_test_names.append(test_name)
         elif isinstance(result, SkipTest):
             skip_count += 1
         else:
@@ -369,13 +408,15 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
     
     # Print summary of test run
     if True:
-        is_ok = (failure_count + error_count) == 0
+        is_ok = (failure_count + error_count + interrupted_count) == 0
         
         suffix_parts = []
         if failure_count != 0:
             suffix_parts.append(f'failures={failure_count}')
         if error_count != 0:
             suffix_parts.append(f'errors={error_count}')
+        if interrupted_count != 0:
+            suffix_parts.append(f'interrupted={interrupted_count}')
         if skip_count != 0:
             suffix_parts.append(f'skipped={skip_count}')
         suffix = (
@@ -390,6 +431,8 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
         for result in result_for_test_func_id.values():
             if result is None:
                 print('.', end='')
+            elif isinstance(result, _TestInterrupted):
+                print('-', end='')
             elif isinstance(result, AssertionError):
                 print('F', end='')
             elif isinstance(result, SkipTest):
@@ -435,7 +478,12 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
         print()
         print('Rerun failed tests with:')
         print(f'$ crystal --test {" ".join(failed_test_names)}')
+    
+    # Print command to rerun interrupted tests
+    if len(interrupted_test_names) != 0:
         print()
+        print('Rerun interrupted tests with:')
+        print(f'$ crystal --test {" ".join(interrupted_test_names)}')
     
     # Play bell sound in terminal
     print('\a', end='', flush=True)
@@ -529,6 +577,11 @@ def _run_single_test(
     # implicitly assume that it will be.
     if not is_windows():
         gc.collect()
+
+
+class _TestInterrupted(Exception):
+    """Marker exception to indicate a test was interrupted by Ctrl-C."""
+    pass
 
 
 # === Utility ===

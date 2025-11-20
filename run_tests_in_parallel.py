@@ -301,7 +301,6 @@ def format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tupl
             output_lines.append('')
             output_lines.append('Rerun failed tests with:')
             output_lines.append(f'$ crystal --test {" ".join(failed_tests)}')
-            output_lines.append('')
     
     return '\n'.join(output_lines), is_ok
 
