@@ -1164,4 +1164,3 @@ some older macOS versions and Windows XP.
 ### v1.0.0a (January 24, 2012)
 
 * Initial version
-
