@@ -223,8 +223,8 @@ def main(args: Sequence[str]) -> int:
             all_test_results.append(TestResult(
                 name=test_name,
                 status='INTERRUPTED',
-                output='',
-                skip_reason=None
+                skip_reason=None,
+                output_lines=[],  # don't print this test at all
             ))
     
     # Format and print summary (individual tests already printed during streaming)
@@ -412,17 +412,8 @@ class TestResult:
     """Result of running a single test."""
     name: str
     status: str  # 'OK', 'SKIP', 'FAILURE', 'ERROR', 'INTERRUPTED'
-    output: str
-    skip_reason: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class PartialTestResult:
-    """Partial result of a test that is currently being parsed."""
-    short_name: str
-    name: str
-    percentage: str
-    output: list[str]
+    skip_reason: Optional[str]
+    output_lines: list[str]
 
 
 # Global lock for serializing output from multiple workers
@@ -631,8 +622,8 @@ def _parse_test_result(test_name: str, output_lines: list[str], interrupted: boo
         return TestResult(
             name=test_name,
             status='ERROR',
-            output='\n'.join(output_lines),
-            skip_reason=None
+            skip_reason=None,
+            output_lines=['ERROR (Invalid prefix lines in test output)', ''],
         )
     del output_lines[:3]
     
@@ -667,21 +658,18 @@ def _parse_test_result(test_name: str, output_lines: list[str], interrupted: boo
             return TestResult(
                 name=test_name,
                 status='ERROR',
-                output='\n'.join(output_lines),
-                skip_reason=None
+                skip_reason=None,
+                output_lines=output_lines + ['ERROR (Test status line not found)', ''],
             )
     else:
         last_status = 'INTERRUPTED'
         last_skip_reason = None
     
-    # Extract the test output (between prefix and status line)
-    test_output = output_lines[:last_status_idx]
-    
     return TestResult(
         name=test_name,
         status=last_status,
-        output='\n'.join(test_output),
-        skip_reason=last_skip_reason
+        skip_reason=last_skip_reason,
+        output_lines=output_lines,
     )
 
 
@@ -691,20 +679,15 @@ def _display_test_result(test_result: TestResult) -> None:
     """
     with output_lock:
         # Don't display INTERRUPTED tests that were never started
-        if test_result.status == 'INTERRUPTED' and not test_result.output:
+        if test_result.status == 'INTERRUPTED' and not test_result.output_lines:
             return
         
-        print('=' * 70)
-        # Extract short name from full name
+        print(_DOUBLE_SEPARATOR_LINE)
         short_name = test_result.name.split('.')[-1] if '.' in test_result.name else test_result.name
         print(f'RUNNING: {short_name} ({test_result.name})')
-        print('-' * 70)
-        print(test_result.output)
-        if test_result.status == 'SKIP' and test_result.skip_reason:
-            print(f'SKIP ({test_result.skip_reason})')
-        else:
-            print(test_result.status)
-        print()
+        print(_SINGLE_SEPARATOR_LINE)
+        for line in test_result.output_lines:
+            print(line)
         sys.stdout.flush()
 
 
