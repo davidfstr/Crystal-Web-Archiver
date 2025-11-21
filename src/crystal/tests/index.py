@@ -98,10 +98,8 @@ _TEST_FUNCS = (
 _TestFuncId = tuple[str, str]  # (module, func_name)
 
 
-# TODO: Rename "test_names" to something more appropriate,
-#       now that items can also refer to test modules (and not just test functions)
 @bg_affinity
-def run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
+def run_tests(raw_test_names: list[str], *, interactive: bool = False) -> bool:
     """
     Runs automated UI tests, printing a summary report,
     and returning whether the run was OK.
@@ -118,14 +116,14 @@ def run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
             # 1. Normalize test names to handle various input formats
             # 2. Error if a test name cannot be resolved to a valid module or function
             try:
-                normalized_test_names = _normalize_test_names(test_names)
+                test_names = _normalize_test_names(raw_test_names)
             except ValueError as e:
                 print(f'ERROR: {e}', file=sys.stderr)
                 return False
         else:
-            normalized_test_names = []  # ignored
+            test_names = []  # ignored
         
-        return _run_tests(normalized_test_names, interactive=interactive)
+        return _run_tests(test_names, interactive=interactive)
 
 
 def _normalize_test_names(raw_test_names: list[str]) -> list[str]:

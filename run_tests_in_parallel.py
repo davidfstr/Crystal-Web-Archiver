@@ -66,15 +66,28 @@ def main(args: Sequence[str]) -> int:
     )
     parsed_args = parser.parse_args(args)
     
+    is_ok = run_tests(
+        raw_test_names=parsed_args.test_names,
+        jobs=parsed_args.jobs,
+        verbose=parsed_args.verbose,
+    )
+    
+    return 0 if is_ok else 1
+
+
+def run_tests(
+        raw_test_names: list[str],
+        jobs: int | None,
+        verbose: bool,
+        ) -> bool:
     # Get test names to run
-    if parsed_args.test_names:
-        raw_test_names = parsed_args.test_names
+    if raw_test_names:
         # Normalize test names to handle various input formats
         try:
-            test_names = normalize_test_names(raw_test_names)
+            test_names = _normalize_test_names(raw_test_names)
         except ValueError as e:
             print(f'ERROR: {e}', file=sys.stderr)
-            return 1
+            return False
         
         test_names_to_run = []
         for test_func in _TEST_FUNCS():
@@ -89,18 +102,15 @@ def main(args: Sequence[str]) -> int:
             test_names_to_run.append(test_name)
     else:
         # Get all available tests
-        test_names_to_run = get_all_test_names()
+        test_names_to_run = _get_all_test_names()
     
     # Determine number of workers
-    num_workers = parsed_args.jobs if parsed_args.jobs is not None else multiprocessing.cpu_count()
-    
-    # Determine verbosity
-    verbose = parsed_args.verbose
+    num_workers = jobs if jobs is not None else multiprocessing.cpu_count()
     
     if verbose:
         print(f'[Runner] Running {len(test_names_to_run)} tests in parallel across {num_workers} workers...', file=sys.stderr)
     # Create log directory for worker output
-    log_dir = create_log_directory()
+    log_dir = _create_log_directory()
     if verbose:
         print(f'[Runner] Worker logs in: {log_dir}', file=sys.stderr)
     
@@ -124,7 +134,7 @@ def main(args: Sequence[str]) -> int:
     ]  # tuples of (interrupt_read_pipe, interrupt_write_pipe)
     if True:
         def run_worker_thread(worker_id: int) -> None:
-            result = run_worker(
+            result = _run_worker(
                 worker_id, work_queue, log_dir, verbose,
                 interrupted_event, worker_interrupt_pipes[worker_id][0],
             )
@@ -198,7 +208,7 @@ def main(args: Sequence[str]) -> int:
                     print(f'[Runner] *** Missing results from worker {worker_id} unexpectedly', file=sys.stderr)
                     missing_results = True
             if missing_results:
-                return 1
+                return False
         
         # Gather all test results
         completed_test_results: dict[str, TestResult] = {}
@@ -228,18 +238,18 @@ def main(args: Sequence[str]) -> int:
             ))
     
     # Format and print summary (individual tests already printed during streaming)
-    (summary, is_ok) = format_summary(all_test_results, end_time - start_time)
+    (summary, is_ok) = _format_summary(all_test_results, end_time - start_time)
     print(summary)
     
     # Play bell sound in terminal (like crystal --test does)
     print('\a', end='', flush=True)
     
-    return 0 if is_ok else 1
+    return is_ok
 
 
-def get_all_test_names() -> list[str]:
+def _get_all_test_names() -> list[str]:
     """
-    Get all available test names by importing Crystal's test index.
+    Gets all available test names.
     
     Returns:
         List of fully qualified test names (e.g., 'crystal.tests.test_workflows.test_function')
@@ -264,27 +274,7 @@ def _TEST_FUNCS():
     return _TEST_FUNCS_
 
 
-def normalize_test_names(raw_test_names: list[str]) -> list[str]:
-    """
-    Normalize test names from various formats into the canonical format.
-    
-    Handles these input formats:
-    - crystal.tests.test_workflows (module)
-    - crystal.tests.test_workflows.test_function (function)
-    - crystal.tests.test_workflows::test_function (pytest-style function)
-    - src/crystal/tests/test_workflows.py (file path)
-    - test_workflows (unqualified module)
-    - test_function (unqualified function)
-    
-    Args:
-        raw_test_names: List of test names in various formats
-    
-    Returns:
-        List of normalized test names (fully qualified)
-    
-    Raises:
-        ValueError: if a test name cannot be resolved to a valid module or function.
-    """
+def _normalize_test_names(raw_test_names: list[str]) -> list[str]:
     # Add src directory to path so we can import crystal modules
     src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src')
     if src_dir not in sys.path:
@@ -295,7 +285,7 @@ def normalize_test_names(raw_test_names: list[str]) -> list[str]:
     return _normalize_test_names(raw_test_names)
 
 
-def create_log_directory() -> str:
+def _create_log_directory() -> str:
     """
     Create a timestamped directory for worker log files.
     
@@ -308,7 +298,7 @@ def create_log_directory() -> str:
     return log_dir
 
 
-def format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tuple[str, bool]:
+def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tuple[str, bool]:
     """
     Format the summary section in the same format as `crystal --test`.
     
@@ -417,10 +407,10 @@ class TestResult:
 
 
 # Global lock for serializing output from multiple workers
-output_lock = threading.Lock()
+_output_lock = threading.Lock()
 
 
-def run_worker(
+def _run_worker(
         worker_id: int,
         work_queue: Queue[Optional[str]],
         log_dir: str,
@@ -677,7 +667,7 @@ def _display_test_result(test_result: TestResult) -> None:
     """
     Display a test result to stdout in the same format as `crystal --test`.
     """
-    with output_lock:
+    with _output_lock:
         # Don't display INTERRUPTED tests that were never started
         if test_result.status == 'INTERRUPTED' and not test_result.output_lines:
             return
