@@ -3,6 +3,9 @@ Tests for Crystal's test runner functionality.
 
 These tests verify that the test infrastructure itself works correctly,
 including error recovery mechanisms, and test utilities.
+
+TODO: Move all the `# === Testing Tests ...` sections from test_cli.py
+      to this module.
 """
 
 from contextlib import redirect_stderr

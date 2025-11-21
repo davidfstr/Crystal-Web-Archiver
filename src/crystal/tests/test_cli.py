@@ -652,30 +652,6 @@ def test_when_stale_before_argument_missing_value_then_prints_error_and_exits() 
 # === Testing Tests (test, --test): Serial ===
 
 def test_can_run_tests_with_test_subcommand() -> None:
-    """Test that 'crystal test <test_name>' works."""
-    result = run_crystal([
-        'test',
-        # NOTE: This is a simple, fast test
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
-    ])
-    assertEqual(0, result.returncode)
-    assertIn('OK', result.stdout)
-    assertIn('Ran 1 tests', result.stdout)
-
-
-def test_can_run_tests_with_test_flag() -> None:
-    """Test that 'crystal --test <test_name>' still works for backward compatibility."""
-    result = run_crystal([
-        '--test',
-        # NOTE: This is a simple, fast test
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
-    ])
-    assertEqual(0, result.returncode)
-    assertIn('OK', result.stdout)
-    assertIn('Ran 1 tests', result.stdout)
-
-
-def test_can_run_multiple_tests_with_test_subcommand() -> None:
     """Test that 'crystal test <test1> <test2>' works."""
     result = run_crystal([
         'test',
@@ -688,7 +664,7 @@ def test_can_run_multiple_tests_with_test_subcommand() -> None:
     assertIn('Ran 2 tests', result.stdout)
 
 
-def test_can_run_multiple_tests_with_test_flag() -> None:
+def test_can_run_tests_with_test_flag() -> None:
     """Test that 'crystal --test <test1> <test2>' works for backward compatibility."""
     result = run_crystal([
         '--test',
@@ -737,7 +713,7 @@ def test_can_run_tests_in_interactive_mode() -> None:
     assertEqual(0, crystal.returncode)
 
 
-def test_when_test_not_found_in_interactive_mode_then_prints_error() -> None:
+def test_given_interactive_mode_when_test_not_found_then_prints_error() -> None:
     """Test that 'crystal test --interactive' handles non-existent tests gracefully."""
     with crystal_running(args=['test', '--interactive']) as crystal:
         assert crystal.stdin is not None
@@ -769,7 +745,7 @@ def test_when_test_not_found_in_interactive_mode_then_prints_error() -> None:
     assertEqual(0, crystal.returncode)
 
 
-def test_when_interactive_flag_used_with_test_names_then_prints_error() -> None:
+def test_given_interactive_mode_when_test_names_provided_then_prints_error() -> None:
     """Test that 'crystal test --interactive <test_name>' is rejected."""
     result = run_crystal([
         'test',
