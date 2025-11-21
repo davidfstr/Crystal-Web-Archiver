@@ -220,27 +220,28 @@ def _main2(args: list[str]) -> None:
             )
             test_parser = subparsers.add_parser(
                 'test',
-                help=argparse.SUPPRESS,  # 'Run automated tests.'
-                add_help=False,
+                # TODO: Investigate why this help text isn't appearing
+                #       when running: crystal test --help
+                help='Run automated tests.'
             )
             test_parser.add_argument(
                 'test_names',
-                help=argparse.SUPPRESS,  # 'Names of tests to run.'
+                help='Names of tests to run.',
                 nargs='*',
             )
             test_parser.add_argument(
                 '--interactive',
-                help=argparse.SUPPRESS,  # 'Run tests in interactive mode.'
+                help='Run tests in interactive mode.',
                 action='store_true',
             )
             test_parser.add_argument(
                 '-p', '--parallel',
-                help=argparse.SUPPRESS,  # 'Run tests in parallel.'
+                help='Run tests in parallel.',
                 action='store_true',
             )
             test_parser.add_argument(
                 '-j', '--jobs',
-                help=argparse.SUPPRESS,  # 'Number of parallel jobs. Only valid with --parallel.'
+                help='Number of parallel jobs. Only valid with --parallel.',
                 type=int,
                 default=None,
             )

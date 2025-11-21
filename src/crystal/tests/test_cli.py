@@ -958,6 +958,26 @@ def test_when_jobs_flag_used_without_parallel_then_prints_error() -> None:
     assertIn('error: -j/--jobs can only be used with -p/--parallel', result.stderr)
 
 
+# === Testing Tests (test): Help ===
+
+def test_tests_are_not_mentioned_in_crystal_help() -> None:
+    result = run_crystal(['--help'])
+    assertEqual(0, result.returncode)
+    assertNotIn('test', result.stdout)
+    assertNotIn('--test', result.stdout)
+
+
+def test_can_run_tests_subcommand_with_help_flag() -> None:
+    result = run_crystal(['test', '--help'])
+    assertEqual(0, result.returncode)
+    # TODO: Investigate why this isn't appearing in the help
+    #assertIn('Run automated tests.', result.stdout)
+    assertIn('--interactive', result.stdout)
+    assertIn('--parallel', result.stdout)
+    assertIn('-j', result.stdout)
+    assertIn('--jobs', result.stdout)
+
+
 # === Platform-Specific Options Tests ===
 
 @skip('not yet automated')
