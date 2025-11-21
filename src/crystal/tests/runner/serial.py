@@ -68,15 +68,6 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
     
     is_coverage_now = is_coverage()  # cache
     
-    if interactive:
-        # Build map of available test functions
-        test_func_by_name = {}  # type: dict[str, Callable]
-        for test_func in TEST_FUNCS:
-            test_name = f'{test_func.__module__}.{test_func.__name__}'
-            test_func_by_name[test_name] = test_func
-    else:
-        test_func_by_name = {}  # unused
-    
     # Run selected tests
     result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
     start_time = time.monotonic()  # capture
@@ -85,6 +76,12 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
         assert warning_list is not None
         
         if interactive:
+            # Build map of available test functions
+            test_func_by_name = {}  # type: dict[str, Callable]
+            for test_func in TEST_FUNCS:
+                test_name = f'{test_func.__module__}.{test_func.__name__}'
+                test_func_by_name[test_name] = test_func
+            
             # Interactive mode: read test names from stdin one at a time
             while True:
                 # Print prompt
