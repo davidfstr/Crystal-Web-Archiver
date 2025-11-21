@@ -69,11 +69,11 @@ def main(args: Sequence[str]) -> int:
 
 def run_tests(
         raw_test_names: list[str],
-        jobs: int | None,
+        *, jobs: int | None,
         verbose: bool,
         ) -> bool:
-    from crystal.tests.index import _TEST_FUNCS
-    from crystal.tests.index import _normalize_test_names
+    from crystal.tests.index import TEST_FUNCS
+    from crystal.tests.runner.serial import _normalize_test_names
     
     # Get test names to run
     if raw_test_names:
@@ -85,7 +85,7 @@ def run_tests(
             return False
         
         test_names_to_run = []
-        for test_func in _TEST_FUNCS:
+        for test_func in TEST_FUNCS:
             test_name = f'{test_func.__module__}.{test_func.__name__}'
             
             # Only run test if it was requested (or if all tests are to be run)
@@ -96,7 +96,7 @@ def run_tests(
     else:
         # Get all available tests
         test_names_to_run = []
-        for test_func in _TEST_FUNCS:
+        for test_func in TEST_FUNCS:
             test_name = f'{test_func.__module__}.{test_func.__name__}'
             test_names_to_run.append(test_name)
     
@@ -250,10 +250,10 @@ def _get_all_test_names() -> list[str]:
     Returns:
         List of fully qualified test names (e.g., 'crystal.tests.test_workflows.test_function')
     """
-    from crystal.tests.index import _TEST_FUNCS
+    from crystal.tests.index import TEST_FUNCS
     
     test_names = []
-    for test_func in _TEST_FUNCS:
+    for test_func in TEST_FUNCS:
         module_name = test_func.__module__
         func_name = test_func.__name__
         test_names.append(f'{module_name}.{func_name}')

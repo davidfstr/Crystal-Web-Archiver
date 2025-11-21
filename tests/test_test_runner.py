@@ -4,7 +4,7 @@ Unit tests for the Crystal test runner functionality in:
 - crystal.tests.util.runner
 """
 
-from crystal.tests.index import _normalize_test_names
+from crystal.tests.runner.serial import _normalize_test_names
 import pytest
 
 

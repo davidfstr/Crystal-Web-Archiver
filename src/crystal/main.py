@@ -640,7 +640,8 @@ def _main2(args: list[str]) -> None:
             
             # Block until test-related modules are done loading,
             # before starting bg_task() on background thread
-            from crystal.tests.index import run_tests
+            from crystal.tests.index import TEST_FUNCS as _
+            from crystal.tests.runner.serial import run_tests
             from crystal.util.bulkheads import capture_crashes_to_stderr
             from crystal.util.xos import is_coverage
             from crystal.util.xthreading import fg_call_and_wait
