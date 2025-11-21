@@ -6,6 +6,7 @@ Runs end-to-end tests in parallel across subprocesses.
 import argparse
 from collections.abc import Sequence
 from contextlib import closing
+from crystal.tests.runner.shared import normalize_test_names
 from dataclasses import dataclass
 import datetime
 import faulthandler
@@ -73,13 +74,12 @@ def run_tests(
         verbose: bool,
         ) -> bool:
     from crystal.tests.index import TEST_FUNCS
-    from crystal.tests.runner.serial import _normalize_test_names
     
     # Get test names to run
     if raw_test_names:
         # Normalize test names to handle various input formats
         try:
-            test_names = _normalize_test_names(raw_test_names)
+            test_names = normalize_test_names(raw_test_names)
         except ValueError as e:
             print(f'ERROR: {e}', file=sys.stderr)
             return False
