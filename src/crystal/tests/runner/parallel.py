@@ -30,11 +30,11 @@ def main(args: Sequence[str]) -> int:
     """
     Main entry point.
     
-    Args:
-        args: Command line arguments (test names)
+    Arguments:
+    * args -- Command line arguments (test names).
     
     Returns:
-        Exit code (0 for success, 1 for failure)
+    * Exit code (0 for success, 1 for failure).
     """
     parser = argparse.ArgumentParser(
         description='Run Crystal tests in parallel across multiple subprocesses.'
@@ -251,7 +251,7 @@ def _get_all_test_names() -> list[str]:
     Gets all available test names.
     
     Returns:
-        List of fully qualified test names (e.g., 'crystal.tests.test_workflows.test_function')
+    * List of fully qualified test names (e.g., 'crystal.tests.test_workflows.test_function').
     """
     from crystal.tests.index import TEST_FUNCS
     
@@ -269,7 +269,7 @@ def _create_log_directory() -> str:
     Create a timestamped directory for worker log files.
     
     Returns:
-        Path to the created directory
+    * Path to the created directory.
     """
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H%M')
     log_dir = os.path.join(tempfile.gettempdir(), f'{timestamp}-crystal-tests')
@@ -283,12 +283,12 @@ def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tup
     
     Individual test results have already been printed during streaming.
     
-    Args:
-        all_tests: All completed test results
-        total_duration: Total time taken
+    Arguments:
+    * all_tests -- All completed test results.
+    * total_duration -- Total time taken.
     
     Returns:
-        Tuple of (formatted summary string, is_ok boolean)
+    * Tuple of (formatted summary string, is_ok boolean).
     """
     output_lines = []
     
@@ -400,15 +400,16 @@ def _run_worker(
     """
     Run a worker subprocess in interactive mode, pulling tests from work_queue on-demand.
     
-    Args:
-        worker_id: ID of this worker (for logging)
-        work_queue: Queue of test names to run. None sentinel indicates no more work.
-        log_dir: Directory to write log files to
-        verbose: Whether to print verbose diagnostic information
-        interrupted_event: Event that is set when Ctrl-C is pressed
+    Arguments:
+    * worker_id -- ID of this worker (for logging).
+    * work_queue -- Queue of test names to run. None sentinel indicates no more work.
+    * log_dir -- Directory to write log files to.
+    * verbose -- Whether to print verbose diagnostic information.
+    * interrupted_event -- Event that is set when Ctrl-C is pressed.
+    * interrupt_read_pipe -- File descriptor for interrupt signaling.
     
     Returns:
-        WorkerResult containing test results and metadata
+    * WorkerResult containing test results and metadata.
     """
     start_time = time.monotonic()
     test_results: list[TestResult] = []
@@ -542,11 +543,11 @@ def _read_until_prompt(
     """
     Read lines from reader until we see the 'test>' prompt.
     
-    Args:
-        reader: TeeReader to read from
+    Arguments:
+    * reader -- TeeReader to read from.
     
     Returns:
-        List of lines read (excluding the prompt line)
+    * Tuple of (list of lines read (excluding the prompt line), status).
     """
     lines = []  # type: list[str]
     while True:
@@ -578,6 +579,14 @@ def _parse_test_result(test_name: str, output_lines: list[str], interrupted: boo
         ----------------------------------------------------------------------
         ... test output ...
         OK|SKIP|FAILURE|ERROR|INTERRUPTED
+    
+    Arguments:
+    * test_name -- Name of the test.
+    * output_lines -- Output lines from the test run.
+    * interrupted -- Whether the test run was interrupted.
+    
+    Returns:
+    * TestResult containing the parsed test result.
     """
     # Validate and remove prefix lines
     prefix_lines = output_lines[:3]
@@ -686,7 +695,7 @@ class InterruptableTeeReader:
         Reads a line from the underlying text stream.
         
         Raises:
-        * InterruptedError -- if the read was interrupted
+        * InterruptedError -- if the read was interrupted.
         """
         if self._interrupted:
             raise InterruptedError()
