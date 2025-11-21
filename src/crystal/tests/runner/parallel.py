@@ -15,8 +15,10 @@ import datetime
 import faulthandler
 import multiprocessing
 import os
+import queue
 from queue import Queue
 import select
+import signal
 import subprocess
 import sys
 import tempfile
@@ -166,20 +168,9 @@ def run_tests(
         except KeyboardInterrupt:
             # Ctrl-C pressed
             if verbose:
-                print('\n[Runner] Received Ctrl-C, shutting down workers...', file=sys.stderr)
+                print('\n[Runner] Received Ctrl-C. Shutting down workers...', file=sys.stderr)
             
-            # Signal workers to stop
-            interrupted_event.set()
-            
-            # Signal workers via interrupt pipes to unblock any stuck reads
-            with worker_results_lock:
-                for (worker_id, (_, interrupt_write_pipe)) in enumerate(worker_interrupt_pipes):
-                    try:
-                        # Send interrupt signal byte
-                        os.write(interrupt_write_pipe, b'\x00')
-                    except Exception as e:
-                        if verbose:
-                            print(f'[Runner] Failed to signal worker {worker_id} via pipe: {e}', file=sys.stderr)
+            _interrupt_workers(interrupted_event, worker_interrupt_pipes, verbose)
             
             # Wait for workers to finish gracefully
             all_workers_joined = True  # may be overridden
@@ -282,6 +273,24 @@ def _create_log_directory() -> str:
     return log_dir
 
 
+def _interrupt_workers(
+        interrupted_event: threading.Event,
+        worker_interrupt_pipes: list[tuple[int, int]],
+        verbose: bool,
+        ) -> None:
+    # Signal workers to stop
+    interrupted_event.set()
+    
+    # Signal workers via interrupt pipes to unblock any stuck reads
+    for (worker_id, (_, interrupt_write_pipe)) in enumerate(worker_interrupt_pipes):
+        try:
+            # Send interrupt signal byte
+            os.write(interrupt_write_pipe, b'\x00')
+        except Exception as e:
+            if verbose:
+                print(f'[Runner] Failed to signal worker {worker_id} via pipe: {e}', file=sys.stderr)
+
+
 def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tuple[str, bool]:
     """
     Format the summary section in the same format as `crystal --test`.
@@ -378,7 +387,7 @@ class WorkerResult:
     """Result of a worker subprocess."""
     test_results: 'list[TestResult]'
     duration: float
-    returncode: int
+    returncode: int | Literal[-1]  # -1 if process did not terminate
 
 
 @dataclass(frozen=True)
@@ -388,6 +397,9 @@ class TestResult:
     status: str  # 'OK', 'SKIP', 'FAILURE', 'ERROR', 'INTERRUPTED'
     skip_reason: Optional[str]
     output_lines: list[str]
+    
+    # Tell pytest this class is not a test suite, despite being named "Test*"
+    __test__ = False
 
 
 # Global lock for serializing output from multiple workers
@@ -398,6 +410,7 @@ _displayed_test_index = 0
 _num_tests_to_display: int | None = None
 
 
+@bg_affinity
 def _run_worker(
         worker_id: int,
         work_queue: Queue[Optional[str]],
@@ -408,6 +421,18 @@ def _run_worker(
         ) -> WorkerResult:
     """
     Run a worker subprocess in interactive mode, pulling tests from work_queue on-demand.
+    
+    Implementation notes:
+    - Runs in the parent process that is controlling worker subprocesses,
+      on a background thread.
+    - Is prepared to be interrupted at any time by its caller,
+      through interrupted_event and interrupt_read_pipe.
+        - Is NOT prepared to handle KeyboardInterrupt exceptions itself,
+          because it always runs in a background thread, and background threads
+          never receive KeyboardInterrupt exceptions directly.
+    - Is prepared for its worker subprocess to unexpectedly terminate, for several reasons:
+        - A Ctrl-C signal may interrupt the worker subprocess.
+        - A segfault while running tests may terminate the worker subprocess.
     
     Arguments:
     * worker_id -- ID of this worker (for logging).
@@ -465,7 +490,7 @@ def _run_worker(
                     # Get next test from queue (blocking with timeout to check for interrupts)
                     try:
                         test_name = work_queue.get(timeout=0.1)
-                    except:
+                    except queue.Empty:
                         # Timeout. Check for interrupts and try again.
                         continue
                     
@@ -513,11 +538,11 @@ def _run_worker(
                         pass
                 except InterruptedError:
                     pass
+                
+                # Wait for process to complete
+                returncode = process.wait()
             else:
                 assert_never(status)
-            
-            # Wait for process to complete
-            returncode = process.wait()
     except Exception as e:
         if isinstance(e, BrokenPipeError):
             if verbose:
@@ -544,9 +569,15 @@ def _run_worker(
         # Ensure process is terminated
         if process.poll() is None:
             process.terminate()
-            process.wait(timeout=5.0)
+            try:
+                process.wait(timeout=5.0)
+            except subprocess.TimeoutExpired:
+                print(
+                    f'[Runner] Warning: Timed out waiting for worker {worker_id} process to terminate.',
+                    file=sys.stderr)
         
-        # Close interrupt pipe read-end (write-end will be closed by main thread)
+        # Close interrupt pipe read-end.
+        # (The write-end will be closed by the main thread.)
         try:
             os.close(interrupt_read_pipe)
         except Exception:
@@ -617,7 +648,7 @@ def _parse_test_result(test_name: str, output_lines: list[str], interrupted: boo
     Arguments:
     * test_name -- Name of the test.
     * output_lines -- Output lines from the test run.
-    * interrupted -- Whether the test run was interrupted.
+    * interrupted -- Whether the test run in this process was interrupted.
     
     Returns:
     * TestResult containing the parsed test result.
@@ -635,9 +666,9 @@ def _parse_test_result(test_name: str, output_lines: list[str], interrupted: boo
             name=test_name,
             status='ERROR',
             skip_reason=None,
-            output_lines=['ERROR (Invalid prefix lines in test output)', ''],
+            output_lines=['ERROR (Incomplete test prefix lines. Did the test segfault?)', ''],
         )
-    del output_lines[:3]
+    output_lines = output_lines[3:]  # reinterpret
     
     if not interrupted:
         # Find the last status line
@@ -671,7 +702,7 @@ def _parse_test_result(test_name: str, output_lines: list[str], interrupted: boo
                 name=test_name,
                 status='ERROR',
                 skip_reason=None,
-                output_lines=output_lines + ['ERROR (Test status line not found)', ''],
+                output_lines=output_lines + ['ERROR (No test status line. Did the test segfault?)', ''],
             )
     else:
         last_status = 'INTERRUPTED'
@@ -761,7 +792,12 @@ class InterruptableTeeReader:
     
     def close(self) -> None:
         self.source.close()
-        self.log_file.close()
+        try:
+            # NOTE: May raise `OSError: [Errno 9] Bad file descriptor` if
+            #       log_file has never been read from.
+            self.log_file.close()
+        except Exception:
+            pass
 
 
 # ------------------------------------------------------------------------------
