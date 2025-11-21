@@ -649,7 +649,7 @@ def test_when_stale_before_argument_missing_value_then_prints_error_and_exits() 
     assertIn('expected one argument', result.stderr)
 
 
-# === Testing Tests (test, --test) ===
+# === Testing Tests (test, --test): Serial ===
 
 def test_can_run_tests_with_test_subcommand() -> None:
     """Test that 'crystal test <test_name>' works."""
@@ -906,6 +906,56 @@ def test_special_b() -> None:
 #       - test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_test_as_interrupted_and_ignores_further_tests_on_stdin
 def test_special_c() -> None:
     pass
+
+
+# === Testing Tests (test): Parallel ===
+
+def test_can_run_tests_in_parallel() -> None:
+    """Test that 'crystal test --parallel <test_name>' works."""
+    result = run_crystal([
+        'test',
+        '--parallel',
+        # NOTE: This is a simple, fast test
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+    ])
+    assertEqual(0, result.returncode)
+    assertIn('OK', result.stdout)
+    assertIn('Ran 1 tests', result.stdout)
+
+
+def test_can_run_tests_in_parallel_with_explicit_job_count() -> None:
+    """Test that 'crystal test --parallel -j 2 <test_name>' works."""
+    result = run_crystal([
+        'test',
+        '--parallel', '-j', '2',
+        # NOTE: This is a simple, fast test
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+    ])
+    assertEqual(0, result.returncode)
+    assertIn('OK', result.stdout)
+    assertIn('Ran 1 tests', result.stdout)
+
+
+def test_when_interactive_flag_used_with_parallel_then_prints_error() -> None:
+    """Test that 'crystal test --parallel --interactive' is rejected."""
+    result = run_crystal([
+        'test',
+        '--parallel',
+        '--interactive',
+    ])
+    assert result.returncode != 0
+    assertIn('error: --interactive cannot be used with -p/--parallel', result.stderr)
+
+
+def test_when_jobs_flag_used_without_parallel_then_prints_error() -> None:
+    """Test that 'crystal test -j 2 <test_name>' without --parallel is rejected."""
+    result = run_crystal([
+        'test',
+        '-j', '2',
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+    ])
+    assert result.returncode != 0
+    assertIn('error: -j/--jobs can only be used with -p/--parallel', result.stderr)
 
 
 # === Platform-Specific Options Tests ===

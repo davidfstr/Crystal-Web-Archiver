@@ -7,6 +7,7 @@ import argparse
 from collections.abc import Sequence
 from contextlib import closing
 from crystal.tests.runner.shared import normalize_test_names
+from crystal.util.xthreading import fg_affinity
 from dataclasses import dataclass
 import datetime
 import faulthandler
@@ -68,6 +69,8 @@ def main(args: Sequence[str]) -> int:
 
 # === Run Tests ===
 
+# NOTE: Must run on the main thread so that it can handle KeyboardInterrupts
+@fg_affinity
 def run_tests(
         raw_test_names: list[str],
         *, jobs: int | None,

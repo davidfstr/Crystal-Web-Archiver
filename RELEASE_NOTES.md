@@ -22,11 +22,11 @@ Release Notes ⋮
     * Tests can now be run using a subcommand style `crystal test <test_names>...` 
       in addition to the legacy `crystal --test <test_names>...` syntax. 
         * The subcommand style is recommended for future use and will enable 
-          test-specific options like `--quiet`, `--verbose`, and `--interactive` 
-          in the future.
-    * When running tests with `crystal test` or `crystal --test`, 
-      pressing Ctrl-C now prints a summary section before exiting, 
-      marking interrupted tests with "-" status and showing a 
+          test-specific options like `--verbose` in the future.
+    * Tests can now be run in parallel using `crystal test --parallel <test_names>...` 
+      or `crystal test -p <test_names>...`.
+    * When running tests, pressing Ctrl-C now prints a summary section 
+      before exiting,  marking interrupted tests with "-" status and showing a 
       "Rerun interrupted tests with:" section.
 
 [interactive interpreter]: https://docs.python.org/3/whatsnew/3.13.html#whatsnew313-better-interactive-interpreter

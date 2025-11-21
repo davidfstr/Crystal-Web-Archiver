@@ -233,6 +233,17 @@ def _main2(args: list[str]) -> None:
                 help=argparse.SUPPRESS,  # 'Run tests in interactive mode.'
                 action='store_true',
             )
+            test_parser.add_argument(
+                '-p', '--parallel',
+                help=argparse.SUPPRESS,  # 'Run tests in parallel.'
+                action='store_true',
+            )
+            test_parser.add_argument(
+                '-j', '--jobs',
+                help=argparse.SUPPRESS,  # 'Number of parallel jobs. Only valid with --parallel.'
+                type=int,
+                default=None,
+            )
         
         # Define main command
         parser.add_argument(
@@ -372,6 +383,18 @@ def _main2(args: list[str]) -> None:
                 if parsed_args.test_names:
                     print('error: test names cannot be specified with --interactive', file=sys.stderr)
                     sys.exit(2)
+            
+            # Validate --interactive disallows --parallel
+            if (hasattr(parsed_args, 'parallel') and parsed_args.parallel and
+                hasattr(parsed_args, 'interactive') and parsed_args.interactive):
+                print('error: --interactive cannot be used with -p/--parallel', file=sys.stderr)
+                sys.exit(2)
+            
+            # Validate --jobs requires --parallel
+            if (hasattr(parsed_args, 'jobs') and parsed_args.jobs is not None and
+                (not hasattr(parsed_args, 'parallel') or not parsed_args.parallel)):
+                print('error: -j/--jobs can only be used with -p/--parallel', file=sys.stderr)
+                sys.exit(2)
         else:
             parsed_args.test = None
         
@@ -391,6 +414,22 @@ def _main2(args: list[str]) -> None:
         from crystal.install import install_to_linux_desktop_environment
         install_to_linux_desktop_environment()
         sys.exit()
+    
+    # Run (parallel) tests if requested
+    is_parallel = hasattr(parsed_args, 'parallel') and parsed_args.parallel
+    if parsed_args.test is not None and is_parallel:
+        from crystal.tests.runner.parallel import run_tests as run_tests_parallel
+
+        jobs = parsed_args.jobs if hasattr(parsed_args, 'jobs') else None
+        
+        # NOTE: Run on main thread so that it can handle KeyboardInterrupt
+        is_ok = run_tests_parallel(
+            parsed_args.test,
+            jobs=jobs,
+            verbose=False
+        )
+        exit_code = 0 if is_ok else 1
+        sys.exit(exit_code)
     
     # Start GUI subsystem
     import wx
@@ -612,6 +651,8 @@ def _main2(args: list[str]) -> None:
         if not parsed_args.headless:
             # Queue call of app.OnInit() and _did_launch() after main loop starts
             # NOTE: Shows the dock icon on macOS
+            # NOTE: Overrides Ctrl-C handling to exit process immediately,
+            #       without raising KeyboardInterrupt in main thread
             app = MyApp(redirect=False)
         else:
             # Queue call of _did_launch() after main loop starts
@@ -624,8 +665,13 @@ def _main2(args: list[str]) -> None:
         if shell is not None:
             shell.start(wait_for_banner=True)  # if not already started
         
-        # Starts tests if requested
+        # Start (serial) tests if requested
         if parsed_args.test is not None:
+            assert not is_parallel, \
+                'Parallel tests should have been run earlier in the main function'
+            
+            is_interactive = hasattr(parsed_args, 'interactive') and parsed_args.interactive
+            
             from crystal.util.xthreading import (
                 bg_call_later, has_foreground_thread,
             )
@@ -641,21 +687,15 @@ def _main2(args: list[str]) -> None:
             # Block until test-related modules are done loading,
             # before starting bg_task() on background thread
             from crystal.tests.index import TEST_FUNCS as _
-            from crystal.tests.runner.serial import run_tests
+            from crystal.tests.runner.serial import run_tests as run_tests_serial
             from crystal.util.bulkheads import capture_crashes_to_stderr
             from crystal.util.xos import is_coverage
             from crystal.util.xthreading import fg_call_and_wait
-            
-            # Determine if running in interactive mode
-            is_interactive = (
-                hasattr(parsed_args, 'interactive') and 
-                parsed_args.interactive
-            )
 
             # NOTE: Any unhandled exception will probably call os._exit(1)
             #       before reaching this decorator.
             @capture_crashes_to_stderr
-            def bg_task():
+            def bg_task() -> None:
                 # (Don't import anything here, because strange things can
                 #  happen if the foreground thread tries to import the
                 #  same new modules at the same time. Instead put
@@ -663,7 +703,7 @@ def _main2(args: list[str]) -> None:
                 
                 is_ok = False
                 try:
-                    is_ok = run_tests(parsed_args.test, interactive=is_interactive)
+                    is_ok = run_tests_serial(parsed_args.test, interactive=is_interactive)
                 finally:
                     exit_code = 0 if is_ok else 1
                     if is_coverage():
@@ -677,6 +717,7 @@ def _main2(args: list[str]) -> None:
                     else:
                         # Exit app immediately
                         os._exit(exit_code)
+            # NOTE: Run on background thread so that UI is not blocked
             bg_call_later(bg_task, name='main.run_tests')
         
         # 1. Run main loop
