@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
 """
-Runs Crystal end-to-end tests in parallel across 2 subprocesses.
-
-Usage:
-    python run_tests_in_parallel.py [test_name1 test_name2 ...]
-
-If no test names are provided, runs all tests.
-
-This script runs tests in parallel using dynamic assignment: tests are
-assigned to workers on-demand as they become available, ensuring balanced
-load distribution.
+Runs end-to-end tests in parallel across subprocesses.
 """
 
 import argparse
@@ -20,8 +11,7 @@ import datetime
 import faulthandler
 import multiprocessing
 import os
-from queue import Empty, Queue
-import re
+from queue import Queue
 import select
 import subprocess
 import sys
@@ -75,11 +65,16 @@ def main(args: Sequence[str]) -> int:
     return 0 if is_ok else 1
 
 
+# === Run Tests ===
+
 def run_tests(
         raw_test_names: list[str],
         jobs: int | None,
         verbose: bool,
         ) -> bool:
+    from crystal.tests.index import _TEST_FUNCS
+    from crystal.tests.index import _normalize_test_names
+    
     # Get test names to run
     if raw_test_names:
         # Normalize test names to handle various input formats
@@ -90,9 +85,7 @@ def run_tests(
             return False
         
         test_names_to_run = []
-        for test_func in _TEST_FUNCS():
-            if not callable(test_func):
-                raise ValueError(f'Test function is not callable: {test_func}')
+        for test_func in _TEST_FUNCS:
             test_name = f'{test_func.__module__}.{test_func.__name__}'
             
             # Only run test if it was requested (or if all tests are to be run)
@@ -102,7 +95,10 @@ def run_tests(
             test_names_to_run.append(test_name)
     else:
         # Get all available tests
-        test_names_to_run = _get_all_test_names()
+        test_names_to_run = []
+        for test_func in _TEST_FUNCS:
+            test_name = f'{test_func.__module__}.{test_func.__name__}'
+            test_names_to_run.append(test_name)
     
     # Determine number of workers
     num_workers = jobs if jobs is not None else multiprocessing.cpu_count()
@@ -254,35 +250,15 @@ def _get_all_test_names() -> list[str]:
     Returns:
         List of fully qualified test names (e.g., 'crystal.tests.test_workflows.test_function')
     """
+    from crystal.tests.index import _TEST_FUNCS
+    
     test_names = []
-    for test_func in _TEST_FUNCS():
+    for test_func in _TEST_FUNCS:
         module_name = test_func.__module__
         func_name = test_func.__name__
         test_names.append(f'{module_name}.{func_name}')
     
     return test_names
-
-
-def _TEST_FUNCS():
-    # Add src directory to path so we can import crystal modules
-    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src')
-    if src_dir not in sys.path:
-        sys.path.insert(0, src_dir)
-    
-    from crystal.tests.index import _TEST_FUNCS as _TEST_FUNCS_
-    
-    return _TEST_FUNCS_
-
-
-def _normalize_test_names(raw_test_names: list[str]) -> list[str]:
-    # Add src directory to path so we can import crystal modules
-    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src')
-    if src_dir not in sys.path:
-        sys.path.insert(0, src_dir)
-    
-    from crystal.tests.index import _normalize_test_names
-    
-    return _normalize_test_names(raw_test_names)
 
 
 def _create_log_directory() -> str:

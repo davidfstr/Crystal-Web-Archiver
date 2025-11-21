@@ -240,8 +240,6 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
         # Build map of available test functions
         test_func_by_name = {}  # type: dict[str, Callable]
         for test_func in _TEST_FUNCS:
-            if not callable(test_func):
-                raise ValueError(f'Test function is not callable: {test_func}')
             test_name = f'{test_func.__module__}.{test_func.__name__}'
             test_func_by_name[test_name] = test_func
     else:
@@ -327,8 +325,6 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
             # Batch mode: run all requested tests
             test_funcs_to_run = []
             for test_func in _TEST_FUNCS:
-                if not callable(test_func):
-                    raise ValueError(f'Test function is not callable: {test_func}')
                 test_name = f'{test_func.__module__}.{test_func.__name__}'
                 
                 # Only run test if it was requested (or if all tests are to be run)
