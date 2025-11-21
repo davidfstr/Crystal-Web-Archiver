@@ -677,6 +677,19 @@ def test_can_run_tests_with_test_flag() -> None:
     assertIn('Ran 2 tests', result.stdout)
 
 
+# NOTE: More kinds of raw test names are tested in TestNormalizeTestNames
+def test_can_run_tests_with_unqualified_function_or_module_name() -> None:
+    result = run_crystal([
+        '--test',
+        # NOTE: This is a simple, fast test
+        'test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors',
+        # NOTE: This is a fast test module
+        'test_profile',
+    ])
+    assertEqual(0, result.returncode)
+    assertRegex(result.stdout, r'Ran \d+ tests')
+
+
 def test_can_run_tests_in_interactive_mode() -> None:
     """Test that 'crystal test --interactive' works."""
     # Start Crystal in interactive test mode
@@ -710,6 +723,45 @@ def test_can_run_tests_in_interactive_mode() -> None:
         assertIn('OK', output)
     
     # Verify exit code
+    assertEqual(0, crystal.returncode)
+
+
+# NOTE: More kinds of raw test names are tested in TestNormalizeTestNames
+def test_given_interactive_mode_can_run_tests_with_unqualified_function_or_module_name() -> None:
+    with crystal_running(args=['test', '--interactive']) as crystal:
+        assert crystal.stdin is not None
+        assert isinstance(crystal.stdout, TextIOBase)
+        
+        # Read the first prompt
+        (output, _) = read_until(crystal.stdout, 'test>\n', timeout=2.0)
+        
+        # Send test name #1
+        # NOTE: This is a simple, fast test
+        crystal.stdin.write('test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors\n')
+        crystal.stdin.flush()
+        
+        # Verify OK was printed
+        (output, _) = read_until(crystal.stdout, 'test>\n', timeout=5.0)
+        assertIn('OK\n', output)
+        
+        # Send test name #2
+        # NOTE: This is a fast test module
+        crystal.stdin.write('test_profile\n')
+        crystal.stdin.flush()
+        
+        # Verify multiple tests finished
+        (output, _) = read_until(crystal.stdout, 'test>\n', timeout=5.0)
+        
+        # Close stdin
+        crystal.stdin.close()
+        
+        # Wait for summary
+        (output, _) = read_until(crystal.stdout, '\x07', timeout=5.0)
+        assertIn('SUMMARY', output)
+        assertIn('OK', output)
+        assertRegex(output, r'Ran \d+ tests')
+    
+    # Exit code should be 0
     assertEqual(0, crystal.returncode)
 
 
@@ -932,6 +984,20 @@ def test_when_jobs_flag_used_without_parallel_then_prints_error() -> None:
     ])
     assert result.returncode != 0
     assertIn('error: -j/--jobs can only be used with -p/--parallel', result.stderr)
+
+
+# NOTE: More kinds of raw test names are tested in TestNormalizeTestNames
+def test_can_run_tests_in_parallel_with_unqualified_function_or_module_name() -> None:
+    result = run_crystal([
+        'test',
+        '--parallel',
+        # NOTE: This is a simple, fast test
+        'test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors',
+        # NOTE: This is a fast test module
+        'test_profile',
+    ])
+    assertEqual(0, result.returncode)
+    assertRegex(result.stdout, r'Ran \d+ tests')
 
 
 # === Testing Tests (test): Help ===
