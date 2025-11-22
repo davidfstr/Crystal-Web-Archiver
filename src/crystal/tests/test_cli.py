@@ -986,6 +986,21 @@ def test_when_jobs_flag_used_without_parallel_then_prints_error() -> None:
     assertIn('error: -j/--jobs can only be used with -p/--parallel', result.stderr)
 
 
+def test_can_run_tests_in_parallel_with_verbose_flag() -> None:
+    """Test that 'crystal test --parallel -v <test_name>' works and prints verbose output."""
+    result = run_crystal([
+        'test',
+        '--parallel', '-v',
+        # NOTE: This is a simple, fast test
+        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+    ])
+    assertEqual(0, result.returncode)
+    assertIn('OK', result.stdout)
+    assertIn('Ran 1 tests', result.stdout)
+    # Verbose mode should print additional diagnostic information to stderr
+    assertIn('[Runner]', result.stderr)
+
+
 # NOTE: More kinds of raw test names are tested in TestNormalizeTestNames
 def test_can_run_tests_in_parallel_with_unqualified_function_or_module_name() -> None:
     result = run_crystal([
@@ -1018,6 +1033,8 @@ def test_can_run_tests_subcommand_with_help_flag() -> None:
     assertIn('--parallel', result.stdout)
     assertIn('-j', result.stdout)
     assertIn('--jobs', result.stdout)
+    assertIn('-v', result.stdout)
+    assertIn('--verbose', result.stdout)
 
 
 # === Platform-Specific Options Tests ===

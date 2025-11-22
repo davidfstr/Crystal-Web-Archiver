@@ -245,6 +245,11 @@ def _main2(args: list[str]) -> None:
                 type=int,
                 default=None,
             )
+            test_parser.add_argument(
+                '-v', '--verbose',
+                help='Print additional diagnostic information. Only applies with --parallel.',
+                action='store_true',
+            )
         
         # Define main command
         parser.add_argument(
@@ -422,12 +427,13 @@ def _main2(args: list[str]) -> None:
         from crystal.tests.runner.parallel import run_tests as run_tests_parallel
 
         jobs = parsed_args.jobs if hasattr(parsed_args, 'jobs') else None
+        verbose = parsed_args.verbose if hasattr(parsed_args, 'verbose') else False
         
         # NOTE: Run on main thread so that it can handle KeyboardInterrupt
         is_ok = run_tests_parallel(
             parsed_args.test,
             jobs=jobs,
-            verbose=False
+            verbose=verbose
         )
         exit_code = 0 if is_ok else 1
         sys.exit(exit_code)
