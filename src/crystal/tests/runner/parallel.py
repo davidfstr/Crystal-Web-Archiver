@@ -431,7 +431,7 @@ def _run_worker(
         # Create log file for this worker
         log_file_path = os.path.join(log_dir, f'worker{worker_id}-pid{process.pid}.log')
         if verbose:
-            print(f'[Worker {worker_id}] Starting', file=sys.stderr)
+            print(f'[Worker {worker_id}] Starting with pid {process.pid}', file=sys.stderr)
         
         # Wrap stdout to copy output to log file and to provide interruptability
         reader = InterruptableTeeReader(
