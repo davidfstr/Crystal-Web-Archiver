@@ -83,73 +83,70 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                 test_func_by_name[test_name] = test_func
             
             # Interactive mode: read test names from stdin one at a time
-            while True:
-                # Print prompt
-                print('test>', flush=True)
-                
-                # Read test name from stdin
-                try:
+            try:
+                while True:
+                    # Print prompt
+                    print('test>', flush=True)
+                    
+                    # Read test name from stdin
                     line = sys.stdin.readline()
-                except KeyboardInterrupt:
-                    # Ctrl-C pressed at the prompt: Exit normally
-                    print()  # new line after ^C
-                    break
-                
-                # Check for EOF
-                if not line:
-                    break
-                
-                test_name = line.strip()
-                
-                # Skip empty lines
-                if not test_name:
-                    continue
-                
-                # Check if test exists
-                if test_name not in test_func_by_name:
-                    # Try to normalize the test name
-                    try:
-                        normalized_names = normalize_test_names([test_name])
-                        if normalized_names and normalized_names[0] in test_func_by_name:
-                            test_name = normalized_names[0]  # reinterpret
-                        else:
+                    
+                    # Check for EOF
+                    if not line:
+                        break
+                    
+                    test_name = line.strip()
+                    
+                    # Skip empty lines
+                    if not test_name:
+                        continue
+                    
+                    # Check if test exists
+                    if test_name not in test_func_by_name:
+                        # Try to normalize the test name
+                        try:
+                            normalized_names = normalize_test_names([test_name])
+                            if normalized_names and normalized_names[0] in test_func_by_name:
+                                test_name = normalized_names[0]  # reinterpret
+                            else:
+                                print(f'test: Test not found: {test_name}')
+                                continue
+                        except ValueError as e:
+                            # Normalization failed
                             print(f'test: Test not found: {test_name}')
                             continue
-                    except ValueError as e:
-                        # Normalization failed
-                        print(f'test: Test not found: {test_name}')
-                        continue
-                
-                # Get test function
-                test_func = test_func_by_name[test_name]
-                test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
-                
-                # Run the single test
-                try:
-                    _run_single_test(
-                        test_func=test_func,
-                        test_func_id=test_func_id,
-                        test_func_index=run_count,
-                        num_test_funcs_to_run=None,
-                        result_for_test_func_id=result_for_test_func_id,
-                        is_coverage_now=is_coverage_now
-                    )
-                    run_count += 1
-                except KeyboardInterrupt:
-                    # Ctrl-C pressed while running test: Mark as interrupted
-                    print()  # new line after ^C
                     
-                    print('INTERRUPTED')
+                    # Get test function
+                    test_func = test_func_by_name[test_name]
+                    test_func_id = (test_func.__module__, test_func.__name__)  # type: _TestFuncId
                     
-                    # Mark only this single test as interrupted
-                    result_for_test_func_id[test_func_id] = _TestInterrupted()
-                    run_count += 1
-                    
-                    # Ignore any further tests specified on stdin
-                    break
-                except NoForegroundThreadError:
-                    # Fatal error; abort
-                    break
+                    # Run the single test
+                    try:
+                        _run_single_test(
+                            test_func=test_func,
+                            test_func_id=test_func_id,
+                            test_func_index=run_count,
+                            num_test_funcs_to_run=None,
+                            result_for_test_func_id=result_for_test_func_id,
+                            is_coverage_now=is_coverage_now
+                        )
+                        run_count += 1
+                    except KeyboardInterrupt:
+                        print('INTERRUPTED')
+                        print()
+                        
+                        # Mark this test as interrupted
+                        result_for_test_func_id[test_func_id] = _TestInterrupted()
+                        run_count += 1
+                        
+                        # Ignore any further tests specified on stdin
+                        raise
+                    except NoForegroundThreadError:
+                        # Fatal error; abort
+                        break
+            except KeyboardInterrupt:
+                # Proceed to print a summary section, and exit the process
+                pass
         else:
             # Batch mode: run all requested tests
             test_funcs_to_run = []
@@ -164,39 +161,42 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                 
             num_test_funcs_to_run = len(test_funcs_to_run)  # cache
             
-            for (test_func_index, test_func) in enumerate(test_funcs_to_run):
-                test_func_id = (test_func.__module__, test_func.__name__)
-                
-                # Run the single test
-                try:
-                    _run_single_test(
-                        test_func=test_func,
-                        test_func_id=test_func_id,
-                        test_func_index=test_func_index,
-                        num_test_funcs_to_run=num_test_funcs_to_run,
-                        result_for_test_func_id=result_for_test_func_id,
-                        is_coverage_now=is_coverage_now
-                    )
-                    run_count += 1
-                except KeyboardInterrupt:
-                    # Ctrl-C pressed while running test: Mark as interrupted
-                    print()  # new line after ^C
+            try:
+                for (test_func_index, test_func) in enumerate(test_funcs_to_run):
+                    test_func_id = (test_func.__module__, test_func.__name__)
                     
-                    print('INTERRUPTED')
-                    
-                    # Mark this test as interrupted
-                    result_for_test_func_id[test_func_id] = _TestInterrupted()
-                    run_count += 1
-                    
-                    # Mark all remaining tests as interrupted
-                    for remaining_test_func in test_funcs_to_run[test_func_index + 1:]:
-                        remaining_test_func_id = (remaining_test_func.__module__, remaining_test_func.__name__)
+                    # Run the single test
+                    try:
+                        _run_single_test(
+                            test_func=test_func,
+                            test_func_id=test_func_id,
+                            test_func_index=test_func_index,
+                            num_test_funcs_to_run=num_test_funcs_to_run,
+                            result_for_test_func_id=result_for_test_func_id,
+                            is_coverage_now=is_coverage_now
+                        )
+                        run_count += 1
+                    except KeyboardInterrupt:
+                        print('INTERRUPTED')
+                        print()
+                        
+                        # Mark this test as interrupted
+                        result_for_test_func_id[test_func_id] = _TestInterrupted()
+                        run_count += 1
+                        
+                        raise
+                    except NoForegroundThreadError:
+                        # Fatal error; abort
+                        break
+            except KeyboardInterrupt:
+                # Mark all remaining tests as interrupted
+                for remaining_test_func in test_funcs_to_run[test_func_index:]:
+                    remaining_test_func_id = (remaining_test_func.__module__, remaining_test_func.__name__)
+                    if remaining_test_func_id not in result_for_test_func_id:
                         result_for_test_func_id[remaining_test_func_id] = _TestInterrupted()
-                    
-                    break
-                except NoForegroundThreadError:
-                    # Fatal error; abort
-                    break
+                
+                # Proceed to print a summary section, and exit the process
+                pass
     if is_coverage_now:
         # Tell code coverage that no test is now running
         xcoverage.switch_context()
@@ -323,7 +323,7 @@ def _run_single_test(
     is_coverage_now: bool
 ) -> None:
     """
-    Run a single test function and record its result.
+    Runs a single test function and records its result.
     
     Arguments:
     * test_func -- The test function to run
@@ -346,14 +346,20 @@ def _run_single_test(
     
     app_prefs.reset()
     
-    print('=' * 70)
+    # Print prefix, atomically
+    # (so that a concurrent KeyboardInterrupt will never print a partial prefix)
     if num_test_funcs_to_run is not None:
         (numer, denom) = (test_func_index+1, num_test_funcs_to_run)
-        suffix = f' [{int(numer*100/denom)}%]'
+        percent_suffix = f' [{int(numer*100/denom)}%]'
     else:
-        suffix = ''
-    print(f'RUNNING: {test_func_id[1]} ({test_func_id[0]}.{test_func_id[1]}){suffix}')
-    print('-' * 70)
+        percent_suffix = ''
+    prefix_lines = [
+        '=' * 70,
+        f'RUNNING: {test_func_id[1]} ({test_func_id[0]}.{test_func_id[1]}){percent_suffix}',
+        '-' * 70
+    ]
+    print('\n'.join(prefix_lines))
+    
     try:
         try:
             run_test(test_func)
