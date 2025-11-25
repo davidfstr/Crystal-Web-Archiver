@@ -7,7 +7,9 @@ import argparse
 from collections.abc import Sequence
 from contextlib import closing
 from crystal.tests.runner.shared import normalize_test_names
-from crystal.util.xthreading import fg_affinity
+from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.xfunctools import partial2
+from crystal.util.xthreading import bg_affinity, bg_call_later, fg_affinity
 from dataclasses import dataclass
 import datetime
 import faulthandler
@@ -132,6 +134,7 @@ def run_tests(
         os.pipe() for i in range(num_workers)
     ]  # tuples of (interrupt_read_pipe, interrupt_write_pipe)
     if True:
+        @capture_crashes_to_stderr
         def run_worker_thread(worker_id: int) -> None:
             result = _run_worker(
                 worker_id, work_queue, log_dir, verbose,
@@ -143,14 +146,10 @@ def run_tests(
         # Start workers
         worker_threads = []
         for i in range(num_workers):
-            # NOTE: Don't use bg_call_later() here, which is part of "crystal"
-            #       infrastructure, so that this module stays self-contained
-            worker_thread = threading.Thread(  # pylint: disable=no-direct-thread
-                target=run_worker_thread,
-                args=(i,),
+            worker_thread = bg_call_later(
+                partial2(run_worker_thread, i),
                 name=f'Worker-{i}'
             )
-            worker_thread.start()
             worker_threads.append(worker_thread)
         
         # Wait for all workers to complete
@@ -563,6 +562,10 @@ def _read_until_prompt(
         line = line.rstrip('\n')
         if line == 'test>':
             return (lines, 'found')
+        if line == 'SUMMARY':
+            if len(lines) >= 1 and lines[-1] == _DOUBLE_SEPARATOR_LINE:
+                del lines[-1]
+            return (lines, 'interrupted')
         lines.append(line)
 
 
