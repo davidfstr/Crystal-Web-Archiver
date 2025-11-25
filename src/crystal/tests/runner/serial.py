@@ -335,6 +335,7 @@ def _run_single_test(
     
     Raises:
     * NoForegroundThreadError
+    * KeyboardInterrupt -- if user presses Ctrl-C
     """
     test_name = f'{test_func_id[0]}.{test_func_id[1]}'
     
@@ -362,6 +363,7 @@ def _run_single_test(
     
     try:
         try:
+            # NOTE: May raise KeyboardInterrupt if user presses Ctrl-C
             run_test(test_func)
         finally:
             # Flush any stderr output immediately,

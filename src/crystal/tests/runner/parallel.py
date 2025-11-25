@@ -510,6 +510,20 @@ def _run_worker(
             traceback.print_exc(file=sys.stderr)
         # (keep going)
     finally:
+        assert process.stdin is not None
+        assert process.stdout is not None
+        
+        # Close subprocess streams to avoid BrokenPipeError in __del__
+        # when the subprocess has already terminated
+        try:
+            process.stdin.close()
+        except Exception:
+            pass  # Already closed
+        try:
+            process.stdout.close()
+        except Exception:
+            pass  # Already closed
+        
         # Ensure process is terminated
         if process.poll() is None:
             process.terminate()
