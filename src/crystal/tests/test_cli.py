@@ -6,14 +6,14 @@ See also:
 """
 
 from collections.abc import Iterator
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from crystal import APP_NAME, __version__
 from crystal.model import Project, Resource
 from crystal.tests.util.asserts import (
     assertEqual, assertIn, assertNotEqual, assertNotIn, assertRegex
 )
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, crystal_running, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until,
+    ReadUntilTimedOut, close_open_or_create_dialog, crystal_running, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until,
     crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
@@ -24,9 +24,10 @@ from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.ports import port_in_use
 from crystal.util.xos import is_mac_os
+from crystal.util.xtyping import not_none
 from io import TextIOBase
-import datetime
 import os
+import re
 import signal
 import socket
 import tempfile
@@ -812,17 +813,15 @@ def test_when_ctrl_c_pressed_while_test_running_noninteractively_then_marks_that
     with crystal_running(
         args=[
             'test',
-            # Test 1: Fast test that should pass
+            # Test 0: Fast test that should pass
             'crystal.tests.test_cli.test_special_a_causing_pass',
-            # Test 2: Special test that simulates Ctrl-C
+            # Test 1: Special test that simulates Ctrl-C
             'crystal.tests.test_cli.test_special_b_causing_ctrl_c',
-            # Test 3: Fast test that should pass, if it wasn't interrupted
+            # Test 2: Fast test that should pass, if it wasn't interrupted
             'crystal.tests.test_cli.test_special_c_causing_pass',
         ],
         # Enable Ctrl-C simulation in test_special_b_causing_ctrl_c
         env_extra={'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '1'},
-        # Let the process exit naturally after Ctrl-C
-        kill=False,
     ) as crystal:
         (stdout_str, _) = crystal.communicate()
         returncode = crystal.returncode
@@ -858,8 +857,6 @@ def test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_te
         args=['test', '--interactive'],
         # Enable Ctrl-C simulation in test_special_b_causing_ctrl_c
         env_extra={'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '1'},
-        # Let the process exit naturally after Ctrl-C
-        kill=False,
     ) as crystal:
         assert crystal.stdin is not None
         assert isinstance(crystal.stdout, TextIOBase)
@@ -1018,6 +1015,311 @@ def test_can_run_tests_in_parallel_with_unqualified_function_or_module_name() ->
     ])
     assertEqual(0, result.returncode)
     assertRegex(result.stdout, r'Ran \d+ tests')
+
+
+@with_subtests
+def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test_and_all_following_tests_as_interrupted(subtests: SubtestsContext) -> None:
+    def run_tests_and_interrupt_child_process(worker_task_indexes: str) -> tuple[str, int]:
+        with crystal_running(
+            args=[
+                'test',
+                '--parallel',
+                '-j', '2',
+                # Test 0: Fast test that should pass
+                'crystal.tests.test_cli.test_special_a_causing_pass',
+                # Test 1: Special test that simulates Ctrl-C
+                'crystal.tests.test_cli.test_special_b_causing_ctrl_c',
+                # Test 2: Fast test that should pass, if it is not interrupted
+                'crystal.tests.test_cli.test_special_c_causing_pass',
+            ],
+            env_extra={
+                # Assign tests to workers deterministically
+                'CRYSTAL_PARALLEL_WORKER_TASKS': worker_task_indexes,
+                # Enable Ctrl-C simulation in test_special_b_causing_ctrl_c
+                'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '1',
+            },
+        ) as crystal:
+            (stdout_str, _) = crystal.communicate()
+            returncode = crystal.returncode
+        return (stdout_str, returncode)
+    
+    def run_tests_and_interrupt_parent_process(worker_task_indexes: str) -> tuple[str, int]:
+        with crystal_running(
+            args=[
+                'test',
+                '--parallel',
+                '-j', '2',
+                # Test 0: Fast test that should pass, if it is not interrupted
+                'crystal.tests.test_cli.test_special_a_causing_pass',
+                # Test 1: Fast test that should pass, if it is not interrupted
+                'crystal.tests.test_cli.test_special_c_causing_pass',
+            ],
+            env_extra={
+                # Assign tests to workers deterministically
+                'CRYSTAL_PARALLEL_WORKER_TASKS': worker_task_indexes,
+            },
+        ) as crystal:
+            (stdout_str, _) = crystal.communicate()
+            returncode = crystal.returncode
+        return (stdout_str, returncode)
+    
+    # target_process='child'
+    if True:
+        with subtests.test(target_process='child', allocation='all_together'):
+            # - Worker 0: Tests 0, 1, 2 (all tests)
+            # - Worker 1: nothing
+            (stdout_str, returncode) = run_tests_and_interrupt_child_process(
+                '0,1,2;')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{3})\n', stdout_str)).group(1)
+            assertEqual('.--', summary_line)
+            assertEqual(1, returncode)
+        
+        with subtests.test(target_process='child', allocation='ctrl_c_alone'):
+            # - Worker 0: Tests 0, 2 (fast pass tests)
+            # - Worker 1: Test 1 (Ctrl-C test)
+            (stdout_str, returncode) = run_tests_and_interrupt_child_process(
+                '0,2;1')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{3})\n', stdout_str)).group(1)
+            assertEqual('.-.', summary_line)
+            assertEqual(1, returncode)
+        
+        with subtests.test(target_process='child', allocation='ctrl_c_plus_another'):
+            # - Worker 0: Tests 0
+            # - Worker 1: Test 1 (Ctrl-C test), 2
+            (stdout_str, returncode) = run_tests_and_interrupt_child_process(
+                '0;1,2')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{3})\n', stdout_str)).group(1)
+            assertEqual('.--', summary_line)
+            assertEqual(1, returncode)
+    
+    # target_process='parent'
+    if True:
+        with subtests.test(target_process='parent', num_interrupted=2, allocation='all_together'):
+            (stdout_str, returncode) = run_tests_and_interrupt_parent_process(
+                '!,0,1;!')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{2})\n', stdout_str)).group(1)
+            assertEqual('--', summary_line)
+            assertEqual(1, returncode)
+        
+        with subtests.test(target_process='parent', num_interrupted=2, allocation='all_separate'):
+            (stdout_str, returncode) = run_tests_and_interrupt_parent_process(
+                '!,0;!,1')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{2})\n', stdout_str)).group(1)
+            assertEqual('--', summary_line)
+            assertEqual(1, returncode)
+        
+        with subtests.test(target_process='parent', num_interrupted=1, allocation='all_together'):
+            (stdout_str, returncode) = run_tests_and_interrupt_parent_process(
+                '0,!,1;!')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{2})\n', stdout_str)).group(1)
+            assertEqual('.-', summary_line)
+            assertEqual(1, returncode)
+        
+        with subtests.test(target_process='parent', num_interrupted=1, allocation='all_separate'):
+            (stdout_str, returncode) = run_tests_and_interrupt_parent_process(
+                '0,!;!,1')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{2})\n', stdout_str)).group(1)
+            assertEqual('.-', summary_line)
+            assertEqual(1, returncode)
+        
+        with subtests.test(target_process='parent', num_interrupted=0, allocation='all_together'):
+            (stdout_str, returncode) = run_tests_and_interrupt_parent_process(
+                '0,1,!;!')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{2})\n', stdout_str)).group(1)
+            assertEqual('..', summary_line)
+            assertEqual(0, returncode)
+        
+        with subtests.test(target_process='parent', num_interrupted=0, allocation='all_separate'):
+            (stdout_str, returncode) = run_tests_and_interrupt_parent_process(
+                '0,!;1,!')
+            
+            summary_line = not_none(re.search(r'\n([-.E]{2})\n', stdout_str)).group(1)
+            assertEqual('..', summary_line)
+            assertEqual(0, returncode)
+
+
+@with_subtests
+def test_output_format_of_running_tests_in_parallel_and_in_serial_are_identical(subtests: SubtestsContext) -> None:
+    _3_PASSING_TESTS = [
+        # Test 0: Fast test that should pass
+        'crystal.tests.test_cli.test_special_a_causing_pass',
+        # Test 1: Fast test that should pass
+        'crystal.tests.test_cli.test_special_b_causing_ctrl_c',
+        # Test 2: Fast test that should pass
+        'crystal.tests.test_cli.test_special_c_causing_pass',
+    ]
+    
+    TEST_0_LINES = [
+        '======================================================================',
+        'RUNNING: test_special_a_causing_pass (crystal.tests.test_cli.test_special_a_causing_pass) [$%]',
+        '----------------------------------------------------------------------',
+        'OK',
+        '',
+    ]
+    TEST_1_LINES = [
+        '======================================================================',
+        'RUNNING: test_special_b_causing_ctrl_c (crystal.tests.test_cli.test_special_b_causing_ctrl_c) [$%]',
+        '----------------------------------------------------------------------',
+        'OK',
+        '',
+    ]
+    TEST_2_LINES = [
+        '======================================================================',
+        'RUNNING: test_special_c_causing_pass (crystal.tests.test_cli.test_special_c_causing_pass) [$%]',
+        '----------------------------------------------------------------------',
+        'OK',
+        '',
+    ]
+    SUMMARY_LINES = lambda num_tests: [
+        '======================================================================',
+        'SUMMARY',
+        '----------------------------------------------------------------------',
+        '.' * num_tests,
+        '----------------------------------------------------------------------',
+        'Ran $ tests in $.$s',
+        '',
+        'OK',
+    ]
+    
+    TEST_X_LINES = {
+        0: TEST_0_LINES,
+        1: TEST_1_LINES,
+        2: TEST_2_LINES,
+    }
+    
+    def run_tests_in_serial(num_tests: int) -> str:
+        with crystal_running(
+            args=[
+                'test',
+                *_3_PASSING_TESTS[:num_tests],
+            ],
+            env_extra={
+                # DISABLE Ctrl-C simulation in test_special_b_causing_ctrl_c
+                'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '0',
+            },
+        ) as crystal:
+            (stdout_str, _) = crystal.communicate()
+        return stdout_str
+    
+    def run_tests_in_parallel(num_tests: int, worker_task_indexes: str) -> str:
+        with crystal_running(
+            args=[
+                'test',
+                '--parallel',
+                '-j', '2',
+                *_3_PASSING_TESTS[:num_tests],
+            ],
+            env_extra={
+                # Assign tests to workers deterministically
+                'CRYSTAL_PARALLEL_WORKER_TASKS': worker_task_indexes,
+                # DISABLE Ctrl-C simulation in test_special_b_causing_ctrl_c
+                'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '0',
+            },
+        ) as crystal:
+            (stdout_str, _) = crystal.communicate()
+        return stdout_str
+    
+    def output_to_lines(stdout_str: str) -> list[str]:
+        # Replace runs of digits with '$', to normalize the following kind of lines:
+        # - 'Ran 3 tests in 1.234s' -> 'Ran $ tests in $.$s'
+        # - 'RUNNING: X (Y) [50%]'  -> 'RUNNING: X (Y) [$%]'
+        normalized_str = re.sub(r'\d+', '$', stdout_str)
+        # Split lines
+        lines = normalized_str.rstrip('\n').split('\n')
+        # Remove trailing BEL character
+        if len(lines) > 0 and lines[-1] == '\x07':
+            del lines[-1]
+        return lines
+    
+    def tests_mentioned_in_output(lines: list[str]) -> list[int]:
+        test_indexes = []
+        for line in lines:
+            if not line.startswith('RUNNING:'):
+                continue
+            # Extract the test function name from the RUNNING line
+            # Format: "RUNNING: test_name (crystal.tests.test_cli.test_name) [$%]"
+            match = re.search(r'RUNNING: (\S+) \(', line)
+            if not match:
+                continue
+            short_test_name = match.group(1)
+            for (i, full_test_name) in enumerate(_3_PASSING_TESTS):
+                if full_test_name.endswith(short_test_name):
+                    test_indexes.append(i)
+                    break
+            else:
+                raise AssertionError(
+                    f'RUNNING line does not match any of the expected tests. '
+                    f'{line=!r}, tests={_3_PASSING_TESTS!r}')
+        return test_indexes
+    
+    with subtests.test('serial format matches expected', return_if_failure=True):
+        # Ensure serial test output looks the way we expect
+        actual_serial_lines = output_to_lines(run_tests_in_serial(num_tests=3))
+        expected_serial_lines = (
+            TEST_0_LINES +
+            TEST_1_LINES +
+            TEST_2_LINES +
+            SUMMARY_LINES(3)
+        )
+        assertEqual(
+            expected_serial_lines, actual_serial_lines,
+            'Output of "crystal test <test_names>" has changed format!')
+    
+    with subtests.test('parallel format matches serial', num_tests=1, return_if_failure=True):
+        actual_parallel_lines = output_to_lines(run_tests_in_parallel(
+            num_tests=1,
+            worker_task_indexes='0;'))
+        expected_parallel_lines = (
+            TEST_0_LINES +
+            SUMMARY_LINES(1)
+        )
+        assertEqual(
+            expected_parallel_lines, actual_parallel_lines,
+            'Output of "crystal test --parallel <test_names>" with 1 test '
+            'does not match output of "crystal test <test_names>"')
+    
+    for worker_task_indexes in ['0,1;', '0;1', ';0,1']:
+        with subtests.test('parallel format matches serial', num_tests=2, worker_task_indexes=worker_task_indexes):
+            actual_parallel_lines = output_to_lines(run_tests_in_parallel(
+                num_tests=2,
+                worker_task_indexes=worker_task_indexes))
+            test_indexes = tests_mentioned_in_output(actual_parallel_lines)
+            assertEqual(2, len(test_indexes))
+            expected_parallel_lines = (
+                TEST_X_LINES[test_indexes[0]] +
+                TEST_X_LINES[test_indexes[1]] +
+                SUMMARY_LINES(2)
+            )
+            assertEqual(
+                expected_parallel_lines, actual_parallel_lines,
+                'Output of "crystal test --parallel <test_names>" with 2 tests '
+                'does not match output of "crystal test <test_names>"')
+    
+    for worker_task_indexes in ['0,1,2;', '0,1;2', '0,2;1', '0;1,2', '1;0,2', ';0,1,2']:
+        with subtests.test('parallel format matches serial', num_tests=3, worker_task_indexes=worker_task_indexes):
+            actual_parallel_lines = output_to_lines(run_tests_in_parallel(
+                num_tests=3,
+                worker_task_indexes=worker_task_indexes))
+            test_indexes = tests_mentioned_in_output(actual_parallel_lines)
+            assertEqual(3, len(test_indexes))
+            expected_parallel_lines = (
+                TEST_X_LINES[test_indexes[0]] +
+                TEST_X_LINES[test_indexes[1]] +
+                TEST_X_LINES[test_indexes[2]] +
+                SUMMARY_LINES(3)
+            )
+            assertEqual(
+                expected_parallel_lines, actual_parallel_lines,
+                'Output of "crystal test --parallel <test_names>" with 3 tests '
+                'does not match output of "crystal test <test_names>"')
 
 
 # === Testing Tests (test): Help ===

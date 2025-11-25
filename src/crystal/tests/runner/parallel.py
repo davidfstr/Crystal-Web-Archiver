@@ -25,7 +25,7 @@ import tempfile
 import threading
 import time
 import traceback
-from typing import IO, Literal, Optional, assert_never
+from typing import Callable, IO, Literal, Optional, assert_never
 
 
 # === Main ===
@@ -110,20 +110,68 @@ def run_tests(
     # Determine number of workers
     num_workers = jobs if jobs is not None else multiprocessing.cpu_count()
     
+    # Determine which tests should be run by each worker
+    try:
+        worker_task_assignments = _parse_worker_tasks_env(
+            num_workers,
+            num_tests=len(test_names_to_run),
+        )
+    except ValueError as e:
+        print(f'ERROR: {e}', file=sys.stderr)
+        return False
+    deterministic_mode = worker_task_assignments is not None
+    simulate_parent_interrupt = (
+        worker_task_assignments is not None and
+        worker_task_assignments.interrupt_positions is not None
+    )
+    
     if verbose:
         print(f'[Runner] Running {len(test_names_to_run)} tests in parallel across {num_workers} workers...', file=sys.stderr)
+        if deterministic_mode:
+            print(f'[Runner] Deterministic mode enabled via CRYSTAL_PARALLEL_WORKER_TASKS', file=sys.stderr)
+        if simulate_parent_interrupt:
+            print(f'[Runner] Parent interrupt simulation enabled via "!" in CRYSTAL_PARALLEL_WORKER_TASKS', file=sys.stderr)
     # Create log directory for worker output
     log_dir = _create_log_directory()
     if verbose:
         print(f'[Runner] Worker logs in: {log_dir}', file=sys.stderr)
     
-    # Create work queue with all tests
-    work_queue: Queue[Optional[str]] = Queue()
-    for test_name in test_names_to_run:
-        work_queue.put(test_name)
-    # Add sentinel values to signal workers to stop
-    for _ in range(num_workers):
-        work_queue.put(None)
+    # Create work queues for each worker
+    # NOTE: Work queue items are either:
+    #   - A test name (str) to run
+    #   - _INTERRUPT_MARKER to signal worker should wait for parent interrupt
+    #   - None sentinel to signal end of work
+    if worker_task_assignments is not None:
+        # Create per-worker queues with assigned tests
+        work_queues: list[Queue[Optional[str]]] = []
+        for worker_id in range(num_workers):
+            worker_queue: Queue[Optional[str]] = Queue()
+            
+            interrupt_pos = (
+                worker_task_assignments.interrupt_positions[worker_id]
+                if worker_task_assignments.interrupt_positions is not None
+                else None
+            )
+            task_indexes = worker_task_assignments.task_indexes[worker_id]
+            for (i, task_index) in enumerate(task_indexes):
+                if interrupt_pos is not None and i == interrupt_pos:
+                    worker_queue.put(_INTERRUPT_MARKER)
+                worker_queue.put(test_names_to_run[task_index])
+            if interrupt_pos is not None and interrupt_pos == len(task_indexes):
+                worker_queue.put(_INTERRUPT_MARKER)
+            
+            worker_queue.put(None)  # sentinel
+            
+            work_queues.append(worker_queue)
+    else:
+        # Create shared work queue with all tests
+        shared_work_queue: Queue[Optional[str]] = Queue()
+        for test_name in test_names_to_run:
+            shared_work_queue.put(test_name)
+        # Add sentinel values to signal workers to stop
+        for _ in range(num_workers):
+            shared_work_queue.put(None)
+        work_queues = [shared_work_queue] * num_workers  # all workers share the same queue
     
     # Initialize test progress counters
     with _output_lock:
@@ -133,6 +181,12 @@ def run_tests(
     
     # Create shared state for interrupt handling
     interrupted_event = threading.Event()
+    
+    # Create coordination state for simulated parent interrupt
+    # (used when '!' appears in CRYSTAL_PARALLEL_WORKER_TASKS)
+    workers_at_interrupt_point: list[threading.Event] = [
+        threading.Event() for _ in range(num_workers)
+    ]
     
     # Run workers in parallel
     start_time = time.monotonic()  # capture
@@ -145,8 +199,13 @@ def run_tests(
         @capture_crashes_to_stderr
         def run_worker_thread(worker_id: int) -> None:
             result = _run_worker(
-                worker_id, work_queue, log_dir, verbose,
+                worker_id, work_queues[worker_id], log_dir, verbose,
                 interrupted_event, worker_interrupt_pipes[worker_id][0],
+                display_result_immediately=(not deterministic_mode),
+                at_interrupt_point_event=(
+                    workers_at_interrupt_point[worker_id]
+                    if simulate_parent_interrupt else None
+                ),
             )
             with worker_results_lock:
                 worker_results[worker_id] = result
@@ -162,8 +221,17 @@ def run_tests(
         
         # Wait for all workers to complete
         try:
-            for worker_thread in worker_threads:
-                worker_thread.join()
+            if simulate_parent_interrupt:
+                # Wait for all workers to reach their '!' interrupt point
+                for event in workers_at_interrupt_point:
+                    event.wait()
+                if verbose:
+                    print('[Runner] All workers at interrupt point. Simulating Ctrl-C...', file=sys.stderr)
+                # Simulate Ctrl-C by raising KeyboardInterrupt
+                raise KeyboardInterrupt()
+            else:
+                for worker_thread in worker_threads:
+                    worker_thread.join()
             all_workers_joined = True
         except KeyboardInterrupt:
             # Ctrl-C pressed
@@ -215,6 +283,15 @@ def run_tests(
             for test_result in worker_result.test_results:
                 completed_test_results[test_result.name] = test_result
         
+        # In deterministic mode, print results in worker order
+        # (worker 0's tests first, then worker 1's, etc.)
+        if deterministic_mode:
+            for worker_id in range(num_workers):
+                worker_result = worker_results[worker_id]
+                if worker_result is not None:
+                    for test_result in worker_result.test_results:
+                        _display_test_result(test_result)
+        
         del worker_results  # prevent further accidental use
     
     # - Build ordered list of results, preserving the original test order.
@@ -242,22 +319,110 @@ def run_tests(
     return is_ok
 
 
-def _get_all_test_names() -> list[str]:
+def _parse_worker_tasks_env(num_workers: int, num_tests: int) -> 'Optional[WorkerTaskAssignments]':
     """
-    Gets all available test names.
+    Parse the CRYSTAL_PARALLEL_WORKER_TASKS environment variable.
+    
+    Format: '0,2;1' means worker 0 gets test indexes 0,2 and worker 1 gets test index 1.
+    
+    If a '!' appears in the value, it indicates where the parent process should be
+    interrupted (simulating Ctrl-C). For example '0,!;!,1' means:
+    - Worker 0 runs test 0, then pauses at the '!' point
+    - Worker 1 pauses at the '!' point, then would run test 1
+    - When all workers reach their '!' point, a KeyboardInterrupt is raised in the parent
     
     Returns:
-    * List of fully qualified test names (e.g., 'crystal.tests.test_workflows.test_function').
+    * WorkerTaskAssignments containing task indexes and interrupt info, or None if env var is not set.
+    
+    Raises:
+    * ValueError -- if the format is invalid.
     """
-    from crystal.tests.index import TEST_FUNCS
+    env_value = os.environ.get('CRYSTAL_PARALLEL_WORKER_TASKS')
+    if not env_value:
+        return None
     
-    test_names = []
-    for test_func in TEST_FUNCS:
-        module_name = test_func.__module__
-        func_name = test_func.__name__
-        test_names.append(f'{module_name}.{func_name}')
+    has_interrupt_marker = '!' in env_value
     
-    return test_names
+    worker_task_indexes: list[list[int]] = []
+    worker_interrupt_positions: list[int | None] = []  # position of '!' in each worker's task list
+    
+    for worker_spec in env_value.split(';'):
+        if not worker_spec:
+            worker_task_indexes.append([])
+            worker_interrupt_positions.append(None)
+        else:
+            task_indexes: list[int] = []
+            interrupt_position: int | None = None
+            position = 0
+            for item in worker_spec.split(','):
+                item = item.strip()
+                if item == '!':
+                    if interrupt_position is not None:
+                        raise ValueError(
+                            f'CRYSTAL_PARALLEL_WORKER_TASKS has multiple "!" in one worker spec: {env_value!r}'
+                        )
+                    interrupt_position = position
+                    # (Don't increment position. '!' is not a real task.)
+                else:
+                    try:
+                        task_indexes.append(int(item))
+                    except ValueError:
+                        raise ValueError(
+                            f'Invalid CRYSTAL_PARALLEL_WORKER_TASKS format: {env_value!r}'
+                        )
+                    position += 1
+            worker_task_indexes.append(task_indexes)
+            worker_interrupt_positions.append(interrupt_position)
+    
+    # Validate worker count matches
+    if len(worker_task_indexes) != num_workers:
+        raise ValueError(
+            f'CRYSTAL_PARALLEL_WORKER_TASKS specifies {len(worker_task_indexes)} workers, '
+            f'but -j/--jobs specifies {num_workers} workers.'
+        )
+    
+    # Validate interrupt markers: if any worker has '!', all workers must have exactly one '!'
+    if has_interrupt_marker:
+        for (worker_id, interrupt_pos) in enumerate(worker_interrupt_positions):
+            if interrupt_pos is None:
+                raise ValueError(
+                    f'CRYSTAL_PARALLEL_WORKER_TASKS has "!" but worker {worker_id} is missing "!". '
+                    f'When using "!", every worker must have exactly one "!".'
+                )
+    
+    # Validate all test indexes are valid and exactly cover all tests
+    all_assigned_indexes = set()
+    for task_indexes in worker_task_indexes:
+        for task_index in task_indexes:
+            if task_index < 0 or task_index >= num_tests:
+                raise ValueError(
+                    f'CRYSTAL_PARALLEL_WORKER_TASKS contains invalid test index {task_index}. '
+                    f'Valid range is 0-{num_tests-1}.'
+                )
+            if task_index in all_assigned_indexes:
+                raise ValueError(
+                    f'CRYSTAL_PARALLEL_WORKER_TASKS assigns test index {task_index} to multiple workers.'
+                )
+            all_assigned_indexes.add(task_index)
+    
+    if all_assigned_indexes != set(range(num_tests)):
+        missing = set(range(num_tests)) - all_assigned_indexes
+        raise ValueError(
+            f'CRYSTAL_PARALLEL_WORKER_TASKS does not assign all tests. '
+            f'Missing test indexes: {sorted(missing)}'
+        )
+    
+    return WorkerTaskAssignments(
+        task_indexes=worker_task_indexes,
+        interrupt_positions=worker_interrupt_positions if has_interrupt_marker else None,
+    )
+
+
+@dataclass(frozen=True)
+class WorkerTaskAssignments:
+    """Parsed result of CRYSTAL_PARALLEL_WORKER_TASKS environment variable."""
+    task_indexes: list[list[int]]  # test indexes for each worker
+    interrupt_positions: list[int | None] | None  # position of '!' in each worker's task list, or None if no interrupts
 
 
 def _create_log_directory() -> str:
@@ -382,6 +547,10 @@ def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tup
 
 # === Worker ===
 
+# Special marker in work queue that signals worker should wait for parent interrupt
+_INTERRUPT_MARKER = '!'
+
+
 @dataclass(frozen=True)
 class WorkerResult:
     """Result of a worker subprocess."""
@@ -418,6 +587,8 @@ def _run_worker(
         verbose: bool,
         interrupted_event: threading.Event,
         interrupt_read_pipe: int,
+        display_result_immediately: bool = True,
+        at_interrupt_point_event: threading.Event | None = None,
         ) -> WorkerResult:
     """
     Run a worker subprocess in interactive mode, pulling tests from work_queue on-demand.
@@ -437,10 +608,15 @@ def _run_worker(
     Arguments:
     * worker_id -- ID of this worker (for logging).
     * work_queue -- Queue of test names to run. None sentinel indicates no more work.
+        May contain _INTERRUPT_MARKER to signal worker should pause at that point.
     * log_dir -- Directory to write log files to.
     * verbose -- Whether to print verbose diagnostic information.
     * interrupted_event -- Event that is set when Ctrl-C is pressed.
     * interrupt_read_pipe -- File descriptor for interrupt signaling.
+    * display_result_immediately -- Whether to print test results as they complete.
+        If False, results are only returned in the WorkerResult.
+    * at_interrupt_point_event -- Event to set when worker reaches _INTERRUPT_MARKER.
+        The worker will then wait for interrupted_event to be set before continuing.
     
     Returns:
     * WorkerResult containing test results and metadata.
@@ -494,10 +670,23 @@ def _run_worker(
                         # Timeout. Check for interrupts and try again.
                         continue
                     
-                    # Check for sentinel value indicating no more work
+                    # Check for sentinel value, indicating no more work
                     if test_name is None:
                         if verbose:
                             print(f'[Worker {worker_id}] No more work, shutting down', file=sys.stderr)
+                        break
+                    
+                    # Check for interrupt marker,
+                    # indicating should pause and wait for parent to interrupt
+                    if test_name == _INTERRUPT_MARKER:
+                        if verbose:
+                            print(f'[Worker {worker_id}] Reached interrupt point, waiting...', file=sys.stderr)
+                        if at_interrupt_point_event is not None:
+                            at_interrupt_point_event.set()
+                        # Wait for the parent to signal interruption
+                        interrupted_event.wait()
+                        if verbose:
+                            print(f'[Worker {worker_id}] Received interrupt signal', file=sys.stderr)
                         break
                     
                     if verbose:
@@ -523,8 +712,9 @@ def _run_worker(
                     test_results.append(test_result)
                     tests_run += 1
                     
-                    # Display the test result immediately
-                    _display_test_result(test_result)
+                    # Display the test result immediately (unless deferred)
+                    if display_result_immediately:
+                        _display_test_result(test_result)
                     
                     if process_is_interrupted:
                         break
