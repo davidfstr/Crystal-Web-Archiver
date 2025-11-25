@@ -144,6 +144,11 @@ def _main2(args: list[str]) -> None:
             err_file = sys.stderr
             print(cli.TERMINAL_FG_RED, end='', file=err_file)
             print('Exception in unraisable context:', file=err_file)
+            if args.err_msg:
+                print(f'  Context: {args.err_msg}', file=err_file)
+            if args.object is not None:
+                print(f'  Object: {args.object!r}', file=err_file)
+                print(f'  Object type: {type(args.object)}', file=err_file)
             traceback.print_exception(
                 args.exc_type, args.exc_value, args.exc_traceback,
                 file=err_file)
