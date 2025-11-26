@@ -474,18 +474,25 @@ def _run_worker(
                     
                     # Read test output until we see the next prompt
                     (test_output_lines, status) = _read_until_prompt(reader)
+                    process_is_interrupted = (
+                        status == 'interrupted' or
+                        (status == 'eof' and process.poll() == -signal.SIGINT)
+                    )
                     
                     # Parse the test result
                     test_result = _parse_test_result(
                         test_name,
                         test_output_lines,
-                        interrupted=(status == 'interrupted'),
+                        interrupted=process_is_interrupted,
                     )
                     test_results.append(test_result)
                     tests_run += 1
                     
                     # Display the test result immediately
                     _display_test_result(test_result)
+                    
+                    if process_is_interrupted:
+                        break
                 
                 # Close stdin to signal end of interactive mode
                 process.stdin.close()
