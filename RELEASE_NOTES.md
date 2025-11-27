@@ -18,6 +18,17 @@ Release Notes ⋮
 * Support changes
     * Embedded Python upgraded from Python 3.11 to 3.13.
 
+* Development improvements
+    * Tests can now be run in parallel using `crystal test --parallel <test_names>...` 
+      or `crystal test -p <test_names>...`.
+    * When running tests, pressing Ctrl-C now prints a summary section 
+      before exiting,  marking interrupted tests with "-" status and showing a 
+      "Rerun interrupted tests with:" section.
+    * Tests can now be run using a subcommand style `crystal test <test_names>...` 
+      in addition to the legacy `crystal --test <test_names>...` syntax.
+        * Additional options like `--verbose` are available in the
+          subcommand style.
+
 [interactive interpreter]: https://docs.python.org/3/whatsnew/3.13.html#whatsnew313-better-interactive-interpreter
 
 ### v2.1.0 (November 15, 2025)

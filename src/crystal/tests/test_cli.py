@@ -6,13 +6,15 @@ See also:
 """
 
 from collections.abc import Iterator
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from crystal import APP_NAME, __version__
 from crystal.model import Project, Resource
-from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn, assertRegex
+from crystal.tests.util.asserts import (
+    assertEqual, assertIn, assertNotIn, assertRegex
+)
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until,
-    crystal_shell, crystal_running_with_banner, run_crystal, wait_for_main_window,
+    ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, crystal_shell,
+    crystal_running_with_banner, run_crystal, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.skip import skipTest
@@ -23,7 +25,6 @@ from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.ports import port_in_use
 from crystal.util.xos import is_mac_os
 from io import TextIOBase
-import datetime
 import os
 import signal
 import socket
@@ -57,7 +58,7 @@ def test_when_launched_with_no_arguments_then_shows_open_or_create_project_dialo
 
 def test_when_launched_with_help_argument_then_prints_help_and_exits() -> None:
     result = run_crystal(['--help'])
-    assert result.returncode == 0
+    assertEqual(0, result.returncode)
     assertIn('Crystal: A tool for archiving websites in high fidelity.', result.stdout)
     assertIn('usage:', result.stdout)
     assertIn('--shell', result.stdout)
@@ -67,7 +68,7 @@ def test_when_launched_with_help_argument_then_prints_help_and_exits() -> None:
 
 def test_when_launched_with_version_argument_then_prints_version_and_exits() -> None:
     result = run_crystal(['--version'])
-    assert result.returncode == 0
+    assertEqual(0, result.returncode)
     assertIn(APP_NAME, result.stdout)
     assertIn(__version__, result.stdout)
 
@@ -608,19 +609,19 @@ def test_stale_before_option_recognizes_many_date_formats(subtests: SubtestsCont
     with _temporary_project() as project_path:
         with subtests.test(format='ISO date'):
             result = run_crystal(['--stale-before', '2022-07-17', '--help'])
-            assert result.returncode == 0, f"ISO date format failed: {result.stderr}"
+            assertEqual(0, result.returncode, f"ISO date format failed: {result.stderr}")
         
         with subtests.test(format='ISO datetime without timezone'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42', '--help'])
-            assert result.returncode == 0, f"ISO datetime format failed: {result.stderr}"
+            assertEqual(0, result.returncode, f"ISO datetime format failed: {result.stderr}")
         
         with subtests.test(format='ISO datetime with UTC timezone'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42+00:00', '--help'])
-            assert result.returncode == 0, f"ISO datetime with timezone format failed: {result.stderr}"
+            assertEqual(0, result.returncode, f"ISO datetime with timezone format failed: {result.stderr}")
         
         with subtests.test(format='ISO datetime with negative timezone offset'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42-05:00', '--help'])
-            assert result.returncode == 0, f"ISO datetime with negative timezone offset failed: {result.stderr}"
+            assertEqual(0, result.returncode, f"ISO datetime with negative timezone offset failed: {result.stderr}")
 
 
 @with_subtests
@@ -645,6 +646,11 @@ def test_when_stale_before_argument_missing_value_then_prints_error_and_exits() 
     result = run_crystal(['--stale-before'])
     assert result.returncode != 0
     assertIn('expected one argument', result.stderr)
+
+
+# === Testing Tests (test, --test) ===
+
+# See the "# === Testing Tests (test, --test): ... ===" sections in test_runner.py
 
 
 # === Platform-Specific Options Tests ===
