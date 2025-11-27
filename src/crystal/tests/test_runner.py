@@ -393,6 +393,10 @@ def test_can_run_tests_in_parallel_with_unqualified_function_or_module_name() ->
 @with_subtests
 def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test_and_all_following_tests_as_interrupted(subtests: SubtestsContext) -> None:
     def run_tests_and_interrupt_child_process(worker_task_indexes: str) -> tuple[str, int]:
+        # NOTE: Print something regularly so that watchdog doesn't timeout
+        #       the test on slow CI runners like macOS
+        print(f'interrupt child: {worker_task_indexes=!r}')
+        
         with crystal_running(
             args=[
                 'test',
@@ -417,6 +421,10 @@ def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test
         return (stdout_str, returncode)
     
     def run_tests_and_interrupt_parent_process(worker_task_indexes: str) -> tuple[str, int]:
+        # NOTE: Print something regularly so that watchdog doesn't timeout
+        #       the test on slow CI runners like macOS
+        print(f'interrupt parent: {worker_task_indexes=!r}')
+        
         with crystal_running(
             args=[
                 'test',
