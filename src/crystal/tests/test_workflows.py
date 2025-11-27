@@ -772,6 +772,7 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     page.action_button.click()
                     
                     # Verify download button gets disabled and progress bar appears
+                    # TODO: Pause something to prevent download from immediately completing
                     expect(page.action_button).to_contain_text('Creating & Starting Download...')
                     expect(page.action_button).to_be_disabled()
                     page.progress_bar.wait_for(state='visible')

@@ -936,9 +936,11 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
                 
                 # Start download
                 page.action_button.click()
+                
+                # Verify download button gets disabled and progress bar appears
                 # TODO: Pause something to prevent download from immediately completing
-                expect(page.action_button).to_be_disabled()
                 expect(page.action_button).to_contain_text('Creating & Starting Download...')
+                expect(page.action_button).to_be_disabled()
                 page.progress_bar.wait_for(state='visible')
                 
                 # Wait for download failure. Then:
