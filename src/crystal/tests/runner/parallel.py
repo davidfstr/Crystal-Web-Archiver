@@ -123,6 +123,12 @@ def run_tests(
     for _ in range(num_workers):
         work_queue.put(None)
     
+    # Initialize test progress counters
+    with _output_lock:
+        global _displayed_test_index, _num_tests_to_display
+        _displayed_test_index = 0
+        _num_tests_to_display = len(test_names_to_run)
+    
     # Create shared state for interrupt handling
     interrupted_event = threading.Event()
     
@@ -386,6 +392,10 @@ class TestResult:
 
 # Global lock for serializing output from multiple workers
 _output_lock = threading.Lock()
+
+# Counters for tracking test progress (protected by _output_lock)
+_displayed_test_index = 0
+_num_tests_to_display: int | None = None
 
 
 def _run_worker(
@@ -679,14 +689,24 @@ def _display_test_result(test_result: TestResult) -> None:
     """
     Display a test result to stdout in the same format as `crystal --test`.
     """
+    global _displayed_test_index
+    
     with _output_lock:
         # Don't display INTERRUPTED tests that were never started
         if test_result.status == 'INTERRUPTED' and not test_result.output_lines:
             return
         
+        # Calculate percentage suffix
+        _displayed_test_index += 1
+        if _num_tests_to_display is not None:
+            (numer, denom) = (_displayed_test_index, _num_tests_to_display)
+            percent_suffix = f' [{int(numer*100/denom)}%]'
+        else:
+            percent_suffix = ''
+        
         print(_DOUBLE_SEPARATOR_LINE)
         short_name = test_result.name.split('.')[-1] if '.' in test_result.name else test_result.name
-        print(f'RUNNING: {short_name} ({test_result.name})')
+        print(f'RUNNING: {short_name} ({test_result.name}){percent_suffix}')
         print(_SINGLE_SEPARATOR_LINE)
         for line in test_result.output_lines:
             print(line)
