@@ -187,11 +187,11 @@ def test_when_ctrl_c_pressed_while_test_running_noninteractively_then_marks_that
         args=[
             'test',
             # Test 0: Fast test that should pass
-            'crystal.tests.test_cli.test_special_a_causing_pass',
+            'crystal.tests.test_runner.test_special_a_causing_pass',
             # Test 1: Special test that simulates Ctrl-C
-            'crystal.tests.test_cli.test_special_b_causing_ctrl_c',
+            'crystal.tests.test_runner.test_special_b_causing_ctrl_c',
             # Test 2: Fast test that should pass, if it wasn't interrupted
-            'crystal.tests.test_cli.test_special_c_causing_pass',
+            'crystal.tests.test_runner.test_special_c_causing_pass',
         ],
         # Enable Ctrl-C simulation in test_special_b_causing_ctrl_c
         env_extra={'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '1'},
@@ -218,8 +218,8 @@ def test_when_ctrl_c_pressed_while_test_running_noninteractively_then_marks_that
     assertIn('Rerun interrupted tests with:', stdout_str)
     assertIn(
         'crystal --test '
-        'crystal.tests.test_cli.test_special_b_causing_ctrl_c '
-        'crystal.tests.test_cli.test_special_c_causing_pass', stdout_str)
+        'crystal.tests.test_runner.test_special_b_causing_ctrl_c '
+        'crystal.tests.test_runner.test_special_c_causing_pass', stdout_str)
     
     # Verify exit code indicates failure
     assertNotEqual(0, returncode, f'Expected non-zero exit code, got {returncode}')
@@ -238,18 +238,18 @@ def test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_te
         (_, _) = read_until(crystal.stdout, 'test>\n', timeout=2.0)
         
         # Send test 1 (should pass)
-        crystal.stdin.write('crystal.tests.test_cli.test_special_a_causing_pass\n')
+        crystal.stdin.write('crystal.tests.test_runner.test_special_a_causing_pass\n')
         crystal.stdin.flush()
         (early_stdout_str, _) = read_until(crystal.stdout, 'test>\n', timeout=30.0)
         assertIn('OK', early_stdout_str)
         
         # Send test 2 (will trigger Ctrl-C simulation)
-        crystal.stdin.write('crystal.tests.test_cli.test_special_b_causing_ctrl_c\n')
+        crystal.stdin.write('crystal.tests.test_runner.test_special_b_causing_ctrl_c\n')
         crystal.stdin.flush()
         
         # Try to send test 3 (should be ignored after Ctrl-C)
         # Note: We send this immediately, but after Ctrl-C it should be ignored
-        crystal.stdin.write('crystal.tests.test_cli.test_special_c_causing_pass\n')
+        crystal.stdin.write('crystal.tests.test_runner.test_special_c_causing_pass\n')
         crystal.stdin.flush()
         
         # Wait for process to exit
@@ -274,7 +274,7 @@ def test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_te
     
     # Verify 'Rerun interrupted tests with:' section exists
     assertIn('Rerun interrupted tests with:', late_stdout_str)
-    assertIn('crystal --test crystal.tests.test_cli.test_special_b_causing_ctrl_c', late_stdout_str)
+    assertIn('crystal --test crystal.tests.test_runner.test_special_b_causing_ctrl_c', late_stdout_str)
     
     # Verify test_special_c_causing_pass was NOT run (it was on stdin but ignored after Ctrl-C)
     assertNotIn('test_special_c_causing_pass', late_stdout_str)
@@ -399,11 +399,11 @@ def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test
                 '--parallel',
                 '-j', '2',
                 # Test 0: Fast test that should pass
-                'crystal.tests.test_cli.test_special_a_causing_pass',
+                'crystal.tests.test_runner.test_special_a_causing_pass',
                 # Test 1: Special test that simulates Ctrl-C
-                'crystal.tests.test_cli.test_special_b_causing_ctrl_c',
+                'crystal.tests.test_runner.test_special_b_causing_ctrl_c',
                 # Test 2: Fast test that should pass, if it is not interrupted
-                'crystal.tests.test_cli.test_special_c_causing_pass',
+                'crystal.tests.test_runner.test_special_c_causing_pass',
             ],
             env_extra={
                 # Assign tests to workers deterministically
@@ -423,9 +423,9 @@ def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test
                 '--parallel',
                 '-j', '2',
                 # Test 0: Fast test that should pass, if it is not interrupted
-                'crystal.tests.test_cli.test_special_a_causing_pass',
+                'crystal.tests.test_runner.test_special_a_causing_pass',
                 # Test 1: Fast test that should pass, if it is not interrupted
-                'crystal.tests.test_cli.test_special_c_causing_pass',
+                'crystal.tests.test_runner.test_special_c_causing_pass',
             ],
             env_extra={
                 # Assign tests to workers deterministically
@@ -523,30 +523,30 @@ def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test
 def test_output_format_of_running_tests_in_parallel_and_in_serial_are_identical(subtests: SubtestsContext) -> None:
     _3_PASSING_TESTS = [
         # Test 0: Fast test that should pass
-        'crystal.tests.test_cli.test_special_a_causing_pass',
+        'crystal.tests.test_runner.test_special_a_causing_pass',
         # Test 1: Fast test that should pass
-        'crystal.tests.test_cli.test_special_b_causing_ctrl_c',
+        'crystal.tests.test_runner.test_special_b_causing_ctrl_c',
         # Test 2: Fast test that should pass
-        'crystal.tests.test_cli.test_special_c_causing_pass',
+        'crystal.tests.test_runner.test_special_c_causing_pass',
     ]
     
     TEST_0_LINES = [
         '======================================================================',
-        'RUNNING: test_special_a_causing_pass (crystal.tests.test_cli.test_special_a_causing_pass) [$%]',
+        'RUNNING: test_special_a_causing_pass (crystal.tests.test_runner.test_special_a_causing_pass) [$%]',
         '----------------------------------------------------------------------',
         'OK',
         '',
     ]
     TEST_1_LINES = [
         '======================================================================',
-        'RUNNING: test_special_b_causing_ctrl_c (crystal.tests.test_cli.test_special_b_causing_ctrl_c) [$%]',
+        'RUNNING: test_special_b_causing_ctrl_c (crystal.tests.test_runner.test_special_b_causing_ctrl_c) [$%]',
         '----------------------------------------------------------------------',
         'OK',
         '',
     ]
     TEST_2_LINES = [
         '======================================================================',
-        'RUNNING: test_special_c_causing_pass (crystal.tests.test_cli.test_special_c_causing_pass) [$%]',
+        'RUNNING: test_special_c_causing_pass (crystal.tests.test_runner.test_special_c_causing_pass) [$%]',
         '----------------------------------------------------------------------',
         'OK',
         '',
