@@ -17,7 +17,7 @@ import multiprocessing
 import os
 import queue
 from queue import Queue
-import select
+import selectors
 import signal
 import subprocess
 import sys
@@ -965,13 +965,20 @@ class InterruptableTeeReader:
         if self._interrupted:
             raise InterruptedError()
         
-        (readable, _, _) = select.select([
-            self.source.fileno(),
-            self.interrupt_read_pipe
-        ], [], [])
-        if self.interrupt_read_pipe in readable:
-            self._interrupted = True
-            raise InterruptedError()
+        # Wait for either the source or interrupt pipe to become readable
+        with selectors.DefaultSelector() as fileobjs:
+            fileobjs.register(self.source.fileno(), selectors.EVENT_READ)
+            fileobjs.register(self.interrupt_read_pipe, selectors.EVENT_READ)
+            events = fileobjs.select(timeout=None)
+            
+            for (key, _) in events:
+                if key.fd == self.interrupt_read_pipe:
+                    self._interrupted = True
+                    raise InterruptedError()
+            else:
+                # self.source.fileno() must be in events
+                pass
+        
         line = self.source.readline()
         
         if line:
