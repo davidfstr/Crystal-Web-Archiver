@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from contextlib import closing
 from crystal.tests.runner.shared import normalize_test_names
 from crystal.util.bulkheads import capture_crashes_to_stderr
+from crystal.util.pipes import create_selectable_pipe, Pipe, ReadablePipeEnd
 from crystal.util.xfunctools import partial2
 from crystal.util.xthreading import bg_affinity, bg_call_later, fg_affinity
 from dataclasses import dataclass
@@ -25,7 +26,7 @@ import tempfile
 import threading
 import time
 import traceback
-from typing import Callable, IO, Literal, Optional, assert_never
+from typing import IO, Literal, Optional, assert_never
 
 
 # === Main ===
@@ -192,15 +193,16 @@ def run_tests(
     start_time = time.monotonic()  # capture
     worker_results: list[Optional[WorkerResult]] = [None] * num_workers
     worker_results_lock = threading.Lock()
-    worker_interrupt_pipes: list[tuple[int, int]] = [
-        os.pipe() for i in range(num_workers)
-    ]  # tuples of (interrupt_read_pipe, interrupt_write_pipe)
+    worker_interrupt_pipes: list[Pipe] = [
+        create_selectable_pipe() for i in range(num_workers)
+    ]
     if True:
         @capture_crashes_to_stderr
         def run_worker_thread(worker_id: int) -> None:
             result = _run_worker(
                 worker_id, work_queues[worker_id], log_dir, verbose,
-                interrupted_event, worker_interrupt_pipes[worker_id][0],
+                interrupted_event,
+                worker_interrupt_pipes[worker_id].readable_end,
                 display_result_immediately=(not deterministic_mode),
                 at_interrupt_point_event=(
                     workers_at_interrupt_point[worker_id]
@@ -256,9 +258,9 @@ def run_tests(
         end_time = time.monotonic()  # capture
     
     # Clean up interrupt pipes
-    for (worker_id, (_, interrupt_write_pipe)) in enumerate(worker_interrupt_pipes):
+    for (worker_id, pipe) in enumerate(worker_interrupt_pipes):
         try:
-            os.close(interrupt_write_pipe)
+            pipe.writable_end.close()
         except Exception:
             pass  # Already closed or error
     
@@ -440,17 +442,17 @@ def _create_log_directory() -> str:
 
 def _interrupt_workers(
         interrupted_event: threading.Event,
-        worker_interrupt_pipes: list[tuple[int, int]],
+        worker_interrupt_pipes: list[Pipe],
         verbose: bool,
         ) -> None:
     # Signal workers to stop
     interrupted_event.set()
     
     # Signal workers via interrupt pipes to unblock any stuck reads
-    for (worker_id, (_, interrupt_write_pipe)) in enumerate(worker_interrupt_pipes):
+    for (worker_id, pipe) in enumerate(worker_interrupt_pipes):
         try:
             # Send interrupt signal byte
-            os.write(interrupt_write_pipe, b'\x00')
+            pipe.writable_end.write(b'\x00')
         except Exception as e:
             if verbose:
                 print(f'[Runner] Failed to signal worker {worker_id} via pipe: {e}', file=sys.stderr)
@@ -586,7 +588,7 @@ def _run_worker(
         log_dir: str,
         verbose: bool,
         interrupted_event: threading.Event,
-        interrupt_read_pipe: int,
+        interrupt_read_pipe: 'ReadablePipeEnd',
         display_result_immediately: bool = True,
         at_interrupt_point_event: threading.Event | None = None,
         ) -> WorkerResult:
@@ -769,7 +771,7 @@ def _run_worker(
         # Close interrupt pipe read-end.
         # (The write-end will be closed by the main thread.)
         try:
-            os.close(interrupt_read_pipe)
+            interrupt_read_pipe.close()
         except Exception:
             pass  # Already closed
     
@@ -945,7 +947,7 @@ class InterruptableTeeReader:
     """
     def __init__(self,
             source: IO[str],
-            interrupt_read_pipe: int,
+            interrupt_read_pipe: 'ReadablePipeEnd',
             log_file_path: str,
             ) -> None:
         log_file = open(log_file_path, 'w', encoding='utf-8')
@@ -968,11 +970,11 @@ class InterruptableTeeReader:
         # Wait for either the source or interrupt pipe to become readable
         with selectors.DefaultSelector() as fileobjs:
             fileobjs.register(self.source.fileno(), selectors.EVENT_READ)
-            fileobjs.register(self.interrupt_read_pipe, selectors.EVENT_READ)
+            fileobjs.register(self.interrupt_read_pipe.fileno(), selectors.EVENT_READ)
             events = fileobjs.select(timeout=None)
             
             for (key, _) in events:
-                if key.fd == self.interrupt_read_pipe:
+                if key.fd == self.interrupt_read_pipe.fileno():
                     self._interrupted = True
                     raise InterruptedError()
             else:

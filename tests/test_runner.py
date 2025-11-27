@@ -11,6 +11,7 @@ from crystal.tests.runner.parallel import (
     _interrupt_workers, _parse_test_result, _read_until_prompt, _run_worker,
 )
 from crystal.tests.runner.shared import normalize_test_names
+from crystal.util.pipes import create_selectable_pipe, Pipe
 from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 import os
@@ -897,8 +898,8 @@ class TestInterruptRunParallelTestWorker:
         with tempfile.TemporaryDirectory() as log_dir:
             # Create interrupt event and pipes
             interrupted_event = threading.Event()
-            (interrupt_read_pipe, interrupt_write_pipe) = os.pipe()
-            worker_interrupt_pipes = [(interrupt_read_pipe, interrupt_write_pipe)]
+            interrupt_pipe = create_selectable_pipe()
+            worker_interrupt_pipes = [interrupt_pipe]
             
             try:
                 def run_worker() -> WorkerResult:
@@ -911,7 +912,7 @@ class TestInterruptRunParallelTestWorker:
                             log_dir=log_dir,
                             verbose=False,
                             interrupted_event=interrupted_event,
-                            interrupt_read_pipe=interrupt_read_pipe,
+                            interrupt_read_pipe=interrupt_pipe.readable_end,
                         )
                         
                         # Wait for worker to complete and get result
@@ -927,7 +928,7 @@ class TestInterruptRunParallelTestWorker:
             finally:
                 # Clean up pipes (write pipe is closed by _interrupt_workers)
                 try:
-                    os.close(interrupt_read_pipe)
+                    interrupt_pipe.readable_end.close()
                 except OSError:
                     pass
 
@@ -1020,7 +1021,7 @@ class _MockProcess:
         try:
             # NOTE: May raise `OSError: [Errno 9] Bad file descriptor` if
             #       log_file has never been read from.
-            os.close(self.stdout._write_fd)
+            self.stdout._pipe.writable_end.close()
         except Exception:
             pass
     
@@ -1059,14 +1060,14 @@ class _MockReadableFile:
         self._line_index = 0
         self._closed = False
         # Create a real pipe to provide a real file descriptor
-        (self._read_fd, self._write_fd) = os.pipe()
+        self._pipe = create_selectable_pipe()
         if self._line_index < len(self._lines):
             # Send "input available" signal byte
-            os.write(self._write_fd, b'\x00')
+            self._pipe.writable_end.write(b'\x00')
     
     def fileno(self) -> int:
         """Return the file descriptor for this file."""
-        return self._read_fd
+        return self._pipe.readable_end.fileno()
     
     def readline(self) -> str:
         """Read and return the next line."""
@@ -1076,18 +1077,18 @@ class _MockReadableFile:
         self._line_index += 1
         if not self._at_eof():
             # Send "input available" signal byte
-            os.write(self._write_fd, b'\x00')
+            self._pipe.writable_end.write(b'\x00')
         return line + '\n'
     
     def close(self) -> None:
         """Close the file."""
         self._closed = True
         try:
-            os.close(self._read_fd)
+            self._pipe.readable_end.close()
         except OSError:
             pass
         try:
-            os.close(self._write_fd)
+            self._pipe.writable_end.close()
         except OSError:
             pass
     
