@@ -212,7 +212,13 @@ def crystal_running_with_banner(
             
             if len(next_lines) == 0:
                 try:
-                    (lines_str, _) = read_until(crystal.stdout, ('\n', '>>> '), _drain_diagnostic=False)
+                    (lines_str, _) = read_until(
+                        crystal.stdout,
+                        ('\n', '>>> '),
+                        # 2.0s isn't enough on macOS locally when run in parallel
+                        timeout=4.0,
+                        _drain_diagnostic=False,
+                    )
                 except ReadUntilTimedOut as e:
                     raise e.plus(
                         f' Read before: {"".join(lines_found)!r} '
