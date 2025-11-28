@@ -774,10 +774,29 @@ def not_in_archive_html(
     script_html = dedent(
         """
         <script>
+            // -----------------------------------------------------------------
+            // Testing: Reload (Patchable)
+            
             // NOTE: Patched by tests
             window.crReload = function() {
                 window.location.reload();
             };
+            
+            // -----------------------------------------------------------------
+            // Testing: Fetch (Pausable)
+            
+            (function() {
+                const originalFetch = window.fetch;
+                async function pausableFetch(...args) {
+                    while (window.crFetchPaused) {
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+                    return originalFetch.apply(window, args);
+                }
+                window.fetch = pausableFetch;
+            })();
+            
+            // -----------------------------------------------------------------
             
             %(_DOWNLOAD_PROGRESS_BAR_JS)s
             

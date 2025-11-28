@@ -254,6 +254,28 @@ def reloads_paused(page: RawPage, *, expect_reload: bool=True) -> Iterator[None]
 
 
 # ------------------------------------------------------------------------------
+# Utility: Fetch
+
+@contextmanager
+def fetch_paused(page: RawPage) -> Iterator[None]:
+    """
+    Context manager that pauses `window.fetch()` calls during execution,
+    allowing tests to observe UI states that occur while fetch is pending.
+    
+    Usage:
+        with fetch_paused(page):
+            page.download_button.click()
+            expect(page.progress_indicator).to_be_visible()
+        # (Fetch resumes here and completes)
+    """
+    page.evaluate('() => { window.crFetchPaused = true; }')
+    try:
+        yield
+    finally:
+        page.evaluate('() => { window.crFetchPaused = false; }')
+
+
+# ------------------------------------------------------------------------------
 # Utility: Network Down
 
 @contextmanager

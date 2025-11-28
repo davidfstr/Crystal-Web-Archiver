@@ -17,7 +17,7 @@ from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.data import LOREM_IPSUM_LONG, LOREM_IPSUM_SHORT
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.pages import (
-    FetchErrorPage, NotInArchivePage, network_down_after_delay, reloads_paused
+    FetchErrorPage, NotInArchivePage, fetch_paused, network_down_after_delay, reloads_paused
 )
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
@@ -939,13 +939,15 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
                 # Ensure progress bar is initially hidden
                 expect(page.progress_bar).not_to_be_visible()
                 
-                # Start download
-                page.action_button.click()
+                with fetch_paused(raw_page):
+                    # Start download
+                    page.action_button.click()
+                    
+                    # Verify download button gets disabled
+                    expect(page.action_button).to_contain_text('Creating & Starting Download...')
+                    expect(page.action_button).to_be_disabled()
                 
-                # Verify download button gets disabled and progress bar appears
-                # TODO: Pause something to prevent download from immediately completing
-                expect(page.action_button).to_contain_text('Creating & Starting Download...')
-                expect(page.action_button).to_be_disabled()
+                # Verify progress bar appears
                 page.progress_bar.wait_for(state='visible')
                 
                 # Wait for download failure. Then:
