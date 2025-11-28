@@ -51,6 +51,8 @@ if TYPE_CHECKING:
 # Window & Dialog Abstractions
 
 class OpenOrCreateDialog:
+    # NOTE: 2.0 isn't long enough when running tests in parallel locally
+    _TIMEOUT_FOR_OPEN_OCD = 4.0
     # NOTE: 10.0 isn't long enough for Windows test runners on GitHub Actions
     _TIMEOUT_FOR_OPEN_MAIN_WINDOW = 12.0
     
@@ -65,7 +67,7 @@ class OpenOrCreateDialog:
         try:
             open_or_create_project_dialog = await wait_for(
                 window_condition('cr-open-or-create-project'),
-                timeout=timeout,
+                timeout=timeout or OpenOrCreateDialog._TIMEOUT_FOR_OPEN_OCD,
                 stacklevel_extra=1,
             )  # type: wx.Window
         except WaitTimedOut as e:
