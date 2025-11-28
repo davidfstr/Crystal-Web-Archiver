@@ -95,6 +95,8 @@ def test_can_run_tests_in_interactive_mode() -> None:
         (output, _) = read_until(crystal.stdout, '\x07', timeout=5.0)
         assertIn('SUMMARY', output)
         assertIn('OK', output)
+        
+        crystal.wait(timeout=2.0)  # may raise TimeoutExpired
     
     # Verify exit code
     assertEqual(0, crystal.returncode)
