@@ -29,6 +29,23 @@ WINDOW_PROXY_REPR_STR = '<unset crystal.browser.MainWindow proxy>\n'
 # ------------------------------------------------------------------------------
 # Run CLI
 
+def get_crystal_command() -> list[str]:
+    """
+    Returns the command (as a list of strings) to run Crystal on the command line.
+    
+    When running from a frozen macOS app, this returns the path to the Crystal binary.
+    Otherwise, this returns ['python', '-m', 'crystal'] using the current interpreter.
+    """
+    python = sys.executable
+    if getattr(sys, 'frozen', None) == 'macosx_app':
+        python_neighbors = os.listdir(os.path.dirname(python))
+        (crystal_binary_name,) = (n for n in python_neighbors if 'crystal' in n.lower())
+        crystal_binary = os.path.join(os.path.dirname(python), crystal_binary_name)
+        return [crystal_binary]
+    else:
+        return [python, '-m', 'crystal']
+
+
 def run_crystal(args: list[str]) -> subprocess.CompletedProcess[str]:
     """
     Run Crystal CLI with the given arguments and return the result.
@@ -73,15 +90,7 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
     _ensure_can_use_crystal_cli()
     
     # Determine how to run Crystal on command line
-    crystal_command: list[str]
-    python = sys.executable
-    if getattr(sys, 'frozen', None) == 'macosx_app':
-        python_neighbors = os.listdir(os.path.dirname(python))
-        (crystal_binary_name,) = (n for n in python_neighbors if 'crystal' in n.lower())
-        crystal_binary = os.path.join(os.path.dirname(python), crystal_binary_name)
-        crystal_command = [crystal_binary]
-    else:
-        crystal_command = [python, '-m', 'crystal']
+    crystal_command = get_crystal_command()
     
     crystal = subprocess.Popen(
         [*crystal_command, *args],

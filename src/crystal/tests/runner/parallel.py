@@ -7,6 +7,7 @@ import argparse
 from collections.abc import Sequence
 from contextlib import closing
 from crystal.tests.runner.shared import normalize_test_names
+from crystal.tests.util.cli import get_crystal_command
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.pipes import create_selectable_pipe, Pipe, ReadablePipeEnd
 from crystal.util.xfunctools import partial2
@@ -630,7 +631,7 @@ def _run_worker(
     try:
         # Start subprocess in interactive test mode
         process = subprocess.Popen(
-            ['crystal', 'test', '--interactive'],
+            [*get_crystal_command(), 'test', '--interactive'],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,  # Merge stderr into stdout
