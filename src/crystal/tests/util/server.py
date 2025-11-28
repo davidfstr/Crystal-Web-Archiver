@@ -34,7 +34,7 @@ from zipfile import ZipFile
 def get_most_recently_started_server_port() -> int:
     """
     Returns the port of the most recently started ProjectServer during tests.
-    Falls back to _DEFAULT_SERVER_PORT if no server has been started yet.
+    Falls back to _DEFAULT_SERVER_PORT() if no server has been started yet.
     
     This function enables test utilities to auto-detect which port a ProjectServer
     is running on, eliminating the need for tests to hardcode the port.
