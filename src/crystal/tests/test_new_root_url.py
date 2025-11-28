@@ -742,12 +742,12 @@ async def test_given_url_input_is_empty_and_focused_when_tab_pressed_then_url_in
             SetFocus(nud.url_field, None)
         else:
             assertEqual(True, nud.url_field_focused)
-        assertEqual(False, nud.url_cleaner_spinner.IsShown())
+        await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
         assertEqual('', nud.url_field.Value)
         
         SetFocus(nud.name_field, nud.url_field)  # simulate press tab
         assertEqual(False, nud.url_field_focused)
-        assertEqual(False, nud.url_cleaner_spinner.IsShown())
+        await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
         assertEqual('', nud.url_field.Value)
 
 
@@ -767,7 +767,7 @@ async def test_given_url_input_is_nonempty_and_focused_when_tab_pressed_then_url
                     
                     SetFocus(nud.name_field, nud.url_field)  # simulate press tab
                     assertEqual(False, nud.url_field_focused)
-                    assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                    await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                     
                     SetFocus(nud.url_field, nud.name_field)  # simulate press shift-tab
                     assertEqual(True, nud.url_field_focused)
@@ -793,7 +793,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
                     
                     last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                     assertEqual(False, nud.url_field_focused)
-                    assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                    await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                     await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
                     assertEqual(normalized_url, nud.url_field.Value)
 
@@ -816,7 +816,7 @@ async def test_given_url_input_is_nonempty_without_www_and_did_press_tab_and_spi
                     
                     last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                     assertEqual(False, nud.url_field_focused)
-                    assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                    await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                     await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
                     assertEqual(with_www_url, nud.url_field.Value)
 
@@ -839,7 +839,7 @@ async def test_given_url_input_is_nonempty_with_www_and_did_press_tab_and_spinne
                     
                     last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                     assertEqual(False, nud.url_field_focused)
-                    assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                    await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                     await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
                     assertEqual(without_www_url, nud.url_field.Value)
 
@@ -860,7 +860,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
                     
                     last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                     assertEqual(False, nud.url_field_focused)
-                    assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                    await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                     await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
                     assertEqual(normalized_start_url, nud.url_field.Value)
 
@@ -879,7 +879,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_ur
                 
                 last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                 assertEqual(False, nud.url_field_focused)
-                assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                 
                 last_focused = SetFocus(nud.url_field, last_focused)  # simulate press shift-tab
                 assertEqual(True, nud.url_field_focused)
@@ -889,7 +889,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_ur
                 
                 last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                 assertEqual(False, nud.url_field_focused)
-                assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
 
 
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_press_ok_then_disables_all_controls_except_cancel() -> None:
@@ -903,7 +903,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
                 
                 last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                 assertEqual(False, nud.url_field_focused)
-                assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                 
                 nud.name_field.Value = 'Home'
                 
@@ -938,7 +938,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
                 
                 last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                 assertEqual(False, nud.url_field_focused)
-                assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                 
                 click_button(nud.ok_button)
                 assertEqual(False, nud.url_field.Enabled)
@@ -964,7 +964,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_pres
             
             last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
             assertEqual(False, nud.url_field_focused)
-            assertEqual(True, nud.url_cleaner_spinner.IsShown())
+            await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
             
             nud.name_field.Value = 'Home'
             
@@ -1022,7 +1022,7 @@ async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_the
             
             last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
             assertEqual(False, nud.url_field_focused)
-            assertEqual(True, nud.url_cleaner_spinner.IsShown())
+            await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
             
             nud.name_field.Value = 'Home'
             
@@ -1033,7 +1033,7 @@ async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_the
             
             last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
             assertEqual(False, nud.url_field_focused)
-            assertEqual(False, nud.url_cleaner_spinner.IsShown())
+            await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
 
 
 # === Test: Disallow Create Empty Root URL ===
@@ -1108,7 +1108,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 
                 last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                 assertEqual(False, nud.url_field_focused)
-                assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                 
                 with patch(
                         'crystal.browser.new_root_url.ShowModal',
@@ -1134,7 +1134,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
                 
                 last_focused = SetFocus(nud.name_field, last_focused)  # simulate press tab
                 assertEqual(False, nud.url_field_focused)
-                assertEqual(True, nud.url_cleaner_spinner.IsShown())
+                await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
                 
                 await wait_for(lambda: (False == nud.url_cleaner_spinner.IsShown()) or None)
                 
