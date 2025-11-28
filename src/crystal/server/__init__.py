@@ -71,7 +71,14 @@ if TYPE_CHECKING:
 # ------------------------------------------------------------------------------
 # ProjectServer
 
-_DEFAULT_SERVER_PORT = 2797  # CRYS on telephone keypad
+def _DEFAULT_SERVER_PORT() -> int:
+    """Returns the default server port, allowing override via environment variable for testing."""
+    env_port = os.environ.get('CRYSTAL_DEFAULT_SERVER_PORT')
+    if env_port is not None:
+        return int(env_port)
+    return 2797  # CRYS on telephone keypad
+
+
 _DEFAULT_SERVER_HOST = '127.0.0.1'
 
 
@@ -119,7 +126,7 @@ class ProjectServer:
         * OSError (errno.EADDRINUSE) -- if the host:port combination is already in use.
         """
         if port is None:
-            port = _DEFAULT_SERVER_PORT
+            port = _DEFAULT_SERVER_PORT()
             try_other_ports = True
         elif port is Ellipsis:
             # TODO: Use socket's default handling for port=0 to pick an open port.

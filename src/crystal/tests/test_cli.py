@@ -303,13 +303,20 @@ def test_given_launched_with_serve_and_port_when_port_already_in_use_then_fails_
 
 
 def test_given_launched_with_serve_and_no_port_and_default_port_in_use_then_uses_next_higher_open_port() -> None:
-    if _is_port_in_use(2797) or _is_port_in_use(2798):
-        skipTest('Port 2797 or 2798 already in use, cannot run test')
-    
-    with port_in_use(2797, '127.0.0.1'):
+    # Find two consecutive free ports: P and P+1.
+    # We'll set P as the default port (via env var) and block it,
+    # then verify Crystal automatically uses P+1.
+    with port_in_use(0, '127.0.0.1') as default_port:
+        # Verify P+1 is also free
+        if _is_port_in_use(default_port + 1):
+            skipTest(f'Port {default_port + 1} already in use, cannot run test')
+        
         with _temporary_project() as project_path:
-            with _crystal_shell_with_serve(project_path) as server_start_message:
-                assertIn('Server started at: http://127.0.0.1:2798', server_start_message)
+            with _crystal_shell_with_serve(
+                    project_path,
+                    env_extra={'CRYSTAL_DEFAULT_SERVER_PORT': str(default_port)}
+                    ) as server_start_message:
+                assertIn(f'Server started at: http://127.0.0.1:{default_port + 1}', server_start_message)
 
 
 def test_when_launched_with_serve_and_without_readonly_then_serves_as_writable() -> None:
@@ -689,6 +696,7 @@ def _crystal_shell_with_serve(
         host: str | None = None,
         *, banner_timeout: float | None = None,
         extra_args: list[str] | None = None,
+        env_extra: dict[str, str] | None = None,
         ) -> Iterator[str]:
     """
     Context which starts "crystal --serve [--port PORT] [--host HOST] [extra_args] PROJECT_PATH --shell"
@@ -718,6 +726,8 @@ def _crystal_shell_with_serve(
         banner_timeout = 7.0
     if extra_args is None:
         extra_args = []
+    if env_extra is None:
+        env_extra = {}
     
     # Build arguments
     args = ['--serve']
@@ -728,7 +738,7 @@ def _crystal_shell_with_serve(
     args.extend(extra_args)
     args.extend([project_path])
     
-    with crystal_shell(args=args) as (crystal, banner):
+    with crystal_shell(args=args, env_extra=env_extra) as (crystal, banner):
         assert isinstance(crystal.stdout, TextIOBase)
         
         # Read banner until we see expected lines or reach a reasonable line limit
