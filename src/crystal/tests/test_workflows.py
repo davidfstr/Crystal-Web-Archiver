@@ -15,7 +15,7 @@ from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
     click_button, click_checkbox, set_checkbox_value, TreeItem,
 )
-from crystal.tests.util.pages import NotInArchivePage
+from crystal.tests.util.pages import NotInArchivePage, fetch_paused
 from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url,
@@ -769,12 +769,14 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     # Click the download URL button (above the form)
                     expect(page.action_button).to_contain_text('⬇ Download')
                     expect(page.action_button).to_be_enabled()
-                    page.action_button.click()
+                    with fetch_paused(raw_page):
+                        page.action_button.click()
+                        
+                        # Verify download button gets disabled
+                        expect(page.action_button).to_contain_text('Creating & Starting Download...')
+                        expect(page.action_button).to_be_disabled()
                     
-                    # Verify download button gets disabled and progress bar appears
-                    # TODO: Pause something to prevent download from immediately completing
-                    expect(page.action_button).to_contain_text('Creating & Starting Download...')
-                    expect(page.action_button).to_be_disabled()
+                    # Verify progress bar appears
                     page.progress_bar.wait_for(state='visible')
                     
                     # Wait for the page to reload after download completes.
