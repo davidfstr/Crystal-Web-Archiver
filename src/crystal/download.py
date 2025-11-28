@@ -255,8 +255,16 @@ class HttpResourceRequest(ResourceRequest):
             'reason_phrase': response.reason,
             'headers': [[k, v] for (k, v) in response.getheaders()]
         })
+        def close() -> None:
+            try:
+                # NOTE: Must close HTTPResponse explicitly because HTTPConnection
+                #       does not always retain a reference to it, and thus closing
+                #       HTTPConnection by itself may not actually close the response.
+                response.close()
+            finally:
+                conn.close()
         body_stream = _HttpResourceBodyStream(
-            close=conn.close,
+            close=close,
             read=response.read,
             readinto=response.readinto,
             fileno=response.fileno,
