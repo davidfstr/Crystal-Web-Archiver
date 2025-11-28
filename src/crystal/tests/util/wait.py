@@ -4,6 +4,7 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.screenshots import take_error_screenshot
+from crystal.util.xtime import avoid_calling_time_monotonic
 import datetime
 import os
 import time
@@ -121,7 +122,14 @@ async def wait_for(
     soft_timeout = timeout
     hard_timeout = timeout * HARD_TIMEOUT_MULTIPLIER
     
-    start_time = time.monotonic()  # capture
+    use_real_monotonic_time = not avoid_calling_time_monotonic()
+    def time_monotonic() -> float:
+        if use_real_monotonic_time:
+            return time.monotonic()
+        else:
+            return time.time()  # pylint: disable=monotonic-durations
+    
+    start_time = time_monotonic()  # capture
     hard_timeout_exceeded = False
     succeeded_after_one_check = True
     try:
@@ -132,7 +140,7 @@ async def wait_for(
             succeeded_after_one_check = False
             
             # Raise if hard timeout exceeded
-            delta_time = time.monotonic() - start_time
+            delta_time = time_monotonic() - start_time
             if delta_time > hard_timeout:
                 if message is not None:
                     # Use caller-provided failure message if available
@@ -157,7 +165,7 @@ async def wait_for(
     finally:
         # Warn if soft timeout exceeded
         if not hard_timeout_exceeded and not succeeded_after_one_check:
-            delta_time = time.monotonic() - start_time
+            delta_time = time_monotonic() - start_time
             if delta_time > soft_timeout:
                 message_suffix_str = None
                 if message is not None:

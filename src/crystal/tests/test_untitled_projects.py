@@ -33,6 +33,7 @@ from crystal.app_preferences import app_prefs
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xappdirs import user_untitled_projects_dir
 from crystal.util.xos import is_ci, is_linux, is_mac_os, is_windows
+from crystal.util.xtime import time_monotonic_calls_avoided
 from crystal.util.xtyping import not_none
 from dataclasses import dataclass
 import errno
@@ -691,7 +692,8 @@ async def test_when_save_as_large_project_then_progress_updates_incrementally() 
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _temporary_directory_on_new_filesystem() as save_dir, \
             _untitled_project() as project, \
-            RealMainWindow(project) as rmw:
+            RealMainWindow(project) as rmw, \
+            time_monotonic_calls_avoided():
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
