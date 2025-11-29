@@ -634,9 +634,16 @@ def _run_worker(
             [*get_crystal_command(), 'test', '--interactive'],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Merge stderr into stdout
+            stderr=subprocess.STDOUT,  # merge stderr into stdout
             text=True,
-            bufsize=1,  # Line buffered
+            bufsize=1,  # line buffered
+            env={
+                **os.environ,
+                **{
+                    # Signal that is_parallel() is True
+                    'CRYSTAL_IS_PARALLEL': 'True',
+                }
+            }
         )
         assert process.stdin is not None
         assert process.stdout is not None
