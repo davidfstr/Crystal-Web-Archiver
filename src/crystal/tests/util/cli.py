@@ -42,6 +42,8 @@ def get_crystal_command() -> list[str]:
         (crystal_binary_name,) = (n for n in python_neighbors if 'crystal' in n.lower())
         crystal_binary = os.path.join(os.path.dirname(python), crystal_binary_name)
         return [crystal_binary]
+    elif is_windows():
+        return [python]
     else:
         return [python, '-m', 'crystal']
 

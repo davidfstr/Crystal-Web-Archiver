@@ -9,8 +9,9 @@ from contextlib import closing
 from crystal.tests.runner.shared import normalize_test_names
 from crystal.tests.util.cli import get_crystal_command
 from crystal.util.bulkheads import capture_crashes_to_stderr
-from crystal.util.pipes import create_selectable_pipe, Pipe, ReadablePipeEnd
+from crystal.util.pipes import create_selectable_pipe, Pipe, ReadablePipeEnd, SelectableReader
 from crystal.util.xfunctools import partial2
+from crystal.util.xos import is_windows
 from crystal.util.xthreading import bg_affinity, bg_call_later, fg_affinity
 from dataclasses import dataclass
 import datetime
@@ -27,7 +28,7 @@ import tempfile
 import threading
 import time
 import traceback
-from typing import IO, Literal, Optional, assert_never
+from typing import IO, Literal, Optional, Union, assert_never
 
 
 # === Main ===
@@ -676,6 +677,13 @@ def _run_worker(
         assert process.stdin is not None
         assert process.stdout is not None
         
+        # Wrap stdout for selectability on Windows
+        # (On Windows, select() only works with sockets, not pipes)
+        if is_windows():
+            selectable_stdout: Union[IO[str], SelectableReader] = SelectableReader(process.stdout)
+        else:
+            selectable_stdout = process.stdout
+        
         # Create log file for this worker
         log_file_path = os.path.join(log_dir, f'worker{worker_id}-pid{process.pid}.log')
         if verbose:
@@ -683,7 +691,7 @@ def _run_worker(
         
         # Wrap stdout to copy output to log file and to provide interruptability
         reader = InterruptableTeeReader(
-            process.stdout, interrupt_read_pipe, log_file_path
+            selectable_stdout, interrupt_read_pipe, log_file_path
         )
         with closing(reader):
             
@@ -1003,7 +1011,7 @@ class InterruptableTeeReader:
       to a log file. Similar to the Unix 'tee' command.
     """
     def __init__(self,
-            source: IO[str],
+            source: Union[IO[str], SelectableReader],
             interrupt_read_pipe: 'ReadablePipeEnd',
             log_file_path: str,
             ) -> None:
