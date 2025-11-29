@@ -21,7 +21,7 @@ from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url, served_project,
 )
 from crystal.tests.util.skip import skipTest
-from crystal.tests.util.slow import slow
+from crystal.tests.util.mark import slow
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,
