@@ -680,9 +680,8 @@ def _run_worker(
         # Wrap stdout for selectability on Windows
         # (On Windows, select() only works with sockets, not pipes)
         if is_windows():
-            selectable_stdout: Union[IO[str], SelectableReader] = SelectableReader(process.stdout)
-        else:
-            selectable_stdout = process.stdout
+            process.stdout = SelectableReader(process.stdout)
+        
         
         # Create log file for this worker
         log_file_path = os.path.join(log_dir, f'worker{worker_id}-pid{process.pid}.log')
@@ -691,7 +690,7 @@ def _run_worker(
         
         # Wrap stdout to copy output to log file and to provide interruptability
         reader = InterruptableTeeReader(
-            selectable_stdout, interrupt_read_pipe, log_file_path
+            process.stdout, interrupt_read_pipe, log_file_path
         )
         with closing(reader):
             
