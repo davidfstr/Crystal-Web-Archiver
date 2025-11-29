@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, contextmanager, nullcontext
 from crystal.browser.new_root_url import fields_hide_hint_when_focused
 from crystal.model import Project, Resource, RootResource
 from crystal.task import DownloadResourceGroupTask
@@ -1237,11 +1237,13 @@ def _EXPAND_enabled() -> Iterator[None]:
 
 
 @asynccontextmanager
-async def _new_root_url_dialog_open(*,
-        autoclose: bool=True
+async def _new_root_url_dialog_open(
+        *, autoclose: bool=True,
         ) -> AsyncIterator[tuple[NewRootUrlDialog, Project]]:
+    urlopen_is_mocked = crystal.url_input.urlopen.__module__ != 'urllib.request'
+    
     # Never allow automated tests to make real internet requests
-    with _urlopen_responding_with(_UrlOpenHttpResponse(code=590, url=ANY)):
+    with (_urlopen_responding_with(_UrlOpenHttpResponse(code=590, url=ANY)) if not urlopen_is_mocked else nullcontext()):
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             click_button(mw.new_root_url_button)
             nud = await NewRootUrlDialog.wait_for()
