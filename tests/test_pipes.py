@@ -2,11 +2,13 @@
 Unit tests for crystal.util.pipes module.
 """
 
+from crystal.tests.util.cli import get_crystal_command
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.pipes import create_selectable_pipe, Pipe, SelectableReader
 from crystal.util.xthreading import bg_call_later
 from io import StringIO
 import selectors
+import subprocess
 import time
 
 
@@ -368,3 +370,51 @@ class TestSelectableReader:
         reader.close()
         reader.close()  # Should not raise
         reader.close()  # Should not raise
+    
+    def test_works_with_subprocess_stdout(self) -> None:
+        """Test that SelectableReader works with a real subprocess stdout."""
+        # Start a subprocess that produces output
+        process = subprocess.Popen(
+            [*get_crystal_command(), '--help'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        assert process.stdout is not None
+        
+        reader = SelectableReader(process.stdout)
+        try:
+            sel = selectors.DefaultSelector()
+            try:
+                sel.register(reader.fileno(), selectors.EVENT_READ)
+                
+                # Wait for data to become available
+                events = sel.select(timeout=5.0)
+                assert len(events) == 1, 'Expected subprocess output to be readable'
+                assert events[0][0].fd == reader.fileno()
+                
+                # Read lines from the subprocess
+                lines = []
+                while True:
+                    # Check if more data is available
+                    events = sel.select(timeout=0.5)
+                    if not events:
+                        # No more data available within timeout
+                        break
+                    
+                    line = reader.readline()
+                    if not line:
+                        # EOF
+                        break
+                    lines.append(line)
+                
+                # Verify we got some expected output from crystal --help
+                output = ''.join(lines)
+                assert 'crystal' in output.lower() or 'usage' in output.lower(), \
+                    f'Expected help output, got: {output[:200]}'
+            finally:
+                sel.close()
+        finally:
+            reader.close()
+            process.wait(timeout=5.0)
