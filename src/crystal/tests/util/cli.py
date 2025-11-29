@@ -79,6 +79,8 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
     * discrete_stderr --
         if True, stderr is kept separate from stdout;
         if False, stderr is merged into stdout.
+    * kill --
+        whether to kill the Crystal subprocess when exiting the context normally
     
     Raises:
     * SkipTest -- if Crystal CLI cannot be used in the current environment
@@ -92,6 +94,7 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
     # Determine how to run Crystal on command line
     crystal_command = get_crystal_command()
     
+    did_raise = False
     crystal = subprocess.Popen(
         [*crystal_command, *args],
         stdin=subprocess.PIPE,
@@ -126,14 +129,22 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
         app_prefs.flush()
         
         yield crystal
+    except:
+        did_raise = True
+        raise
     finally:
-        if kill:
+        if kill or did_raise:
             assert crystal.stdin is not None
             crystal.stdin.close()
             assert crystal.stdout is not None
             crystal.stdout.close()
             crystal.kill()
-        crystal.wait()
+        try:
+            crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            print(
+                f'*** Crystal subprocess did not exit within {DEFAULT_WAIT_TIMEOUT:.1f}s',
+                file=sys.stderr)
         
         # Sync app preferences after subprocess exits,
         # in case the subprocess modified them
