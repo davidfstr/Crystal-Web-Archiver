@@ -680,8 +680,7 @@ def _run_worker(
         # Wrap stdout for selectability on Windows
         # (On Windows, select() only works with sockets, not pipes)
         if is_windows():
-            process.stdout = SelectableReader(process.stdout)
-        
+            process.stdout = SelectableReader(process.stdout)  # type: ignore[assignment]
         
         # Create log file for this worker
         log_file_path = os.path.join(log_dir, f'worker{worker_id}-pid{process.pid}.log')

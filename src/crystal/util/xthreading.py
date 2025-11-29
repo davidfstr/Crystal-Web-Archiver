@@ -387,7 +387,7 @@ def fg_waiting_calling_thread() -> threading.Thread | None:
 # Call on Background Thread
 
 def bg_call_later(
-        callable: Callable[[], None],
+        target: Callable[[], None],
         *,
         name: str,
         daemon: bool=False,
@@ -396,23 +396,23 @@ def bg_call_later(
     Calls the specified callable on a new background thread.
     
     Arguments:
-    * callable -- the callable to run.
-    * args -- the arguments to provide to the callable.
+    * target -- the callable to run.
+    * name -- the name of the background thread, for debugging.
     * daemon -- 
         if True, forces the background thread to be a daemon,
         and not prevent program termination while it is running.
     """
     if _DEFERRED_BG_CALLS_MUST_CAPTURE_CRASHES:
-        ensure_is_bulkhead_call(callable)
+        ensure_is_bulkhead_call(target)
     
     # On Windows, initialize COM on every thread so that finalizers
     # interacting with wxPython COM objects do not print the warning
     # "Windows fatal exception: code 0x800401f0"
     if is_windows():
-        callable = _com_initialized()(callable)  # reinterpret
+        target = _com_initialized()(target)  # reinterpret
     
     thread = threading.Thread(  # pylint: disable=no-direct-thread
-        target=callable,
+        target=target,
         args=(),
         name=name,
         daemon=daemon

@@ -1,7 +1,8 @@
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.xos import is_linux, is_mac_os, is_windows
+from crystal.util.xthreading import bg_call_later
 import os
 import socket
-import threading
 from typing import IO, Optional
 
 
@@ -208,13 +209,13 @@ class SelectableReader:
         self._buffer = ''
         
         # Start background thread to forward data from source to socket
-        self._forwarder_thread = threading.Thread(
+        self._forwarder_thread = bg_call_later(
             target=self._forward_data,
             daemon=True,
-            name='SelectableReader-forwarder'
+            name='SelectableReader.forward_data'
         )
-        self._forwarder_thread.start()
     
+    @capture_crashes_to_stderr
     def _forward_data(self) -> None:
         """Background thread that forwards data from source to write socket."""
         try:
