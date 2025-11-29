@@ -1,7 +1,9 @@
+from crystal.util.test_mode import is_called_from_a_test, is_parallel, tests_are_running
+from crystal.util.xos import is_wx_gtk
 import sys
 from types import EllipsisType
 from typing import Literal
-from crystal.util.xos import is_wx_gtk
+from unittest import SkipTest
 import wx
 
 
@@ -19,6 +21,9 @@ def SetFocus(
     
     Returns the window that was focused.
     """
+    if tests_are_running() and is_parallel() and is_called_from_a_test():
+        raise SkipTest('focus-sensitive test must be run in serial, not in parallel')
+    
     if previously_focused is Ellipsis:
         previously_focused = wx.Window.FindFocus()
     
