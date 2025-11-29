@@ -67,7 +67,7 @@ def test_can_run_tests_with_unqualified_function_or_module_name() -> None:
 def test_can_run_tests_in_interactive_mode() -> None:
     """Test that 'crystal test --interactive' works."""
     # Start Crystal in interactive test mode
-    with crystal_running(args=['test', '--interactive']) as crystal:
+    with crystal_running(args=['test', '--interactive'], kill=False) as crystal:
         assert crystal.stdin is not None
         assert isinstance(crystal.stdout, TextIOBase)
         
@@ -95,8 +95,6 @@ def test_can_run_tests_in_interactive_mode() -> None:
         (output, _) = read_until(crystal.stdout, '\x07', timeout=5.0)
         assertIn('SUMMARY', output)
         assertIn('OK', output)
-        
-        crystal.wait(timeout=2.0)  # may raise TimeoutExpired
     
     # Verify exit code
     assertEqual(0, crystal.returncode)
@@ -104,7 +102,7 @@ def test_can_run_tests_in_interactive_mode() -> None:
 
 # NOTE: More kinds of raw test names are tested in TestNormalizeTestNames
 def test_given_interactive_mode_can_run_tests_with_unqualified_function_or_module_name() -> None:
-    with crystal_running(args=['test', '--interactive']) as crystal:
+    with crystal_running(args=['test', '--interactive'], kill=False) as crystal:
         assert crystal.stdin is not None
         assert isinstance(crystal.stdout, TextIOBase)
         
@@ -143,7 +141,7 @@ def test_given_interactive_mode_can_run_tests_with_unqualified_function_or_modul
 
 def test_given_interactive_mode_when_test_not_found_then_prints_error() -> None:
     """Test that 'crystal test --interactive' handles non-existent tests gracefully."""
-    with crystal_running(args=['test', '--interactive']) as crystal:
+    with crystal_running(args=['test', '--interactive'], kill=False) as crystal:
         assert crystal.stdin is not None
         assert isinstance(crystal.stdout, TextIOBase)
         
