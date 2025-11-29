@@ -3,8 +3,9 @@ Unit tests for crystal.util.pipes module.
 """
 
 from crystal.util.bulkheads import capture_crashes_to_stderr
-from crystal.util.pipes import create_selectable_pipe, Pipe
+from crystal.util.pipes import create_selectable_pipe, Pipe, SelectableReader
 from crystal.util.xthreading import bg_call_later
+from io import StringIO
 import selectors
 import time
 
@@ -220,3 +221,150 @@ class TestCreateSelectablePipe:
             pipe1.writable_end.close()
             pipe2.readable_end.close()
             pipe2.writable_end.close()
+
+
+class TestSelectableReader:
+    """Tests for the SelectableReader class."""
+    
+    def test_can_read_single_line(self) -> None:
+        """Test that a single line can be read from the wrapped stream."""
+        source = StringIO('hello world\n')
+        reader = SelectableReader(source)
+        try:
+            line = reader.readline()
+            assert line == 'hello world\n'
+        finally:
+            reader.close()
+    
+    def test_can_read_multiple_lines(self) -> None:
+        """Test that multiple lines can be read sequentially."""
+        source = StringIO('line1\nline2\nline3\n')
+        reader = SelectableReader(source)
+        try:
+            assert reader.readline() == 'line1\n'
+            assert reader.readline() == 'line2\n'
+            assert reader.readline() == 'line3\n'
+        finally:
+            reader.close()
+    
+    def test_returns_empty_string_on_eof(self) -> None:
+        """Test that readline returns empty string when EOF is reached."""
+        source = StringIO('only line\n')
+        reader = SelectableReader(source)
+        try:
+            assert reader.readline() == 'only line\n'
+            # Give the forwarder thread time to detect EOF
+            time.sleep(0.1)
+            assert reader.readline() == ''
+        finally:
+            reader.close()
+    
+    def test_handles_line_without_trailing_newline(self) -> None:
+        """Test that a line without a trailing newline is returned on EOF."""
+        source = StringIO('no newline at end')
+        reader = SelectableReader(source)
+        try:
+            # Give the forwarder thread time to process
+            time.sleep(0.1)
+            line = reader.readline()
+            assert line == 'no newline at end'
+        finally:
+            reader.close()
+    
+    def test_fileno_returns_valid_descriptor(self) -> None:
+        """Test that fileno() returns a valid file descriptor."""
+        source = StringIO('test\n')
+        reader = SelectableReader(source)
+        try:
+            fd = reader.fileno()
+            assert isinstance(fd, int)
+            assert fd >= 0
+        finally:
+            reader.close()
+    
+    def test_works_with_selectors_module(self) -> None:
+        """Test that the reader's file descriptor works with selectors."""
+        source = StringIO('test line\n')
+        reader = SelectableReader(source)
+        try:
+            sel = selectors.DefaultSelector()
+            try:
+                sel.register(reader.fileno(), selectors.EVENT_READ)
+                
+                # Data should become available after forwarder processes it
+                events = sel.select(timeout=1.0)
+                assert len(events) == 1
+                assert events[0][0].fd == reader.fileno()
+            finally:
+                sel.close()
+        finally:
+            reader.close()
+    
+    def test_can_select_alongside_pipe(self) -> None:
+        """Test that SelectableReader can be used with select alongside a Pipe."""
+        source = StringIO('')  # Empty source, won't produce data
+        reader = SelectableReader(source)
+        pipe = create_selectable_pipe()
+        try:
+            sel = selectors.DefaultSelector()
+            try:
+                sel.register(reader.fileno(), selectors.EVENT_READ, data='reader')
+                sel.register(pipe.readable_end.fileno(), selectors.EVENT_READ, data='pipe')
+                
+                # Write to pipe
+                pipe.writable_end.write(b'x')
+                
+                # Wait for events - pipe should be ready
+                events = sel.select(timeout=1.0)
+                
+                # At least the pipe should be readable
+                pipe_events = [e for e in events if e[0].data == 'pipe']
+                assert len(pipe_events) == 1
+            finally:
+                sel.close()
+        finally:
+            reader.close()
+            pipe.readable_end.close()
+            pipe.writable_end.close()
+    
+    def test_handles_unicode_content(self) -> None:
+        """Test that unicode content is handled correctly."""
+        source = StringIO('héllo wörld 日本語\n')
+        reader = SelectableReader(source)
+        try:
+            line = reader.readline()
+            assert line == 'héllo wörld 日本語\n'
+        finally:
+            reader.close()
+    
+    def test_handles_empty_lines(self) -> None:
+        """Test that empty lines are handled correctly."""
+        source = StringIO('\n\ntext\n\n')
+        reader = SelectableReader(source)
+        try:
+            assert reader.readline() == '\n'
+            assert reader.readline() == '\n'
+            assert reader.readline() == 'text\n'
+            assert reader.readline() == '\n'
+        finally:
+            reader.close()
+    
+    def test_handles_long_lines(self) -> None:
+        """Test that lines longer than the buffer size are handled correctly."""
+        # Create a line longer than the 4096 byte buffer
+        long_content = 'x' * 10000
+        source = StringIO(long_content + '\n')
+        reader = SelectableReader(source)
+        try:
+            line = reader.readline()
+            assert line == long_content + '\n'
+        finally:
+            reader.close()
+    
+    def test_close_is_idempotent(self) -> None:
+        """Test that calling close multiple times is safe."""
+        source = StringIO('test\n')
+        reader = SelectableReader(source)
+        reader.close()
+        reader.close()  # Should not raise
+        reader.close()  # Should not raise
