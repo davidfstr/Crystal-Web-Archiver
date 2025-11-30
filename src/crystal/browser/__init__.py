@@ -1905,7 +1905,7 @@ class MainWindow(CloakMixin):
                         logotext_baseline_from_bottom = int(logotext_height * 0.2) + fudge_offset
                     else:
                         dc.SetFont(program_name.GetFont())
-                        _, _, program_descent, _ = dc.GetFullTextExtent(program_name.LabelText)
+                        (_, _, program_descent, _) = dc.GetFullTextExtent(program_name.LabelText)
                         logotext_baseline_from_bottom = program_descent
                     
                     # Calculate offset to align version baseline with logotext baseline

@@ -13,10 +13,11 @@ from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_linux, is_mac_os, is_windows, is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, TypeAlias, Union
 import wx
 
-ChangePrefixCommand = Union[
+
+ChangePrefixCommand: TypeAlias = Union[
     # Set prefix
     tuple[Literal['domain', 'directory'], str],
     # Clear prefix

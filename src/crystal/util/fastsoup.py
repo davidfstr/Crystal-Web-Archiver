@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from collections.abc import Callable, Iterable, MutableMapping
 import lxml.html
 from re import Pattern
-from typing import Literal, Optional, TYPE_CHECKING, Union
+from typing import Literal, Optional, TypeAlias, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from crystal.doc.html import HtmlParserType
@@ -34,9 +34,9 @@ def parse_html(
         raise ValueError(f'Unrecognized value for parser_type: {parser_type}')
 
 
-Tag = Union[lxml.html.HtmlElement, bs4.Tag]
+Tag: TypeAlias = Union[lxml.html.HtmlElement, bs4.Tag]
 
-FindFunc = Callable[['FastSoup'], Iterable[Tag]]
+FindFunc: TypeAlias = Callable[['FastSoup'], Iterable[Tag]]
 
 
 class FastSoup:  # abstract

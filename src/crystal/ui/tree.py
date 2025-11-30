@@ -18,10 +18,10 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_ignored, wrapped_object_deleted_error_raising,
 )
 from crystal.util.xthreading import fg_affinity
-from typing import cast, Dict, List, NewType, NoReturn, Optional
+from typing import cast, Dict, List, NewType, NoReturn, Optional, TypeAlias
 import wx
 
-IconSet = tuple[tuple[wx.TreeItemIcon, wx.Bitmap], ...]
+IconSet: TypeAlias = tuple[tuple[wx.TreeItemIcon, wx.Bitmap], ...]
 ImageIndex = NewType('ImageIndex', int)
 
 _DEFAULT_TREE_ICON_SIZE = (16,16)

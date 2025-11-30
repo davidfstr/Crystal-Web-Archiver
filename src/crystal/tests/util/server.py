@@ -226,7 +226,7 @@ class MockFtpServer:
             try:
                 self._server_socket.settimeout(0.5)
                 try:
-                    client_socket, address = self._server_socket.accept()
+                    (client_socket, address) = self._server_socket.accept()
                 except socket.timeout:
                     continue
                 
@@ -320,7 +320,7 @@ class MockFtpServer:
                     
                     # Accept data connection
                     self._send_response(client_socket, '150 Opening data connection\r\n')
-                    data_conn, _ = data_socket.accept()
+                    (data_conn, _) = data_socket.accept()
                     
                     # Send file content
                     data_conn.sendall(self.files[file_path])

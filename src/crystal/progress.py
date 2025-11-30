@@ -8,7 +8,7 @@ from crystal.util.xos import is_wx_gtk, is_windows
 from crystal.util.xthreading import fg_affinity, fg_call_later, fg_calls_paused, is_foreground_thread
 from functools import wraps
 import time
-from typing import List, Optional, overload, Self, TypeVar
+from typing import List, Optional, overload, Self, TypeAlias, TypeVar
 from typing_extensions import override
 import wx
 
@@ -668,7 +668,7 @@ class SaveAsProgressDialog(_AbstractProgressDialog, SaveAsProgressListener):
 
 _R = TypeVar('_R')
 
-_Call = tuple[str, tuple[object, ...], dict[str, object]]
+_Call: TypeAlias = tuple[str, tuple[object, ...], dict[str, object]]
 
 class DeferredProgressDialog:
     """

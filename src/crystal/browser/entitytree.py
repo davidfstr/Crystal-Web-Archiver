@@ -38,12 +38,14 @@ from crystal.util.xcollections.ordereddict import defaultordereddict
 from crystal.util.xthreading import bg_call_later, fg_call_later
 import sys
 import time
-from typing import assert_never, cast, Dict, final, Literal, Optional, Tuple, Union
+from typing import (
+    assert_never, cast, Dict, final, Literal, Optional, Tuple, TypeAlias, Union,
+)
 from typing_extensions import override
 from urllib.parse import urljoin
 import wx
 
-DeferrableResourceGroupSource = Union[
+DeferrableResourceGroupSource: TypeAlias = Union[
     ResourceGroupSource,
     Callable[[], ResourceGroupSource]
 ]
@@ -516,7 +518,7 @@ def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     return [old_seq_selfdict.get(x, x) for x in new_seq]
 
 
-NodeEntity = Union['RootResource', 'Resource', 'ResourceGroup']
+NodeEntity: TypeAlias = Union['RootResource', 'Resource', 'ResourceGroup']
 
 
 class Node(Bulkhead):

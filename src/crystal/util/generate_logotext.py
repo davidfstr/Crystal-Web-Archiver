@@ -117,7 +117,7 @@ def _render_text_to_bitmap(
     # Create a temporary DC to measure text
     temp_dc = wx.MemoryDC()
     temp_dc.SetFont(font)
-    text_width, text_height = temp_dc.GetTextExtent(text)
+    (text_width, text_height) = temp_dc.GetTextExtent(text)
     
     # Add some padding
     padding = 0

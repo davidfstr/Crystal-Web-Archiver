@@ -227,7 +227,7 @@ def _press_arrow_key_in_treectrl_on_windows(
                 # Check if root is hidden
                 if tree.HasFlag(wx.TR_HIDE_ROOT):
                     # Get first child of root
-                    first_child, _ = tree.GetFirstChild(root_item)
+                    (first_child, _) = tree.GetFirstChild(root_item)
                     if first_child.IsOk():
                         _select_tree_item_firing_events(tree, wx.TreeItemId(), first_child)
                 else:
@@ -260,7 +260,7 @@ def _press_arrow_key_in_treectrl_on_windows(
                     tree.Expand(htSel)
                 else:
                     # Navigate to first child if already expanded
-                    first_child, _ = tree.GetFirstChild(htSel)
+                    (first_child, _) = tree.GetFirstChild(htSel)
                     if first_child.IsOk():
                         _select_tree_item_firing_events(tree, htSel, first_child)
 

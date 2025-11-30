@@ -135,9 +135,9 @@ class ProgressBarCalculator:
         Formats a number of seconds as a clock time,
         `[H:]MM:SS` or `Dd + H:MM:SS`
         """
-        mins, s = divmod(int(t), 60)
-        hours, m = divmod(mins, 60)
-        d, h = divmod(hours, 24)
+        (mins, s) = divmod(int(t), 60)
+        (hours, m) = divmod(mins, 60)
+        (d, h) = divmod(hours, 24)
         if d:
             # ex: '1d + 7:08:54'
             return f'{d:d}d + {h:d}:{m:02d}:{s:02d}'

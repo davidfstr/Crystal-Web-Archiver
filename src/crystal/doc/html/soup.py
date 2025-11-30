@@ -412,7 +412,7 @@ def _format_srcset_str(srcset: list[list[str]]) -> str:
     return ','.join([' '.join(parts) for parts in srcset])
 
 
-InsertLocation = Literal[
+InsertLocation: TypeAlias = Literal[
     'head_first_child',
     'html_first_child',
     'first_element',

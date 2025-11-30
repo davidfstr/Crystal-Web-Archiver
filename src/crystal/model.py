@@ -88,7 +88,7 @@ from tqdm import tqdm
 import traceback
 from typing import (
     Any, BinaryIO, cast, Dict, Generic, List, Literal, Optional, Self, Tuple,
-    TYPE_CHECKING, TypedDict, TypeVar, Union,
+    TYPE_CHECKING, TypedDict, TypeAlias, TypeVar, Union,
 )
 from typing_extensions import deprecated, override
 from urllib.parse import quote as url_quote
@@ -123,7 +123,7 @@ class _Missing(Enum):
     VALUE = 1
 
 
-EntityTitleFormat = Literal['url_name', 'name_url']
+EntityTitleFormat: TypeAlias = Literal['url_name', 'name_url']
 
 
 class Project(ListenableMixin):
@@ -4550,7 +4550,7 @@ class _PersistedError(Exception):
         self.type = type
 
 
-ResourceGroupSource = Union['RootResource', 'ResourceGroup', None]
+ResourceGroupSource: TypeAlias = Union['RootResource', 'ResourceGroup', None]
 
 
 class ResourceGroup(ListenableMixin):

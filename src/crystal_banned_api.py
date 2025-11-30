@@ -72,6 +72,11 @@ class CrystalBannedApiChecker(BaseChecker):
             'monotonic-durations',
             "time.time() is not suitable for measuring durations. Use time.monotonic() instead.",
         ),
+        'C9011': (
+            "Tuple is missing parentheses; use `(k, v)` instead of `k, v`",
+            'tuple-missing-parens',
+            "Tuples should always be parenthesized. Use `(k, v)` instead of `k, v`.",
+        ),
     }
     
     # === Visit Call ===
@@ -114,6 +119,106 @@ class CrystalBannedApiChecker(BaseChecker):
         # time.time(...)
         if self._is_time_time_call(node):
             self.add_message('monotonic-durations', node=node)
+    
+    # === Visit Tuple ===
+    
+    def visit_tuple(self, node: astroid.Tuple) -> None:
+        """Check for tuples without parentheses."""
+        # Skip tuples inside type annotations (e.g., tuple[str, str])
+        if self._is_in_annotation_context(node):
+            return
+        if not self._tuple_has_parens(node):
+            self.add_message('tuple-missing-parens', node=node)
+    
+    # === Tuple Helpers ===
+    
+    def _is_in_annotation_context(self, node: astroid.NodeNG) -> bool:
+        """Check if the node is inside a type annotation context."""
+        current = node
+        while current is not None:
+            parent = current.parent
+            if parent is None:
+                break
+            
+            # Check if we're in an annotated assignment's annotation
+            if isinstance(parent, astroid.AnnAssign):
+                if current is parent.annotation:
+                    return True
+                # Check if the annotation is TypeAlias - then the value is also a type
+                if current is parent.value and self._is_typealias_annotation(parent):
+                    return True
+            
+            # Check if we're in a function's return annotation
+            if isinstance(parent, astroid.FunctionDef):
+                if current is parent.returns:
+                    return True
+            
+            # Check if we're in a function argument's annotation
+            if isinstance(parent, astroid.Arguments):
+                # Check annotations list
+                if parent.annotations and current in parent.annotations:
+                    return True
+                # Check posonlyargs_annotations (positional-only args)
+                if hasattr(parent, 'posonlyargs_annotations'):
+                    if parent.posonlyargs_annotations and current in parent.posonlyargs_annotations:
+                        return True
+                # Check kwonlyargs_annotations
+                if parent.kwonlyargs_annotations and current in parent.kwonlyargs_annotations:
+                    return True
+                # Check varargannotation and kwargannotation
+                if current is parent.varargannotation or current is parent.kwargannotation:
+                    return True
+            
+            # Check if we're in the first argument of cast()
+            if isinstance(parent, astroid.Call):
+                if self._is_cast_call(parent) and parent.args and current is parent.args[0]:
+                    return True
+            
+            current = parent
+        
+        return False
+    
+    def _is_typealias_annotation(self, node: astroid.AnnAssign) -> bool:
+        """Check if the annotation is TypeAlias."""
+        ann = node.annotation
+        if isinstance(ann, astroid.Name) and ann.name == 'TypeAlias':
+            return True
+        if isinstance(ann, astroid.Attribute) and ann.attrname == 'TypeAlias':
+            return True
+        return False
+    
+    def _is_cast_call(self, node: astroid.Call) -> bool:
+        """Check if this is a call to typing.cast()."""
+        # cast(...)
+        if isinstance(node.func, astroid.Name) and node.func.name == 'cast':
+            return True
+        # typing.cast(...)
+        if isinstance(node.func, astroid.Attribute):
+            if node.func.attrname == 'cast':
+                if isinstance(node.func.expr, astroid.Name):
+                    if node.func.expr.name == 'typing':
+                        return True
+        return False
+    
+    def _tuple_has_parens(self, node: astroid.Tuple) -> bool:
+        """Check if a tuple has parentheses by examining source code."""
+        try:
+            # Get the source file
+            module = node.root()
+            with open(module.file, 'r') as f:
+                lines = f.readlines()
+            
+            # Get the line (0-indexed)
+            line = lines[node.lineno - 1]
+            
+            # Check if the character at col_offset is '('
+            if node.col_offset < len(line):
+                return line[node.col_offset] == '('
+        except Exception:
+            pass
+        return True  # Assume has parens if we can't check (fail safe)
+    
+    # === Call Helpers ===
     
     def _is_thread_call(self, node: astroid.Call) -> bool:
         # Thread(...)
@@ -219,7 +324,7 @@ class CrystalBannedApiChecker(BaseChecker):
         """Check for banned imports."""
         
         # import asyncio
-        for module_name, _ in node.names:
+        for (module_name, _) in node.names:
             if module_name == 'asyncio':
                 self.add_message('no-asyncio', node=node)
     

@@ -570,7 +570,7 @@ def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tup
             output_lines.append('Rerun interrupted tests with:')
             output_lines.append(f'$ crystal --test {" ".join(interrupted_tests)}')
     
-    return '\n'.join(output_lines), is_ok
+    return ('\n'.join(output_lines), is_ok)
 
 
 # === Worker ===

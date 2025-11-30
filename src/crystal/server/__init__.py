@@ -58,7 +58,7 @@ import traceback
 import trycast
 from trycast import checkcast
 from typing import (
-    Literal, Mapping, Optional, TextIO, TYPE_CHECKING,
+    Literal, Mapping, Optional, TextIO, TypeAlias, TYPE_CHECKING,
     assert_never,
 )
 from typing_extensions import override
@@ -82,7 +82,7 @@ def _DEFAULT_SERVER_PORT() -> int:
 _DEFAULT_SERVER_HOST = '127.0.0.1'
 
 
-Verbosity = Literal['normal', 'indent']
+Verbosity: TypeAlias = Literal['normal', 'indent']
 
 
 _default_port_in_use_warnings_enabled = True
@@ -517,7 +517,7 @@ class _HttpServer(HTTPServer):
         security prompt on macOS.
         """
         socketserver.TCPServer.server_bind(self)
-        host, port = self.server_address[:2]
+        (host, port) = self.server_address[:2]
         if host == '127.0.0.1':
             # Avoid mDNS lookup on macOS
             self.server_name = 'localhost'

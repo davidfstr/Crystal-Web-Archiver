@@ -4,7 +4,7 @@ from crystal.util import cli
 from functools import wraps
 import sys
 import traceback
-from typing import Concatenate, overload, Protocol, TypeVar
+from typing import Concatenate, overload, Protocol, TypeAlias, TypeVar
 from typing_extensions import ParamSpec
 
 _S = TypeVar('_S')
@@ -329,8 +329,8 @@ def _mark_bulkhead_call(bulkhead_call: Callable[_P, _R]) -> Callable[_P, _R]:
     return bulkhead_call
 
 
-_ExtractedTraceback = list[traceback.FrameSummary]
-_FixTbFunc = Callable[[_ExtractedTraceback, _ExtractedTraceback], _ExtractedTraceback]
+_ExtractedTraceback: TypeAlias = list[traceback.FrameSummary]
+_FixTbFunc: TypeAlias = Callable[[_ExtractedTraceback, _ExtractedTraceback], _ExtractedTraceback]
 
 def _extract_bulkhead_traceback(
         e: BaseException,

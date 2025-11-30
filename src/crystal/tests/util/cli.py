@@ -19,6 +19,7 @@ from io import TextIOBase
 import os
 import subprocess
 import sys
+from typing import TypeAlias
 from unittest import SkipTest
 
 
@@ -151,7 +152,7 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
         app_prefs.sync(immediately=False)
 
 
-BannerLineType = Literal[
+BannerLineType: TypeAlias = Literal[
     # --shell
     "version",
     "help",

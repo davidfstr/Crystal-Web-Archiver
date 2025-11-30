@@ -18,7 +18,7 @@ import os
 import sys
 import time
 import traceback
-from typing import Dict, Optional
+from typing import Dict, Optional, TypeAlias
 from unittest import SkipTest
 import warnings
 
@@ -26,7 +26,7 @@ import warnings
 
 # === Run Tests ===
 
-_TestFuncId = tuple[str, str]  # (module, func_name)
+_TestFuncId: TypeAlias = tuple[str, str]  # (module, func_name)
 
 
 @bg_affinity
