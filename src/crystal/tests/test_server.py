@@ -2962,7 +2962,9 @@ async def test_when_timeout_while_server_reads_request_or_writes_response_then_l
                         pass  # expected
                 
                 # Ensure log_error() was called 1 time with the expected format string
-                assertEqual(1, spy_log_error.call_count)
+                assertEqual(1, spy_log_error.call_count,
+                    f'Expected log_error() to be called 1 time, '
+                    f'but was called with: {spy_log_error.call_args_list}')
                 (_, format_str, args) = spy_log_error.call_args_list[0].args
                 assertEqual("Request timed out: %r", format_str)
                 
