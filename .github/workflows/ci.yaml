@@ -754,7 +754,7 @@ jobs:
           - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20  # 150% of normal time: 13 min, as of 2025-09-17
+    timeout-minutes: 30  # 150% of normal time: 20 min, as of 2025-11-29
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
