@@ -859,7 +859,11 @@ def _parse_test_result(test_name: str, output_lines: list[str], interrupted: boo
             name=test_name,
             status='ERROR',
             skip_reason=None,
-            output_lines=['ERROR (Incomplete test prefix lines. Did the test segfault?)', ''],
+            output_lines=[
+                f'*** Invalid test prefix lines: {prefix_lines[:3]=!r}',
+                'ERROR (Incomplete test prefix lines. Did the test segfault?)',
+                ''
+            ],
         )
     output_lines = output_lines[3:]  # reinterpret
     
