@@ -893,7 +893,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_ur
 
 
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_press_ok_then_disables_all_controls_except_cancel() -> None:
-    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
+    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url='https://1.99.1.99/')):
         async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
@@ -931,7 +931,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
 
 
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_and_did_press_ok_when_press_cancel_then_dialog_disappears() -> None:
-    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
+    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url='https://1.99.1.99/')):
         async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
@@ -958,7 +958,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
 
 
 async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_press_ok_then_dialog_disappears_and_root_url_is_created() -> None:
-    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
+    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url='https://xkcd.com/')):
         async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
@@ -987,7 +987,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_pres
 
 
 async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_ok_then_dialog_disappears_and_root_url_is_created() -> None:
-    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
+    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url='https://xkcd.com/')):
         async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
@@ -1007,7 +1007,7 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
 
 
 async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_cancel_then_dialog_disappears() -> None:
-    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
+    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url='https://xkcd.com/')):
         async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
@@ -1022,7 +1022,7 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
 
 
 async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_then_spinner_does_not_appear() -> None:
-    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
+    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url='https://xkcd.com/')):
         async with _new_root_url_dialog_open() as (nud, project):
             last_focused = None  # type: Optional[wx.Window]
             
@@ -1082,7 +1082,7 @@ async def test_given_url_input_is_nonempty_when_url_input_becomes_empty_then_ok_
 
 @awith_subtests
 async def test_given_url_input_matches_existing_root_url_when_press_ok_then_displays_error_dialog_and_enables_all_controls(subtests: SubtestsContext) -> None:
-    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
+    with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url='https://xkcd.com/')):
         with subtests.test(case='given url input is focused'):
             async with _new_root_url_dialog_open() as (nud, project):
                 r = Resource(project, 'https://xkcd.com/')
