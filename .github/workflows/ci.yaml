@@ -156,7 +156,7 @@ jobs:
           CRYSTAL_EXCLUDE_TESTS_MARKED: 'slow'
           CRYSTAL_NONASAN_PYTHON_PATH: ${{ steps.install-nonasan-python.outputs.python-path }}
         run: |
-          crystal --test ${TEST_NAMES}
+          crystal test --parallel ${TEST_NAMES}
   
   build-linux-asan:
     # Only run this expensive job when explicitly requested or when building distribution artifacts
@@ -346,7 +346,7 @@ jobs:
         run: |
           poetry run -- python3 .github/workflows/watchdog.py --timeout=120 -- \
             poetry run xvfb-run \
-            crystal --test ${TEST_NAMES}
+            crystal test --parallel ${TEST_NAMES}
 
   # CAUTION: macOS runners cost 10x a Linux runner and 5x a Windows runner.
   #          Keep the matrix small to avoid high costs.
@@ -532,7 +532,7 @@ jobs:
           ulimit -c unlimited  # allow core dumps of unlimited size
           CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots \
             poetry run -- python3 .github/workflows/watchdog.py --timeout=120 -- \
-            "setup/dist/Crystal.app/Contents/MacOS/Crystal" --test ${TEST_NAMES}
+            "setup/dist/Crystal.app/Contents/MacOS/Crystal" test --parallel ${TEST_NAMES}
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
@@ -731,7 +731,7 @@ jobs:
           CRYSTAL_SCREENSHOTS_DIRPATH=$GITHUB_WORKSPACE/screenshots \
             poetry run -- python3 .github/workflows/watchdog.py --timeout=120 -- \
             poetry run xvfb-run \
-            crystal --test ${TEST_NAMES}
+            crystal test --parallel ${TEST_NAMES}
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
@@ -754,7 +754,7 @@ jobs:
           - "3.13.5"
       fail-fast: false
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20  # 150% of normal time: 13 min, as of 2025-09-17
+    timeout-minutes: 30  # 150% of normal time: 20 min, as of 2025-11-29
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -821,7 +821,7 @@ jobs:
           $env:CRYSTAL_EXCLUDE_TESTS_MARKED = "slow"
           poetry run -- python3 ..\.github\workflows\watchdog.py --timeout=120 -- `
             poetry run python run_exe.py "--argsfile=arguments.txt" "--stdouterrfile=$LOGDIR\stdouterr.log" `
-              "dist\Crystal.exe" "---" "--test" ${env:TEST_NAMES}
+              "dist\Crystal.exe" "---" "test" ${env:TEST_NAMES}
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'

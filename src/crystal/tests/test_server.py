@@ -17,7 +17,7 @@ from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.data import LOREM_IPSUM_LONG, LOREM_IPSUM_SHORT
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.pages import (
-    FetchErrorPage, NotInArchivePage, network_down_after_delay, reloads_paused
+    FetchErrorPage, NotInArchivePage, fetch_paused, network_down_after_delay, reloads_paused
 )
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
@@ -35,7 +35,7 @@ from crystal.tests.util.xplaywright import (
     Playwright, RawPage, awith_playwright, expect,
 )
 from crystal.util.cli import TERMINAL_FG_PURPLE, colorize
-from crystal.util.ports import is_port_in_use
+from crystal.util.ports import is_port_in_use, port_in_use
 from http.client import BadStatusLine, RemoteDisconnected
 from io import StringIO
 import json
@@ -54,15 +54,20 @@ from urllib.parse import urlparse
 # Test: Start Server
 
 async def test_given_default_serving_port_in_use_when_start_serving_project_then_finds_alternate_port() -> None:
-    if is_port_in_use(_DEFAULT_SERVER_PORT):
-        skipTest('_DEFAULT_SERVER_PORT is already in use outside of tests')
-    if is_port_in_use(_DEFAULT_SERVER_PORT + 1):
-        skipTest('_DEFAULT_SERVER_PORT + 1 is already in use outside of tests')
+    # Find two consecutive free ports: P and P+1.
+    with port_in_use(0, '127.0.0.1') as default_port:
+        pass
     
-    assert not is_port_in_use(_DEFAULT_SERVER_PORT)
-    with served_project('testdata_xkcd.crystalproj.zip', port=_DEFAULT_SERVER_PORT) as sp, \
+    # Verify P and P+1 are both free (they should be, we just released P)
+    if is_port_in_use(default_port):
+        skipTest(f'Port {default_port} became occupied after we released it')
+    if is_port_in_use(default_port + 1):
+        skipTest(f'Port {default_port + 1} already in use, cannot run test')
+    
+    with patch.dict('os.environ', {'CRYSTAL_DEFAULT_SERVER_PORT': str(default_port)}), \
+            served_project('testdata_xkcd.crystalproj.zip', port=default_port) as sp, \
             default_port_in_use_warnings_disabled():
-        assert is_port_in_use(_DEFAULT_SERVER_PORT)
+        assert is_port_in_use(default_port)
         
         # Define URLs
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -87,9 +92,9 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
             async with wait_for_download_task_to_start_and_finish(project):
                 click_button(mw.download_button)
             
-            # Try to start second server, also on _DEFAULT_SERVER_PORT.
-            # Expect it to actually start on (_DEFAULT_SERVER_PORT + 1).
-            expected_port = _DEFAULT_SERVER_PORT + 1
+            # Try to start second server, also on default_port.
+            # Expect it to actually start on (default_port + 1).
+            expected_port = default_port + 1
             home_ti.SelectItem()
             try:
                 with assert_does_open_webbrowser_to(get_request_url(home_url, expected_port, project_default_url_prefix=project.default_url_prefix)):
@@ -934,13 +939,15 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
                 # Ensure progress bar is initially hidden
                 expect(page.progress_bar).not_to_be_visible()
                 
-                # Start download
-                page.action_button.click()
+                with fetch_paused(raw_page):
+                    # Start download
+                    page.action_button.click()
+                    
+                    # Verify download button gets disabled
+                    expect(page.action_button).to_contain_text('Creating & Starting Download...')
+                    expect(page.action_button).to_be_disabled()
                 
-                # Verify download button gets disabled and progress bar appears
-                # TODO: Pause something to prevent download from immediately completing
-                expect(page.action_button).to_contain_text('Creating & Starting Download...')
-                expect(page.action_button).to_be_disabled()
+                # Verify progress bar appears
                 page.progress_bar.wait_for(state='visible')
                 
                 # Wait for download failure. Then:
@@ -2955,7 +2962,9 @@ async def test_when_timeout_while_server_reads_request_or_writes_response_then_l
                         pass  # expected
                 
                 # Ensure log_error() was called 1 time with the expected format string
-                assertEqual(1, spy_log_error.call_count)
+                assertEqual(1, spy_log_error.call_count,
+                    f'Expected log_error() to be called 1 time, '
+                    f'but was called with: {spy_log_error.call_args_list}')
                 (_, format_str, args) = spy_log_error.call_args_list[0].args
                 assertEqual("Request timed out: %r", format_str)
                 

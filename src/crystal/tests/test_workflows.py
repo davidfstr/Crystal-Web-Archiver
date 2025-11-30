@@ -15,7 +15,8 @@ from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
     click_button, click_checkbox, set_checkbox_value, TreeItem,
 )
-from crystal.tests.util.pages import NotInArchivePage
+from crystal.tests.util.mark import serial_only, should_check_focused_windows
+from crystal.tests.util.pages import NotInArchivePage, fetch_paused
 from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, fetch_archive_url,
@@ -46,7 +47,6 @@ import crystal.tests.util.xtempfile as xtempfile
 from crystal.tests.util.xtzutils import localtime_fallback_for_get_localzone
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.wx_window import SetFocus
-from crystal.util.xos import is_ci, is_linux, is_mac_os
 from crystal.util.xtyping import not_none
 import datetime
 import re
@@ -769,12 +769,14 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     # Click the download URL button (above the form)
                     expect(page.action_button).to_contain_text('⬇ Download')
                     expect(page.action_button).to_be_enabled()
-                    page.action_button.click()
+                    with fetch_paused(raw_page):
+                        page.action_button.click()
+                        
+                        # Verify download button gets disabled
+                        expect(page.action_button).to_contain_text('Creating & Starting Download...')
+                        expect(page.action_button).to_be_disabled()
                     
-                    # Verify download button gets disabled and progress bar appears
-                    # TODO: Pause something to prevent download from immediately completing
-                    expect(page.action_button).to_contain_text('Creating & Starting Download...')
-                    expect(page.action_button).to_be_disabled()
+                    # Verify progress bar appears
                     page.progress_bar.wait_for(state='visible')
                     
                     # Wait for the page to reload after download completes.
@@ -831,6 +833,7 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
 # TODO: Also test:
 #       - Command-R (New Root URL)
 #       - Command-Delete (Forget)
+@serial_only
 async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> None:
     """
     Test that can successfully download and serve a mostly-static site,
@@ -842,15 +845,7 @@ async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> No
     
     Example site: https://xkcd.com/
     """
-    # Disable focus checking in:
-    # - headless environments like macOS and Linux CI,
-    #   where no control ever reports being focused
-    # - local environments like macOS and Linux,
-    #   where wiggling the mouse can cause inconsistent focus statuses
-    check_focused_windows = not (
-        (is_ci() or not is_ci()) and  # i.e., True
-        (is_mac_os() or is_linux())
-    )
+    check_focused_windows = should_check_focused_windows()
     
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         # Define URLs

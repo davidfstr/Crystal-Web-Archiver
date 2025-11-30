@@ -226,8 +226,10 @@ class TreeItem:
                     if child.Text == url_or_url_pattern
                 )
             except ValueError:
+                child_texts = [child.Text for child in parent_ti.Children]
                 raise TreeItem.ChildNotFound(
-                    f'Child {url_or_url_pattern} not found in specified TreeItem'
+                    f'Child {url_or_url_pattern} not found in specified TreeItem. '
+                    f'Instead found {child_texts}.'
                 ) from None
         return matching_child_ti
     

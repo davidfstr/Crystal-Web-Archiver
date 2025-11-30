@@ -1156,6 +1156,7 @@ class TestParseAndDisplayOutputOfInterruptedParallelTestWorkerProcess:
     def test_interrupted_child_process_printed_zero_lines(self, subtests: pytest.Subtests) -> None:
         for interrupted in [True, False]:
             truncated_error_lines = [
+                '*** Invalid test prefix lines: prefix_lines[:3]=[]',
                 'ERROR (Incomplete test prefix lines. Did the test segfault?)',
                 '',
             ] if not interrupted else []
@@ -1200,6 +1201,7 @@ class TestParseAndDisplayOutputOfInterruptedParallelTestWorkerProcess:
     def test_interrupted_child_process_printed_one_line(self, subtests: pytest.Subtests) -> None:
         for interrupted in [True, False]:
             truncated_error_lines = [
+                "*** Invalid test prefix lines: prefix_lines[:3]=['======================================================================']",
                 'ERROR (Incomplete test prefix lines. Did the test segfault?)',
                 '',
             ] if not interrupted else []
@@ -1235,6 +1237,7 @@ class TestParseAndDisplayOutputOfInterruptedParallelTestWorkerProcess:
     def test_interrupted_child_process_printed_two_lines(self, subtests: pytest.Subtests) -> None:
         for interrupted in [True, False]:
             truncated_error_lines = [
+                f"*** Invalid test prefix lines: prefix_lines[:3]=['======================================================================', 'RUNNING: {self._EXAMPLE_TEST_SHORT_NAME} ({self._EXAMPLE_TEST_NAME})']",
                 'ERROR (Incomplete test prefix lines. Did the test segfault?)',
                 '',
             ] if not interrupted else []

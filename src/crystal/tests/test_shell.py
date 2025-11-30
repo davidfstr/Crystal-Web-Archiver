@@ -1,7 +1,7 @@
 from typing import List
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.cli import PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, crystal_shell
+from crystal.tests.util.cli import _OK_THREAD_STOP_SUFFIX, PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, crystal_shell
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
@@ -173,7 +173,10 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 close_open_or_create_dialog(crystal)
                 
                 if exit_method == 'exit()':
-                    py_eval(crystal, 'exit()', stop_suffix='')
+                    try:
+                        py_eval(crystal, 'exit()', stop_suffix='')
+                    except BrokenPipeError:
+                        pass
                 elif exit_method == 'Ctrl-D':
                     crystal.stdin.close()  # Ctrl-D
                 else:
@@ -193,9 +196,12 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 close_open_or_create_dialog(crystal)
                 
                 if exit_method == 'exit()':
-                    py_eval(
-                        crystal, 'exit()', stop_suffix='',
-                        timeout=5.0)  # took 4.0s in Linux CI
+                    try:
+                        py_eval(
+                            crystal, 'exit()', stop_suffix='',
+                            timeout=5.0)  # took 4.0s in Linux CI
+                    except BrokenPipeError:
+                        pass
                 elif exit_method == 'Ctrl-D':
                     crystal.stdin.close()  # Ctrl-D
                 else:
@@ -578,7 +584,7 @@ def test_given_shell_running_when_all_windows_closed_then_shell_exits_and_app_ex
                     ocd = await OpenOrCreateDialog.wait_for()
                     ocd.open_or_create_project_dialog.Close()
                 '''
-            ), 'crystal_task', [])
+            ), 'crystal_task', [], stop_suffix=_OK_THREAD_STOP_SUFFIX + ('>>> OK',))
             
             wait_for_crystal_to_exit(
                 crystal,

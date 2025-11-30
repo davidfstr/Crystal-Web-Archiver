@@ -10,7 +10,7 @@ from crystal.task import (
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import served_project
-from crystal.tests.util.slow import slow
+from crystal.tests.util.mark import slow
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests
 from crystal.tests.util.tasks import (
     append_deferred_top_level_tasks,

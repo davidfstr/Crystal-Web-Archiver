@@ -269,7 +269,7 @@ def _main2(args: list[str]) -> None:
         )
         parser.add_argument(
             '--port', '-p',
-            help=f'Specify the port to bind to when using --serve (default: {_DEFAULT_SERVER_PORT}).',
+            help=f'Specify the port to bind to when using --serve (default: {_DEFAULT_SERVER_PORT()}).',
             type=int,
             default=None,
         )
@@ -975,7 +975,7 @@ async def _did_launch(
                 project.close()
             
             if is_port_in_use_error(e):
-                port = parsed_args.port or _DEFAULT_SERVER_PORT
+                port = parsed_args.port or _DEFAULT_SERVER_PORT()
                 host = parsed_args.host or _DEFAULT_SERVER_HOST
                 print(f'*** Cannot start server on {host}:{port} - address already in use', file=sys.stderr)
             else:

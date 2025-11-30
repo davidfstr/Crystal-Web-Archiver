@@ -805,6 +805,14 @@ class DeferredProgressDialog:
         if not self._shown and time.monotonic() >= self._show_at:
             self.Show()
         
+        # Guard against value beyond the maximum
+        # NOTE: Should hopefully prevent C/C++ assertion failures of the type:
+        #       - wx._core.wxAssertionError: C++ assertion "value <= m_maximum" failed at wxWidgets/src/generic/progdlgg.cpp(406) in Update(): invalid progress value
+        if not (value <= (maximum := self.GetRange())):
+            raise ValueError(
+                f'Expected wx.ProgressDialog value to be <= maximum value: '
+                f'{value=}, {maximum=}')
+        
         # Defer/apply operation
         self._value = value
         return self._call(('Update', (value, newmsg), {}), (True, False))

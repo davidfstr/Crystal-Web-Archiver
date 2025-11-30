@@ -45,6 +45,9 @@ class NewRootUrlDialog:
     _INITIAL_URL_WIDTH = 400  # in pixels
     _FIELD_TO_SPINNER_MARGIN = 5
     
+    # Whether to print when URL cleaning operations are happening
+    _VERBOSE_URL_CLEANING = False
+    
     # NOTE: Only changed when tests are running
     _last_opened: 'Optional[NewRootUrlDialog]'=None
     
@@ -390,6 +393,8 @@ class NewRootUrlDialog:
         if self._is_destroying_or_destroyed:
             return
         
+        if self._VERBOSE_URL_CLEANING:
+            print(f'_on_url_cleaner_running_changed: {running=}')
         if running:
             self.url_cleaner_spinner.Show()
             self.url_cleaner_spinner.Start()
@@ -408,6 +413,8 @@ class NewRootUrlDialog:
         if self._is_destroying_or_destroyed:
             return
         
+        if self._VERBOSE_URL_CLEANING:
+            print(f'_set_cleaned_url: {cleaned_url=!r}')
         self._last_cleaned_url = cleaned_url
         if self._url_field.Value != cleaned_url:
             self._url_field.Value = cleaned_url
@@ -426,6 +433,8 @@ class NewRootUrlDialog:
         if self._url_field_focused:
             # Already did focus action
             return
+        if self._VERBOSE_URL_CLEANING:
+            print(f'_on_url_field_focus')
         self._url_field_focused = True
         
         # If field still focused after a tick,
@@ -438,7 +447,11 @@ class NewRootUrlDialog:
             
             # Stop cleaning any old URL input
             if self._url_cleaner is not None:
+                if self._VERBOSE_URL_CLEANING:
+                    print(f'_on_url_field_focus: will cancel _url_cleaner')
                 self._url_cleaner.cancel()
+                if self._VERBOSE_URL_CLEANING:
+                    print(f'_on_url_field_focus: did cancel _url_cleaner')
                 self._url_cleaner = None
         fg_call_later(fg_task, force_later=True)
         
@@ -452,6 +465,8 @@ class NewRootUrlDialog:
         if not self._url_field_focused:
             # Already did blur action
             return
+        if self._VERBOSE_URL_CLEANING:
+            print(f'_on_url_field_blur')
         self._url_field_focused = False
         
         if self._is_destroying_or_destroyed:
@@ -465,14 +480,22 @@ class NewRootUrlDialog:
         else:
             if self._url_cleaner is None or self._url_cleaner.url_input != url_input:
                 if self._url_cleaner is not None:
+                    if self._VERBOSE_URL_CLEANING:
+                        print(f'_on_url_field_blur: will cancel _url_cleaner')
                     self._url_cleaner.cancel()
+                    if self._VERBOSE_URL_CLEANING:
+                        print(f'_on_url_field_blur: did cancel _url_cleaner')
                     self._url_cleaner = None
                 
                 self._url_cleaner = UrlCleaner(
                     url_input,
                     self._on_url_cleaner_running_changed,
                     self._set_cleaned_url)
+                if self._VERBOSE_URL_CLEANING:
+                    print(f'_on_url_field_blur: will start _url_cleaner')
                 self._url_cleaner.start()
+                if self._VERBOSE_URL_CLEANING:
+                    print(f'_on_url_field_blur: did start _url_cleaner')
                 # (NOTE: self._url_cleaner may be None now)
         
         # Continue processing event in the normal fashion
