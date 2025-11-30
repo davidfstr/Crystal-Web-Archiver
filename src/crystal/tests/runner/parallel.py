@@ -142,6 +142,7 @@ def run_tests(
     # NOTE: Work queue items are either:
     #   - A test name (str) to run
     #   - _INTERRUPT_MARKER to signal worker should wait for parent interrupt
+    #   - _SERIAL_MARKER to signal transition to serial mode
     #   - None sentinel to signal end of work
     if worker_task_assignments is not None:
         # Create per-worker queues with assigned tests
@@ -167,11 +168,10 @@ def run_tests(
             work_queues.append(worker_queue)
     else:
         # Separate tests into parallel-safe and serial-only tests
-        from crystal.tests.util.mark import serial_only
-        serial_only_short_names = set(serial_only.test_names)  # type: ignore[attr-defined]
-        
         parallel_test_names = []
         serial_test_names = []
+        from crystal.tests.util.mark import serial_only
+        serial_only_short_names = set(serial_only.test_names)  # type: ignore[attr-defined]
         for test_name in test_names_to_run:
             short_name = test_name.split('.')[-1]
             if short_name in serial_only_short_names:
@@ -196,7 +196,7 @@ def run_tests(
             shared_work_queue.put(_SERIAL_MARKER)
             for test_name in serial_test_names:
                 shared_work_queue.put(test_name)
-        # Final sentinel for the last worker
+        # Add final sentinel to stop the last worker
         shared_work_queue.put(None)
         work_queues = [shared_work_queue] * num_workers  # all workers share the same queue
     
