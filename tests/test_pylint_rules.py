@@ -210,3 +210,67 @@ class TestTupleMissingParens:
             '''
         )
         _assert_no_message_emitted(code, 'C9011')
+
+
+# === C9012: no-direct-crystal-subprocess ===
+
+class TestNoDirectCrystalSubprocess:
+    """Tests for the no-direct-crystal-subprocess rule (C9012)."""
+    
+    def test_list_with_crystal_literal_first_is_flagged(self) -> None:
+        code = dedent(
+            '''\
+            import subprocess
+            args = []
+            crystal = subprocess.Popen(['crystal', *args])
+            '''
+        )
+        _assert_message_emitted(code, 'C9012')
+    
+    def test_list_variable_with_crystal_literal_first_is_flagged(self) -> None:
+        code = dedent(
+            '''\
+            args = []
+            cmd = ['crystal', *args]
+            '''
+        )
+        _assert_message_emitted(code, 'C9012')
+    
+    def test_list_with_get_crystal_command_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            import subprocess
+            from crystal.tests.util.cli import get_crystal_command
+            args = []
+            crystal = subprocess.Popen([*get_crystal_command(), *args])
+            '''
+        )
+        _assert_no_message_emitted(code, 'C9012')
+    
+    def test_list_variable_with_get_crystal_command_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            from crystal.tests.util.cli import get_crystal_command
+            args = []
+            cmd = [*get_crystal_command(), *args]
+            '''
+        )
+        _assert_no_message_emitted(code, 'C9012')
+    
+    def test_list_with_other_string_first_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            import subprocess
+            args = []
+            proc = subprocess.Popen(['python', *args])
+            '''
+        )
+        _assert_no_message_emitted(code, 'C9012')
+    
+    def test_empty_list_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            empty = []
+            '''
+        )
+        _assert_no_message_emitted(code, 'C9012')

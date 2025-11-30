@@ -77,6 +77,11 @@ class CrystalBannedApiChecker(BaseChecker):
             'tuple-missing-parens',
             "Tuples should always be parenthesized. Use `(k, v)` instead of `k, v`.",
         ),
+        'C9012': (
+            "Don't assume a Crystal subprocess can be started with ['crystal', ...]; use [*get_crystal_command(), ...] instead",
+            'no-direct-crystal-subprocess',
+            "Direct ['crystal', ...] is not allowed. Use [*get_crystal_command(), ...] from crystal.tests.util.cli instead.",
+        ),
     }
     
     # === Visit Call ===
@@ -129,6 +134,25 @@ class CrystalBannedApiChecker(BaseChecker):
             return
         if not self._tuple_has_parens(node):
             self.add_message('tuple-missing-parens', node=node)
+    
+    # === Visit List ===
+    
+    def visit_list(self, node: astroid.List) -> None:
+        """Check for banned list patterns."""
+        # ['crystal', ...]
+        if self._is_crystal_subprocess_list(node):
+            self.add_message('no-direct-crystal-subprocess', node=node)
+    
+    # === List Helpers ===
+    
+    def _is_crystal_subprocess_list(self, node: astroid.List) -> bool:
+        """Check if this is a list starting with 'crystal' string literal."""
+        if node.elts:  # Check if list has elements
+            first_elem = node.elts[0]
+            if isinstance(first_elem, astroid.Const):
+                if first_elem.value == 'crystal':
+                    return True
+        return False
     
     # === Tuple Helpers ===
     
