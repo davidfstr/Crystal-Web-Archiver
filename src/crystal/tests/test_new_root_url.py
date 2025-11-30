@@ -916,7 +916,10 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
             await wait_for(lambda: (False == nud.shown) or None)
             
             r = project.get_resource('https://1.99.1.99/')
-            assert r is not None
+            assert r is not None, (
+                f'Expected to find resource "https://1.99.1.99/", '
+                f'but instead found: {sorted([r.url for r in project.resources])}'
+            )
             rr = project.get_root_resource(r)
             assert rr is not None
             assertEqual('Home', rr.name)
@@ -974,7 +977,10 @@ async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_pres
             assertEqual(False, nud.shown)
             
             r = project.get_resource('https://xkcd.com/')
-            assert r is not None
+            assert r is not None, (
+                f'Expected to find resource "https://xkcd.com/", '
+                f'but instead found: {sorted([r.url for r in project.resources])}'
+            )
             rr = project.get_root_resource(r)
             assert rr is not None
             assertEqual('Home', rr.name)
@@ -992,7 +998,10 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
             await wait_for(lambda: (False == nud.shown) or None)
             
             r = project.get_resource('https://xkcd.com/')
-            assert r is not None
+            assert r is not None, (
+                f'Expected to find resource "https://xkcd.com/", '
+                f'but instead found: {sorted([r.url for r in project.resources])}'
+            )
             rr = project.get_root_resource(r)
             assert rr is not None
 
