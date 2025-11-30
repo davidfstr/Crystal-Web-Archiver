@@ -173,7 +173,10 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 close_open_or_create_dialog(crystal)
                 
                 if exit_method == 'exit()':
-                    py_eval(crystal, 'exit()', stop_suffix='')
+                    try:
+                        py_eval(crystal, 'exit()', stop_suffix='')
+                    except BrokenPipeError:
+                        pass
                 elif exit_method == 'Ctrl-D':
                     crystal.stdin.close()  # Ctrl-D
                 else:
@@ -193,9 +196,12 @@ def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
                 close_open_or_create_dialog(crystal)
                 
                 if exit_method == 'exit()':
-                    py_eval(
-                        crystal, 'exit()', stop_suffix='',
-                        timeout=5.0)  # took 4.0s in Linux CI
+                    try:
+                        py_eval(
+                            crystal, 'exit()', stop_suffix='',
+                            timeout=5.0)  # took 4.0s in Linux CI
+                    except BrokenPipeError:
+                        pass
                 elif exit_method == 'Ctrl-D':
                     crystal.stdin.close()  # Ctrl-D
                 else:
