@@ -227,7 +227,8 @@ def crystal_running_with_banner(
                         crystal.stdout,
                         ('\n', '>>> '),
                         # 2.0s isn't enough on macOS locally when run in parallel
-                        timeout=4.0,
+                        # 4.0s isn't enough on macOS in CI when run in parallel
+                        timeout=6.0,
                         _drain_diagnostic=False,
                     )
                 except ReadUntilTimedOut as e:
