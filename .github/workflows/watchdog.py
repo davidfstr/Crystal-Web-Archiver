@@ -133,7 +133,8 @@ class SubprocessWatchdog:
         except KeyboardInterrupt:
             # Handle Ctrl+C gracefully
             if self._process and self._process.poll() is None:
-                self._process.terminate()
+                # Send SIGINT (Ctrl+C) to interrupt process nicely
+                os.kill(self._process.pid, signal.SIGINT)
                 try:
                     self._process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
@@ -181,30 +182,45 @@ class SubprocessWatchdog:
                     continue
                 assert not self._aborted
                 self._aborted = True
-                
+            
+            # Send SIGINT (Ctrl+C) to interrupt process nicely
             print(
-                f"\nWatchdog aborted because no output for {self._timeout_seconds} seconds", 
+                f"\n[Watchdog] Sending SIGINT (Ctrl+C) because no output for {self._timeout_seconds} seconds", 
                 file=sys.stderr,
                 flush=True,
             )
-            
-            # Send SIGABRT to trigger faulthandler if enabled
             try:
-                os.kill(self._process.pid, signal.SIGABRT)
+                os.kill(self._process.pid, signal.SIGINT)
             except (OSError, ProcessLookupError):
                 # Process might have already terminated
                 pass
-            
-            # Wait 5 seconds for graceful termination
             try:
+                # Wait for graceful termination
                 self._process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                # Force termination if still running
+                
+                # Send SIGABRT to trigger faulthandler if enabled
+                print(
+                    f"\n[Watchdog] Sending SIGABRT", 
+                    file=sys.stderr,
+                    flush=True,
+                )
                 try:
-                    self._process.terminate()
+                    os.kill(self._process.pid, signal.SIGABRT)
+                except (OSError, ProcessLookupError):
+                    # Process might have already terminated
+                    pass
+                try:
+                    # Wait for graceful termination
                     self._process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
+                    
                     # Last resort: kill the process
+                    print(
+                        f"\n[Watchdog] Sending SIGKILL", 
+                        file=sys.stderr,
+                        flush=True,
+                    )
                     try:
                         self._process.kill()
                     except (OSError, ProcessLookupError):
