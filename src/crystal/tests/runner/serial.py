@@ -101,6 +101,13 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                     if not test_name:
                         continue
                     
+                    # Check for special __serial__ marker
+                    # This signals transition from parallel mode to serial mode,
+                    # used by the parallel test runner to run @serial_only tests
+                    if test_name == '__serial__':
+                        os.environ['CRYSTAL_IS_PARALLEL'] = 'False'
+                        continue
+                    
                     # Check if test exists
                     if test_name not in test_func_by_name:
                         # Try to normalize the test name
