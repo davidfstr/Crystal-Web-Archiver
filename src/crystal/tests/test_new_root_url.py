@@ -6,6 +6,7 @@ from crystal.task import DownloadResourceGroupTask
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
+from crystal.tests.util.mark import serial_only
 from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.subtests import (
     awith_subtests, SubtestsContext, with_subtests,
@@ -36,6 +37,7 @@ import wx
 
 # === Test: Create & Delete Standalone ===
 
+@serial_only
 async def test_can_create_root_url(
         *, ensure_revisions_not_deleted: bool=False,
         add_surrounding_whitespace: bool=False) -> None:
@@ -736,6 +738,7 @@ def test_given_schemaless_url_with_www_prefix_then_returns_ellipsis() -> None:
 
 # === Test: Validate URL upon Blur ===
 
+@serial_only
 async def test_given_url_input_is_empty_and_focused_when_tab_pressed_then_url_input_unfocused_and_url_input_empty_and_no_spinner_visible() -> None:
     async with _new_root_url_dialog_open() as (nud, project):
         if fields_hide_hint_when_focused():
@@ -751,6 +754,7 @@ async def test_given_url_input_is_empty_and_focused_when_tab_pressed_then_url_in
         assertEqual('', nud.url_field.Value)
 
 
+@serial_only
 @awith_subtests
 async def test_given_url_input_is_nonempty_and_focused_when_tab_pressed_then_url_input_unfocused_and_spinner_appears(subtests: SubtestsContext) -> None:
     URLS = [
@@ -776,6 +780,7 @@ async def test_given_url_input_is_nonempty_and_focused_when_tab_pressed_then_url
 
 # === Test: Resolve URL ===
 
+@serial_only
 @awith_subtests
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_200_then_spinner_disappears(subtests: SubtestsContext) -> None:
     CASES = [
@@ -798,6 +803,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
                     assertEqual(normalized_url, nud.url_field.Value)
 
 
+@serial_only
 @awith_subtests
 async def test_given_url_input_is_nonempty_without_www_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_3xx_to_url_with_www_and_url_with_www_url_responds_with_http_200_then_url_input_replaced_with_url_with_www_and_spinner_disappears(subtests: SubtestsContext) -> None:
     CASES = [
@@ -821,6 +827,7 @@ async def test_given_url_input_is_nonempty_without_www_and_did_press_tab_and_spi
                     assertEqual(with_www_url, nud.url_field.Value)
 
 
+@serial_only
 @awith_subtests
 async def test_given_url_input_is_nonempty_with_www_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_3xx_to_url_without_www_and_url_without_www_responds_with_http_200_then_url_input_replaced_with_url_without_www_and_spinner_disappears(subtests: SubtestsContext) -> None:
     CASES = [
@@ -844,6 +851,7 @@ async def test_given_url_input_is_nonempty_with_www_and_did_press_tab_and_spinne
                     assertEqual(without_www_url, nud.url_field.Value)
 
 
+@serial_only
 @awith_subtests
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_url_responds_with_http_3xx_to_unrelated_url_then_spinner_disappears(subtests: SubtestsContext) -> None:
     CASES = [
@@ -867,6 +875,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
 
 # === Test: Concurrent Actions While Resolving URL & Allow Create Root URL ===
 
+@serial_only
 async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_url_input_then_spinner_disappears() -> None:
     # TODO: Respond with "unreachable error" to be more realistic
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=500, url=ANY)):
@@ -892,6 +901,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_visible_when_focus_ur
                 await wait_for(lambda: (True == nud.url_cleaner_spinner.IsShown()) or None)
 
 
+@serial_only
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_when_press_ok_then_disables_all_controls_except_cancel() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
         async with _new_root_url_dialog_open() as (nud, project):
@@ -927,6 +937,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
     pass
 
 
+@serial_only
 async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visible_and_did_press_ok_when_press_cancel_then_dialog_disappears() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
         async with _new_root_url_dialog_open() as (nud, project):
@@ -954,6 +965,7 @@ async def test_given_url_input_is_nonempty_and_did_press_tab_and_spinner_is_visi
             assert r is None
 
 
+@serial_only
 async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_press_ok_then_dialog_disappears_and_root_url_is_created() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
         async with _new_root_url_dialog_open() as (nud, project):
@@ -980,6 +992,7 @@ async def test_given_url_input_is_unfocused_and_spinner_is_not_visible_when_pres
             assertEqual('Home', rr.name)
 
 
+@serial_only
 async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_ok_then_dialog_disappears_and_root_url_is_created() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
         async with _new_root_url_dialog_open() as (nud, project):
@@ -997,6 +1010,7 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
             assert rr is not None
 
 
+@serial_only
 async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_cancel_then_dialog_disappears() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
         async with _new_root_url_dialog_open() as (nud, project):
@@ -1012,6 +1026,7 @@ async def test_given_url_input_is_focused_and_spinner_is_not_visible_when_press_
             assert r is None
 
 
+@serial_only
 async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_then_spinner_does_not_appear() -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
         async with _new_root_url_dialog_open() as (nud, project):
@@ -1038,6 +1053,7 @@ async def test_given_url_input_is_unfocused_when_is_focused_and_is_unfocused_the
 
 # === Test: Disallow Create Empty Root URL ===
 
+@serial_only
 async def test_given_url_input_is_empty_then_ok_button_is_disabled() -> None:
     async with _new_root_url_dialog_open() as (nud, project):
         assertEqual('', nud.url_field.Value)
@@ -1071,6 +1087,7 @@ async def test_given_url_input_is_nonempty_when_url_input_becomes_empty_then_ok_
 
 # === Test: Disallow Create Duplicate Root URL ===
 
+@serial_only
 @awith_subtests
 async def test_given_url_input_matches_existing_root_url_when_press_ok_then_displays_error_dialog_and_enables_all_controls(subtests: SubtestsContext) -> None:
     with _urlopen_responding_with(_UrlOpenHttpResponse(code=200, url=ANY)):
@@ -1153,6 +1170,7 @@ async def test_given_url_input_matches_existing_root_url_when_press_ok_then_disp
 
 # === Test: Copy ===
 
+@serial_only
 async def test_given_clean_url_in_url_field_when_press_copy_then_copies_clean_url() -> None:
     with _urlopen_responding_with({'example.com': _UrlOpenHttpResponse(code=200, url='example.com')}):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:
@@ -1188,6 +1206,7 @@ async def test_given_clean_url_in_url_field_when_press_copy_then_copies_clean_ur
                 await nrud.cancel()
 
 
+@serial_only
 async def test_given_unclean_url_in_url_field_when_press_copy_then_waits_for_url_to_finish_cleaning_and_copies_clean_url() -> None:
     with _urlopen_responding_with({'example.com': _UrlOpenHttpResponse(code=200, url='example.com')}):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:

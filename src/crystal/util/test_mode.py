@@ -1,5 +1,8 @@
+import importlib.util
 import inspect
 import os
+import sys
+from typing import Callable
 
 
 def tests_are_running() -> bool:
@@ -20,13 +23,17 @@ def is_parallel() -> bool:
     )
 
 
-def is_called_from_a_test() -> bool:
+def test_function_caller() -> str | None:
     """
-    Returns whether the caller of this function was called directly from 
-    a test function.
+    Returns the name of the test function that directly called the caller of this function,
+    or None if the caller of this function was not directly called by a test function.
     """
     # NOTE:
     # - stack()[0] is the current frame (this function)
     # - stack()[1] is the direct caller
     # - stack()[2] is the direct caller's caller; maybe a test
-    return inspect.stack()[2].function.startswith("test_")
+    frame_info = inspect.stack()[2]
+    if frame_info.function.startswith("test_"):
+        return frame_info.function
+    else:
+        return None

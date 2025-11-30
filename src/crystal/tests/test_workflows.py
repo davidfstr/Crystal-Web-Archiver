@@ -15,6 +15,7 @@ from crystal.tests.util.console import console_output_copied
 from crystal.tests.util.controls import (
     click_button, click_checkbox, set_checkbox_value, TreeItem,
 )
+from crystal.tests.util.mark import serial_only
 from crystal.tests.util.pages import NotInArchivePage, fetch_paused
 from crystal.tests.util.runner import bg_fetch_url, bg_sleep
 from crystal.tests.util.server import (
@@ -833,6 +834,7 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
 # TODO: Also test:
 #       - Command-R (New Root URL)
 #       - Command-Delete (Forget)
+@serial_only
 async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> None:
     """
     Test that can successfully download and serve a mostly-static site,
