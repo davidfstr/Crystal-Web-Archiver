@@ -821,7 +821,7 @@ jobs:
           $env:CRYSTAL_EXCLUDE_TESTS_MARKED = "slow"
           poetry run -- python3 ..\.github\workflows\watchdog.py --timeout=120 -- `
             poetry run python run_exe.py "--argsfile=arguments.txt" "--stdouterrfile=$LOGDIR\stdouterr.log" `
-              "dist\Crystal.exe" "---" "test" "--parallel" ${env:TEST_NAMES}
+              "dist\Crystal.exe" "---" "test" ${env:TEST_NAMES}
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
