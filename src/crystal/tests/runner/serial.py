@@ -6,7 +6,7 @@ from crystal.tests.runner.shared import available_modules_str, normalize_test_na
 from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
-from crystal.util.test_mode import tests_are_running
+from crystal.util.test_mode import is_parallel, tests_are_running
 from crystal.util.xcollections.dedup import dedup_list
 from crystal.util import xcoverage
 from crystal.util.xos import is_coverage, is_windows
@@ -99,6 +99,14 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                     
                     # Skip empty lines
                     if not test_name:
+                        continue
+                    
+                    # Check for special __serial__ marker.
+                    # This signals transition from parallel mode to serial mode,
+                    # used by the parallel test runner to run @serial_only tests.
+                    if test_name == '__serial__':
+                        os.environ['CRYSTAL_IS_PARALLEL'] = 'False'
+                        assert not is_parallel()
                         continue
                     
                     # Check if test exists

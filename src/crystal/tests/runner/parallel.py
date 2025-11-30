@@ -142,6 +142,7 @@ def run_tests(
     # NOTE: Work queue items are either:
     #   - A test name (str) to run
     #   - _INTERRUPT_MARKER to signal worker should wait for parent interrupt
+    #   - _SERIAL_MARKER to signal transition to serial mode
     #   - None sentinel to signal end of work
     if worker_task_assignments is not None:
         # Create per-worker queues with assigned tests
@@ -166,13 +167,37 @@ def run_tests(
             
             work_queues.append(worker_queue)
     else:
-        # Create shared work queue with all tests
-        shared_work_queue: Queue[Optional[str]] = Queue()
+        # Separate tests into parallel-safe and serial-only tests
+        parallel_test_names = []
+        serial_test_names = []
+        from crystal.tests.util.mark import serial_only
+        serial_only_short_names = set(serial_only.test_names)  # type: ignore[attr-defined]
         for test_name in test_names_to_run:
+            short_name = test_name.split('.')[-1]
+            if short_name in serial_only_short_names:
+                serial_test_names.append(test_name)
+            else:
+                parallel_test_names.append(test_name)
+        
+        # Create shared work queue with:
+        # 1. All parallel-safe tests (can be run by any worker)
+        # 2. None sentinels for (num_workers - 1) workers to terminate
+        # 3. _SERIAL_MARKER to signal transition to serial mode
+        # 4. All serial-only tests (run by the last remaining worker)
+        # 5. Final None sentinel for the last worker to terminate
+        shared_work_queue: Queue[Optional[str]] = Queue()
+        for test_name in parallel_test_names:
             shared_work_queue.put(test_name)
-        # Add sentinel values to signal workers to stop
-        for _ in range(num_workers):
+        # Add sentinel values to stop all but one worker
+        for _ in range(num_workers - 1):
             shared_work_queue.put(None)
+        # Add serial marker and serial tests for the last worker
+        if serial_test_names:
+            shared_work_queue.put(_SERIAL_MARKER)
+            for test_name in serial_test_names:
+                shared_work_queue.put(test_name)
+        # Add final sentinel to stop the last worker
+        shared_work_queue.put(None)
         work_queues = [shared_work_queue] * num_workers  # all workers share the same queue
     
     # Initialize test progress counters
@@ -553,6 +578,9 @@ def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tup
 # Special marker in work queue that signals worker should wait for parent interrupt
 _INTERRUPT_MARKER = '!'
 
+# Special marker in work queue that signals transition to serial-only mode
+_SERIAL_MARKER = '__serial__'
+
 
 @dataclass(frozen=True)
 class WorkerResult:
@@ -698,6 +726,23 @@ def _run_worker(
                         if verbose:
                             print(f'[Worker {worker_id}] Received interrupt signal', file=sys.stderr)
                         break
+                    
+                    # Check for serial marker,
+                    # indicating transition to serial-only mode
+                    if test_name == _SERIAL_MARKER:
+                        if verbose:
+                            print(f'[Worker {worker_id}] Entering serial mode', file=sys.stderr)
+                        # Send __serial__ to subprocess to disable parallel mode
+                        process.stdin.write(_SERIAL_MARKER + '\n')
+                        process.stdin.flush()
+                        # Read the acknowledgement prompt
+                        (_, status) = _read_until_prompt(reader)
+                        if status != 'found':
+                            if verbose:
+                                print(f'[Worker {worker_id}] Failed to enter serial mode', file=sys.stderr)
+                            break
+                        # Continue processing remaining tests (serial-only tests)
+                        continue
                     
                     if verbose:
                         print(f'[Worker {worker_id}] Running test: {test_name}', file=sys.stderr)
