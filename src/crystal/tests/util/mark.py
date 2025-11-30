@@ -3,10 +3,16 @@ import os
 from typing import Callable, ParamSpec, TypeVar
 from unittest import SkipTest
 
+from crystal.util.test_mode import is_parallel
+from crystal.util.xos import is_ci, is_linux, is_mac_os
+
 
 _P = ParamSpec('_P')
 _R = TypeVar('_R')
 
+
+# ------------------------------------------------------------------------------
+# slow
 
 def _mark(label: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     """
@@ -36,6 +42,9 @@ slow.__doc__ = (
 )
 
 
+# ------------------------------------------------------------------------------
+# serial_only
+
 def serial_only(func: Callable[_P, _R]) -> Callable[_P, _R]:
     """
     Marks a test that only works properly when run in serial.
@@ -52,3 +61,44 @@ def serial_only(func: Callable[_P, _R]) -> Callable[_P, _R]:
     serial_only.test_names.append(func.__name__)  # type: ignore[attr-defined]
     return wrapped
 serial_only.test_names = []  # type: ignore[attr-defined]
+
+
+# ------------------------------------------------------------------------------
+# Focus-Sensitive Tests
+
+def reacts_to_focus_changes(func: Callable[_P, _R]) -> Callable[_P, _R]:
+    """
+    Marks a test which tests behavior that depends on observing focus changes.
+    """
+    # Add a @serial_only decorator to the function before this decorator,
+    # because focus changes can only be reliably observed when a test is running
+    # in serial as the frontmost foreground process
+    func = serial_only(func)
+    
+    @wraps(func)
+    def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        if not should_check_focused_windows():
+            raise SkipTest(
+                f'tests behavior which reacts to focus changes, '
+                f'but focus changes cannot be observed reliably in this environment')
+        return func(*args, **kwargs)
+    return wrapped
+
+
+def should_check_focused_windows() -> bool:
+    """
+    Returns whether automated tests that have an option of skipping
+    focus-related assertion checks should skip those checks.
+    """
+    # Disable focus checking in:
+    # - headless environments like macOS and Linux CI,
+    #   where no control ever reports being focused
+    # - local environments like macOS and Linux,
+    #   where wiggling the mouse can cause inconsistent focus statuses
+    return not (
+        (is_ci() or not is_ci()) and  # i.e., True
+        (is_mac_os() or is_linux())
+    )
+
+
+# ------------------------------------------------------------------------------
