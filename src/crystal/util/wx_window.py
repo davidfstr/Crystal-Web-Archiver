@@ -12,7 +12,7 @@ import wx
 def SetFocus(
         window: wx.Window,
         previously_focused: wx.Window | None | EllipsisType = Ellipsis,
-        *, simulate_events: Literal[True] | None=None) -> wx.Window:
+        *, simulate_events: bool | None=None) -> wx.Window:
     """
     Replacement for wx.Window.SetFocus() that works properly even on Linux.
     
@@ -21,18 +21,23 @@ def SetFocus(
     
     Returns the window that was focused.
     """
-    if tests_are_running() and is_parallel() and ((test_name := test_function_caller()) is not None):
+    if tests_are_running() and is_parallel() and ((caller_test_name := test_function_caller()) is not None):
         from crystal.tests.util.mark import serial_only
-        if test_name not in serial_only.test_names:  # type: ignore[attr-defined]
-            raise AssertionError(f'focus-sensitive test {test_name} must be marked with @serial_only')
+        if caller_test_name not in serial_only.test_names:  # type: ignore[attr-defined]
+            raise AssertionError(f'focus-sensitive test {caller_test_name} must be marked with @serial_only')
         raise SkipTest('focus-sensitive test must be run in serial, not in parallel')
     
     if previously_focused is Ellipsis:
         previously_focused = wx.Window.FindFocus()
     
-    if is_wx_gtk() or simulate_events:
-        # Simulate focus and blur events, 
-        # since wxGTK's SetFocus() doesn't appear to have any effect
+    if simulate_events is None:  # auto
+        simulate_events = (
+            # wxGTK's SetFocus() doesn't appear to have any effect
+            is_wx_gtk()
+        )
+    
+    if simulate_events:
+        # Simulate focus and blur events
         
         # Keep focus state in UI up-to-date so that UI doesn't issue
         # its own focus/blur events unexpectedly later
