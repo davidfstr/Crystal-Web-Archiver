@@ -26,7 +26,7 @@ def requote_uri(uri):
 
 # The unreserved URI characters (RFC 3986)
 _UNRESERVED_SET = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" + "0123456789-._~")
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' + '0123456789-._~')
 
 # Adapted from unquote_unreserved() @ requests/utils.py
 def _unquote_unreserved(uri):

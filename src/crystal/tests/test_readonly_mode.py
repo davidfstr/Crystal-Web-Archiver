@@ -365,7 +365,7 @@ async def test_given_readonly_project_and_get_info_button_pressed_then_copy_butt
                         original_label = nrud.copy_button.Label
                         click_button(nrud.copy_button)
                         assert nrud.copy_button.Label in [original_label, '✓'], \
-                            "Copy button should respond to click"
+                            'Copy button should respond to click'
                         assertEqual(home_url, clipboard.text)
                 finally:
                     await nrud.cancel()
@@ -383,7 +383,7 @@ async def test_given_readonly_project_and_get_info_button_pressed_then_copy_butt
                         original_label = ngd.copy_button.Label
                         click_button(ngd.copy_button)
                         assert ngd.copy_button.Label in [original_label, '✓'], \
-                            "Copy button should respond to click"
+                            'Copy button should respond to click'
                         assertEqual(comic_pattern, clipboard.text)
                 finally:
                     await ngd.cancel()

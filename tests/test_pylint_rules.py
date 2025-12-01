@@ -274,3 +274,131 @@ class TestNoDirectCrystalSubprocess:
             '''
         )
         _assert_no_message_emitted(code, 'C9012')
+
+
+# === C9013: no-double-quoted-string ===
+
+class TestNoDoubleQuotedString:
+    """Tests for the no-double-quoted-string rule (C9013)."""
+    
+    # --- Regular strings ---
+    
+    def test_single_quoted_string_is_allowed(self) -> None:
+        code = dedent(
+            """\
+            name = 'crystal-banned-api'
+            """
+        )
+        _assert_no_message_emitted(code, 'C9013')
+    
+    def test_double_quoted_string_is_flagged(self) -> None:
+        code = dedent(
+            """\
+            name = "crystal-banned-api"
+            """
+        )
+        _assert_message_emitted(code, 'C9013')
+    
+    # --- Strings containing single quotes ---
+    
+    def test_double_quoted_string_with_single_quote_in_value_is_allowed(self) -> None:
+        code = dedent(
+            """\
+            explanation = "Don't construct threads directly"
+            """
+        )
+        _assert_no_message_emitted(code, 'C9013')
+    
+    # --- f-strings ---
+    
+    def test_single_quoted_fstring_is_allowed(self) -> None:
+        code = dedent(
+            """\
+            print(f'AppPreferences: Property changed')
+            """
+        )
+        _assert_no_message_emitted(code, 'C9013')
+    
+    def test_double_quoted_fstring_is_flagged(self) -> None:
+        code = dedent(
+            """\
+            print(f"AppPreferences: Property changed")
+            """
+        )
+        _assert_message_emitted(code, 'C9013')
+    
+    # --- r-strings (raw strings) ---
+    
+    def test_single_quoted_rstring_is_allowed(self) -> None:
+        code = dedent(
+            """\
+            import re
+            if re.fullmatch(r'[0-9]+', 'foo'): ...
+            """
+        )
+        _assert_no_message_emitted(code, 'C9013')
+    
+    def test_double_quoted_rstring_is_flagged(self) -> None:
+        code = dedent(
+            """\
+            import re
+            if re.fullmatch(r"[0-9]+", "foo"): ...
+            """
+        )
+        _assert_message_emitted(code, 'C9013')
+    
+    # --- Triple-quoted strings (docstrings, multiline) ---
+    
+    def test_triple_double_quoted_string_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            def register(linter):
+                """Register the checker with pylint."""
+                ...
+            '''
+        )
+        _assert_no_message_emitted(code, 'C9013')
+    
+    def test_triple_single_quoted_string_is_allowed(self) -> None:
+        code = dedent(
+            """\
+            import textwrap
+            code = textwrap.dedent(
+                '''\\
+                import wx
+                
+                return wx.GetApp()
+                '''
+            )
+            """
+        )
+        _assert_no_message_emitted(code, 'C9013')
+    
+    # --- Nested strings inside f-strings ---
+    
+    def test_double_quoted_string_nested_in_fstring_is_allowed(self) -> None:
+        code = dedent(
+            """\
+            condition = True
+            value = f'{"set" if condition else "unset"}'
+            """
+        )
+        _assert_no_message_emitted(code, 'C9013')
+    
+    def test_double_quoted_rstring_nested_in_fstring_is_allowed(self) -> None:
+        code = dedent(
+            """\
+            condition = True
+            value = f'{r"set" if condition else r"unset"}'
+            """
+        )
+        _assert_no_message_emitted(code, 'C9013')
+    
+    def test_double_quoted_fstring_nested_in_fstring_is_allowed(self) -> None:
+        code = dedent(
+            """\
+            condition = True
+            value = f'{f"set" if condition else f"unset"}'
+            """
+        )
+        _assert_no_message_emitted(code, 'C9013')

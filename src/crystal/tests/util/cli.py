@@ -154,15 +154,15 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
 
 BannerLineType: TypeAlias = Literal[
     # --shell
-    "version",
-    "help",
-    "variables",
-    "exit",
-    "prompt",
+    'version',
+    'help',
+    'variables',
+    'exit',
+    'prompt',
 
     # --serve
-    "server_started",
-    "ctrl_c"
+    'server_started',
+    'ctrl_c'
 ]
 
 @dataclass
@@ -212,9 +212,9 @@ def crystal_running_with_banner(
                 expects_found.append(expect)
             lines_found.append(line)
             
-            if expect == "server_started":
+            if expect == 'server_started':
                 url_match = re.search(r'http://[\d.:]+', line)
-                assert url_match is not None, f"Could not find server URL in: {line!r}"
+                assert url_match is not None, f'Could not find server URL in: {line!r}'
                 banner_metadata.server_url = url_match.group(0)
 
         next_lines = []
@@ -242,32 +242,32 @@ def crystal_running_with_banner(
                 # 1. Split lines_str after each '\n', retaining the '\n' at the end of each line
                 # 2. Split lines_str at each '>>> '
                 lines = re.findall(_LINE_OR_PROMPT_RE, lines_str)
-                assert len(lines) > 0, "Expected read_until() to return at least one line"
+                assert len(lines) > 0, 'Expected read_until() to return at least one line'
                 next_lines.extend(lines)
             line = next_lines.pop(0)
             
             # ex: 'Crystal 1.11.0 (Python 3.12.2)'
             if line.startswith('Crystal '):
-                found("version", line)
+                found('version', line)
             # ex: 'Type "help" for more information.'
             elif '"help"' in line:
-                found("help", line)
+                found('help', line)
             # ex: 'Variables "project" and "window" are available.'
             elif '"project"' in line and '"window"' in line:
-                found("variables", line)
+                found('variables', line)
             # ex: 'Use exit() or Ctrl-D (i.e. EOF) to exit.'
             elif 'exit()' in line:
-                found("exit", line)
+                found('exit', line)
             elif line == '>>> ':
-                found("prompt", line)
+                found('prompt', line)
             # ex: 'Server started at: http://127.0.0.1:2797'
             elif line.startswith('Server started at: '):
-                found("server_started", line)
+                found('server_started', line)
             # ex: 'Press Ctrl-C to stop.'
             elif 'Ctrl-C' in line:
-                found("ctrl_c", line)
+                found('ctrl_c', line)
             elif 'Traceback (most recent call last):' in line:
-                raise AssertionError(f"Unexpected error in output:\n{line + drain(crystal.stdout)}")
+                raise AssertionError(f'Unexpected error in output:\n{line + drain(crystal.stdout)}')
             else:
                 # Unknown line
                 found(None, line)

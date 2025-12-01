@@ -22,11 +22,11 @@ async def test_new_root_url_dialog_has_title_heading_on_macos_only() -> None:
         click_button(mw.new_root_url_button)
         nud = await NewRootUrlDialog.wait_for()
         try:
-            title_heading = _find_static_text_with_label(nud._dialog, "New Root URL")
+            title_heading = _find_static_text_with_label(nud._dialog, 'New Root URL')
             if is_mac_os():
-                assert title_heading is not None, "Title heading should be present on macOS"
+                assert title_heading is not None, 'Title heading should be present on macOS'
             else:
-                assert title_heading is None, "Title heading should not be present on non-macOS"
+                assert title_heading is None, 'Title heading should not be present on non-macOS'
         finally:
             await nud.cancel()
 
@@ -47,11 +47,11 @@ async def test_edit_root_url_dialog_has_title_heading_on_macos_only() -> None:
         
         nud = await NewRootUrlDialog.wait_for()
         try:
-            title_heading = _find_static_text_with_label(nud._dialog, "Edit Root URL")
+            title_heading = _find_static_text_with_label(nud._dialog, 'Edit Root URL')
             if is_mac_os():
-                assert title_heading is not None, "Title heading should be present on macOS"
+                assert title_heading is not None, 'Title heading should be present on macOS'
             else:
-                assert title_heading is None, "Title heading should not be present on non-macOS"
+                assert title_heading is None, 'Title heading should not be present on non-macOS'
         finally:
             await nud.cancel()
 
@@ -63,11 +63,11 @@ async def test_new_group_dialog_has_title_heading_on_macos_only() -> None:
         
         ngd = await NewGroupDialog.wait_for()
         try:
-            title_heading = _find_static_text_with_label(ngd._dialog, "New Group")
+            title_heading = _find_static_text_with_label(ngd._dialog, 'New Group')
             if is_mac_os():
-                assert title_heading is not None, "Title heading should be present on macOS"
+                assert title_heading is not None, 'Title heading should be present on macOS'
             else:
-                assert title_heading is None, "Title heading should not be present on non-macOS"
+                assert title_heading is None, 'Title heading should not be present on non-macOS'
         finally:
             await ngd.cancel()
 
@@ -80,13 +80,13 @@ async def test_preferences_dialog_has_title_heading_on_macos_only() -> None:
         pref = await PreferencesDialog.wait_for()
         try:
             title_heading = (
-                _find_static_text_with_label(pref._dialog, "Preferences") or
-                _find_static_text_with_label(pref._dialog, "Settings")
+                _find_static_text_with_label(pref._dialog, 'Preferences') or
+                _find_static_text_with_label(pref._dialog, 'Settings')
             )
             if is_mac_os():
-                assert title_heading is not None, "Title heading should be present on macOS"
+                assert title_heading is not None, 'Title heading should be present on macOS'
             else:
-                assert title_heading is None, "Title heading should not be present on non-macOS"
+                assert title_heading is None, 'Title heading should not be present on non-macOS'
         finally:
             await pref.cancel()
 

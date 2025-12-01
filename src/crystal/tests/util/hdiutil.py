@@ -58,9 +58,9 @@ def hdiutil_disk_image_mounted(srcfolder: str | None = None, readonly: bool = Fa
             )
         except subprocess.CalledProcessError as e:
             print(
-                f"*** hdiutil create failed (cmd={e.cmd}, returncode={e.returncode})\n"
-                f"stdout:\n{e.stdout.decode(errors='replace')}\n"
-                f"stderr:\n{e.stderr.decode(errors='replace')}",
+                f'*** hdiutil create failed (cmd={e.cmd}, returncode={e.returncode})\n'
+                f'stdout:\n{e.stdout.decode(errors="replace")}\n'
+                f'stderr:\n{e.stderr.decode(errors="replace")}',
                 file=sys.stderr
             )
             raise
@@ -90,9 +90,9 @@ def hdiutil_disk_image_mounted(srcfolder: str | None = None, readonly: bool = Fa
             )
         except subprocess.CalledProcessError as e:
             print(
-                f"*** hdiutil attach failed (cmd={e.cmd}, returncode={e.returncode})\n"
-                f"stdout:\n{e.stdout.decode(errors='replace')}\n"
-                f"stderr:\n{e.stderr.decode(errors='replace')}",
+                f'*** hdiutil attach failed (cmd={e.cmd}, returncode={e.returncode})\n'
+                f'stdout:\n{e.stdout.decode(errors="replace")}\n'
+                f'stderr:\n{e.stderr.decode(errors="replace")}',
                 file=sys.stderr
             )
             raise

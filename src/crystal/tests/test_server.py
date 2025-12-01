@@ -163,19 +163,19 @@ async def test_given_welcome_page_visible_then_crystal_branding_and_url_input_is
         # Verify Crystal branding is visible
         content = server_page.content
         assert 'Crystal' in content, \
-            "Crystal branding should be visible in page content"
+            'Crystal branding should be visible in page content'
         
         # Verify URL input is visible
         assert 'Enter the URL of a page' in content, \
-            "URL input should be visible on the welcome page"
+            'URL input should be visible on the welcome page'
         
         # Verify form elements are present
         assert '<form action="/">' in content, \
-            "Form should be present on welcome page"
+            'Form should be present on welcome page'
         assert 'name="url"' in content, \
-            "URL input field should be present"
+            'URL input field should be present'
         assert 'type="submit"' in content, \
-            "Submit button should be present"
+            'Submit button should be present'
 
 
 async def test_given_welcome_page_visible_when_enter_url_then_navigates_to_url_in_archive() -> None:
@@ -209,7 +209,7 @@ async def test_given_welcome_page_visible_when_enter_url_then_navigates_to_url_i
             final_response = await bg_fetch_url(target_url_in_archive)
             assertEqual(200, final_response.status)
             assertIn('<title>xkcd:', final_response.content, \
-                "Response should contain the archived xkcd title")
+                'Response should contain the archived xkcd title')
 
 
 # ------------------------------------------------------------------------------
@@ -268,19 +268,19 @@ async def test_given_not_found_page_visible_then_crystal_branding_and_exit_butto
         # Verify Crystal branding is visible
         content = server_page.content
         assert 'Crystal' in content, \
-            "Crystal branding should be visible in page content"
+            'Crystal branding should be visible in page content'
         
         # Verify error message is present
         assert 'Page Not Found' in content, \
-            "Error message should indicate the page was not found"
+            'Error message should indicate the page was not found'
         
         # Verify go back button is visible 
         assert '← Go Back' in content and 'onclick="history.back()"' in content, \
-            "Go Back button should be visible on the not found page"
+            'Go Back button should be visible on the not found page'
 
         # Verify return home button is visible
         assert 'Return to Home' in content, \
-            "Return to Home button should be visible on the not found page"
+            'Return to Home button should be visible on the not found page'
 
 
 async def test_when_invalid_internal_crystal_url_is_requested_then_always_serves_not_found_page() -> None:
@@ -647,16 +647,16 @@ async def test_given_nia_page_visible_then_crystal_branding_and_error_message_an
         # Verify Crystal branding is visible
         content = server_page.content
         assert 'Crystal' in content, \
-            "Crystal branding should be visible in page content"
+            'Crystal branding should be visible in page content'
         
         # Verify the missing URL is displayed in the error message
         missing_url = 'https://xkcd.com/missing-page/'
         assert missing_url in content, \
-            f"Missing URL {missing_url} should be visible in the error message"
+            f'Missing URL {missing_url} should be visible in the error message'
         
         # Verify basic error message content
         assert '<strong>Page Not in Archive</strong>' in content, \
-            "Error message should indicate the page is not in archive"
+            'Error message should indicate the page is not in archive'
 
 
 async def test_given_nia_page_visible_when_press_go_back_button_then_navigates_to_previous_page() -> None:
@@ -664,7 +664,7 @@ async def test_given_nia_page_visible_when_press_go_back_button_then_navigates_t
         # Verify a go back button is present in the content
         content = server_page.content
         assert '← Go Back' in content and 'onclick="history.back()"' in content, \
-            "Go back button should be present on NIA page"
+            'Go back button should be present on NIA page'
 
 
 async def test_given_nia_page_visible_and_project_is_readonly_then_create_form_is_disabled_and_readonly_warning_visible() -> None:
@@ -673,13 +673,13 @@ async def test_given_nia_page_visible_and_project_is_readonly_then_create_form_i
         
         # Should show readonly warning
         assert '<div class="cr-readonly-warning">' in content, \
-            "Readonly warning should be visible when project is readonly"
+            'Readonly warning should be visible when project is readonly'
         
         # Download button should be present but disabled
         assert '<button id="cr-action-button" ' in content, \
-            "Download button should be present in readonly mode"
+            'Download button should be present in readonly mode'
         assert '<button id="cr-action-button" disabled ' in content, \
-            "Download button should be disabled in readonly mode"
+            'Download button should be disabled in readonly mode'
 
 
 async def test_given_nia_page_visible_and_project_is_writable_then_create_form_is_enabled_and_readonly_warning_is_not_visible() -> None:
@@ -688,13 +688,13 @@ async def test_given_nia_page_visible_and_project_is_writable_then_create_form_i
         
         # Should NOT show readonly warning
         assert '<div class="cr-readonly-warning">' not in content, \
-            "Readonly warning should NOT be visible when project is writable"
+            'Readonly warning should NOT be visible when project is writable'
         
         # Download button should be present and enabled
         assert '<button id="cr-action-button" ' in content, \
-            "Download button should be present when project is writable"
+            'Download button should be present when project is writable'
         assert '<button id="cr-action-button" disabled ' not in content, \
-            "Download button should NOT be disabled when project is writable"
+            'Download button should NOT be disabled when project is writable'
 
 
 async def test_given_readonly_project_then_all_action_type_radio_buttons_disabled() -> None:
@@ -703,21 +703,21 @@ async def test_given_readonly_project_then_all_action_type_radio_buttons_disable
         
         # Create Root URL radio button should be present but disabled
         assert '<input type="radio" name="cr-action-type" id="cr-create-root-url-radio"' in content, \
-            "Create Root URL radio button should be present even in readonly mode"
+            'Create Root URL radio button should be present even in readonly mode'
         assert 'id="cr-create-root-url-radio" value="create-root-url" disabled ' in content, \
-            "Create Root URL radio button should be disabled in readonly mode"
+            'Create Root URL radio button should be disabled in readonly mode'
         
         # Create Group radio button should be present but disabled
         assert '<input type="radio" name="cr-action-type" id="cr-create-group-radio"' in content, \
-            "Create Group radio button should be present even in readonly mode"
+            'Create Group radio button should be present even in readonly mode'
         assert 'id="cr-create-group-radio" value="create-group" disabled ' in content, \
-            "Create Group radio button should be disabled in readonly mode"
+            'Create Group radio button should be disabled in readonly mode'
         
         # Download Only radio button should be present but disabled
         assert '<input type="radio" name="cr-action-type" id="cr-download-only-radio"' in content, \
-            "Download Only radio button should be present even in readonly mode"
+            'Download Only radio button should be present even in readonly mode'
         assert 'id="cr-download-only-radio" value="download-only" disabled ' in content, \
-            "Download Only radio button should be disabled in readonly mode"
+            'Download Only radio button should be disabled in readonly mode'
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -785,7 +785,7 @@ async def test_given_create_root_url_selected_when_download_button_pressed_then_
             # Verify the "Create Root URL" radio button is checked by default
             assert 'id="cr-create-root-url-radio" value="create-root-url"' in first_comic_page.content
             assert 'id="cr-create-root-url-radio" value="create-root-url" onchange="onActionTypeChanged()" checked' in first_comic_page.content, \
-                "Create Root URL radio button should be checked by default"
+                'Create Root URL radio button should be checked by default'
             
             EXPECTED_ROOT_URL_NAME = 'Comic #1'
             
@@ -823,9 +823,9 @@ async def test_given_create_root_url_selected_when_download_button_pressed_then_
             
             # Verify the created RootResource has the expected name
             created_rr = project.get_root_resource(url=comic1_url)
-            assert created_rr is not None, "RootResource should have been created"
+            assert created_rr is not None, 'RootResource should have been created'
             assert created_rr.name == EXPECTED_ROOT_URL_NAME, \
-                f"RootResource name should be {EXPECTED_ROOT_URL_NAME!r}, got {created_rr.name!r}"
+                f'RootResource name should be {EXPECTED_ROOT_URL_NAME!r}, got {created_rr.name!r}'
 
 
 # TODO: Implement discrete test that actually checks that the progress bar updates.
@@ -1515,15 +1515,15 @@ async def test_given_fetch_error_page_visible_then_crystal_branding_and_error_me
         # Verify Crystal branding is visible
         content = server_page.content
         assert 'Crystal' in content, \
-            "Crystal branding should be visible in page content"
+            'Crystal branding should be visible in page content'
         
         # Verify the failing URL is displayed in the error message
         assert failing_url in content, \
-            f"Failing URL {failing_url} should be visible in the error message"
+            f'Failing URL {failing_url} should be visible in the error message'
         
         # Verify basic error message content
         assert '<strong>Fetch Error</strong>' in content, \
-            "Error message should indicate there was a fetch error"
+            'Error message should indicate there was a fetch error'
 
 
 async def test_given_fetch_error_page_visible_when_press_go_back_button_then_navigates_to_previous_page() -> None:
@@ -1531,7 +1531,7 @@ async def test_given_fetch_error_page_visible_when_press_go_back_button_then_nav
         # Verify a go back button is present in the content
         content = server_page.content
         assert '← Go Back' in content and 'onclick="history.back()"' in content, \
-            "Go back button should be present on fetch error page"
+            'Go back button should be present on fetch error page'
 
 
 async def test_given_fetch_error_page_visible_then_retry_download_button_is_present() -> None:
@@ -1539,11 +1539,11 @@ async def test_given_fetch_error_page_visible_then_retry_download_button_is_pres
         # Verify the retry download button is present in the content
         content = server_page.content
         assert '⟳ Retry Download' in content, \
-            "Retry download button should be present on fetch error page"
+            'Retry download button should be present on fetch error page'
         assert 'id="cr-retry-button"' in content, \
-            "Retry button should have proper ID for JavaScript interaction"
+            'Retry button should have proper ID for JavaScript interaction'
         assert 'onclick="onRetryDownload()"' in content, \
-            "Retry button should have proper onclick handler"
+            'Retry button should have proper onclick handler'
 
 
 @awith_playwright
@@ -1587,7 +1587,7 @@ async def test_given_fetch_error_page_visible_when_click_retry_button_then_retry
             resource = Resource(project, home_url)
             error_revision = resource.default_revision()
             assert error_revision is not None
-            assert error_revision.error_dict is not None, "Should have an error revision before retry"
+            assert error_revision.error_dict is not None, 'Should have an error revision before retry'
             
             def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
                 fetch_error_page = FetchErrorPage.open(raw_page, url_in_archive=home_url_in_archive)
@@ -1861,13 +1861,13 @@ async def test_when_serve_regular_page_with_short_content_then_footer_banner_app
                     banner_box = footer_banner.bounding_box()
                     assert banner_box is not None
                     assert banner_box['width'] > 0, \
-                        f"Banner width should be > 0, got {banner_box['width']}"
+                        f'Banner width should be > 0, got {banner_box["width"]}'
                     assert banner_box['height'] > 0, \
-                        f"Banner height should be > 0, got {banner_box['height']}"
+                        f'Banner height should be > 0, got {banner_box["height"]}'
                     
                     # Verify banner Y coordinate is > 0 (visible in viewport)
                     assert banner_box['y'] > 0, \
-                        f"Banner Y coordinate should be > 0, got {banner_box['y']}"
+                        f'Banner Y coordinate should be > 0, got {banner_box["y"]}'
                     
                     # Verify banner is positioned at or very close to the bottom of the viewport
                     viewport_size = raw_page.viewport_size
@@ -1882,12 +1882,12 @@ async def test_when_serve_regular_page_with_short_content_then_footer_banner_app
                     banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
                     position = banner_styles['position']
                     assert position in ['fixed', 'absolute'], \
-                        f"Banner should be positioned fixed or absolute, got {position}"
+                        f'Banner should be positioned fixed or absolute, got {position}'
                     
                     # Verify banner is stacked on top (has high z-index)
                     z_index = banner_styles.get('zIndex', 'auto')
                     assert z_index.isdigit() and int(z_index) >= 1000, \
-                        f"Banner should have high z-index for stacking, got {z_index}"
+                        f'Banner should have high z-index for stacking, got {z_index}'
                 await pw.run(pw_task)
 
 
@@ -2577,13 +2577,13 @@ async def test_when_serve_page_with_all_floated_content_then_footer_banner_appea
                     # Verify banner has non-zero dimensions
                     banner_box = footer_banner.bounding_box()
                     assert banner_box is not None
-                    assert banner_box['width'] > 0, f"Banner width should be > 0, got {banner_box['width']}"
-                    assert banner_box['height'] > 0, f"Banner height should be > 0, got {banner_box['height']}"
+                    assert banner_box['width'] > 0, f'Banner width should be > 0, got {banner_box["width"]}'
+                    assert banner_box['height'] > 0, f'Banner height should be > 0, got {banner_box["height"]}'
                     
                     # Verify banner has the clear: both style to properly position after floated content
                     banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
                     assert banner_styles['clear'] == 'both', \
-                        f"Banner should have clear: both style, got {banner_styles['clear']}"
+                        f'Banner should have clear: both style, got {banner_styles["clear"]}'
                     
                     # Verify banner is positioned after all the floated content
                     main_section = raw_page.locator('#main-section')
@@ -2591,8 +2591,8 @@ async def test_when_serve_page_with_all_floated_content_then_footer_banner_appea
                     assert main_box is not None
                     main_bottom = main_box['y'] + main_box['height']
                     assert banner_box['y'] >= main_bottom, (
-                        f"Banner should be below main content. "
-                        f"Banner Y: {banner_box['y']}, Main bottom: {main_bottom}"
+                        f'Banner should be below main content. '
+                        f'Banner Y: {banner_box['y']}, Main bottom: {main_bottom}'
                     )
                 await pw.run(pw_task)
 
@@ -2659,13 +2659,13 @@ async def test_when_serve_page_with_all_absolute_positioned_content_then_footer_
                     banner_box = footer_banner.bounding_box()
                     assert banner_box is not None
                     assert banner_box['width'] > 0, \
-                        f"Banner width should be > 0, got {banner_box['width']}"
+                        f'Banner width should be > 0, got {banner_box["width"]}'
                     assert banner_box['height'] > 0, \
-                        f"Banner height should be > 0, got {banner_box['height']}"
+                        f'Banner height should be > 0, got {banner_box["height"]}'
                     
                     # Verify banner Y coordinate is > 0 (visible in viewport)
                     assert banner_box['y'] > 0, \
-                        f"Banner Y coordinate should be > 0, got {banner_box['y']}"
+                        f'Banner Y coordinate should be > 0, got {banner_box["y"]}'
                     
                     # Verify banner is positioned at or very close to the bottom of the viewport
                     viewport_size = raw_page.viewport_size
@@ -2680,12 +2680,12 @@ async def test_when_serve_page_with_all_absolute_positioned_content_then_footer_
                     banner_styles = footer_banner.evaluate('el => window.getComputedStyle(el)')
                     position = banner_styles['position']
                     assert position in ['fixed', 'absolute'], \
-                        f"Banner should be positioned fixed or absolute, got {position}"
+                        f'Banner should be positioned fixed or absolute, got {position}'
                     
                     # Verify banner is stacked on top (has high z-index)
                     z_index = banner_styles.get('zIndex', 'auto')
                     assert z_index.isdigit() and int(z_index) >= 1000, \
-                        f"Banner should have high z-index for stacking, got {z_index}"
+                        f'Banner should have high z-index for stacking, got {z_index}'
                 await pw.run(pw_task)
 
 
@@ -2966,7 +2966,7 @@ async def test_when_timeout_while_server_reads_request_or_writes_response_then_l
                     f'Expected log_error() to be called 1 time, '
                     f'but was called with: {spy_log_error.call_args_list}')
                 (_, format_str, args) = spy_log_error.call_args_list[0].args
-                assertEqual("Request timed out: %r", format_str)
+                assertEqual('Request timed out: %r', format_str)
                 
                 # Ensure none of the print methods were called (timeout errors are silently ignored)
                 assertEqual(0, spy_print_success.call_count)

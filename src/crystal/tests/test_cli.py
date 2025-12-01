@@ -575,7 +575,7 @@ async def test_when_project_opened_with_stale_before_then_old_revisions_consider
             rr = rr_future.result(timeout=0)
             
             # Verify the revision is not initially stale
-            assert not rr.is_stale, "Resource revision should not be stale initially"
+            assert not rr.is_stale, 'Resource revision should not be stale initially'
         
         with subtests.test(msg='reopen with past date - revision should NOT be stale'):
             past_date = '1900-01-01T00:00:00+00:00'
@@ -586,7 +586,7 @@ async def test_when_project_opened_with_stale_before_then_old_revisions_consider
                 py_exec(crystal, f'r = project.get_resource({atom_feed_url!r})')
                 py_exec(crystal, 'rr = r.default_revision()')
                 result = py_eval_literal(crystal, 'rr.is_stale')
-                assert False == result, f"Expected resource revision to NOT be stale with past min_fetch_date, got: {result}"
+                assert False == result, f'Expected resource revision to NOT be stale with past min_fetch_date, got: {result}'
         
         with subtests.test(msg='reopen with future date - revision should be stale'):
             future_date = '2099-01-01T00:00:00+00:00'
@@ -595,20 +595,20 @@ async def test_when_project_opened_with_stale_before_then_old_revisions_consider
                 
                 # Verify the project's min_fetch_date is set correctly
                 result = py_eval_literal(crystal, 'repr(project.min_fetch_date)')
-                assert 'datetime.datetime(2099, 1, 1' in result, f"Expected min_fetch_date to be set to 2099, got: {result}"
+                assert 'datetime.datetime(2099, 1, 1' in result, f'Expected min_fetch_date to be set to 2099, got: {result}'
                 
                 # Get the resource and its revision
                 # TODO: Rewrite to use more-reliable py_eval_literal()
                 result = py_eval(crystal, f'r = project.get_resource({atom_feed_url!r}); r')
-                assert 'Resource(' in result, f"Expected to find resource, got: {result}"
+                assert 'Resource(' in result, f'Expected to find resource, got: {result}'
                 
                 # TODO: Rewrite to use more-reliable py_eval_literal()
                 result = py_eval(crystal, 'rr = r.default_revision(); rr')
-                assert 'ResourceRevision' in result, f"Expected to find resource revision, got: {result}"
+                assert 'ResourceRevision' in result, f'Expected to find resource revision, got: {result}'
                 
                 # Verify the revision is now considered stale
                 result = py_eval_literal(crystal, 'rr.is_stale')
-                assert True == result, f"Expected resource revision to be stale with future min_fetch_date, got: {result}"
+                assert True == result, f'Expected resource revision to be stale with future min_fetch_date, got: {result}'
 
 
 @with_subtests
@@ -616,19 +616,19 @@ def test_stale_before_option_recognizes_many_date_formats(subtests: SubtestsCont
     with _temporary_project() as project_path:
         with subtests.test(format='ISO date'):
             result = run_crystal(['--stale-before', '2022-07-17', '--help'])
-            assertEqual(0, result.returncode, f"ISO date format failed: {result.stderr}")
+            assertEqual(0, result.returncode, f'ISO date format failed: {result.stderr}')
         
         with subtests.test(format='ISO datetime without timezone'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42', '--help'])
-            assertEqual(0, result.returncode, f"ISO datetime format failed: {result.stderr}")
+            assertEqual(0, result.returncode, f'ISO datetime format failed: {result.stderr}')
         
         with subtests.test(format='ISO datetime with UTC timezone'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42+00:00', '--help'])
-            assertEqual(0, result.returncode, f"ISO datetime with timezone format failed: {result.stderr}")
+            assertEqual(0, result.returncode, f'ISO datetime with timezone format failed: {result.stderr}')
         
         with subtests.test(format='ISO datetime with negative timezone offset'):
             result = run_crystal(['--stale-before', '2022-07-17T12:47:42-05:00', '--help'])
-            assertEqual(0, result.returncode, f"ISO datetime with negative timezone offset failed: {result.stderr}")
+            assertEqual(0, result.returncode, f'ISO datetime with negative timezone offset failed: {result.stderr}')
 
 
 @with_subtests

@@ -102,4 +102,4 @@ def normalize_test_names(raw_test_names: list[str]) -> list[str]:
 
 
 def available_modules_str(available_modules: set[str]) -> str:
-    return ", ".join(sorted(available_modules)).replace("crystal.tests.", "")
+    return ', '.join(sorted(available_modules)).replace('crystal.tests.', '')

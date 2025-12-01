@@ -33,7 +33,7 @@ def test_function_caller() -> str | None:
     # - stack()[1] is the direct caller
     # - stack()[2] is the direct caller's caller; maybe a test
     frame_info = inspect.stack()[2]
-    if frame_info.function.startswith("test_"):
+    if frame_info.function.startswith('test_'):
         return frame_info.function
     else:
         return None

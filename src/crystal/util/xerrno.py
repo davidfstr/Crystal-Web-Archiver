@@ -12,6 +12,6 @@ def is_path_too_long_error(exc: BaseException) -> bool:
             # POSIX case
             exc.errno == errno.ENAMETOOLONG or
             # Windows case: ERROR_FILENAME_EXCED_RANGE
-            getattr(exc, "winerror", None) == 206
+            getattr(exc, 'winerror', None) == 206
         )
     )

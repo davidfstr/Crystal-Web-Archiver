@@ -37,6 +37,6 @@ def localtime_fallback_for_get_localzone(get_localzone_location: str) -> Iterato
 def _get_zoneinfo_from_localtime():
     tz_path = os.path.realpath('/etc/localtime')
     if '/zoneinfo/' not in tz_path:
-        raise RuntimeError(f"/etc/localtime does not point to a zoneinfo file: {tz_path}")
+        raise RuntimeError(f'/etc/localtime does not point to a zoneinfo file: {tz_path}')
     zone_name = tz_path.split('/zoneinfo/', 1)[-1]
     return ZoneInfo(zone_name)
