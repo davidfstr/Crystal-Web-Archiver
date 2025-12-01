@@ -82,6 +82,11 @@ class CrystalBannedApiChecker(BaseChecker):
             'no-direct-crystal-subprocess',
             "Direct ['crystal', ...] is not allowed. Use [*get_crystal_command(), ...] from crystal.tests.util.cli instead.",
         ),
+        'C9013': (
+            'Double-quoted string literal; use single-quoted string literal instead',
+            'no-double-quoted-string',
+            'String literals should use single quotes rather than double quotes.',
+        ),
     }
     
     # === Visit Call ===
@@ -352,6 +357,126 @@ class CrystalBannedApiChecker(BaseChecker):
                 if first_elem.value == 'crystal':
                     return True
         return False
+    
+    # === Visit Const (String Literals) ===
+    
+    def visit_const(self, node: astroid.Const) -> None:
+        """Check for double-quoted string literals."""
+        # Only check string constants
+        if not isinstance(node.value, str):
+            return
+        
+        # Exception: A string containing a single quote in its value may use double quotes
+        if "'" in node.value:
+            return
+        
+        # Exception: A single-quoted f-string may contain a double-quoted string literal
+        if self._is_inside_fstring(node):
+            return
+        
+        # Error if this string uses double quotes, by checking the source code
+        if self._is_double_quoted_string(node):
+            self.add_message('no-double-quoted-string', node=node)
+    
+    def _is_inside_fstring(self, node: astroid.NodeNG) -> bool:
+        """Check if the specified node is nested inside an f-string (JoinedStr)."""
+        current = node.parent
+        while current is not None:
+            if isinstance(current, astroid.JoinedStr):
+                return True
+            current = current.parent
+        return False
+    
+    # === Visit JoinedStr (f-strings) ===
+    
+    def visit_joinedstr(self, node: astroid.JoinedStr) -> None:
+        """Check for double-quoted f-string literals."""
+        # Exception: A single-quoted f-string may contain a double-quoted f-string
+        if self._is_inside_fstring(node):
+            return
+        
+        # Exception: An f-string containing a single quote in its value may use double quotes
+        if self._fstring_contains_single_quote(node):
+            return
+        
+        # Error if this f-string uses double quotes, by checking the source code
+        if self._is_double_quoted_fstring(node):
+            self.add_message('no-double-quoted-string', node=node)
+    
+    def _fstring_contains_single_quote(self, node: astroid.JoinedStr) -> bool:
+        """Check if any string part of the f-string contains a single quote."""
+        for value in node.values:
+            if isinstance(value, astroid.Const) and isinstance(value.value, str):
+                if "'" in value.value:
+                    return True
+        return False
+    
+    def _is_double_quoted_fstring(self, node: astroid.JoinedStr) -> bool:
+        """Check if an f-string uses double quotes by examining source code."""
+        try:
+            module = node.root()
+            with open(module.file, 'r') as f:
+                lines = f.readlines()
+            
+            line = lines[node.lineno - 1]
+            
+            if node.col_offset < len(line):
+                char = line[node.col_offset]
+                
+                # f-strings start with 'f' or 'F' prefix
+                if char in 'fF':
+                    next_pos = node.col_offset + 1
+                    # Handle rf or fr prefixes
+                    if next_pos < len(line) and line[next_pos] in 'rR':
+                        next_pos += 1
+                    if next_pos < len(line):
+                        # Skip triple-quoted f-strings
+                        if line[next_pos:].startswith('"""') or line[next_pos:].startswith("'''"):
+                            return False
+                        return line[next_pos] == '"'
+        except Exception:
+            pass
+        return False
+    
+    def _is_double_quoted_string(self, node: astroid.Const) -> bool:
+        """Check if a string constant uses double quotes by examining source code."""
+        try:
+            # Get the source file
+            module = node.root()
+            with open(module.file, 'r') as f:
+                lines = f.readlines()
+            
+            # Get the line (0-indexed)
+            line = lines[node.lineno - 1]
+            
+            # Get the character at col_offset
+            if node.col_offset < len(line):
+                char = line[node.col_offset]
+                
+                # Skip triple-quoted strings
+                remaining = line[node.col_offset:]
+                if remaining.startswith('"""') or remaining.startswith("'''"):
+                    return False
+                
+                # Check for prefixed strings like f", r", b", etc.
+                # The prefix comes before the quote character
+                if char in 'fFrRbBuU':
+                    # Could be a prefix; check the next character(s)
+                    next_pos = node.col_offset + 1
+                    # Handle multi-character prefixes like fr, rf, br, rb
+                    if next_pos < len(line) and line[next_pos] in 'fFrRbBuU':
+                        next_pos += 1
+                    if next_pos < len(line):
+                        # Skip triple-quoted strings
+                        if line[next_pos:].startswith('"""') or line[next_pos:].startswith("'''"):
+                            return False
+                        return line[next_pos] == '"'
+                
+                # Regular string. Check if it starts with double quote.
+                return char == '"'
+        except Exception:
+            pass
+        return False  # Assume single-quoted if we can't check (fail safe)
 
 
 def register(linter):
