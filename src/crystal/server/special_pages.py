@@ -1609,8 +1609,8 @@ def _to_base64_url(mime_type: str, svg_image_bytes: bytes) -> str:
 
     Returns a string like: "data:image/svg+xml;base64,PHN2ZyB4bWxu...".
     """
-    b64 = base64.b64encode(svg_image_bytes).decode("ascii")
-    return f"data:{mime_type};base64,{b64}"
+    b64 = base64.b64encode(svg_image_bytes).decode('ascii')
+    return f'data:{mime_type};base64,{b64}'
 
 
 STANDARD_FONT_FAMILY = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"

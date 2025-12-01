@@ -504,7 +504,7 @@ def _detect_sequential_group_at_dimension(
         if any_page is None:
             # Unable to locate last page with the already-downloaded information
             assert eager_downloads_ok == False, \
-                "Earlier code should have tried to download any_page"
+                'Earlier code should have tried to download any_page'
             last_page_ordinal = None
         else:
             probable_last_page_ordinal = max(seen_page_ordinals)

@@ -228,7 +228,7 @@ class ProjectServer:
         """
         # Request that shutdown happen soon
         assert isinstance(getattr(http_server, '_BaseServer__shutdown_request', None), bool), (
-            "BaseServer.__shutdown_request not found or wrong type. "
+            'BaseServer.__shutdown_request not found or wrong type. '
             "Has BaseServer's internal API changed?"
         )
         http_server._BaseServer__shutdown_request = True  # type: ignore[attr-defined]
@@ -237,7 +237,7 @@ class ProjectServer:
         # while still processing events in the wx event loop
         is_shut_down = getattr(http_server, '_BaseServer__is_shut_down', None)
         assert isinstance(is_shut_down, threading.Event), (
-            "BaseServer.__is_shut_down not found or wrong type. "
+            'BaseServer.__is_shut_down not found or wrong type. '
             "Has BaseServer's internal API changed?"
         )
         def poll_is_shut_down() -> bool:
@@ -581,7 +581,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             
             self.send_error(
                 HTTPStatus.BAD_REQUEST,
-                "Bad request version")
+                'Bad request version')
             return False
         
         return super().parse_request()
@@ -964,7 +964,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         try:
             # Ensure project is not readonly
             if self.project.readonly:
-                self._send_json_response(403, {"error": "Project is read-only"})
+                self._send_json_response(403, {'error': 'Project is read-only'})
                 return
             
             # Parse arguments
@@ -974,7 +974,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             else:
                 post_data = self.rfile.read().decode('utf-8')
             if not post_data:
-                self._send_json_response(400, {"error": "Missing request body"})
+                self._send_json_response(400, {'error': 'Missing request body'})
                 return
             try:
                 request_data = json.loads(post_data)
@@ -983,19 +983,19 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 root_url_name = request_data.get('name', '')
                 download_immediately = request_data.get('download_immediately', True)
             except json.JSONDecodeError:
-                self._send_json_response(400, {"error": "Invalid JSON"})
+                self._send_json_response(400, {'error': 'Invalid JSON'})
                 return
             if url is None or is_root is None:
-                self._send_json_response(400, {"error": "Missing parameter"})
+                self._send_json_response(400, {'error': 'Missing parameter'})
                 return
             if not isinstance(url, str) or not isinstance(is_root, bool):
-                self._send_json_response(400, {"error": "Invalid parameter type"})
+                self._send_json_response(400, {'error': 'Invalid parameter type'})
                 return
             if not isinstance(root_url_name, str):
-                self._send_json_response(400, {"error": "Invalid parameter type for name"})
+                self._send_json_response(400, {'error': 'Invalid parameter type for name'})
                 return
             if not isinstance(download_immediately, bool):
-                self._send_json_response(400, {"error": "Invalid parameter type for download_immediately"})
+                self._send_json_response(400, {'error': 'Invalid parameter type for download_immediately'})
                 return
             
             @fg_affinity
@@ -1014,15 +1014,15 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     # Create download task and start downloading
                     task = r.download_with_task(interactive=True, needs_result=False)
                     return {
-                        "status": "success", 
-                        "message": "Download started",
-                        "task_id": task.resource.url
+                        'status': 'success', 
+                        'message': 'Download started',
+                        'task_id': task.resource.url
                     }
                 else:
                     # Just created a root URL without downloading
                     return {
-                        "status": "success",
-                        "message": "Root URL created successfully"
+                        'status': 'success',
+                        'message': 'Root URL created successfully'
                     }
             result = fg_call_and_wait(create_root_url_and_optionally_start_download)
             
@@ -1032,7 +1032,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._print_error(f'Error handling download request: {str(e)}')
             self._send_json_response(500, {
-                "error": f"Internal server error: {str(e)}"
+                'error': f'Internal server error: {str(e)}'
             })
     
     @bg_affinity
@@ -1116,7 +1116,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         try:
             # Ensure project is not readonly
             if self.project.readonly:
-                self._send_json_response(403, CreateGroupErrorResponse({"error": "Project is read-only"}))
+                self._send_json_response(403, CreateGroupErrorResponse({'error': 'Project is read-only'}))
                 return
             
             # Parse arguments
@@ -1126,7 +1126,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             else:
                 post_data = self.rfile.read().decode('utf-8')
             if not post_data:
-                self._send_json_response(400, CreateGroupErrorResponse({"error": "Missing request body"}))
+                self._send_json_response(400, CreateGroupErrorResponse({'error': 'Missing request body'}))
                 return
             try:
                 request_data = json.loads(post_data)
@@ -1136,10 +1136,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 name = request['name']
                 download_immediately = request['download_immediately']
             except json.JSONDecodeError:
-                self._send_json_response(400, CreateGroupErrorResponse({"error": "Invalid JSON"}))
+                self._send_json_response(400, CreateGroupErrorResponse({'error': 'Invalid JSON'}))
                 return
             except trycast.ValidationError:
-                self._send_json_response(400, CreateGroupErrorResponse({"error": "Invalid request"}))
+                self._send_json_response(400, CreateGroupErrorResponse({'error': 'Invalid request'}))
                 return
             
             def parse_source_value(source_value: SourceChoiceValue | None) -> ResourceGroupSource:
@@ -1150,7 +1150,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 elif source_value['type'] == 'resource_group':
                     return self.project.get_resource_group(id=int(source_value['id']))
                 else:
-                    raise ValueError(f"Invalid source type: {source_value['type']}")
+                    raise ValueError(f'Invalid source type: {source_value["type"]}')
             
             @fg_affinity
             def create_group_and_optionally_start_download() -> CreateGroupResponse:
@@ -1159,7 +1159,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 # Check if group with this pattern already exists
                 existing_group = self.project.get_resource_group(url_pattern=url_pattern)
                 if existing_group is not None:
-                    return CreateGroupErrorResponse({"error": "Group with URL pattern already exists"})
+                    return CreateGroupErrorResponse({'error': 'Group with URL pattern already exists'})
                 
                 # Create the resource group
                 group = ResourceGroup(
@@ -1175,9 +1175,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     group.download()
                 
                 result = CreateGroupSuccessResponse({
-                    "status": "success",
-                    "message": "Group created successfully",
-                    "group_id": intstr_from(group._id),
+                    'status': 'success',
+                    'message': 'Group created successfully',
+                    'group_id': intstr_from(group._id),
                 })
                 return result
             result = fg_call_and_wait(create_group_and_optionally_start_download)
@@ -1189,7 +1189,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._print_error(f'Error handling create group request: {str(e)}')
             self._send_json_response(500, CreateGroupErrorResponse({
-                "error": f"Internal server error: {str(e)}"
+                'error': f'Internal server error: {str(e)}'
             }))
 
     @bg_affinity
@@ -1202,16 +1202,16 @@ class _RequestHandler(BaseHTTPRequestHandler):
             else:
                 post_data = self.rfile.read().decode('utf-8')
             if not post_data:
-                self._send_json_response(400, {"error": "Missing request body"})
+                self._send_json_response(400, {'error': 'Missing request body'})
                 return
             try:
                 request_data = json.loads(post_data)
                 url_pattern = request_data.get('url_pattern')
             except json.JSONDecodeError:
-                self._send_json_response(400, {"error": "Invalid JSON"})
+                self._send_json_response(400, {'error': 'Invalid JSON'})
                 return
             if not url_pattern:
-                self._send_json_response(400, {"error": "Missing url_pattern parameter"})
+                self._send_json_response(400, {'error': 'Missing url_pattern parameter'})
                 return
             
             # NOTE: Use same algorithm as the NewGroupDialog to calculate and present URLs
@@ -1219,13 +1219,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
             matching_urls_and_more_items = fg_call_and_wait(
                 lambda: NewGroupDialog._calculate_preview_urls(self.project, url_pattern))
             self._send_json_response(200, {
-                "matching_urls": matching_urls_and_more_items,
+                'matching_urls': matching_urls_and_more_items,
             })
 
         except Exception as e:
             self._print_error(f'Error handling preview URLs request: {str(e)}')
             self._send_json_response(500, {
-                "error": f"Internal server error: {str(e)}"
+                'error': f'Internal server error: {str(e)}'
             })
 
     @bg_affinity
@@ -1233,7 +1233,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         try:
             # Ensure project is not readonly
             if self.project.readonly:
-                self._send_json_response(403, {"error": "Project is read-only"})
+                self._send_json_response(403, {'error': 'Project is read-only'})
                 return
             
             # Parse arguments
@@ -1243,19 +1243,19 @@ class _RequestHandler(BaseHTTPRequestHandler):
             else:
                 post_data = self.rfile.read().decode('utf-8')
             if not post_data:
-                self._send_json_response(400, {"error": "Missing request body"})
+                self._send_json_response(400, {'error': 'Missing request body'})
                 return
             try:
                 request_data = json.loads(post_data)
                 url = request_data.get('url')
             except json.JSONDecodeError:
-                self._send_json_response(400, {"error": "Invalid JSON"})
+                self._send_json_response(400, {'error': 'Invalid JSON'})
                 return
             if url is None:
-                self._send_json_response(400, {"error": "Missing url parameter"})
+                self._send_json_response(400, {'error': 'Missing url parameter'})
                 return
             if not isinstance(url, str):
-                self._send_json_response(400, {"error": "Invalid parameter type for url"})
+                self._send_json_response(400, {'error': 'Invalid parameter type for url'})
                 return
             
             @fg_affinity
@@ -1264,11 +1264,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 default_revision = resource.default_revision()
                 if default_revision is None:
                     return {
-                        "error": "No revision found for this URL"
+                        'error': 'No revision found for this URL'
                     }
                 if default_revision.error_dict is None:
                     return {
-                        "error": "Current revision is not an error - cannot retry"
+                        'error': 'Current revision is not an error - cannot retry'
                     }
                 
                 # Delete the error revision
@@ -1277,9 +1277,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 # Start a new download
                 task = resource.download_with_task(interactive=True, needs_result=False)
                 return {
-                    "status": "success", 
-                    "message": "Retry download started",
-                    "task_id": task.resource.url
+                    'status': 'success', 
+                    'message': 'Retry download started',
+                    'task_id': task.resource.url
                 }
             result = fg_call_and_wait(retry_download)
             
@@ -1291,7 +1291,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._print_error(f'Error handling retry download request: {str(e)}')
             self._send_json_response(500, {
-                "error": f"Internal server error: {str(e)}"
+                'error': f'Internal server error: {str(e)}'
             })
 
     def _start_sse_stream(self) -> None:
@@ -1303,7 +1303,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
 
     def _send_sse_data(self, data: dict) -> None:
         try:
-            sse_data = f"data: {json.dumps(data)}\n\n"
+            sse_data = f'data: {json.dumps(data)}\n\n'
             self.wfile.write(sse_data.encode('utf-8'))
             self.wfile.flush()
         except BrokenPipeError:
@@ -1871,11 +1871,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
                         else None
                     )
                     prediction_msg = (
-                        f"[PREDICT] Regular group:\n"
-                        f"    a: {referrer_archive_url!r}\n"
-                        f"    b: {archive_url!r}\n"
-                        f"    A: {best_group_info.source!r}\n"
-                        f"    B: {best_group or best_group_info.url_pattern!r}"
+                        f'[PREDICT] Regular group:\n'
+                        f'    a: {referrer_archive_url!r}\n'
+                        f'    b: {archive_url!r}\n'
+                        f'    A: {best_group_info.source!r}\n'
+                        f'    B: {best_group or best_group_info.url_pattern!r}'
                     )
                     self._print_special(prediction_msg)
                 
@@ -1891,23 +1891,23 @@ class _RequestHandler(BaseHTTPRequestHandler):
                             else None
                         )
                         prediction_msg = (
-                            f"[PREDICT] Sequential group {group_info.first_page_ordinal}..{group_info.last_page_ordinal}:\n"
-                            f"    a: {referrer_archive_url!r}\n"
-                            f"    b: {archive_url!r}\n"
-                            f"    A: {group_info.source!r}\n"
-                            f"    B: {best_group or group_info.url_pattern!r}"
+                            f'[PREDICT] Sequential group {group_info.first_page_ordinal}..{group_info.last_page_ordinal}:\n'
+                            f'    a: {referrer_archive_url!r}\n'
+                            f'    b: {archive_url!r}\n'
+                            f'    A: {group_info.source!r}\n'
+                            f'    B: {best_group or group_info.url_pattern!r}'
                         )
                         self._print_special(prediction_msg)
                 
                 if not found_group:
                     prediction_msg = (
-                        f"[PREDICT] No groups identified:\n"
-                        f"    a: {referrer_archive_url!r}\n"
-                        f"    b: {archive_url!r}"
+                        f'[PREDICT] No groups identified:\n'
+                        f'    a: {referrer_archive_url!r}\n'
+                        f'    b: {archive_url!r}'
                     )
                     self._print_special(prediction_msg)
         except Exception as e:
-            self._print_special(f"*** [PREDICT] Error in heuristic:\n{traceback.format_exc()}")
+            self._print_special(f'*** [PREDICT] Error in heuristic:\n{traceback.format_exc()}')
     
     # === Utility: Request Accessors ===
     
@@ -1927,12 +1927,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @override
     def log_error(self, format: str, *args) -> None:
         # ex: Request timed out: TimeoutError('timed out')​
-        if format == "Request timed out: %r":  # from BaseHTTPRequestHandler.handle_one_request()
+        if format == 'Request timed out: %r':  # from BaseHTTPRequestHandler.handle_one_request()
             # Ignore uninteresting timeout while handling a request
             return
         
         # ex: code 400, message Bad request version ('Hello')
-        if format == "code %d, message %s":  # from BaseHTTPRequestHandler.send_error()
+        if format == 'code %d, message %s':  # from BaseHTTPRequestHandler.send_error()
             (code, message) = args
             format = '"%s" %s %s "%s"'  # reinterpret
             args = (self.requestline, str(code), '-', message)  # reinterpret

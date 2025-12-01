@@ -105,7 +105,7 @@ class Callout(wx.Panel):
         if is_windows():
             # On Windows, use GenButton because the native button doesn't allow
             # customizing the background color to blend in to the parent's background
-            close_button = wx.lib.buttons.GenButton(self, label="✕", size=close_button_size)
+            close_button = wx.lib.buttons.GenButton(self, label='✕', size=close_button_size)
             close_button.SetBackgroundColour(self._COLOR)
             
             # Override DrawFocusIndicator to fix replace default strange
@@ -126,10 +126,10 @@ class Callout(wx.Panel):
             close_button.DrawFocusIndicator = custom_draw_focus_indicator
         else:
             # On macOS/Linux, regular button works fine
-            close_button = wx.Button(self, label="✕", size=close_button_size)
+            close_button = wx.Button(self, label='✕', size=close_button_size)
         close_button.SetName(self.Name + '__close-button')
         bind(close_button, wx.EVT_BUTTON, self._on_close_button)
-        close_button.SetToolTip("Dismiss this help message")
+        close_button.SetToolTip('Dismiss this help message')
         
         top_bar.Add(
             message_text,

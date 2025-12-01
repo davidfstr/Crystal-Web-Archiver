@@ -210,8 +210,8 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
     crash_reason = cast(CrashReason | None, property(
         _get_crash_reason, _set_crash_reason,
         doc=(
-            "The reason this task crashed, or None if it has not crashed. "
-            "A crashed task may be complete or incomplete."
+            'The reason this task crashed, or None if it has not crashed. '
+            'A crashed task may be complete or incomplete.'
         )))
     
     # === Properties ===
@@ -797,9 +797,9 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
                 try:
                     child = children_seq[index]
                 except UnmaterializedItemError:
-                    lines.append(f"{'  ' * depth}{index}: <unmaterialized child>")
+                    lines.append(f'{"  " * depth}{index}: <unmaterialized child>')
                 else:
-                    lines.append(f"{'  ' * depth}{index}: {child.title} -- {child.subtitle}")
+                    lines.append(f'{"  " * depth}{index}: {child.title} -- {child.subtitle}')
                     format_tree(child, depth + 1)
         if len(self.children) == 0:
             lines.append('<empty>')

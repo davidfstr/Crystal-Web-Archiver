@@ -620,7 +620,7 @@ class NewRootUrlDialog:
     
     async def ok(self) -> None:
         if self.ok_button is None:
-            raise ValueError("Cannot click OK button - dialog is in readonly mode")
+            raise ValueError('Cannot click OK button - dialog is in readonly mode')
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-new-root-url-dialog')), stacklevel_extra=1)
     
@@ -783,7 +783,7 @@ class NewGroupDialog:
     
     async def ok(self) -> None:
         if self.ok_button is None:
-            raise ValueError("Cannot click OK button. Dialog is in readonly mode.")
+            raise ValueError('Cannot click OK button. Dialog is in readonly mode.')
         click_button(self.ok_button)
         await wait_for(not_condition(window_condition('cr-new-group-dialog')), stacklevel_extra=1)
     

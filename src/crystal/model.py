@@ -256,7 +256,7 @@ class Project(ListenableMixin):
             # Create an untitled project in a permanent but hidden directory
             untitled_projects_dir = user_untitled_projects_dir()
             assert os.path.exists(untitled_projects_dir)
-            project_name = f"Untitled-{uuid.uuid4().hex[:8]}{Project.FILE_EXTENSION}"
+            project_name = f'Untitled-{uuid.uuid4().hex[:8]}{Project.FILE_EXTENSION}'
             untitled_project_dirpath = os.path.join(untitled_projects_dir, project_name)
             assert not os.path.exists(untitled_project_dirpath)
             
@@ -2429,11 +2429,11 @@ class Project(ListenableMixin):
                     poll_interval=0)
             except TimeoutError:
                 tb = get_thread_stack(scheduler_thread)
-                msg = f"Scheduler thread failed to stop within {self._SCHEDULER_JOIN_TIMEOUT} seconds.\n\n"
+                msg = f'Scheduler thread failed to stop within {self._SCHEDULER_JOIN_TIMEOUT} seconds.\n\n'
                 if tb:
-                    msg += f"Scheduler thread stack (possible deadlock):\n{tb}"
+                    msg += f'Scheduler thread stack (possible deadlock):\n{tb}'
                 else:
-                    msg += "Scheduler thread stack unavailable."
+                    msg += 'Scheduler thread stack unavailable.'
                 raise TimeoutError(msg)
             
             self._scheduler_thread = None
@@ -3447,7 +3447,7 @@ class Resource:
     # === Utility ===
     
     def __repr__(self):
-        return "Resource({})".format(repr(self.url))
+        return 'Resource({})'.format(repr(self.url))
 
 
 class RootResource:
@@ -3596,7 +3596,7 @@ class RootResource:
     # === Utility ===
     
     def __repr__(self):
-        return "RootResource({},{})".format(repr(self.name), repr(self.resource.url))
+        return 'RootResource({},{})'.format(repr(self.name), repr(self.resource.url))
     
     class AlreadyExists(Exception):
         """

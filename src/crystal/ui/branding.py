@@ -46,11 +46,11 @@ def create_program_name_control(parent: wx.Window, *, name_prefix: str) -> wx.St
         if logotext_bundle:
             program_name = wx.StaticBitmap(parent, bitmap=logotext_bundle, name=f'{name_prefix}__program-name-bitmap')
         else:
-            raise RuntimeError("Failed to create logotext bundle")
+            raise RuntimeError('Failed to create logotext bundle')
     except Exception as e:
         # Fallback to text if bitmap loading fails
         print(
-            f"Warning: Failed to load logotext bitmap, using text fallback: {e}",
+            f'Warning: Failed to load logotext bitmap, using text fallback: {e}',
             file=sys.stderr)
         program_name = wx.StaticText(parent, label=PROGRAM_NAME, name=f'{name_prefix}__program-name-text')
         program_name_font = load_app_name_font(int(23 * font_size_scale))

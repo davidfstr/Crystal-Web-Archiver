@@ -574,8 +574,8 @@ async def test_when_save_as_project_then_new_tasks_started_continue_to_show_in_t
         task_root_ti = TreeItem.GetRootItem(mw.task_tree)
         final_task_count = len(task_root_ti.Children)
         assert final_task_count > initial_task_count, \
-            f"TaskTree should show new task after Save As. " \
-            f"Initial: {initial_task_count}, Final: {final_task_count}"
+            f'TaskTree should show new task after Save As. ' \
+            f'Initial: {initial_task_count}, Final: {final_task_count}'
 
 
 async def test_when_save_as_untitled_project_to_different_filesystem_then_copies_project_and_shows_progress_dialog() -> None:
@@ -1216,7 +1216,7 @@ async def test_given_untitled_project_created_when_crystal_unexpectedly_quits_th
             # TODO: Eliminate race condition that requires this wait
             import time; time.sleep(0.5)
             project_available = _project_is_available(crystal)
-            assert project_available, "Expected project to be auto-reopened but none was found"
+            assert project_available, 'Expected project to be auto-reopened but none was found'
             
             # Ensure we have a main window
             wait_for_main_window(crystal)

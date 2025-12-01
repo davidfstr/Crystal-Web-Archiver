@@ -57,7 +57,7 @@ def warn_if_slow(
                 if excluded_delta_time > 0
                 else ''
             )
-            print("*** {} took {:.02f}s{} to execute: {}".format(
+            print('*** {} took {:.02f}s{} to execute: {}'.format(
                 title,
                 delta_time,
                 excluded_part,

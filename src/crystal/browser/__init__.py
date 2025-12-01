@@ -743,7 +743,7 @@ class MainWindow(CloakMixin):
         
         # Create message text, large and centered
         message = wx.StaticText(panel, 
-            label="Download your first page by defining a root URL for the page.",
+            label='Download your first page by defining a root URL for the page.',
             style=wx.ALIGN_CENTER)
         if True:
             message.Wrap(400)  # wrap text at 400px

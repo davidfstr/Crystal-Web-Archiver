@@ -410,7 +410,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 py_exec(crystal, 'from crystal.model import Resource')
                 # Test can create Resource
                 assertEqual(
-                    f"Resource({home_url!r})\n",
+                    f'Resource({home_url!r})\n',
                     py_eval(crystal, f'r = Resource(p, {home_url!r}); r'))
                 
                 # Test can import RootResource
@@ -476,7 +476,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
             with subtests.test(case='test can download project entities', return_if_failure=True):
                 # Recreate home Resource
                 assertEqual(
-                    f"Resource({home_url!r})\n",
+                    f'Resource({home_url!r})\n',
                     py_eval(crystal, f'r = Resource(p, {home_url!r}); r'))
                 # Recreate home RootResource
                 assertEqual(
