@@ -1160,7 +1160,7 @@ class MainWindow(CloakMixin):
                 # Wait for save to complete
                 try:
                     fg_wait_for(lambda: future.done(), timeout=None, poll_interval=0.1)
-                    future.result()
+                    future.result(timeout=0)
                 except CancelSaveAs:
                     return False
                 # TODO: Handle ProjectReadOnlyError more gracefully,
