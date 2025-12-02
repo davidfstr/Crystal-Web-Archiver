@@ -404,7 +404,7 @@ def assert_does_open_webbrowser_to(request_url: str | Callable[[], str]) -> Iter
         
         with assert_does_open_webbrowser_to(lambda: ...) as url_future:
             click_button(mw.view_button)
-        actual_url = url_future.result()
+        actual_url = url_future.result(timeout=0)
     """
     url_future: Future[str] = Future()
     

@@ -213,7 +213,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
                     lambda: rr_future.done() or None,
                     timeout=MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY)
                 try:
-                    rr_future.result()
+                    rr_future.result(timeout=0)
                 except ProjectFreeSpaceTooLowError:
                     if expect_failure:
                         pass  # expected
