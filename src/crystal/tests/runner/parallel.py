@@ -341,7 +341,7 @@ def run_tests(
     (summary, is_ok) = _format_summary(all_test_results, end_time - start_time)
     print(summary)
     
-    # Play bell sound in terminal (like crystal --test does)
+    # Play bell sound in terminal (like crystal test does)
     print('\a', end='', flush=True)
     
     return is_ok
@@ -486,7 +486,7 @@ def _interrupt_workers(
 
 def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tuple[str, bool]:
     """
-    Format the summary section in the same format as `crystal --test`.
+    Format the summary section in the same format as `crystal test`.
     
     Individual test results have already been printed during streaming.
     
@@ -563,12 +563,12 @@ def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tup
         if failed_tests:
             output_lines.append('')
             output_lines.append('Rerun failed tests with:')
-            output_lines.append(f'$ crystal --test {" ".join(failed_tests)}')
+            output_lines.append(f'$ crystal test {" ".join(failed_tests)}')
         
         if interrupted_tests:
             output_lines.append('')
             output_lines.append('Rerun interrupted tests with:')
-            output_lines.append(f'$ crystal --test {" ".join(interrupted_tests)}')
+            output_lines.append(f'$ crystal test {" ".join(interrupted_tests)}')
     
     return ('\n'.join(output_lines), is_ok)
 
@@ -967,7 +967,7 @@ def _parse_test_result(test_name: str, output_lines: list[str], interrupted: boo
 
 def _display_test_result(test_result: TestResult) -> None:
     """
-    Display a test result to stdout in the same format as `crystal --test`.
+    Display a test result to stdout in the same format as `crystal test`.
     """
     global _displayed_test_index
     

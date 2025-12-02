@@ -10,7 +10,7 @@ is used to stop the process.
 This is useful for CI jobs where test runners might hang indefinitely.
 
 Example usage:
-    python3 watchdog.py --timeout=120 -- crystal --test
+    python3 watchdog.py --timeout=120 -- crystal test
 """
 
 import argparse
@@ -32,7 +32,7 @@ def main() -> None:
         epilog=dedent(
             """
             Example:
-              python3 watchdog.py --timeout=120 -- crystal --test
+              python3 watchdog.py --timeout=120 -- crystal test
               python3 watchdog.py --timeout=300 -- python -m pytest tests/
             """
         )

@@ -308,13 +308,13 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
     if len(failed_test_names) != 0:
         print()
         print('Rerun failed tests with:')
-        print(f'$ crystal --test {" ".join(failed_test_names)}')
+        print(f'$ crystal test {" ".join(failed_test_names)}')
     
     # Print command to rerun interrupted tests
     if len(interrupted_test_names) != 0:
         print()
         print('Rerun interrupted tests with:')
-        print(f'$ crystal --test {" ".join(interrupted_test_names)}')
+        print(f'$ crystal test {" ".join(interrupted_test_names)}')
     
     # Play bell sound in terminal
     print('\a', end='', flush=True)

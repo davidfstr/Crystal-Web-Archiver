@@ -21,7 +21,7 @@ For the new test module to be detected, you must manually add it to
 To run all tests inside a module, like `crystal.tests.test_foo`:
 
 ```
-$ crystal --test crystal.tests.test_foo
+$ crystal test crystal.tests.test_foo
 ```
 
 ## Define a test function
@@ -92,13 +92,13 @@ def test_with_some_subtests(subtests: SubtestsContext) -> None:
 To run an individual test function, like `crystal.tests.test_module.test_func`:
 
 ```
-$ crystal --test crystal.tests.test_module.test_func
+$ crystal test crystal.tests.test_module.test_func
 ```
 
 To run all test functions in a module, like `crystal.tests.test_module`:
 
 ```
-$ crystal --test crystal.tests.test_module
+$ crystal test crystal.tests.test_module
 ```
 
 ## Download from a served project fixture

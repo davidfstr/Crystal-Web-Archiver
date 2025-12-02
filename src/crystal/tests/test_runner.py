@@ -217,7 +217,7 @@ def test_when_ctrl_c_pressed_while_test_running_noninteractively_then_marks_that
     # Verify 'Rerun interrupted tests with:' section exists
     assertIn('Rerun interrupted tests with:', stdout_str)
     assertIn(
-        'crystal --test '
+        'crystal test '
         'crystal.tests.test_runner.test_special_b_causing_ctrl_c '
         'crystal.tests.test_runner.test_special_c_causing_pass', stdout_str)
     
@@ -274,7 +274,7 @@ def test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_te
     
     # Verify 'Rerun interrupted tests with:' section exists
     assertIn('Rerun interrupted tests with:', late_stdout_str)
-    assertIn('crystal --test crystal.tests.test_runner.test_special_b_causing_ctrl_c', late_stdout_str)
+    assertIn('crystal test crystal.tests.test_runner.test_special_b_causing_ctrl_c', late_stdout_str)
     
     # Verify test_special_c_causing_pass was NOT run (it was on stdin but ignored after Ctrl-C)
     assertNotIn('test_special_c_causing_pass', late_stdout_str)

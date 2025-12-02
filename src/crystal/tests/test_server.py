@@ -1727,7 +1727,7 @@ _MUST_DOWNLOAD_FRAMES_IN_FRAMESET_EXPLICITLY = True
 _MAX_BANNER_OVERHEAD_BYTES = 3_000  # 3KB
 
 # Whether to print the footer banner overhead in bytes, when running the test:
-# $ crystal --test test_footer_banner_does_not_add_more_than_X_bytes_of_overhead_to_page
+# $ crystal test test_footer_banner_does_not_add_more_than_X_bytes_of_overhead_to_page
 _PRINT_BANNER_OVERHEAD = True
 
 

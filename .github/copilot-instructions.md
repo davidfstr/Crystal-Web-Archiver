@@ -63,15 +63,15 @@ Error Handling:
 * Prefer writing end-to-end tests over unit tests, as they provide a more comprehensive coverage of the feature.
 * Tests should cover the full functionality of its related feature, including any edge cases.
 
-* Use `crystal --test crystal.tests.test_FOO` to run a specific end-to-end test file like `./src/crystal/tests/test_FOO.py`. The exit code will be 0 only if tests pass.
-* Use `crystal --test` to run all end-to-end tests. All end-to-end tests take as long as 4 minutes to run locally, so prefer running individual test files when possible.
+* Use `crystal test crystal.tests.test_FOO` to run a specific end-to-end test file like `./src/crystal/tests/test_FOO.py`. The exit code will be 0 only if tests pass.
+* Use `crystal test` to run all end-to-end tests. All end-to-end tests take as long as 4 minutes to run locally, so prefer running individual test files when possible.
 * Use `pytest` to run all unit tests. The exit code will be 0 only if tests pass. All unit tests take less than a second to run locally, so you can run them all at once without worrying about performance.
 
 * End-to-end tests should be named with full sentences, describing the behavior being tested. For example `test_given_entity_tree_in_empty_state_when_create_root_resource_then_entity_tree_enters_non_empty_state`.
 * End-to-end tests generally do not require a docstring, as the test name should be descriptive enough.
 * End-to-end tests should avoid accessing windows by name directly, e.g. `mw.main_window.FindWindow(name='cr-view-button-callout')`. Instead create/use functions on page object classes in `./src/crystal/tests/util/windows.py` which encapsulate how to locate and manipulate windows.
 
-* Standalone test scripts that use async testing utilities like `OpenOrCreateDialog.wait_for` will not work because they depend on the custom event loop used by `crystal --test` and a running foreground thread. In particular async testing utilities are not compatible with `asyncio.run()`. Instead write temporary scripts as an end-to-end test.
+* Standalone test scripts that use async testing utilities like `OpenOrCreateDialog.wait_for` will not work because they depend on the custom event loop used by `crystal test` and a running foreground thread. In particular async testing utilities are not compatible with `asyncio.run()`. Instead write temporary scripts as an end-to-end test.
 
 ## Conventions
 
@@ -85,5 +85,5 @@ Error Handling:
 * Run `crystal --version` and ensure you see a result like `Crystal 2.0.2`.
     * If you see `crystal: command not found` then you probably need to activate a Python virtual environment first or use Poetry to run commands. Try `source venv3.14/bin/activate && crystal --version` first. If there is no `venv3.14` directory then try `poetry run crystal --version`.
 * Ensure you can run a unit test. Try `pytest tests/test_version.py` or `poetry run pytest ...`.
-* Ensure you can run an end-to-end test. Try `xvfb-run crystal --test crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors` or `poetry run xvfb-run crystal --test ...`.
+* Ensure you can run an end-to-end test. Try `xvfb-run crystal test crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors` or `poetry run xvfb-run crystal test ...`.
     * If you see `xvfb-run: command not found` then remove `xvfb-run` from the command and try again.
