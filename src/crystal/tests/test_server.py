@@ -555,7 +555,7 @@ async def test_when_404_page_downloaded_and_served_by_crystal_then_url_box_links
                 served_404_url,
                 project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
-            served_404_url_in_archive = url_future.result()
+            served_404_url_in_archive = url_future.result(timeout=0)
             
             def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
                 raw_page.goto(served_404_url_in_archive)
@@ -763,7 +763,7 @@ async def test_given_create_root_url_selected_when_download_button_pressed_then_
                     home_url,
                     project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
-            home_url_in_archive = url_future.result()
+            home_url_in_archive = url_future.result(timeout=0)
             server_port = get_most_recently_started_server_port()  # capture
             
             # Verify that the home page is NOT a "Not in Archive" page
@@ -869,7 +869,7 @@ async def test_when_download_complete_and_successful_download_with_fetch_error_t
                     home_url,
                     project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
-            home_url_in_archive = url_future.result()
+            home_url_in_archive = url_future.result(timeout=0)
             server_port = get_most_recently_started_server_port()  # capture
             
             # Verify that the home page is NOT a "Not in Archive" page
@@ -1446,7 +1446,7 @@ async def test_given_dip_page_visible_then_progress_bar_runs_until_download_comp
                 home_url,
                 project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
-            home_url_in_archive = url_future.result()
+            home_url_in_archive = url_future.result(timeout=0)
             
             # Patch download_in_progress_html to ignore reload requests,
             # so that we can control exactly when it reloads
@@ -1581,7 +1581,7 @@ async def test_given_fetch_error_page_visible_when_click_retry_button_then_retry
                     home_url,
                     project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
-            home_url_in_archive = url_future.result()
+            home_url_in_archive = url_future.result(timeout=0)
             
             # Verify resource has error revision before retry
             resource = Resource(project, home_url)
@@ -3120,7 +3120,7 @@ async def _generic_404_page_visible(
                         'https://xkcd.com/',
                         project_default_url_prefix=project.default_url_prefix)) as url_future:
                     click_button(mw.view_button)
-                home_request_url = url_future.result()
+                home_request_url = url_future.result(timeout=0)
                 
                 # Verify that "Not in Archive" page reached
                 request_url = get_request_url(
@@ -3265,7 +3265,7 @@ async def _fetch_error_page_visible() -> AsyncIterator[tuple[WebPage, str]]:
                     home_url,
                     project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
-            home_url_in_archive = url_future.result()
+            home_url_in_archive = url_future.result(timeout=0)
             
             # Verify that "Fetch Error" page reached
             fetch_error_page = await fetch_archive_url(home_url)
@@ -3373,7 +3373,7 @@ async def _view_xkcd_home_page_when_embedded_image_is_undownloaded(
                 home_url,
                 project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
-            home_url_in_archive = url_future.result()
+            home_url_in_archive = url_future.result(timeout=0)
             
             with patch.object(
                         crystal.server._RequestHandler, 'send_revision', autospec=True,

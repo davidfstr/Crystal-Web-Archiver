@@ -550,7 +550,7 @@ async def test_when_readonly_project_becomes_writable_then_get_info_button_becom
             root_resource = RootResource(project, 'Atom Feed', r)
             rr_future = r.download()
             await step_scheduler_until_done(project)
-            rr = rr_future.result()
+            rr = rr_future.result(timeout=0)
         
         # Reopen the project as readonly
         with Project(original_project_path, readonly=True) as readonly_project, \

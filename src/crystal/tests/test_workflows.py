@@ -139,7 +139,7 @@ async def test_first_time_user_can_easily_download_and_view_first_url() -> None:
                     # Action 6 (Click): "View"
                     action_count += 1
                     click_button(mw.view_button)
-                home_url_in_archive = url_future.result()
+                home_url_in_archive = url_future.result(timeout=0)
                 
                 # Ensure downloaded page looks correct
                 page = await bg_fetch_url(home_url_in_archive)
@@ -289,7 +289,7 @@ async def test_first_time_user_can_easily_download_and_view_simple_site() -> Non
                     # Action 7 (Click): "View"
                     action_count += 1
                     click_button(mw.view_button)
-                home_url_in_archive = url_future.result()
+                home_url_in_archive = url_future.result(timeout=0)
                 
                 # Ensure downloaded page looks correct
                 page = await bg_fetch_url(home_url_in_archive)
@@ -418,7 +418,7 @@ async def test_can_download_and_serve_a_static_site_using_main_window_ui() -> No
                 home_ti.SelectItem()
                 with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)) as url_future:
                     click_button(mw.view_button)
-                home_request_url = url_future.result()
+                home_request_url = url_future.result(timeout=0)
                 # Verify the request URL has the expected pattern (with any port number)
                 assertRegex(
                     home_request_url,
@@ -734,7 +734,7 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     home_url,
                     project_default_url_prefix=project.default_url_prefix)) as url_future:
                 click_button(mw.view_button)
-            home_url_in_archive = url_future.result()
+            home_url_in_archive = url_future.result(timeout=0)
             
             # Extract values before defining the closure
             # to avoid capturing the unserializable Project object
