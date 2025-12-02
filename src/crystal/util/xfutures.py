@@ -84,12 +84,7 @@ def patch_future_result_to_check_for_deadlock() -> None:
     
     super_result = Future.result
     def result(self, timeout: float | None = None) -> Any:
-        # TODO: Consider being more strict by eliminating the following special case
-        # HACK: Permit timeout=None when self.done() to accomodate existing
-        #       code that unsafely calls Future.result(timeout=None)
-        #       in a context it believes the Future will always be done.
         if (timeout is None and 
-                not self.done() and 
                 not getattr(self, '_cr_declare_no_deadlocks', False) and
                 is_foreground_thread()):
             raise RuntimeError(
