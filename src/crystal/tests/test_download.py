@@ -254,12 +254,11 @@ async def test_when_download_resource_given_revision_body_missing_then_redownloa
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 r = Resource(project, server.get_url('/'))
                 revision_future = r.download(wait_for_embedded=True)
-                await wait_for_future(revision_future)
+                rr = await wait_for_future(revision_future)
                 
                 assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
                 server.requested_paths.clear()
                 
-                rr = revision_future.result()
                 rr_body_filepath = rr._body_filepath  # capture
             
             # Simulate loss of revision body file, perhaps due to an
@@ -445,7 +444,7 @@ async def test_can_download_http_resource_with_socks_proxy() -> None:
             async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                 r = Resource(project, server.get_url('/'))
                 revision_future = r.download()
-                await wait_for_future(revision_future)
+                rr = await wait_for_future(revision_future)
                 
                 # Verify SOCKS proxy was configured correctly.
                 # (It may be called multiple times due to fetch of favicon
@@ -459,7 +458,6 @@ async def test_can_download_http_resource_with_socks_proxy() -> None:
                 assert '/' in server.requested_paths
                 
                 # Verify the download succeeded
-                rr = revision_future.result()
                 assert rr is not None
                 assert rr.metadata is not None
                 assertEqual(200, rr.metadata['status_code'])
@@ -507,7 +505,7 @@ async def test_can_download_https_resource_with_socks_proxy() -> None:
                 # but connect to the HTTP test server
                 r = Resource(project, server.get_url('/').replace('http://', 'https://'))
                 revision_future = r.download()
-                await wait_for_future(revision_future)
+                rr = await wait_for_future(revision_future)
                 
                 # Verify SOCKS proxy was configured correctly.
                 # (It may be called multiple times due to fetch of favicon
@@ -524,7 +522,6 @@ async def test_can_download_https_resource_with_socks_proxy() -> None:
                 assert '/' in server.requested_paths
                 
                 # Verify the download succeeded
-                rr = revision_future.result()
                 assert rr is not None
                 assert rr.metadata is not None
                 assertEqual(200, rr.metadata['status_code'])
@@ -552,7 +549,7 @@ async def test_can_download_ftp_resource_with_socks_proxy() -> None:
             async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
                 r = Resource(project, server.get_url('/test.txt'))
                 revision_future = r.download()
-                await wait_for_future(revision_future)
+                rr = await wait_for_future(revision_future)
                 
                 # Verify SOCKS proxy handler was created with correct settings
                 assert len(socks_handler_init_calls) >= 1
@@ -566,7 +563,6 @@ async def test_can_download_ftp_resource_with_socks_proxy() -> None:
                 assert '/test.txt' in server.requested_paths
                 
                 # Verify the download succeeded
-                rr = revision_future.result()
                 assert rr is not None
                 with rr.open() as body:
                     assert body.read() == b'Hello FTP World'
