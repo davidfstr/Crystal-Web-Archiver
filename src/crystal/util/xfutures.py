@@ -3,7 +3,7 @@ from concurrent.futures._base import (  # type: ignore[attr-defined]  # private 
     CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, RUNNING
 )
 import threading
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 from typing_extensions import override
 
 
@@ -73,3 +73,31 @@ class InterruptableFuture(Generic[_R], Future[_R]):
             if self._ignore_set_result_and_set_exception:
                 return
         super().set_exception(exception)
+
+
+def patch_future_result_to_check_for_deadlock() -> None:
+    """
+    Patches Future.result() to raise if called in an unsafe way on the
+    foreground thread.
+    """
+    from crystal.util.xthreading import is_foreground_thread
+    
+    super_result = Future.result
+    def result(self, timeout: float | None = None) -> Any:
+        # TODO: Consider being more strict by eliminating the following special case
+        # HACK: Permit timeout=None when self.done() to accomodate existing
+        #       code that unsafely calls Future.result(timeout=None)
+        #       in a context it believes the Future will always be done.
+        if (timeout is None and 
+                not self.done() and 
+                not getattr(self, '_cr_declare_no_deadlocks', False) and
+                is_foreground_thread()):
+            raise RuntimeError(
+                'Calling Future.result() from the foreground thread '
+                'without a timeout is likely to cause a deadlock.\n'
+                '\n'
+                'Use timeout=0 if a result is expected immediately. '
+                'Use "await wait_for_future(future)" if calling from an async test.'
+            )
+        return super_result(self, timeout)
+    Future.result = result  # type: ignore[method-assign]

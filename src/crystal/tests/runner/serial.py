@@ -42,7 +42,7 @@ def run_tests(raw_test_names: list[str], *, interactive: bool = False) -> bool:
     to that used by Python's unittest module.
     """
     with delay_between_downloads_minimized(), sleep_profiled(), \
-            _future_result_deadlock_detection(), _tqdm_locks_disabled():
+            _tqdm_locks_disabled():
         if not interactive:
             # 1. Normalize test names to handle various input formats
             # 2. Error if a test name cannot be resolved to a valid module or function
@@ -424,33 +424,6 @@ class _TestInterrupted(Exception):
 
 
 # === Utility ===
-
-@contextmanager
-def _future_result_deadlock_detection():
-    """
-    Patch Future.result() to raise a RuntimeError if called from the foreground thread during tests.
-    
-    This helps catch deadlocks caused by waiting on a Future synchronously in the foreground thread.
-    """
-    original_result = Future.result
-    def patched_result(self, timeout=None):
-        if is_foreground_thread():
-            # HACK: Permit timeout=None when self.done() to accomodate existing
-            #       code that unsafely calls Future.result(timeout=None)
-            #       in a context it believes the Future will always be done.
-            if timeout is None and not self.done() and not getattr(self, '_cr_declare_no_deadlocks', False):
-                raise RuntimeError(
-                    "Calling Future.result() from the foreground thread will cause a deadlock. "
-                    "Use 'await wait_for_future(future)' instead."
-                )
-        return original_result(self, timeout)
-
-    Future.result = patched_result
-    try:
-        yield
-    finally:
-        Future.result = original_result
-
 
 @contextmanager
 def _tqdm_locks_disabled() -> Iterator[None]:

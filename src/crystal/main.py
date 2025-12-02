@@ -691,6 +691,9 @@ def _main2(args: list[str]) -> None:
             from crystal.util.tqdm_debug import patch_tqdm_to_debug_deadlocks
             patch_tqdm_to_debug_deadlocks(on_deadlock='keep_trying')
             
+            from crystal.util.xfutures import patch_future_result_to_check_for_deadlock
+            patch_future_result_to_check_for_deadlock()
+            
             # Block until test-related modules are done loading,
             # before starting bg_task() on background thread
             from crystal.tests.index import TEST_FUNCS as _
