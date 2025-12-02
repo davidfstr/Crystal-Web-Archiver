@@ -79,8 +79,7 @@ async def test_downloads_embedded_resources() -> None:
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            await wait_for_future(revision_future)
             
             assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
 
@@ -120,8 +119,7 @@ async def test_does_not_download_embedded_resources_of_http_4xx_and_5xx_pages() 
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            await wait_for_future(revision_future)
             
             assertEqual(['/'], server.requested_paths)
 
@@ -142,8 +140,7 @@ async def test_does_not_download_embedded_resources_of_recognized_binary_resourc
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            await wait_for_future(revision_future)
             
             assertEqual(['/'], server.requested_paths)
 
@@ -183,8 +180,7 @@ async def test_does_not_download_forever_given_embedded_resources_form_a_cycle()
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            await wait_for_future(revision_future)
             
             assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
 
@@ -224,8 +220,7 @@ async def test_does_not_download_forever_given_embedded_resources_nest_infinitel
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            await wait_for_future(revision_future)
             
             assert 3 == crystal.task._MAX_EMBEDDED_RESOURCE_RECURSION_DEPTH
             assertEqual([
@@ -259,8 +254,7 @@ async def test_when_download_resource_given_revision_body_missing_then_redownloa
             async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
                 r = Resource(project, server.get_url('/'))
                 revision_future = r.download(wait_for_embedded=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                await wait_for_future(revision_future)
                 
                 assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
                 server.requested_paths.clear()
@@ -277,8 +271,7 @@ async def test_when_download_resource_given_revision_body_missing_then_redownloa
                 with redirect_stderr(io.StringIO()) as captured_stderr:
                     r = Resource(project, server.get_url('/'))
                     revision_future = r.download(wait_for_embedded=True)
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
+                    await wait_for_future(revision_future)
                 
                 assert (
                     ' is missing its body on disk. Redownloading it.'
@@ -322,16 +315,14 @@ async def test_when_download_resource_given_all_embedded_resources_already_downl
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            await wait_for_future(revision_future)
             
             assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
             server.requested_paths.clear()
             
             r = Resource(project, server.get_url('/index.php'))
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            await wait_for_future(revision_future)
             
             assertEqual(['/index.php'], server.requested_paths)
 
@@ -359,8 +350,7 @@ async def test_given_same_resource_embedded_multiple_times_then_downloads_it_onl
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, server.get_url('/'))
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            await wait_for_future(revision_future)
             
             assertEqual(['/', '/assets/image.png', _FAVICON_PATH], server.requested_paths)
 

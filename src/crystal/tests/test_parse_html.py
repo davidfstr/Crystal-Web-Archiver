@@ -15,7 +15,7 @@ from crystal.tests.util.controls import click_button
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
+from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for_future
 from crystal.tests.util.windows import (
     MainWindow, OpenOrCreateDialog, PreferencesDialog,
 )
@@ -49,9 +49,7 @@ async def test_uses_html_parser_specified_in_preferences() -> None:
             await pd.ok()
             
             revision_future = r.download(wait_for_embedded=True)
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
-            revision = revision_future.result()
+            revision = await wait_for_future(revision_future)
             
             # Ensure expected HTML parser is used
             with _watch_html_parser_usage() as (lxml_parse_func, bs4_parse_func):

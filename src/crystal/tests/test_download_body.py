@@ -8,7 +8,7 @@ from crystal.model import (
 )
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
+from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 import crystal.tests.util.xtempfile as xtempfile
 from crystal.util.bulkheads import capture_crashes_to_stderr
@@ -44,10 +44,7 @@ async def test_download_does_save_resource_metadata_and_content_accurately() -> 
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, f'http://localhost:{server_port}/')
             revision_future = r.download_body()
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
-            
-            downloaded_revision = revision_future.result()  # type: ResourceRevision
+            downloaded_revision = await wait_for_future(revision_future)  # type: ResourceRevision
             loaded_revision = r.default_revision()
             assert loaded_revision is not None
             
@@ -89,10 +86,7 @@ async def test_download_does_autopopulate_date_header_if_not_received_from_origi
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, f'http://localhost:{server_port}/')
             revision_future = r.download_body()
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
-            
-            downloaded_revision = revision_future.result()  # type: ResourceRevision
+            downloaded_revision = await wait_for_future(revision_future)  # type: ResourceRevision
             loaded_revision = r.default_revision()
             assert loaded_revision is not None
             
@@ -155,11 +149,9 @@ async def test_when_no_errors_then_database_row_and_body_file_is_created_and_ret
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
             r = Resource(project, home_url)
             revision_future = r.download_body()
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            revision = await wait_for_future(revision_future)  # type: ResourceRevision
             
             # Ensure no error is reported
-            revision = revision_future.result()  # type: ResourceRevision
             assert None == revision.error
             
             # Ensure database and filesystem is in expected state
@@ -179,11 +171,9 @@ async def test_when_network_io_error_then_tries_to_delete_partial_body_file_but_
             with _downloads_mocked_to_raise_network_io_error() as is_connection_reset:
                 r = Resource(project, home_url)
                 revision_future = r.download_body()
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                revision = await wait_for_future(revision_future)  # type: ResourceRevision
             
             # Ensure an I/O error is reported as an error revision
-            revision = revision_future.result()  # type: ResourceRevision
             assert None != revision.error
             assert is_connection_reset(revision.error)
             
@@ -202,16 +192,14 @@ async def test_when_database_error_then_tries_to_delete_partial_body_file_and_ra
             with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                 r = Resource(project, home_url)
                 revision_future = r.download_body()
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-            
-            # Ensure a database error is reported as a raised exception
-            try:
-                revision = revision_future.result()  # type: ResourceRevision
-            except Exception as e:
-                assert is_database_error(e)
-            else:
-                assert False, 'Expected database error'
+                
+                # Ensure a database error is reported as a raised exception
+                try:
+                    revision = await wait_for_future(revision_future)  # type: ResourceRevision
+                except Exception as e:
+                    assert is_database_error(e)
+                else:
+                    assert False, 'Expected database error'
             
             # Ensure database and filesystem is in expected state
             assert 0 == project._revision_count()
@@ -230,17 +218,15 @@ async def test_when_network_io_error_and_database_error_then_tries_to_delete_par
                 with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                     r = Resource(project, home_url)
                     revision_future = r.download_body()
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-            # Ensure a database error is reported as a raised exception
-            # (rather than reporting the I/O error as an error revision)
-            try:
-                revision = revision_future.result()  # type: ResourceRevision
-            except Exception as e:
-                assert is_database_error(e)
-            else:
-                assert False, 'Expected database error'
+                    
+                    # Ensure a database error is reported as a raised exception
+                    # (rather than reporting the I/O error as an error revision)
+                    try:
+                        revision = await wait_for_future(revision_future)  # type: ResourceRevision
+                    except Exception as e:
+                        assert is_database_error(e)
+                    else:
+                        assert False, 'Expected database error'
             
             # Ensure database and filesystem is in expected state
             assert 0 == project._revision_count()
@@ -287,11 +273,9 @@ async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_t
             with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
                 r = Resource(project, home_url)
                 revision_future = r.download_body()
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                revision = await wait_for_future(revision_future)  # type: ResourceRevision
             
             # Ensure an I/O error is reported as an error revision
-            revision = revision_future.result()  # type: ResourceRevision
             assert None != revision.error
             assert is_io_error(revision.error)
             
@@ -311,16 +295,14 @@ async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_a
                 with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                     r = Resource(project, home_url)
                     revision_future = r.download_body()
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
-            
-            # Ensure a database error is reported as a raised exception
-            try:
-                revision = revision_future.result()  # type: ResourceRevision
-            except Exception as e:
-                assert is_database_error(e)
-            else:
-                assert False, 'Expected database error'
+                    
+                    # Ensure a database error is reported as a raised exception
+                    try:
+                        revision = await wait_for_future(revision_future)  # type: ResourceRevision
+                    except Exception as e:
+                        assert is_database_error(e)
+                    else:
+                        assert False, 'Expected database error'
             
             # Ensure database and filesystem is in expected state
             assert 0 == project._revision_count()
@@ -347,10 +329,8 @@ async def test_given_project_has_revision_with_maximum_id_when_download_revision
             
             with _database_cursor_mocked_to_create_revision_with_id(Project._MAX_REVISION_ID + 1, project):
                 download_result = resource.download_body()
-                while not download_result.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
                 try:
-                    download_result.result()
+                    await wait_for_future(download_result)
                 except ProjectHasTooManyRevisionsError:
                     pass
                 else:

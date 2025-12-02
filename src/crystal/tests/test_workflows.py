@@ -28,7 +28,7 @@ from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
     is_focused_condition, not_condition,
     tree_has_no_children_condition,
-    wait_for, window_condition,
+    wait_for, wait_for_future, window_condition,
 )
 from crystal.tests.util.windows import (
     EntityTree, MainWindow, NewGroupDialog, NewRootUrlDialog,
@@ -1601,13 +1601,11 @@ async def test_can_update_downloaded_site_with_newer_page_revisions() -> None:
                 if True:
                     revision_future = Resource(project, home_url).download(
                         wait_for_embedded=True, needs_result=False)
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
+                    await wait_for_future(revision_future)
                     
                     revision_future = Resource(project, comic1_url).download(
                         wait_for_embedded=True, needs_result=False)
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
+                    await wait_for_future(revision_future)
                 
                 # Verify etag is still v1 for both
                 assert home_v1_etag == (await fetch_archive_url(home_url, port=project_port)).etag

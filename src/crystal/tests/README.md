@@ -496,22 +496,19 @@ switches back to the foreground thread, and resumes the test function.
 ### bg_sleep
 
 The `bg_sleep` function is frequently used to wait for an operation on a
-`Project` to complete:
+`Project` to complete. For example the `wait_for_future` function uses
+`bg_sleep` internally:
 
 ```
             # default: wait_for_embedded=False, needs_result=True
             revision_future = comic_r.download()
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            revision = await wait_for_future(revision_future)
 ```
 
 ```
             revision_future = comic_r.download_body()
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            revision = await wait_for_future(revision_future)
 ```
-
-> TODO: Extract the preceding common pattern to a reusable function.
 
 > TODO: Mention the preceding wait strategy in the
 > "Waiting for downloads to complete" and the 

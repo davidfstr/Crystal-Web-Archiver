@@ -11,7 +11,7 @@ from contextlib import redirect_stderr
 from crystal.model import Project, Resource
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD
+from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 import io
 import os
@@ -29,20 +29,16 @@ async def test_given_default_revision_with_missing_body_when_download_related_re
             # Download revision
             r = Resource(project, home_url)
             revision_future = r.download_body()
-            while not revision_future.done():
-                await bg_sleep(DEFAULT_WAIT_PERIOD)
+            revision = await wait_for_future(revision_future)
             
             # Simulate loss of revision body file
-            revision = revision_future.result()
             os.remove(revision._body_filepath)
             
             # Download related resource
             with redirect_stderr(io.StringIO()) as captured_stderr:
                 revision_future = r.download(wait_for_embedded=True, needs_result=True)
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
+                revision = await wait_for_future(revision_future)
             assert 'is missing its body on disk. Redownloading it.' in captured_stderr.getvalue()
-            revision = revision_future.result()
             assert revision.has_body
             with revision.open():  # ensure no error
                 pass

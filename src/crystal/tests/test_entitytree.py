@@ -11,7 +11,7 @@ from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
-    wait_for,
+    wait_for, wait_for_future,
 )
 from crystal.tests.util.windows import (
     MainWindow, MenuitemDisabledError, MenuitemMissingError, NewRootUrlDialog, OpenOrCreateDialog, PreferencesDialog,
@@ -776,11 +776,9 @@ async def test_given_rr_is_downloaded_and_is_error_when_expand_rrn_then_shows_er
                 home_rr = RootResource(project, 'Home', r)
                 async with wait_for_download_task_to_start_and_finish(project):
                     revision_future = home_rr.download()
-                    while not revision_future.done():
-                        await bg_sleep(DEFAULT_WAIT_PERIOD)
+                    rr = await wait_for_future(revision_future)
                     # (Wait for download to complete, including the trailing wait)
                 
-                rr = revision_future.result()
                 assert DownloadErrorDict(
                     type='gaierror',
                     message='[Errno 8] nodename nor servname provided, or not known',
@@ -809,10 +807,7 @@ async def test_given_rr_is_downloaded_but_revision_body_missing_when_expand_rrn_
                 r = Resource(project, home_url)
                 home_rr = RootResource(project, 'Home', r)
                 revision_future = home_rr.download()
-                while not revision_future.done():
-                    await bg_sleep(DEFAULT_WAIT_PERIOD)
-                
-                rr = revision_future.result()
+                rr = await wait_for_future(revision_future)
                 rr_body_filepath = rr._body_filepath  # capture
             
             # Simulate loss of revision body file, perhaps due to an
