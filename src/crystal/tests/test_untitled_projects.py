@@ -130,7 +130,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
             
             assert True == project.is_dirty
             assert True == project.is_untitled
-            rr = rr_future.result()
+            rr = rr_future.result(timeout=0)
             old_rr_body_filepath = rr._body_filepath  # capture
             assert os.path.exists(old_rr_body_filepath)
             
@@ -181,7 +181,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
             rr_future = r.download()
             await step_scheduler_until_done(project)
             
-            rr = rr_future.result()
+            rr = rr_future.result(timeout=0)
             old_rr_body_filepath = rr._body_filepath  # capture
             assert os.path.exists(old_rr_body_filepath)
             
@@ -250,6 +250,7 @@ async def test_when_untitled_project_saved_then_becomes_clean_and_titled(subtest
                     project.root_task.print_tree()
                 
                 # Save untitled project to somewhere else
+                old_project_dirpath = project.path  # capture
                 new_project_dirpath = os.path.join(
                     new_container_dirpath,
                     os.path.basename(old_project_dirpath))
@@ -621,7 +622,7 @@ async def test_when_save_as_untitled_project_to_same_filesystem_then_moves_proje
         r = Resource(project, atom_feed_url)
         rr_future = r.download()
         await step_scheduler_until_done(project)
-        rr = rr_future.result()
+        rr = rr_future.result(timeout=0)
         old_rr_body_filepath = rr._body_filepath  # capture
         
         # Save to same filesystem
@@ -664,7 +665,7 @@ async def test_when_save_as_titled_project_then_copies_project_and_shows_progres
             r = Resource(project, atom_feed_url)
             rr_future = r.download()
             await step_scheduler_until_done(project)
-            rr = rr_future.result()
+            rr = rr_future.result(timeout=0)
             original_rr_body_filepath = rr._body_filepath  # capture
         
         # Reopen the project and perform Save As
@@ -701,7 +702,7 @@ async def test_when_save_as_large_project_then_progress_updates_incrementally() 
         r = Resource(project, atom_feed_url)
         rr_future = r.download()
         await step_scheduler_until_done(project)
-        rr = rr_future.result()
+        rr = rr_future.result(timeout=0)
         
         new_project_dirpath = os.path.join(save_dir, 'copy.crystalproj')
         
@@ -924,7 +925,7 @@ async def test_when_save_as_readonly_project_then_creates_writable_copy_and_open
             r = Resource(project, atom_feed_url)
             rr_future = r.download()
             await step_scheduler_until_done(project)
-            rr = rr_future.result()
+            rr = rr_future.result(timeout=0)
         
         # Reopen the project as readonly
         with Project(original_project_path, readonly=True) as readonly_project, \
@@ -971,7 +972,7 @@ async def test_when_save_as_project_and_old_project_fails_to_close_then_handles_
         r = Resource(project, atom_feed_url)
         rr_future = r.download()
         await step_scheduler_until_done(project)
-        rr = rr_future.result()
+        rr = rr_future.result(timeout=0)
         
         save_path = os.path.join(save_dir, 'FailedSaveProject.crystalproj')
         old_path = project.path  # capture original path
@@ -1012,7 +1013,7 @@ async def test_when_save_as_project_and_new_project_fails_to_open_then_handles_g
         r = Resource(project, atom_feed_url)
         rr_future = r.download()
         await step_scheduler_until_done(project)
-        rr = rr_future.result()
+        rr = rr_future.result(timeout=0)
         
         save_path = os.path.join(save_dir, 'CorruptedProject.crystalproj')
         old_path = project.path  # capture original path
@@ -1097,7 +1098,7 @@ async def test_when_save_as_titled_project_with_corrupted_database_then_fails_wi
             r = Resource(project, atom_feed_url)
             rr_future = r.download()
             await step_scheduler_until_done(project)
-            rr = rr_future.result()
+            rr = rr_future.result(timeout=0)
         
         # Reopen the project and perform Save As with corruption
         with Project(original_project_path) as project, \
