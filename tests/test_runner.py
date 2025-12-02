@@ -1304,9 +1304,6 @@ class TestParseAndDisplayOutputOfInterruptedParallelTestWorkerProcess:
     
     # NOTE: This is expected to be the MOST COMMON type of partial output that
     #       will need to be parsed.
-    # TODO: Consider altering subtests to print status lines like
-    #       "SUBSKIP", "SUBERROR", etc so that they are easy to distinguish
-    #       from the test-level status lines like "SKIP", "ERROR", etc.
     def test_interrupted_child_process_printed_at_least_four_lines_excluding_final_status_line(self, subtests: pytest.Subtests) -> None:
         # Extra Dimension:
         # * includes_intermediate_status_line: bool -- whether a subtest has printed a status line
@@ -1357,11 +1354,11 @@ class TestParseAndDisplayOutputOfInterruptedParallelTestWorkerProcess:
                         'Traceback (most recent call last):',
                         '  ...',
                         'ValueError: boom',
-                        'ERROR',
+                        'SUBERROR',
                         '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ',
                         f'SUBTEST: {self._EXAMPLE_TEST_NAME} (case=2)',
                         '. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ',
-                        'SKIP',
+                        'SUBSKIP',
                         '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ',
                         f'SUBTEST: {self._EXAMPLE_TEST_NAME} (case=3)',
                         # (Interrupted)
@@ -1369,15 +1366,11 @@ class TestParseAndDisplayOutputOfInterruptedParallelTestWorkerProcess:
                     interrupted=interrupted,
                     expected_test_result=TestResult(
                         name=self._EXAMPLE_TEST_NAME,
-                        # NOTE: If interrupted=False, can misidentify test status as last line that
-                        #       looks like a status line.
-                        status='INTERRUPTED' if interrupted else 'SKIP',
+                        status='INTERRUPTED' if interrupted else 'ERROR',
                         skip_reason=None,
-                        # NOTE: No truncated_error_lines even if interrupted=False
-                        output_lines=(suffix_lines + NO_truncated_error_lines),
+                        output_lines=(suffix_lines + truncated_error_lines),
                     ),
-                    # NOTE: No truncated_error_lines even if interrupted=False
-                    expected_printed_lines=(prefix_lines + suffix_lines + NO_truncated_error_lines),
+                    expected_printed_lines=(prefix_lines + suffix_lines + truncated_error_lines),
                 )
     
     def test_interrupted_child_process_printed_at_least_four_lines_including_final_status_line(self, subtests: pytest.Subtests) -> None:
@@ -1426,18 +1419,18 @@ class TestParseAndDisplayOutputOfInterruptedParallelTestWorkerProcess:
                         'Traceback (most recent call last):',
                         '  ...',
                         'ValueError: boom',
-                        'ERROR',
+                        'SUBERROR',
                         '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ',
                         f'SUBTEST: {self._EXAMPLE_TEST_NAME} (case=2)',
                         '. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ',
-                        'SKIP',
+                        'SUBSKIP',
                         '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ',
                         f'SUBTEST: {self._EXAMPLE_TEST_NAME} (case=3)',
                         '. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ',
                         'Traceback (most recent call last):',
                         '  ...',
                         'AssertionError: 1 + 1 == 3',
-                        'FAILURE',
+                        'SUBFAILURE',
                         '----------------------------------------------------------------------',
                         'ERROR (SubtestFailed)',
                         '',

@@ -73,14 +73,14 @@ class SubtestsContext:
             yield
         except Exception as e:
             if isinstance(e, AssertionError):
-                exc_category = 'FAILURE'
+                exc_category = 'SUBFAILURE'
                 exc_traceback_useful = True
                 self._had_failure_or_error = True
             elif isinstance(e, SkipTest):
-                exc_category = 'SKIP'
+                exc_category = 'SUBSKIP'
                 exc_traceback_useful = False
             else:
-                exc_category = 'ERROR'
+                exc_category = 'SUBERROR'
                 exc_traceback_useful = True
                 self._had_failure_or_error = True
             
