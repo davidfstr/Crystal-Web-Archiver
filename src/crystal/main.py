@@ -1031,7 +1031,7 @@ async def _prompt_for_project(
     """
     from crystal.browser import MainWindow
     from crystal.progress import CancelOpenProject
-    from crystal.ui.BetterMessageDialog import BetterMessageDialog
+    from crystal.ui.dialog import BetterMessageDialog
     from crystal.util.wx_bind import bind
     from crystal.util.wx_window import SetFocus
     from crystal.util.xos import is_mac_os
