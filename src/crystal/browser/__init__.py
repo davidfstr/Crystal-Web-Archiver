@@ -137,7 +137,7 @@ class MainWindow(CloakMixin):
                 frame_sizer = wx.BoxSizer(wx.VERTICAL)
                 frame.SetSizer(frame_sizer)
                 
-                splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE, name='cr-main-window-splitter')
+                splitter = wx.SplitterWindow(frame, style=wx.SP_3D|wx.SP_NO_XP_THEME|wx.SP_LIVE_UPDATE)
                 splitter.SetSashGravity(1.0)
                 splitter.SetMinimumPaneSize(20)
                 
@@ -682,7 +682,7 @@ class MainWindow(CloakMixin):
         Raises:
         * CancelOpenProject
         """
-        pane = wx.Panel(parent)
+        pane = wx.Panel(parent, name='cr-entity-pane')
         pane_sizer = wx.BoxSizer(wx.VERTICAL)
         pane.SetSizer(pane_sizer)
         
@@ -1681,7 +1681,7 @@ class MainWindow(CloakMixin):
     # === Task Pane: Init/Refresh ===
     
     def _create_task_pane(self, parent: wx.Window) -> wx.Window:
-        pane = wx.Panel(parent)
+        pane = wx.Panel(parent, name='cr-task-pane')
         pane_sizer = wx.BoxSizer(wx.VERTICAL)
         pane.SetSizer(pane_sizer)
         
@@ -1795,7 +1795,7 @@ class MainWindow(CloakMixin):
     # === Status Bar: Init/Refresh ===
     
     def _create_status_bar(self, parent: wx.Window) -> wx.Window:
-        pane = wx.Panel(parent)
+        pane = wx.Panel(parent, name='cr-status-bar')
         pane_sizer = wx.BoxSizer(wx.HORIZONTAL)
         pane.SetSizer(pane_sizer)
         
@@ -1831,7 +1831,7 @@ class MainWindow(CloakMixin):
         is_dark_mode = IsDark()  # cache
         
         # Create branding area with icon and text
-        branding_area = wx.Panel(parent)
+        branding_area = wx.Panel(parent, name='cr-branding-area')
         branding_sizer = wx.BoxSizer(wx.HORIZONTAL)
         branding_area.SetSizer(branding_sizer)
         
