@@ -7,6 +7,7 @@ from crystal.browser import MainWindow
 from crystal.model import Project
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.headless import is_headless_mode
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xfunctools import partial2
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
@@ -130,6 +131,33 @@ class Shell:
             eof = 'Ctrl-D (i.e. EOF)'
         exit_instructions = 'Use {}() or {} to exit'.format('exit', eof)
         
+        agent_detected = (
+            os.environ.get('TERM_PROGRAM') == 'vscode' and
+            not tests_are_running()
+        )
+        if agent_detected:
+            from crystal.ui.nav import T
+            from crystal.tests.util.controls import click, TreeItem
+            import wx
+            
+            agent_instructions = (
+                'AI agents:\n'
+                '- Use `T` to view/control the UI. Learn more with `help(T)`.\n'
+                '- Use `click(window)` to click a button.\n'
+            )
+            agent_locals = dict(
+                T=T,
+                click=click,
+                
+                # NOTE: Having these as a built-in makes it easy to immediately use
+                #       CodeExpressions obtained from T that reference them.
+                wx=wx,
+                TreeItem=TreeItem,
+            )
+        else:
+            agent_instructions = ''
+            agent_locals = {}
+        
         python_version = '.'.join([str(x) for x in sys.version_info[:3]])
         try:
             fg_interact(
@@ -137,11 +165,13 @@ class Shell:
                     f'Crystal {crystal_version} (Python {python_version})\n'
                     'Type "help" for more information.\n'
                     'Variables "project" and "window" are available.\n'
+                    f'{agent_instructions}'
                     f'{exit_instructions}.'
                 ),
                 local=dict(
                     project=self._project_proxy,
                     window=self._window_proxy,
+                    **agent_locals,
                 ),
                 exitmsg='now waiting for all windows to close...',
                 banner_printed=banner_printed,

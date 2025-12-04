@@ -4,9 +4,38 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from crystal.util.wx_treeitem_gettooltip import GetTooltipEvent
 from crystal.util.xos import is_windows
-from typing import List, Literal, Optional
+from typing import TYPE_CHECKING, List, Literal, Optional, assert_never
 from unittest.mock import patch
 import wx
+
+
+# ------------------------------------------------------------------------------
+# Utility: Controls: General
+
+# NOTE: This function is exposed to AI agents in the shell
+def click(window: wx.Button | wx.CheckBox | wx.RadioButton) -> None:
+    """
+    Clicks a wx.Window control.
+    
+    Examples:
+    - click(T(Id=wx.ID_YES).W)
+    - click(T['cr-open-or-create-project__checkbox'].W)
+    - click(T[0][0][0][0][2].W)
+    """
+    if isinstance(window, wx.Button):
+        click_button(window)
+    elif isinstance(window, wx.CheckBox):
+        click_checkbox(window)
+    elif isinstance(window, wx.RadioButton):
+        click_radio_button(window)
+    else:
+        if TYPE_CHECKING:
+            assert_never(window)
+        else:
+            raise NotImplementedError(
+                f'Do not know how to click a {type(window).__name__}.'
+            )
+
 
 # ------------------------------------------------------------------------------
 # Utility: Controls: wx.Button
@@ -124,12 +153,26 @@ class TreeItem:
     
     _USE_FAST_ID_COMPARISONS = True
     
+    # === Init ===
+    
     def __init__(self, tree: wx.TreeCtrl, id: wx.TreeItemId) -> None:
         if not id.IsOk():
             raise ValueError('TreeItemId is invalid')
         
         self.tree = tree
         self.id = id
+    
+    # === Root ===
+    
+    # TODO: Consider rename to RootOf, which reads more naturally IMHO
+    @staticmethod
+    def GetRootItem(tree: wx.TreeCtrl) -> TreeItem:
+        root_tii = tree.GetRootItem()
+        assert root_tii.IsOk()
+        return TreeItem(tree, root_tii)
+    
+    def IsRoot(self) -> bool:
+        return self.id == self.tree.GetRootItem()
     
     # === Peer Queries and Actions ===
     
@@ -167,6 +210,9 @@ class TreeItem:
         else:
             return None
     
+    def ItemHasChildren(self) -> bool:
+        return self.tree.ItemHasChildren(self.id)
+    
     def Expand(self) -> None:
         self.tree.Expand(self.id)
     
@@ -178,12 +224,6 @@ class TreeItem:
     
     def ScrollTo(self) -> None:
         self.tree.ScrollTo(self.id)
-    
-    @staticmethod
-    def GetRootItem(tree: wx.TreeCtrl) -> TreeItem:
-        root_tii = tree.GetRootItem()
-        assert root_tii.IsOk()
-        return TreeItem(tree, root_tii)
     
     def GetFirstChild(self) -> TreeItem | None:
         first_child_tii = self.tree.GetFirstChild(self.id)[0]

@@ -28,6 +28,9 @@ Release Notes ⋮
       in addition to the legacy `crystal --test <test_names>...` syntax.
         * Additional options like `--verbose` are available in the
           subcommand style.
+    * A special `T` navigator object is available to AI coding agents that
+      run `crystal --shell`, which allows the agent to quickly take a
+      snapshot of all UI controls and manipulate them.
 
 [interactive interpreter]: https://docs.python.org/3/whatsnew/3.13.html#whatsnew313-better-interactive-interpreter
 
