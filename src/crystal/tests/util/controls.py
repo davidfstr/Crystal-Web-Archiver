@@ -149,6 +149,8 @@ class TreeItem:
         event = GetTooltipEvent(tree_item_id=self.id, tooltip_cell=[Ellipsis], tooltip_type=tooltip_type)
         self.tree.ProcessEvent(event)  # callee should set: event.tooltip_cell[0]
         assert event.tooltip_cell[0] is not Ellipsis
+        if isinstance(event.tooltip_cell[0], Exception):
+            raise event.tooltip_cell[0]
         return event.tooltip_cell[0]
     
     def SelectItem(self) -> None:

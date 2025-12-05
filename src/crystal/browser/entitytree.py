@@ -487,7 +487,10 @@ class EntityTree(Bulkhead):
     
     @capture_crashes_to_self
     def _on_get_tooltip_event(self, event: GetTooltipEvent) -> None:  # type: ignore[reportInvalidTypeForm]
-        event.tooltip_cell[0] = self._tooltip_for_tree_item_id(event.tree_item_id, event.tooltip_type)
+        try:
+            event.tooltip_cell[0] = self._tooltip_for_tree_item_id(event.tree_item_id, event.tooltip_type)
+        except Exception as e:
+            event.tooltip_cell[0] = e
     
     def _tooltip_for_tree_item_id(self, tree_item_id: wx.TreeItemId, tooltip_type: Literal['icon', 'label']) -> str | None:
         node_view = self.peer.GetItemData(tree_item_id)  # type: NodeView
@@ -497,7 +500,10 @@ class EntityTree(Bulkhead):
         elif tooltip_type == 'label':
             return node.label_tooltip
         else:
-            raise ValueError()
+            raise ValueError(
+                f'Invalid tooltip_type: {tooltip_type!r}. '
+                f'Expected one of: {["icon", "label"]}'
+            )
     
     # === Dispose ===
     
