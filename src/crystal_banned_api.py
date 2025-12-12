@@ -3,6 +3,7 @@ Pylint plugin to ban specific API patterns in Crystal.
 """
 
 import astroid
+from functools import lru_cache
 from pylint.checkers import BaseChecker
 
 
@@ -328,8 +329,7 @@ class CrystalBannedApiChecker(BaseChecker):
         try:
             # Get the source file
             module = node.root()
-            with open(module.file, 'r') as f:
-                lines = f.readlines()
+            lines = _read_source_lines(module.file)
             
             # Get the line (0-indexed)
             line = lines[node.lineno - 1]
@@ -415,8 +415,7 @@ class CrystalBannedApiChecker(BaseChecker):
         """Check if an f-string uses double quotes by examining source code."""
         try:
             module = node.root()
-            with open(module.file, 'r') as f:
-                lines = f.readlines()
+            lines = _read_source_lines(module.file)
             
             line = lines[node.lineno - 1]
             
@@ -443,8 +442,7 @@ class CrystalBannedApiChecker(BaseChecker):
         try:
             # Get the source file
             module = node.root()
-            with open(module.file, 'r') as f:
-                lines = f.readlines()
+            lines = _read_source_lines(module.file)
             
             # Get the line (0-indexed)
             line = lines[node.lineno - 1]
@@ -477,6 +475,18 @@ class CrystalBannedApiChecker(BaseChecker):
         except Exception:
             pass
         return False  # Assume single-quoted if we can't check (fail safe)
+
+
+@lru_cache(maxsize=128)
+def _read_source_lines(filepath: str) -> tuple[str, ...]:
+    """
+    Read source file and return lines as a tuple.
+    
+    Cached to avoid re-reading the same file multiple times during analysis.
+    Returns tuple instead of list so result is hashable for caching.
+    """
+    with open(filepath, 'r') as f:
+        return tuple(f.readlines())
 
 
 def register(linter):
