@@ -4,13 +4,12 @@ Unit tests for the custom pylint rules defined in crystal_banned_api.py.
 
 import astroid
 from crystal_banned_api import CrystalBannedApiChecker
-import os
+from itertools import count
 import pylint.testutils
 from pylint.checkers import BaseChecker
-import subprocess
-import tempfile
 from textwrap import dedent
 from typing import Type
+from unittest import mock
 
 
 # === C9001: no-direct-thread ===
@@ -25,7 +24,7 @@ class TestNoDirectThreadInMemory:
             t = Thread(target=lambda: None)
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-thread')
+        _assert_message_emitted(code, 'no-direct-thread')
     
     def test_threading_thread_constructor_is_flagged(self) -> None:
         code = dedent(
@@ -34,7 +33,7 @@ class TestNoDirectThreadInMemory:
             t = threading.Thread(target=lambda: None)
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-thread')
+        _assert_message_emitted(code, 'no-direct-thread')
     
     def test_bg_call_later_is_allowed(self) -> None:
         code = dedent(
@@ -43,7 +42,7 @@ class TestNoDirectThreadInMemory:
             bg_call_later(lambda: None)
             '''
         )
-        _assert_no_message_emitted_inmem(code, 'no-direct-thread')
+        _assert_no_message_emitted(code, 'no-direct-thread')
 
 
 # === C9002: no-direct-showmodal ===
@@ -58,7 +57,7 @@ class TestNoDirectShowModalInMemory:
             result = dialog.ShowModal()
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-showmodal')
+        _assert_message_emitted(code, 'no-direct-showmodal')
     
     def test_other_method_is_allowed(self) -> None:
         code = dedent(
@@ -67,7 +66,7 @@ class TestNoDirectShowModalInMemory:
             result = obj.Show()
             '''
         )
-        _assert_no_message_emitted_inmem(code, 'no-direct-showmodal')
+        _assert_no_message_emitted(code, 'no-direct-showmodal')
 
 
 # === C9003: no-direct-showwindowmodal ===
@@ -82,7 +81,7 @@ class TestNoDirectShowWindowModalInMemory:
             dialog.ShowWindowModal()
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-showwindowmodal')
+        _assert_message_emitted(code, 'no-direct-showwindowmodal')
 
 
 # === C9004: no-direct-isdark ===
@@ -97,7 +96,7 @@ class TestNoDirectIsDarkInMemory:
             is_dark = appearance.IsDark()
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-isdark')
+        _assert_message_emitted(code, 'no-direct-isdark')
 
 
 # === C9005: no-direct-bind ===
@@ -113,7 +112,7 @@ class TestNoDirectBindInMemory:
             window.Bind(wx.EVT_CLOSE, lambda e: None)
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-bind')
+        _assert_message_emitted(code, 'no-direct-bind')
     
     def test_bind_function_is_allowed(self) -> None:
         code = dedent(
@@ -124,7 +123,7 @@ class TestNoDirectBindInMemory:
             bind(window, wx.EVT_CLOSE, lambda e: None)
             '''
         )
-        _assert_no_message_emitted_inmem(code, 'no-direct-bind')
+        _assert_no_message_emitted(code, 'no-direct-bind')
 
 
 # === C9006: no-direct-setfocus ===
@@ -139,7 +138,7 @@ class TestNoDirectSetFocusInMemory:
             window.SetFocus()
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-setfocus')
+        _assert_message_emitted(code, 'no-direct-setfocus')
 
 
 # === C9007: no-asyncio ===
@@ -153,7 +152,7 @@ class TestNoAsyncioInMemory:
             import asyncio
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-asyncio')
+        _assert_message_emitted(code, 'no-asyncio')
     
     def test_from_asyncio_import_is_flagged(self) -> None:
         code = dedent(
@@ -161,7 +160,7 @@ class TestNoAsyncioInMemory:
             from asyncio import run
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-asyncio')
+        _assert_message_emitted(code, 'no-asyncio')
     
     def test_other_import_is_allowed(self) -> None:
         code = dedent(
@@ -169,7 +168,7 @@ class TestNoAsyncioInMemory:
             import sys
             '''
         )
-        _assert_no_message_emitted_inmem(code, 'no-asyncio')
+        _assert_no_message_emitted(code, 'no-asyncio')
 
 
 # === C9008: no-direct-callafter ===
@@ -184,7 +183,7 @@ class TestNoDirectCallAfterInMemory:
             wx.CallAfter(lambda: None)
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-callafter')
+        _assert_message_emitted(code, 'no-direct-callafter')
     
     def test_fg_call_later_is_allowed(self) -> None:
         code = dedent(
@@ -193,7 +192,7 @@ class TestNoDirectCallAfterInMemory:
             fg_call_later(lambda: None)
             '''
         )
-        _assert_no_message_emitted_inmem(code, 'no-direct-callafter')
+        _assert_no_message_emitted(code, 'no-direct-callafter')
 
 
 # === C9009: no-direct-calllater ===
@@ -208,7 +207,7 @@ class TestNoDirectCallLaterInMemory:
             wx.CallLater(100, lambda: None)
             '''
         )
-        _assert_message_emitted_inmem(code, 'no-direct-calllater')
+        _assert_message_emitted(code, 'no-direct-calllater')
     
     def test_timer_is_allowed(self) -> None:
         code = dedent(
@@ -217,7 +216,7 @@ class TestNoDirectCallLaterInMemory:
             Timer(None, 100, lambda: None, one_shot=True)
             '''
         )
-        _assert_no_message_emitted_inmem(code, 'no-direct-calllater')
+        _assert_no_message_emitted(code, 'no-direct-calllater')
 
 
 # === C9010: monotonic-durations ===
@@ -232,7 +231,7 @@ class TestMonotonicDurationsInMemory:
             start = time.time()
             '''
         )
-        _assert_message_emitted_inmem(code, 'monotonic-durations')
+        _assert_message_emitted(code, 'monotonic-durations')
     
     def test_time_call_direct_import_is_flagged(self) -> None:
         code = dedent(
@@ -241,7 +240,7 @@ class TestMonotonicDurationsInMemory:
             start = time()
             '''
         )
-        _assert_message_emitted_inmem(code, 'monotonic-durations')
+        _assert_message_emitted(code, 'monotonic-durations')
     
     def test_time_monotonic_is_allowed(self) -> None:
         code = dedent(
@@ -250,7 +249,7 @@ class TestMonotonicDurationsInMemory:
             start = time.monotonic()
             '''
         )
-        _assert_no_message_emitted_inmem(code, 'monotonic-durations')
+        _assert_no_message_emitted(code, 'monotonic-durations')
 
 
 # === C9011: tuple-missing-parens ===
@@ -607,13 +606,15 @@ class TestNoDoubleQuotedString:
 
 # === Utilities ===
 
-# --- Utilities: In-Memory Testing Helpers ---
+# Counter for generating unique fake filenames
+_fake_filename_counter = count(1)
 
-def _assert_message_emitted_inmem(code: str, message_id: str) -> None:
+
+def _assert_message_emitted(code: str, message_id: str) -> None:
     """
-    Assert that checker emits the given message for the code (in-memory).
+    Assert that checker emits the specified message given the specified code.
     
-    message_id should be the symbolic name (e.g. 'no-direct-thread').
+    message_id should be the symbolic name (e.g. 'tuple-missing-parens').
     """
     messages = _run_checker_on_code(code)
     message_ids = [msg.msg_id for msg in messages]
@@ -622,11 +623,11 @@ def _assert_message_emitted_inmem(code: str, message_id: str) -> None:
     )
 
 
-def _assert_no_message_emitted_inmem(code: str, message_id: str) -> None:
+def _assert_no_message_emitted(code: str, message_id: str) -> None:
     """
-    Assert that checker does not emit the given message (in-memory).
+    Assert that checker does not emit the specified message given the specified code.
     
-    message_id should be the symbolic name (e.g. 'no-direct-thread').
+    message_id should be the symbolic name (e.g. 'tuple-missing-parens').
     """
     messages = _run_checker_on_code(code)
     message_ids = [msg.msg_id for msg in messages]
@@ -635,28 +636,32 @@ def _assert_no_message_emitted_inmem(code: str, message_id: str) -> None:
     )
 
 
-def _run_checker_on_code(code: str, checker_class: Type[BaseChecker] = CrystalBannedApiChecker) -> list[pylint.testutils.MessageTest]:
+def _run_checker_on_code(code: str) -> list[pylint.testutils.MessageTest]:
     """
-    Run a pylint checker on code in-memory and return messages.
-    
-    This is much faster than _run_pylint_on_code() since it:
-    - Doesn't spawn a subprocess
-    - Doesn't write to filesystem
-    - Directly invokes the checker
+    Run a pylint checker on code, in-memory with mocked filesystem access.
     """
-    # Create a test case instance
-    test_case = _InMemoryCheckerTestCase()
-    test_case.CHECKER_CLASS = checker_class
-    test_case.setup_method()
+    # Generate a unique fake filename for this test
+    fake_filename = f'<test_file_{next(_fake_filename_counter)}.py>'
     
-    # Parse the code into an AST
-    module = astroid.parse(code)
-    
-    # Walk the AST with the checker to trigger visit_* methods
-    test_case.walk(module)
-    
-    # Return collected messages
-    return test_case.linter.release_messages()
+    # Mock _read_source_lines to return the code's lines without filesystem access
+    code_lines = tuple(code.splitlines(keepends=True))
+    with mock.patch('crystal_banned_api._read_source_lines', return_value=code_lines):
+
+        # Create a test case instance
+        test_case = _InMemoryCheckerTestCase()
+        test_case.CHECKER_CLASS = CrystalBannedApiChecker
+        test_case.setup_method()
+        
+        # Parse the code into an AST with the fake filename
+        module = astroid.parse(code, module_name=fake_filename)
+        # Set the file attribute so _tuple_has_parens can access it
+        module.file = fake_filename
+        
+        # Walk the AST with the checker
+        test_case.walk(module)
+        
+        # Return collected messages
+        return test_case.linter.release_messages()
 
 
 class _InMemoryCheckerTestCase(pylint.testutils.CheckerTestCase):
@@ -664,65 +669,5 @@ class _InMemoryCheckerTestCase(pylint.testutils.CheckerTestCase):
     Base class for in-memory pylint checker tests.
     
     Uses pylint's in-memory API to avoid subprocess and filesystem overhead.
-    Much faster than _run_pylint_on_code().
     """
     CHECKER_CLASS: Type[BaseChecker] = CrystalBannedApiChecker
-
-
-# --- Utilities: In-Filesystem Testing Helpers ---
-
-def _assert_message_emitted(code: str, message_id: str) -> None:
-    """
-    Assert that pylint emits the given message for the code.
-    
-    message_id should be the symbolic name (e.g. 'tuple-missing-parens').
-    """
-    (exit_code, output) = _run_pylint_on_code(code)
-    # Pylint output format: "C9011: ... (tuple-missing-parens)"
-    # Check for symbolic name in parentheses
-    assert f'({message_id})' in output, (
-        f'Expected message {message_id} not found in output:\n{output}'
-    )
-
-
-def _assert_no_message_emitted(code: str, message_id: str) -> None:
-    """
-    Assert that pylint does not emit the given message for the code.
-    
-    message_id should be the symbolic name (e.g. 'tuple-missing-parens').
-    """
-    (exit_code, output) = _run_pylint_on_code(code)
-    # Pylint output format: "C9011: ... (tuple-missing-parens)"
-    # Check for symbolic name in parentheses
-    assert f'({message_id})' not in output, (
-        f'Unexpected message {message_id} found in output:\n{output}'
-    )
-
-
-def _run_pylint_on_code(code: str) -> tuple[int, str]:
-    """
-    Run pylint with crystal_banned_api rules on the given code.
-    
-    Returns a tuple of (exit_code, output).
-    """
-    with tempfile.NamedTemporaryFile(
-        mode='w', suffix='.py', delete=False
-    ) as f:
-        f.write(code)
-        temp_path = f.name
-    
-    try:
-        result = subprocess.run(
-            [
-                'pylint',
-                '--rcfile=.pylintrc',
-                temp_path,
-            ],
-            capture_output=True,
-            text=True,
-            env={**os.environ, 'PYTHONPATH': 'src'},
-        )
-        return (result.returncode, result.stdout + result.stderr)
-    finally:
-        os.unlink(temp_path)
-
