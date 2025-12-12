@@ -3,6 +3,7 @@ Pylint plugin to ban specific API patterns in Crystal.
 """
 
 import astroid
+from astroid import nodes
 from functools import lru_cache
 from pylint.checkers import BaseChecker
 
@@ -92,7 +93,7 @@ class CrystalBannedApiChecker(BaseChecker):
     
     # === Visit Call ===
     
-    def visit_call(self, node: astroid.Call) -> None:
+    def visit_call(self, node: nodes.Call) -> None:
         """Check for banned API patterns in function calls."""
         
         # Thread(...), threading.Thread(...)
@@ -131,23 +132,23 @@ class CrystalBannedApiChecker(BaseChecker):
         if self._is_time_time_call(node):
             self.add_message('monotonic-durations', node=node)
     
-    def _is_thread_call(self, node: astroid.Call) -> bool:
+    def _is_thread_call(self, node: nodes.Call) -> bool:
         # Thread(...)
-        if isinstance(node.func, astroid.Name) and node.func.name == 'Thread':
+        if isinstance(node.func, nodes.Name) and node.func.name == 'Thread':
             return True
         
         # threading.Thread(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'Thread':
-                if isinstance(node.func.expr, astroid.Name):
+                if isinstance(node.func.expr, nodes.Name):
                     if node.func.expr.name == 'threading':
                         return True
         
         return False
     
-    def _is_dialog_showmodal_call(self, node: astroid.Call) -> bool:
+    def _is_dialog_showmodal_call(self, node: nodes.Call) -> bool:
         # dialog.ShowModal(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'ShowModal':
                 # This is a call to ShowModal() method on some object,
                 # presumably a wx.Dialog. Ban it.
@@ -155,9 +156,9 @@ class CrystalBannedApiChecker(BaseChecker):
         
         return False
     
-    def _is_dialog_showwindowmodal_call(self, node: astroid.Call) -> bool:
+    def _is_dialog_showwindowmodal_call(self, node: nodes.Call) -> bool:
         # dialog.ShowWindowModal(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'ShowWindowModal':
                 # This is a call to ShowWindowModal() method on some object,
                 # presumably a wx.Dialog. Ban it.
@@ -165,9 +166,9 @@ class CrystalBannedApiChecker(BaseChecker):
         
         return False
     
-    def _is_appearance_isdark_call(self, node: astroid.Call) -> bool:
+    def _is_appearance_isdark_call(self, node: nodes.Call) -> bool:
         # wx.SystemSettings.GetAppearance().IsDark(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'IsDark':
                 # This is a call to IsDark() method on some object,
                 # presumably wx.SystemSettings.GetAppearance(). Ban it.
@@ -175,9 +176,9 @@ class CrystalBannedApiChecker(BaseChecker):
         
         return False
     
-    def _is_window_bind_call(self, node: astroid.Call) -> bool:
+    def _is_window_bind_call(self, node: nodes.Call) -> bool:
         # window.Bind(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'Bind':
                 # This is a call to Bind() method on some object,
                 # presumably a wx.Window. Ban it.
@@ -185,9 +186,9 @@ class CrystalBannedApiChecker(BaseChecker):
         
         return False
     
-    def _is_window_setfocus_call(self, node: astroid.Call) -> bool:
+    def _is_window_setfocus_call(self, node: nodes.Call) -> bool:
         # window.SetFocus(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'SetFocus':
                 # This is a call to SetFocus() method on some object,
                 # presumably a wx.Window. Ban it.
@@ -195,43 +196,43 @@ class CrystalBannedApiChecker(BaseChecker):
         
         return False
     
-    def _is_callafter_call(self, node: astroid.Call) -> bool:
+    def _is_callafter_call(self, node: nodes.Call) -> bool:
         # wx.CallAfter(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'CallAfter':
-                if isinstance(node.func.expr, astroid.Name):
+                if isinstance(node.func.expr, nodes.Name):
                     if node.func.expr.name == 'wx':
                         return True
         
         return False
     
-    def _is_calllater_call(self, node: astroid.Call) -> bool:
+    def _is_calllater_call(self, node: nodes.Call) -> bool:
         # wx.CallLater(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'CallLater':
-                if isinstance(node.func.expr, astroid.Name):
+                if isinstance(node.func.expr, nodes.Name):
                     if node.func.expr.name == 'wx':
                         return True
         
         return False
     
-    def _is_time_time_call(self, node: astroid.Call) -> bool:
+    def _is_time_time_call(self, node: nodes.Call) -> bool:
         # time.time(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'time':
-                if isinstance(node.func.expr, astroid.Name):
+                if isinstance(node.func.expr, nodes.Name):
                     if node.func.expr.name == 'time':
                         return True
         
         # time() - assumed to be imported directly from the "time" module
-        if isinstance(node.func, astroid.Name) and node.func.name == 'time':
+        if isinstance(node.func, nodes.Name) and node.func.name == 'time':
             return True
         
         return False
     
     # === Visit Import ===
     
-    def visit_import(self, node: astroid.Import) -> None:
+    def visit_import(self, node: nodes.Import) -> None:
         """Check for banned imports."""
         
         # import asyncio
@@ -239,7 +240,7 @@ class CrystalBannedApiChecker(BaseChecker):
             if module_name == 'asyncio':
                 self.add_message('no-asyncio', node=node)
     
-    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
+    def visit_importfrom(self, node: nodes.ImportFrom) -> None:
         """Check for banned from imports."""
         
         # from asyncio import ...
@@ -248,7 +249,7 @@ class CrystalBannedApiChecker(BaseChecker):
     
     # === Visit Tuple ===
     
-    def visit_tuple(self, node: astroid.Tuple) -> None:
+    def visit_tuple(self, node: nodes.Tuple) -> None:
         """Check for tuples without parentheses."""
         # Skip tuples inside type annotations (e.g., tuple[str, str])
         if self._is_in_annotation_context(node):
@@ -256,7 +257,7 @@ class CrystalBannedApiChecker(BaseChecker):
         if not self._tuple_has_parens(node):
             self.add_message('tuple-missing-parens', node=node)
     
-    def _is_in_annotation_context(self, node: astroid.NodeNG) -> bool:
+    def _is_in_annotation_context(self, node: nodes.NodeNG) -> bool:
         """Check if the node is inside a type annotation context."""
         current = node
         while current is not None:
@@ -265,7 +266,7 @@ class CrystalBannedApiChecker(BaseChecker):
                 break
             
             # Check if we're in an annotated assignment's annotation
-            if isinstance(parent, astroid.AnnAssign):
+            if isinstance(parent, nodes.AnnAssign):
                 if current is parent.annotation:
                     return True
                 # Check if the annotation is TypeAlias - then the value is also a type
@@ -273,12 +274,12 @@ class CrystalBannedApiChecker(BaseChecker):
                     return True
             
             # Check if we're in a function's return annotation
-            if isinstance(parent, astroid.FunctionDef):
+            if isinstance(parent, nodes.FunctionDef):
                 if current is parent.returns:
                     return True
             
             # Check if we're in a function argument's annotation
-            if isinstance(parent, astroid.Arguments):
+            if isinstance(parent, nodes.Arguments):
                 # Check annotations list
                 if parent.annotations and current in parent.annotations:
                     return True
@@ -294,7 +295,7 @@ class CrystalBannedApiChecker(BaseChecker):
                     return True
             
             # Check if we're in the first argument of cast()
-            if isinstance(parent, astroid.Call):
+            if isinstance(parent, nodes.Call):
                 if self._is_cast_call(parent) and parent.args and current is parent.args[0]:
                     return True
             
@@ -302,29 +303,29 @@ class CrystalBannedApiChecker(BaseChecker):
         
         return False
     
-    def _is_typealias_annotation(self, node: astroid.AnnAssign) -> bool:
+    def _is_typealias_annotation(self, node: nodes.AnnAssign) -> bool:
         """Check if the annotation is TypeAlias."""
         ann = node.annotation
-        if isinstance(ann, astroid.Name) and ann.name == 'TypeAlias':
+        if isinstance(ann, nodes.Name) and ann.name == 'TypeAlias':
             return True
-        if isinstance(ann, astroid.Attribute) and ann.attrname == 'TypeAlias':
+        if isinstance(ann, nodes.Attribute) and ann.attrname == 'TypeAlias':
             return True
         return False
     
-    def _is_cast_call(self, node: astroid.Call) -> bool:
+    def _is_cast_call(self, node: nodes.Call) -> bool:
         """Check if this is a call to typing.cast()."""
         # cast(...)
-        if isinstance(node.func, astroid.Name) and node.func.name == 'cast':
+        if isinstance(node.func, nodes.Name) and node.func.name == 'cast':
             return True
         # typing.cast(...)
-        if isinstance(node.func, astroid.Attribute):
+        if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'cast':
-                if isinstance(node.func.expr, astroid.Name):
+                if isinstance(node.func.expr, nodes.Name):
                     if node.func.expr.name == 'typing':
                         return True
         return False
     
-    def _tuple_has_parens(self, node: astroid.Tuple) -> bool:
+    def _tuple_has_parens(self, node: nodes.Tuple) -> bool:
         """Check if a tuple has parentheses by examining source code."""
         try:
             # Get the source file
@@ -343,24 +344,24 @@ class CrystalBannedApiChecker(BaseChecker):
     
     # === Visit List ===
     
-    def visit_list(self, node: astroid.List) -> None:
+    def visit_list(self, node: nodes.List) -> None:
         """Check for banned list patterns."""
         # ['crystal', ...]
         if self._is_crystal_subprocess_list(node):
             self.add_message('no-direct-crystal-subprocess', node=node)
     
-    def _is_crystal_subprocess_list(self, node: astroid.List) -> bool:
+    def _is_crystal_subprocess_list(self, node: nodes.List) -> bool:
         """Check if this is a list starting with 'crystal' string literal."""
         if node.elts:  # Check if list has elements
             first_elem = node.elts[0]
-            if isinstance(first_elem, astroid.Const):
+            if isinstance(first_elem, nodes.Const):
                 if first_elem.value == 'crystal':
                     return True
         return False
     
     # === Visit Const (String Literals) ===
     
-    def visit_const(self, node: astroid.Const) -> None:
+    def visit_const(self, node: nodes.Const) -> None:
         """Check for double-quoted string literals."""
         # Only check string constants
         if not isinstance(node.value, str):
@@ -378,18 +379,18 @@ class CrystalBannedApiChecker(BaseChecker):
         if self._is_double_quoted_string(node):
             self.add_message('no-double-quoted-string', node=node)
     
-    def _is_inside_fstring(self, node: astroid.NodeNG) -> bool:
+    def _is_inside_fstring(self, node: nodes.NodeNG) -> bool:
         """Check if the specified node is nested inside an f-string (JoinedStr)."""
         current = node.parent
         while current is not None:
-            if isinstance(current, astroid.JoinedStr):
+            if isinstance(current, nodes.JoinedStr):
                 return True
             current = current.parent
         return False
     
     # === Visit JoinedStr (f-strings) ===
     
-    def visit_joinedstr(self, node: astroid.JoinedStr) -> None:
+    def visit_joinedstr(self, node: nodes.JoinedStr) -> None:
         """Check for double-quoted f-string literals."""
         # Exception: A single-quoted f-string may contain a double-quoted f-string
         if self._is_inside_fstring(node):
@@ -403,15 +404,15 @@ class CrystalBannedApiChecker(BaseChecker):
         if self._is_double_quoted_fstring(node):
             self.add_message('no-double-quoted-string', node=node)
     
-    def _fstring_contains_single_quote(self, node: astroid.JoinedStr) -> bool:
+    def _fstring_contains_single_quote(self, node: nodes.JoinedStr) -> bool:
         """Check if any string part of the f-string contains a single quote."""
         for value in node.values:
-            if isinstance(value, astroid.Const) and isinstance(value.value, str):
+            if isinstance(value, nodes.Const) and isinstance(value.value, str):
                 if "'" in value.value:
                     return True
         return False
     
-    def _is_double_quoted_fstring(self, node: astroid.JoinedStr) -> bool:
+    def _is_double_quoted_fstring(self, node: nodes.JoinedStr) -> bool:
         """Check if an f-string uses double quotes by examining source code."""
         try:
             module = node.root()
@@ -437,7 +438,7 @@ class CrystalBannedApiChecker(BaseChecker):
             pass
         return False
     
-    def _is_double_quoted_string(self, node: astroid.Const) -> bool:
+    def _is_double_quoted_string(self, node: nodes.Const) -> bool:
         """Check if a string constant uses double quotes by examining source code."""
         try:
             # Get the source file
