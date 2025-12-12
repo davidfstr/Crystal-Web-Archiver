@@ -54,7 +54,10 @@ def hdiutil_disk_image_mounted(srcfolder: str | None = None, readonly: bool = Fa
             _run_with_retries(
                 create_image,
                 exc_type=subprocess.CalledProcessError,
-                exc_matcher=lambda e: b'Resource busy' in e.stderr,
+                exc_matcher=lambda e: (
+                    b'Resource busy' in e.stderr or
+                    b'Device not configured' in e.stderr
+                )
             )
         except subprocess.CalledProcessError as e:
             print(
