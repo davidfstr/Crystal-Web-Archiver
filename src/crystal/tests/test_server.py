@@ -2592,7 +2592,7 @@ async def test_when_serve_page_with_all_floated_content_then_footer_banner_appea
                     main_bottom = main_box['y'] + main_box['height']
                     assert banner_box['y'] >= main_bottom, (
                         f'Banner should be below main content. '
-                        f'Banner Y: {banner_box['y']}, Main bottom: {main_bottom}'
+                        f'Banner Y: {banner_box["y"]}, Main bottom: {main_bottom}'
                     )
                 await pw.run(pw_task)
 
