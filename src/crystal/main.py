@@ -18,15 +18,16 @@ import argparse
 import atexit
 from collections.abc import Callable
 import datetime
-from io import TextIOBase
+import io
 import locale
 import os
 import os.path
+import socket
 import sys
 import threading
 import time
 import traceback
-from typing import Any, TextIO, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
+from typing import Any, BinaryIO, TextIO, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
 from typing_extensions import override
 
 if TYPE_CHECKING:
@@ -84,7 +85,7 @@ def _main1(args: list[str]) -> Never:
 
 def _main2(args: list[str]) -> None:
     # If running as Mac app or as Windows executable, redirect stdout and 
-    # stderr to file, since these don't exist in these environments.
+    # stderr to file (or socket), since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
     interactive = 'TERM' in os.environ
     log_to_file = (
@@ -92,13 +93,44 @@ def _main2(args: list[str]) -> None:
         (getattr(sys, 'frozen', None) == 'windows_exe')
     )
     if log_to_file:
-        from crystal.util.xappdirs import user_log_dir
-        log_dirpath = user_log_dir()
-        assert os.path.exists(log_dirpath)
-        
-        sys.stdout = sys.stderr = open(
-            os.path.join(log_dirpath, 'stdouterr.log'), 
-            'w', encoding='utf-8', buffering=1)
+        # Check if socket-based communication is requested
+        stdinout_port_str = os.environ.get('CRYSTAL_STDINOUT_PORT')
+        if stdinout_port_str is not None:
+            # Connect to socket for stdin/stdout/stderr
+            stdinout_port = int(stdinout_port_str)
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.connect(('127.0.0.1', stdinout_port))
+            
+            # Create separate file objects for reading and writing
+            # since we need different wrappers for stdin vs stdout/stderr
+            socket_file_read = cast(BinaryIO, client_socket.makefile('rb', buffering=0))
+            socket_file_write = cast(BinaryIO, client_socket.makefile('wb', buffering=0))
+            
+            # Redirect stdin to socket (read mode)
+            sys.stdin = io.TextIOWrapper(
+                socket_file_read,
+                encoding='utf-8',
+                line_buffering=True
+            )
+            
+            # Redirect stdout and stderr to socket (write mode)
+            sys.stdout = sys.stderr = io.TextIOWrapper(
+                socket_file_write,
+                encoding='utf-8',
+                line_buffering=True
+            )
+        else:
+            # Fall back to file-based logging
+            stdouterr_filepath = os.environ.get('CRYSTAL_STDOUTERR_FILE')
+            if stdouterr_filepath is None:
+                from crystal.util.xappdirs import user_log_dir
+                log_dirpath = user_log_dir()
+                assert os.path.exists(log_dirpath)
+                stdouterr_filepath = os.path.join(log_dirpath, 'stdouterr.log')
+            
+            sys.stdout = sys.stderr = open(
+                stdouterr_filepath, 
+                'w', encoding='utf-8', buffering=1)
     
     # If CRYSTAL_FAULTHANDLER == True or running from source,
     # enable automatic dumping of Python tracebacks if wx has a segmentation fault
@@ -162,11 +194,10 @@ def _main2(args: list[str]) -> None:
         sys.path.insert(0, os.path.join(os.path.dirname(sys.executable), 'lib'))
     
     # If running as Windows executable, also look for command line arguments
-    # in a text file in the current directory
+    # in CRYSTAL_ARGUMENTS environment variable
     if getattr(sys, 'frozen', None) == 'windows_exe':
-        if os.path.exists('arguments.txt'):
-            with open('arguments.txt', encoding='utf-8') as f:
-                args_line = f.read()
+        args_line = os.environ.get('CRYSTAL_ARGUMENTS')
+        if args_line is not None:
             # TODO: Consider using shlex.split() here to support quoted arguments
             args = args_line.strip().split(' ')  # reinterpret
     

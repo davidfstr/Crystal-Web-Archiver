@@ -815,12 +815,11 @@ jobs:
         env:
           PYTHONUTF8: '1'
         run: |
-          $LOGDIR = "$HOME\AppData\Local\DaFoster\Crystal\Logs"
           $env:CRYSTAL_SCREENSHOTS_DIRPATH = "$env:GITHUB_WORKSPACE\screenshots"
           $env:CRYSTAL_FAULTHANDLER = "True"
           $env:CRYSTAL_EXCLUDE_TESTS_MARKED = "slow"
           poetry run -- python3 ..\.github\workflows\watchdog.py --timeout=120 -- `
-            poetry run python run_exe.py "--argsfile=arguments.txt" "--stdouterrfile=$LOGDIR\stdouterr.log" `
+            poetry run python run_exe.py `
               "dist\Crystal.exe" "---" "test" ${env:TEST_NAMES}
 
       - name: Upload screenshot if test failure
