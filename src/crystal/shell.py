@@ -144,6 +144,7 @@ class Shell:
                 'AI agents:\n'
                 '- Use `T` to view/control the UI. Learn more with `help(T)`.\n'
                 '- Use `click(window)` to click a button.\n'
+                '- Use Python control flow (for/while loops, if statements, etc.) to batch operations.\n'
             )
             agent_locals = dict(
                 T=T,
