@@ -204,7 +204,7 @@ class WindowNavigator(Navigator[wx.Window]):
                         c_index = i
                         # (keep going)
                     elif i == 3:
-                        inner_line = f'More(Count={len(children) - 6})'
+                        inner_line = f'({path}[{3}:{len(children)-3}] := More(Count={len(children) - 6})): [...]'
                         lines.append(f'  {inner_line}')
                         lines[-1] += ','
                         continue
@@ -553,7 +553,7 @@ class TreeItemNavigator(Navigator[TreeItem]):
                         c_index = i
                         # (keep going)
                     elif i == 3:
-                        inner_line = f'More(Count={len(children) - 6})'
+                        inner_line = f'({path}[{3}:{len(children)-3}] := More(Count={len(children) - 6})): [...]'
                         lines.append(f'  {inner_line}')
                         lines[-1] += ','
                         continue
