@@ -158,6 +158,12 @@ class Shell:
             agent_instructions = ''
             agent_locals = {}
         
+        # Disable use of pager by help(...) if AI agent detected
+        if ai_agent_detected():
+            # NOTE: Setting MANPAGER rather than PAGER because the former has
+            #       higher priority, according to pydoc documentation
+            os.environ['MANPAGER'] = 'cat'
+        
         python_version = '.'.join([str(x) for x in sys.version_info[:3]])
         try:
             fg_interact(
