@@ -817,6 +817,10 @@ T.__doc__ = (
         >>> click(T(Label='Open as &read only').W)
         >>> click(T['cr-preferences-dialog__no-proxy-radio'].W)
     
+    Wait for UI changes:
+        >>> await wait_for(lambda: len(T['cr-task-tree'].Tree.Children) == 0)
+        >>> await wait_for(lambda: T['cr-download-button'].W.IsEnabled())
+    
     Type in an input field:
         >>> T['cr-new-root-url-dialog__url-field'].W.Value = 'https://xkcd.com/'
         >>> T['cr-new-root-url-dialog__url-field'].W.Value
