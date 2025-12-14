@@ -601,6 +601,8 @@ class TreeItemNavigator(Navigator[TreeItem]):
             details.append(('Visible', repr(False)))
         if item.IsSelected():
             details.append(('IsSelected', repr(True)))
+        if (icon_tooltip := item.Tooltip('icon')) is not None:
+            details.append(('IconTooltip', repr(icon_tooltip)))
         if (c := item.TextColour).IsOk():
             hex_color_str = f'#{c.Red():02x}{c.Green():02x}{c.Blue():02x}'
             details.append(('TextColour', repr(hex_color_str)))
