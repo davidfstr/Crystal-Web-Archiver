@@ -77,7 +77,7 @@ async def wait_while(
             return None  # no progress
     
     while True:
-        is_done = (await wait_for(
+        is_done = (await wait_for_and_return(
             do_check_status,
             timeout=progress_timeout,
             period=period,
@@ -95,6 +95,34 @@ DEFAULT_WAIT_PERIOD = 0.1  # arbitrary
 
 
 async def wait_for(
+        condition: Callable[[], _T],
+        timeout: float | None=None,
+        *, period: float | None=None,
+        message: Callable[[], str] | None=None,
+        stacklevel_extra: int=0,
+        screenshot_on_error: bool=True,
+        ) -> None:
+    """
+    Waits up to `timeout` seconds for the specified condition to become falsy,
+    checking every `period` seconds.
+    
+    The condition is always checked on the foreground thread.
+    The foreground thread is released while waiting between checks.
+    
+    Raises:
+    * WaitTimedOut -- if the timeout expires before the condition becomes falsy
+    """
+    await wait_for_and_return(
+        condition=(lambda: condition() or None),
+        timeout=timeout,
+        period=period,
+        message=message,
+        stacklevel_extra=(stacklevel_extra + 1),
+        screenshot_on_error=screenshot_on_error,
+    )
+
+
+async def wait_for_and_return(
         condition: Callable[[], _T | None],
         timeout: float | None=None,
         *, period: float | None=None,
@@ -192,7 +220,7 @@ def wait_for_sync(condition: Callable[[], _T | None], *args, **kwargs) -> _T:
     """
     from crystal.tests.util.runner import SleepCommand
     # TODO: Set stacklevel_extra kwarg to an appropriate value
-    coro = wait_for(condition, *args, **kwargs)
+    coro = wait_for_and_return(condition, *args, **kwargs)
     while True:
         try:
             command = coro.send(None)

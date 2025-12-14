@@ -16,10 +16,9 @@ from crystal.model import ResourceRevision as RR
 from crystal.model import ResourceRevisionMetadata
 from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
 from crystal.tests.test_server import serve_and_fetch_xkcd_home_page
-from crystal.tests.util.controls import click_button
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project
-from crystal.tests.util.wait import wait_for, wait_while, window_condition
+from crystal.tests.util.wait import wait_while
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
