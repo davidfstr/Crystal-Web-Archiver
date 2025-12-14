@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 # TODO: Promote the TreeItem abstraction to the crystal.ui package,
 #       outside of the crystal.tests.** namespace
 from crystal.tests.util.controls import TreeItem
-from typing import Type, assert_never, Generic, Iterable, assert_type, overload, TYPE_CHECKING, TypeVar
+from typing import Self, assert_never, Generic, Iterable, overload, TypeVar
 import wx
 
 
@@ -37,6 +37,13 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
         Describes a CodeExpression to obtain this navigator's peer
         and describes all of the peer's visible descendents, including a
         CodeExpression to navigate to each descendent.
+        """
+        raise NotImplementedError()
+    
+    def snapshot(self) -> Snapshot[_P]:
+        """
+        Creates a snapshot of this navigator's state, recursively capturing
+        all visible children.
         """
         raise NotImplementedError()
     
@@ -154,16 +161,95 @@ class WindowNavigator(Navigator[wx.Window]):
         and describes all of the window's visible descendents, including a
         CodeExpression to navigate to each descendent.
         """
-        self_desc = (
-            f'# {self._path}.{self._PEER_ACCESSOR} := {self._describe(self._peer)}\n'
-            if self._peer is not None
+        return repr(self.snapshot())
+    
+    def snapshot(self) -> Snapshot[wx.Window]:
+        """
+        Creates a snapshot of this navigator's state, recursively capturing
+        all visible children.
+        
+        Special handling:
+        - Includes TreeItem root as a special child if the window is a TreeCtrl
+        - Elides non-modal windows when modal dialogs are present
+        """
+        return self._snapshot_for(self._peer, self._path, self._query)
+    
+    @classmethod
+    def _snapshot_for(cls,
+            peer: wx.Window | None,
+            path: str,
+            query: str | None,
+            ) -> Snapshot[wx.Window]:
+        # Get peer description (may be '' for top-level navigator)
+        peer_description = cls._describe(peer) if peer is not None else ''
+        
+        # Get children
+        children = cls._children_of(peer)
+        
+        # Check for TreeCtrl with root item
+        tree_item_root = (
+            TreeItem.GetRootItem(peer)
+            if isinstance(peer, wx.TreeCtrl)
             else None
         )
-        children_desc = '\n'.join(self._describe_children(self._peer, self._path))
-        return (
-            self_desc + children_desc
-            if self_desc is not None
-            else children_desc
+        
+        # Identify modal top-level windows if we're at the top level
+        modal_tlws = [
+            tlw for tlw in wx.GetTopLevelWindows()
+            if isinstance(tlw, wx.Dialog) and tlw.IsModal()
+        ] if peer is None else []
+        
+        # Build child snapshots
+        all_children_list = cls._all_children_of(peer)
+        child_snapshots: list[Snapshot[wx.Window]] = []
+        
+        # Add TreeItem root as first "child" if present
+        if tree_item_root is not None:
+            tree_snapshot = TreeItemNavigator._snapshot_for(
+                peer=tree_item_root,
+                path=f'{path}.Tree',
+                query=(
+                    f'TreeItem.GetRootItem({query})'
+                    if query
+                    else f'TreeItem.GetRootItem(wx.GetTopLevelWindows()[...])'
+                ),
+            )
+            child_snapshots.append(tree_snapshot)  # type: ignore[arg-type]
+        
+        # Add regular window children
+        for (i, c) in enumerate(children):
+            c_query = (
+                f'{query}.Children[{all_children_list.index(c)}]'
+                if query is not None
+                else f'wx.GetTopLevelWindows()[{all_children_list.index(c)}]'
+            )
+            
+            c_snapshot: Snapshot[wx.Window]
+            if modal_tlws and c not in modal_tlws:
+                # Create a shallow snapshot for non-interactable windows
+                c_snapshot = Snapshot(
+                    peer_description=cls._describe(c),
+                    children=[],  # Empty - elided
+                    children_elided=True,
+                    path=f'{path}[{i}]',
+                    query=c_query,
+                    peer_accessor=cls._PEER_ACCESSOR,
+                )
+            else:
+                # Recursively create full snapshot
+                c_snapshot = cls._snapshot_for(
+                    peer=c,
+                    path=f'{path}[{i}]',
+                    query=c_query,
+                )
+            child_snapshots.append(c_snapshot)
+        
+        return Snapshot(
+            peer_description=peer_description,
+            children=child_snapshots,
+            path=path,
+            query=query or 'T',
+            peer_accessor=cls._PEER_ACCESSOR,
         )
     
     @classmethod
@@ -536,12 +622,41 @@ class TreeItemNavigator(Navigator[TreeItem]):
         and describes all of the item's visible descendents, including a
         CodeExpression to navigate to each descendent.
         """
-        self_desc = (
-            f'# {self._path}.{self._PEER_ACCESSOR} := {self._describe(self._peer)}\n'
-        )
-        children_desc = '\n'.join(self._describe_children(self._peer, self._path))
-        return (
-            self_desc + children_desc
+        return repr(self.snapshot())
+    
+    def snapshot(self) -> Snapshot[TreeItem]:
+        """
+        Creates a snapshot of this navigator's state, recursively capturing
+        all visible children.
+        """
+        return self._snapshot_for(self._peer, self._path, self._query)
+    
+    @classmethod
+    def _snapshot_for(cls,
+            peer: TreeItem,
+            path: str,
+            query: str,
+            ) -> Snapshot[TreeItem]:
+        peer_description = cls._describe(peer)
+        children = cls._children_of(peer)
+        
+        # Recursively create snapshots for all children
+        all_children_list = cls._all_children_of(peer)
+        child_snapshots = [
+            cls._snapshot_for(
+                peer=c,
+                path=f'{path}[{i}]',
+                query=f'{query}.Children[{all_children_list.index(c)}]',
+            )
+            for (i, c) in enumerate(children)
+        ]
+        
+        return Snapshot(
+            peer_description=peer_description,
+            children=child_snapshots,
+            path=path,
+            query=query,
+            peer_accessor=cls._PEER_ACCESSOR,
         )
     
     @classmethod
@@ -718,6 +833,185 @@ class TreeItemNavigator(Navigator[TreeItem]):
         Shorthand property equivalent to .Query, for quick scripts.
         """
         return self.Query
+
+
+# ------------------------------------------------------------------------------
+# Snapshot
+
+class Snapshot(Generic[_P]):
+    """
+    A snapshot of a Navigator's state at a point in time.
+    Used for detecting changes in the UI.
+    
+    Captures the full tree structure including all children,
+    even those that would be hidden by More(...) in the repr output.
+    
+    Examples
+    ========
+    
+    Create snapshots and detect changes:
+        >>> # Take initial snapshot
+        >>> snap1 = T['cr-entity-tree'].Tree.snapshot()
+        >>> 
+        >>> # Perform some UI actions...
+        >>> # ...
+        >>> 
+        >>> # Take new snapshot
+        >>> snap2 = T['cr-entity-tree'].Tree.snapshot()
+        >>> 
+        >>> # Detect what changed
+        >>> diff = Snapshot.diff(snap1, snap2)
+        >>> if diff is not None:
+        ...     print(f'Change detected at: {diff._path}')
+        ...     print(repr(diff))
+    """
+    
+    def __init__(self,
+            peer_description: str,
+            children: list['Snapshot[_P]'],
+            path: str,
+            query: str,
+            peer_accessor: str,
+            *, children_elided: bool = False,
+            ) -> None:
+        """
+        Creates a snapshot.
+        
+        Arguments:
+        * peer_description -- The description of the peer from _describe()
+        * children -- Snapshots of all visible children
+        * path -- The navigation path to this peer
+        * query -- The code expression to obtain this peer
+        * peer_accessor -- The name of the shorthand property (e.g., 'I', 'W')
+        """
+        self._peer_description = peer_description
+        self._children = children
+        self._children_elided = children_elided
+        self._path = path
+        self._query = query
+        self._peer_accessor = peer_accessor
+    
+    # === Format ===
+    
+    def __repr__(self) -> str:
+        """
+        Returns a formatted representation of this snapshot and its children,
+        using the same format as Navigator.__repr__().
+        """
+        # Top-level navigator (e.g., T) doesn't show self description
+        self_desc = (
+            f'# {self._path}.{self._peer_accessor} := {self._peer_description}\n'
+            if self._peer_description != ''
+            else None
+        )
+        children_desc = '\n'.join(self._describe_children())
+        return (
+            self_desc + children_desc
+            if self_desc is not None
+            else children_desc
+        )
+    
+    def _describe_children(self) -> list[str]:
+        """
+        Formats the children of this snapshot,
+        applying More(...) truncation logic when there are more than 7 children.
+        """
+        children = self._children
+        path = self._path
+        peer_accessor = self._peer_accessor
+        children_elided = self._children_elided
+        
+        if len(children) == 0:
+            if children_elided:
+                return ['{...}']
+            else:
+                return ['{}']
+        else:
+            lines = []
+            lines.append('{')
+            for i in range(min(len(children), 7)):
+                if len(children) > 7:
+                    # Insert a More(...) item in the center of the children list
+                    # such that no more than 7 children are displayed by default
+                    if i < 3:
+                        c_index = i
+                        # (keep going)
+                    elif i == 3:
+                        inner_line = f'({path}[{3}:{len(children)-3}] := More(Count={len(children) - 6})): [...]'
+                        lines.append(f'  {inner_line}')
+                        lines[-1] += ','
+                        continue
+                    elif i > 3:
+                        c_index = len(children) - 3 + (i - 4)
+                        # (keep going)
+                else:
+                    # Display the full children list
+                    c_index = i
+                c = children[c_index]
+                
+                inner_lines = c._describe_children()
+                inner_lines[0] = f'({c._path}.{c._peer_accessor} := {c._peer_description}): ' + inner_lines[0]
+                for x in inner_lines:
+                    lines.append(f'  {x}')
+                lines[-1] += ','
+            lines.append('}')
+            return lines
+    
+    # === Diff ===
+    
+    @staticmethod
+    def diff(
+            old: 'Snapshot[_P]',
+            new: 'Snapshot[_P]',
+            ) -> 'Snapshot[_P] | None':
+        """
+        Compares two snapshots and returns a snapshot pointing to the common
+        parent of all changed subtrees, if any.
+        
+        Returns:
+        * The entire new snapshot (`new`) if the peer description differs
+        * The entire new snapshot (`new`) if the children count differs
+        * The entire new snapshot (`new`) if multiple children have changes
+        * The diff of the single changed child if exactly one child differs
+        * None if there are no changes (empty diff)
+        """
+        # If description of each snapshot's peer differs, return the entire new snapshot
+        if old._peer_description != new._peer_description:
+            return new
+        
+        # If children count differs, return the entire new snapshot
+        if len(old._children) != len(new._children):
+            return new
+        
+        # Compare children recursively
+        child_diffs: list[Snapshot[_P] | None] = []
+        for (c1, c2) in zip(old._children, new._children):
+            child_diff = Snapshot.diff(c1, c2)
+            child_diffs.append(child_diff)
+        
+        # Count non-empty diffs
+        non_empty_diffs = [d for d in child_diffs if d is not None]
+        
+        if len(non_empty_diffs) == 0:
+            # If zero children have a non-empty diff, return None (empty diff)
+            return None
+        elif len(non_empty_diffs) == 1:
+            # If exactly 1 child has a non-empty diff, return that diff
+            return non_empty_diffs[0]
+        else:
+            # If multiple children have a non-empty diff, return the entire new snapshot
+            return new
+    
+    def __sub__(new: Self, old: 'Snapshot[_P]') -> 'Snapshot[_P] | None':
+        """
+        Shorthand operator equivalent to .diff, for quick scripts.
+        
+        Example:
+            >>> snap_diff = new - old  # Snapshot.diff(old, new)
+        """
+        if not isinstance(old, Snapshot):
+            return NotImplemented
+        return Snapshot.diff(old, new)
 
 
 # ------------------------------------------------------------------------------
