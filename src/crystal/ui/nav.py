@@ -800,15 +800,15 @@ T.__doc__ = (
         }
     
     Zoom in on part of the UI:
-        >>> T[0][0][1]  # lookup by index
-        # T[0][0][1].W := wx.Panel(Name='cr-status-bar')
+        >>> T['cr-task-tree']  # lookup by Name (focused view!)
+        # T['cr-task-tree'].W := crystal.ui.tree._OrderedTreeCtrl(Name='cr-task-tree')
         {
-          (T[0][0][1][0].W := wx.Panel(Name='cr-branding-area')): { ... },
-          (T[0][0][1][1].W := wx.Button(Name='cr-preferences-button', Label='⚙️ Settings...')): {},
-          (T[0][0][1][2].W := wx.StaticText(Name='cr-read-write-icon', Label='✏️')): {},
+          (T['cr-task-tree'].Tree := TreeItem(IsRoot=True, Visible=False, IsSelected=True)): {
+            (T['cr-task-tree'].Tree[0].I := TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/6/ -- Waiting before performing next request...')): {},
+          },
         }
         
-        >>> T['cr-preferences-button']  # lookup by Name
+        >>> T[0][0][1]  # lookup by index
         >>> T(Id=wx.ID_YES)  # lookup by Id
         >>> T(Label='✏️')  # lookup by Label
     
