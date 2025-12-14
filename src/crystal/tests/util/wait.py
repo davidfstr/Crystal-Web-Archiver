@@ -214,18 +214,18 @@ async def wait_for_and_return(
                     stacklevel=(2 + stacklevel_extra))
 
 
-def wait_for_sync(condition: Callable[[], _T | None], *args, **kwargs) -> _T:
+def wait_for_sync(condition: Callable[[], _T], *args, **kwargs) -> None:
     """
     Similar to wait_for() but does not release the current thread between waits.
     """
     from crystal.tests.util.runner import SleepCommand
     # TODO: Set stacklevel_extra kwarg to an appropriate value
-    coro = wait_for_and_return(condition, *args, **kwargs)
+    coro = wait_for(condition, *args, **kwargs)
     while True:
         try:
             command = coro.send(None)
         except StopIteration as e:
-            return e.value
+            return
         assert isinstance(command, SleepCommand)
         time.sleep(command.delay)
 
