@@ -948,7 +948,7 @@ async def test_when_RGN_update_children_crashes_during_ET_resource_did_instantia
             with patch('crystal.browser.entitytree.NormalResourceNode', side_effect=_CRASH), \
                     patch.object(ResourceGroupNode, 'update_children', update_children):
                 Resource(project, rss_feed_url)
-                await wait_for(lambda: update_children.called or None)  # type: ignore[attr-defined]
+                await wait_for(lambda: update_children.called)  # type: ignore[attr-defined]
             
             # Postconditions
             (error_ti,) = feed_ti.Children
@@ -1596,7 +1596,7 @@ async def test_when_RT_crashed_then_can_close_project() -> None:
                 home_r.download()
                 
                 # Wait for the crash to happen
-                await wait_for(lambda: (append_child.call_count >= 1) or None)  # type: ignore[attr-defined]
+                await wait_for(lambda: (append_child.call_count >= 1))  # type: ignore[attr-defined]
             
             # Postconditions
             assert root_task.crash_reason is not None

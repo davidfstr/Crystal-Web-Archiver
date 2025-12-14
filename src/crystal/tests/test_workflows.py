@@ -25,10 +25,9 @@ from crystal.tests.util.server import (
 )
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
-    DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
-    is_focused_condition, not_condition,
-    tree_has_no_children_condition,
-    wait_for, wait_for_future, window_condition,
+    DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition, is_focused_condition,
+    not_condition, tree_has_no_children_condition, wait_for, wait_for_future,
+    window_condition,
 )
 from crystal.tests.util.windows import (
     EntityTree, MainWindow, NewGroupDialog, NewRootUrlDialog,

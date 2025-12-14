@@ -8,8 +8,7 @@ from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
-    first_child_of_tree_item_is_not_loading_condition,
-    tree_has_no_children_condition, wait_for,
+    first_child_of_tree_item_is_not_loading_condition, tree_has_no_children_condition, wait_for,
 )
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
 from unittest import skip
@@ -44,8 +43,8 @@ async def test_given_project_database_not_on_ssd_when_expanding_first_resource_g
                     assert child is not None and child.Text == 'Loading...'
                     
                     # Ensure hides loading node after pressing Cancel
-                    await wait_for(lambda: (progress_listener_method.call_count >= 1) or None)
-                    await wait_for(lambda: True if not comic_group_ti.IsExpanded() else None)
+                    await wait_for(lambda: (progress_listener_method.call_count >= 1))
+                    await wait_for(lambda: not comic_group_ti.IsExpanded())
 
 
 @skip('covered by: test_given_project_database_not_on_ssd_when_expanding_first_resource_group_node_in_entity_tree_then_loading_urls_progress_dialog_becomes_visible_and_shows_loading_node')
@@ -83,7 +82,7 @@ async def test_given_project_database_not_on_ssd_given_resource_group_node_selec
                     click_button(mw.download_button)
                     
                     # Wait for progress dialog to show and for cancel to be pressed
-                    await wait_for(lambda: (progress_listener_method.call_count >= 1) or None)
+                    await wait_for(lambda: (progress_listener_method.call_count >= 1))
                     
                     # Ensure did not create a download task
                     assert tree_has_no_children_condition(mw.task_tree)() is not None
@@ -106,7 +105,7 @@ async def test_given_project_database_not_on_ssd_when_press_new_group_button_the
                     click_button(mw.new_group_button)
                     
                     # Wait for progress dialog to show and for cancel to be pressed
-                    await wait_for(lambda: (progress_listener_method.call_count >= 1) or None)
+                    await wait_for(lambda: (progress_listener_method.call_count >= 1))
                     
                     # Ensure did not show NewGroupDialog
                     assert NewGroupDialog.window_condition()() is None

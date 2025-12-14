@@ -370,7 +370,7 @@ async def test_while_project_open_then_periodically_saves_resume_data_so_that_ca
                 # Wait for autohibernate to save resume data
                 _clear_project_resume_data(project)
                 assert not _project_has_resume_data(project)
-                await wait_for(lambda: _project_has_resume_data(project) or None, timeout=2)
+                await wait_for(lambda: _project_has_resume_data(project), timeout=2)
                 
                 _close_project_abruptly(project)
             
@@ -675,7 +675,7 @@ async def _open_project_with_resume_data(
             mocked_show_modal('cr-resume-downloads', wx.ID_OK if resume else wx.ID_CANCEL)
             ) as show_modal_method:
         async def wait_for_project_to_unhibernate() -> None:
-            await wait_for(lambda: (1 == show_modal_method.call_count) or None)
+            await wait_for(lambda: (1 == show_modal_method.call_count))
         
         async with (await OpenOrCreateDialog.wait_for()).open(
                 project_dirpath, wait_func=wait_for_project_to_unhibernate) as (mw, project):

@@ -8,18 +8,13 @@ from crystal.model import Project, ResourceRevision
 import crystal.task
 from crystal.task import RootTask, _is_scheduler_thread, scheduler_affinity, Task
 from crystal.tests.util.controls import TreeItem
-from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.wait import (
-    DEFAULT_WAIT_PERIOD, tree_has_children_condition,
-    tree_has_no_children_condition, wait_for, wait_while, WaitTimedOut,
+    DEFAULT_WAIT_PERIOD, wait_while,
 )
 from crystal.tests.util.xthreading import bg_call_and_wait
 from crystal.util.xthreading import fg_affinity
 from io import BytesIO
-import re
 import threading
-from typing import List
-from typing_extensions import deprecated
 from unittest.mock import patch
 import wx
 

@@ -10,8 +10,8 @@ from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import MockHttpServer, MockFtpServer, served_project
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish
 from crystal.tests.util.wait import (
-    DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition,
-    wait_for, wait_for_future,
+    DEFAULT_WAIT_PERIOD, first_child_of_tree_item_is_not_loading_condition, wait_for,
+    wait_for_future,
 )
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
 import crystal.tests.util.xtempfile as xtempfile

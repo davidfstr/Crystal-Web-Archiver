@@ -235,7 +235,7 @@ async def _wait_for_main_window_to_reopen(project1: Project) -> AsyncIterator[Pr
         new_project = Project._last_opened_project
         return new_project is not None and new_project is not project1
     await wait_for(
-        lambda: new_mw_is_visible() or None,
+        new_mw_is_visible,
         timeout=OpenOrCreateDialog._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
     mw2 = await MainWindow.wait_for(timeout=OpenOrCreateDialog._TIMEOUT_FOR_OPEN_MAIN_WINDOW)
     try:
