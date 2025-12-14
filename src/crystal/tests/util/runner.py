@@ -53,7 +53,9 @@ def run_test(test_func: Callable[[], Awaitable[_T]] | Callable[[], _T]) -> _T:
 
 
 @coroutine
-@fg_affinity
+# NOTE: wait_for_sync() relies on the possibility that a caller may be on
+#       a background thread.
+#@fg_affinity
 def bg_sleep(
         duration: float
         ) -> Generator[Command, object, None]:
