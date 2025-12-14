@@ -138,6 +138,7 @@ class Shell:
         if ai_agent_detected():
             from crystal.ui.nav import T
             from crystal.tests.util.controls import click, TreeItem
+            from crystal.tests.util.wait import wait_for
             import wx
             
             agent_instructions = (
@@ -154,6 +155,7 @@ class Shell:
                 #       CodeExpressions obtained from T that reference them.
                 wx=wx,
                 TreeItem=TreeItem,
+                wait_for=wait_for,
             )
         else:
             agent_instructions = ''
