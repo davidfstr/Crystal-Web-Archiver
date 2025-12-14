@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 from types import coroutine, FrameType
-from typing import Generic, TYPE_CHECKING, TypeVar, Union
+from typing import Any, Generic, TYPE_CHECKING, TypeVar, Union
 import urllib.error
 import urllib.request
 
@@ -33,6 +33,10 @@ def run_test(test_func: Callable[[], Awaitable[_T]] | Callable[[], _T]) -> _T:
     test_co = test_func()  # if async func then should be a Generator[Command, None, _T]
     if not asyncio.iscoroutine(test_co):
         return test_co  # type: ignore[return-value]
+    return run_test_coro(test_co)  # type: ignore[arg-type]
+
+
+def run_test_coro(test_co: Generator[Command, Any, _T]) -> _T:
     last_command_result = None  # type: Union[object, Exception]
     while True:
         try:
