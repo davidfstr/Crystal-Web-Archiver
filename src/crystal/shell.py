@@ -7,9 +7,9 @@ from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
 from crystal.tests.util.runner import run_test_coro
+from crystal.util.ai_agents import ai_agent_detected
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.headless import is_headless_mode
-from crystal.util.test_mode import tests_are_running
 from crystal.util.xfunctools import partial2
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
@@ -135,11 +135,7 @@ class Shell:
             eof = 'Ctrl-D (i.e. EOF)'
         exit_instructions = 'Use {}() or {} to exit'.format('exit', eof)
         
-        agent_detected = (
-            os.environ.get('TERM_PROGRAM') == 'vscode' and
-            not tests_are_running()
-        )
-        if agent_detected:
+        if ai_agent_detected():
             from crystal.ui.nav import T
             from crystal.tests.util.controls import click, TreeItem
             import wx
