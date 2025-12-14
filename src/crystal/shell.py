@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import ast
 import code
 from concurrent.futures import Future
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
+from crystal.tests.util.runner import run_test_coro
 from crystal.util.ai_agents import ai_agent_detected
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.headless import is_headless_mode
@@ -14,10 +16,12 @@ from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_call_and_wait, has_foreground_thread,
     NoForegroundThreadError,
 )
+import inspect
 import os
 import signal
 import sys
 import threading
+import types
 from typing import Literal, Optional
 from typing_extensions import override
 
@@ -287,6 +291,8 @@ def fg_interact(
                 console.write('%s\n' % exitmsg)
 
 
+# TODO: Rename as _AsyncFgInteractiveConsole
+# TODO: Update docstring to mention that this console supports async
 class _FgInteractiveConsole(code.InteractiveConsole):
     """
     Similar to code.InteractiveConsole, but evaluates code on the foreground thread.
@@ -302,6 +308,9 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         self._first_write = True
         self._first_input = True
         self.banner_printed = banner_printed or Future()  # type: Future[Literal[True]]
+        
+        # Allow top-level await in code lines
+        self.compile.compiler.flags |= ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
     
     @override
     def write(self, data: str) -> None:
@@ -326,9 +335,9 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         return super().raw_input(*args, **kwargs)
     
     @override
-    def runcode(self, code) -> None:
-        def fg_runcode():
-            super(_FgInteractiveConsole, self).runcode(code)
+    def runcode(self, code: types.CodeType) -> None:
+        def fg_runcode() -> None:
+            self._runcode_async(code)
         
         if _main_loop_has_exited():
             fg_runcode()
@@ -341,6 +350,26 @@ class _FgInteractiveConsole(code.InteractiveConsole):
                     profile=False)
             except NoForegroundThreadError:
                 fg_runcode()
+    
+    # NOTE: Uses a similar implementation pattern as
+    #       AsyncIOInteractiveConsole.runcode() from asyncio/__main__.py
+    def _runcode_async(self, code: types.CodeType):
+        func = types.FunctionType(code, self.locals)  # type: ignore[arg-type]
+        try:
+            coro = func()
+        except SystemExit:
+            raise
+        except BaseException:
+            self.showtraceback()
+            return None
+        
+        if not inspect.iscoroutine(coro):
+            return coro
+        try:
+            return run_test_coro(coro)  # type: ignore[arg-type]
+        except BaseException:
+            self.showtraceback()
+            return None
     
     @override
     def showtraceback(self) -> None:

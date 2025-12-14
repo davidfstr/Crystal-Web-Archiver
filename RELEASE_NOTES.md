@@ -14,6 +14,8 @@ Release Notes ⋮
 
 * CLI improvements
     * The `--shell` uses the new [interactive interpreter] from Python 3.13.
+    * The `--shell` now supports using `await` with Crystal's testing utilities
+      such as `wait_for()`.
 
 * Support changes
     * Embedded Python upgraded from Python 3.11 to 3.13.
