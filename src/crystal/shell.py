@@ -283,8 +283,8 @@ def fg_interact(
         console.interact(banner, exitmsg='')
     finally:
         if not _main_loop_has_exited():
-            if is_headless_mode():
-                # In headless mode, exit the entire process when the shell exits.
+            if is_headless_mode() or ai_agent_detected():
+                # Exit the entire process when the shell exits
                 os.kill(os.getpid(), signal.SIGINT)  # simulate Ctrl-C
             else:
                 console.write('%s\n' % exitmsg)
