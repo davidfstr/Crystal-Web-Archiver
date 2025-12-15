@@ -427,6 +427,16 @@ class WindowNavigator(Navigator[wx.Window]):
             children = [c for c in children if not c.IsTopLevel()]
         if not include_hidden:
             children = [c for c in children if c.Shown]
+        if isinstance(window, wx.TreeCtrl):
+            # Filter out scrollbars & other unimportant child windows that
+            # sometimes show themselves and sometimes don't.
+            # These windows just pollute snapshot diffs if retained.
+            children = [c for c in children if not (
+                # Filter out standalone scrollbar children
+                (isinstance(c, wx.ScrollBar) and len(c.Children) == 0) or
+                # Filter out empty panel child
+                (c.Name == 'panel' and len(c.Children) == 0)
+            )]
         return children
     
     @classmethod
