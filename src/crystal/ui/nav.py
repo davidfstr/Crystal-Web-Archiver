@@ -40,7 +40,7 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
         """
         raise NotImplementedError()
     
-    def snapshot(self) -> NavigatorSnapshot[_P]:
+    def snapshot(self) -> Snapshot[_P]:
         """
         Creates a snapshot of this navigator's state, recursively capturing
         all visible children.
@@ -163,7 +163,7 @@ class WindowNavigator(Navigator[wx.Window]):
         """
         return repr(self.snapshot())
     
-    def snapshot(self) -> NavigatorSnapshot[wx.Window]:
+    def snapshot(self) -> Snapshot[wx.Window]:
         """
         Creates a snapshot of this navigator's state, recursively capturing
         all visible children.
@@ -179,7 +179,7 @@ class WindowNavigator(Navigator[wx.Window]):
             peer: wx.Window | None,
             path: str,
             query: str | None,
-            ) -> NavigatorSnapshot[wx.Window]:
+            ) -> Snapshot[wx.Window]:
         # Get peer description (may be '' for top-level navigator)
         peer_description = cls._describe(peer) if peer is not None else ''
         
@@ -201,7 +201,7 @@ class WindowNavigator(Navigator[wx.Window]):
         
         # Build child snapshots
         all_children_list = cls._all_children_of(peer)
-        child_snapshots: list[NavigatorSnapshot[wx.Window]] = []
+        child_snapshots: list[Snapshot[wx.Window]] = []
         
         # Add TreeItem root as first "child" if present
         if tree_item_root is not None:
@@ -224,10 +224,10 @@ class WindowNavigator(Navigator[wx.Window]):
                 else f'wx.GetTopLevelWindows()[{all_children_list.index(c)}]'
             )
             
-            c_snapshot: NavigatorSnapshot[wx.Window]
+            c_snapshot: Snapshot[wx.Window]
             if modal_tlws and c not in modal_tlws:
                 # Create a shallow snapshot for non-interactable windows
-                c_snapshot = NavigatorSnapshot(
+                c_snapshot = Snapshot(
                     peer_description=cls._describe(c),
                     children=[],  # Empty - elided
                     children_elided=True,
@@ -244,7 +244,7 @@ class WindowNavigator(Navigator[wx.Window]):
                 )
             child_snapshots.append(c_snapshot)
         
-        return NavigatorSnapshot(
+        return Snapshot(
             peer_description=peer_description,
             children=child_snapshots,
             path=path,
@@ -624,7 +624,7 @@ class TreeItemNavigator(Navigator[TreeItem]):
         """
         return repr(self.snapshot())
     
-    def snapshot(self) -> NavigatorSnapshot[TreeItem]:
+    def snapshot(self) -> Snapshot[TreeItem]:
         """
         Creates a snapshot of this navigator's state, recursively capturing
         all visible children.
@@ -636,7 +636,7 @@ class TreeItemNavigator(Navigator[TreeItem]):
             peer: TreeItem,
             path: str,
             query: str,
-            ) -> NavigatorSnapshot[TreeItem]:
+            ) -> Snapshot[TreeItem]:
         peer_description = cls._describe(peer)
         children = cls._children_of(peer)
         
@@ -651,7 +651,7 @@ class TreeItemNavigator(Navigator[TreeItem]):
             for (i, c) in enumerate(children)
         ]
         
-        return NavigatorSnapshot(
+        return Snapshot(
             peer_description=peer_description,
             children=child_snapshots,
             path=path,
@@ -836,9 +836,9 @@ class TreeItemNavigator(Navigator[TreeItem]):
 
 
 # ------------------------------------------------------------------------------
-# NavigatorSnapshot
+# Snapshot
 
-class NavigatorSnapshot(Generic[_P]):
+class Snapshot(Generic[_P]):
     """
     A snapshot of a Navigator's state at a point in time.
     Used for detecting changes in the UI.
@@ -860,7 +860,7 @@ class NavigatorSnapshot(Generic[_P]):
         >>> snap2 = T['cr-entity-tree'].Tree.snapshot()
         >>> 
         >>> # Detect what changed
-        >>> diff = NavigatorSnapshot.diff(snap1, snap2)
+        >>> diff = Snapshot.diff(snap1, snap2)
         >>> if diff is not None:
         ...     print(f'Change detected at: {diff._path}')
         ...     print(repr(diff))
@@ -868,7 +868,7 @@ class NavigatorSnapshot(Generic[_P]):
     
     def __init__(self,
             peer_description: str,
-            children: list['NavigatorSnapshot[_P]'],
+            children: list['Snapshot[_P]'],
             path: str,
             query: str,
             peer_accessor: str,
@@ -961,9 +961,9 @@ class NavigatorSnapshot(Generic[_P]):
     
     @staticmethod
     def diff(
-            old: 'NavigatorSnapshot[_P]',
-            new: 'NavigatorSnapshot[_P]',
-            ) -> 'NavigatorSnapshot[_P] | None':
+            old: 'Snapshot[_P]',
+            new: 'Snapshot[_P]',
+            ) -> 'Snapshot[_P] | None':
         """
         Compares two snapshots and returns a snapshot pointing to the common
         parent of all changed subtrees, if any.
@@ -984,9 +984,9 @@ class NavigatorSnapshot(Generic[_P]):
             return new
         
         # Compare children recursively
-        child_diffs: list[NavigatorSnapshot[_P] | None] = []
+        child_diffs: list[Snapshot[_P] | None] = []
         for (c1, c2) in zip(old._children, new._children):
-            child_diff = NavigatorSnapshot.diff(c1, c2)
+            child_diff = Snapshot.diff(c1, c2)
             child_diffs.append(child_diff)
         
         # Count non-empty diffs
@@ -1002,16 +1002,16 @@ class NavigatorSnapshot(Generic[_P]):
             # If multiple children have a non-empty diff, return the entire new snapshot
             return new
     
-    def __sub__(new: Self, old: 'NavigatorSnapshot[_P]') -> 'NavigatorSnapshot[_P] | None':
+    def __sub__(new: Self, old: 'Snapshot[_P]') -> 'Snapshot[_P] | None':
         """
         Shorthand operator equivalent to .diff, for quick scripts.
         
         Example:
-            >>> snap_diff = new - old  # NavigatorSnapshot.diff(old, new)
+            >>> snap_diff = new - old  # Snapshot.diff(old, new)
         """
-        if not isinstance(old, NavigatorSnapshot):
+        if not isinstance(old, Snapshot):
             return NotImplemented
-        return NavigatorSnapshot.diff(old, new)
+        return Snapshot.diff(old, new)
 
 
 # ------------------------------------------------------------------------------
