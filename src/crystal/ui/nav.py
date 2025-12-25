@@ -5,11 +5,17 @@ wxPython-based program.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 # TODO: Promote the TreeItem abstraction to the crystal.ui package,
 #       outside of the crystal.tests.** namespace
 from crystal.tests.util.controls import TreeItem
-from typing import Self, assert_never, Generic, Iterable, overload, TypeVar
+from crystal.util.xtyping import not_none
+from difflib import SequenceMatcher
+import re
+from typing import (
+    assert_never, Generic, Iterable, Literal, NoReturn, overload, Self,
+    TypeAlias, TypeVar
+)
 import wx
 
 
@@ -234,6 +240,7 @@ class WindowNavigator(Navigator[wx.Window]):
                     path=f'{path}[{i}]',
                     query=c_query,
                     peer_accessor=cls._PEER_ACCESSOR,
+                    peer_obj=c,
                 )
             else:
                 # Recursively create full snapshot
@@ -250,6 +257,7 @@ class WindowNavigator(Navigator[wx.Window]):
             path=path,
             query=query or 'T',
             peer_accessor=cls._PEER_ACCESSOR,
+            peer_obj=peer,
         )
     
     @classmethod
@@ -657,6 +665,7 @@ class TreeItemNavigator(Navigator[TreeItem]):
             path=path,
             query=query,
             peer_accessor=cls._PEER_ACCESSOR,
+            peer_obj=peer,
         )
     
     @classmethod
@@ -838,6 +847,10 @@ class TreeItemNavigator(Navigator[TreeItem]):
 # ------------------------------------------------------------------------------
 # Snapshot
 
+DeletionStyle: TypeAlias = Literal['minimal', 'full']
+
+_DEFAULT_DELETION_STYLE: DeletionStyle = 'minimal'
+
 class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
     """
     A snapshot of a Navigator's state at a point in time.
@@ -861,9 +874,12 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         >>> 
         >>> # Detect what changed
         >>> diff = Snapshot.diff(snap1, snap2)
-        >>> if diff is not None:
-        ...     print(f'Change detected at: {diff._path}')
+        >>> if diff:
         ...     print(repr(diff))
+        # S := T['cr-entity-tree'].Tree
+        S[0] ~ TreeItem(👁='... {27→31} of 2,438 ...')
+        S[0][1][0] ~ TreeItem(👁='— 📄 2{2→6} more')
+        ...
     """
     
     def __init__(self,
@@ -872,7 +888,8 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
             path: str,
             query: str,
             peer_accessor: str,
-            *, children_elided: bool = False,
+            *, peer_obj: Hashable,
+            children_elided: bool = False,
             ) -> None:
         """
         Creates a snapshot.
@@ -883,6 +900,9 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         * path -- The navigation path to this peer
         * query -- The code expression to obtain this peer
         * peer_accessor -- The name of the shorthand property (e.g., 'I', 'W')
+        * peer_obj --
+            The peer which this snapshot is rooted at.
+            Expected to be hashable.
         """
         self._peer_description = peer_description
         self._children = children
@@ -890,6 +910,7 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         self._path = path
         self._query = query
         self._peer_accessor = peer_accessor
+        self._peer_obj = peer_obj
     
     # === Format ===
     
@@ -992,46 +1013,66 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
     def diff(
             old: 'Snapshot[_P]',
             new: 'Snapshot[_P]',
-            ) -> 'Snapshot[_P] | None':
+            name: str = 'S',
+            deletion_style: DeletionStyle = _DEFAULT_DELETION_STYLE,
+            ) -> 'SnapshotDiff[_P]':
         """
-        Compares two snapshots and returns a snapshot pointing to the common
-        parent of all changed subtrees, if any.
+        Compares two snapshots and returns a SnapshotDiff describing all
+        changes between them.
+        
+        Arguments:
+        * old -- The old snapshot to compare from
+        * new -- The new snapshot to compare to
+        * name -- The root name to use in the diff output (default 'S')
+        * deletion_style --
+            How to display deleted nodes: 'full' shows all descendents,
+            'minimal' collapses them
         
         Returns:
-        * The entire new snapshot (`new`) if the peer description differs
-        * The entire new snapshot (`new`) if the children count differs
-        * The entire new snapshot (`new`) if multiple children have changes
-        * The diff of the single changed child if exactly one child differs
-        * None if there are no changes (empty diff)
+        * A SnapshotDiff object that can be printed to see all changes
         """
-        # If description of each snapshot's peer differs, return the entire new snapshot
-        if old._peer_description != new._peer_description:
-            return new
+        def diff_rooted_here() -> 'SnapshotDiff[_P]':
+            return SnapshotDiff(old, new, name, deletion_style)
         
-        # If children count differs, return the entire new snapshot
+        # If description of each snapshot's peer differs, diff root is here
+        if old._peer_description != new._peer_description:
+            return diff_rooted_here()
+        
+        # If either snapshot has children elided, skip comparing children entirely
+        # Children are not fully captured, so we can't determine if they changed
+        if old._children_elided or new._children_elided:
+            # Return an empty diff since we can't detect child changes
+            return diff_rooted_here()
+        
+        # If children count differs, diff root is here
         if len(old._children) != len(new._children):
-            return new
+            return diff_rooted_here()
+        
+        # If children identities differ, diff root is here
+        for (c1, c2) in zip(old._children, new._children):
+            if c1._peer_obj != c2._peer_obj:
+                return diff_rooted_here()
         
         # Compare children recursively
-        child_diffs: list[Snapshot[_P] | None] = []
+        child_diffs: list[SnapshotDiff[_P] | None] = []
         for (c1, c2) in zip(old._children, new._children):
-            child_diff = Snapshot.diff(c1, c2)
+            child_diff = Snapshot.diff(c1, c2, deletion_style=deletion_style)
             child_diffs.append(child_diff)
         
         # Count non-empty diffs
-        non_empty_diffs = [d for d in child_diffs if d is not None]
+        non_empty_diffs = [d for d in child_diffs if d]
         
         if len(non_empty_diffs) == 0:
-            # If zero children have a non-empty diff, return None (empty diff)
-            return None
+            # If zero children have a non-empty diff, return an empty diff rooted here
+            return diff_rooted_here()
         elif len(non_empty_diffs) == 1:
             # If exactly 1 child has a non-empty diff, return that diff
             return non_empty_diffs[0]
         else:
-            # If multiple children have a non-empty diff, return the entire new snapshot
-            return new
+            # If multiple children have a non-empty diff, diff root is here
+            return diff_rooted_here()
     
-    def __sub__(new: Self, old: 'Snapshot[_P]') -> 'Snapshot[_P] | None':
+    def __sub__(new: Self, old: 'Snapshot[_P]') -> 'SnapshotDiff[_P]':
         """
         Shorthand operator equivalent to .diff, for quick scripts.
         
@@ -1039,8 +1080,800 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
             >>> snap_diff = new - old  # Snapshot.diff(old, new)
         """
         if not isinstance(old, Snapshot):
-            return NotImplemented
+            return NotImplemented  # type: ignore[return-value]
         return Snapshot.diff(old, new)
+
+
+# ------------------------------------------------------------------------------
+# SnapshotDiff
+
+class SnapshotDiff(Generic[_P]):
+    """
+    Represents the difference between two snapshots.
+    
+    Provides a concise, readable representation of what changed between
+    the old and new snapshots.
+    
+    Examples
+    ========
+    
+    Create and display a diff:
+        >>> snap1 = T['cr-entity-tree'].Tree.snapshot()
+        >>> # ... perform UI actions ...
+        >>> snap2 = T['cr-entity-tree'].Tree.snapshot()
+        >>> 
+        >>> diff = Snapshot.diff(snap1, snap2)
+        >>> print(repr(diff))
+        # S := T['cr-entity-tree'].Tree[0]
+        S ~ TreeItem(👁='... {27→31} of 2,438 ...')
+        S[1][0] ~ TreeItem(👁='— 📄 2{2→6} more')
+        ...
+    
+    Access the underlying snapshots:
+        >>> diff.old  # The old snapshot
+        >>> diff.new  # The new snapshot
+    """
+    
+    def __init__(self,
+            old: Snapshot[_P],
+            new: Snapshot[_P],
+            name: str = 'S',
+            deletion_style: DeletionStyle = _DEFAULT_DELETION_STYLE,
+            ) -> None:
+        self._old = old
+        self._new = new
+        self._name = name
+        self._deletion_style = deletion_style
+    
+    # === Format ===
+    
+    def __repr__(self) -> str:
+        """
+        Returns a concise diff representation showing all changes.
+        
+        Format:
+        - Header: `# S := path.to.root`
+        - Modified: `S[...] ~ Description({old→new})`
+        - Removed: `S[...] - Description`
+        - Added: `S[...] + Description`
+        - Unchanged but moved: `S[old→new] = Description`
+        - Range slide: `S[a..b → c..d] = More(Count=N)`
+        - Collapsed additions: `S[a..b] + More(Count=N)` (for runs > 7)
+        - Collapsed deletions: `S[a..b] - More(Count=N)` (for runs > 7)
+        """
+        entries = self._compute_diff_entries(
+            self._old,
+            self._new,
+            self._name,
+            self._deletion_style,
+        )
+        # Sort all entries by path for proper tree ordering
+        entries.sort(key=lambda e: e.path_sort_key())
+        
+        # Collapse various types of runs into More(...) entries
+        entries = self._collapse_shifted_unchanged_runs(entries)
+        entries = self._collapse_add_and_delete_runs(entries)
+        
+        lines = [f'# {self._name} := {self._new._path}']
+        if entries:
+            for entry in entries:
+                lines.extend(entry.format_lines())
+        else:
+            lines.append('(no changes)')
+        return '\n'.join(lines)
+    
+    @classmethod
+    def _compute_diff_entries(cls,
+            old: Snapshot[_P],
+            new: Snapshot[_P],
+            path: str,
+            deletion_style: DeletionStyle,
+            ) -> list['_DiffEntry']:
+        """
+        Recursively computes all diff entries between two snapshots.
+        """
+        entries: list[_DiffEntry] = []
+        
+        # Check if root details changed
+        if old._peer_description != new._peer_description:
+            entries.append(_DiffEntry(
+                path=path,
+                symbol='~',
+                description=inline_diff(old._peer_description, new._peer_description),
+                old_index=None,
+                new_index=None,
+            ))
+        
+        # Compute child diffs
+        # NOTE: If children are elided, assume nothing changed.
+        if not old._children_elided and not new._children_elided:
+            child_entries = cls._compute_children_diff(
+                old._children,
+                new._children,
+                path,
+                deletion_style,
+            )
+            entries.extend(child_entries)
+        
+        return entries
+    
+    @classmethod
+    def _compute_children_diff(cls,
+            old_children: list[Snapshot[_P]],
+            new_children: list[Snapshot[_P]],
+            parent_path: str,
+            deletion_style: DeletionStyle,
+            ) -> list['_DiffEntry']:
+        """
+        Computes diff entries for children of a node.
+        Matches children by identity (peer_obj), then by description.
+        """
+        # Build mappings from peer_obj to (index, snapshot) for matching
+        old_by_id: dict[Hashable, tuple[int, Snapshot[_P]]] = {}
+        new_by_id: dict[Hashable, tuple[int, Snapshot[_P]]] = {}
+        for (i, c) in enumerate(old_children):
+            old_by_id[c._peer_obj] = (i, c)
+        for (i, c) in enumerate(new_children):
+            new_by_id[c._peer_obj] = (i, c)
+        
+        # Find matches, deletions, and additions
+        if True:
+            # Find matches
+            matches: list[tuple[int, int, Snapshot[_P], Snapshot[_P]]] = []  # (old_idx, new_idx, old_snap, new_snap)
+            matched_old_indices: set[int] = set()
+            matched_new_indices: set[int] = set()
+            if True:
+                # Match by peer_obj
+                for (peer_obj_id, (old_idx, old_snap)) in old_by_id.items():
+                    if peer_obj_id in new_by_id:
+                        (new_idx, new_snap) = new_by_id[peer_obj_id]
+                        matches.append((old_idx, new_idx, old_snap, new_snap))
+                        matched_old_indices.add(old_idx)
+                        matched_new_indices.add(new_idx)
+                
+                # Fallback: Simple greedy matching by description for remaining items
+                # NOTE: Previously this logic was necessary because peer_obj could be None,
+                #       but None is no longer a valid value.
+                remaining_old = [
+                    (i, c) for (i, c) in enumerate(old_children)
+                    if i not in matched_old_indices
+                ]
+                remaining_new = [
+                    (i, c) for (i, c) in enumerate(new_children)
+                    if i not in matched_new_indices
+                ]
+                for (old_idx, old_snap) in remaining_old:
+                    for (new_idx, new_snap) in remaining_new:
+                        if new_idx not in matched_new_indices:
+                            if old_snap._peer_description == new_snap._peer_description:
+                                matches.append((old_idx, new_idx, old_snap, new_snap))
+                                matched_old_indices.add(old_idx)
+                                matched_new_indices.add(new_idx)
+                                break
+            
+            # Collect deletions (old children not matched)
+            deletions = [
+                (i, c) for (i, c) in enumerate(old_children)
+                if i not in matched_old_indices
+            ]
+            
+            # Collect additions (new children not matched)
+            additions = [
+                (i, c) for (i, c) in enumerate(new_children)
+                if i not in matched_new_indices
+            ]
+        
+        # Compute diff entries
+        entries: list[_DiffEntry] = []
+        if True:
+            # Process matches: Check for modifications and index changes
+            for (old_idx, new_idx, old_snap, new_snap) in matches:
+                child_path = cls._format_child_path(parent_path, old_idx, new_idx)
+                
+                # Check if details changed
+                details_changed = old_snap._peer_description != new_snap._peer_description
+                index_changed = old_idx != new_idx
+                
+                if details_changed:
+                    # Details changed. Index may have changed.
+                    entries.append(_DiffEntry(
+                        path=child_path,
+                        symbol='~',
+                        description=inline_diff(old_snap._peer_description, new_snap._peer_description),
+                        old_index=old_idx,
+                        new_index=new_idx,
+                    ))
+                elif index_changed:
+                    # Index changed. Details the same.
+                    entries.append(_DiffEntry(
+                        path=child_path,
+                        symbol='=',
+                        description=new_snap._peer_description,
+                        old_index=old_idx,
+                        new_index=new_idx,
+                    ))
+                else:
+                    # Neither details nor index changed
+                    pass
+                
+                # Recursively diff children of matched nodes
+                # NOTE: If children are elided, assume nothing changed.
+                if not old_snap._children_elided and not new_snap._children_elided:
+                    recursive_entries = cls._compute_children_diff(
+                        old_snap._children,
+                        new_snap._children,
+                        f'{parent_path}[{new_idx}]',  # Use new index for path
+                        deletion_style,
+                    )
+                    entries.extend(recursive_entries)
+            
+            # Add deletion entries
+            for (old_idx, old_snap) in deletions:
+                child_path = f'{parent_path}[{old_idx}]'
+                # Recursively compute entries for all descendents of the removed node
+                descendant_entries = cls._compute_descendant_entries(
+                    old_snap,
+                    child_path,
+                    symbol='-',
+                    deletion_style=deletion_style,
+                )
+                entries.append(_DiffEntry(
+                    path=child_path,
+                    symbol='-',
+                    description=old_snap._peer_description,
+                    old_index=old_idx,
+                    new_index=None,
+                    descendents=descendant_entries,
+                ))
+            
+            # Add addition entries
+            for (new_idx, new_snap) in additions:
+                child_path = f'{parent_path}[{new_idx}]'
+                # Recursively compute entries for all descendents of the added node
+                descendant_entries = cls._compute_descendant_entries(
+                    new_snap,
+                    child_path,
+                    symbol='+',
+                    deletion_style=deletion_style,
+                )
+                entries.append(_DiffEntry(
+                    path=child_path,
+                    symbol='+',
+                    description=new_snap._peer_description,
+                    old_index=None,
+                    new_index=new_idx,
+                    descendents=descendant_entries,
+                ))
+        
+        # NOTE: Returned entries are unsorted.
+        #       Sorting is done at the top level in __repr__ using path_sort_key()
+        return entries
+    
+    @classmethod
+    def _compute_descendant_entries(cls,
+            snapshot: Snapshot[_P],
+            parent_path: str,
+            symbol: Literal['+', '-'],
+            deletion_style: DeletionStyle = _DEFAULT_DELETION_STYLE,
+            ) -> list['_DiffEntry']:
+        """
+        Recursively compute diff entries for all descendents of a snapshot node.
+        Used when a node is added or removed to show all its children.
+        
+        Arguments:
+        * snapshot -- The snapshot node whose descendents to process
+        * parent_path -- The path to the snapshot node in the diff output
+        * symbol -- Either '+' (for added nodes) or '-' (for removed nodes)
+        * deletion_style --
+            How to display deleted nodes: 'full' shows all descendents,
+            'minimal' collapses them
+        
+        Returns:
+        * A list of _DiffEntry objects for all descendents
+        """
+        entries: list[_DiffEntry] = []
+        
+        # For minimal deletion style, collapse all children into a single More(...) entry
+        if deletion_style == 'minimal' and symbol == '-':
+            # Count total descendents recursively
+            def count_descendents(snap: Snapshot[_P]) -> int:
+                total = len(snap._children)
+                for child in snap._children:
+                    total += count_descendents(child)
+                return total
+            
+            num_children = len(snapshot._children)
+            if num_children > 0:
+                # Create a collapsed entry for all children
+                # Determine the path range
+                if num_children == 1:
+                    child_range_path = f'{parent_path}[0]'
+                else:
+                    child_range_path = f'{parent_path}[0..{num_children - 1}]'
+                
+                entries.append(_DiffEntry(
+                    path=child_range_path,
+                    symbol='-',
+                    description=f'More(Count={num_children})',
+                    old_index=0,
+                    new_index=None,
+                    old_range_end=num_children - 1 if num_children > 1 else None,
+                ))
+            return entries
+        
+        # For full deletion style or additions, show all descendents
+        for (idx, child_snap) in enumerate(snapshot._children):
+            child_path = f'{parent_path}[{idx}]'
+            
+            # Create an entry for this child
+            if symbol == '+':
+                entries.append(_DiffEntry(
+                    path=child_path,
+                    symbol='+',
+                    description=child_snap._peer_description,
+                    old_index=None,
+                    new_index=idx,
+                ))
+            else:  # symbol == '-'
+                entries.append(_DiffEntry(
+                    path=child_path,
+                    symbol='-',
+                    description=child_snap._peer_description,
+                    old_index=idx,
+                    new_index=None,
+                ))
+            
+            # Recursively process this child's descendents
+            descendant_entries = cls._compute_descendant_entries(
+                child_snap,
+                child_path,
+                symbol,
+                deletion_style,
+            )
+            entries.extend(descendant_entries)
+        
+        return entries
+    
+    @classmethod
+    def _format_child_path(cls,
+            parent_path: str,
+            old_idx: int,
+            new_idx: int,
+            ) -> str:
+        """Format child path with index change notation if needed."""
+        if old_idx == new_idx:
+            return f'{parent_path}[{new_idx}]'
+        else:
+            return f'{parent_path}[{old_idx}→{new_idx}]'
+    
+    @classmethod
+    def _collapse_shifted_unchanged_runs(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
+        """
+        Merges contiguous moved nodes with unchanged details into range entries.
+        
+        Detects sequences of entries that:
+        1. Have symbol '=' (moved but unchanged)
+        2. Are at the same tree depth
+        3. Have contiguous old and new indices
+        4. Have the same parent path
+        
+        Merges such sequences into a single range entry with format:
+        S[parent][A..B → C..D] = More(Count=N)
+        
+        Note: This method skips over non-'=' entries (additions/deletions/modifications)
+        when looking for contiguous sequences, so that moves can be merged even if
+        other changes are interspersed in the sorted output.
+        """
+        if len(entries) <= 1:
+            return entries
+        
+        # First pass: identify which '=' entries belong to mergeable ranges
+        # Group entries by parent path
+        groups_by_parent: dict[str, list[tuple[int, _DiffEntry]]] = {}
+        for (idx, entry) in enumerate(entries):
+            if entry.symbol == '=':
+                assert entry.old_index is not None
+                assert entry.new_index is not None
+                parent_path = cls._extract_parent_path(entry.path)
+                if parent_path not in groups_by_parent:
+                    groups_by_parent[parent_path] = []
+                groups_by_parent[parent_path].append((idx, entry))
+        
+        # For each parent group, find contiguous ranges
+        entries_to_merge: set[int] = set()  # Indices of entries that will be merged
+        range_replacements: dict[int, _DiffEntry] = {}  # Maps first entry index to range entry
+        
+        for (parent_path, group) in groups_by_parent.items():
+            # Sort by old_index to find contiguous sequences
+            group.sort(key=lambda x: not_none(x[1].old_index))
+            
+            i = 0
+            while i < len(group):
+                (start_idx, start_entry) = group[i]
+                range_entries = [(start_idx, start_entry)]
+                
+                # Try to extend the range
+                j = i + 1
+                while j < len(group):
+                    (_, curr_entry) = range_entries[-1]
+                    (next_idx, next_entry) = group[j]
+                    
+                    # Check if next entry continues the sequence
+                    if (next_entry.old_index == not_none(curr_entry.old_index) + 1 and
+                        next_entry.new_index == not_none(curr_entry.new_index) + 1):
+                        range_entries.append((next_idx, next_entry))
+                        j += 1
+                    else:
+                        break
+                
+                # If we found a range of at least 2 entries, mark them for merging
+                if len(range_entries) >= 2:
+                    first_entry = range_entries[0][1]
+                    last_entry = range_entries[-1][1]
+                    
+                    # Create range path: S[parent][A..B → C..D]
+                    range_path = f'{parent_path}[{first_entry.old_index}..{last_entry.old_index} → {first_entry.new_index}..{last_entry.new_index}]'
+                    
+                    # Create range description
+                    range_desc = f'More(Count={len(range_entries)})'
+                    
+                    # Create the range entry
+                    range_entry = _DiffEntry(
+                        path=range_path,
+                        symbol='=',
+                        description=range_desc,
+                        old_index=first_entry.old_index,
+                        new_index=first_entry.new_index,
+                        old_range_end=last_entry.old_index,
+                        new_range_end=last_entry.new_index,
+                    )
+                    
+                    # Mark all entries in this range for merging
+                    for (entry_idx, _) in range_entries:
+                        entries_to_merge.add(entry_idx)
+                    
+                    # The range entry will replace the first entry in the range
+                    range_replacements[range_entries[0][0]] = range_entry
+                
+                i = j
+        
+        # Second pass: build the merged list
+        merged: list[_DiffEntry] = []
+        for (idx, entry) in enumerate(entries):
+            if idx in entries_to_merge:
+                # This entry is part of a merged range
+                if idx in range_replacements:
+                    # This is the first entry of a range, replace it with the range entry
+                    merged.append(range_replacements[idx])
+                # Otherwise, skip this entry (it's been merged into a range)
+            else:
+                # Keep this entry as-is
+                merged.append(entry)
+        
+        return merged
+    
+    @classmethod
+    def _extract_parent_path(cls, path: str) -> str:
+        """
+        Extracts the parent path from a full path.
+        
+        Examples:
+            'S[0][1→2]' -> 'S[0]'
+            'S[0][1]' -> 'S[0]'
+            'S[0]' -> 'S'
+        """
+        # Find the last '[' and strip everything from there
+        last_bracket = path.rfind('[')
+        if last_bracket == -1:
+            return ''
+        return path[:last_bracket]
+    
+    @classmethod
+    def _collapse_add_and_delete_runs(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
+        """
+        Collapses long runs of additions (+) or deletions (-) into More() entries.
+        
+        If a contiguous range of > 7 indexes all have the same symbol (+ or -),
+        every interior line except the first 3 and last 3 in the range
+        is replaced with a More(Count=#) line.
+        
+        Example:
+            S[0] + ...
+            S[1] + ...
+            S[2] + ...
+            S[3..31] + More(Count=29)
+            S[32] + ...
+            S[33] + ...
+            S[34] + ...
+        """
+        # Group entries by parent path and symbol (+ or -)
+        groups_by_parent_symbol: dict[tuple[str, str], list[tuple[int, _DiffEntry]]] = {}
+        for (idx, entry) in enumerate(entries):
+            if entry.symbol in ('+', '-'):
+                parent_path = cls._extract_parent_path(entry.path)
+                key = (parent_path, entry.symbol)
+                if key not in groups_by_parent_symbol:
+                    groups_by_parent_symbol[key] = []
+                groups_by_parent_symbol[key].append((idx, entry))
+        
+        # For each parent+symbol group, find contiguous runs to collapse
+        entries_to_collapse: set[int] = set()  # Indices of entries that will be collapsed
+        more_replacements: dict[int, _DiffEntry] = {}  # Maps collapse position to More entry
+        
+        for ((parent_path, symbol), group) in groups_by_parent_symbol.items():
+            # Sort by index (use new_index for additions, old_index for deletions)
+            if symbol == '+':
+                group.sort(key=lambda x: not_none(x[1].new_index))
+            else:  # symbol == '-'
+                group.sort(key=lambda x: not_none(x[1].old_index))
+            
+            i = 0
+            while i < len(group):
+                (start_idx, start_entry) = group[i]
+                run_entries = [(start_idx, start_entry)]
+                
+                # Try to extend the run
+                j = i + 1
+                while j < len(group):
+                    (_, curr_entry) = run_entries[-1]
+                    (next_idx, next_entry) = group[j]
+                    
+                    # Check if next entry continues the contiguous sequence
+                    if symbol == '+':
+                        curr_idx = not_none(curr_entry.new_index)
+                        next_new_idx = not_none(next_entry.new_index)
+                        if next_new_idx == curr_idx + 1:
+                            run_entries.append((next_idx, next_entry))
+                            j += 1
+                        else:
+                            break
+                    else:  # symbol == '-'
+                        curr_idx = not_none(curr_entry.old_index)
+                        next_old_idx = not_none(next_entry.old_index)
+                        if next_old_idx == curr_idx + 1:
+                            run_entries.append((next_idx, next_entry))
+                            j += 1
+                        else:
+                            break
+                
+                # If we found a run of > 7 entries, collapse the interior
+                if len(run_entries) > 7:
+                    # Keep first 3 and last 3, collapse the interior
+                    first_3 = run_entries[:3]
+                    last_3 = run_entries[-3:]
+                    interior = run_entries[3:-3]
+                    
+                    # Create the More entry
+                    first_interior_entry = interior[0][1]
+                    last_interior_entry = interior[-1][1]
+                    
+                    if symbol == '+':
+                        first_idx = not_none(first_interior_entry.new_index)
+                        last_idx = not_none(last_interior_entry.new_index)
+                        more_path = f'{parent_path}[{first_idx}..{last_idx}]'
+                        more_entry = _DiffEntry(
+                            path=more_path,
+                            symbol='+',
+                            description=f'More(Count={len(interior)})',
+                            old_index=None,
+                            new_index=first_idx,
+                        )
+                    else:  # symbol == '-'
+                        first_idx = not_none(first_interior_entry.old_index)
+                        last_idx = not_none(last_interior_entry.old_index)
+                        more_path = f'{parent_path}[{first_idx}..{last_idx}]'
+                        more_entry = _DiffEntry(
+                            path=more_path,
+                            symbol='-',
+                            description=f'More(Count={len(interior)})',
+                            old_index=first_idx,
+                            new_index=None,
+                        )
+                    
+                    # Mark interior entries for removal
+                    for (entry_idx, _) in interior:
+                        entries_to_collapse.add(entry_idx)
+                    
+                    # The More entry will replace the first interior entry
+                    more_replacements[interior[0][0]] = more_entry
+                
+                i = j
+        
+        # Second pass: build the collapsed list
+        collapsed: list[_DiffEntry] = []
+        for (idx, entry) in enumerate(entries):
+            if idx in entries_to_collapse:
+                # This entry is part of a collapsed run
+                if idx in more_replacements:
+                    # This is the first interior entry, replace it with the More entry
+                    collapsed.append(more_replacements[idx])
+                # Otherwise, skip this entry (it's been collapsed into a More)
+            else:
+                # Keep this entry as-is
+                collapsed.append(entry)
+        
+        return collapsed
+    
+    # === Empty ===
+    
+    def __bool__(self) -> bool:
+        """Returns True if there are any changes, False otherwise."""
+        entries = self._compute_diff_entries(
+            self._old,
+            self._new,
+            self._name,
+            self._deletion_style,
+        )
+        return len(entries) > 0
+    
+    # === Navigation ===
+    
+    def __getitem__(self, index: object) -> NoReturn:
+        raise ValueError(
+            f'{self._name}[{index!r}]... is ambiguous. '
+            f'Use {self._name}.new[{index!r}]... or {self._name}.old[{index!r}]... instead.'
+        )
+    
+    @property
+    def old(self) -> Snapshot[_P]:
+        """The old snapshot being compared from."""
+        return self._old
+    
+    @property
+    def new(self) -> Snapshot[_P]:
+        """The new snapshot being compared to."""
+        return self._new
+
+
+class _DiffEntry:
+    """
+    Represents a single line in a snapshot diff output.
+    May contain nested descendent entries that should be printed after this entry.
+    """
+    
+    def __init__(self,
+            path: str,
+            symbol: Literal['~', '-', '+', '='],
+            description: str,
+            old_index: int | None,
+            new_index: int | None,
+            *,
+            old_range_end: int | None = None,
+            new_range_end: int | None = None,
+            descendents: list['_DiffEntry'] | None = None,
+            ) -> None:
+        self.path = path
+        self.symbol = symbol
+        self.description = description
+        self.old_index = old_index
+        self.new_index = new_index
+        self.old_range_end = old_range_end
+        self.new_range_end = new_range_end
+        self.descendents = descendents or []
+    
+    def format_lines(self) -> list[str]:
+        """Format this entry and all its descendents as diff lines."""
+        lines = [f'{self.path} {self.symbol} {self.description}']
+        # Recursively format all descendent entries
+        for desc in self.descendents:
+            lines.extend(desc.format_lines())
+        return lines
+    
+    def path_sort_key(self) -> tuple:
+        """
+        Returns a sort key for ordering entries by path.
+        
+        Parses the path into segments and sorts by:
+        - Each path segment's index (old_index if present, else new_index)
+        - For entries at the same position, additions (+) come after others
+        """
+        # Parse path segments like S[0][1][2→3] into indices
+        segments = re.findall(r'\[(\d+)(?:→(\d+))?\]', self.path)
+        
+        # Build sort key: for each segment, use old_index if present, else new_index
+        indices: list[int] = []
+        for seg in segments:
+            (old_idx_str, new_idx_str) = seg
+            # Use old index if present (for moved items), else use the index as-is
+            idx = int(old_idx_str) if old_idx_str else int(new_idx_str or 0)
+            indices.append(idx)
+        
+        # Additions at the same path position come after other symbols
+        addition_penalty = 1 if self.symbol == '+' else 0
+        
+        return (tuple(indices), addition_penalty, self.path)
+
+
+# ------------------------------------------------------------------------------
+# Utility: Inline Diff
+
+def inline_diff(old: str, new: str) -> str:
+    """
+    Computes an inline diff between two strings, marking changes with {old→new}.
+    
+    Uses a token-based diff algorithm to avoid splitting words and numbers in
+    the middle. Tokens are defined as:
+    - Runs of letters [a-zA-Z]+
+    - Runs of digits and formatting chars [\\d:,.]+
+    - Single characters (anything else)
+    
+    Examples:
+        >>> inline_diff("hello world", "hello there")
+        'hello {world→there}'
+        >>> inline_diff("27 of 100", "31 of 100")
+        '{27→31} of 100'
+        >>> inline_diff("Downloading", "Complete")
+        '{Downloading→Complete}'
+        >>> inline_diff("2:18:01", "2:19:18")
+        '{2:18:01→2:19:18}'
+    """
+    if old == new:
+        return new
+    
+    # Tokenize both strings
+    old_tokens = _tokenize(old)
+    new_tokens = _tokenize(new)
+    
+    # Perform diff on token sequences
+    sm = SequenceMatcher(None, old_tokens, new_tokens)
+    result: list[str] = []
+    
+    for (tag, i1, i2, j1, j2) in sm.get_opcodes():
+        if tag == 'equal':
+            result.extend(old_tokens[i1:i2])
+        elif tag == 'replace':
+            old_part = ''.join(old_tokens[i1:i2])
+            new_part = ''.join(new_tokens[j1:j2])
+            result.append(f'{{{old_part}→{new_part}}}')
+        elif tag == 'delete':
+            old_part = ''.join(old_tokens[i1:i2])
+            result.append(f'{{{old_part}→}}')
+        elif tag == 'insert':
+            new_part = ''.join(new_tokens[j1:j2])
+            result.append(f'{{→{new_part}}}')
+    
+    return ''.join(result)
+
+
+def _tokenize(s: str) -> list[str]:
+    """
+    Tokenizes a string into meaningful units for diffing.
+    
+    Tokens:
+    - Runs of letters: [a-zA-Z]+
+    - Runs of digits and formatting chars: [\\d:,.]+
+    - Single characters: any other character
+    
+    Examples:
+        >>> _tokenize("hello world")
+        ['hello', ' ', 'world']
+        >>> _tokenize("2:18:01")
+        ['2:18:01']
+        >>> _tokenize("2,310 items")
+        ['2,310', ' ', 'items']
+    """
+    tokens: list[str] = []
+    i = 0
+    while i < len(s):
+        # Try to match a run of letters
+        if s[i].isalpha():
+            j = i
+            while j < len(s) and s[j].isalpha():
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+        # Try to match a run of digits and formatting chars
+        elif s[i].isdigit() or s[i] in ':,.':
+            j = i
+            while j < len(s) and (s[j].isdigit() or s[j] in ':,.'):
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+        # Single character token
+        else:
+            tokens.append(s[i])
+            i += 1
+    return tokens
 
 
 # ------------------------------------------------------------------------------
