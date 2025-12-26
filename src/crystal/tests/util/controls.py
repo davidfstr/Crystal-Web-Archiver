@@ -340,6 +340,15 @@ class TreeItem:
             if id_data is None or other_id_data is None:
                 raise TreeItemsIncomparableError('Cannot compare TreeItems lacking item data')
             return id_data is other_id_data
+    
+    def __hash__(self) -> int:
+        if TreeItem._USE_FAST_ID_COMPARISONS and not is_windows():
+            return hash(self.tree) ^ hash(self.id)
+        else:
+            id_data = self._ItemData
+            if id_data is None:
+                raise TreeItemsIncomparableError('Cannot hash TreeItem lacking item data')
+            return hash(self.tree) ^ hash(id_data)
 
 
 class TreeItemsIncomparableError(ValueError):
