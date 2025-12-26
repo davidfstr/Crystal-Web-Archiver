@@ -5,7 +5,7 @@ wxPython-based program.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 # TODO: Promote the TreeItem abstraction to the crystal.ui package,
 #       outside of the crystal.tests.** namespace
 from crystal.tests.util.controls import TreeItem
@@ -881,7 +881,7 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
             path: str,
             query: str,
             peer_accessor: str,
-            *, peer_obj: object,
+            *, peer_obj: Hashable,
             children_elided: bool = False,
             ) -> None:
         """
@@ -894,9 +894,8 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         * query -- The code expression to obtain this peer
         * peer_accessor -- The name of the shorthand property (e.g., 'I', 'W')
         * peer_obj --
-            An object whose identity (id()) is used to match peers
-            across snapshots. If None, matching falls back to
-            comparing peer_description.
+            The peer which this snapshot is rooted at.
+            Expected to be hashable.
         """
         self._peer_description = peer_description
         self._children = children
@@ -1164,12 +1163,12 @@ class SnapshotDiff(Generic[_P]):
         Matches children by identity (peer_obj), then by description.
         """
         # Build mappings from peer_obj to (index, snapshot) for matching
-        old_by_id: dict[int, tuple[int, Snapshot[_P]]] = {}
-        new_by_id: dict[int, tuple[int, Snapshot[_P]]] = {}
+        old_by_id: dict[Hashable, tuple[int, Snapshot[_P]]] = {}
+        new_by_id: dict[Hashable, tuple[int, Snapshot[_P]]] = {}
         for (i, c) in enumerate(old_children):
-            old_by_id[id(c._peer_obj)] = (i, c)
+            old_by_id[c._peer_obj] = (i, c)
         for (i, c) in enumerate(new_children):
-            new_by_id[id(c._peer_obj)] = (i, c)
+            new_by_id[c._peer_obj] = (i, c)
         
         # Find matches, deletions, and additions
         if True:
