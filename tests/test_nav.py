@@ -312,6 +312,133 @@ class TestSnapshotDiff:
         # Child A should match by description, Child B should be seen as removed/added
         diff_repr = repr(diff)
         assert 'Child B' in diff_repr
+    
+    def test_long_runs_of_additions_are_collapsed(self) -> None:
+        """Test that runs of > 7 additions are collapsed with More() entries."""
+        parent_peer = object()
+        
+        # Create a snapshot with many additions (35 new children)
+        old = make_snapshot('Parent', children=[], peer_obj=parent_peer)
+        new_children = [
+            make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
+            for i in range(35)
+        ]
+        new = make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
+        
+        diff = Snapshot.diff(old, new)
+        
+        assert bool(diff)
+        diff_repr = repr(diff)
+        
+        # Should show first 3 additions
+        assert 'S[0] + Child 0' in diff_repr
+        assert 'S[1] + Child 1' in diff_repr
+        assert 'S[2] + Child 2' in diff_repr
+        
+        # Should show collapsed middle section
+        assert 'S[3..31] + More(Count=29)' in diff_repr
+        
+        # Should show last 3 additions
+        assert 'S[32] + Child 32' in diff_repr
+        assert 'S[33] + Child 33' in diff_repr
+        assert 'S[34] + Child 34' in diff_repr
+        
+        # Should NOT show the collapsed entries individually
+        assert 'S[15]' not in diff_repr  # middle entry should be collapsed
+    
+    def test_long_runs_of_deletions_are_collapsed(self) -> None:
+        """Test that runs of > 7 deletions are collapsed with More() entries."""
+        parent_peer = object()
+        
+        # Create a snapshot with many deletions (35 removed children)
+        old_children = [
+            make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
+            for i in range(35)
+        ]
+        old = make_snapshot('Parent', children=old_children, peer_obj=parent_peer)
+        new = make_snapshot('Parent', children=[], peer_obj=parent_peer)
+        
+        diff = Snapshot.diff(old, new)
+        
+        assert bool(diff)
+        diff_repr = repr(diff)
+        
+        # Should show first 3 deletions
+        assert 'S[0] - Child 0' in diff_repr
+        assert 'S[1] - Child 1' in diff_repr
+        assert 'S[2] - Child 2' in diff_repr
+        
+        # Should show collapsed middle section
+        assert 'S[3..31] - More(Count=29)' in diff_repr
+        
+        # Should show last 3 deletions
+        assert 'S[32] - Child 32' in diff_repr
+        assert 'S[33] - Child 33' in diff_repr
+        assert 'S[34] - Child 34' in diff_repr
+        
+        # Should NOT show the collapsed entries individually
+        assert 'S[15]' not in diff_repr  # middle entry should be collapsed
+    
+    def test_short_runs_are_not_collapsed(self) -> None:
+        """Test that runs of <= 7 additions/deletions are NOT collapsed."""
+        parent_peer = object()
+        
+        # Create a snapshot with exactly 7 additions
+        old = make_snapshot('Parent', children=[], peer_obj=parent_peer)
+        new_children = [
+            make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
+            for i in range(7)
+        ]
+        new = make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
+        
+        diff = Snapshot.diff(old, new)
+        
+        assert bool(diff)
+        diff_repr = repr(diff)
+        
+        # Should show all 7 additions individually (no More() entry)
+        for i in range(7):
+            assert f'S[{i}] + Child {i}' in diff_repr
+        
+        # Should NOT have a More() entry
+        assert 'More(Count=' not in diff_repr
+    
+    def test_non_contiguous_runs_not_collapsed_together(self) -> None:
+        """Test that non-contiguous runs of additions are treated separately."""
+        parent_peer = object()
+        existing_child = object()
+        
+        # Create old with one child in the middle
+        old = make_snapshot('Parent', children=[
+            make_snapshot('Existing', path='S[5]', peer_obj=existing_child),
+        ], peer_obj=parent_peer)
+        
+        # Create new with additions before and after the existing child
+        # Each run has exactly 5 items, so neither should be collapsed (need > 7)
+        new_children = []
+        for i in range(11):
+            if i == 5:
+                new_children.append(make_snapshot('Existing', path=f'S[{i}]', peer_obj=existing_child))
+            else:
+                new_children.append(make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object()))
+        new = make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
+        
+        diff = Snapshot.diff(old, new)
+        
+        assert bool(diff)
+        diff_repr = repr(diff)
+        
+        # The existing child should not be shown as added or removed
+        # (it's matched by peer_obj)
+        
+        # There should be two separate runs: S[0-4] (5 items) and S[6-10] (5 items)
+        # Neither is > 7, so neither should be collapsed
+        for i in range(11):
+            if i != 5:
+                assert f'S[{i}] + Child {i}' in diff_repr
+        
+        # Should NOT have a More() entry since neither run is > 7
+        assert 'More(Count=' not in diff_repr
 
 
 class TestSnapshotDiffApi:

@@ -1091,6 +1091,8 @@ class SnapshotDiff(Generic[_P]):
         - Added: `S[...] + Description`
         - Unchanged but moved: `S[old→new] = Description`
         - Range slide: `S[a..b → c..d] = More(Count=N)`
+        - Collapsed additions: `S[a..b] + More(Count=N)` (for runs > 7)
+        - Collapsed deletions: `S[a..b] - More(Count=N)` (for runs > 7)
         """
         entries = self._compute_diff_entries(
             self._old,
@@ -1103,6 +1105,9 @@ class SnapshotDiff(Generic[_P]):
         
         # Merge contiguous moved nodes into range entries
         entries = self._merge_ranges(entries)
+        
+        # Collapse long runs of additions and deletions
+        entries = self._collapse_runs(entries)
         
         lines = [f'# {self._name} := {self._new._path}']
         if entries:
@@ -1417,6 +1422,132 @@ class SnapshotDiff(Generic[_P]):
         if last_bracket == -1:
             return ''
         return path[:last_bracket]
+    
+    @classmethod
+    def _collapse_runs(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
+        """
+        Collapses long runs of additions (+) or deletions (-) into More() entries.
+        
+        If a contiguous range of > 7 indexes all have the same symbol (+ or -),
+        every interior line except the first 3 and last 3 in the range
+        is replaced with a More(Count=#) line.
+        
+        Example:
+            S[0] + ...
+            S[1] + ...
+            S[2] + ...
+            S[3..31] + More(Count=29)
+            S[32] + ...
+            S[33] + ...
+            S[34] + ...
+        """
+        # Group entries by parent path and symbol (+ or -)
+        groups_by_parent_symbol: dict[tuple[str, str], list[tuple[int, _DiffEntry]]] = {}
+        for (idx, entry) in enumerate(entries):
+            if entry.symbol in ('+', '-'):
+                parent_path = cls._extract_parent_path(entry.path)
+                key = (parent_path, entry.symbol)
+                if key not in groups_by_parent_symbol:
+                    groups_by_parent_symbol[key] = []
+                groups_by_parent_symbol[key].append((idx, entry))
+        
+        # For each parent+symbol group, find contiguous runs to collapse
+        entries_to_collapse: set[int] = set()  # Indices of entries that will be collapsed
+        more_replacements: dict[int, _DiffEntry] = {}  # Maps collapse position to More entry
+        
+        for ((parent_path, symbol), group) in groups_by_parent_symbol.items():
+            # Sort by index (use new_index for additions, old_index for deletions)
+            if symbol == '+':
+                group.sort(key=lambda x: not_none(x[1].new_index))
+            else:  # symbol == '-'
+                group.sort(key=lambda x: not_none(x[1].old_index))
+            
+            i = 0
+            while i < len(group):
+                (start_idx, start_entry) = group[i]
+                run_entries = [(start_idx, start_entry)]
+                
+                # Try to extend the run
+                j = i + 1
+                while j < len(group):
+                    (_, curr_entry) = run_entries[-1]
+                    (next_idx, next_entry) = group[j]
+                    
+                    # Check if next entry continues the contiguous sequence
+                    if symbol == '+':
+                        curr_idx = not_none(curr_entry.new_index)
+                        next_new_idx = not_none(next_entry.new_index)
+                        if next_new_idx == curr_idx + 1:
+                            run_entries.append((next_idx, next_entry))
+                            j += 1
+                        else:
+                            break
+                    else:  # symbol == '-'
+                        curr_idx = not_none(curr_entry.old_index)
+                        next_old_idx = not_none(next_entry.old_index)
+                        if next_old_idx == curr_idx + 1:
+                            run_entries.append((next_idx, next_entry))
+                            j += 1
+                        else:
+                            break
+                
+                # If we found a run of > 7 entries, collapse the interior
+                if len(run_entries) > 7:
+                    # Keep first 3 and last 3, collapse the interior
+                    first_3 = run_entries[:3]
+                    last_3 = run_entries[-3:]
+                    interior = run_entries[3:-3]
+                    
+                    # Create the More entry
+                    first_interior_entry = interior[0][1]
+                    last_interior_entry = interior[-1][1]
+                    
+                    if symbol == '+':
+                        first_idx = not_none(first_interior_entry.new_index)
+                        last_idx = not_none(last_interior_entry.new_index)
+                        more_path = f'{parent_path}[{first_idx}..{last_idx}]'
+                        more_entry = _DiffEntry(
+                            path=more_path,
+                            symbol='+',
+                            description=f'More(Count={len(interior)})',
+                            old_index=None,
+                            new_index=first_idx,
+                        )
+                    else:  # symbol == '-'
+                        first_idx = not_none(first_interior_entry.old_index)
+                        last_idx = not_none(last_interior_entry.old_index)
+                        more_path = f'{parent_path}[{first_idx}..{last_idx}]'
+                        more_entry = _DiffEntry(
+                            path=more_path,
+                            symbol='-',
+                            description=f'More(Count={len(interior)})',
+                            old_index=first_idx,
+                            new_index=None,
+                        )
+                    
+                    # Mark interior entries for removal
+                    for (entry_idx, _) in interior:
+                        entries_to_collapse.add(entry_idx)
+                    
+                    # The More entry will replace the first interior entry
+                    more_replacements[interior[0][0]] = more_entry
+                
+                i = j
+        
+        # Second pass: build the collapsed list
+        collapsed: list[_DiffEntry] = []
+        for (idx, entry) in enumerate(entries):
+            if idx in entries_to_collapse:
+                # This entry is part of a collapsed run
+                if idx in more_replacements:
+                    # This is the first interior entry, replace it with the More entry
+                    collapsed.append(more_replacements[idx])
+                # Otherwise, skip this entry (it's been collapsed into a More)
+            else:
+                # Keep this entry as-is
+                collapsed.append(entry)
+        
+        return collapsed
 
 
 class _DiffEntry:
