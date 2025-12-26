@@ -909,7 +909,7 @@ class TestSnapshotDiffGolden:
                     peer_obj=task_peer
                 ),
             ],
-            path='S',
+            path="T['cr-entity-tree'].Tree[0]",
             peer_obj=root_peer
         )
         
@@ -1010,12 +1010,12 @@ class TestSnapshotDiffGolden:
                     peer_obj=task_peer
                 ),
             ],
-            path='S',
+            path="T['cr-entity-tree'].Tree[0]",
             peer_obj=root_peer
         )
         
         expected_diff_repr_lines = [
-            '# S := S',
+            "# S := T['cr-entity-tree'].Tree[0]",
             "S[0] ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {27→30} of 2,438 item(s) -- 2:1{→9:1}8{:01→} remaining (3.4{3→7}s/item)')",
             "S[0][1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {27→30} of 2,438 item(s) -- 2:1{→9:1}8{:01→} remaining (3.4{3→7}s/item)')",
             "S[0][1][0] ~ TreeItem(👁='— 📄 2{2→5} more')",
@@ -1041,7 +1041,7 @@ class TestSnapshotDiffGolden:
             assert actual_diff_repr_lines == expected_diff_repr_lines
         
         expected_reverse_diff_repr_lines = [
-            '# S := S',
+            "# S := T['cr-entity-tree'].Tree[0]",
             "S[0] ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {30→27} of 2,438 item(s) -- 2:1{9→8}:{→0}1{8→} remaining (3.4{7→3}s/item)')",
             "S[0][1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {30→27} of 2,438 item(s) -- 2:1{9→8}:{→0}1{8→} remaining (3.4{7→3}s/item)')",
             "S[0][1][0] ~ TreeItem(👁='— 📄 2{5→2} more')",
