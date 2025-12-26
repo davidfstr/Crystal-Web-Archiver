@@ -788,15 +788,16 @@ class TestSnapshotDiffSorting:
 
 
 class TestSnapshotDiffGolden:
-    """Golden tests for SnapshotDiff with realistic scenarios."""
+    """
+    Golden tests for SnapshotDiff which verify the exact output format
+    for various realistic scenarios.
+    """
     
-    def test_realistic_download_progress_scenario(self, subtests) -> None:
+    def test_progress_of_download_group_task_in_task_tree(self, subtests) -> None:
         """
-        Golden test for a realistic download progress scenario.
-        
-        This test verifies the exact output format for a complex scenario
-        where multiple download tasks are progressing, with items being
-        completed, moved, and added.
+        Situation:
+        - Multiple child download tasks are progressing, with items being
+          completed, moved, and added.
         """
         # Create peer objects for identity-based matching
         root_peer = object()
