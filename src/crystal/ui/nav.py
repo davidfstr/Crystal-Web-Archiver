@@ -844,7 +844,7 @@ class TreeItemNavigator(Navigator[TreeItem]):
 # ------------------------------------------------------------------------------
 # Snapshot
 
-class Snapshot(Generic[_P]):
+class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
     """
     A snapshot of a Navigator's state at a point in time.
     Used for detecting changes in the UI.
@@ -971,6 +971,32 @@ class Snapshot(Generic[_P]):
                 lines[-1] += ','
             lines.append('}')
             return lines
+    
+    # === Navigation ===
+    
+    @overload
+    def __getitem__(self, index: int) -> 'Snapshot[_P]': ...
+    @overload
+    def __getitem__(self, index: slice) -> tuple['Snapshot[_P]', ...]: ...
+    def __getitem__(self, index: int | slice):
+        """
+        - snapshot[i], where i is an int, returns a snapshot of
+          the i'th visible child of this snapshot's peer.
+        - snapshot[i:j:k], where i:j:k is a slice, returns a tuple of snapshots
+          corresponding to the associated children of this snapshot's peer.
+        """
+        if isinstance(index, int):
+            return self._children[index]
+        elif isinstance(index, slice):
+            return tuple(self._children[index])
+        else:
+            raise TypeError(f'indices must be integers or slices, not {type(index).__name__}')
+    
+    def __len__(self) -> int:
+        """
+        The number of visible children of this snapshot's peer.
+        """
+        return len(self._children)
     
     # === Diff ===
     
