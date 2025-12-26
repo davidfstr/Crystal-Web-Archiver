@@ -1025,6 +1025,11 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         if len(old._children) != len(new._children):
             return SnapshotDiff(old, new, name)
         
+        # If children identities differ, diff root is here
+        for (c1, c2) in zip(old._children, new._children):
+            if c1._peer_obj != c2._peer_obj:
+                return SnapshotDiff(old, new, name)
+        
         # Compare children recursively
         child_diffs: list[SnapshotDiff[_P] | None] = []
         for (c1, c2) in zip(old._children, new._children):

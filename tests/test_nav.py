@@ -10,7 +10,7 @@ from crystal.ui.nav import Snapshot, SnapshotDiff, inline_diff
 def make_snapshot(
         desc: str,
         children: list[Snapshot] | None = None,
-        path: str = 'S',
+        path: str = 'T',
         query: str = '',
         accessor: str = 'I',
         peer_obj: object | None = None,
@@ -75,13 +75,13 @@ class TestSnapshot:
         snap = make_snapshot('Test Node')
         assert snap._peer_description == 'Test Node'
         assert snap._children == []
-        assert snap._path == 'S'
+        assert snap._path == 'T'
     
     def test_can_create_snapshot_with_children(self) -> None:
         """Test that a snapshot can have children."""
         parent = make_snapshot('Parent', children=[
-            child1 := make_snapshot('Child 1', path='S[0]'),
-            child2 := make_snapshot('Child 2', path='S[1]')
+            child1 := make_snapshot('Child 1', path='T[0]'),
+            child2 := make_snapshot('Child 2', path='T[1]')
         ])
         
         assert len(parent._children) == 2
@@ -96,7 +96,7 @@ class TestSnapshot:
     
     def test_repr_shows_description(self) -> None:
         """Test that repr() includes the node description."""
-        snap = make_snapshot('Test Description', path='S', accessor='I')
+        snap = make_snapshot('Test Description', path='T', accessor='I')
         result = repr(snap)
         assert 'Test Description' in result
 
@@ -137,7 +137,7 @@ class TestSnapshotDiffBasics:
             # (none)
         ], peer_obj=parent_peer)
         new = make_snapshot('Parent', children=[
-            make_snapshot('New Child', path='S[0]', peer_obj=child_peer)
+            make_snapshot('New Child', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -153,7 +153,7 @@ class TestSnapshotDiffBasics:
         child_peer = object()
         
         old = make_snapshot('Parent', children=[
-            make_snapshot('Old Child', path='S[0]', peer_obj=child_peer)
+            make_snapshot('Old Child', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
         new = make_snapshot('Parent', children=[
             # (none)
@@ -172,17 +172,18 @@ class TestSnapshotDiffBasics:
         child_peer = object()
         
         old = make_snapshot('Parent', children=[
-            make_snapshot('Child v1', path='S[0]', peer_obj=child_peer)
+            make_snapshot('Child v1', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
         new = make_snapshot('Parent', children=[
-            make_snapshot('Child v2', path='S[0]', peer_obj=child_peer)
+            make_snapshot('Child v2', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
         
         assert bool(diff)
         diff_repr = repr(diff)
-        assert 'S[0] ~' in diff_repr
+        assert '# S := T[0]' in diff_repr
+        assert 'S ~' in diff_repr
         assert 'Child' in diff_repr
     
     def test_child_moved_without_modification(self) -> None:
@@ -192,12 +193,12 @@ class TestSnapshotDiffBasics:
         child2_peer = object()
         
         old = make_snapshot('Parent', children=[
-            make_snapshot('Other Child', path='S[0]', peer_obj=child2_peer),
-            make_snapshot('Moved Child', path='S[1]', peer_obj=child1_peer),
+            make_snapshot('Other Child', path='T[0]', peer_obj=child2_peer),
+            make_snapshot('Moved Child', path='T[1]', peer_obj=child1_peer),
         ], peer_obj=parent_peer)
         new = make_snapshot('Parent', children=[
-            make_snapshot('Moved Child', path='S[0]', peer_obj=child1_peer),
-            make_snapshot('Other Child', path='S[1]', peer_obj=child2_peer),
+            make_snapshot('Moved Child', path='T[0]', peer_obj=child1_peer),
+            make_snapshot('Other Child', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -216,12 +217,12 @@ class TestSnapshotDiffBasics:
         child2_peer = object()
         
         old = make_snapshot('Parent', children=[
-            make_snapshot('Child 1 v1', path='S[0]', peer_obj=child1_peer),
-            make_snapshot('Child 2 v1', path='S[1]', peer_obj=child2_peer),
+            make_snapshot('Child 1 v1', path='T[0]', peer_obj=child1_peer),
+            make_snapshot('Child 2 v1', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
         new = make_snapshot('Parent', children=[
-            make_snapshot('Child 1 v2', path='S[0]', peer_obj=child1_peer),
-            make_snapshot('Child 2 v2', path='S[1]', peer_obj=child2_peer),
+            make_snapshot('Child 1 v2', path='T[0]', peer_obj=child1_peer),
+            make_snapshot('Child 2 v2', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -241,24 +242,21 @@ class TestSnapshotDiffBasics:
         
         old = make_snapshot('Root', children=[
             make_snapshot('Parent', children=[
-                make_snapshot('Grandchild v1', path='S[0][0]', peer_obj=grandchild_peer)
-            ], path='S[0]', peer_obj=parent_peer)
+                make_snapshot('Grandchild v1', path='T[0][0]', peer_obj=grandchild_peer)
+            ], path='T[0]', peer_obj=parent_peer)
         ], peer_obj=root_peer)
         new = make_snapshot('Root', children=[
             make_snapshot('Parent', children=[
-                make_snapshot('Grandchild v2', path='S[0][0]', peer_obj=grandchild_peer)
-            ], path='S[0]', peer_obj=parent_peer)
+                make_snapshot('Grandchild v2', path='T[0][0]', peer_obj=grandchild_peer)
+            ], path='T[0]', peer_obj=parent_peer)
         ], peer_obj=root_peer)
         
         diff = Snapshot.diff(old, new)
         
         assert bool(diff)
         diff_repr = repr(diff)
-        # TODO: Fix the following assert to pass,
-        #       which ensures that any change always reports its 
-        #       (potentially unchanged) ancestors as context
-        #assert 'S[0] =' in diff_repr
-        assert 'S[0][0] ~' in diff_repr
+        assert '# S := T[0][0]' in diff_repr
+        assert 'S ~' in diff_repr
         assert 'Grandchild' in diff_repr
     
     def test_mixed_operations(self) -> None:
@@ -270,14 +268,14 @@ class TestSnapshotDiffBasics:
         add_peer = object()
         
         old = make_snapshot('Parent', children=[
-            make_snapshot('Keep', path='S[0]', peer_obj=keep_peer),
-            make_snapshot('Remove', path='S[1]', peer_obj=remove_peer),
-            make_snapshot('Modify v1', path='S[2]', peer_obj=modify_peer),
+            make_snapshot('Keep', path='T[0]', peer_obj=keep_peer),
+            make_snapshot('Remove', path='T[1]', peer_obj=remove_peer),
+            make_snapshot('Modify v1', path='T[2]', peer_obj=modify_peer),
         ], peer_obj=parent_peer)
         new = make_snapshot('Parent', children=[
-            make_snapshot('Keep', path='S[0]', peer_obj=keep_peer),
-            make_snapshot('Modify v2', path='S[1]', peer_obj=modify_peer),
-            make_snapshot('Add', path='S[2]', peer_obj=add_peer),
+            make_snapshot('Keep', path='T[0]', peer_obj=keep_peer),
+            make_snapshot('Modify v2', path='T[1]', peer_obj=modify_peer),
+            make_snapshot('Add', path='T[2]', peer_obj=add_peer),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -298,12 +296,12 @@ class TestSnapshotDiffBasics:
         parent_peer = object()
         
         old = make_snapshot('Parent', children=[
-            make_snapshot('Child A', path='S[0]', peer_obj=None),
-            make_snapshot('Child B', path='S[1]', peer_obj=None),
+            make_snapshot('Child A', path='T[0]', peer_obj=None),
+            make_snapshot('Child B', path='T[1]', peer_obj=None),
         ], peer_obj=parent_peer)
         new = make_snapshot('Parent', children=[
-            make_snapshot('Child A', path='S[0]', peer_obj=None),
-            make_snapshot('Child B Modified', path='S[1]', peer_obj=None),
+            make_snapshot('Child A', path='T[0]', peer_obj=None),
+            make_snapshot('Child B Modified', path='T[1]', peer_obj=None),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -335,25 +333,25 @@ class TestSnapshotDiffShiftedMoreSyntax:
         old = make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-                make_snapshot('Item2', path='S[1]', peer_obj=item2),
-                make_snapshot('Item3', path='S[2]', peer_obj=item3),
+                make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                make_snapshot('Item2', path='T[1]', peer_obj=item2),
+                make_snapshot('Item3', path='T[2]', peer_obj=item3),
             ],
         )
         
         new = make_snapshot(
             'Root',
             [
-                make_snapshot('NewItem1', path='S[0]', peer_obj=object()),
-                make_snapshot('Item1', path='S[1]', peer_obj=item1),
-                make_snapshot('NewItem2', path='S[2]', peer_obj=object()),
-                make_snapshot('Item2', path='S[3]', peer_obj=item2),
-                make_snapshot('Item3', path='S[4]', peer_obj=item3),
+                make_snapshot('NewItem1', path='T[0]', peer_obj=object()),
+                make_snapshot('Item1', path='T[1]', peer_obj=item1),
+                make_snapshot('NewItem2', path='T[2]', peer_obj=object()),
+                make_snapshot('Item2', path='T[3]', peer_obj=item2),
+                make_snapshot('Item3', path='T[4]', peer_obj=item3),
             ],
         )
         
         expected_diff_repr_lines = [
-            '# S := S',
+            '# S := T',
             'S[0→1] = Item1',
             'S[0] + NewItem1',
             'S[1..2 → 3..4] = More(Count=2)',
@@ -379,9 +377,9 @@ class TestSnapshotDiffShiftedMoreSyntax:
         old = make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-                make_snapshot('Item2', path='S[1]', peer_obj=item2),
-                make_snapshot('Item3', path='S[2]', peer_obj=item3),
+                make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                make_snapshot('Item2', path='T[1]', peer_obj=item2),
+                make_snapshot('Item3', path='T[2]', peer_obj=item3),
             ],
         )
         
@@ -389,15 +387,15 @@ class TestSnapshotDiffShiftedMoreSyntax:
         new = make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),  # Stays at 0
-                make_snapshot('NewItem', path='S[1]', peer_obj=object()),  # New item creates gap
-                make_snapshot('Item2', path='S[2]', peer_obj=item2),  # Moves 1→2
-                make_snapshot('Item3', path='S[3]', peer_obj=item3),  # Moves 2→3
+                make_snapshot('Item1', path='T[0]', peer_obj=item1),  # Stays at 0
+                make_snapshot('NewItem', path='T[1]', peer_obj=object()),  # New item creates gap
+                make_snapshot('Item2', path='T[2]', peer_obj=item2),  # Moves 1→2
+                make_snapshot('Item3', path='T[3]', peer_obj=item3),  # Moves 2→3
             ],
         )
         
         expected_diff_repr_lines = [
-            '# S := S',
+            '# S := T',
             'S[1..2 → 2..3] = More(Count=2)',  # Only Item2 and Item3 merge
             'S[1] + NewItem',
         ]
@@ -416,20 +414,20 @@ class TestSnapshotDiffShiftedMoreSyntax:
         old = make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
+                make_snapshot('Item1', path='T[0]', peer_obj=item1),
             ],
         )
         
         new = make_snapshot(
             'Root',
             [
-                make_snapshot('NewItem', path='S[0]', peer_obj=object()),
-                make_snapshot('Item1', path='S[1]', peer_obj=item1),
+                make_snapshot('NewItem', path='T[0]', peer_obj=object()),
+                make_snapshot('Item1', path='T[1]', peer_obj=item1),
             ],
         )
         
         expected_diff_repr_lines = [
-            '# S := S',
+            '# S := T',
             'S[0→1] = Item1',  # Single item stays as individual entry
             'S[0] + NewItem',
         ]
@@ -453,11 +451,11 @@ class TestSnapshotDiffShiftedMoreSyntax:
         old = make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-                make_snapshot('Item2', path='S[1]', peer_obj=item2),
-                make_snapshot('Item3', path='S[2]', peer_obj=item3),
-                make_snapshot('Item4', path='S[3]', peer_obj=item4),
-                make_snapshot('Item5', path='S[4]', peer_obj=item5),
+                make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                make_snapshot('Item2', path='T[1]', peer_obj=item2),
+                make_snapshot('Item3', path='T[2]', peer_obj=item3),
+                make_snapshot('Item4', path='T[3]', peer_obj=item4),
+                make_snapshot('Item5', path='T[4]', peer_obj=item5),
             ],
         )
         
@@ -466,19 +464,19 @@ class TestSnapshotDiffShiftedMoreSyntax:
         new = make_snapshot(
             'Root',
             [
-                make_snapshot('NewItem1', path='S[0]', peer_obj=object()),
-                make_snapshot('NewItem2', path='S[1]', peer_obj=object()),
-                make_snapshot('Item1', path='S[2]', peer_obj=item1),
-                make_snapshot('Item2', path='S[3]', peer_obj=item2),
-                make_snapshot('Item3', path='S[4]', peer_obj=item3),  # Stays at relative position, breaking continuity
-                make_snapshot('NewItem3', path='S[5]', peer_obj=object()),
-                make_snapshot('Item4', path='S[6]', peer_obj=item4),
-                make_snapshot('Item5', path='S[7]', peer_obj=item5),
+                make_snapshot('NewItem1', path='T[0]', peer_obj=object()),
+                make_snapshot('NewItem2', path='T[1]', peer_obj=object()),
+                make_snapshot('Item1', path='T[2]', peer_obj=item1),
+                make_snapshot('Item2', path='T[3]', peer_obj=item2),
+                make_snapshot('Item3', path='T[4]', peer_obj=item3),  # Stays at relative position, breaking continuity
+                make_snapshot('NewItem3', path='T[5]', peer_obj=object()),
+                make_snapshot('Item4', path='T[6]', peer_obj=item4),
+                make_snapshot('Item5', path='T[7]', peer_obj=item5),
             ],
         )
         
         expected_diff_repr_lines = [
-            '# S := S',
+            '# S := T',
             'S[0..2 → 2..4] = More(Count=3)',  # Items 1-2-3
             'S[0] + NewItem1',
             'S[1] + NewItem2',
@@ -504,26 +502,26 @@ class TestSnapshotDiffShiftedMoreSyntax:
         old = make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-                make_snapshot('Item2-old', path='S[1]', peer_obj=item2),
-                make_snapshot('Item3', path='S[2]', peer_obj=item3),
-                make_snapshot('Item4', path='S[3]', peer_obj=item4),
+                make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                make_snapshot('Item2-old', path='T[1]', peer_obj=item2),
+                make_snapshot('Item3', path='T[2]', peer_obj=item3),
+                make_snapshot('Item4', path='T[3]', peer_obj=item4),
             ],
         )
         
         new = make_snapshot(
             'Root',
             [
-                make_snapshot('NewItem', path='S[0]', peer_obj=object()),  # Addition forces items to move
-                make_snapshot('Item1', path='S[1]', peer_obj=item1),
-                make_snapshot('Item2-new', path='S[2]', peer_obj=item2),  # Modified
-                make_snapshot('Item3', path='S[3]', peer_obj=item3),
-                make_snapshot('Item4', path='S[4]', peer_obj=item4),
+                make_snapshot('NewItem', path='T[0]', peer_obj=object()),  # Addition forces items to move
+                make_snapshot('Item1', path='T[1]', peer_obj=item1),
+                make_snapshot('Item2-new', path='T[2]', peer_obj=item2),  # Modified
+                make_snapshot('Item3', path='T[3]', peer_obj=item3),
+                make_snapshot('Item4', path='T[4]', peer_obj=item4),
             ],
         )
         
         expected_diff_repr_lines = [
-            '# S := S',
+            '# S := T',
             'S[0→1] = Item1',  # Not merged because Item2 is modified (breaks contiguity)
             'S[0] + NewItem',
             'S[1→2] ~ Item2-{old→new}',  # Modified, not a move
@@ -639,7 +637,7 @@ class TestSnapshotDiffAddAndDeleteMoreSyntax:
         
         # Create old with one child in the middle
         old = make_snapshot('Parent', children=[
-            make_snapshot('Existing', path='S[5]', peer_obj=existing_child),
+            make_snapshot('Existing', path='T[5]', peer_obj=existing_child),
         ], peer_obj=parent_peer)
         
         # Create new with additions before and after the existing child
@@ -745,16 +743,16 @@ class TestSnapshotDiffSorting:
         grandchild_peer = object()
         
         old = make_snapshot('Root', children=[
-            make_snapshot('Child 0 v1', path='S[0]', peer_obj=child0_peer),
+            make_snapshot('Child 0 v1', path='T[0]', peer_obj=child0_peer),
             make_snapshot('Child 1', children=[
-                make_snapshot('Grandchild v1', path='S[1][0]', peer_obj=grandchild_peer)
-            ], path='S[1]', peer_obj=child1_peer),
+                make_snapshot('Grandchild v1', path='T[1][0]', peer_obj=grandchild_peer)
+            ], path='T[1]', peer_obj=child1_peer),
         ], peer_obj=root_peer)
         new = make_snapshot('Root', children=[
-            make_snapshot('Child 0 v2', path='S[0]', peer_obj=child0_peer),
+            make_snapshot('Child 0 v2', path='T[0]', peer_obj=child0_peer),
             make_snapshot('Child 1', children=[
-                make_snapshot('Grandchild v2', path='S[1][0]', peer_obj=grandchild_peer)
-            ], path='S[1]', peer_obj=child1_peer),
+                make_snapshot('Grandchild v2', path='T[1][0]', peer_obj=grandchild_peer)
+            ], path='T[1]', peer_obj=child1_peer),
         ], peer_obj=root_peer)
         
         diff = Snapshot.diff(old, new)
@@ -772,14 +770,15 @@ class TestSnapshotDiffSorting:
         new_child_peer = object()
         
         old = make_snapshot('Parent', children=[
-            make_snapshot('Old Child', path='S[0]', peer_obj=old_child_peer),
+            make_snapshot('Old Child', path='T[0]', peer_obj=old_child_peer),
         ], peer_obj=parent_peer)
         new = make_snapshot('Parent', children=[
-            make_snapshot('New Child', path='S[0]', peer_obj=new_child_peer),
+            make_snapshot('New Child', path='T[0]', peer_obj=new_child_peer),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
         diff_repr = repr(diff)
+        assert '# S := T' in diff_repr
         
         # Deletion should come before addition
         lines = diff_repr.split('\n')
@@ -829,7 +828,7 @@ class TestSnapshotDiffGolden:
                     [  
                         make_snapshot(
                             "TreeItem(👁='▶︎ 📁 Finding members of group: Comic -- Complete')",
-                            path='S[0][0]',
+                            path='T[0][0]',
                             peer_obj=subtask_peer
                         ),
                         make_snapshot(
@@ -837,79 +836,79 @@ class TestSnapshotDiffGolden:
                             [
                                 make_snapshot(
                                     "TreeItem(👁='— 📄 22 more')",
-                                    path='S[0][1][0]',
+                                    path='T[0][1][0]',
                                     peer_obj=more_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2424/index.html -- Complete')",
-                                    path='S[0][1][1]',
+                                    path='T[0][1][1]',
                                     peer_obj=item_2424_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2423/index.html -- Complete')",
-                                    path='S[0][1][2]',
+                                    path='T[0][1][2]',
                                     peer_obj=item_2423_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2422/index.html -- Complete')",
-                                    path='S[0][1][3]',
+                                    path='T[0][1][3]',
                                     peer_obj=item_2422_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2421/index.html -- Complete')",
-                                    path='S[0][1][4]',
+                                    path='T[0][1][4]',
                                     peer_obj=item_2421_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2420/index.html -- Complete')",
-                                    path='S[0][1][5]',
+                                    path='T[0][1][5]',
                                     peer_obj=item_2420_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- Downloading')",
-                                    path='S[0][1][6]',
+                                    path='T[0][1][6]',
                                     peer_obj=item_1001_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- Queued')",
-                                    path='S[0][1][7]',
+                                    path='T[0][1][7]',
                                     peer_obj=item_1002_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- Queued')",
-                                    path='S[0][1][8]',
+                                    path='T[0][1][8]',
                                     peer_obj=item_1003_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- Queued')",
-                                    path='S[0][1][9]',
+                                    path='T[0][1][9]',
                                     peer_obj=item_1004_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1005/index.html -- Queued')",
-                                    path='S[0][1][10]',
+                                    path='T[0][1][10]',
                                     peer_obj=item_1005_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1006/index.html -- Queued')",
-                                    path='S[0][1][11]',
+                                    path='T[0][1][11]',
                                     peer_obj=item_1006_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='— 📄 2,310 more')",
-                                    path='S[0][1][12]',
+                                    path='T[0][1][12]',
                                     peer_obj=more_end_peer
                                 ),
                             ],
-                            path='S[0][1]',
+                            path='T[0][1]',
                             peer_obj=task_peer
                         ),
                     ],
-                    path='S[0]',
+                    path="T['cr-entity-tree'].Tree[0]",
                     peer_obj=task_peer
                 ),
             ],
-            path="T['cr-entity-tree'].Tree[0]",
+            path="T['cr-entity-tree'].Tree",
             peer_obj=root_peer
         )
         
@@ -922,7 +921,7 @@ class TestSnapshotDiffGolden:
                     [
                         make_snapshot(
                             "TreeItem(👁='▶︎ 📁 Finding members of group: Comic -- Complete')",
-                            path='S[0][0]',
+                            path='T[0][0]',
                             peer_obj=subtask_peer
                         ),
                         make_snapshot(
@@ -930,108 +929,108 @@ class TestSnapshotDiffGolden:
                             [
                                 make_snapshot(
                                     "TreeItem(👁='— 📄 25 more')",
-                                    path='S[0][1][0]',
+                                    path='T[0][1][0]',
                                     peer_obj=more_peer
                                 ),
                                 # 2424, 2423, 2422 removed (scrolled off by 3 items)
                                 # 2421, 2420 stay visible and complete
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2421/index.html -- Complete')",
-                                    path='S[0][1][1]',
+                                    path='T[0][1][1]',
                                     peer_obj=item_2421_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2420/index.html -- Complete')",
-                                    path='S[0][1][2]',
+                                    path='T[0][1][2]',
                                     peer_obj=item_2420_peer
                                 ),
                                 # 1001 moved from index 6 to 3 and completed
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- Complete')",
-                                    path='S[0][1][3]',
+                                    path='T[0][1][3]',
                                     peer_obj=item_1001_peer
                                 ),
                                 # 1002 moved from index 7 to 4 and completed
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- Complete')",
-                                    path='S[0][1][4]',
+                                    path='T[0][1][4]',
                                     peer_obj=item_1002_peer
                                 ),
                                 # 1003 moved from index 8 to 5 and completed
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- Complete')",
-                                    path='S[0][1][5]',
+                                    path='T[0][1][5]',
                                     peer_obj=item_1003_peer
                                 ),
                                 # 1004 moved from index 9 to 6 and now downloading
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- Downloading')",
-                                    path='S[0][1][6]',
+                                    path='T[0][1][6]',
                                     peer_obj=item_1004_peer
                                 ),
                                 # 1005, 1006 stay queued and shifted up
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1005/index.html -- Queued')",
-                                    path='S[0][1][7]',
+                                    path='T[0][1][7]',
                                     peer_obj=item_1005_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1006/index.html -- Queued')",
-                                    path='S[0][1][8]',
+                                    path='T[0][1][8]',
                                     peer_obj=item_1006_peer
                                 ),
                                 # 1007, 1008, 1009 newly visible, queued
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1007/index.html -- Queued')",
-                                    path='S[0][1][9]',
+                                    path='T[0][1][9]',
                                     peer_obj=item_1007_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1008/index.html -- Queued')",
-                                    path='S[0][1][10]',
+                                    path='T[0][1][10]',
                                     peer_obj=item_1008_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1009/index.html -- Queued')",
-                                    path='S[0][1][11]',
+                                    path='T[0][1][11]',
                                     peer_obj=item_1009_peer
                                 ),
                                 make_snapshot(
                                     "TreeItem(👁='— 📄 2,307 more')",
-                                    path='S[0][1][12]',
+                                    path='T[0][1][12]',
                                     peer_obj=more_end_peer
                                 ),
                             ],
-                            path='S[0][1]',
+                            path='T[0][1]',
                             peer_obj=task_peer
                         ),
                     ],
-                    path='S[0]',
+                    path="T['cr-entity-tree'].Tree[0]",
                     peer_obj=task_peer
                 ),
             ],
-            path="T['cr-entity-tree'].Tree[0]",
+            path="T['cr-entity-tree'].Tree",
             peer_obj=root_peer
         )
         
         expected_diff_repr_lines = [
             "# S := T['cr-entity-tree'].Tree[0]",
-            "S[0] ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {27→30} of 2,438 item(s) -- 2:1{→9:1}8{:01→} remaining (3.4{3→7}s/item)')",
-            "S[0][1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {27→30} of 2,438 item(s) -- 2:1{→9:1}8{:01→} remaining (3.4{3→7}s/item)')",
-            "S[0][1][0] ~ TreeItem(👁='— 📄 2{2→5} more')",
-            "S[0][1][1] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2424/index.html -- Complete')",
-            "S[0][1][2] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2423/index.html -- Complete')",
-            "S[0][1][3] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2422/index.html -- Complete')",
-            'S[0][1][4..5 → 1..2] = More(Count=2)',
-            "S[0][1][6→3] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- {D→C}o{wn→mp}l{oading→ete}')",
-            "S[0][1][7→4] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- {Qu→Compl}e{u→t}e{d→}')",
-            "S[0][1][8→5] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- {Qu→Compl}e{u→t}e{d→}')",
-            "S[0][1][9→6] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- {Queue→Downloa}d{→ing}')",
-            "S[0][1][9] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1007/index.html -- Queued')",
-            'S[0][1][10..11 → 7..8] = More(Count=2)',
-            "S[0][1][10] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1008/index.html -- Queued')",
-            "S[0][1][11] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1009/index.html -- Queued')",
-            "S[0][1][12] ~ TreeItem(👁='— 📄 2,3{1→}0{→7} more')",
+            "S ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {27→30} of 2,438 item(s) -- 2:1{→9:1}8{:01→} remaining (3.4{3→7}s/item)')",
+            "S[1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {27→30} of 2,438 item(s) -- 2:1{→9:1}8{:01→} remaining (3.4{3→7}s/item)')",
+            "S[1][0] ~ TreeItem(👁='— 📄 2{2→5} more')",
+            "S[1][1] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2424/index.html -- Complete')",
+            "S[1][2] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2423/index.html -- Complete')",
+            "S[1][3] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2422/index.html -- Complete')",
+            'S[1][4..5 → 1..2] = More(Count=2)',
+            "S[1][6→3] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- {D→C}o{wn→mp}l{oading→ete}')",
+            "S[1][7→4] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- {Qu→Compl}e{u→t}e{d→}')",
+            "S[1][8→5] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- {Qu→Compl}e{u→t}e{d→}')",
+            "S[1][9→6] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- {Queue→Downloa}d{→ing}')",
+            "S[1][9] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1007/index.html -- Queued')",
+            'S[1][10..11 → 7..8] = More(Count=2)',
+            "S[1][10] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1008/index.html -- Queued')",
+            "S[1][11] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1009/index.html -- Queued')",
+            "S[1][12] ~ TreeItem(👁='— 📄 2,3{1→}0{→7} more')",
         ]
         
         with subtests.test(direction='forward'):
@@ -1042,22 +1041,22 @@ class TestSnapshotDiffGolden:
         
         expected_reverse_diff_repr_lines = [
             "# S := T['cr-entity-tree'].Tree[0]",
-            "S[0] ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {30→27} of 2,438 item(s) -- 2:1{9→8}:{→0}1{8→} remaining (3.4{7→3}s/item)')",
-            "S[0][1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {30→27} of 2,438 item(s) -- 2:1{9→8}:{→0}1{8→} remaining (3.4{7→3}s/item)')",
-            "S[0][1][0] ~ TreeItem(👁='— 📄 2{5→2} more')",
-            'S[0][1][1..2 → 4..5] = More(Count=2)',
-            "S[0][1][1] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2424/index.html -- Complete')",
-            "S[0][1][2] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2423/index.html -- Complete')",
-            "S[0][1][3→6] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- {C→D}o{mp→wn}l{ete→oading}')",
-            "S[0][1][3] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2422/index.html -- Complete')",
-            "S[0][1][4→7] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- {Compl→Qu}e{t→u}e{→d}')",
-            "S[0][1][5→8] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- {Compl→Qu}e{t→u}e{→d}')",
-            "S[0][1][6→9] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- {Downloa→Queue}d{ing→}')",
-            'S[0][1][7..8 → 10..11] = More(Count=2)',
-            "S[0][1][9] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1007/index.html -- Queued')",
-            "S[0][1][10] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1008/index.html -- Queued')",
-            "S[0][1][11] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1009/index.html -- Queued')",
-            "S[0][1][12] ~ TreeItem(👁='— 📄 2,3{→1}0{7→} more')",
+            "S ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {30→27} of 2,438 item(s) -- 2:1{9→8}:{→0}1{8→} remaining (3.4{7→3}s/item)')",
+            "S[1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {30→27} of 2,438 item(s) -- 2:1{9→8}:{→0}1{8→} remaining (3.4{7→3}s/item)')",
+            "S[1][0] ~ TreeItem(👁='— 📄 2{5→2} more')",
+            'S[1][1..2 → 4..5] = More(Count=2)',
+            "S[1][1] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2424/index.html -- Complete')",
+            "S[1][2] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2423/index.html -- Complete')",
+            "S[1][3→6] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- {C→D}o{mp→wn}l{ete→oading}')",
+            "S[1][3] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2422/index.html -- Complete')",
+            "S[1][4→7] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- {Compl→Qu}e{t→u}e{→d}')",
+            "S[1][5→8] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- {Compl→Qu}e{t→u}e{→d}')",
+            "S[1][6→9] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- {Downloa→Queue}d{ing→}')",
+            'S[1][7..8 → 10..11] = More(Count=2)',
+            "S[1][9] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1007/index.html -- Queued')",
+            "S[1][10] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1008/index.html -- Queued')",
+            "S[1][11] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1009/index.html -- Queued')",
+            "S[1][12] ~ TreeItem(👁='— 📄 2,3{→1}0{7→} more')",
         ]
         
         with subtests.test(direction='reverse'):
