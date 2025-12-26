@@ -103,7 +103,7 @@ class TestSnapshot:
 
 # === Tests for SnapshotDiff ===
 
-class TestSnapshotDiff:
+class TestSnapshotDiffBasics:
     """Tests for the SnapshotDiff class."""
     
     def test_no_changes_returns_empty_diff(self) -> None:
@@ -312,6 +312,235 @@ class TestSnapshotDiff:
         # Child A should match by description, Child B should be seen as removed/added
         diff_repr = repr(diff)
         assert 'Child B' in diff_repr
+
+
+class TestSnapshotDiffShiftedMoreSyntax:
+    """
+    Tests that contiguous ranges of moved children (with changed indexes)
+    are reported as a single `[A1..B1 → A2..B2] = More(Count=#)` diff entry.
+    """
+
+    def test_range_merging_with_additions_interspersed(self) -> None:
+        """
+        Test that contiguous moved items are merged into a range even when
+        additions are interspersed in the sorted output.
+        
+        Verifies that 2 or more contiguous moves are merged into a range.
+        """
+        # Create peers for identity matching
+        item1 = object()
+        item2 = object()
+        item3 = object()
+        
+        old = make_snapshot(
+            'Root',
+            [
+                make_snapshot('Item1', path='S[0]', peer_obj=item1),
+                make_snapshot('Item2', path='S[1]', peer_obj=item2),
+                make_snapshot('Item3', path='S[2]', peer_obj=item3),
+            ],
+        )
+        
+        new = make_snapshot(
+            'Root',
+            [
+                make_snapshot('NewItem1', path='S[0]', peer_obj=object()),
+                make_snapshot('Item1', path='S[1]', peer_obj=item1),
+                make_snapshot('NewItem2', path='S[2]', peer_obj=object()),
+                make_snapshot('Item2', path='S[3]', peer_obj=item2),
+                make_snapshot('Item3', path='S[4]', peer_obj=item3),
+            ],
+        )
+        
+        expected_diff_repr_lines = [
+            '# S := S',
+            'S[0→1] = Item1',
+            'S[0] + NewItem1',
+            'S[1..2 → 3..4] = More(Count=2)',
+            'S[2] + NewItem2',
+        ]
+        
+        diff = Snapshot.diff(old, new)
+        diff_repr = repr(diff)
+        actual_diff_repr_lines = diff_repr.split('\n')
+        assert actual_diff_repr_lines == expected_diff_repr_lines
+    
+    def test_range_merging_requires_contiguous_new_indices(self) -> None:
+        """
+        Test that range merging requires BOTH old and new indices to be contiguous.
+        
+        If items have contiguous old indices but gaps in new indices (due to
+        additions), they should not all merge into a single range.
+        """
+        item1 = object()
+        item2 = object()
+        item3 = object()
+        
+        old = make_snapshot(
+            'Root',
+            [
+                make_snapshot('Item1', path='S[0]', peer_obj=item1),
+                make_snapshot('Item2', path='S[1]', peer_obj=item2),
+                make_snapshot('Item3', path='S[2]', peer_obj=item3),
+            ],
+        )
+        
+        # Items move with a gap in the middle
+        new = make_snapshot(
+            'Root',
+            [
+                make_snapshot('Item1', path='S[0]', peer_obj=item1),  # Stays at 0
+                make_snapshot('NewItem', path='S[1]', peer_obj=object()),  # New item creates gap
+                make_snapshot('Item2', path='S[2]', peer_obj=item2),  # Moves 1→2
+                make_snapshot('Item3', path='S[3]', peer_obj=item3),  # Moves 2→3
+            ],
+        )
+        
+        expected_diff_repr_lines = [
+            '# S := S',
+            'S[1..2 → 2..3] = More(Count=2)',  # Only Item2 and Item3 merge
+            'S[1] + NewItem',
+        ]
+        
+        diff = Snapshot.diff(old, new)
+        diff_repr = repr(diff)
+        actual_diff_repr_lines = diff_repr.split('\n')
+        assert actual_diff_repr_lines == expected_diff_repr_lines
+    
+    def test_range_merging_single_item_not_merged(self) -> None:
+        """
+        Test that a single moved item is not turned into a range.
+        """
+        item1 = object()
+        
+        old = make_snapshot(
+            'Root',
+            [
+                make_snapshot('Item1', path='S[0]', peer_obj=item1),
+            ],
+        )
+        
+        new = make_snapshot(
+            'Root',
+            [
+                make_snapshot('NewItem', path='S[0]', peer_obj=object()),
+                make_snapshot('Item1', path='S[1]', peer_obj=item1),
+            ],
+        )
+        
+        expected_diff_repr_lines = [
+            '# S := S',
+            'S[0→1] = Item1',  # Single item stays as individual entry
+            'S[0] + NewItem',
+        ]
+        
+        diff = Snapshot.diff(old, new)
+        diff_repr = repr(diff)
+        actual_diff_repr_lines = diff_repr.split('\n')
+        assert actual_diff_repr_lines == expected_diff_repr_lines
+    
+    def test_range_merging_multiple_separate_ranges(self) -> None:
+        """
+        Test that multiple separate contiguous ranges in the same parent
+        are each merged independently.
+        """
+        item1 = object()
+        item2 = object()
+        item3 = object()
+        item4 = object()
+        item5 = object()
+        
+        old = make_snapshot(
+            'Root',
+            [
+                make_snapshot('Item1', path='S[0]', peer_obj=item1),
+                make_snapshot('Item2', path='S[1]', peer_obj=item2),
+                make_snapshot('Item3', path='S[2]', peer_obj=item3),
+                make_snapshot('Item4', path='S[3]', peer_obj=item4),
+                make_snapshot('Item5', path='S[4]', peer_obj=item5),
+            ],
+        )
+        
+        # Two separate ranges with a gap: Items 1-2 shift to 2-3, Items 4-5 shift to 6-7
+        # Item3 stays at same position creating a break in the sequence
+        new = make_snapshot(
+            'Root',
+            [
+                make_snapshot('NewItem1', path='S[0]', peer_obj=object()),
+                make_snapshot('NewItem2', path='S[1]', peer_obj=object()),
+                make_snapshot('Item1', path='S[2]', peer_obj=item1),
+                make_snapshot('Item2', path='S[3]', peer_obj=item2),
+                make_snapshot('Item3', path='S[4]', peer_obj=item3),  # Stays at relative position, breaking continuity
+                make_snapshot('NewItem3', path='S[5]', peer_obj=object()),
+                make_snapshot('Item4', path='S[6]', peer_obj=item4),
+                make_snapshot('Item5', path='S[7]', peer_obj=item5),
+            ],
+        )
+        
+        expected_diff_repr_lines = [
+            '# S := S',
+            'S[0..2 → 2..4] = More(Count=3)',  # Items 1-2-3
+            'S[0] + NewItem1',
+            'S[1] + NewItem2',
+            'S[3..4 → 6..7] = More(Count=2)',  # Items 4-5
+            'S[5] + NewItem3',
+        ]
+        
+        diff = Snapshot.diff(old, new)
+        diff_repr = repr(diff)
+        actual_diff_repr_lines = diff_repr.split('\n')
+        assert actual_diff_repr_lines == expected_diff_repr_lines
+    
+    def test_range_merging_only_moves_not_modifications(self) -> None:
+        """
+        Test that only unchanged moves (=) are merged into ranges,
+        not modifications (~).
+        """
+        item1 = object()
+        item2 = object()
+        item3 = object()
+        item4 = object()
+        
+        old = make_snapshot(
+            'Root',
+            [
+                make_snapshot('Item1', path='S[0]', peer_obj=item1),
+                make_snapshot('Item2-old', path='S[1]', peer_obj=item2),
+                make_snapshot('Item3', path='S[2]', peer_obj=item3),
+                make_snapshot('Item4', path='S[3]', peer_obj=item4),
+            ],
+        )
+        
+        new = make_snapshot(
+            'Root',
+            [
+                make_snapshot('NewItem', path='S[0]', peer_obj=object()),  # Addition forces items to move
+                make_snapshot('Item1', path='S[1]', peer_obj=item1),
+                make_snapshot('Item2-new', path='S[2]', peer_obj=item2),  # Modified
+                make_snapshot('Item3', path='S[3]', peer_obj=item3),
+                make_snapshot('Item4', path='S[4]', peer_obj=item4),
+            ],
+        )
+        
+        expected_diff_repr_lines = [
+            '# S := S',
+            'S[0→1] = Item1',  # Not merged because Item2 is modified (breaks contiguity)
+            'S[0] + NewItem',
+            'S[1→2] ~ Item2-{old→new}',  # Modified, not a move
+            'S[2..3 → 3..4] = More(Count=2)',  # Item3 and Item4 are merged
+        ]
+        
+        diff = Snapshot.diff(old, new)
+        diff_repr = repr(diff)
+        actual_diff_repr_lines = diff_repr.split('\n')
+        assert actual_diff_repr_lines == expected_diff_repr_lines
+
+
+class TestSnapshotDiffAddAndDeleteMoreSyntax:
+    """
+    Test that contiguous ranges of >7 adds or deletes are collapsed such
+    that exactly 7 items are displayed with a middle More(Count=#) item.
+    """
     
     def test_long_runs_of_additions_are_collapsed(self) -> None:
         """Test that runs of > 7 additions are collapsed with More() entries."""
@@ -837,224 +1066,3 @@ class TestSnapshotDiffGolden:
             actual_diff_repr_lines = diff_repr.split('\n')
             assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
 
-
-class TestSnapshotDiffMoreSyntax:
-    """
-    Tests that contiguous ranges of moved children (with changed indexes)
-    are reported as a single `[A1..B1 → A2..B2] = More(Count=#)` diff entry.
-    """
-
-    def test_range_merging_with_additions_interspersed(self) -> None:
-        """
-        Test that contiguous moved items are merged into a range even when
-        additions are interspersed in the sorted output.
-        
-        Verifies that 2 or more contiguous moves are merged into a range.
-        """
-        # Create peers for identity matching
-        item1 = object()
-        item2 = object()
-        item3 = object()
-        
-        old = make_snapshot(
-            'Root',
-            [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-                make_snapshot('Item2', path='S[1]', peer_obj=item2),
-                make_snapshot('Item3', path='S[2]', peer_obj=item3),
-            ],
-        )
-        
-        new = make_snapshot(
-            'Root',
-            [
-                make_snapshot('NewItem1', path='S[0]', peer_obj=object()),
-                make_snapshot('Item1', path='S[1]', peer_obj=item1),
-                make_snapshot('NewItem2', path='S[2]', peer_obj=object()),
-                make_snapshot('Item2', path='S[3]', peer_obj=item2),
-                make_snapshot('Item3', path='S[4]', peer_obj=item3),
-            ],
-        )
-        
-        expected_diff_repr_lines = [
-            '# S := S',
-            'S[0→1] = Item1',
-            'S[0] + NewItem1',
-            'S[1..2 → 3..4] = More(Count=2)',
-            'S[2] + NewItem2',
-        ]
-        
-        diff = Snapshot.diff(old, new)
-        diff_repr = repr(diff)
-        actual_diff_repr_lines = diff_repr.split('\n')
-        assert actual_diff_repr_lines == expected_diff_repr_lines
-    
-    def test_range_merging_requires_contiguous_new_indices(self) -> None:
-        """
-        Test that range merging requires BOTH old and new indices to be contiguous.
-        
-        If items have contiguous old indices but gaps in new indices (due to
-        additions), they should not all merge into a single range.
-        """
-        item1 = object()
-        item2 = object()
-        item3 = object()
-        
-        old = make_snapshot(
-            'Root',
-            [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-                make_snapshot('Item2', path='S[1]', peer_obj=item2),
-                make_snapshot('Item3', path='S[2]', peer_obj=item3),
-            ],
-        )
-        
-        # Items move with a gap in the middle
-        new = make_snapshot(
-            'Root',
-            [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),  # Stays at 0
-                make_snapshot('NewItem', path='S[1]', peer_obj=object()),  # New item creates gap
-                make_snapshot('Item2', path='S[2]', peer_obj=item2),  # Moves 1→2
-                make_snapshot('Item3', path='S[3]', peer_obj=item3),  # Moves 2→3
-            ],
-        )
-        
-        expected_diff_repr_lines = [
-            '# S := S',
-            'S[1..2 → 2..3] = More(Count=2)',  # Only Item2 and Item3 merge
-            'S[1] + NewItem',
-        ]
-        
-        diff = Snapshot.diff(old, new)
-        diff_repr = repr(diff)
-        actual_diff_repr_lines = diff_repr.split('\n')
-        assert actual_diff_repr_lines == expected_diff_repr_lines
-    
-    def test_range_merging_single_item_not_merged(self) -> None:
-        """
-        Test that a single moved item is not turned into a range.
-        """
-        item1 = object()
-        
-        old = make_snapshot(
-            'Root',
-            [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-            ],
-        )
-        
-        new = make_snapshot(
-            'Root',
-            [
-                make_snapshot('NewItem', path='S[0]', peer_obj=object()),
-                make_snapshot('Item1', path='S[1]', peer_obj=item1),
-            ],
-        )
-        
-        expected_diff_repr_lines = [
-            '# S := S',
-            'S[0→1] = Item1',  # Single item stays as individual entry
-            'S[0] + NewItem',
-        ]
-        
-        diff = Snapshot.diff(old, new)
-        diff_repr = repr(diff)
-        actual_diff_repr_lines = diff_repr.split('\n')
-        assert actual_diff_repr_lines == expected_diff_repr_lines
-    
-    def test_range_merging_multiple_separate_ranges(self) -> None:
-        """
-        Test that multiple separate contiguous ranges in the same parent
-        are each merged independently.
-        """
-        item1 = object()
-        item2 = object()
-        item3 = object()
-        item4 = object()
-        item5 = object()
-        
-        old = make_snapshot(
-            'Root',
-            [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-                make_snapshot('Item2', path='S[1]', peer_obj=item2),
-                make_snapshot('Item3', path='S[2]', peer_obj=item3),
-                make_snapshot('Item4', path='S[3]', peer_obj=item4),
-                make_snapshot('Item5', path='S[4]', peer_obj=item5),
-            ],
-        )
-        
-        # Two separate ranges with a gap: Items 1-2 shift to 2-3, Items 4-5 shift to 6-7
-        # Item3 stays at same position creating a break in the sequence
-        new = make_snapshot(
-            'Root',
-            [
-                make_snapshot('NewItem1', path='S[0]', peer_obj=object()),
-                make_snapshot('NewItem2', path='S[1]', peer_obj=object()),
-                make_snapshot('Item1', path='S[2]', peer_obj=item1),
-                make_snapshot('Item2', path='S[3]', peer_obj=item2),
-                make_snapshot('Item3', path='S[4]', peer_obj=item3),  # Stays at relative position, breaking continuity
-                make_snapshot('NewItem3', path='S[5]', peer_obj=object()),
-                make_snapshot('Item4', path='S[6]', peer_obj=item4),
-                make_snapshot('Item5', path='S[7]', peer_obj=item5),
-            ],
-        )
-        
-        expected_diff_repr_lines = [
-            '# S := S',
-            'S[0..2 → 2..4] = More(Count=3)',  # Items 1-2-3
-            'S[0] + NewItem1',
-            'S[1] + NewItem2',
-            'S[3..4 → 6..7] = More(Count=2)',  # Items 4-5
-            'S[5] + NewItem3',
-        ]
-        
-        diff = Snapshot.diff(old, new)
-        diff_repr = repr(diff)
-        actual_diff_repr_lines = diff_repr.split('\n')
-        assert actual_diff_repr_lines == expected_diff_repr_lines
-    
-    def test_range_merging_only_moves_not_modifications(self) -> None:
-        """
-        Test that only unchanged moves (=) are merged into ranges,
-        not modifications (~).
-        """
-        item1 = object()
-        item2 = object()
-        item3 = object()
-        item4 = object()
-        
-        old = make_snapshot(
-            'Root',
-            [
-                make_snapshot('Item1', path='S[0]', peer_obj=item1),
-                make_snapshot('Item2-old', path='S[1]', peer_obj=item2),
-                make_snapshot('Item3', path='S[2]', peer_obj=item3),
-                make_snapshot('Item4', path='S[3]', peer_obj=item4),
-            ],
-        )
-        
-        new = make_snapshot(
-            'Root',
-            [
-                make_snapshot('NewItem', path='S[0]', peer_obj=object()),  # Addition forces items to move
-                make_snapshot('Item1', path='S[1]', peer_obj=item1),
-                make_snapshot('Item2-new', path='S[2]', peer_obj=item2),  # Modified
-                make_snapshot('Item3', path='S[3]', peer_obj=item3),
-                make_snapshot('Item4', path='S[4]', peer_obj=item4),
-            ],
-        )
-        
-        expected_diff_repr_lines = [
-            '# S := S',
-            'S[0→1] = Item1',  # Not merged because Item2 is modified (breaks contiguity)
-            'S[0] + NewItem',
-            'S[1→2] ~ Item2-{old→new}',  # Modified, not a move
-            'S[2..3 → 3..4] = More(Count=2)',  # Item3 and Item4 are merged
-        ]
-        
-        diff = Snapshot.diff(old, new)
-        diff_repr = repr(diff)
-        actual_diff_repr_lines = diff_repr.split('\n')
-        assert actual_diff_repr_lines == expected_diff_repr_lines

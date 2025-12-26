@@ -1099,15 +1099,12 @@ class SnapshotDiff(Generic[_P]):
             self._new,
             self._name,
         )
-        
         # Sort all entries by path for proper tree ordering
         entries.sort(key=lambda e: e.path_sort_key())
         
-        # Merge contiguous moved nodes into range entries
-        entries = self._merge_ranges(entries)
-        
-        # Collapse long runs of additions and deletions
-        entries = self._collapse_runs(entries)
+        # Collapse various types of runs into More(...) entries
+        entries = self._collapse_shifted_unchanged_runs(entries)
+        entries = self._collapse_add_and_delete_runs(entries)
         
         lines = [f'# {self._name} := {self._new._path}']
         if entries:
@@ -1302,7 +1299,7 @@ class SnapshotDiff(Generic[_P]):
             return f'{parent_path}[{old_idx}→{new_idx}]'
     
     @classmethod
-    def _merge_ranges(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
+    def _collapse_shifted_unchanged_runs(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
         """
         Merges contiguous moved nodes with unchanged details into range entries.
         
@@ -1424,7 +1421,7 @@ class SnapshotDiff(Generic[_P]):
         return path[:last_bracket]
     
     @classmethod
-    def _collapse_runs(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
+    def _collapse_add_and_delete_runs(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
         """
         Collapses long runs of additions (+) or deletions (-) into More() entries.
         
