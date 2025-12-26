@@ -1017,7 +1017,32 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         Returns:
         * A SnapshotDiff object that can be printed to see all changes
         """
-        return SnapshotDiff(old, new, name)
+        # If description of each snapshot's peer differs, diff root is here
+        if old._peer_description != new._peer_description:
+            return SnapshotDiff(old, new, name)
+        
+        # If children count differs, diff root is here
+        if len(old._children) != len(new._children):
+            return SnapshotDiff(old, new, name)
+        
+        # Compare children recursively
+        child_diffs: list[SnapshotDiff[_P] | None] = []
+        for (c1, c2) in zip(old._children, new._children):
+            child_diff = Snapshot.diff(c1, c2)
+            child_diffs.append(child_diff)
+        
+        # Count non-empty diffs
+        non_empty_diffs = [d for d in child_diffs if d]
+        
+        if len(non_empty_diffs) == 0:
+            # If zero children have a non-empty diff, return an empty diff rooted here
+            return SnapshotDiff(old, new, name)
+        elif len(non_empty_diffs) == 1:
+            # If exactly 1 child has a non-empty diff, return that diff
+            return non_empty_diffs[0]
+        else:
+            # If multiple children have a non-empty diff, diff root is here
+            return SnapshotDiff(old, new, name)
     
     def __sub__(new: Self, old: 'Snapshot[_P]') -> 'SnapshotDiff[_P]':
         """
