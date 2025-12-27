@@ -1139,7 +1139,7 @@ class SnapshotDiff(Generic[_P]):
         lines = [f'# {self._name} := {self._new._path}']
         if entries:
             for entry in entries:
-                lines.append(entry.format_line())
+                lines.extend(entry.format_lines())
         else:
             lines.append('(no changes)')
         return '\n'.join(lines)
@@ -1293,27 +1293,92 @@ class SnapshotDiff(Generic[_P]):
             # Add deletion entries
             for (old_idx, old_snap) in deletions:
                 child_path = f'{parent_path}[{old_idx}]'
+                # Recursively compute entries for all descendents of the removed node
+                descendant_entries = cls._compute_descendant_entries(
+                    old_snap,
+                    child_path,
+                    symbol='-',
+                )
                 entries.append(_DiffEntry(
                     path=child_path,
                     symbol='-',
                     description=old_snap._peer_description,
                     old_index=old_idx,
                     new_index=None,
+                    descendents=descendant_entries,
                 ))
             
             # Add addition entries
             for (new_idx, new_snap) in additions:
                 child_path = f'{parent_path}[{new_idx}]'
+                # Recursively compute entries for all descendents of the added node
+                descendant_entries = cls._compute_descendant_entries(
+                    new_snap,
+                    child_path,
+                    symbol='+',
+                )
                 entries.append(_DiffEntry(
                     path=child_path,
                     symbol='+',
                     description=new_snap._peer_description,
                     old_index=None,
                     new_index=new_idx,
+                    descendents=descendant_entries,
                 ))
         
         # NOTE: Returned entries are unsorted.
         #       Sorting is done at the top level in __repr__ using path_sort_key()
+        return entries
+    
+    @classmethod
+    def _compute_descendant_entries(cls,
+            snapshot: Snapshot[_P],
+            parent_path: str,
+            symbol: Literal['+', '-'],
+            ) -> list['_DiffEntry']:
+        """
+        Recursively compute diff entries for all descendents of a snapshot node.
+        Used when a node is added or removed to show all its children.
+        
+        Arguments:
+        * snapshot -- The snapshot node whose descendents to process
+        * parent_path -- The path to the snapshot node in the diff output
+        * symbol -- Either '+' (for added nodes) or '-' (for removed nodes)
+        
+        Returns:
+        * A list of _DiffEntry objects for all descendents
+        """
+        entries: list[_DiffEntry] = []
+        
+        for (idx, child_snap) in enumerate(snapshot._children):
+            child_path = f'{parent_path}[{idx}]'
+            
+            # Create an entry for this child
+            if symbol == '+':
+                entries.append(_DiffEntry(
+                    path=child_path,
+                    symbol='+',
+                    description=child_snap._peer_description,
+                    old_index=None,
+                    new_index=idx,
+                ))
+            else:  # symbol == '-'
+                entries.append(_DiffEntry(
+                    path=child_path,
+                    symbol='-',
+                    description=child_snap._peer_description,
+                    old_index=idx,
+                    new_index=None,
+                ))
+            
+            # Recursively process this child's descendents
+            descendant_entries = cls._compute_descendant_entries(
+                child_snap,
+                child_path,
+                symbol,
+            )
+            entries.extend(descendant_entries)
+        
         return entries
     
     @classmethod
@@ -1580,6 +1645,7 @@ class SnapshotDiff(Generic[_P]):
 class _DiffEntry:
     """
     Represents a single line in a snapshot diff output.
+    May contain nested descendent entries that should be printed after this entry.
     """
     
     def __init__(self,
@@ -1591,6 +1657,7 @@ class _DiffEntry:
             *,
             old_range_end: int | None = None,
             new_range_end: int | None = None,
+            descendents: list['_DiffEntry'] | None = None,
             ) -> None:
         self.path = path
         self.symbol = symbol
@@ -1599,15 +1666,15 @@ class _DiffEntry:
         self.new_index = new_index
         self.old_range_end = old_range_end
         self.new_range_end = new_range_end
+        self.descendents = descendents or []
     
-    def format_line(self) -> str:
-        """Format this entry as a diff line."""
-        # Check if this is a range entry
-        if self.old_range_end is not None and self.new_range_end is not None:
-            # Format as range: S[A..B → C..D] = More(Count=N)
-            # Extract the count from the description
-            return f'{self.path} {self.symbol} {self.description}'
-        return f'{self.path} {self.symbol} {self.description}'
+    def format_lines(self) -> list[str]:
+        """Format this entry and all its descendents as diff lines."""
+        lines = [f'{self.path} {self.symbol} {self.description}']
+        # Recursively format all descendent entries
+        for desc in self.descendents:
+            lines.extend(desc.format_lines())
+        return lines
     
     def path_sort_key(self) -> tuple:
         """

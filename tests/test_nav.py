@@ -289,6 +289,68 @@ class TestSnapshotDiffBasics:
         assert '+' in diff_repr  # addition
         assert '~' in diff_repr  # modification
     
+    def test_added_node_with_descendents_shows_all_descendents(self) -> None:
+        """Test that adding a node with descendents displays all of them."""
+        parent_peer = object()
+        new_parent_peer = object()
+        new_child1_peer = object()
+        new_child2_peer = object()
+        new_grandchild_peer = object()
+        
+        old = make_snapshot('Root', children=[
+            # (empty)
+        ], peer_obj=parent_peer)
+        new = make_snapshot('Root', children=[
+            make_snapshot('New Parent', children=[
+                make_snapshot('New Child 1', children=[
+                    make_snapshot('New Grandchild', path='T[0][0][0]', peer_obj=new_grandchild_peer)
+                ], path='T[0][0]', peer_obj=new_child1_peer),
+                make_snapshot('New Child 2', path='T[0][1]', peer_obj=new_child2_peer),
+            ], path='T[0]', peer_obj=new_parent_peer)
+        ], peer_obj=parent_peer)
+        
+        diff = Snapshot.diff(old, new)
+        
+        assert bool(diff)
+        diff_repr = repr(diff)
+        # Should show the added parent
+        assert 'S[0] + New Parent' in diff_repr
+        # Should show all added descendents
+        assert 'S[0][0] + New Child 1' in diff_repr
+        assert 'S[0][0][0] + New Grandchild' in diff_repr
+        assert 'S[0][1] + New Child 2' in diff_repr
+    
+    def test_removed_node_with_descendents_shows_all_descendents(self) -> None:
+        """Test that removing a node with descendents displays all of them."""
+        parent_peer = object()
+        old_parent_peer = object()
+        old_child1_peer = object()
+        old_child2_peer = object()
+        old_grandchild_peer = object()
+        
+        old = make_snapshot('Root', children=[
+            make_snapshot('Old Parent', children=[
+                make_snapshot('Old Child 1', children=[
+                    make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
+                ], path='T[0][0]', peer_obj=old_child1_peer),
+                make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
+            ], path='T[0]', peer_obj=old_parent_peer)
+        ], peer_obj=parent_peer)
+        new = make_snapshot('Root', children=[
+            # (empty)
+        ], peer_obj=parent_peer)
+        
+        diff = Snapshot.diff(old, new)
+        
+        assert bool(diff)
+        diff_repr = repr(diff)
+        # Should show the removed parent
+        assert 'S[0] - Old Parent' in diff_repr
+        # Should show all removed descendents
+        assert 'S[0][0] - Old Child 1' in diff_repr
+        assert 'S[0][0][0] - Old Grandchild' in diff_repr
+        assert 'S[0][1] - Old Child 2' in diff_repr
+    
     # TODO: Consider eliminating support for diff'ing Snapshots
     #       that lack a peer_obj
     def test_fallback_to_description_matching_when_no_peer_obj(self) -> None:
@@ -792,6 +854,196 @@ class TestSnapshotDiffGolden:
     Golden tests for SnapshotDiff which verify the exact output format
     for various realistic scenarios.
     """
+    
+    def test_open_or_create_project_dialog_replaced_with_main_window(self, subtests) -> None:
+        """
+        Situation:
+        - The "Open or Create Project" dialog is replaced with the main window,
+          demonstrating that added and removed nodes display all their descendents.
+        """
+        # Create peer objects for identity matching
+        root_peer = object()
+        dialog_peer = object()
+        dialog_text_peer = object()
+        dialog_checkbox_peer = object()
+        dialog_open_button_peer = object()
+        dialog_new_button_peer = object()
+        
+        frame_peer = object()
+        frame_child_peer = object()
+        splitter_peer = object()
+        entity_pane_peer = object()
+        entity_pane_title_peer = object()
+        entity_pane_empty_state_peer = object()
+        entity_pane_empty_text_peer = object()
+        entity_pane_empty_button_peer = object()
+        entity_pane_add_button_peer = object()
+        task_pane_peer = object()
+        task_pane_title_peer = object()
+        
+        # Old snapshot: Dialog with children
+        old = make_snapshot(
+            '',
+            [
+                make_snapshot(
+                    "crystal.ui.dialog.BetterMessageDialog(Name='cr-open-or-create-project', Label='Select a Project')",
+                    [
+                        make_snapshot(
+                            "wx.StaticText(Label='Create a new project or open an existing project?')",
+                            path='T[0][0]',
+                            peer_obj=dialog_text_peer
+                        ),
+                        make_snapshot(
+                            "wx.CheckBox(Name='cr-open-or-create-project__checkbox', Label='Open as &read only', Value=False)",
+                            path='T[0][1]',
+                            peer_obj=dialog_checkbox_peer
+                        ),
+                        make_snapshot(
+                            "wx.Button(Id=wx.ID_NO, Label='&Open')",
+                            path='T[0][2]',
+                            peer_obj=dialog_open_button_peer
+                        ),
+                        make_snapshot(
+                            "wx.Button(Id=wx.ID_YES, Label='&New Project')",
+                            path='T[0][3]',
+                            peer_obj=dialog_new_button_peer
+                        ),
+                    ],
+                    path='T[0]',
+                    peer_obj=dialog_peer
+                ),
+            ],
+            path='T',
+            peer_obj=root_peer
+        )
+        
+        # New snapshot: Main window with nested hierarchy
+        new = make_snapshot(
+            '',
+            [
+                make_snapshot(
+                    "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+                    [
+                        make_snapshot(
+                            "_",
+                            [
+                                make_snapshot(
+                                    "wx.SplitterWindow()",
+                                    [
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-entity-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Root URLs and Groups')",
+                                                    path='T[0][0][0][0][0]',
+                                                    peer_obj=entity_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    "_",
+                                                    [
+                                                        make_snapshot(
+                                                            "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+                                                            path='T[0][0][0][0][1][0]',
+                                                            peer_obj=entity_pane_empty_text_peer
+                                                        ),
+                                                        make_snapshot(
+                                                            "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+                                                            path='T[0][0][0][0][1][1]',
+                                                            peer_obj=entity_pane_empty_button_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][0][1]',
+                                                    peer_obj=entity_pane_empty_state_peer
+                                                ),
+                                                make_snapshot(
+                                                    "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+                                                    path='T[0][0][0][0][2]',
+                                                    peer_obj=entity_pane_add_button_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][0]',
+                                            peer_obj=entity_pane_peer
+                                        ),
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-task-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Tasks')",
+                                                    path='T[0][0][0][1][0]',
+                                                    peer_obj=task_pane_title_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][1]',
+                                            peer_obj=task_pane_peer
+                                        ),
+                                    ],
+                                    path='T[0][0][0]',
+                                    peer_obj=splitter_peer
+                                ),
+                            ],
+                            path='T[0][0]',
+                            peer_obj=frame_child_peer
+                        ),
+                    ],
+                    path='T[0]',
+                    peer_obj=frame_peer
+                ),
+            ],
+            path='T',
+            peer_obj=root_peer
+        )
+        
+        expected_diff_repr_lines = [
+            '# S := T',
+            "S[0] - crystal.ui.dialog.BetterMessageDialog(Name='cr-open-or-create-project', Label='Select a Project')",
+            "S[0][0] - wx.StaticText(Label='Create a new project or open an existing project?')",
+            "S[0][1] - wx.CheckBox(Name='cr-open-or-create-project__checkbox', Label='Open as &read only', Value=False)",
+            "S[0][2] - wx.Button(Id=wx.ID_NO, Label='&Open')",
+            "S[0][3] - wx.Button(Id=wx.ID_YES, Label='&New Project')",
+            "S[0] + wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+            "S[0][0] + _",
+            "S[0][0][0] + wx.SplitterWindow()",
+            "S[0][0][0][0] + wx.Panel(Name='cr-entity-pane')",
+            "S[0][0][0][0][0] + wx.StaticText(Label='Root URLs and Groups')",
+            "S[0][0][0][0][1] + _",
+            "S[0][0][0][0][1][0] + wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+            "S[0][0][0][0][1][1] + wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+            "S[0][0][0][0][2] + wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+            "S[0][0][0][1] + wx.Panel(Name='cr-task-pane')",
+            "S[0][0][0][1][0] + wx.StaticText(Label='Tasks')",
+        ]
+        
+        with subtests.test(direction='forward'):
+            diff = Snapshot.diff(old, new)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_diff_repr_lines
+        
+        expected_reverse_diff_repr_lines = [
+            '# S := T',
+            "S[0] - wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+            "S[0][0] - _",
+            "S[0][0][0] - wx.SplitterWindow()",
+            "S[0][0][0][0] - wx.Panel(Name='cr-entity-pane')",
+            "S[0][0][0][0][0] - wx.StaticText(Label='Root URLs and Groups')",
+            "S[0][0][0][0][1] - _",
+            "S[0][0][0][0][1][0] - wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+            "S[0][0][0][0][1][1] - wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+            "S[0][0][0][0][2] - wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+            "S[0][0][0][1] - wx.Panel(Name='cr-task-pane')",
+            "S[0][0][0][1][0] - wx.StaticText(Label='Tasks')",
+            "S[0] + crystal.ui.dialog.BetterMessageDialog(Name='cr-open-or-create-project', Label='Select a Project')",
+            "S[0][0] + wx.StaticText(Label='Create a new project or open an existing project?')",
+            "S[0][1] + wx.CheckBox(Name='cr-open-or-create-project__checkbox', Label='Open as &read only', Value=False)",
+            "S[0][2] + wx.Button(Id=wx.ID_NO, Label='&Open')",
+            "S[0][3] + wx.Button(Id=wx.ID_YES, Label='&New Project')",
+        ]
+        
+        with subtests.test(direction='reverse'):
+            diff = Snapshot.diff(new, old)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
     
     def test_expand_and_collapse_of_node_in_entity_tree(self, subtests) -> None:
         """
