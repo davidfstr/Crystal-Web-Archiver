@@ -1505,6 +1505,351 @@ class TestSnapshotDiffGolden:
             actual_diff_repr_lines = diff_repr.split('\n')
             assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
     
+    def test_when_new_group_defined_then_entity_tree_children_nodes_restructured(self, subtests) -> None:
+        """
+        Situation:
+        - A new group is defined, causing some child URLs of a root resource
+          to be reorganized under the group node in the entity tree.
+        """
+        # Create peer objects for identity-based matching
+        root_peer = object()
+        root_0_peer = object()
+        root_0_0_peer = object()
+        root_0_1_peer = object()
+        root_0_2_peer = object()
+        root_0_39_peer = object()
+        root_0_40_peer = object()
+        root_0_41_peer = object()
+        
+        # Peers for URLs that move to the group
+        url_1_peer = object()
+        url_2438_peer = object()
+        url_150_peer = object()
+        url_730_peer = object()
+        url_162_peer = object()
+        url_688_peer = object()
+        url_556_peer = object()
+        url_1732_peer = object()
+        
+        # Peers for group nodes
+        group_inlined_peer = object()
+        group_root_peer = object()
+        
+        # Old snapshot: Before group is defined
+        old = make_snapshot(
+            'TreeItem(IsRoot=True, Visible=False)',
+            [
+                make_snapshot(
+                    "TreeItem(👁='▼ 📂 / - Home', IsSelected=True, IconTooltip='Fresh root URL')",
+                    [
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /atom.xml - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][0]',
+                            peer_obj=root_0_0_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /rss.xml - Unknown Link (rel=alternate), Link: RSS Feed', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][1]',
+                            peer_obj=root_0_1_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /styles.css - Link: Stylesheet', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][3]',
+                            peer_obj=object()
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /script.js - Link: Script', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][4]',
+                            peer_obj=object()
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][5]',
+                            peer_obj=url_1_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][6]',
+                            peer_obj=url_2438_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /other1.html - Link', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][7]',
+                            peer_obj=object()
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /other2.html - Link', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][8]',
+                            peer_obj=object()
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /150/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][9]',
+                            peer_obj=url_150_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /730/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][10]',
+                            peer_obj=url_730_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /162/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][11]',
+                            peer_obj=url_162_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /688/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][12]',
+                            peer_obj=url_688_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /556/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][13]',
+                            peer_obj=url_556_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /1732/index.html - Link', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][14]',
+                            peer_obj=url_1732_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /license.html - Link: More details', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][15]',
+                            peer_obj=root_0_39_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 (Low-priority: Offsite)', IconTooltip='Offsite URLs')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][16]',
+                            peer_obj=root_0_40_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 (Hidden: Embedded)', IconTooltip='Embedded URLs')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][17]',
+                            peer_obj=root_0_41_peer
+                        ),
+                    ],
+                    path='T[0][0][0][0][1].Tree[0]',
+                    peer_obj=root_0_peer
+                ),
+            ],
+            path='T[0][0][0][0][1].Tree',
+            peer_obj=root_peer
+        )
+        
+        # New snapshot: After group is defined
+        new = make_snapshot(
+            'TreeItem(IsRoot=True, Visible=False)',
+            [
+                make_snapshot(
+                    "TreeItem(👁='▼ 📂 / - Home', IconTooltip='Fresh root URL')",
+                    [
+                        make_snapshot(
+                            "TreeItem(👁='▼ 📂 /#/index.html - 8 of Comic', IconTooltip='Grouped urls')",
+                            [
+                                make_snapshot(
+                                    "TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IsSelected=True, IconTooltip='Undownloaded URL')",
+                                    [],
+                                    path='T[0][0][0][0][1].Tree[0][0][0]',
+                                    peer_obj=url_1_peer
+                                ),
+                                make_snapshot(
+                                    "TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
+                                    [],
+                                    path='T[0][0][0][0][1].Tree[0][0][1]',
+                                    peer_obj=url_2438_peer
+                                ),
+                                make_snapshot(
+                                    "TreeItem(👁='▶︎ 📁 /150/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                                    [],
+                                    path='T[0][0][0][0][1].Tree[0][0][2]',
+                                    peer_obj=url_150_peer
+                                ),
+                                make_snapshot(
+                                    "TreeItem(👁='▶︎ 📁 /730/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                                    [],
+                                    path='T[0][0][0][0][1].Tree[0][0][3]',
+                                    peer_obj=url_730_peer
+                                ),
+                                make_snapshot(
+                                    "TreeItem(👁='▶︎ 📁 /162/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                                    [],
+                                    path='T[0][0][0][0][1].Tree[0][0][4]',
+                                    peer_obj=url_162_peer
+                                ),
+                                make_snapshot(
+                                    "TreeItem(👁='▶︎ 📁 /688/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                                    [],
+                                    path='T[0][0][0][0][1].Tree[0][0][5]',
+                                    peer_obj=url_688_peer
+                                ),
+                                make_snapshot(
+                                    "TreeItem(👁='▶︎ 📁 /556/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+                                    [],
+                                    path='T[0][0][0][0][1].Tree[0][0][6]',
+                                    peer_obj=url_556_peer
+                                ),
+                                make_snapshot(
+                                    "TreeItem(👁='▶︎ 📁 /1732/index.html - Link', IconTooltip='Undownloaded URL')",
+                                    [],
+                                    path='T[0][0][0][0][1].Tree[0][0][7]',
+                                    peer_obj=url_1732_peer
+                                ),
+                            ],
+                            path='T[0][0][0][0][1].Tree[0][0]',
+                            peer_obj=group_inlined_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /atom.xml - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][1]',
+                            peer_obj=root_0_0_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /rss.xml - Unknown Link (rel=alternate), Link: RSS Feed', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][2]',
+                            peer_obj=root_0_1_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /other1.html - Link', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][3]',
+                            peer_obj=object()
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /other2.html - Link', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][4]',
+                            peer_obj=object()
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /styles.css - Link: Stylesheet', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][5]',
+                            peer_obj=object()
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /script.js - Link: Script', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][6]',
+                            peer_obj=object()
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 /license.html - Link: More details', IconTooltip='Undownloaded URL')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][7]',
+                            peer_obj=root_0_39_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 (Low-priority: Offsite)', IconTooltip='Offsite URLs')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][8]',
+                            peer_obj=root_0_40_peer
+                        ),
+                        make_snapshot(
+                            "TreeItem(👁='▶︎ 📁 (Hidden: Embedded)', IconTooltip='Embedded URLs')",
+                            [],
+                            path='T[0][0][0][0][1].Tree[0][9]',
+                            peer_obj=root_0_41_peer
+                        ),
+                    ],
+                    path='T[0][0][0][0][1].Tree[0]',
+                    peer_obj=root_0_peer
+                ),
+                make_snapshot(
+                    "TreeItem(👁='▶︎ 📁 /#/index.html - Comic', IconTooltip='Group')",
+                    [],
+                    path='T[0][0][0][0][1].Tree[1]',
+                    peer_obj=group_root_peer
+                ),
+            ],
+            path='T[0][0][0][0][1].Tree',
+            peer_obj=root_peer
+        )
+        
+        expected_diff_repr_lines = [
+            '# S := T[0][0][0][0][1].Tree',
+            "S[0] ~ TreeItem(👁='▼ 📂 / - Home'{, IsSelected=True→}, IconTooltip='Fresh root URL')",
+            'S[0][0..1 → 1..2] = More(Count=2)',
+            "S[0][0] + TreeItem(👁='▼ 📂 /#/index.html - 8 of Comic', IconTooltip='Grouped urls')",
+            "S[0][0][0] + TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IsSelected=True, IconTooltip='Undownloaded URL')",
+            "S[0][0][1] + TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
+            "S[0][0][2] + TreeItem(👁='▶︎ 📁 /150/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][3] + TreeItem(👁='▶︎ 📁 /730/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][4] + TreeItem(👁='▶︎ 📁 /162/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][5] + TreeItem(👁='▶︎ 📁 /688/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][6] + TreeItem(👁='▶︎ 📁 /556/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][7] + TreeItem(👁='▶︎ 📁 /1732/index.html - Link', IconTooltip='Undownloaded URL')",
+            'S[0][2..3 → 5..6] = More(Count=2)',
+            "S[0][4] - TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IconTooltip='Undownloaded URL')",
+            "S[0][5] - TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
+            'S[0][6..7 → 3..4] = More(Count=2)',
+            "S[0][8] - TreeItem(👁='▶︎ 📁 /150/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][9] - TreeItem(👁='▶︎ 📁 /730/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][10] - TreeItem(👁='▶︎ 📁 /162/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][11] - TreeItem(👁='▶︎ 📁 /688/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][12] - TreeItem(👁='▶︎ 📁 /556/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][13] - TreeItem(👁='▶︎ 📁 /1732/index.html - Link', IconTooltip='Undownloaded URL')",
+            'S[0][14..16 → 7..9] = More(Count=3)',
+            "S[1] + TreeItem(👁='▶︎ 📁 /#/index.html - Comic', IconTooltip='Group')",
+        ]
+        
+        with subtests.test(direction='forward'):
+            diff = Snapshot.diff(old, new)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_diff_repr_lines
+        
+        expected_reverse_diff_repr_lines = [
+            '# S := T[0][0][0][0][1].Tree',
+            "S[0] ~ TreeItem(👁='▼ 📂 / - Home'{→, IsSelected=True}, IconTooltip='Fresh root URL')",
+            "S[0][0] - TreeItem(👁='▼ 📂 /#/index.html - 8 of Comic', IconTooltip='Grouped urls')",
+            "S[0][0][0] - TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IsSelected=True, IconTooltip='Undownloaded URL')",
+            "S[0][0][1] - TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
+            "S[0][0][2] - TreeItem(👁='▶︎ 📁 /150/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][3] - TreeItem(👁='▶︎ 📁 /730/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][4] - TreeItem(👁='▶︎ 📁 /162/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][5] - TreeItem(👁='▶︎ 📁 /688/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][6] - TreeItem(👁='▶︎ 📁 /556/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][0][7] - TreeItem(👁='▶︎ 📁 /1732/index.html - Link', IconTooltip='Undownloaded URL')",
+            'S[0][1..2 → 0..1] = More(Count=2)',
+            'S[0][3..4 → 6..7] = More(Count=2)',
+            "S[0][4] + TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IconTooltip='Undownloaded URL')",
+            'S[0][5..6 → 2..3] = More(Count=2)',
+            "S[0][5] + TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
+            'S[0][7..9 → 14..16] = More(Count=3)',
+            "S[0][8] + TreeItem(👁='▶︎ 📁 /150/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][9] + TreeItem(👁='▶︎ 📁 /730/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][10] + TreeItem(👁='▶︎ 📁 /162/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][11] + TreeItem(👁='▶︎ 📁 /688/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][12] + TreeItem(👁='▶︎ 📁 /556/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
+            "S[0][13] + TreeItem(👁='▶︎ 📁 /1732/index.html - Link', IconTooltip='Undownloaded URL')",
+            "S[1] - TreeItem(👁='▶︎ 📁 /#/index.html - Comic', IconTooltip='Group')",
+        ]
+        
+        with subtests.test(direction='reverse'):
+            diff = Snapshot.diff(new, old)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
+    
     def test_progress_of_download_group_task_in_task_tree(self, subtests) -> None:
         """
         Situation:
