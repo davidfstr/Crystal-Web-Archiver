@@ -65,6 +65,47 @@ class TestInlineDiff:
         assert '{→text}' == result_add
         result_del = inline_diff('text', '')
         assert '{text→}' == result_del
+    
+    def test_time_string_change(self) -> None:
+        """Test that time strings remain as single tokens."""
+        result = inline_diff('2:18:01', '2:19:18')
+        assert result == '{2:18:01→2:19:18}'
+    
+    def test_word_replacement(self) -> None:
+        """Test that whole words are replaced without splitting."""
+        result = inline_diff('Downloading', 'Complete')
+        assert result == '{Downloading→Complete}'
+    
+    def test_comma_separated_numbers(self) -> None:
+        """Test that comma-separated numbers remain as single tokens."""
+        result = inline_diff('2,310', '2,307')
+        assert result == '{2,310→2,307}'
+    
+    def test_mixed_time_in_sentence(self) -> None:
+        """Test time changes within a larger sentence."""
+        result = inline_diff(
+            '2:18:01 remaining (3.43s/item)',
+            '2:19:18 remaining (3.47s/item)'
+        )
+        assert result == '{2:18:01→2:19:18} remaining ({3.43→3.47}s/item)'
+    
+    def test_status_word_change_in_sentence(self) -> None:
+        """Test status word changes within a larger sentence."""
+        result = inline_diff(
+            'Downloading: https://example.com -- Downloading',
+            'Downloading: https://example.com -- Complete'
+        )
+        assert result == 'Downloading: https://example.com -- {Downloading→Complete}'
+    
+    def test_comma_number_in_context(self) -> None:
+        """Test comma-separated numbers in descriptive text."""
+        result = inline_diff('— 📄 2,310 more', '— 📄 2,307 more')
+        assert result == '— 📄 {2,310→2,307} more'
+    
+    def test_mixed_digits_letters_and_symbols(self) -> None:
+        """Test complex string with mixed token types."""
+        result = inline_diff('Item 27 (status: OK)', 'Item 30 (status: DONE)')
+        assert result == 'Item {27→30} (status: {OK→DONE})'
 
 
 # === Tests for Snapshot ===
@@ -1786,7 +1827,7 @@ class TestSnapshotDiffGolden:
         
         expected_diff_repr_lines = [
             '# S := T[0][0][0][0][1].Tree',
-            "S[0] ~ TreeItem(👁='▼ 📂 / - Home'{, IsSelected=True→}, IconTooltip='Fresh root URL')",
+            "S[0] ~ TreeItem(👁='▼ 📂 / - Home', {IsSelected=True, →}IconTooltip='Fresh root URL')",
             'S[0][0..1 → 1..2] = More(Count=2)',
             "S[0][0] + TreeItem(👁='▼ 📂 /#/index.html - 8 of Comic', IconTooltip='Grouped urls')",
             "S[0][0][0] + TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IsSelected=True, IconTooltip='Undownloaded URL')",
@@ -1819,7 +1860,7 @@ class TestSnapshotDiffGolden:
         
         expected_reverse_diff_repr_lines = [
             '# S := T[0][0][0][0][1].Tree',
-            "S[0] ~ TreeItem(👁='▼ 📂 / - Home'{→, IsSelected=True}, IconTooltip='Fresh root URL')",
+            "S[0] ~ TreeItem(👁='▼ 📂 / - Home', {→IsSelected=True, }IconTooltip='Fresh root URL')",
             "S[0][0] - TreeItem(👁='▼ 📂 /#/index.html - 8 of Comic', IconTooltip='Grouped urls')",
             "S[0][0][0] - TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IsSelected=True, IconTooltip='Undownloaded URL')",
             "S[0][0][1] - TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
@@ -2073,22 +2114,22 @@ class TestSnapshotDiffGolden:
         
         expected_diff_repr_lines = [
             "# S := T['cr-entity-tree'].Tree[0]",
-            "S ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {27→30} of 2,438 item(s) -- 2:1{→9:1}8{:01→} remaining (3.4{3→7}s/item)')",
-            "S[1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {27→30} of 2,438 item(s) -- 2:1{→9:1}8{:01→} remaining (3.4{3→7}s/item)')",
-            "S[1][0] ~ TreeItem(👁='— 📄 2{2→5} more')",
+            "S ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {27→30} of 2,438 item(s) -- {2:18:01→2:19:18} remaining ({3.43→3.47}s/item)')",
+            "S[1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {27→30} of 2,438 item(s) -- {2:18:01→2:19:18} remaining ({3.43→3.47}s/item)')",
+            "S[1][0] ~ TreeItem(👁='— 📄 {22→25} more')",
             "S[1][1] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2424/index.html -- Complete')",
             "S[1][2] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2423/index.html -- Complete')",
             "S[1][3] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2422/index.html -- Complete')",
             'S[1][4..5 → 1..2] = More(Count=2)',
-            "S[1][6→3] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- {D→C}o{wn→mp}l{oading→ete}')",
-            "S[1][7→4] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- {Qu→Compl}e{u→t}e{d→}')",
-            "S[1][8→5] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- {Qu→Compl}e{u→t}e{d→}')",
-            "S[1][9→6] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- {Queue→Downloa}d{→ing}')",
+            "S[1][6→3] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- {Downloading→Complete}')",
+            "S[1][7→4] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- {Queued→Complete}')",
+            "S[1][8→5] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- {Queued→Complete}')",
+            "S[1][9→6] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- {Queued→Downloading}')",
             "S[1][9] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1007/index.html -- Queued')",
             'S[1][10..11 → 7..8] = More(Count=2)',
             "S[1][10] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1008/index.html -- Queued')",
             "S[1][11] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1009/index.html -- Queued')",
-            "S[1][12] ~ TreeItem(👁='— 📄 2,3{1→}0{→7} more')",
+            "S[1][12] ~ TreeItem(👁='— 📄 {2,310→2,307} more')",
         ]
         
         with subtests.test(direction='forward'):
@@ -2099,22 +2140,22 @@ class TestSnapshotDiffGolden:
         
         expected_reverse_diff_repr_lines = [
             "# S := T['cr-entity-tree'].Tree[0]",
-            "S ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {30→27} of 2,438 item(s) -- 2:1{9→8}:{→0}1{8→} remaining (3.4{7→3}s/item)')",
-            "S[1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {30→27} of 2,438 item(s) -- 2:1{9→8}:{→0}1{8→} remaining (3.4{7→3}s/item)')",
-            "S[1][0] ~ TreeItem(👁='— 📄 2{5→2} more')",
+            "S ~ TreeItem(👁='▼ 📂 Downloading group: Comic -- {30→27} of 2,438 item(s) -- {2:19:18→2:18:01} remaining ({3.47→3.43}s/item)')",
+            "S[1] ~ TreeItem(👁='▼ 📂 Downloading members of group: Comic -- {30→27} of 2,438 item(s) -- {2:19:18→2:18:01} remaining ({3.47→3.43}s/item)')",
+            "S[1][0] ~ TreeItem(👁='— 📄 {25→22} more')",
             'S[1][1..2 → 4..5] = More(Count=2)',
             "S[1][1] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2424/index.html -- Complete')",
             "S[1][2] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2423/index.html -- Complete')",
-            "S[1][3→6] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- {C→D}o{mp→wn}l{ete→oading}')",
+            "S[1][3→6] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- {Complete→Downloading}')",
             "S[1][3] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2422/index.html -- Complete')",
-            "S[1][4→7] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- {Compl→Qu}e{t→u}e{→d}')",
-            "S[1][5→8] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- {Compl→Qu}e{t→u}e{→d}')",
-            "S[1][6→9] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- {Downloa→Queue}d{ing→}')",
+            "S[1][4→7] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- {Complete→Queued}')",
+            "S[1][5→8] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- {Complete→Queued}')",
+            "S[1][6→9] ~ TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- {Downloading→Queued}')",
             'S[1][7..8 → 10..11] = More(Count=2)',
             "S[1][9] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1007/index.html -- Queued')",
             "S[1][10] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1008/index.html -- Queued')",
             "S[1][11] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1009/index.html -- Queued')",
-            "S[1][12] ~ TreeItem(👁='— 📄 2,3{→1}0{7→} more')",
+            "S[1][12] ~ TreeItem(👁='— 📄 {2,307→2,310} more')",
         ]
         
         with subtests.test(direction='reverse'):

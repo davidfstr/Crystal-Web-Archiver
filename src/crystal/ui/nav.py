@@ -1718,29 +1718,89 @@ def inline_diff(old: str, new: str) -> str:
     """
     Computes an inline diff between two strings, marking changes with {old→new}.
     
+    Uses a token-based diff algorithm to avoid splitting words and numbers in
+    the middle. Tokens are defined as:
+    - Runs of letters [a-zA-Z]+
+    - Runs of digits and formatting chars [\\d:,.]+
+    - Single characters (anything else)
+    
     Examples:
         >>> inline_diff("hello world", "hello there")
         'hello {world→there}'
         >>> inline_diff("27 of 100", "31 of 100")
         '{27→31} of 100'
+        >>> inline_diff("Downloading", "Complete")
+        '{Downloading→Complete}'
+        >>> inline_diff("2:18:01", "2:19:18")
+        '{2:18:01→2:19:18}'
     """
     if old == new:
         return new
     
-    sm = SequenceMatcher(None, old, new)
+    # Tokenize both strings
+    old_tokens = _tokenize(old)
+    new_tokens = _tokenize(new)
+    
+    # Perform diff on token sequences
+    sm = SequenceMatcher(None, old_tokens, new_tokens)
     result: list[str] = []
     
     for (tag, i1, i2, j1, j2) in sm.get_opcodes():
         if tag == 'equal':
-            result.append(old[i1:i2])
+            result.extend(old_tokens[i1:i2])
         elif tag == 'replace':
-            result.append(f'{{{old[i1:i2]}→{new[j1:j2]}}}')
+            old_part = ''.join(old_tokens[i1:i2])
+            new_part = ''.join(new_tokens[j1:j2])
+            result.append(f'{{{old_part}→{new_part}}}')
         elif tag == 'delete':
-            result.append(f'{{{old[i1:i2]}→}}')
+            old_part = ''.join(old_tokens[i1:i2])
+            result.append(f'{{{old_part}→}}')
         elif tag == 'insert':
-            result.append(f'{{→{new[j1:j2]}}}')
+            new_part = ''.join(new_tokens[j1:j2])
+            result.append(f'{{→{new_part}}}')
     
     return ''.join(result)
+
+
+def _tokenize(s: str) -> list[str]:
+    """
+    Tokenizes a string into meaningful units for diffing.
+    
+    Tokens:
+    - Runs of letters: [a-zA-Z]+
+    - Runs of digits and formatting chars: [\\d:,.]+
+    - Single characters: any other character
+    
+    Examples:
+        >>> _tokenize("hello world")
+        ['hello', ' ', 'world']
+        >>> _tokenize("2:18:01")
+        ['2:18:01']
+        >>> _tokenize("2,310 items")
+        ['2,310', ' ', 'items']
+    """
+    tokens: list[str] = []
+    i = 0
+    while i < len(s):
+        # Try to match a run of letters
+        if s[i].isalpha():
+            j = i
+            while j < len(s) and s[j].isalpha():
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+        # Try to match a run of digits and formatting chars
+        elif s[i].isdigit() or s[i] in ':,.':
+            j = i
+            while j < len(s) and (s[j].isdigit() or s[j] in ':,.'):
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+        # Single character token
+        else:
+            tokens.append(s[i])
+            i += 1
+    return tokens
 
 
 # ------------------------------------------------------------------------------
