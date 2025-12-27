@@ -1099,6 +1099,201 @@ class TestSnapshotDiffGolden:
             actual_diff_repr_lines = diff_repr.split('\n')
             assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
     
+    def test_new_root_url_dialog_or_other_modal_dialog_appears(self, subtests) -> None:
+        """
+        Situation:
+        - A modal dialog appears over the main window.
+        - The main window's children are elided in the new snapshot (not fully captured).
+        - The diff should only show the dialog being added, not the main window's children being removed.
+        
+        This test verifies the fix for the issue where children_elided=True was treated
+        as having zero children, causing spurious deletion entries in the diff.
+        """
+        # Create peer objects for identity matching
+        root_peer = object()
+        main_window_peer = object()
+        frame_child_peer = object()
+        splitter_peer = object()
+        entity_pane_peer = object()
+        entity_pane_title_peer = object()
+        entity_pane_empty_state_peer = object()
+        entity_pane_empty_text_peer = object()
+        entity_pane_empty_button_peer = object()
+        entity_pane_add_button_peer = object()
+        task_pane_peer = object()
+        task_pane_title_peer = object()
+        
+        dialog_peer = object()
+        dialog_title_peer = object()
+        dialog_url_label_peer = object()
+        dialog_url_field_peer = object()
+        dialog_cancel_button_peer = object()
+        dialog_new_button_peer = object()
+        
+        # Old snapshot: Just main window with full children
+        old = make_snapshot(
+            '',
+            [
+                make_snapshot(
+                    "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+                    [
+                        make_snapshot(
+                            '_',
+                            [
+                                make_snapshot(
+                                    'wx.SplitterWindow()',
+                                    [
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-entity-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Root URLs and Groups')",
+                                                    path='T[0][0][0][0][0]',
+                                                    peer_obj=entity_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    '_',
+                                                    [
+                                                        make_snapshot(
+                                                            "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+                                                            path='T[0][0][0][0][1][0]',
+                                                            peer_obj=entity_pane_empty_text_peer
+                                                        ),
+                                                        make_snapshot(
+                                                            "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+                                                            path='T[0][0][0][0][1][1]',
+                                                            peer_obj=entity_pane_empty_button_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][0][1]',
+                                                    peer_obj=entity_pane_empty_state_peer
+                                                ),
+                                                make_snapshot(
+                                                    "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+                                                    path='T[0][0][0][0][2]',
+                                                    peer_obj=entity_pane_add_button_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][0]',
+                                            peer_obj=entity_pane_peer
+                                        ),
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-task-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Tasks')",
+                                                    path='T[0][0][0][1][0]',
+                                                    peer_obj=task_pane_title_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][1]',
+                                            peer_obj=task_pane_peer
+                                        ),
+                                    ],
+                                    path='T[0][0][0]',
+                                    peer_obj=splitter_peer
+                                ),
+                            ],
+                            path='T[0][0]',
+                            peer_obj=frame_child_peer
+                        ),
+                    ],
+                    path='T[0]',
+                    peer_obj=main_window_peer
+                ),
+            ],
+            path='T',
+            peer_obj=root_peer
+        )
+        
+        # New snapshot: Main window with children elided + new dialog
+        new = make_snapshot(
+            '',
+            [
+                make_snapshot(
+                    "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+                    [],  # Children elided - not fully captured
+                    path='T[0]',
+                    peer_obj=main_window_peer,
+                    children_elided=True
+                ),
+                make_snapshot(
+                    "wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+                    [
+                        make_snapshot(
+                            "wx.StaticText(Label='New Root URL')",
+                            path='T[1][0]',
+                            peer_obj=dialog_title_peer
+                        ),
+                        make_snapshot(
+                            "wx.StaticText(Label='URL:')",
+                            path='T[1][1]',
+                            peer_obj=dialog_url_label_peer
+                        ),
+                        make_snapshot(
+                            "wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
+                            path='T[1][2]',
+                            peer_obj=dialog_url_field_peer
+                        ),
+                        make_snapshot(
+                            "wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
+                            path='T[1][3]',
+                            peer_obj=dialog_cancel_button_peer
+                        ),
+                        make_snapshot(
+                            "wx.Button(Id=wx.ID_NEW, Label='&New')",
+                            path='T[1][4]',
+                            peer_obj=dialog_new_button_peer
+                        ),
+                    ],
+                    path='T[1]',
+                    peer_obj=dialog_peer
+                ),
+            ],
+            path='T',
+            peer_obj=root_peer
+        )
+        
+        # Expected:
+        # - Only the dialog should be shown as added
+        # - The main window's children should NOT be shown as removed
+        #   because the new snapshot has children_elided=True
+        expected_diff_repr_lines = [
+            '# S := T',
+            "S[1] + wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+            "S[1][0] + wx.StaticText(Label='New Root URL')",
+            "S[1][1] + wx.StaticText(Label='URL:')",
+            "S[1][2] + wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
+            "S[1][3] + wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
+            "S[1][4] + wx.Button(Id=wx.ID_NEW, Label='&New')",
+        ]
+        
+        with subtests.test(direction='forward'):
+            diff = Snapshot.diff(old, new)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_diff_repr_lines
+        
+        # Expected reverse:
+        # - Dialog removed, main window children NOT shown as added
+        #   because the old snapshot still has children_elided=False on the new snapshot
+        #   (but the new snapshot in the reverse diff has children_elided=True from old)
+        expected_reverse_diff_repr_lines = [
+            '# S := T',
+            "S[1] - wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+            "S[1][0] - wx.StaticText(Label='New Root URL')",
+            "S[1][1] - wx.StaticText(Label='URL:')",
+            "S[1][2] - wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
+            "S[1][3] - wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
+            "S[1][4] - wx.Button(Id=wx.ID_NEW, Label='&New')",
+        ]
+        
+        with subtests.test(direction='reverse'):
+            diff = Snapshot.diff(new, old)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
+    
     def test_expand_and_collapse_of_node_in_entity_tree(self, subtests) -> None:
         """
         Situation:
