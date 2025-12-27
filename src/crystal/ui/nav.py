@@ -1021,6 +1021,12 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         if old._peer_description != new._peer_description:
             return SnapshotDiff(old, new, name)
         
+        # If either snapshot has children elided, skip comparing children entirely
+        # Children are not fully captured, so we can't determine if they changed
+        if old._children_elided or new._children_elided:
+            # Return an empty diff since we can't detect child changes
+            return SnapshotDiff(old, new, name)
+        
         # If children count differs, diff root is here
         if len(old._children) != len(new._children):
             return SnapshotDiff(old, new, name)
@@ -1175,12 +1181,14 @@ class SnapshotDiff(Generic[_P]):
             ))
         
         # Compute child diffs
-        child_entries = cls._compute_children_diff(
-            old._children,
-            new._children,
-            path,
-        )
-        entries.extend(child_entries)
+        # NOTE: If children are elided, assume nothing changed.
+        if not old._children_elided and not new._children_elided:
+            child_entries = cls._compute_children_diff(
+                old._children,
+                new._children,
+                path,
+            )
+            entries.extend(child_entries)
         
         return entries
     
@@ -1283,12 +1291,14 @@ class SnapshotDiff(Generic[_P]):
                     pass
                 
                 # Recursively diff children of matched nodes
-                recursive_entries = cls._compute_children_diff(
-                    old_snap._children,
-                    new_snap._children,
-                    f'{parent_path}[{new_idx}]',  # Use new index for path
-                )
-                entries.extend(recursive_entries)
+                # NOTE: If children are elided, assume nothing changed.
+                if not old_snap._children_elided and not new_snap._children_elided:
+                    recursive_entries = cls._compute_children_diff(
+                        old_snap._children,
+                        new_snap._children,
+                        f'{parent_path}[{new_idx}]',  # Use new index for path
+                    )
+                    entries.extend(recursive_entries)
             
             # Add deletion entries
             for (old_idx, old_snap) in deletions:

@@ -14,6 +14,7 @@ def make_snapshot(
         query: str = '',
         accessor: str = 'I',
         peer_obj: object | None = None,
+        children_elided: bool = False,
         ) -> Snapshot:
     """Helper to create a Snapshot for testing."""
     return Snapshot(
@@ -23,6 +24,7 @@ def make_snapshot(
         query=query,
         peer_accessor=accessor,
         peer_obj=peer_obj,
+        children_elided=children_elided,
     )
 
 
@@ -372,6 +374,58 @@ class TestSnapshotDiffBasics:
         # Child A should match by description, Child B should be seen as removed/added
         diff_repr = repr(diff)
         assert 'Child B' in diff_repr
+    
+    def test_when_children_elided_then_assumes_no_changes_in_diff(self) -> None:
+        """Test that snapshots with children_elided=True don't report child changes."""
+        parent_peer = object()
+        child1_peer = object()
+        child2_peer = object()
+        
+        # Old snapshot has children fully captured
+        old = make_snapshot('Parent', children=[
+            make_snapshot('Child 1', path='T[0]', peer_obj=child1_peer),
+            make_snapshot('Child 2', path='T[1]', peer_obj=child2_peer),
+        ], peer_obj=parent_peer)
+        
+        # New snapshot has children elided (not fully captured)
+        new = make_snapshot('Parent', children=[
+            # empty
+        ], peer_obj=parent_peer, children_elided=True)
+        
+        diff = Snapshot.diff(old, new)
+        
+        # Should not report children as removed since new snapshot has elided children
+        diff_repr = repr(diff)
+        assert 'Child 1' not in diff_repr
+        assert 'Child 2' not in diff_repr
+        # Should show no changes
+        assert '-' not in diff_repr
+    
+    def test_when_children_elided_then_assumes_no_changes_in_recursive_diff(self) -> None:
+        """Test that children_elided on matched child nodes prevents recursive diff."""
+        root_peer = object()
+        parent_peer = object()
+        grandchild_peer = object()
+        
+        # Old snapshot has full tree
+        old = make_snapshot('Root', children=[
+            make_snapshot('Parent', children=[
+                make_snapshot('Grandchild', path='T[0][0]', peer_obj=grandchild_peer)
+            ], path='T[0]', peer_obj=parent_peer)
+        ], peer_obj=root_peer)
+        
+        # New snapshot has Parent with elided children
+        new = make_snapshot('Root', children=[
+            make_snapshot('Parent', children=[
+                # empty
+            ], path='T[0]', peer_obj=parent_peer, children_elided=True)
+        ], peer_obj=root_peer)
+        
+        diff = Snapshot.diff(old, new)
+        
+        # Should not report Grandchild as removed
+        diff_repr = repr(diff)
+        assert 'Grandchild' not in diff_repr
 
 
 class TestSnapshotDiffShiftedMoreSyntax:
