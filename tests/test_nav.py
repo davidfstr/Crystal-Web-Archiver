@@ -925,10 +925,10 @@ class TestSnapshotDiffGolden:
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
                     [
                         make_snapshot(
-                            "_",
+                            '_',
                             [
                                 make_snapshot(
-                                    "wx.SplitterWindow()",
+                                    'wx.SplitterWindow()',
                                     [
                                         make_snapshot(
                                             "wx.Panel(Name='cr-entity-pane')",
@@ -939,7 +939,7 @@ class TestSnapshotDiffGolden:
                                                     peer_obj=entity_pane_title_peer
                                                 ),
                                                 make_snapshot(
-                                                    "_",
+                                                    '_',
                                                     [
                                                         make_snapshot(
                                                             "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
@@ -1001,11 +1001,11 @@ class TestSnapshotDiffGolden:
             "S[0][2] - wx.Button(Id=wx.ID_NO, Label='&Open')",
             "S[0][3] - wx.Button(Id=wx.ID_YES, Label='&New Project')",
             "S[0] + wx.Frame(Name='cr-main-window', Label='Untitled Project')",
-            "S[0][0] + _",
-            "S[0][0][0] + wx.SplitterWindow()",
+            'S[0][0] + _',
+            'S[0][0][0] + wx.SplitterWindow()',
             "S[0][0][0][0] + wx.Panel(Name='cr-entity-pane')",
             "S[0][0][0][0][0] + wx.StaticText(Label='Root URLs and Groups')",
-            "S[0][0][0][0][1] + _",
+            'S[0][0][0][0][1] + _',
             "S[0][0][0][0][1][0] + wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
             "S[0][0][0][0][1][1] + wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
             "S[0][0][0][0][2] + wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
@@ -1022,11 +1022,11 @@ class TestSnapshotDiffGolden:
         expected_reverse_diff_repr_lines = [
             '# S := T',
             "S[0] - wx.Frame(Name='cr-main-window', Label='Untitled Project')",
-            "S[0][0] - _",
-            "S[0][0][0] - wx.SplitterWindow()",
+            'S[0][0] - _',
+            'S[0][0][0] - wx.SplitterWindow()',
             "S[0][0][0][0] - wx.Panel(Name='cr-entity-pane')",
             "S[0][0][0][0][0] - wx.StaticText(Label='Root URLs and Groups')",
-            "S[0][0][0][0][1] - _",
+            'S[0][0][0][0][1] - _',
             "S[0][0][0][0][1][0] - wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
             "S[0][0][0][0][1][1] - wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
             "S[0][0][0][0][2] - wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
