@@ -4,7 +4,6 @@ Pylint plugin to ban specific API patterns in Crystal.
 
 import astroid
 from astroid import nodes
-from functools import lru_cache
 from pylint.checkers import BaseChecker
 
 
@@ -328,9 +327,7 @@ class CrystalBannedApiChecker(BaseChecker):
     def _tuple_has_parens(self, node: nodes.Tuple) -> bool:
         """Check if a tuple has parentheses by examining source code."""
         try:
-            # Get the source file
-            module = node.root()
-            lines = _read_source_lines(module.file)
+            lines = _read_source_lines(node)
             
             # Get the line (0-indexed)
             line = lines[node.lineno - 1]
@@ -415,8 +412,7 @@ class CrystalBannedApiChecker(BaseChecker):
     def _is_double_quoted_fstring(self, node: nodes.JoinedStr) -> bool:
         """Check if an f-string uses double quotes by examining source code."""
         try:
-            module = node.root()
-            lines = _read_source_lines(module.file)
+            lines = _read_source_lines(node)
             
             line = lines[node.lineno - 1]
             
@@ -441,9 +437,7 @@ class CrystalBannedApiChecker(BaseChecker):
     def _is_double_quoted_string(self, node: nodes.Const) -> bool:
         """Check if a string constant uses double quotes by examining source code."""
         try:
-            # Get the source file
-            module = node.root()
-            lines = _read_source_lines(module.file)
+            lines = _read_source_lines(node)
             
             # Get the line (0-indexed)
             line = lines[node.lineno - 1]
@@ -478,16 +472,40 @@ class CrystalBannedApiChecker(BaseChecker):
         return False  # Assume single-quoted if we can't check (fail safe)
 
 
-@lru_cache(maxsize=128)
-def _read_source_lines(filepath: str) -> tuple[str, ...]:
+def _read_source_lines(node: nodes.NodeNG) -> tuple[str, ...]:
     """
     Read source file and return lines as a tuple.
     
-    Cached to avoid re-reading the same file multiple times during analysis.
-    Returns tuple instead of list so result is hashable for caching.
+    Uses the authoritative source text from the astroid module, which may be
+    from memory (if editing in VS Code) or from disk.
     """
-    with open(filepath, 'r') as f:
-        return tuple(f.readlines())
+    module = node.root()
+    
+    # Check for cached lines on the module object
+    if hasattr(module, '_crystal_source_lines'):
+        return module._crystal_source_lines
+    
+    # Read from stream
+    stream = module.stream()
+    if stream is None:
+        return ()
+    try:
+        content_bytes = stream.read()
+    finally:
+        stream.close()
+        
+    encoding = module.file_encoding or 'utf-8'
+    try:
+        content = content_bytes.decode(encoding)
+    except LookupError:
+        # Fallback if encoding is invalid
+        content = content_bytes.decode('utf-8', errors='replace')
+        
+    lines = tuple(content.splitlines(keepends=True))
+    
+    # Cache lines on the module object
+    module._crystal_source_lines = lines
+    return lines
 
 
 def register(linter):
