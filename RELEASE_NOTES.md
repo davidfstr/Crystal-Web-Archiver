@@ -23,16 +23,19 @@ Release Notes ⋮
 * Development improvements
     * Tests can now be run in parallel using `crystal test --parallel <test_names>...` 
       or `crystal test -p <test_names>...`.
-    * When running tests, pressing Ctrl-C now prints a summary section 
-      before exiting,  marking interrupted tests with "-" status and showing a 
-      "Rerun interrupted tests with:" section.
-    * Tests can now be run using a subcommand style `crystal test <test_names>...` 
-      in addition to the legacy `crystal --test <test_names>...` syntax.
-        * Additional options like `--verbose` are available in the
-          subcommand style.
+        * When running tests, pressing Ctrl-C now prints a summary section 
+          before exiting, marking interrupted tests with "-" status and showing a 
+          "Rerun interrupted tests with:" section.
+        * Tests can now be run using a subcommand style `crystal test <test_names>...` 
+          in addition to the legacy `crystal --test <test_names>...` syntax.
+            * Additional options like `--verbose` are available in the
+              subcommand style.
     * A special `T` navigator object is available to AI coding agents that
       run `crystal --shell`, which allows the agent to quickly take a
       snapshot of all UI controls and manipulate them.
+    * Several new lint rules are added to enforce Crystal-specific coding conventions.
+        * Lint rules are especially useful for steering AI coding agents
+          to use Crystal-specific coding conventions and safe patterns.
 
 [interactive interpreter]: https://docs.python.org/3/whatsnew/3.13.html#whatsnew313-better-interactive-interpreter
 
