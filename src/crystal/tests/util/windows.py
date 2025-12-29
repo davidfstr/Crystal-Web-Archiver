@@ -15,7 +15,7 @@ See also:
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import AbstractContextManager, asynccontextmanager, nullcontext
+from contextlib import asynccontextmanager
 from crystal.browser.new_root_url import (
     NewRootUrlDialog as RealNewRootUrlDialog,
 )
@@ -25,15 +25,13 @@ from crystal.tests.util.controls import (
     click_button, file_dialog_returning, select_menuitem_now, TreeItem,
 )
 from crystal.tests.util.save_as import wait_for_save_as_to_complete
-from crystal.tests.util.tasks import append_deferred_top_level_tasks, first_task_title_progression
+from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
-    not_condition, or_condition, tree_has_no_children_condition, wait_for,
-    WaitTimedOut, window_condition, window_disposed_condition,
+    WaitTimedOut, not_condition, or_condition, tree_has_no_children_condition, wait_for,
+    wait_for_and_return, window_condition, window_disposed_condition,
 )
-import crystal.tests.util.xtempfile as xtempfile
 from crystal.util import features
 from crystal.util.wx_dialog import mocked_show_modal
-from crystal.util.xos import is_mac_os
 import os.path
 import re
 import sys
@@ -65,7 +63,7 @@ class OpenOrCreateDialog:
     async def wait_for(timeout: float | None=None, *, _attempt_recovery: bool=True) -> OpenOrCreateDialog:
         self = OpenOrCreateDialog(_ready=True)
         try:
-            open_or_create_project_dialog = await wait_for(
+            open_or_create_project_dialog = await wait_for_and_return(
                 window_condition('cr-open-or-create-project'),
                 timeout=timeout or OpenOrCreateDialog._TIMEOUT_FOR_OPEN_OCD,
                 stacklevel_extra=1,
@@ -74,7 +72,7 @@ class OpenOrCreateDialog:
             if _attempt_recovery:
                 # Check if a MainWindow is open from a previous failed test
                 try:
-                    main_window: wx.Window = await wait_for(
+                    main_window: wx.Window = await wait_for_and_return(
                         window_condition('cr-main-window'),
                         # Short timeout. Check whether a MainWindow is open.
                         timeout=0.1,
@@ -337,7 +335,7 @@ class MainWindow:
         return self
     
     async def _connect(self) -> None:
-        mw_frame: wx.Window = await wait_for(
+        mw_frame: wx.Window = await wait_for_and_return(
             window_condition('cr-main-window'),
             timeout=self._connect_timeout,
             stacklevel_extra=1)
@@ -549,7 +547,7 @@ class NewRootUrlDialog:
     @staticmethod
     async def wait_for() -> NewRootUrlDialog:
         self = NewRootUrlDialog(_ready=True)
-        self._dialog = await wait_for(window_condition('cr-new-root-url-dialog'), stacklevel_extra=1)
+        self._dialog = await wait_for_and_return(window_condition('cr-new-root-url-dialog'), stacklevel_extra=1)
         assert isinstance(self._dialog, wx.Dialog)
         assert RealNewRootUrlDialog._last_opened is not None
         self._controller = RealNewRootUrlDialog._last_opened
@@ -682,7 +680,7 @@ class NewGroupDialog:
     @staticmethod
     async def wait_for() -> NewGroupDialog:
         self = NewGroupDialog(_ready=True)
-        self._dialog = await wait_for(
+        self._dialog = await wait_for_and_return(
             NewGroupDialog.window_condition(),
             timeout=5.0,  # 4.2s observed for macOS test runners on GitHub Actions
             stacklevel_extra=1,
@@ -799,7 +797,7 @@ class AboutDialog:
     @staticmethod
     async def wait_for() -> AboutDialog:
         self = AboutDialog(_ready=True)
-        self._dialog = await wait_for(
+        self._dialog = await wait_for_and_return(
             window_condition('cr-about-dialog'),
             timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
             stacklevel_extra=1,
@@ -853,7 +851,7 @@ class PreferencesDialog:
         import wx.adv
         
         self = PreferencesDialog(_ready=True)
-        self._dialog = await wait_for(
+        self._dialog = await wait_for_and_return(
             window_condition('cr-preferences-dialog'),
             timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
             stacklevel_extra=1,

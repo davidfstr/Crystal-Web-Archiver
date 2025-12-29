@@ -4,8 +4,7 @@ from crystal.tests.util.clipboard import FakeClipboard
 from crystal.tests.util.controls import click_button, TreeItem
 from crystal.tests.util.server import extracted_project
 from crystal.tests.util.wait import (
-    first_child_of_tree_item_is_not_loading_condition, is_enabled_condition,
-    wait_for,
+    first_child_of_tree_item_is_not_loading_condition, is_enabled_condition, wait_for,
 )
 from crystal.tests.util.windows import NewGroupDialog, OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal

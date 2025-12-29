@@ -63,7 +63,7 @@ def test_warn_if_application_menu_name_changes_from_detects_name_change() -> Non
             # Wait for print_special() to be called by the monitoring thread of
             # warn_if_application_menu_name_changes_from()
             wait_for_sync(
-                lambda: mock_print_special.called or None,
+                lambda: mock_print_special.called,
                 timeout=0.5
             )
             

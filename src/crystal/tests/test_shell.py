@@ -423,12 +423,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download ResourceRevision
                 with delay_between_downloads_minimized(crystal):
                     py_exec(crystal, 'rr_future = r.download()')
-                    # TODO: Use wait_for_sync() rather than a manual loop
-                    while True:
-                        is_done = (py_eval_literal(crystal, 'rr_future.done()') == True)
-                        if is_done:
-                            break
-                        time.sleep(.2)
+                    wait_for_sync(lambda: (py_eval_literal(crystal, 'rr_future.done()') == True))
                     assertIn('<ResourceRevision ', py_eval(crystal, 'rr = rr_future.result(); rr'))
                 
                 # Test can import ResourceGroup
@@ -486,12 +481,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download RootResource
                 with delay_between_downloads_minimized(crystal):
                     py_exec(crystal, 'rr_future = root_r.download()')
-                    # TODO: Use wait_for_sync() rather than a manual loop
-                    while True:
-                        is_done = (py_eval_literal(crystal, 'rr_future.done()') == True)
-                        if is_done:
-                            break
-                        time.sleep(.2)
+                    wait_for_sync(lambda: (py_eval_literal(crystal, 'rr_future.done()') == True))
                     assertIn('<ResourceRevision ', py_eval(crystal, 'rr = rr_future.result(); rr'))
                 
                 # Create feed ResourceGroup
@@ -507,12 +497,7 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can download ResourceGroup
                 with delay_between_downloads_minimized(crystal):
                     py_exec(crystal, 'drgt = rg.download()')
-                    # TODO: Use wait_for_sync() rather than a manual loop
-                    while True:
-                        is_done = (py_eval_literal(crystal, 'drgt.complete') == True)
-                        if is_done:
-                            break
-                        time.sleep(.2)
+                    wait_for_sync(lambda: (py_eval_literal(crystal, 'drgt.complete') == True))
                 assertEqual(
                     [True] * 2,
                     py_eval_literal(crystal, '[r.has_any_revisions() for r in rg.members]'))
