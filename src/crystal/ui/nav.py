@@ -33,6 +33,8 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
     peer's direct children. See __getitem__() documentation for all ways
     to navigate.
     """
+    # NOTE: Prevent accidental assignment to any non-existent attribute
+    __slots__ = ('_peer',)
     
     _peer: _P
     
@@ -117,6 +119,12 @@ class WindowNavigator(Navigator[wx.Window]):
     window's direct children. See __getitem__() documentation for all ways
     to navigate.
     """
+    # NOTE: Prevent accidental assignment to any non-existent attribute
+    __slots__ = (
+        '_path',
+        '_query',
+        '_doc_override',
+    )
     
     _DEFAULT_NAME_FOR_WINDOW_TYPE_STR = {
         wx.Button: wx.ButtonNameStr.decode('ascii'),
@@ -137,13 +145,19 @@ class WindowNavigator(Navigator[wx.Window]):
     
     # === Init ===
 
-    def __init__(self, window: wx.Window | None = None, path: str = 'T', query: str | None = None) -> None:
+    def __init__(self,
+            window: wx.Window | None = None,
+            path: str = 'T',
+            query: str | None = None,
+            _doc: str | None = None,
+            ) -> None:
         """
         Creates a navigator. Most code will obtain a navigator by navigating
         from the top navigator `T` rather than creating one directly.
         """
         self._peer = window
         self._path = path
+        self._doc_override = _doc
         if (window is not None and 
                 window.Name and 
                 window.Name != self._DEFAULT_NAME_FOR_WINDOW_TYPE_STR.get(type(window)) and
@@ -158,6 +172,17 @@ class WindowNavigator(Navigator[wx.Window]):
         else:
             # Use fallback path-based query provided by caller
             self._query = query
+    
+    def __getattribute__(self, name: str) -> Any:
+        """
+        Custom attribute access to allow overriding __doc__ via _doc_override.
+        """
+        if name == '__doc__':
+            doc_override = object.__getattribute__(self, '_doc_override')
+            if doc_override is not None:
+                return doc_override
+            # (Fall through to default __doc__)
+        return object.__getattribute__(self, name)
     
     # === Formatting ===
     
@@ -610,6 +635,8 @@ class TreeItemNavigator(Navigator[TreeItem]):
     item's direct children. See __getitem__() documentation for all ways
     to navigate.
     """
+    # NOTE: Prevent accidental assignment to any non-existent attribute
+    __slots__ = ('_path', '_query')
     
     # === Init ===
 
@@ -881,6 +908,16 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         S[0][1][0] ~ TreeItem(👁='— 📄 2{2→6} more')
         ...
     """
+    # NOTE: Prevent accidental assignment to any non-existent attribute
+    __slots__ = (
+        '_peer_description',
+        '_children',
+        '_children_elided',
+        '_path',
+        '_query',
+        '_peer_accessor',
+        '_peer_obj',
+    )
     
     def __init__(self,
             peer_description: str,
@@ -1113,6 +1150,13 @@ class SnapshotDiff(Generic[_P]):
         >>> diff.old  # The old snapshot
         >>> diff.new  # The new snapshot
     """
+    # NOTE: Prevent accidental assignment to any non-existent attribute
+    __slots__ = (
+        '_old',
+        '_new',
+        '_name',
+        '_deletion_style',
+    )
     
     def __init__(self,
             old: Snapshot[_P],
@@ -1730,6 +1774,17 @@ class _DiffEntry:
     Represents a single line in a snapshot diff output.
     May contain nested descendent entries that should be printed after this entry.
     """
+    # NOTE: Minimize memory usage
+    __slots__ = (
+        'path',
+        'symbol',
+        'description',
+        'old_index',
+        'new_index',
+        'old_range_end',
+        'new_range_end',
+        'descendents',
+    )
     
     def __init__(self,
             path: str,
@@ -1937,8 +1992,7 @@ class CodeExpression:
 # Globals
 
 # NOTE: This constant is exposed to AI agents in the shell
-T = WindowNavigator()
-T.__doc__ = (
+T = WindowNavigator(path='T', _doc=(
     """
     The top navigator, pointing to the root of the wx.Window hierarchy.
     
@@ -2006,7 +2060,7 @@ T.__doc__ = (
         >>> T[0][0][0][0][1].Tree[0].Q
         TreeItem.GetRootItem(wx.FindWindowByName('cr-entity-tree')).Children[0]
     """
-)
+))
 
 
 # ------------------------------------------------------------------------------
