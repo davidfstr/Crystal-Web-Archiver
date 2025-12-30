@@ -356,6 +356,11 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     # NOTE: Uses a similar implementation pattern as
     #       AsyncIOInteractiveConsole.runcode() from asyncio/__main__.py
     def _runcode_async(self, code: types.CodeType):
+        # Capture snapshot before executing code (for AI agents only)
+        if ai_agent_detected():
+            from crystal.ui.nav import T
+            snap_before = T.snapshot()  # capture
+        
         func = types.FunctionType(code, self.locals)  # type: ignore[arg-type]
         try:
             coro = func()
@@ -365,13 +370,33 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             self.showtraceback()
             return None
         
+        result = None
         if not inspect.iscoroutine(coro):
-            return coro
-        try:
-            return run_test_coro(coro)  # type: ignore[arg-type]
-        except BaseException:
-            self.showtraceback()
-            return None
+            result = coro
+        else:
+            try:
+                result = run_test_coro(coro)  # type: ignore[arg-type]
+            except BaseException:
+                self.showtraceback()
+                return None
+        
+        # Capture snapshot after executing code and show diff (for AI agents only)
+        if ai_agent_detected():
+            from crystal.ui.nav import Snapshot, T
+            snap_after = T.snapshot()  # capture
+            diff = Snapshot.diff(snap_before, snap_after, name='S')
+            
+            # Store the diff in the shell's locals as 'S'
+            self.locals['S'] = diff  # type: ignore[index]
+            
+            if diff:
+                # Format the diff output
+                [header_line, *rest_lines] = repr(diff).split('\n')
+                self.write(f'🤖 UI changed at: {header_line.removeprefix("# ")}\n')
+                for line in rest_lines:
+                    self.write(f'  {line}\n')  # 2-space indentation
+        
+        return result
     
     @override
     def showtraceback(self) -> None:

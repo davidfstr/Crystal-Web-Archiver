@@ -1172,7 +1172,7 @@ class TestSnapshotDiffApi:
             assert actual_diff_repr_lines == expected_diff_repr_lines
         
         with subtests.test(scenario='try direct access'):
-            with pytest.raises(ValueError, match=re.escape('S[0]... is ambiguous. Use S.new[0]... or S.old[0]... instead')):
+            with pytest.raises(ValueError, match=re.escape('S[0] is ambiguous. Use S.new[0] or S.old[0] instead')):
                 repr(S[0][0])  # type: ignore[index]
         
         with subtests.test(scenario='access new'):

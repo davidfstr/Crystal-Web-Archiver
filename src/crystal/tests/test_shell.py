@@ -8,6 +8,7 @@ from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_TIMEOUT, wait_for_sync,
 )
+from crystal.util.xos import is_linux
 from crystal.util.xthreading import fg_call_and_wait
 from io import TextIOBase
 import os
@@ -550,6 +551,96 @@ def test_can_import_guppy_in_shell() -> None:
         # Ensure can take memory sample since checkpoint
         result = py_eval(crystal, 'import gc; gc.collect(); heap = h.heap(); heap; _.more')
         assertNotIn('Traceback', result)
+
+
+# ------------------------------------------------------------------------------
+# Tests: AI Agents: UI Change Detection
+
+def test_shell_detects_and_reports_ui_changes_to_ai_agents() -> None:
+    """
+    When an AI agent is detected, the shell should automatically detect
+    and report UI changes that occur between commands.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True'}) as (crystal, banner):
+        # Verify AI agent banner appears
+        assertIn('AI agents:', banner)
+        assertIn('Use `T` to view/control the UI', banner)
+        
+        # Click 'New Project' button.
+        # Should report: Dialog replaced with main window
+        result = py_eval(crystal, 'click(T(Id=wx.ID_YES).W)')
+        assertIn('🤖 UI changed at: S :=', result,
+            'Expected UI change detection when opening main window')
+        assertIn("- crystal.ui.dialog.BetterMessageDialog(Name='cr-open-or-create-project'", result,
+            'Expected old dialog to be reported as deleted')
+        assertIn("+ wx.Frame(Name='cr-main-window'", result,
+            'Expected new main window to be reported as added')
+        
+        # Click 'New Root URL...' button.
+        # Should report: New dialog opened
+        result = py_eval(crystal, "click(T['cr-empty-state-new-root-url-button'].W)")
+        assertIn('🤖 UI changed at: S :=', result,
+            'Expected UI change detection when opening dialog')
+        if is_linux():
+            assertIn("+ wx.Dialog(Name='cr-new-root-url-dialog'", result,
+                'Expected new dialog to be reported as added')
+        else:
+            assertIn("+ wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog'", result,
+                'Expected new dialog to be reported as added')
+        assertIn("+ wx.TextCtrl(Name='cr-new-root-url-dialog__url-field'", result,
+            'Expected URL field to be reported as added')
+        
+        # Set URL field value.
+        # Should report: Field value changed
+        result = py_eval(crystal, "T['cr-new-root-url-dialog__url-field'].W.Value = 'https://example.com/'")
+        assertIn('🤖 UI changed at: S :=', result,
+            'Expected UI change detection when setting field value')
+        assertIn("~ wx.TextCtrl(Name='cr-new-root-url-dialog__url-field'", result,
+            'Expected URL field to be reported as modified')
+        assertIn("Value='{→https://example.com/}'", result,
+            'Expected URL value change to be shown in diff')
+        
+        # Verify S variable is accessible and has correct structure
+        if True:
+            result = py_eval(crystal, 'S')
+            assertIn('S := T[', result,
+                'Expected S variable to exist and contain a diff')
+            
+            # Verify S.old and S.new are accessible
+            result = py_eval(crystal, 'S.old')
+            assertNotIn('Traceback', result,
+                'Expected S.old to be accessible')
+            assertIn("wx.TextCtrl(Name='cr-new-root-url-dialog__url-field'", result,
+                'Expected S.old to contain the old snapshot')
+            
+            result = py_eval(crystal, 'S.new')
+            assertNotIn('Traceback', result,
+                'Expected S.new to be accessible')
+            assertIn("wx.TextCtrl(Name='cr-new-root-url-dialog__url-field'", result,
+                'Expected S.new to contain the new snapshot')
+        
+        # Verify S[...] raises an error suggesting use of S.old[...] or S.new[...]
+        result = py_eval(crystal, 'S[1]')
+        assertIn('Traceback', result,
+            'Expected S[1] to raise an error')
+        assertIn('ValueError', result,
+            'Expected ValueError to be raised')
+        assertIn('S[1] is ambiguous', result,
+            'Expected error message to suggest using S.old or S.new')
+        assertIn('Use S.new[1] or S.old[1] instead', result,
+            'Expected error message to suggest using S.old or S.new')
+        
+        # Close the dialog.
+        # Should report: Dialog closed
+        result = py_eval(crystal, 'click(T(Id=wx.ID_CANCEL).W)')
+        assertIn('🤖 UI changed at: S :=', result,
+            'Expected UI change detection when closing dialog')
+        if is_linux():
+            assertIn("- wx.Dialog(Name='cr-new-root-url-dialog'", result,
+                'Expected dialog to be reported as deleted')
+        else:
+            assertIn("- wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog'", result,
+                'Expected dialog to be reported as deleted')
 
 
 # ------------------------------------------------------------------------------

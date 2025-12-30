@@ -1710,8 +1710,8 @@ class SnapshotDiff(Generic[_P]):
     
     def __getitem__(self, index: object) -> NoReturn:
         raise ValueError(
-            f'{self._name}[{index!r}]... is ambiguous. '
-            f'Use {self._name}.new[{index!r}]... or {self._name}.old[{index!r}]... instead.'
+            f'{self._name}[{index!r}] is ambiguous. '
+            f'Use {self._name}.new[{index!r}] or {self._name}.old[{index!r}] instead.'
         )
     
     @property
