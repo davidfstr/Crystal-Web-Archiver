@@ -93,6 +93,20 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
     """Name of the shorthand property that returns this navigator's peer."""
     
     @property
+    def Peer(self) -> _P:
+        """
+        The peer that this navigator is pointing to.
+        """
+        return getattr(self, self._PEER_ACCESSOR)
+    
+    @property
+    def P(self) -> wx.Window:
+        """
+        Shorthand property equivalent to .Peer, for quick scripts.
+        """
+        return self.Peer
+    
+    @property
     def Query(self) -> CodeExpression:
         """
         A code expression suitable for including in production code
@@ -925,7 +939,7 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
             path: str,
             query: str,
             peer_accessor: str,
-            *, peer_obj: Hashable,
+            *, peer_obj: _P,
             children_elided: bool = False,
             ) -> None:
         """
@@ -1045,6 +1059,20 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         return len(self._children)
     
     # === Properties ===
+    
+    @property
+    def Peer(self) -> _P:
+        """
+        The peer that this snapshot is rooted at.
+        """
+        return self._peer
+    
+    @property
+    def P(self) -> wx.Window:
+        """
+        Shorthand property equivalent to .Peer, for quick scripts.
+        """
+        return self.Peer
     
     def __dir__(self) -> Iterable[str]:
         # Include {_peer_accessor} in the list of attributes
