@@ -13,7 +13,7 @@ from crystal.util.xtyping import not_none
 from difflib import SequenceMatcher
 import re
 from typing import (
-    assert_never, Generic, Iterable, Literal, NoReturn, overload, Self,
+    Any, assert_never, Generic, Iterable, Literal, NoReturn, overload, Self,
     TypeAlias, TypeVar
 )
 import wx
@@ -1043,6 +1043,18 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         The number of visible children of this snapshot's peer.
         """
         return len(self._children)
+    
+    # === Properties ===
+    
+    def __dir__(self) -> Iterable[str]:
+        # Include {_peer_accessor} in the list of attributes
+        return sorted(list(super().__dir__()) + [self._peer_accessor])
+    
+    def __getattr__(self, attr_name: str) -> Any:
+        # Support access of {W, I} or whatever {_peer_accessor} is
+        if attr_name == self._peer_accessor:
+            return self._peer_obj
+        raise AttributeError
     
     # === Diff ===
     
