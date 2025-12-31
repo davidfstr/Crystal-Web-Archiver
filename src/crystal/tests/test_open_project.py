@@ -133,7 +133,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
             project_path = py_eval_await_literal(crystal, textwrap.dedent(
                 '''\
                 from crystal.model import Project
-                from crystal.tests.util.wait import wait_for
+                from crystal.tests.util.wait import wait_for_and_return
                 from crystal.tests.util.windows import OpenOrCreateDialog
                 import wx
                 
@@ -152,7 +152,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                                 return None
                             else:
                                 return maybe_new_project
-                        project = await wait_for(new_project_opened)
+                        project = await wait_for_and_return(new_project_opened)
                         project_path = project.path  # capture
                     print(repr(project_path))
                 '''
@@ -167,7 +167,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                     '''\
                     from crystal.model import Project, Resource, RootResource
                     from crystal.tests.util.controls import file_dialog_returning
-                    from crystal.tests.util.wait import wait_for
+                    from crystal.tests.util.wait import wait_for_and_return
                     from crystal.tests.util.windows import OpenOrCreateDialog
                     from crystal.tests.util import xtempfile
                     from crystal.util.wx_dialog import mocked_show_modal
@@ -201,7 +201,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                                     return None
                                 else:
                                     return maybe_new_project
-                            project = await wait_for(new_project_opened)
+                            project = await wait_for_and_return(new_project_opened)
                             project_path = project.path  # capture
                         print(repr(project_path))
                     '''
@@ -213,7 +213,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                 project_path = py_eval_await_literal(crystal, textwrap.dedent(
                     '''\
                     from crystal.model import Project, Resource, RootResource
-                    from crystal.tests.util.wait import wait_for
+                    from crystal.tests.util.wait import wait_for_and_return
                     from crystal.tests.util.windows import OpenOrCreateDialog
                     from crystal.util.wx_dialog import mocked_show_modal
                     from unittest.mock import patch
@@ -242,7 +242,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                                     return None
                                 else:
                                     return maybe_new_project
-                            project = await wait_for(new_project_opened)
+                            project = await wait_for_and_return(new_project_opened)
                             project_path = project.path  # capture
                         print(repr(project_path))
                     '''
@@ -254,7 +254,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                 did_keep_untitled_project_open = py_eval_await_literal(crystal, textwrap.dedent(
                     '''\
                     from crystal.model import Project, Resource, RootResource
-                    from crystal.tests.util.wait import wait_for, WaitTimedOut
+                    from crystal.tests.util.wait import wait_for_and_return, WaitTimedOut
                     from crystal.tests.util.windows import OpenOrCreateDialog
                     from crystal.util.wx_dialog import mocked_show_modal
                     from unittest.mock import patch
@@ -284,7 +284,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                                 else:
                                     return maybe_new_project
                             try:
-                                project = await wait_for(new_project_opened, timeout=2.0)
+                                project = await wait_for_and_return(new_project_opened, timeout=2.0)
                             except WaitTimedOut:
                                 # Expected
                                 did_keep_untitled_project_open = (
