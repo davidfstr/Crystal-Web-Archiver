@@ -141,7 +141,7 @@ class Shell:
         
         if ai_agent_detected():
             from crystal.ui.nav import T
-            from crystal.tests.util.controls import click, TreeItem
+            from crystal.tests.util.controls import click, screenshot, TreeItem
             from crystal.tests.util.wait import wait_for
             import wx
             
@@ -149,11 +149,13 @@ class Shell:
                 'AI agents:\n'
                 '- Use `T` to view/control the UI. Learn more with `help(T)`.\n'
                 '- Use `click(window)` to click a button.\n'
+                '- Use `await screenshot()` to capture the UI as an image.\n'
                 '- Use Python control flow (for/while loops, if statements, etc.) to batch operations.\n'
             )
             agent_locals = dict(
                 T=T,
                 click=click,
+                screenshot=screenshot,
                 
                 # NOTE: Having these as a built-in makes it easy to immediately use
                 #       CodeExpressions obtained from T that reference them.
