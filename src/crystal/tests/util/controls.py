@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from crystal.util.wx_treeitem_gettooltip import GetTooltipEvent
 from crystal.util.xos import is_windows
-from typing import TYPE_CHECKING, List, Literal, Optional, assert_never
+from typing import TYPE_CHECKING, List, Literal, Optional, TypeAlias, assert_never
 from unittest.mock import patch
 import wx
 
@@ -15,8 +15,10 @@ if TYPE_CHECKING:
 # ------------------------------------------------------------------------------
 # Utility: Controls: General
 
+Clickable: TypeAlias = 'wx.Button | wx.CheckBox | wx.RadioButton | TreeItem | Navigator | Snapshot'
+
 # NOTE: This function is exposed to AI agents in the shell
-def click(window: wx.Button | wx.CheckBox | wx.RadioButton | 'Navigator' | 'Snapshot') -> None:
+def click(window: Clickable) -> None:
     """
     Clicks a wx.Window control.
     
@@ -31,6 +33,8 @@ def click(window: wx.Button | wx.CheckBox | wx.RadioButton | 'Navigator' | 'Snap
         click_checkbox(window)
     elif isinstance(window, wx.RadioButton):
         click_radio_button(window)
+    elif isinstance(window, TreeItem):
+        window.SelectItem()
     else:
         # Also allow clicking common objects that point to a unique wx.Window
         from crystal.ui.nav import Navigator, Snapshot
