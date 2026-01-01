@@ -1,5 +1,5 @@
 __version__ = '2.1.0'
-_build_year = 2025
+_build_year = 2026
 
 APP_NAME = 'Crystal'
 APP_AUTHOR = 'DaFoster'
