@@ -37,6 +37,7 @@ Release Notes ⋮
           snapshot of all UI controls and manipulate them.
         * Whenever the UI changes in response to running a command in the shell,
           automatically print a concise/targeted diff of the UI.
+        * An `await screenshot()` function is available to capture the UI as an image.
     * Several new lint rules are added to enforce Crystal-specific coding conventions.
         * Lint rules are especially useful for steering AI coding agents
           to use Crystal-specific coding conventions and safe patterns.
