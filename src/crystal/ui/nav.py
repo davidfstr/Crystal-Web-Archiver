@@ -33,10 +33,22 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
     peer's direct children. See __getitem__() documentation for all ways
     to navigate.
     """
-    # NOTE: Prevent accidental assignment to any non-existent attribute
-    __slots__ = ('_peer',)
+    # Attributes that can be set on this class
+    # NOTE: Not using __slots__ here because it prevents setting __doc__
+    _ALLOWED_ATTRS = frozenset({'_peer', '__doc__'})
     
     _peer: _P
+    
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Prevent accidental assignment to any non-existent attribute."""
+        for cls in type(self).__mro__:
+            allowed: frozenset[str] = getattr(cls, '_ALLOWED_ATTRS', frozenset())
+            if name in allowed:
+                object.__setattr__(self, name, value)
+                return
+        raise AttributeError(
+            f'Cannot set attribute {name!r} on {type(self).__name__!r} object'
+        )
     
     # === Formatting ===
     
@@ -133,12 +145,8 @@ class WindowNavigator(Navigator[wx.Window]):
     window's direct children. See __getitem__() documentation for all ways
     to navigate.
     """
-    # NOTE: Prevent accidental assignment to any non-existent attribute
-    __slots__ = (
-        '_path',
-        '_query',
-        '_doc_override',
-    )
+    # Attributes that can be set on this class
+    _ALLOWED_ATTRS = frozenset({'_path', '_query'})
     
     _DEFAULT_NAME_FOR_WINDOW_TYPE_STR = {
         wx.Button: wx.ButtonNameStr.decode('ascii'),
@@ -163,7 +171,6 @@ class WindowNavigator(Navigator[wx.Window]):
             window: wx.Window | None = None,
             path: str = 'T',
             query: str | None = None,
-            _doc: str | None = None,
             ) -> None:
         """
         Creates a navigator. Most code will obtain a navigator by navigating
@@ -171,7 +178,6 @@ class WindowNavigator(Navigator[wx.Window]):
         """
         self._peer = window
         self._path = path
-        self._doc_override = _doc
         if (window is not None and 
                 window.Name and 
                 window.Name != self._DEFAULT_NAME_FOR_WINDOW_TYPE_STR.get(type(window)) and
@@ -186,17 +192,6 @@ class WindowNavigator(Navigator[wx.Window]):
         else:
             # Use fallback path-based query provided by caller
             self._query = query
-    
-    def __getattribute__(self, name: str) -> Any:
-        """
-        Custom attribute access to allow overriding __doc__ via _doc_override.
-        """
-        if name == '__doc__':
-            doc_override = object.__getattribute__(self, '_doc_override')
-            if doc_override is not None:
-                return doc_override
-            # (Fall through to default __doc__)
-        return object.__getattribute__(self, name)
     
     # === Formatting ===
     
@@ -649,8 +644,8 @@ class TreeItemNavigator(Navigator[TreeItem]):
     item's direct children. See __getitem__() documentation for all ways
     to navigate.
     """
-    # NOTE: Prevent accidental assignment to any non-existent attribute
-    __slots__ = ('_path', '_query')
+    # Attributes that can be set on this class
+    _ALLOWED_ATTRS = frozenset({'_path', '_query'})
     
     # === Init ===
 
@@ -2032,7 +2027,8 @@ class CodeExpression:
 # Globals
 
 # NOTE: This constant is exposed to AI agents in the shell
-T = WindowNavigator(path='T', _doc=(
+T = WindowNavigator(path='T')
+T.__doc__ = (
     """
     The top navigator, pointing to the root of the wx.Window hierarchy.
     
@@ -2100,7 +2096,7 @@ T = WindowNavigator(path='T', _doc=(
         >>> T[0][0][0][0][1].Tree[0].Q
         TreeItem.GetRootItem(wx.FindWindowByName('cr-entity-tree')).Children[0]
     """
-))
+)
 
 
 # ------------------------------------------------------------------------------
