@@ -368,6 +368,11 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             snap_before = self._fg_call_and_wait_noprofile(lambda: T.snapshot())  # capture
         
         def fg_run_code() -> Any:
+            # Ensure __builtins__ is available to prevent KeyError
+            # during coroutine cleanup if a coroutine is created but not awaited
+            if '__builtins__' not in self.locals:
+                self.locals['__builtins__'] = __builtins__  # type: ignore[index]
+            
             func = types.FunctionType(code, self.locals)  # type: ignore[arg-type]
             try:
                 return func()
@@ -379,7 +384,6 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         
         coro = self._fg_call_and_wait_noprofile(fg_run_code)
         
-        result = None
         if not inspect.iscoroutine(coro):
             result = coro
         else:
