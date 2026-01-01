@@ -8,7 +8,7 @@ from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
 from crystal.tests.util.runner import run_test_coro
-from crystal.util.ai_agents import ai_agent_detected
+from crystal.util.ai_agents import ai_agent_detected, mcp_shell_server_detected
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.headless import is_headless_mode
 from crystal.util.xfunctools import partial2
@@ -17,6 +17,7 @@ from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_call_and_wait, has_foreground_thread,
     NoForegroundThreadError,
 )
+import getpass
 import inspect
 import os
 import signal
@@ -333,7 +334,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     
     @override
     @bg_affinity
-    def raw_input(self, *args, **kwargs) -> str:
+    def raw_input(self, prompt: str = '') -> str:
         if self._first_input:
             # Try to execute startup file specified in $PYTHONSTARTUP
             startup_filepath = os.environ.get('PYTHONSTARTUP')
@@ -344,7 +345,22 @@ class _FgInteractiveConsole(code.InteractiveConsole):
                 self.runcode(code)
             
             self._first_input = False
-        return super().raw_input(*args, **kwargs)
+        
+        # When running under MCP shell-server (terminal_operate),
+        # suppress automatic echo to avoid newline injection issues
+        if mcp_shell_server_detected():
+            # Read input without echoing
+            try:
+                line = getpass.getpass(prompt=prompt, stream=sys.stderr)
+            except EOFError:
+                # Handle Ctrl-D
+                self.write('\n')
+                raise
+            # Echo the complete input line all at once
+            self.write(f'{line}\n')
+            return line
+        else:
+            return super().raw_input(prompt)
     
     @override
     def runsource(self, source: str, filename: str = '<input>', symbol: str = 'single') -> bool:

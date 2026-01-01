@@ -38,11 +38,16 @@ Release Notes ⋮
         * Whenever the UI changes in response to running a command in the shell,
           automatically print a concise/targeted diff of the UI.
         * An `await screenshot()` function is available to capture the UI as an image.
+        * The "terminal_operate" tool from [mako10k/mcp-shell-server] is
+          supported specially. See the `mcp_shell_server_detected()` function
+          in `ai_agents.py` for instructions for how to configure the tool
+          so that Crystal can detect it.
     * Several new lint rules are added to enforce Crystal-specific coding conventions.
         * Lint rules are especially useful for steering AI coding agents
           to use Crystal-specific coding conventions and safe patterns.
 
 [interactive interpreter]: https://docs.python.org/3/whatsnew/3.13.html#whatsnew313-better-interactive-interpreter
+[mako10k/mcp-shell-server]: https://github.com/mako10k/mcp-shell-server
 
 ### v2.1.0 (November 15, 2025)
 
