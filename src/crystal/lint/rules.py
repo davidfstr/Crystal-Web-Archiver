@@ -7,10 +7,10 @@ from pylint.checkers import BaseChecker
 from typing import List, Tuple, Optional
 
 
-class CrystalBannedApiChecker(BaseChecker):
-    """Checker to detect usage of banned API patterns."""
+class CrystalLintRules(BaseChecker):
+    """Checker to detect various Crystal-specific banned code patterns."""
     
-    name = 'crystal-banned-api'
+    name = 'crystal-lint-rules'
     
     # When non-None, tracks fixes for an auto-fixer caller to apply.
     # This list is not used by PyLint itself.
@@ -562,7 +562,7 @@ def _read_source_lines(node: nodes.NodeNG) -> tuple[str, ...]:
 
 def register(linter):
     """Register the checker with pylint."""
-    linter.register_checker(CrystalBannedApiChecker(linter))
+    linter.register_checker(CrystalLintRules(linter))
 
 
 # === String Quote Fixes ===

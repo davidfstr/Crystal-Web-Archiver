@@ -1,11 +1,11 @@
 [MAIN]
-load-plugins=crystal_banned_api
+load-plugins=crystal.lint.rules
 
 [MESSAGES CONTROL]
 # Disable default checks
 disable=all
 
-# Enable only crystal_banned_api messages
+# Enable only crystal.lint.rules messages
 enable=C9001,C9002,C9003,C9004,C9005,C9006,C9007,C9008,C9009,C9010,C9011,C9012,C9013
 
 [REPORTS]

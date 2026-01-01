@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """
-Auto-fixer for the [no-double-quoted-string] (C9013) PyLint rule.
-
-This script automatically converts double-quoted string literals to single-quoted ones.
+Auto-fixer for the [no-double-quoted-string] (C9013) PyLint rule,
+and potentially other rules in the future.
 
 Usage:
-    python -m crystal.util.fix_string_quotes <file_path>
-    python -m crystal.util.fix_string_quotes --check <file_path>  # Check only, no fixes
+    python -m crystal.lint.fix <file_path>
+    python -m crystal.lint.fix --check <file_path>  # Check only, no fixes
 """
 
 import argparse
 import astroid
 from astroid import nodes
-from crystal_banned_api import (
-    CrystalBannedApiChecker,
+from crystal.lint.rules import (
+    CrystalLintRules,
     apply_string_quote_fixes
 )
 import sys
@@ -78,7 +77,7 @@ def fix_file(file_path: Path, check_only: bool = False) -> Tuple[bool, int]:
             pass  # Ignore option registration
     
     # Create a checker with fix tracking enabled
-    checker = CrystalBannedApiChecker(linter=MockLinter())  # type: ignore[arg-type]
+    checker = CrystalLintRules(linter=MockLinter())  # type: ignore[arg-type]
     checker._fixes = []
     
     # Set up source lines on the module for the checker to access

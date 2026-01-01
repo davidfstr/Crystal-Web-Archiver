@@ -1,9 +1,9 @@
 """
-Unit tests for the custom pylint rules defined in crystal_banned_api.py.
+Unit tests for the custom pylint rules defined in crystal/lint/rules.py.
 """
 
 import astroid
-from crystal_banned_api import CrystalBannedApiChecker
+from crystal.lint.rules import CrystalLintRules
 from itertools import count
 import pylint.testutils
 from pylint.checkers import BaseChecker
@@ -486,7 +486,7 @@ class TestNoDoubleQuotedString:
     def test_single_quoted_string_is_allowed(self) -> None:
         code = dedent(
             """\
-            name = 'crystal-banned-api'
+            name = 'crystal-lint-rules'
             """
         )
         _assert_no_message_emitted(code, 'no-double-quoted-string')
@@ -494,7 +494,7 @@ class TestNoDoubleQuotedString:
     def test_double_quoted_string_is_flagged(self) -> None:
         code = dedent(
             """\
-            name = "crystal-banned-api"
+            name = "crystal-lint-rules"
             """
         )
         _assert_message_emitted(code, 'no-double-quoted-string')
@@ -612,7 +612,7 @@ class TestNoDoubleQuotedStringFixer:
         test_file = tmp_path / 'test.py'
         test_file.write_text('name = "test"\n')
         
-        from crystal.util.fix_string_quotes import fix_file
+        from crystal.lint.fix import fix_file
         (has_issues, num_fixes) = fix_file(test_file, check_only=False)
         
         assert has_issues
@@ -624,7 +624,7 @@ class TestNoDoubleQuotedStringFixer:
         test_file = tmp_path / 'test.py'
         test_file.write_text('msg = "Don\'t do this"\n')
         
-        from crystal.util.fix_string_quotes import fix_file
+        from crystal.lint.fix import fix_file
         (has_issues, num_fixes) = fix_file(test_file, check_only=False)
         
         assert not has_issues
@@ -636,7 +636,7 @@ class TestNoDoubleQuotedStringFixer:
         test_file = tmp_path / 'test.py'
         test_file.write_text('msg = f"Hello {name}"\n')
         
-        from crystal.util.fix_string_quotes import fix_file
+        from crystal.lint.fix import fix_file
         (has_issues, num_fixes) = fix_file(test_file, check_only=False)
         
         assert has_issues
@@ -649,7 +649,7 @@ class TestNoDoubleQuotedStringFixer:
         code = 'def foo():\n    """Docstring."""\n    pass\n'
         test_file.write_text(code)
         
-        from crystal.util.fix_string_quotes import fix_file
+        from crystal.lint.fix import fix_file
         (has_issues, num_fixes) = fix_file(test_file, check_only=False)
         
         assert not has_issues
@@ -662,7 +662,7 @@ class TestNoDoubleQuotedStringFixer:
         code = 'value = f\'{"yes" if cond else "no"}\'\n'
         test_file.write_text(code)
         
-        from crystal.util.fix_string_quotes import fix_file
+        from crystal.lint.fix import fix_file
         (has_issues, num_fixes) = fix_file(test_file, check_only=False)
         
         assert not has_issues
@@ -674,7 +674,7 @@ class TestNoDoubleQuotedStringFixer:
         test_file = tmp_path / 'test.py'
         test_file.write_text('pattern = r"[0-9]+"\n')
         
-        from crystal.util.fix_string_quotes import fix_file
+        from crystal.lint.fix import fix_file
         (has_issues, num_fixes) = fix_file(test_file, check_only=False)
         
         assert has_issues
@@ -687,7 +687,7 @@ class TestNoDoubleQuotedStringFixer:
         original = 'name = "test"\n'
         test_file.write_text(original)
         
-        from crystal.util.fix_string_quotes import fix_file
+        from crystal.lint.fix import fix_file
         (has_issues, num_fixes) = fix_file(test_file, check_only=True)
         
         assert has_issues
@@ -699,7 +699,7 @@ class TestNoDoubleQuotedStringFixer:
         test_file = tmp_path / 'test.py'
         test_file.write_text('a = "test1"\nb = "test2"\nc = "test3"\n')
         
-        from crystal.util.fix_string_quotes import fix_file
+        from crystal.lint.fix import fix_file
         (has_issues, num_fixes) = fix_file(test_file, check_only=False)
         
         assert has_issues
@@ -748,11 +748,11 @@ def _run_checker_on_code(code: str) -> list[pylint.testutils.MessageTest]:
     
     # Mock _read_source_lines to return the code's lines without filesystem access
     code_lines = tuple(code.splitlines(keepends=True))
-    with mock.patch('crystal_banned_api._read_source_lines', return_value=code_lines):
+    with mock.patch('crystal.lint.rules._read_source_lines', return_value=code_lines):
 
         # Create a test case instance
         test_case = _InMemoryCheckerTestCase()
-        test_case.CHECKER_CLASS = CrystalBannedApiChecker
+        test_case.CHECKER_CLASS = CrystalLintRules
         test_case.setup_method()
         
         # Parse the code into an AST with the fake filename
@@ -773,4 +773,4 @@ class _InMemoryCheckerTestCase(pylint.testutils.CheckerTestCase):
     
     Uses pylint's in-memory API to avoid subprocess and filesystem overhead.
     """
-    CHECKER_CLASS: Type[BaseChecker] = CrystalBannedApiChecker
+    CHECKER_CLASS: Type[BaseChecker] = CrystalLintRules
