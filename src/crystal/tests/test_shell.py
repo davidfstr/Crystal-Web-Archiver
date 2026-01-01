@@ -586,6 +586,80 @@ def test_help_T_shows_custom_docstring() -> None:
             'Expected custom instance docstring, not the WindowNavigator class docstring')
 
 
+def test_given_ai_agent_when_T_accessed_without_help_T_then_warning_shown() -> None:
+    """
+    When an AI agent accesses T without first reading help(T),
+    a warning message should be displayed recommending they read help(T).
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True'}) as (crystal, banner):
+        # Access T without calling help(T) first
+        result = py_eval(crystal, 'T')
+        
+        # Verify the warning is shown before T's repr
+        assertIn('🤖 T accessed but help(T) not read. Recommend reading help(T).', result,
+            'Expected warning message when T is accessed without help(T)')
+        assertIn('T[0].W', result,
+            'Expected T repr to still be shown after warning')
+
+
+def test_given_ai_agent_when_help_T_called_then_T_accessed_then_no_warning_shown() -> None:
+    """
+    When an AI agent calls help(T) first, then accesses T,
+    no warning should be displayed.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True'}) as (crystal, banner):
+        # Call help(T) first
+        help_result = py_eval(crystal, 'help(T)')
+        assertIn('The top navigator', help_result,
+            'Expected help(T) to show T documentation')
+        
+        # Now access T - should not show warning
+        t_result = py_eval(crystal, 'T')
+        assertNotIn('🤖 T accessed but help(T) not read', t_result,
+            'Expected no warning when T accessed after help(T)')
+        assertIn('T[0].W', t_result,
+            'Expected T repr to be shown')
+
+
+def test_given_ai_agent_when_T_accessed_multiple_times_without_help_T_then_warning_shown_once() -> None:
+    """
+    When an AI agent accesses T multiple times without reading help(T),
+    the warning should only be displayed once (on the first access).
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True'}) as (crystal, banner):
+        # Access T first time - should show warning
+        result1 = py_eval(crystal, 'T')
+        assertIn('🤖 T accessed but help(T) not read. Recommend reading help(T).', result1,
+            'Expected warning on first T access')
+        
+        # Access T second time - should not show warning again
+        result2 = py_eval(crystal, 'T')
+        assertNotIn('🤖 T accessed but help(T) not read', result2,
+            'Expected no warning on second T access')
+        assertIn('T[0].W', result2,
+            'Expected T repr to still be shown')
+        
+        # Access T third time - should not show warning again
+        result3 = py_eval(crystal, 'T')
+        assertNotIn('🤖 T accessed but help(T) not read', result3,
+            'Expected no warning on third T access')
+
+
+def test_given_non_ai_agent_when_T_accessed_without_help_T_then_no_warning_shown() -> None:
+    """
+    When NOT running as an AI agent, no warning should be shown
+    even if T is accessed without reading help(T).
+    """
+    # Note: Not setting CRYSTAL_AI_AGENT, so this runs as a regular user
+    with crystal_shell() as (crystal, banner):
+        # Verify T is not available (it's only available for AI agents)
+        result = py_eval(crystal, 'T')
+        assertIn('NameError', result,
+            'Expected T to not be defined for non-AI agents')
+        assertIn("name 'T' is not defined", result,
+            'Expected NameError about T not being defined')
+
+
 def test_cannot_set_unexpected_attributes_of_T() -> None:
     """
     Setting unexpected attributes on T (like T.Name) should raise an AttributeError,

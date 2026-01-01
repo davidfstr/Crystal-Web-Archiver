@@ -311,6 +311,10 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         self._first_input = True
         self.banner_printed = banner_printed or Future()  # type: Future[Literal[True]]
         
+        # Track whether help(T) has been called (for AI agents)
+        self._help_t_called = False
+        self._help_t_warning_printed = False
+        
         # Allow top-level await in code lines
         self.compile.compiler.flags |= ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
     
@@ -335,6 +339,19 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             
             self._first_input = False
         return super().raw_input(*args, **kwargs)
+    
+    @override
+    def runsource(self, source: str, filename: str = '<input>', symbol: str = 'single') -> bool:
+        # Strongly encourage any AI agent to read help(T) if it tries to use T
+        if ai_agent_detected():
+            normalized_source = source.strip().replace(' ', '').replace('\t', '')
+            if normalized_source == 'help(T)':
+                self._help_t_called = True
+            elif normalized_source == 'T' and not self._help_t_called and not self._help_t_warning_printed:
+                self.write('🤖 T accessed but help(T) not read. Recommend reading help(T).\n')
+                self._help_t_warning_printed = True
+        
+        return super().runsource(source, filename, symbol)
     
     @override
     def runcode(self, code: types.CodeType) -> None:
