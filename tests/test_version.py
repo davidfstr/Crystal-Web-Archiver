@@ -3,10 +3,12 @@ import datetime
 import os
 import pytest
 import re
+from zoneinfo import ZoneInfo
 
 
 def test_build_year_for_version_is_correct() -> None:
-    current_year = datetime.date.today().year
+    eastern = ZoneInfo('America/New_York')  # US/Eastern
+    current_year = datetime.datetime.now(eastern).year
     if _build_year != current_year:
         raise Exception(f'crystal._build_year needs to be updated to {current_year}')
 
