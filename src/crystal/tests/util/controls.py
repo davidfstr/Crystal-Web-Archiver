@@ -26,7 +26,13 @@ def click(window: Clickable) -> None:
     - click(T(Id=wx.ID_YES).W)
     - click(T['cr-open-or-create-project__checkbox'].W)
     - click(T[0][0][0][0][2].W)
+    
+    Raises:
+    * ElementNotInteractableException -- if window is disabled
     """
+    if isinstance(window, wx.Window) and not window.Enabled:
+        raise ElementNotInteractableException(window)
+    
     if isinstance(window, wx.Button):
         click_button(window)
     elif isinstance(window, wx.CheckBox):
@@ -47,6 +53,11 @@ def click(window: Clickable) -> None:
             raise NotImplementedError(
                 f'Do not know how to click a {type(window).__name__}.'
             )
+
+
+class ElementNotInteractableException(Exception):
+    def __init__(self, window: wx.Window) -> None:
+        super().__init__(f'Window is disabled, so click has no effect: {window}')
 
 
 # ------------------------------------------------------------------------------
