@@ -36,11 +36,18 @@ def run_test(test_func: Callable[[], Awaitable[_T]] | Callable[[], _T]) -> _T:
     return run_test_coro(test_co)  # type: ignore[arg-type]
 
 
-def run_test_coro(test_co: Generator[Command, Any, _T]) -> _T:
+@bg_affinity
+def run_test_coro(
+        test_co: Generator[Command, Any, _T],
+        *, fg_call_and_wait_func: Callable | None = None
+        ) -> _T:
+    if fg_call_and_wait_func is None:
+        fg_call_and_wait_func = fg_call_and_wait
+    
     last_command_result = None  # type: Union[object, Exception]
     while True:
         try:
-            command = fg_call_and_wait(
+            command = fg_call_and_wait_func(
                 lambda: test_co.send(last_command_result),  # type: ignore[attr-defined, union-attr]
                 profile=False
             )
