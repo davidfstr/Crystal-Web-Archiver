@@ -7,9 +7,9 @@ from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
 from crystal.tests.util.runner import run_test_coro
+from crystal.util.ai_agents import ai_agent_detected
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.headless import is_headless_mode
-from crystal.util.test_mode import tests_are_running
 from crystal.util.xfunctools import partial2
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
@@ -135,19 +135,17 @@ class Shell:
             eof = 'Ctrl-D (i.e. EOF)'
         exit_instructions = 'Use {}() or {} to exit'.format('exit', eof)
         
-        agent_detected = (
-            os.environ.get('TERM_PROGRAM') == 'vscode' and
-            not tests_are_running()
-        )
-        if agent_detected:
+        if ai_agent_detected():
             from crystal.ui.nav import T
             from crystal.tests.util.controls import click, TreeItem
+            from crystal.tests.util.wait import wait_for
             import wx
             
             agent_instructions = (
                 'AI agents:\n'
                 '- Use `T` to view/control the UI. Learn more with `help(T)`.\n'
                 '- Use `click(window)` to click a button.\n'
+                '- Use Python control flow (for/while loops, if statements, etc.) to batch operations.\n'
             )
             agent_locals = dict(
                 T=T,
@@ -157,10 +155,17 @@ class Shell:
                 #       CodeExpressions obtained from T that reference them.
                 wx=wx,
                 TreeItem=TreeItem,
+                wait_for=wait_for,
             )
         else:
             agent_instructions = ''
             agent_locals = {}
+        
+        # Disable use of pager by help(...) if AI agent detected
+        if ai_agent_detected():
+            # NOTE: Setting MANPAGER rather than PAGER because the former has
+            #       higher priority, according to pydoc documentation
+            os.environ['MANPAGER'] = 'cat'
         
         python_version = '.'.join([str(x) for x in sys.version_info[:3]])
         try:
@@ -281,8 +286,8 @@ def fg_interact(
         console.interact(banner, exitmsg='')
     finally:
         if not _main_loop_has_exited():
-            if is_headless_mode():
-                # In headless mode, exit the entire process when the shell exits.
+            if is_headless_mode() or ai_agent_detected():
+                # Exit the entire process when the shell exits
                 os.kill(os.getpid(), signal.SIGINT)  # simulate Ctrl-C
             else:
                 console.write('%s\n' % exitmsg)
@@ -351,6 +356,11 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     # NOTE: Uses a similar implementation pattern as
     #       AsyncIOInteractiveConsole.runcode() from asyncio/__main__.py
     def _runcode_async(self, code: types.CodeType):
+        # Capture snapshot before executing code (for AI agents only)
+        if ai_agent_detected():
+            from crystal.ui.nav import T
+            snap_before = T.snapshot()  # capture
+        
         func = types.FunctionType(code, self.locals)  # type: ignore[arg-type]
         try:
             coro = func()
@@ -360,13 +370,33 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             self.showtraceback()
             return None
         
+        result = None
         if not inspect.iscoroutine(coro):
-            return coro
-        try:
-            return run_test_coro(coro)  # type: ignore[arg-type]
-        except BaseException:
-            self.showtraceback()
-            return None
+            result = coro
+        else:
+            try:
+                result = run_test_coro(coro)  # type: ignore[arg-type]
+            except BaseException:
+                self.showtraceback()
+                return None
+        
+        # Capture snapshot after executing code and show diff (for AI agents only)
+        if ai_agent_detected():
+            from crystal.ui.nav import Snapshot, T
+            snap_after = T.snapshot()  # capture
+            diff = Snapshot.diff(snap_before, snap_after, name='S')
+            
+            # Store the diff in the shell's locals as 'S'
+            self.locals['S'] = diff  # type: ignore[index]
+            
+            if diff:
+                # Format the diff output
+                [header_line, *rest_lines] = repr(diff).split('\n')
+                self.write(f'🤖 UI changed at: {header_line.removeprefix("# ")}\n')
+                for line in rest_lines:
+                    self.write(f'  {line}\n')  # 2-space indentation
+        
+        return result
     
     @override
     def showtraceback(self) -> None:

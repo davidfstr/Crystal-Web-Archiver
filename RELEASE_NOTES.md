@@ -30,9 +30,13 @@ Release Notes ⋮
           in addition to the legacy `crystal --test <test_names>...` syntax.
             * Additional options like `--verbose` are available in the
               subcommand style.
-    * A special `T` navigator object is available to AI coding agents that
-      run `crystal --shell`, which allows the agent to quickly take a
-      snapshot of all UI controls and manipulate them.
+    * AI agents have several new tools to support efficiently controlling
+      Crystal from within the shell:
+        * A special `T` navigator object is available to AI coding agents that
+          run `crystal --shell`, which allows the agent to quickly take a
+          snapshot of all UI controls and manipulate them.
+        * Whenever the UI changes in response to running a command in the shell,
+          automatically print a concise/targeted diff of the UI.
     * Several new lint rules are added to enforce Crystal-specific coding conventions.
         * Lint rules are especially useful for steering AI coding agents
           to use Crystal-specific coding conventions and safe patterns.

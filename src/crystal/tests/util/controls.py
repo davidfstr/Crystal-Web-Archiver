@@ -8,12 +8,15 @@ from typing import TYPE_CHECKING, List, Literal, Optional, assert_never
 from unittest.mock import patch
 import wx
 
+if TYPE_CHECKING:
+    from crystal.ui.nav import Navigator, Snapshot
+
 
 # ------------------------------------------------------------------------------
 # Utility: Controls: General
 
 # NOTE: This function is exposed to AI agents in the shell
-def click(window: wx.Button | wx.CheckBox | wx.RadioButton) -> None:
+def click(window: wx.Button | wx.CheckBox | wx.RadioButton | 'Navigator' | 'Snapshot') -> None:
     """
     Clicks a wx.Window control.
     
@@ -29,6 +32,11 @@ def click(window: wx.Button | wx.CheckBox | wx.RadioButton) -> None:
     elif isinstance(window, wx.RadioButton):
         click_radio_button(window)
     else:
+        # Also allow clicking common objects that point to a unique wx.Window
+        from crystal.ui.nav import Navigator, Snapshot
+        if isinstance(window, (Navigator, Snapshot)):
+            return click(window.Peer)
+        
         if TYPE_CHECKING:
             assert_never(window)
         else:
