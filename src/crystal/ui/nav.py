@@ -9,6 +9,7 @@ from collections.abc import Callable, Hashable, Sequence
 # TODO: Promote the TreeItem abstraction to the crystal.ui package,
 #       outside of the crystal.tests.** namespace
 from crystal.tests.util.controls import TreeItem
+from crystal.util.xthreading import fg_affinity
 from crystal.util.xtyping import not_none
 from difflib import SequenceMatcher
 import re
@@ -60,6 +61,7 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
         """
         raise NotImplementedError()
     
+    @fg_affinity
     def snapshot(self) -> Snapshot[_P]:
         """
         Creates a snapshot of this navigator's state, recursively capturing
@@ -203,6 +205,7 @@ class WindowNavigator(Navigator[wx.Window]):
         """
         return repr(self.snapshot())
     
+    @fg_affinity
     def snapshot(self) -> Snapshot[wx.Window]:
         """
         Creates a snapshot of this navigator's state, recursively capturing
@@ -668,6 +671,7 @@ class TreeItemNavigator(Navigator[TreeItem]):
         """
         return repr(self.snapshot())
     
+    @fg_affinity
     def snapshot(self) -> Snapshot[TreeItem]:
         """
         Creates a snapshot of this navigator's state, recursively capturing

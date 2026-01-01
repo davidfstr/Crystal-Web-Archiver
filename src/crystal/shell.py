@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import code
+from collections.abc import Callable
 from concurrent.futures import Future
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
@@ -22,8 +23,11 @@ import signal
 import sys
 import threading
 import types
-from typing import Literal, Optional
+from typing import Any, Literal, Optional, TypeVar
 from typing_extensions import override
+
+
+_R = TypeVar('_R')
 
 
 class Shell:
@@ -353,46 +357,37 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         
         return super().runsource(source, filename, symbol)
     
-    @override
-    def runcode(self, code: types.CodeType) -> None:
-        def fg_runcode() -> None:
-            self._runcode_async(code)
-        
-        if _main_loop_has_exited():
-            fg_runcode()
-        else:
-            try:
-                fg_call_and_wait(
-                    fg_runcode,
-                    # Don't complain if fg_runcode() takes a long time to run.
-                    # For example the help() command blocks for a long time.
-                    profile=False)
-            except NoForegroundThreadError:
-                fg_runcode()
-    
     # NOTE: Uses a similar implementation pattern as
     #       AsyncIOInteractiveConsole.runcode() from asyncio/__main__.py
-    def _runcode_async(self, code: types.CodeType):
+    @override
+    @bg_affinity
+    def runcode(self, code: types.CodeType) -> None:
         # Capture snapshot before executing code (for AI agents only)
         if ai_agent_detected():
             from crystal.ui.nav import T
-            snap_before = T.snapshot()  # capture
+            snap_before = self._fg_call_and_wait_noprofile(lambda: T.snapshot())  # capture
         
-        func = types.FunctionType(code, self.locals)  # type: ignore[arg-type]
-        try:
-            coro = func()
-        except SystemExit:
-            raise
-        except BaseException:
-            self.showtraceback()
-            return None
+        def fg_run_code() -> Any:
+            func = types.FunctionType(code, self.locals)  # type: ignore[arg-type]
+            try:
+                return func()
+            except SystemExit:
+                raise
+            except BaseException:
+                self.showtraceback()
+                return None
+        
+        coro = self._fg_call_and_wait_noprofile(fg_run_code)
         
         result = None
         if not inspect.iscoroutine(coro):
             result = coro
         else:
             try:
-                result = run_test_coro(coro)  # type: ignore[arg-type]
+                result = run_test_coro(
+                    coro,  # type: ignore[arg-type]
+                    fg_call_and_wait_func=self._fg_call_and_wait_noprofile
+                )
             except BaseException:
                 self.showtraceback()
                 return None
@@ -400,7 +395,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         # Capture snapshot after executing code and show diff (for AI agents only)
         if ai_agent_detected():
             from crystal.ui.nav import Snapshot, T
-            snap_after = T.snapshot()  # capture
+            snap_after = self._fg_call_and_wait_noprofile(lambda: T.snapshot())  # capture
             diff = Snapshot.diff(snap_before, snap_after, name='S')
             
             # Store the diff in the shell's locals as 'S'
@@ -414,6 +409,21 @@ class _FgInteractiveConsole(code.InteractiveConsole):
                     self.write(f'  {line}\n')  # 2-space indentation
         
         return result
+    
+    @staticmethod
+    def _fg_call_and_wait_noprofile(callable: Callable[[], _R], *, profile: bool = False) -> _R:
+        assert profile == False
+        if _main_loop_has_exited():
+            return callable()
+        else:
+            try:
+                return fg_call_and_wait(
+                    callable,
+                    # Don't complain if callable() takes a long time to run.
+                    # For example the help() command blocks for a long time.
+                    profile=profile)
+            except NoForegroundThreadError:
+                return callable()
     
     @override
     def showtraceback(self) -> None:
