@@ -554,7 +554,63 @@ def test_can_import_guppy_in_shell() -> None:
 
 
 # ------------------------------------------------------------------------------
-# Tests: AI Agents: UI Change Detection
+# Tests: AI Agents: Custom Behavior
+
+def test_help_T_shows_custom_docstring() -> None:
+    """
+    When help(T) is called, the custom docstring for the T navigator should be displayed,
+    explaining how to use T to view and control the UI.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True'}) as (crystal, banner):
+        # Call help(T) and capture the output
+        result = py_eval(crystal, 'help(T)')
+        
+        # Verify the custom docstring is shown
+        assertIn('The top navigator', result,
+            'Expected custom docstring to mention "The top navigator"')
+        assertIn('Examples', result,
+            'Expected custom docstring to include an Examples section')
+        assertIn('Look at the entire UI', result,
+            'Expected custom docstring to include usage examples')
+        assertIn('Click a button, checkbox, or radio button', result,
+            'Expected custom docstring to explain how to click buttons')
+        assertIn('Wait for UI changes', result,
+            'Expected custom docstring to explain how to wait for UI changes')
+        assertIn('Type in an input field', result,
+            'Expected custom docstring to explain how to type in fields')
+        assertIn('Manipulate a TreeItem', result,
+            'Expected custom docstring to explain how to manipulate tree items')
+        
+        # Verify it's not just showing the generic Navigator class docstring
+        assertNotIn('Points to a wx.Window', result,
+            'Expected custom instance docstring, not the WindowNavigator class docstring')
+
+
+def test_cannot_set_unexpected_attributes_of_T() -> None:
+    """
+    Setting unexpected attributes on T (like T.Name) should raise an AttributeError,
+    even though setting Name on a normal wx.Window would work.
+    This verifies that the Navigator attribute protection works correctly.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True'}) as (crystal, banner):
+        # Try to set T.Name, which would work on a wx.Window but not on a Navigator
+        result = py_eval(crystal, 'T.Name = "test"')
+        
+        # Verify AttributeError was raised
+        assertIn('Traceback', result,
+            'Expected an exception to be raised')
+        assertIn('AttributeError', result,
+            'Expected AttributeError to be raised')
+        assertIn("Cannot set attribute 'Name'", result,
+            'Expected error message to mention the Name attribute')
+        assertIn('WindowNavigator', result,
+            'Expected error message to mention WindowNavigator')
+        
+        # Verify we can still access T normally after the error
+        result = py_eval(crystal, 'T')
+        assertNotIn('Traceback', result,
+            'Expected T to still be accessible after the error')
+
 
 def test_shell_detects_and_reports_ui_changes_to_ai_agents() -> None:
     """
