@@ -2,15 +2,19 @@
 Pylint plugin to ban specific API patterns in Crystal.
 """
 
-import astroid
 from astroid import nodes
 from pylint.checkers import BaseChecker
+from typing import List, Tuple, Optional
 
 
 class CrystalBannedApiChecker(BaseChecker):
     """Checker to detect usage of banned API patterns."""
     
     name = 'crystal-banned-api'
+    
+    # When non-None, tracks fixes for an auto-fixer caller to apply.
+    # This list is not used by PyLint itself.
+    _fixes: 'Optional[List[StringQuoteFix]]' = None
     
     # Types of messages/diagnostics this plugin can emit. Each message type has:
     # - a short error code (ex: 'C9001')
@@ -373,8 +377,25 @@ class CrystalBannedApiChecker(BaseChecker):
             return
         
         # Error if this string uses double quotes, by checking the source code
-        if self._is_double_quoted_string(node):
-            self.add_message('no-double-quoted-string', node=node)
+        quote_info = self._get_string_quote_info(node)
+        if quote_info is not None:
+            (prefix, quote_char, is_triple) = quote_info
+            if quote_char == '"' and not is_triple:
+                self.add_message('no-double-quoted-string', node=node)
+                
+                # Track fix info if requested
+                if self._fixes is not None:
+                    fix = StringQuoteFix(
+                        lineno=node.lineno,
+                        col_offset=node.col_offset,
+                        end_lineno=node.end_lineno or node.lineno,
+                        end_col_offset=node.end_col_offset or node.col_offset,
+                        prefix=prefix,
+                        old_quote='"',
+                        new_quote="'",
+                        is_fstring=False
+                    )
+                    self._fixes.append(fix)
     
     def _is_inside_fstring(self, node: nodes.NodeNG) -> bool:
         """Check if the specified node is nested inside an f-string (JoinedStr)."""
@@ -398,8 +419,25 @@ class CrystalBannedApiChecker(BaseChecker):
             return
         
         # Error if this f-string uses double quotes, by checking the source code
-        if self._is_double_quoted_fstring(node):
-            self.add_message('no-double-quoted-string', node=node)
+        quote_info = self._get_fstring_quote_info(node)
+        if quote_info is not None:
+            (prefix, quote_char, is_triple) = quote_info
+            if quote_char == '"' and not is_triple:
+                self.add_message('no-double-quoted-string', node=node)
+                
+                # Track fix info if requested
+                if self._fixes is not None:
+                    fix = StringQuoteFix(
+                        lineno=node.lineno,
+                        col_offset=node.col_offset,
+                        end_lineno=node.end_lineno or node.lineno,
+                        end_col_offset=node.end_col_offset or node.col_offset,
+                        prefix=prefix,
+                        old_quote='"',
+                        new_quote="'",
+                        is_fstring=True
+                    )
+                    self._fixes.append(fix)
     
     def _fstring_contains_single_quote(self, node: nodes.JoinedStr) -> bool:
         """Check if any string part of the f-string contains a single quote."""
@@ -409,67 +447,81 @@ class CrystalBannedApiChecker(BaseChecker):
                     return True
         return False
     
-    def _is_double_quoted_fstring(self, node: nodes.JoinedStr) -> bool:
-        """Check if an f-string uses double quotes by examining source code."""
+    def _get_fstring_quote_info(self, node: nodes.JoinedStr) -> Optional[Tuple[str, str, bool]]:
+        """
+        Get quote info for an f-string.
+        Returns (prefix, quote_char, is_triple) or None if can't determine.
+        """
         try:
             lines = _read_source_lines(node)
-            
             line = lines[node.lineno - 1]
+            pos = node.col_offset
             
-            if node.col_offset < len(line):
-                char = line[node.col_offset]
-                
-                # f-strings start with 'f' or 'F' prefix
-                if char in 'fF':
-                    next_pos = node.col_offset + 1
-                    # Handle rf or fr prefixes
-                    if next_pos < len(line) and line[next_pos] in 'rR':
-                        next_pos += 1
-                    if next_pos < len(line):
-                        # Skip triple-quoted f-strings
-                        if line[next_pos:].startswith('"""') or line[next_pos:].startswith("'''"):
-                            return False
-                        return line[next_pos] == '"'
+            if pos >= len(line):
+                return None
+            
+            # f-strings start with 'f' or 'F' prefix
+            if (char := line[pos]) not in 'fF':
+                return None
+            prefix = char
+            pos += 1
+            
+            # Handle rf or fr prefixes
+            while pos < len(line) and line[pos] in 'rR':
+                prefix += line[pos]
+                pos += 1
+            if pos >= len(line):
+                return None
+            
+            # Triple-quoted f-string
+            remaining = line[pos:]
+            if remaining.startswith('"""'):
+                return (prefix, '"', True)
+            if remaining.startswith("'''"):
+                return (prefix, "'", True)
+            
+            # Regular f-string
+            if (char := line[pos]) in ('"', "'"):
+                return (prefix, char, False)
+            
+            return None
         except Exception:
-            pass
-        return False
+            return None
     
-    def _is_double_quoted_string(self, node: nodes.Const) -> bool:
-        """Check if a string constant uses double quotes by examining source code."""
+    def _get_string_quote_info(self, node: nodes.Const) -> Optional[Tuple[str, str, bool]]:
+        """
+        Get quote info for a string constant.
+        Returns (prefix, quote_char, is_triple) or None if can't determine.
+        """
         try:
             lines = _read_source_lines(node)
-            
-            # Get the line (0-indexed)
             line = lines[node.lineno - 1]
+            pos = node.col_offset
+            if pos >= len(line):
+                return None
             
-            # Get the character at col_offset
-            if node.col_offset < len(line):
-                char = line[node.col_offset]
-                
-                # Skip triple-quoted strings
-                remaining = line[node.col_offset:]
-                if remaining.startswith('"""') or remaining.startswith("'''"):
-                    return False
-                
-                # Check for prefixed strings like f", r", b", etc.
-                # The prefix comes before the quote character
-                if char in 'fFrRbBuU':
-                    # Could be a prefix; check the next character(s)
-                    next_pos = node.col_offset + 1
-                    # Handle multi-character prefixes like fr, rf, br, rb
-                    if next_pos < len(line) and line[next_pos] in 'fFrRbBuU':
-                        next_pos += 1
-                    if next_pos < len(line):
-                        # Skip triple-quoted strings
-                        if line[next_pos:].startswith('"""') or line[next_pos:].startswith("'''"):
-                            return False
-                        return line[next_pos] == '"'
-                
-                # Regular string. Check if it starts with double quote.
-                return char == '"'
+            # Check for prefixed strings like r", b", etc.
+            prefix = ''
+            while pos < len(line) and (char := line[pos]) in 'fFrRbBuU':
+                prefix += char
+                pos += 1
+            if pos >= len(line):
+                return None
+            
+            # Triple-quoted string
+            remaining = line[pos:]
+            if remaining.startswith('"""'):
+                return (prefix, '"', True)
+            if remaining.startswith("'''"):
+                return (prefix, "'", True)
+            
+            # Regular string
+            if (char := line[pos]) in ('"', "'"):
+                return (prefix, char, False)
+            
+            return None
         except Exception:
-            pass
-        return False  # Assume single-quoted if we can't check (fail safe)
+            return None
 
 
 def _read_source_lines(node: nodes.NodeNG) -> tuple[str, ...]:
@@ -511,3 +563,138 @@ def _read_source_lines(node: nodes.NodeNG) -> tuple[str, ...]:
 def register(linter):
     """Register the checker with pylint."""
     linter.register_checker(CrystalBannedApiChecker(linter))
+
+
+# === String Quote Fixes ===
+
+class StringQuoteFix:
+    """Information needed to fix a double-quoted string."""
+    
+    def __init__(
+        self,
+        lineno: int,
+        col_offset: int,
+        end_lineno: int,
+        end_col_offset: int,
+        prefix: str,
+        old_quote: str,
+        new_quote: str,
+        is_fstring: bool
+    ):
+        self.lineno = lineno
+        self.col_offset = col_offset
+        self.end_lineno = end_lineno
+        self.end_col_offset = end_col_offset
+        self.prefix = prefix
+        self.old_quote = old_quote
+        self.new_quote = new_quote
+        self.is_fstring = is_fstring
+
+
+def apply_string_quote_fixes(
+    source_lines: List[str],
+    fixes: List[StringQuoteFix]
+) -> List[str]:
+    """
+    Apply string quote fixes to source lines.
+    
+    Arguments:
+    * source_lines -- List of source code lines (with line endings)
+    * fixes -- List of StringQuoteFix objects to apply
+    
+    Returns:
+    * Modified list of source lines
+    """
+    # Sort fixes in reverse order to preserve positions
+    fixes_sorted = sorted(
+        fixes,
+        key=lambda f: (f.lineno, f.col_offset),
+        reverse=True
+    )
+    
+    lines = source_lines[:]
+    for fix in fixes_sorted:
+        if fix.lineno == fix.end_lineno:
+            # Single line replacement
+            line = lines[fix.lineno - 1]
+            
+            # Extract the original string from source
+            original = line[fix.col_offset:fix.end_col_offset]
+            
+            if fix.is_fstring:
+                # For f-strings, replace the quotes
+                replacement = _fix_fstring_quotes(original, fix)
+            else:
+                # For regular strings, replace the quotes
+                replacement = _fix_string_quotes(original, fix)
+            
+            lines[fix.lineno - 1] = (
+                line[:fix.col_offset] + replacement + line[fix.end_col_offset:]
+            )
+        # Multi-line strings are rare and complex, skip them for now
+    
+    return lines
+
+
+def _fix_string_quotes(original: str, fix: StringQuoteFix) -> str:
+    """
+    Fix quotes in a regular string.
+    
+    Arguments:
+    * original -- Original string from source (e.g., 'r\"test\"')
+    * fix -- Fix information
+    
+    Returns:
+    * Fixed string (e.g., 'r\\'test\\'')
+    """
+    # Find the opening quote (after optional prefix)
+    pos = 0
+    while pos < len(original) and original[pos] in 'fFrRbBuU':
+        pos += 1
+    if pos >= len(original) or original[pos] != fix.old_quote:
+        # Couldn't find opening quote
+        return original
+    
+    # Find the closing quote
+    end_pos = len(original) - 1
+    while end_pos > pos and original[end_pos] not in ('"', "'"):
+        end_pos -= 1
+    if end_pos <= pos or original[end_pos] != fix.old_quote:
+        # Couldn't find closing quote
+        return original
+    
+    # Replace the quote characters only.
+    # The content between quotes stays the same.
+    return fix.prefix + fix.new_quote + original[pos + 1:end_pos] + fix.new_quote
+
+
+def _fix_fstring_quotes(original: str, fix: StringQuoteFix) -> str:
+    """
+    Fix quotes in an f-string.
+    
+    Arguments:
+    * original -- Original f-string from source (e.g., 'f\"test\"')
+    * fix -- Fix information
+    
+    Returns:
+    * Fixed f-string (e.g., 'f\\'test\\'')
+    """
+    # Find the opening quote (after optional prefix)
+    pos = 0
+    while pos < len(original) and original[pos] in 'fFrR':
+        pos += 1
+    if pos >= len(original) or original[pos] != fix.old_quote:
+        # Couldn't find opening quote
+        return original
+    
+    # Find the closing quote
+    end_pos = len(original) - 1
+    while end_pos > pos and original[end_pos] not in ('"', "'"):
+        end_pos -= 1
+    if end_pos <= pos or original[end_pos] != fix.old_quote:
+        # Couldn't find closing quote
+        return original
+    
+    # Replace the quote characters only.
+    # The content between quotes stays the same (including nested strings).
+    return fix.prefix + fix.new_quote + original[pos + 1:end_pos] + fix.new_quote

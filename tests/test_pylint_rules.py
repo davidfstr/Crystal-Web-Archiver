@@ -604,6 +604,109 @@ class TestNoDoubleQuotedString:
         _assert_no_message_emitted(code, 'no-double-quoted-string')
 
 
+class TestNoDoubleQuotedStringFixer:
+    """Tests for the string quote auto-fixer."""
+    
+    def test_fixes_double_quoted_string(self, tmp_path) -> None:
+        """Test that double-quoted strings are fixed to single-quoted."""
+        test_file = tmp_path / 'test.py'
+        test_file.write_text('name = "test"\n')
+        
+        from crystal.util.fix_string_quotes import fix_file
+        (has_issues, num_fixes) = fix_file(test_file, check_only=False)
+        
+        assert has_issues
+        assert num_fixes == 1
+        assert test_file.read_text() == "name = 'test'\n"
+    
+    def test_preserves_string_with_single_quote(self, tmp_path) -> None:
+        """Test that strings containing single quotes keep double quotes."""
+        test_file = tmp_path / 'test.py'
+        test_file.write_text('msg = "Don\'t do this"\n')
+        
+        from crystal.util.fix_string_quotes import fix_file
+        (has_issues, num_fixes) = fix_file(test_file, check_only=False)
+        
+        assert not has_issues
+        assert num_fixes == 0
+        assert test_file.read_text() == 'msg = "Don\'t do this"\n'
+    
+    def test_fixes_double_quoted_fstring(self, tmp_path) -> None:
+        """Test that double-quoted f-strings are fixed."""
+        test_file = tmp_path / 'test.py'
+        test_file.write_text('msg = f"Hello {name}"\n')
+        
+        from crystal.util.fix_string_quotes import fix_file
+        (has_issues, num_fixes) = fix_file(test_file, check_only=False)
+        
+        assert has_issues
+        assert num_fixes == 1
+        assert test_file.read_text() == "msg = f'Hello {name}'\n"
+    
+    def test_preserves_triple_quoted_strings(self, tmp_path) -> None:
+        """Test that triple-quoted strings are not modified."""
+        test_file = tmp_path / 'test.py'
+        code = 'def foo():\n    """Docstring."""\n    pass\n'
+        test_file.write_text(code)
+        
+        from crystal.util.fix_string_quotes import fix_file
+        (has_issues, num_fixes) = fix_file(test_file, check_only=False)
+        
+        assert not has_issues
+        assert num_fixes == 0
+        assert test_file.read_text() == code
+    
+    def test_preserves_nested_strings_in_fstring(self, tmp_path) -> None:
+        """Test that nested double-quoted strings in f-strings are not modified."""
+        test_file = tmp_path / 'test.py'
+        code = 'value = f\'{"yes" if cond else "no"}\'\n'
+        test_file.write_text(code)
+        
+        from crystal.util.fix_string_quotes import fix_file
+        (has_issues, num_fixes) = fix_file(test_file, check_only=False)
+        
+        assert not has_issues
+        assert num_fixes == 0
+        assert test_file.read_text() == code
+    
+    def test_fixes_raw_string(self, tmp_path) -> None:
+        """Test that double-quoted raw strings are fixed."""
+        test_file = tmp_path / 'test.py'
+        test_file.write_text('pattern = r"[0-9]+"\n')
+        
+        from crystal.util.fix_string_quotes import fix_file
+        (has_issues, num_fixes) = fix_file(test_file, check_only=False)
+        
+        assert has_issues
+        assert num_fixes == 1
+        assert test_file.read_text() == "pattern = r'[0-9]+'\n"
+    
+    def test_check_only_mode(self, tmp_path) -> None:
+        """Test that check_only mode doesn't modify the file."""
+        test_file = tmp_path / 'test.py'
+        original = 'name = "test"\n'
+        test_file.write_text(original)
+        
+        from crystal.util.fix_string_quotes import fix_file
+        (has_issues, num_fixes) = fix_file(test_file, check_only=True)
+        
+        assert has_issues
+        assert num_fixes == 1
+        assert test_file.read_text() == original
+    
+    def test_fixes_multiple_strings_in_one_file(self, tmp_path) -> None:
+        """Test that multiple issues in one file are all fixed."""
+        test_file = tmp_path / 'test.py'
+        test_file.write_text('a = "test1"\nb = "test2"\nc = "test3"\n')
+        
+        from crystal.util.fix_string_quotes import fix_file
+        (has_issues, num_fixes) = fix_file(test_file, check_only=False)
+        
+        assert has_issues
+        assert num_fixes == 3
+        assert test_file.read_text() == "a = 'test1'\nb = 'test2'\nc = 'test3'\n"
+
+
 # === Utilities ===
 
 # Counter for generating unique fake filenames
