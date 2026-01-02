@@ -53,19 +53,19 @@ class Shell:
         # Explicitly import guppy to tell py2app and py2exe to include it
         # when building a binary
         try:
-            import guppy
-            import guppy.heapy
-            import guppy.heapy.Classifiers
-            import guppy.heapy.Doc
-            import guppy.heapy.ImpSet
-            import guppy.heapy.OutputHandling
-            import guppy.heapy.Part
-            import guppy.heapy.Path
-            import guppy.heapy.RefPat
-            import guppy.heapy.Target
-            import guppy.heapy.UniSet
-            import guppy.heapy.Use
-            import guppy.heapy.View
+            import guppy  # type: ignore[reportMissingImports]
+            import guppy.heapy  # type: ignore[reportMissingImports]
+            import guppy.heapy.Classifiers  # type: ignore[reportMissingImports]
+            import guppy.heapy.Doc  # type: ignore[reportMissingImports]
+            import guppy.heapy.ImpSet  # type: ignore[reportMissingImports]
+            import guppy.heapy.OutputHandling  # type: ignore[reportMissingImports]
+            import guppy.heapy.Part  # type: ignore[reportMissingImports]
+            import guppy.heapy.Path  # type: ignore[reportMissingImports]
+            import guppy.heapy.RefPat  # type: ignore[reportMissingImports]
+            import guppy.heapy.Target  # type: ignore[reportMissingImports]
+            import guppy.heapy.UniSet  # type: ignore[reportMissingImports]
+            import guppy.heapy.Use  # type: ignore[reportMissingImports]
+            import guppy.heapy.View  # type: ignore[reportMissingImports]
         except ImportError:
             pass
     
