@@ -449,8 +449,8 @@ class TestSnapshotDiffBasics:
         diff_repr = repr(diff)
         assert 'Child B' in diff_repr
     
-    def test_when_children_elided_then_assumes_no_changes_in_diff(self) -> None:
-        """Test that snapshots with children_elided=True don't report child changes."""
+    def test_even_when_children_elided_in_display_then_changes_still_detected_in_diff(self) -> None:
+        """Test that snapshots with children_elided=True still report child changes in diffs."""
         parent_peer = object()
         child1_peer = object()
         child2_peer = object()
@@ -461,22 +461,24 @@ class TestSnapshotDiffBasics:
             make_snapshot('Child 2', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
         
-        # New snapshot has children elided (not fully captured)
+        # New snapshot has children elided (at display time, but still captured internally)
         new = make_snapshot('Parent', children=[
             # empty
         ], peer_obj=parent_peer, children_elided=True)
         
         diff = Snapshot.diff(old, new)
         
-        # Should not report children as removed since new snapshot has elided children
+        # Should report children as removed even though new snapshot has elided children
+        # because children_elided only affects display, not diff computation
         diff_repr = repr(diff)
-        assert 'Child 1' not in diff_repr
-        assert 'Child 2' not in diff_repr
-        # Should show no changes
-        assert '-' not in diff_repr
+        assert 'Child 1' in diff_repr
+        assert 'Child 2' in diff_repr
+        # Should show deletions
+        assert 'S[0] - Child 1' in diff_repr
+        assert 'S[1] - Child 2' in diff_repr
     
-    def test_when_children_elided_then_assumes_no_changes_in_recursive_diff(self) -> None:
-        """Test that children_elided on matched child nodes prevents recursive diff."""
+    def test_even_when_children_elided_in_display_then_changes_still_detected_in_recursive_diff(self) -> None:
+        """Test that children_elided on matched child nodes still allows recursive diff."""
         root_peer = object()
         parent_peer = object()
         grandchild_peer = object()
@@ -497,9 +499,11 @@ class TestSnapshotDiffBasics:
         
         diff = Snapshot.diff(old, new)
         
-        # Should not report Grandchild as removed
+        # Should report Grandchild as removed even though Parent has children_elided=True
+        # because children_elided only affects display, not diff computation
         diff_repr = repr(diff)
-        assert 'Grandchild' not in diff_repr
+        assert 'Grandchild' in diff_repr
+        assert 'S[0] - Grandchild' in diff_repr
 
 
 
@@ -1425,11 +1429,13 @@ class TestSnapshotDiffGolden:
         """
         Situation:
         - A modal dialog appears over the main window.
-        - The main window's children are elided in the new snapshot (not fully captured).
-        - The diff should only show the dialog being added, not the main window's children being removed.
+        - The main window's children are elided in the new snapshot (at display time).
+        - The main window's children are identical in both old and new snapshots.
+        - The diff should only show the dialog being added, not the main window's children changing.
         
-        This test verifies the fix for the issue where children_elided=True was treated
-        as having zero children, causing spurious deletion entries in the diff.
+        This test verifies that children_elided=True only affects display, not data capture.
+        Even though children are elided at display time, they're still captured internally.
+        When children are identical, no changes are reported (as expected).
         """
         # Create peer objects for identity matching
         root_peer = object()
@@ -1534,7 +1540,68 @@ class TestSnapshotDiffGolden:
             [
                 make_snapshot(
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
-                    [],  # Children elided - not fully captured
+                    [  # Children ARE captured (same as old), just elided at display time
+                        make_snapshot(
+                            '_',
+                            [
+                                make_snapshot(
+                                    'wx.SplitterWindow()',
+                                    [
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-entity-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Root URLs and Groups')",
+                                                    path='T[0][0][0][0][0]',
+                                                    peer_obj=entity_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    '_',
+                                                    [
+                                                        make_snapshot(
+                                                            "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+                                                            path='T[0][0][0][0][1][0]',
+                                                            peer_obj=entity_pane_empty_text_peer
+                                                        ),
+                                                        make_snapshot(
+                                                            "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+                                                            path='T[0][0][0][0][1][1]',
+                                                            peer_obj=entity_pane_empty_button_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][0][1]',
+                                                    peer_obj=entity_pane_empty_state_peer
+                                                ),
+                                                make_snapshot(
+                                                    "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+                                                    path='T[0][0][0][0][2]',
+                                                    peer_obj=entity_pane_add_button_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][0]',
+                                            peer_obj=entity_pane_peer
+                                        ),
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-task-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Tasks')",
+                                                    path='T[0][0][0][1][0]',
+                                                    peer_obj=task_pane_title_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][1]',
+                                            peer_obj=task_pane_peer
+                                        ),
+                                    ],
+                                    path='T[0][0][0]',
+                                    peer_obj=splitter_peer
+                                ),
+                            ],
+                            path='T[0][0]',
+                            peer_obj=frame_child_peer
+                        ),
+                    ],
                     path='T[0]',
                     peer_obj=main_window_peer,
                     children_elided=True
@@ -1578,8 +1645,7 @@ class TestSnapshotDiffGolden:
         
         # Expected:
         # - Only the dialog should be shown as added
-        # - The main window's children should NOT be shown as removed
-        #   because the new snapshot has children_elided=True
+        # - Main window's children should NOT be shown as changed because they're identical
         expected_diff_repr_lines = [
             '# S := T',
             "S[1] + wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
@@ -1597,13 +1663,320 @@ class TestSnapshotDiffGolden:
             assert actual_diff_repr_lines == expected_diff_repr_lines
         
         # Expected reverse:
-        # - Dialog removed, main window children NOT shown as added
-        #   because the old snapshot still has children_elided=False on the new snapshot
-        #   (but the new snapshot in the reverse diff has children_elided=True from old)
+        # - Only the dialog should be shown as removed
+        # - Main window children should NOT be shown as changed because they're identical
         expected_reverse_diff_repr_lines = [
             '# S := T',
             "S[1] - wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
             'S[1][0..4] - More(Count=5)',
+        ]
+        
+        with subtests.test(direction='reverse'):
+            diff = Snapshot.diff(new, old)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
+    
+    def test_new_root_url_dialog_disappears_and_creates_entity(self, subtests) -> None:
+        """
+        Situation:
+        - User clicks 'New' button in the 'New Root URL' dialog.
+        - The dialog disappears.
+        - A new entity appears in the entity tree.
+        - The main window's children are elided at display time, but changes within
+          those children ARE detected in the diff.
+        
+        This test verifies that diffs can detect real changes within children_elided=True areas.
+        """
+        # Create peer objects for identity matching
+        root_peer = object()
+        main_window_peer = object()
+        frame_child_peer = object()
+        splitter_peer = object()
+        entity_pane_peer = object()
+        entity_pane_title_peer = object()
+        entity_pane_empty_state_peer = object()
+        entity_pane_empty_text_peer = object()
+        entity_pane_empty_button_peer = object()
+        entity_pane_tree_peer = object()
+        entity_pane_tree_root_peer = object()
+        entity_pane_tree_item_peer = object()
+        entity_pane_add_button_peer = object()
+        task_pane_peer = object()
+        task_pane_title_peer = object()
+        task_pane_tree_peer = object()
+        task_pane_tree_root_peer = object()
+        task_pane_tree_item_peer = object()
+        
+        dialog_peer = object()
+        dialog_title_peer = object()
+        dialog_url_label_peer = object()
+        dialog_url_field_peer = object()
+        dialog_cancel_button_peer = object()
+        dialog_new_button_peer = object()
+        
+        # Old snapshot: Main window with empty state + dialog
+        old = make_snapshot(
+            '',
+            [
+                make_snapshot(
+                    "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+                    [
+                        make_snapshot(
+                            '_',
+                            [
+                                make_snapshot(
+                                    'wx.SplitterWindow()',
+                                    [
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-entity-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Root URLs and Groups')",
+                                                    path='T[0][0][0][0][0]',
+                                                    peer_obj=entity_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    '_',
+                                                    [
+                                                        make_snapshot(
+                                                            "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+                                                            path='T[0][0][0][0][1][0]',
+                                                            peer_obj=entity_pane_empty_text_peer
+                                                        ),
+                                                        make_snapshot(
+                                                            "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+                                                            path='T[0][0][0][0][1][1]',
+                                                            peer_obj=entity_pane_empty_button_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][0][1]',
+                                                    peer_obj=entity_pane_empty_state_peer
+                                                ),
+                                                make_snapshot(
+                                                    "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+                                                    path='T[0][0][0][0][2]',
+                                                    peer_obj=entity_pane_add_button_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][0]',
+                                            peer_obj=entity_pane_peer
+                                        ),
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-task-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Tasks')",
+                                                    path='T[0][0][0][1][0]',
+                                                    peer_obj=task_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    "crystal.ui.tree._OrderedTreeCtrl(Name='cr-task-tree')",
+                                                    [
+                                                        make_snapshot(
+                                                            'TreeItem(IsRoot=True, Visible=False, IsSelected=True)',
+                                                            [],  # No children in old snapshot
+                                                            path='T[0][0][0][1][1][0]',
+                                                            peer_obj=task_pane_tree_root_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][1][1]',
+                                                    peer_obj=task_pane_tree_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][1]',
+                                            peer_obj=task_pane_peer
+                                        ),
+                                    ],
+                                    path='T[0][0][0]',
+                                    peer_obj=splitter_peer
+                                ),
+                            ],
+                            path='T[0][0]',
+                            peer_obj=frame_child_peer
+                        ),
+                    ],
+                    path='T[0]',
+                    peer_obj=main_window_peer,
+                    children_elided=True
+                ),
+                make_snapshot(
+                    "wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+                    [
+                        make_snapshot(
+                            "wx.StaticText(Label='New Root URL')",
+                            path='T[1][0]',
+                            peer_obj=dialog_title_peer
+                        ),
+                        make_snapshot(
+                            "wx.StaticText(Label='URL:')",
+                            path='T[1][1]',
+                            peer_obj=dialog_url_label_peer
+                        ),
+                        make_snapshot(
+                            "wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
+                            path='T[1][2]',
+                            peer_obj=dialog_url_field_peer
+                        ),
+                        make_snapshot(
+                            "wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
+                            path='T[1][3]',
+                            peer_obj=dialog_cancel_button_peer
+                        ),
+                        make_snapshot(
+                            "wx.Button(Id=wx.ID_NEW, Label='&New')",
+                            path='T[1][4]',
+                            peer_obj=dialog_new_button_peer
+                        ),
+                    ],
+                    path='T[1]',
+                    peer_obj=dialog_peer
+                ),
+            ],
+            path='T',
+            peer_obj=root_peer
+        )
+        
+        # New snapshot: Main window with entity tree (no empty state) + no dialog
+        new = make_snapshot(
+            '',
+            [
+                make_snapshot(
+                    "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+                    [
+                        make_snapshot(
+                            '_',
+                            [
+                                make_snapshot(
+                                    'wx.SplitterWindow()',
+                                    [
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-entity-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Root URLs and Groups')",
+                                                    path='T[0][0][0][0][0]',
+                                                    peer_obj=entity_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    "crystal.ui.tree._OrderedTreeCtrl(Name='cr-entity-tree')",
+                                                    [
+                                                        make_snapshot(
+                                                            'TreeItem(IsRoot=True, Visible=False)',
+                                                            [
+                                                                make_snapshot(
+                                                                    "TreeItem(👁='▶︎ 📁 /', IsSelected=True, IconTooltip='Fresh root URL')",
+                                                                    path='T[0][0][0][0][1][0][0]',
+                                                                    peer_obj=entity_pane_tree_item_peer
+                                                                ),
+                                                            ],
+                                                            path='T[0][0][0][0][1][0]',
+                                                            peer_obj=entity_pane_tree_root_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][0][1]',
+                                                    peer_obj=entity_pane_tree_peer
+                                                ),
+                                                make_snapshot(
+                                                    "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+                                                    path='T[0][0][0][0][2]',
+                                                    peer_obj=entity_pane_add_button_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][0]',
+                                            peer_obj=entity_pane_peer
+                                        ),
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-task-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Tasks')",
+                                                    path='T[0][0][0][1][0]',
+                                                    peer_obj=task_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    "crystal.ui.tree._OrderedTreeCtrl(Name='cr-task-tree')",
+                                                    [
+                                                        make_snapshot(
+                                                            'TreeItem(IsRoot=True, Visible=False, IsSelected=True)',
+                                                            [
+                                                                make_snapshot(
+                                                                    "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/ -- 2 of 13 item(s) -- ? remaining (?/item)')",
+                                                                    path='T[0][0][0][1][1][0][0]',
+                                                                    peer_obj=task_pane_tree_item_peer
+                                                                ),
+                                                            ],
+                                                            path='T[0][0][0][1][1][0]',
+                                                            peer_obj=task_pane_tree_root_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][1][1]',
+                                                    peer_obj=task_pane_tree_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][1]',
+                                            peer_obj=task_pane_peer
+                                        ),
+                                    ],
+                                    path='T[0][0][0]',
+                                    peer_obj=splitter_peer
+                                ),
+                            ],
+                            path='T[0][0]',
+                            peer_obj=frame_child_peer
+                        ),
+                    ],
+                    path='T[0]',
+                    peer_obj=main_window_peer,
+                    children_elided=True
+                ),
+            ],
+            path='T',
+            peer_obj=root_peer
+        )
+        
+        # Expected:
+        # - Dialog is shown as removed
+        # - Main window's children ARE shown as changed (even though children_elided=True)
+        #   because there are actual differences:
+        #   * Empty state replaced with entity tree
+        #   * Task tree root gains a new child tree item
+        expected_diff_repr_lines = [
+            '# S := T',
+            'S[0][0][0][0][1] - _',
+            'S[0][0][0][0][1][0..1] - More(Count=2)',
+            "S[0][0][0][0][1] + crystal.ui.tree._OrderedTreeCtrl(Name='cr-entity-tree')",
+            'S[0][0][0][0][1][0] + TreeItem(IsRoot=True, Visible=False)',
+            "S[0][0][0][0][1][0][0] + TreeItem(👁='▶︎ 📁 /', IsSelected=True, IconTooltip='Fresh root URL')",
+            "S[0][0][0][1][1][0][0] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/ -- 2 of 13 item(s) -- ? remaining (?/item)')",
+            "S[1] - wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+            'S[1][0..4] - More(Count=5)',
+        ]
+        
+        with subtests.test(direction='forward'):
+            diff = Snapshot.diff(old, new)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_diff_repr_lines
+        
+        # Expected reverse:
+        # - Dialog is shown as added
+        # - Entity tree replaced with empty state
+        # - Task tree item removed from root
+        expected_reverse_diff_repr_lines = [
+            '# S := T',
+            'S[0][0][0][0][1] - crystal.ui.tree._OrderedTreeCtrl(Name=\'cr-entity-tree\')',
+            'S[0][0][0][0][1][0] - More(Count=1)',
+            'S[0][0][0][0][1] + _',
+            "S[0][0][0][0][1][0] + wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+            "S[0][0][0][0][1][1] + wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+            "S[0][0][0][1][1][0][0] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/ -- 2 of 13 item(s) -- ? remaining (?/item)')",
+            "S[1] + wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+            "S[1][0] + wx.StaticText(Label='New Root URL')",
+            "S[1][1] + wx.StaticText(Label='URL:')",
+            "S[1][2] + wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
+            "S[1][3] + wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
+            "S[1][4] + wx.Button(Id=wx.ID_NEW, Label='&New')",
         ]
         
         with subtests.test(direction='reverse'):
