@@ -37,6 +37,9 @@ _R = TypeVar('_R')
 # to observe any immediately-scheduled asynchronous UI updates
 _ASYNC_UI_UPDATE_DELAY = 50 / 1000  # secs
 
+# Advise to AI agents RE how many milliseconds are best to wait for terminal output.
+_OUTPUT_DELAY_MS_ADVISE = 'use 500 for UI actions, 200 for non-UI actions'
+
 
 class Shell:
     def __init__(self) -> None:
@@ -163,6 +166,11 @@ class Shell:
                 #       spending banner space explaining how to do so.
                 #'- For async multi-line code: use exec() to define async def, then await it.\n'
                 '- Use Python control flow (for/while loops, if statements, etc.) to batch operations.\n'
+            ) + (
+                'terminal_operate users:\n'
+                f'- output_delay_ms: {_OUTPUT_DELAY_MS_ADVISE}\n'
+                if mcp_shell_server_detected()
+                else ''
             )
             agent_locals = dict(
                 # Referenced in agent instructions
