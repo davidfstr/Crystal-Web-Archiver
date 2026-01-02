@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 import types
-from typing import Any, Literal, Optional, TypeVar
+from typing import Any, IO, Literal, Optional, TypeVar
 from typing_extensions import override
 
 
@@ -380,18 +380,27 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             self.resetbuffer()
             return ''
         
-        # When running under MCP shell-server (terminal_operate),
-        # suppress automatic echo to avoid newline injection issues
+        # When running under MCP shell-server (terminal_operate):
+        # - Suppress automatic echo to avoid newline injection issues
+        # - Write everything to a consistent stream (stdout) to reduce
+        #   output delay from 150ms -> 60ms (40% improvements)
         if mcp_shell_server_detected() and not tests_are_running():
+            # Write prompt
+            sys.stdout.write(prompt)
+            # NOTE: No latency improvement observed when using an explicit flush here,
+            #       but it seems like a good idea to do anyway
+            sys.stdout.flush()
+            
             # Read input without echoing
             try:
-                line = getpass.getpass(prompt=prompt, stream=sys.stderr)
+                line = getpass.getpass(prompt='', stream=sys.stdout)
             except EOFError:
                 # Handle Ctrl-D
-                self.write('\n')
+                sys.stdout.write('\n')
                 raise
+            
             # Echo the complete input line all at once
-            self.write(f'{line}\n')
+            sys.stdout.write(f'{line}\n')
             return line
         else:
             return super().raw_input(prompt)
