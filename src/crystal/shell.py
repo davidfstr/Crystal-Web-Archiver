@@ -11,6 +11,7 @@ from crystal.tests.util.runner import run_test_coro
 from crystal.util.ai_agents import ai_agent_detected, mcp_shell_server_detected
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.headless import is_headless_mode
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xfunctools import partial2
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
@@ -151,6 +152,10 @@ class Shell:
                 '- Use `T` to view/control the UI. Learn more with `help(T)`.\n'
                 '- Use `click(window)` to click a button.\n'
                 '- Use `await screenshot()` to capture the UI as an image.\n'
+                '- Run multi-line code with exec(): exec("for i in range(5):\\n    print(i)")\n'
+                # TODO: Wait until agents _regularly_ try to run async code before 
+                #       spending banner space explaining how to do so.
+                #'- For async multi-line code: use exec() to define async def, then await it.\n'
                 '- Use Python control flow (for/while loops, if statements, etc.) to batch operations.\n'
             )
             agent_locals = dict(
@@ -346,9 +351,30 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             
             self._first_input = False
         
+        # When running under MCP shell-server (terminal_operate):
+        # - Disallow direct multi-line input because terminal_operate
+        #   never sends any data after the first \n
+        if mcp_shell_server_detected() and prompt == sys.ps2:  # '... ' usually
+            if 'exec(' in ''.join(self.buffer):
+                sys.stdout.write(
+                    '🤖 Multi-line exec() call detected. '
+                    'terminal_operate silently truncates multi-line input to first line only. '
+                    'Use only a single line with exec() to run multi-line inputs.\n'
+                )
+            else:
+                sys.stdout.write(
+                    '🤖 Multi-line input without exec() detected. '
+                    'terminal_operate silently truncates multi-line input to first line only. '
+                    'Use exec() to run multi-line inputs as a single line.\n'
+                )
+            
+            # Cancel further attempts to read remainder of multi-line input
+            self.resetbuffer()
+            return ''
+        
         # When running under MCP shell-server (terminal_operate),
         # suppress automatic echo to avoid newline injection issues
-        if mcp_shell_server_detected():
+        if mcp_shell_server_detected() and not tests_are_running():
             # Read input without echoing
             try:
                 line = getpass.getpass(prompt=prompt, stream=sys.stderr)

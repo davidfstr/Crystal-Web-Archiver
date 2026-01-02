@@ -727,6 +727,68 @@ def test_shell_detects_and_reports_ui_changes_to_ai_agents() -> None:
                 'Expected dialog to be reported as deleted')
 
 
+def test_given_terminal_operate_tool_then_banner_says_to_use_exec_for_multi_line_input_and_exec_works() -> None:
+    """
+    The shell banner should mention using exec() for multi-line inputs,
+    and exec() should successfully execute multi-line code.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_MCP_SHELL_SERVER': 'True'}) as (crystal, banner):
+        # Verify the banner mentions using exec() for multi-line input
+        assertIn('Run multi-line code with exec()', banner,
+            'Expected banner to mention using exec() for multi-line input')
+        
+        # Test that exec() successfully runs multi-line code
+        result = py_eval(crystal, 'exec("for i in range(1, 6):\\n    print(i)")')
+        
+        # Verify the output shows all numbers printed
+        assertIn('1', result,
+            'Expected number 1 to be printed')
+        assertIn('2', result,
+            'Expected number 2 to be printed')
+        assertIn('3', result,
+            'Expected number 3 to be printed')
+        assertIn('4', result,
+            'Expected number 4 to be printed')
+        assertIn('5', result,
+            'Expected number 5 to be printed')
+        
+        # Verify no error/traceback
+        assertNotIn('Traceback', result,
+            'Expected exec() to run without error')
+
+
+def test_given_terminal_operate_tool_when_multi_line_input_used_directly_then_prints_error() -> None:
+    """
+    When multi-line input is attempted without using exec(),
+    an error message should be printed to guide the user.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_MCP_SHELL_SERVER': 'True'}) as (crystal, banner):
+        # Attempt to start a for loop without exec()
+        result = py_eval(crystal, 'for i in range(1, 6):')
+        
+        # Verify the error message is shown
+        assertIn('🤖 Multi-line input without exec() detected', result,
+            'Expected error message when multi-line input is attempted')
+        assertIn('Use exec() to run multi-line inputs as a single line', result,
+            'Expected error message to suggest using exec()')
+
+
+def test_given_terminal_operate_tool_when_multi_line_exec_attempted_then_prints_error() -> None:
+    """
+    When multi-line input is attempted without using exec(),
+    an error message should be printed to guide the user.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_MCP_SHELL_SERVER': 'True'}) as (crystal, banner):
+        # Attempt to start an exec() with a multi-line string
+        result = py_eval(crystal, 'exec("""')
+        
+        # Verify the error message is shown
+        assertIn('🤖 Multi-line exec() call detected.', result,
+            'Expected error message when multi-line input is attempted')
+        assertIn('Use only a single line with exec() to run multi-line inputs', result,
+            'Expected error message to exphasize using a single line only')
+
+
 # ------------------------------------------------------------------------------
 # Tests: Waiting for Shell to Close
 
