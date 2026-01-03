@@ -169,6 +169,7 @@ class Shell:
             ) + (
                 'terminal_operate users:\n'
                 f'- output_delay_ms: {_OUTPUT_DELAY_MS_ADVISE}\n'
+                '- Type an empty line using "input": " " (1 space)\n'
                 if mcp_shell_server_detected()
                 else ''
             )
