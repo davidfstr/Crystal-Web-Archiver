@@ -24,12 +24,18 @@ import os
 import signal
 import sys
 import threading
+import time
 import types
 from typing import Any, Literal, Optional, TypeVar
 from typing_extensions import override
 
 
 _R = TypeVar('_R')
+
+
+# Additional time to wait after running a command
+# to observe any immediately-scheduled asynchronous UI updates
+_ASYNC_UI_UPDATE_DELAY = 50 / 1000  # secs
 
 
 class Shell:
@@ -159,15 +165,17 @@ class Shell:
                 '- Use Python control flow (for/while loops, if statements, etc.) to batch operations.\n'
             )
             agent_locals = dict(
+                # Referenced in agent instructions
                 T=T,
                 click=click,
                 screenshot=screenshot,
                 
-                # NOTE: Having these as a built-in makes it easy to immediately use
-                #       CodeExpressions obtained from T that reference them.
+                # Referenced in help(T)
+                wait_for=wait_for,
+                
+                # Referenced in CodeExpressions returned/printed by Navigators
                 wx=wx,
                 TreeItem=TreeItem,
-                wait_for=wait_for,
             )
         else:
             agent_instructions = ''
@@ -443,6 +451,11 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         # Capture snapshot after executing code and show diff (for AI agents only)
         if ai_agent_detected():
             from crystal.ui.nav import Snapshot, T
+            
+            # Wait for a short grace period to detect 
+            # immediately-scheduled asynchronous UI updates
+            time.sleep(_ASYNC_UI_UPDATE_DELAY)
+            
             snap_after = self._fg_call_and_wait_noprofile(lambda: T.snapshot())  # capture
             diff = Snapshot.diff(snap_before, snap_after, name='S')
             
