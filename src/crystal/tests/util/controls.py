@@ -354,9 +354,9 @@ def _create_transparent_windowed_screenshot(
     Arguments:
     * source_filepath -- path to source screenshot image
     * dest_filepath -- path where final image should be saved
-    * window_rects -- list of window rectangles in screen coordinates
-    * offset_x -- X offset of the source image relative to screen coordinates
-    * offset_y -- Y offset of the source image relative to screen coordinates
+    * window_rects -- list of window rectangles in screen coordinates (logical pixels)
+    * offset_x -- X offset of the source image relative to screen coordinates (logical pixels)
+    * offset_y -- Y offset of the source image relative to screen coordinates (logical pixels)
     """
     # Load the source screenshot as a bitmap
     source_image = wx.Image(source_filepath)
@@ -364,9 +364,24 @@ def _create_transparent_windowed_screenshot(
         raise RuntimeError(f'Failed to load screenshot from {source_filepath}')
     source_bitmap = wx.Bitmap(source_image)
     
-    # Create a transparent bitmap of the same size
+    # Detect HiDPI scale factor
+    # On Retina displays, the bitmap is 2x the logical size
     width = source_bitmap.GetWidth()
     height = source_bitmap.GetHeight()
+    
+    # Calculate scale factor by comparing bitmap size to expected logical size
+    # (assuming at least one window rect exists to derive the scale)
+    if window_rects:
+        expected_logical_width = max(rect.x + rect.width for rect in window_rects) - offset_x
+        expected_logical_height = max(rect.y + rect.height for rect in window_rects) - offset_y
+        scale_x = width / expected_logical_width if expected_logical_width > 0 else 1.0
+        scale_y = height / expected_logical_height if expected_logical_height > 0 else 1.0
+        # Use the average scale factor (should be the same for x and y on most displays)
+        scale = (scale_x + scale_y) / 2.0
+    else:
+        scale = 1.0
+    
+    # Create a transparent bitmap of the same size
     transparent_bitmap = wx.Bitmap(width, height, 32)  # 32-bit depth for RGBA
     
     # Use MemoryDC to draw on the transparent bitmap
@@ -378,22 +393,24 @@ def _create_transparent_windowed_screenshot(
     
     # Draw each window region from the source bitmap
     for rect in window_rects:
-        # Convert screen coordinates to image coordinates
-        img_x = rect.x - offset_x
-        img_y = rect.y - offset_y
+        # Convert logical screen coordinates to physical image coordinates
+        img_x = int((rect.x - offset_x) * scale)
+        img_y = int((rect.y - offset_y) * scale)
+        img_width = int(rect.width * scale)
+        img_height = int(rect.height * scale)
         
         # Ensure the rectangle is within bounds
         in_bounds = (
             img_x >= 0 and img_y >= 0 and
-            img_x + rect.width <= width and
-            img_y + rect.height <= height
+            img_x + img_width <= width and
+            img_y + img_height <= height
         )
         if not in_bounds:
             continue
         
         # Extract the window region from source bitmap
         window_region = source_bitmap.GetSubBitmap(
-            wx.Rect(img_x, img_y, rect.width, rect.height)
+            wx.Rect(img_x, img_y, img_width, img_height)
         )
         
         # Draw the window region onto the transparent bitmap
