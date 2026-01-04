@@ -364,24 +364,21 @@ def _create_transparent_windowed_screenshot(
         raise RuntimeError(f'Failed to load screenshot from {source_filepath}')
     source_bitmap = wx.Bitmap(source_image)
     
-    # Detect HiDPI scale factor
-    # On Retina displays, the bitmap is 2x the logical size
-    width = source_bitmap.GetWidth()
-    height = source_bitmap.GetHeight()
-    
-    # Calculate scale factor by comparing bitmap size to expected logical size
-    # (assuming at least one window rect exists to derive the scale)
+    # Get HiDPI scale factor directly from a window
+    # (On Retina displays this will be 2.0, on standard displays 1.0)
     if window_rects:
-        expected_logical_width = max(rect.x + rect.width for rect in window_rects) - offset_x
-        expected_logical_height = max(rect.y + rect.height for rect in window_rects) - offset_y
-        scale_x = width / expected_logical_width if expected_logical_width > 0 else 1.0
-        scale_y = height / expected_logical_height if expected_logical_height > 0 else 1.0
-        # Use the average scale factor (should be the same for x and y on most displays)
-        scale = (scale_x + scale_y) / 2.0
+        # Use any visible top-level window to get the scale factor
+        top_level_windows = [w for w in wx.GetTopLevelWindows() if w.Shown]
+        if top_level_windows:
+            scale = top_level_windows[0].GetContentScaleFactor()
+        else:
+            scale = 1.0
     else:
         scale = 1.0
     
     # Create a transparent bitmap of the same size
+    width = source_bitmap.GetWidth()
+    height = source_bitmap.GetHeight()
     transparent_bitmap = wx.Bitmap(width, height, 32)  # 32-bit depth for RGBA
     
     # Use MemoryDC to draw on the transparent bitmap
