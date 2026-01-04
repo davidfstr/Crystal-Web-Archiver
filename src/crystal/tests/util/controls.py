@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from typing import TYPE_CHECKING, List, Literal, Optional, TypeAlias, assert_never
 from unittest.mock import patch
 import wx
@@ -261,31 +262,153 @@ def _capture_window_screenshot_to_file(filepath: str, window: wx.Window) -> None
 
 def _capture_fullscreen_screenshot_to_file(filepath: str) -> None:
     """
-    Captures a screenshot of the entire screen and saves it to a file.
+    Captures a screenshot showing all top-level windows, on a transparent background.
     
     Arguments:
     * filepath -- absolute path where screenshot should be saved
     """
-    if is_mac_os():
-        # Capture entire screen on macOS using screencapture
-        result = subprocess.call(['screencapture', '-x', filepath])
-        if result != 0:
-            raise RuntimeError(f'screencapture command failed with exit code: {result}')
-    else:
-        # Capture entire screen on non-macOS platforms using pyscreeze
-        try:
-            import PIL  # noqa: F401
-        except ImportError:
-            raise ImportError(
-                'Unable to save screenshot because PIL is not available, '
-                'which pyscreeze depends on.'
-            )
-        try:
-            import pyscreeze
-        except ImportError:
-            raise ImportError('Unable to save screenshot because pyscreeze is not available.')
+    # Get rectangles for all top-level windows
+    window_rects = []
+    for window in wx.GetTopLevelWindows():
+        if window.Shown:  # Only include visible windows
+            window_rects.append(window.GetScreenRect())
+    
+    if not window_rects:
+        # No visible windows to capture
+        _create_empty_transparent_image(filepath)
+        return
+    
+    # Find the union rectangle that contains all windows
+    min_x = min(rect.x for rect in window_rects)
+    min_y = min(rect.y for rect in window_rects)
+    max_x = max(rect.x + rect.width for rect in window_rects)
+    max_y = max(rect.y + rect.height for rect in window_rects)
+    union_width = max_x - min_x
+    union_height = max_y - min_y
+    
+    # Create a temporary file for the initial screenshot
+    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
+        temp_filepath = temp_file.name
+    
+    # TODO: Restructure so that tempfile context cleans up its own file
+    try:
+        # Screenshot the union region
+        if is_mac_os():
+            result = subprocess.call([
+                'screencapture',
+                '-x',  # don't play camera sound
+                '-R', f'{min_x},{min_y},{union_width},{union_height}',
+                temp_filepath
+            ])
+            if result != 0:
+                raise RuntimeError(f'screencapture command failed with exit code: {result}')
+        else:
+            try:
+                from PIL import ImageGrab
+            except ImportError:
+                raise ImportError(
+                    'Unable to save screenshot because PIL/Pillow is not available.'
+                )
+            bbox = (min_x, min_y, max_x, max_y)
+            image = ImageGrab.grab(bbox=bbox)
+            image.save(temp_filepath, 'PNG')
         
-        pyscreeze.screenshot(filepath)
+        # Load the screenshot and create transparent image with only Crystal windows
+        _create_transparent_windowed_screenshot(
+            temp_filepath, filepath, window_rects, min_x, min_y
+        )
+    finally:
+        # Clean up temporary file
+        if os.path.exists(temp_filepath):
+            os.remove(temp_filepath)
+
+
+def _create_empty_transparent_image(filepath: str) -> None:
+    """
+    Creates a 1x1 transparent PNG image using wxPython.
+    
+    Arguments:
+    * filepath -- absolute path where image should be saved
+    """
+    # Create a 1x1 transparent image
+    image = wx.Image(1, 1)
+    image.InitAlpha()
+    image.SetAlpha(0, 0, 0)
+    
+    # Save as PNG
+    image.SaveFile(filepath, wx.BITMAP_TYPE_PNG)
+
+
+def _create_transparent_windowed_screenshot(
+        source_filepath: str,
+        dest_filepath: str,
+        window_rects: List[wx.Rect],
+        offset_x: int,
+        offset_y: int
+        ) -> None:
+    """
+    Creates a screenshot with transparent background showing only window regions.
+    
+    Uses wxPython for all image manipulation to avoid external dependencies.
+    
+    Arguments:
+    * source_filepath -- path to source screenshot image
+    * dest_filepath -- path where final image should be saved
+    * window_rects -- list of window rectangles in screen coordinates
+    * offset_x -- X offset of the source image relative to screen coordinates
+    * offset_y -- Y offset of the source image relative to screen coordinates
+    """
+    # Load the source screenshot as a wx.Image
+    source_image = wx.Image(source_filepath)
+    if not source_image.IsOk():
+        raise RuntimeError(f'Failed to load screenshot from {source_filepath}')
+    
+    # Create a transparent image of the same size
+    width = source_image.GetWidth()
+    height = source_image.GetHeight()
+    transparent_image = wx.Image(width, height)
+    transparent_image.InitAlpha()
+    
+    # Initialize all pixels as transparent (alpha = 0)
+    # TODO: Is there a more efficient way to bulk-set this pixel data
+    for y in range(height):
+        for x in range(width):
+            transparent_image.SetAlpha(x, y, 0)
+    
+    # Copy each window region from source to transparent image
+    for rect in window_rects:
+        # Convert screen coordinates to image coordinates
+        img_x = rect.x - offset_x
+        img_y = rect.y - offset_y
+        
+        # Ensure the rectangle is within the source image bounds
+        in_bounds = (
+            img_x >= 0 and img_y >= 0 and
+            img_x + rect.width <= width and
+            img_y + rect.height <= height
+        )
+        if not in_bounds:
+            continue
+            
+        # Copy pixels from source to transparent image for this window region
+        # TODO: Is there a more efficient way to bulk-copy this pixel data
+        for dy in range(rect.height):
+            for dx in range(rect.width):
+                src_x = img_x + dx
+                src_y = img_y + dy
+                
+                # Copy RGB values
+                r = source_image.GetRed(src_x, src_y)
+                g = source_image.GetGreen(src_x, src_y)
+                b = source_image.GetBlue(src_x, src_y)
+                transparent_image.SetRGB(src_x, src_y, r, g, b)
+                
+                # Set alpha to fully opaque for window pixels
+                transparent_image.SetAlpha(src_x, src_y, 255)
+    
+    # Save the final image
+    if not transparent_image.SaveFile(dest_filepath, wx.BITMAP_TYPE_PNG):
+        raise RuntimeError(f'Failed to save transparent screenshot to {dest_filepath}')
 
 
 def _get_top_level_window_containing(window: wx.Window) -> wx.Window | None:
