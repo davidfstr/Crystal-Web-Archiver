@@ -18,6 +18,7 @@ from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_call_and_wait, has_foreground_thread,
     NoForegroundThreadError,
 )
+from crystal.util.xtraceback import format_exception_for_terminal_user
 import getpass
 import inspect
 import os
@@ -496,7 +497,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             return callable()
         else:
             try:
-                return fg_call_and_wait(
+                return fg_call_and_wait(  # cr-traceback: ignore
                     callable,
                     # Don't complain if callable() takes a long time to run.
                     # For example the help() command blocks for a long time.
@@ -514,6 +515,11 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             super().showtraceback()
         finally:
             sys.excepthook = old_excepthook
+    
+    @override
+    def _excepthook(self, typ, value, tb):
+        # Print nicely-formatted tracebacks
+        self.write(format_exception_for_terminal_user(value))
 
 
 def _main_loop_has_exited() -> bool:

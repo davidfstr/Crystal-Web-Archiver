@@ -508,6 +508,57 @@ def test_can_import_guppy_in_shell() -> None:
 
 
 # ------------------------------------------------------------------------------
+# Tests: Shell Usability
+
+def test_exception_raised_by_sync_code_only_shows_frames_back_to_the_console_file() -> None:
+    with crystal_shell() as (crystal, _):
+        result = py_eval(crystal, 'raise ValueError("boom")')
+        
+        expected_traceback = (
+            'Traceback (most recent call last):\n'
+            '  File "<console>", line 1, in <module>\n'
+            'ValueError: boom\n'
+        )
+        assertEqual(expected_traceback, result)
+
+
+def test_exception_raised_by_async_code_only_shows_frames_back_to_the_console_file() -> None:
+    with crystal_shell() as (crystal, _):
+        py_exec(crystal, textwrap.dedent('''\
+            async def async_raise_error():
+                raise ValueError("boom from async")
+            '''
+        ))
+        result = py_eval(crystal, 'await async_raise_error()')
+        
+        source_available = (getattr(sys, 'frozen', None) != 'macosx_app')
+        if source_available:
+            # Match traceback exactly
+            expected_traceback = (
+                'Traceback (most recent call last):\n'
+                '  File "<console>", line 1, in <module>\n'
+                '  File "<string>", line 2, in async_raise_error\n'
+                'ValueError: boom from async\n'
+            )
+            assertEqual(expected_traceback, result)
+        else:
+            expected_traceback_lines = [
+                'Traceback (most recent call last):\n',
+                #'   File "crystal/util/xthreading.py", line 131, in wrapper',
+                #'   File "crystal/tests/util/runner.py", line 50, in run_test_coro',
+                #'   File "crystal/shell.py", line 589, in _fg_call_and_wait_noprofile',
+                #'   File "crystal/util/xthreading.py", line 366, in fg_call_and_wait',
+                #'   File "crystal/util/xthreading.py", line 337, in fg_task',
+                #'   File "crystal/tests/util/runner.py", line 51, in <lambda>',
+                '  File "<console>", line 1, in <module>\n',
+                '  File "<string>", line 2, in async_raise_error\n',
+                'ValueError: boom from async\n',
+            ]
+            for line in expected_traceback_lines:
+                assertIn(line, result)
+
+
+# ------------------------------------------------------------------------------
 # Tests: AI Agents: Custom Behavior
 
 def test_help_T_shows_custom_docstring() -> None:

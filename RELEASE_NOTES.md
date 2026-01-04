@@ -12,10 +12,12 @@ Release Notes ⋮
 
 ### main
 
-* CLI improvements
-    * The `--shell` uses the new [interactive interpreter] from Python 3.13.
-    * The `--shell` now supports using `await` with Crystal's testing utilities
+* Shell improvements
+    * Uses the new [interactive interpreter] from Python 3.13.
+    * Supports using `await` with Crystal's testing utilities
       such as `wait_for()`.
+    * Hide Crystal-internal frames from tracebacks,
+      making them easier to read.
 
 * Support changes
     * Embedded Python upgraded from Python 3.11 to 3.13.

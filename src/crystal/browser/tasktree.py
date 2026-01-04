@@ -27,7 +27,7 @@ from crystal.util.xcollections.lazy import (
 from crystal.util.xthreading import (
     fg_call_and_wait, fg_call_later, is_foreground_thread,
 )
-from crystal.util.xtraceback import format_exception_for_user
+from crystal.util.xtraceback import format_exception_for_ui_user
 from typing import List, Optional, Tuple, assert_never
 import wx
 
@@ -360,7 +360,7 @@ class TaskTreeNode:
                     return last_tooltip
             
             # Calculate and cache tooltip
-            tooltip = format_exception_for_user(self.task.crash_reason).rstrip('\n')
+            tooltip = format_exception_for_ui_user(self.task.crash_reason).rstrip('\n')
             self._crash_reason_and_tooltip = (self.task.crash_reason, tooltip)
             return tooltip
     
