@@ -349,7 +349,7 @@ def _create_transparent_windowed_screenshot(
     """
     Creates a screenshot with transparent background showing only window regions.
     
-    Uses wxPython for all image manipulation to avoid external dependencies.
+    Uses wxPython MemoryDC and bitmap operations for efficient image manipulation.
     
     Arguments:
     * source_filepath -- path to source screenshot image
@@ -358,30 +358,31 @@ def _create_transparent_windowed_screenshot(
     * offset_x -- X offset of the source image relative to screen coordinates
     * offset_y -- Y offset of the source image relative to screen coordinates
     """
-    # Load the source screenshot as a wx.Image
+    # Load the source screenshot as a bitmap
     source_image = wx.Image(source_filepath)
     if not source_image.IsOk():
         raise RuntimeError(f'Failed to load screenshot from {source_filepath}')
+    source_bitmap = wx.Bitmap(source_image)
     
-    # Create a transparent image of the same size
-    width = source_image.GetWidth()
-    height = source_image.GetHeight()
-    transparent_image = wx.Image(width, height)
-    transparent_image.InitAlpha()
+    # Create a transparent bitmap of the same size
+    width = source_bitmap.GetWidth()
+    height = source_bitmap.GetHeight()
+    transparent_bitmap = wx.Bitmap(width, height, 32)  # 32-bit depth for RGBA
     
-    # Initialize all pixels as transparent (alpha = 0)
-    # TODO: Is there a more efficient way to bulk-set this pixel data
-    for y in range(height):
-        for x in range(width):
-            transparent_image.SetAlpha(x, y, 0)
+    # Use MemoryDC to draw on the transparent bitmap
+    dc = wx.MemoryDC(transparent_bitmap)
     
-    # Copy each window region from source to transparent image
+    # Clear to white (will be converted to transparent later)
+    dc.SetBackground(wx.WHITE_BRUSH)
+    dc.Clear()
+    
+    # Draw each window region from the source bitmap
     for rect in window_rects:
         # Convert screen coordinates to image coordinates
         img_x = rect.x - offset_x
         img_y = rect.y - offset_y
         
-        # Ensure the rectangle is within the source image bounds
+        # Ensure the rectangle is within bounds
         in_bounds = (
             img_x >= 0 and img_y >= 0 and
             img_x + rect.width <= width and
@@ -389,25 +390,24 @@ def _create_transparent_windowed_screenshot(
         )
         if not in_bounds:
             continue
-            
-        # Copy pixels from source to transparent image for this window region
-        # TODO: Is there a more efficient way to bulk-copy this pixel data
-        for dy in range(rect.height):
-            for dx in range(rect.width):
-                src_x = img_x + dx
-                src_y = img_y + dy
-                
-                # Copy RGB values
-                r = source_image.GetRed(src_x, src_y)
-                g = source_image.GetGreen(src_x, src_y)
-                b = source_image.GetBlue(src_x, src_y)
-                transparent_image.SetRGB(src_x, src_y, r, g, b)
-                
-                # Set alpha to fully opaque for window pixels
-                transparent_image.SetAlpha(src_x, src_y, 255)
+        
+        # Extract the window region from source bitmap
+        window_region = source_bitmap.GetSubBitmap(
+            wx.Rect(img_x, img_y, rect.width, rect.height)
+        )
+        
+        # Draw the window region onto the transparent bitmap
+        dc.DrawBitmap(window_region, img_x, img_y, useMask=False)
     
-    # Save the final image
-    if not transparent_image.SaveFile(dest_filepath, wx.BITMAP_TYPE_PNG):
+    # Commit changes to the bitmap
+    dc.SelectObject(wx.NullBitmap)
+    
+    # Convert white background to transparent
+    transparent_bitmap.SetMaskColour(wx.Colour(255, 255, 255))
+    
+    # Convert to image and save
+    final_image = transparent_bitmap.ConvertToImage()
+    if not final_image.SaveFile(dest_filepath, wx.BITMAP_TYPE_PNG):
         raise RuntimeError(f'Failed to save transparent screenshot to {dest_filepath}')
 
 
