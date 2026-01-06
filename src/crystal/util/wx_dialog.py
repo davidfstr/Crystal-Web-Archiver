@@ -1,9 +1,10 @@
 from collections.abc import Callable, Generator
 from crystal import resources
+from crystal.util.ai_agents import ai_agent_detected
 from crystal.util.test_mode import tests_are_running
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_kde_or_non_gnome, is_mac_os, is_windows, is_wx_gtk
-from crystal.util.xthreading import ContinueSoonFunc, FgCommand, fg_affinity
+from crystal.util.xthreading import ContinueSoonFunc, FgCommand, fg_affinity, fg_wait_for
 from types import coroutine
 from typing import Protocol
 import warnings
@@ -62,6 +63,13 @@ def ShowModal(dialog: wx.Dialog) -> int:
             f'Please patch ShowModal to return an appropriate result. '
             f'Caption={dialog.Caption!r}, Message={dialog.Message!r}')
     
+    if ai_agent_detected() and isinstance(dialog, wx.MessageDialog):
+        # A wx.MessageDialog opened with ShowModal blocks the event loop
+        # which prevents interaction with the shell. AI agents still want
+        # to be able to interact with the shell while modal dialogs are open.
+        # Therefore simulate ShowModal in a way that doesn't block the event loop.
+        return _simulate_show_modal(dialog)
+    
     # HACK: ShowModal sometimes hangs on macOS while running automated tests,
     #       as admitted by the wxPython test suite in test_dialog.py.
     #       So simulate its effect in a way that does NOT hang while running tests.
@@ -83,6 +91,65 @@ def ShowModal(dialog: wx.Dialog) -> int:
             del dialog.cr_simulated_modal
     else:
         return dialog.ShowModal()  # pylint: disable=no-direct-showmodal
+
+
+def _simulate_show_modal(original_dialog: wx.MessageDialog, /) -> int:
+    """
+    Shows a wx.MessageDialog in a simulated modal fashion.
+    
+    Shows the dialog non-modally and runs a manual nested event loop so that:
+    - Button clicks on the dialog continue to be processed
+    - Callables scheduled with fg_call_and_wait() and fg_call_later()
+      continue to be processed.
+    
+    Returns the button ID that was clicked.
+    """
+    from crystal.ui.dialog import BetterMessageDialog
+    
+    # Create a BetterMessageDialog to mimic the appearance of the original dialog
+    # NOTE: Cannot just Show() the original wx.MessageDialog
+    #       (or wx.GenericMessageDialog) because that method has 
+    #       no effect on that dialog type
+    dialog = BetterMessageDialog(
+        parent=original_dialog.Parent, 
+        message=original_dialog.Message, 
+        caption=original_dialog.Caption, 
+        style=original_dialog.MessageDialogStyle,
+    )
+    dialog.Name = original_dialog.Name
+    
+    # Claim to be modal if anyone asks
+    dialog.IsModal = lambda *args: True
+    
+    # Initialize return code to 0 ("not yet closed")
+    dialog.SetReturnCode(0)
+    
+    # Set return code when button clicked
+    def on_button(event: wx.CommandEvent) -> None:
+        button_id = event.GetId()
+        dialog.SetReturnCode(button_id)
+        dialog.Hide()
+    bind(dialog, wx.EVT_BUTTON, on_button)
+    
+    # Set return code if dialog closed without clicking a button
+    def on_close(event: wx.CloseEvent) -> None:
+        if dialog.GetReturnCode() == 0:
+            dialog.SetReturnCode(dialog.GetEscapeId() if dialog.GetEscapeId() != wx.ID_NONE else wx.ID_CANCEL)
+        dialog.Hide()
+    bind(dialog, wx.EVT_CLOSE, on_close)
+    
+    # Show dialog non-modally
+    dialog.Show()
+    
+    # Wait for the dialog to be closed,
+    # while still processing both wx events and foreground callables
+    fg_wait_for(
+        lambda: not dialog.IsShown(),
+        timeout=None,
+        poll_interval=0.100,
+    )
+    
+    return dialog.GetReturnCode()
 
 
 class ShowModalFunc(Protocol):

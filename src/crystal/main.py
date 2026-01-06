@@ -1079,7 +1079,7 @@ async def _prompt_for_project(
         
         dialog = BetterMessageDialog(menubar_frame,
             message='Create a new project or open an existing project?',
-            title='Select a Project',
+            caption='Select a Project',
             checkbox_label='Open as &read only',
             checkbox_checked=readonly_default,
             on_checkbox_clicked=on_checkbox_clicked,

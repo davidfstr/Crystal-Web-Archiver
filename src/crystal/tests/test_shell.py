@@ -888,3 +888,68 @@ def test_given_shell_running_when_all_windows_closed_then_shell_exits_and_app_ex
 
 
 # ------------------------------------------------------------------------------
+# Tests: AI Agents: Modal Dialog Handling
+
+def test_given_ai_agent_when_modal_message_dialog_shown_then_shell_remains_responsive() -> None:
+    """
+    When an AI agent is detected and a modal MessageDialog is shown,
+    the shell should remain responsive and able to interact with the dialog.
+    
+    This test simulates the scenario where:
+    1. Agent creates a new project
+    2. Agent adds a root URL
+    3. Agent tries to add the same root URL again
+    4. A modal MessageDialog appears saying "Root URL Exists"
+    5. Shell should remain responsive and able to click OK on the dialog
+    """
+    # NOTE: Must set CRYSTAL_RUNNING_TESTS=False so that ShowModal will
+    #       actually try to show a modal wx.MessageDialog without raising
+    #       an AssertionError
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_RUNNING_TESTS': 'False'}) as (crystal, banner):
+        # Verify AI agent banner appears
+        assertIn('AI agents:', banner)
+        
+        # Create a new project
+        result = py_eval(crystal, 'click(T(Id=wx.ID_YES).W)')
+        assertIn('🤖 UI changed', result)
+        
+        # Add a root URL
+        home_url = 'https://xkcd.daarchive.net/'
+        py_exec(crystal, 'from crystal.model import Resource')
+        py_exec(crystal, 'from crystal.model import RootResource')
+        py_eval(crystal, f'r = Resource(project, {home_url!r})', empty_ok=True)
+        py_eval(crystal, f'root_r = RootResource(project, "Home", r)', empty_ok=True)
+        
+        # Try to add the same root URL again.
+        # Should fail with a modal MessageDialog.
+        if True:
+            result = py_eval(crystal, "click(T['cr-add-url-button'].W)")
+            assertIn('🤖 UI changed', result)
+            
+            if True:
+                # URL will already be populated from the newly-added root resource
+                result = py_eval_literal(crystal, f"T['cr-new-root-url-dialog__url-field'].W.Value")
+                assertEqual(home_url, result)
+            else:
+                # NOTE: The code has been observed to hang, for an unknown reason
+                result = py_eval(crystal, f"T['cr-new-root-url-dialog__url-field'].W.Value = {home_url!r}")
+                assertIn('🤖 UI changed', result)
+            
+            result = py_eval(crystal, 'click(T(Id=wx.ID_NEW).W)')
+            assertIn('🤖 UI changed', result)
+            assertIn("MessageDialog(IsModal=True, Name='cr-root-url-exists'", result,
+                'Expected the "Root URL Exists" dialog to be visible')
+            
+            # Verify the shell is still responsive
+            result = py_eval(crystal, 'click(T(Id=wx.ID_OK).W)')
+            assertIn('🤖 UI changed', result)
+            
+            # Close the New Root URL dialog
+            result = py_eval(crystal, 'click(T(Id=wx.ID_CANCEL).W)')
+            assertIn('🤖 UI changed', result)
+        
+        # Close the main window
+        result = py_eval(crystal, 'window.close()')
+
+
+# ------------------------------------------------------------------------------

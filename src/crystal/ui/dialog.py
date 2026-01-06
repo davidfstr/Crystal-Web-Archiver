@@ -18,7 +18,7 @@ class BetterMessageDialog(wx.Dialog):
     def __init__(self, 
             parent: wx.Window, 
             message: str, 
-            title: str, 
+            caption: str, 
             style,
             *, checkbox_label: str | None=None,
             checkbox_checked: bool=False,
@@ -32,7 +32,7 @@ class BetterMessageDialog(wx.Dialog):
         Arguments:
         * parent -- parent window.
         * message -- the message displayed in the dialog.
-        * title -- the title displayed in the dialog's titlebar.
+        * caption -- the title displayed in the dialog's titlebar.
         * style -- the set of buttons to display. See wx.Dialog.CreateButtonSizer() for all options.
         * checkbox_label -- label for the optional checkbox. If None, no checkbox is shown.
         * checkbox_checked -- initial state of the checkbox (True=checked, False=unchecked).
@@ -41,9 +41,9 @@ class BetterMessageDialog(wx.Dialog):
         * no_label -- label for the wx.NO button.
         """
         if name is None:
-            super().__init__(parent, title=title)
+            super().__init__(parent, title=caption)
         else:
-            super().__init__(parent, title=title, name=name)
+            super().__init__(parent, title=caption, name=name)
         set_dialog_or_frame_icon_if_appropriate(self)
         
         self_sizer = wx.BoxSizer(wx.VERTICAL); self.SetSizer(self_sizer)
