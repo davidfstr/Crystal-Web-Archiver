@@ -4,8 +4,10 @@ from collections.abc import Callable, Container, Iterator
 from contextlib import contextmanager
 import crystal
 from crystal.tests.util.runner import bg_sleep
+from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.wx_treeitem_gettooltip import GetTooltipEvent
 from crystal.util.xos import is_mac_os, is_windows
+from crystal.util.xthreading import fg_call_later
 import datetime
 from functools import cache
 import os
@@ -23,12 +25,17 @@ if TYPE_CHECKING:
 # ------------------------------------------------------------------------------
 # General: Click
 
-Clickable: TypeAlias = 'wx.Button | wx.CheckBox | wx.RadioButton | TreeItem | Navigator | Snapshot'
+_ClickablePeer: TypeAlias = 'wx.Button | wx.CheckBox | wx.RadioButton | TreeItem'
+Clickable: TypeAlias = '_ClickablePeer | Navigator | Snapshot'
 
 # NOTE: This function is exposed to AI agents in the shell
-def click(window: Clickable) -> None:
+def click(window: Clickable, *, sync: bool = True) -> None:
     """
     Clicks a wx.Window control.
+    
+    Waits for the click handler to return unless sync=False.
+    Async clicks can be useful if the click handler takes a blocking action
+    such as running a modal dialog.
     
     Examples:
     - click(T(Id=wx.ID_YES).W)
@@ -41,6 +48,21 @@ def click(window: Clickable) -> None:
     if isinstance(window, wx.Window) and not window.Enabled:
         raise ElementNotInteractableException(window)
     
+    # Allow clicking common objects that point to a unique wx.Window
+    from crystal.ui.nav import Navigator, Snapshot
+    if isinstance(window, (Navigator, Snapshot)):
+        return click(window.Peer)
+    
+    if sync:
+        _click_now(window)
+    else:
+        fg_call_later(
+            capture_crashes_to_stderr(lambda: _click_now(window)),
+            force_later=True,
+        )
+
+
+def _click_now(window: _ClickablePeer) -> None:
     if isinstance(window, wx.Button):
         click_button(window)
     elif isinstance(window, wx.CheckBox):
@@ -50,11 +72,6 @@ def click(window: Clickable) -> None:
     elif isinstance(window, TreeItem):
         window.SelectItem()
     else:
-        # Also allow clicking common objects that point to a unique wx.Window
-        from crystal.ui.nav import Navigator, Snapshot
-        if isinstance(window, (Navigator, Snapshot)):
-            return click(window.Peer)
-        
         if TYPE_CHECKING:
             assert_never(window)
         else:

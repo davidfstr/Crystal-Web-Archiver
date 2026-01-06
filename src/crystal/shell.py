@@ -177,7 +177,7 @@ class Shell:
             agent_locals = dict(
                 # Referenced in agent instructions
                 T=T,
-                click=click,
+                click=partial2(click, sync=False),
                 screenshot=screenshot,
                 
                 # Referenced in help(T)
