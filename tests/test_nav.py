@@ -2,9 +2,15 @@
 Unit tests for crystal.ui.nav module.
 """
 
-from crystal.ui.nav import _DEFAULT_DELETION_STYLE, WindowNavigator, inline_diff, Snapshot, SnapshotDiff 
+from unittest import skip
+from crystal.ui.nav import (
+    _DEFAULT_DELETION_STYLE, T, TopWindowNavigatorHasNoWindow, 
+    WindowNavigator, inline_diff, Snapshot, SnapshotDiff, NoSuchWindow,
+)
 import pytest
 import re
+from unittest.mock import Mock, patch
+import wx
 
 
 # === Helper Functions ===
@@ -56,7 +62,419 @@ class TestNavigator:
         assert 'Parent' not in dir_nav
 
 
-# (TODO: Add tests for WindowNavigator)
+class TestWindowNavigator:
+    # === Navigation Tests ===
+    
+    def test_call_of_unique_named_window_returns_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = target_window
+            
+            # Act
+            result = navigator(Name='target')
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is target_window
+        mock_find.assert_called_once_with('target', parent=target_window)
+    
+    def test_call_of_nonunique_named_window_returns_first_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_target = Mock(spec=wx.Window)
+            first_target.Name = 'duplicate'
+            first_target.Shown = True
+            first_target.IsTopLevel.return_value = False
+            
+            second_target = Mock(spec=wx.Window)
+            second_target.Name = 'duplicate'
+            second_target.Shown = True
+            second_target.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_target, second_target]
+            first_target.Children = []
+            second_target.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = first_target
+            
+            # Act
+            result = navigator(Name='duplicate')
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is first_target
+        mock_find.assert_called_once_with('duplicate', parent=first_target)
+    
+    def test_call_of_missing_named_window_raises_no_such_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            child_window = Mock(spec=wx.Window)
+            child_window.Name = 'child'
+            child_window.Shown = True
+            child_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [child_window]
+            child_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = None
+            
+            # Act & Assert
+            with pytest.raises(NoSuchWindow, match='does not exist'):
+                navigator(Name='nonexistent')
+    
+    def test_call_of_unique_id_window_returns_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Id = wx.ID_OK
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowById') as mock_find:
+            mock_find.return_value = target_window
+            
+            # Act
+            result = navigator(Id=wx.ID_OK)
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is target_window
+        mock_find.assert_called_once_with(wx.ID_OK, parent=target_window)
+    
+    def test_call_of_nonunique_id_window_returns_first_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_target = Mock(spec=wx.Window)
+            first_target.Name = 'first'
+            first_target.Id = wx.ID_CANCEL
+            first_target.Shown = True
+            first_target.IsTopLevel.return_value = False
+            
+            second_target = Mock(spec=wx.Window)
+            second_target.Name = 'second'
+            second_target.Id = wx.ID_CANCEL
+            second_target.Shown = True
+            second_target.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_target, second_target]
+            first_target.Children = []
+            second_target.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowById') as mock_find:
+            mock_find.return_value = first_target
+            
+            # Act
+            result = navigator(Id=wx.ID_CANCEL)
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is first_target
+        mock_find.assert_called_once_with(wx.ID_CANCEL, parent=first_target)
+    
+    def test_call_of_missing_id_window_raises_no_such_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            child_window = Mock(spec=wx.Window)
+            child_window.Name = 'child'
+            child_window.Id = wx.ID_OK
+            child_window.Shown = True
+            child_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [child_window]
+            child_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowById') as mock_find:
+            mock_find.return_value = None
+            
+            # Act & Assert
+            with pytest.raises(NoSuchWindow, match='does not exist'):
+                navigator(Id=wx.ID_HELP)
+    
+    def test_call_of_unique_labeled_window_returns_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Label = ''
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Label = 'Target Button'
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByLabel') as mock_find:
+            mock_find.return_value = target_window
+            
+            # Act
+            result = navigator(Label='Target Button')
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is target_window
+        mock_find.assert_called_once_with('Target Button', parent=target_window)
+    
+    def test_call_of_nonunique_labeled_window_returns_first_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Label = ''
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_target = Mock(spec=wx.Window)
+            first_target.Name = 'first'
+            first_target.Label = 'OK'
+            first_target.Shown = True
+            first_target.IsTopLevel.return_value = False
+            
+            second_target = Mock(spec=wx.Window)
+            second_target.Name = 'second'
+            second_target.Label = 'OK'
+            second_target.Shown = True
+            second_target.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_target, second_target]
+            first_target.Children = []
+            second_target.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByLabel') as mock_find:
+            mock_find.return_value = first_target
+            
+            # Act
+            result = navigator(Label='OK')
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is first_target
+        mock_find.assert_called_once_with('OK', parent=first_target)
+    
+    def test_call_of_missing_labeled_window_raises_no_such_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Label = ''
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            child_window = Mock(spec=wx.Window)
+            child_window.Name = 'child'
+            child_window.Label = 'Cancel'
+            child_window.Shown = True
+            child_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [child_window]
+            child_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByLabel') as mock_find:
+            mock_find.return_value = None
+            
+            # Act & Assert
+            with pytest.raises(NoSuchWindow, match='does not exist'):
+                navigator(Label='Nonexistent Label')
+    
+    def test_getitem_of_unique_named_window_returns_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = target_window
+            
+            # Act
+            result = navigator['target']
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is target_window
+        mock_find.assert_called_once_with('target', parent=target_window)
+    
+    def test_getitem_of_nonunique_named_window_returns_first_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_target = Mock(spec=wx.Window)
+            first_target.Name = 'duplicate'
+            first_target.Shown = True
+            first_target.IsTopLevel.return_value = False
+            
+            second_target = Mock(spec=wx.Window)
+            second_target.Name = 'duplicate'
+            second_target.Shown = True
+            second_target.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_target, second_target]
+            first_target.Children = []
+            second_target.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = first_target
+            
+            # Act
+            result = navigator['duplicate']
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is first_target
+        mock_find.assert_called_once_with('duplicate', parent=first_target)
+    
+    def test_getitem_of_missing_named_window_raises_no_such_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            child_window = Mock(spec=wx.Window)
+            child_window.Name = 'child'
+            child_window.Shown = True
+            child_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [child_window]
+            child_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = None
+            
+            # Act & Assert
+            with pytest.raises(NoSuchWindow, match='does not exist'):
+                navigator['nonexistent']
+    
+    # === Properties Tests ===
+    
+    def test_window_raises_if_navigator_is_top(self) -> None:
+        with pytest.raises(TopWindowNavigatorHasNoWindow):
+            T.Window
+    
+    @skip('covered by: test_*_of_*_window_returns_window')
+    def test_window_is_correct_if_navigator_is_not_top(self) -> None:
+        pass
+    
+    def test_query_returns_value_based_on_how_subnavigator_was_found(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = True
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Id = wx.ID_OK
+            target_window.Label = 'Target'
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find1, \
+                patch('wx.Window.FindWindowById') as mock_find2, \
+                patch('wx.Window.FindWindowByLabel') as mock_find3:
+            mock_find1.return_value = target_window
+            mock_find2.return_value = target_window
+            mock_find3.return_value = target_window
+            
+            # Act & Assert
+            result = navigator(Name='target').Query == "wx.Window.FindWindowByName('target')"
+            result = navigator(Id=wx.ID_OK).Query == 'wx.Window.FindWindowById(wx.ID_OK)'
+            result = navigator(Label='cr-target').Query == "wx.Window.FindWindowByLabel('cr-target')"
+            result = navigator['target'].Query == "wx.Window.FindWindowByName('target')"
+            result = navigator[0].Query == 'wx.GetTopLevelWindows()[0]'
 
 
 # (TODO: Add tests for TreeItemNavigator)

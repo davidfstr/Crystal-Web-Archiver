@@ -424,7 +424,14 @@ class WindowNavigator(Navigator[wx.Window]):
             *, Name: str | None = None,
             Id: str | None = None,
             Label: str | None = None,
-            ) -> WindowNavigator | None:
+            ) -> WindowNavigator:
+        """
+        Finds the first visible descendent with a matching Name, Id, or Label.
+        Raises NoSuchWindow if no match was found.
+        
+        Raises:
+        * NoSuchWindow -- if a matching window does not exist
+        """
         kwarg_count = (Name is not None) + (Id is not None) + (Label is not None)
         if kwarg_count != 1:
             raise ValueError('Provide exactly 1 kwarg: Name, Id, Label')
@@ -456,7 +463,7 @@ class WindowNavigator(Navigator[wx.Window]):
     @overload
     def __getitem__(self, index: int) -> WindowNavigator: ...
     @overload
-    def __getitem__(self, index: str) -> WindowNavigator | None: ...
+    def __getitem__(self, index: str) -> WindowNavigator: ...
     @overload
     def __getitem__(self, index: slice) -> NavigatorSlice[wx.Window]: ...
     def __getitem__(self, index: int | str | slice):
@@ -465,9 +472,12 @@ class WindowNavigator(Navigator[wx.Window]):
           the i'th visible child of this navigator's window.
         - navigator['cr-name'], where 'cr-name' is a Name of a window,
           returns a navigator pointing to the first visible descendent with a
-          matching Name, or None if no match was found.
+          matching Name, or raises NoSuchWindow if no match was found.
         - navigator[i:j:k], where i:j:k is a slice, returns navigators
           corresponding to the associated children of this navigator's window.
+        
+        Raises:
+        * NoSuchWindow -- if the named window does not exist
         """
         if isinstance(index, int):
             c_peer = self._children_of(self._peer)[index]
@@ -509,7 +519,11 @@ class WindowNavigator(Navigator[wx.Window]):
             finder_str: str,
             *, index_repr: str | None = None,
             index_path: str | None = None,
-            ) -> WindowNavigator | None:
+            ) -> WindowNavigator:
+        """
+        Raises:
+        * NoSuchWindow -- if a matching window does not exist
+        """
         if index_repr is None:  # auto
             index_repr = repr(index)
         if index_path is None:  # auto
@@ -528,7 +542,7 @@ class WindowNavigator(Navigator[wx.Window]):
                         else f'{finder_str}({index_repr})'
                     ),
                 )
-        return None
+        raise NoSuchWindow(f'Window {index_path} does not exist')
     
     def __len__(self) -> int:
         """
@@ -640,6 +654,10 @@ class WindowNavigator(Navigator[wx.Window]):
 
 
 class TopWindowNavigatorHasNoWindow(ValueError):
+    pass
+
+
+class NoSuchWindow(ValueError):
     pass
 
 
