@@ -9,6 +9,7 @@ from collections.abc import Callable, Hashable, Sequence
 # TODO: Promote the TreeItem abstraction to the crystal.ui package,
 #       outside of the crystal.tests.** namespace
 from crystal.tests.util.controls import TreeItem
+from crystal.util.cloak import CloakMixin, cloak
 from crystal.util.xthreading import fg_affinity
 from crystal.util.xtyping import not_none
 from difflib import SequenceMatcher
@@ -26,7 +27,7 @@ import wx
 _P = TypeVar('_P')  # peer
 
 
-class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
+class Navigator(Generic[_P], Sequence['Navigator[_P]'], CloakMixin):  # abstract
     """
     Points to a peer. Shows the peer's tree of descendents when printed.
     
@@ -38,7 +39,10 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
     # NOTE: Not using __slots__ here because it prevents setting __doc__
     _ALLOWED_ATTRS = frozenset({'_peer', '__doc__'})
     
+    __cloak__ = []  # extended later
+    
     _peer: _P
+    _path: str
     
     def __setattr__(self, name: str, value: Any) -> None:
         """Prevent accidental assignment to any non-existent attribute."""
@@ -134,6 +138,24 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
         Shorthand property equivalent to .Query, for quick scripts.
         """
         return self.Query
+    
+    # === Non-Properties ===
+    
+    @property
+    def Children(self) -> NoReturn:
+        raise AttributeError(
+            f'{type(self).__name__!r} has no attribute {"Children"!r}. '
+            f'Did you mean {self._path}.{self._PEER_ACCESSOR}.Children?'
+        )
+    __cloak__.append('Children')
+    
+    @property
+    def Parent(self) -> NoReturn:
+        raise AttributeError(
+            f'{type(self).__name__!r} has no attribute {"Parent"!r}. '
+            f'Did you mean {self._path}.{self._PEER_ACCESSOR}.Parent?'
+        )
+    __cloak__.append('Parent')
 
 
 # ------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 Unit tests for crystal.ui.nav module.
 """
 
-from crystal.ui.nav import _DEFAULT_DELETION_STYLE, inline_diff, Snapshot, SnapshotDiff 
+from crystal.ui.nav import _DEFAULT_DELETION_STYLE, WindowNavigator, inline_diff, Snapshot, SnapshotDiff 
 import pytest
 import re
 
@@ -28,6 +28,38 @@ def make_snapshot(
         peer_obj=peer_obj,
         children_elided=children_elided,
     )
+
+
+# === Tests for Navigator ===
+
+class TestNavigator:
+    # === Non-Property Tests ===
+    
+    def test_access_of_children_attribute_provides_helpful_error_message(self) -> None:
+        nav = WindowNavigator(path='T[1][2][3]')
+        with pytest.raises(AttributeError, match=re.escape(
+                "'WindowNavigator' has no attribute 'Children'. "
+                "Did you mean T[1][2][3].W.Children?")):
+            nav.Children
+    
+    def test_access_of_parent_attribute_provides_helpful_error_message(self) -> None:
+        nav = WindowNavigator(path='T[1][2][3]')
+        with pytest.raises(AttributeError, match=re.escape(
+                "'WindowNavigator' has no attribute 'Parent'. "
+                "Did you mean T[1][2][3].W.Parent?")):
+            nav.Parent
+    
+    def test_children_and_parent_attributes_do_not_appear_in_dir(self) -> None:
+        nav = WindowNavigator(path='T[1][2][3]')
+        dir_nav = dir(nav)
+        assert 'Children' not in dir_nav
+        assert 'Parent' not in dir_nav
+
+
+# (TODO: Add tests for WindowNavigator)
+
+
+# (TODO: Add tests for TreeItemNavigator)
 
 
 # === Tests for inline_diff ===
