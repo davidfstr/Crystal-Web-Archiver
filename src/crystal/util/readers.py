@@ -1,4 +1,5 @@
 from crystal.util.pipes import ReadablePipeEnd
+import os
 import selectors
 from typing import IO, Protocol
 
@@ -26,6 +27,11 @@ class InterruptableReader:  # implements ReadableStream
         self.interrupt_read_pipe = interrupt_read_pipe
         self._interrupted = False
     
+    def clear_interrupt(self) -> None:
+        self._interrupted = False
+    
+    # === ReadableStream ===
+    
     def readline(self) -> str:
         """
         Reads a line from the underlying text stream.
@@ -44,13 +50,12 @@ class InterruptableReader:  # implements ReadableStream
             
             for (key, _) in events:
                 if key.fd == self.interrupt_read_pipe.fileno():
+                    os.read(self.interrupt_read_pipe.fileno(), 1)
                     self._interrupted = True
                     raise InterruptedError()
             else:
                 # self.source.fileno() must be in events
-                pass
-        
-        return self.source.readline()
+                return self.source.readline()
     
     def fileno(self) -> int:
         """Return the file descriptor of the underlying source stream."""
@@ -73,6 +78,8 @@ class TeeReader:  # implements ReadableStream
         
         self.source = source
         self.log_file = log_file
+    
+    # === ReadableStream ===
     
     def readline(self) -> str:
         """

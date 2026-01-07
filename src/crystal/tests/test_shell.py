@@ -1,7 +1,13 @@
 from typing import List
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.cli import _OK_THREAD_STOP_SUFFIX, PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, crystal_shell
+from crystal.tests.util.cli import (
+    _OK_THREAD_STOP_SUFFIX, PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, 
+    close_main_window, close_open_or_create_dialog, create_new_empty_project, 
+    delay_between_downloads_minimized, drain, py_eval, py_eval_await, 
+    py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, 
+    crystal_shell, crystal_running
+)
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
@@ -13,6 +19,7 @@ from crystal.util.xthreading import fg_call_and_wait
 from io import TextIOBase
 import os
 import re
+import signal
 import sys
 import tempfile
 import textwrap
@@ -20,6 +27,7 @@ import time
 from unittest import skip
 from unittest.mock import ANY
 import urllib
+
 
 _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
 
@@ -505,6 +513,96 @@ def test_can_import_guppy_in_shell() -> None:
         # Ensure can take memory sample since checkpoint
         result = py_eval(crystal, 'import gc; gc.collect(); heap = h.heap(); heap; _.more')
         assertNotIn('Traceback', result)
+
+
+# ------------------------------------------------------------------------------
+# Tests: Ctrl-C (and KeyboardInterrupt)
+
+def test_given_crystal_started_without_shell_when_ctrl_c_pressed_then_exits_with_exit_code_sigint() -> None:
+    with crystal_running(args=[], kill=False) as crystal:
+        # Wait a little bit for Crystal to start up
+        time.sleep(0.5)
+        
+        # Send SIGINT (Ctrl-C)
+        os.kill(crystal.pid, signal.SIGINT)
+        
+        # Wait for process to exit
+        crystal.wait(timeout=5.0)
+        
+        # Verify exit code
+        assertEqual(-signal.SIGINT, crystal.returncode)
+
+
+def test_given_crystal_started_with_shell_and_waiting_for_input_when_ctrl_c_pressed_then_prints_keyboardinterrupt_and_a_new_prompt() -> None:
+    with crystal_shell() as (crystal, banner):
+        # Send SIGINT (Ctrl-C) while waiting for input
+        os.kill(crystal.pid, signal.SIGINT)
+        
+        # Wait for KeyboardInterrupt message and new prompt
+        assert isinstance(crystal.stdout, TextIOBase)
+        (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+        
+        # Verify "KeyboardInterrupt" was printed
+        assertIn('KeyboardInterrupt', output,
+            'Expected "KeyboardInterrupt" to be printed when Ctrl-C is pressed at prompt')
+        
+        # Verify a new prompt appears (matched by read_until)
+        assertEqual('\n>>> ', matched)
+        
+        # Verify shell is still responsive
+        assertEqual('2\n', py_eval(crystal, '1 + 1'))
+
+
+def test_given_crystal_started_with_shell_and_running_a_command_when_ctrl_c_pressed_then_raises_keyboardinterrupt_and_prints_a_new_prompt() -> None:
+    with crystal_shell() as (crystal, banner):
+        # Start a long-running command that prints output periodically
+        assert isinstance(crystal.stdout, TextIOBase)
+        assert isinstance(crystal.stdin, TextIOBase)
+        crystal.stdin.write("exec('import time\\nwhile True:\\n    print(\"loop\")\\n    time.sleep(0.1)\\n')\n")
+        crystal.stdin.flush()
+        
+        # Wait for the command to start printing output
+        (output, _) = read_until(crystal.stdout, 'loop\n', timeout=2.0)
+        
+        # Send SIGINT (Ctrl-C) to interrupt the running command
+        os.kill(crystal.pid, signal.SIGINT)
+        
+        # Wait for KeyboardInterrupt traceback and new prompt
+        (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+        
+        # Verify KeyboardInterrupt was raised
+        assertIn('KeyboardInterrupt', output,
+            'Expected KeyboardInterrupt to be raised when Ctrl-C is pressed during command execution')
+        assertIn('Traceback', output,
+            'Expected a traceback to be shown for the KeyboardInterrupt')
+        
+        # Verify a new prompt appears (matched by read_until)
+        assertEqual('\n>>> ', matched)
+        
+        # Verify shell is still responsive
+        assertEqual('2\n', py_eval(crystal, '1 + 1'))
+
+
+# ------------------------------------------------------------------------------
+# Tests: Ctrl-D (and EOFError)
+
+def test_given_ai_agent_detected_when_ctrl_d_pressed_then_exits_immediately_with_success_code() -> None:
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True'}, kill=False) as (crystal, _):
+        # Close stdin to simulate Ctrl-D (EOF)
+        assert isinstance(crystal.stdin, TextIOBase)
+        crystal.stdin.close()
+        
+        # Wait for process to exit
+        crystal.wait(timeout=2.0)
+        
+        # Verify exit code is 0 (success)
+        assertEqual(0, crystal.returncode,
+            'Expected Crystal to exit with code 0 when Ctrl-D is pressed at prompt')
+
+
+@skip('covered by: test_when_launched_with_shell_and_ctrl_d_pressed_then_exits')
+def test_given_no_ai_agent_and_windows_exist_when_ctrl_d_pressed_then_prints_waiting_for_windows_to_close() -> None:
+    pass
 
 
 # ------------------------------------------------------------------------------

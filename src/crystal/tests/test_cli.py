@@ -432,13 +432,12 @@ async def test_when_launched_with_shell_and_ctrl_d_pressed_then_exits() -> None:
         #crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
 
 
-async def test_when_launched_with_shell_and_ctrl_c_pressed_then_exits() -> None:
-    with crystal_shell() as (crystal, banner):
-        await OpenOrCreateDialog.wait_for()
-        
-        # Simulate Ctrl-C to quit the process
-        os.kill(crystal.pid, signal.SIGINT)
-        crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+@skip('covered by: ' + ', '.join([
+    'test_given_crystal_started_with_shell_and_waiting_for_input_when_ctrl_c_pressed_then_prints_keyboardinterrupt_and_a_new_prompt',
+    'test_given_crystal_started_with_shell_and_running_a_command_when_ctrl_c_pressed_then_raises_keyboardinterrupt_and_prints_a_new_prompt',
+]))
+async def test_when_launched_with_shell_and_ctrl_c_pressed_then_prints_keyboardinterrupt() -> None:
+    pass
 
 
 # === Headless Mode Tests (---headless) ===
