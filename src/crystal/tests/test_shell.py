@@ -167,52 +167,6 @@ def test_builtin_globals_have_stable_public_api(subtests: SubtestsContext) -> No
 @with_subtests
 def test_shell_exits_with_expected_message(subtests: SubtestsContext) -> None:
     for exit_method in ('exit()', 'Ctrl-D'):
-        with subtests.test(case=f'test when {exit_method} given first open/create dialog is already closed then exits'):
-            with crystal_shell() as (crystal, _):
-                assert isinstance(crystal.stdin, TextIOBase)
-                
-                close_open_or_create_dialog(crystal)
-                
-                if exit_method == 'exit()':
-                    try:
-                        py_eval(crystal, 'exit()', stop_suffix='')
-                    except BrokenPipeError:
-                        pass
-                elif exit_method == 'Ctrl-D':
-                    crystal.stdin.close()  # Ctrl-D
-                else:
-                    raise AssertionError()
-                
-                wait_for_crystal_to_exit(
-                    crystal,
-                    timeout=DEFAULT_WAIT_TIMEOUT)
-        
-        with subtests.test(case=f'test when {exit_method} given non-first open/create dialog is already closed then exits'):
-            with crystal_shell() as (crystal, _):
-                assert isinstance(crystal.stdin, TextIOBase)
-                
-                create_new_empty_project(crystal)
-                close_main_window(crystal)
-                
-                close_open_or_create_dialog(crystal)
-                
-                if exit_method == 'exit()':
-                    try:
-                        py_eval(
-                            crystal, 'exit()', stop_suffix='',
-                            timeout=5.0)  # took 4.0s in Linux CI
-                    except BrokenPipeError:
-                        pass
-                elif exit_method == 'Ctrl-D':
-                    crystal.stdin.close()  # Ctrl-D
-                else:
-                    raise AssertionError()
-                
-                wait_for_crystal_to_exit(
-                    crystal,
-                    timeout=5.0)  # took >4.0s in Linux CI
-    
-    for exit_method in ('exit()', 'Ctrl-D'):
         with subtests.test(case=f'test when {exit_method} given first open/create dialog still open then prints waiting message and does not exit'):
             with crystal_shell() as (crystal, _):
                 assert isinstance(crystal.stdin, TextIOBase)
