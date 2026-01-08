@@ -378,8 +378,14 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             sys.stdin,
             self._interrupt_pipe.readable_end
         )
+        
+        # Customize how unhandled exceptions are printed
+        self._old_sys_excepthook = sys.excepthook
+        sys.excepthook = lambda *args: self._sys_excepthook(*args)
     
     def close(self) -> None:
+        sys.excepthook = self._old_sys_excepthook
+        
         # Clean up interrupt pipe
         try:
             self._interrupt_pipe.readable_end.close()
@@ -536,7 +542,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             result = coro
         else:
             try:
-                result = run_test_coro(
+                result = run_test_coro(  # cr-traceback: ignore
                     coro,  # type: ignore[arg-type]
                     fg_call_and_wait_func=self._fg_call_and_wait_noprofile
                 )
@@ -593,19 +599,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     
     # === Handle Raised Exceptions ===
     
-    @override
-    def showtraceback(self) -> None:
-        # Force default behavior of printing the most recent traceback to
-        # the console, even if sys.excepthook has been overridden
-        old_excepthook = sys.excepthook  # capture
-        sys.excepthook = sys.__excepthook__
-        try:
-            super().showtraceback()
-        finally:
-            sys.excepthook = old_excepthook
-    
-    @override
-    def _excepthook(self, typ, value, tb):
+    def _sys_excepthook(self, typ, value, tb):
         # Print nicely-formatted tracebacks
         self.write(format_exception_for_terminal_user(value))
     

@@ -51,7 +51,7 @@ def format_exception_for_terminal_user(exc: BaseException) -> str:
     """
     te = TracebackException(type(exc), exc, exc.__traceback__, compact=True)
     te.stack = _filter_stack_summary(te.stack)
-    return ''.join(list(te.format(chain=True, colorize=False)))  # type: ignore[call-arg]
+    return ''.join(list(te.format(chain=True)))  # type: ignore[call-arg]
 
 
 def _filter_stack_summary(ss: StackSummary) -> StackSummary:
