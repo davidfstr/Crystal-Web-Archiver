@@ -776,7 +776,7 @@ def wait_for_crystal_to_exit(
             crystal.wait(timeout=(timeout * HARD_TIMEOUT_MULTIPLIER) - timeout)
         except subprocess.TimeoutExpired:
             raise WaitTimedOut(
-                f'Timed out waiting for Crystal to exit. '
+                f'Timed out waiting {timeout:.1f}s for Crystal to exit. '
                 f'Trailing output: {drain(crystal.stdout)!r} '
             ) from None
         else:
