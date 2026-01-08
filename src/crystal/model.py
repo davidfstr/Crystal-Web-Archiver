@@ -2685,7 +2685,7 @@ class Resource:
         del url  # prevent accidental usage later
         
         self = object.__new__(cls)
-        self.project = project
+        self.project = _resolve_proxy(project)  # type: ignore[assignment]
         self._url = normalized_url
         self._download_body_task_ref = None
         self._download_task_ref = None
@@ -3480,6 +3480,7 @@ class RootResource:
         * RootResource.AlreadyExists -- 
             if there is already a `RootResource` associated with the specified resource.
         """
+        project = _resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
             raise TypeError()
         if not isinstance(name, str):
@@ -4580,6 +4581,7 @@ class ResourceGroup(ListenableMixin):
         """
         super().__init__()
         
+        project = _resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
             raise TypeError()
         if not isinstance(name, str):
@@ -4879,6 +4881,14 @@ class ResourceGroup(ListenableMixin):
 
     def __repr__(self):
         return 'ResourceGroup({},{})'.format(repr(self.name), repr(self.url_pattern))
+
+
+def _resolve_proxy(maybe_proxy: object) -> object:
+    from crystal.shell import _Proxy
+    if isinstance(maybe_proxy, _Proxy):
+        return maybe_proxy._value
+    else:
+        return maybe_proxy
 
 
 def _is_ascii(s: str) -> bool:
