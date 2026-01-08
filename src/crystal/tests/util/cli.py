@@ -305,7 +305,7 @@ def crystal_shell(*, args=[], env_extra={}, kill: bool=True) -> Iterator[tuple[s
         assert isinstance(crystal.stdout, TextIOBase)
         (banner, _) = read_until(
             crystal.stdout, '\n>>> ',
-            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            timeout=8.0  # 4.0s isn't long enough for macOS test runners on GitHub Actions
         )
         assertIn('Crystal', banner)
         yield (crystal, banner)
