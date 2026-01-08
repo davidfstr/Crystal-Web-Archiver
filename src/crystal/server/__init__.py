@@ -550,7 +550,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def _server_host(self) -> str:
         server = self.server
         assert isinstance(server, _HttpServer)
-        (host, port) = server.server_address
+        (host, port, *_) = server.server_address
         assert isinstance(host, str) and isinstance(port, int)
         return f'{host}:{port}'
     

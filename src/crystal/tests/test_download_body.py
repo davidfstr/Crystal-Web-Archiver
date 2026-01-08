@@ -115,7 +115,7 @@ def _file_served(headers: list[list[str]], content_bytes: bytes) -> Iterator[int
     
     # Start an HTTP server that serves a test file for any GET request
     with HTTPServer(('', 0), RequestHandler) as server:
-        (_, server_port) = server.server_address
+        (_, server_port, *_) = server.server_address
         
         @capture_crashes_to_stderr
         def do_serve_forever() -> None:
