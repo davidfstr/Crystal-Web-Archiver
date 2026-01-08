@@ -4,10 +4,10 @@ from crystal.util.xos import is_windows
 import importlib.resources
 import os
 import sys
-from typing import BinaryIO, TextIO
+from typing import IO
 
 
-def open_binary(filename: str) -> BinaryIO:
+def open_binary(filename: str) -> IO[bytes]:
     """
     Opens a binary data file from this directory for reading.
     
@@ -23,7 +23,7 @@ def open_binary(filename: str) -> BinaryIO:
         return importlib.resources.files(resources).joinpath(filename).open('rb')
 
 
-def open_text(filename: str, *, encoding: str='utf-8', errors='strict') -> TextIO:
+def open_text(filename: str, *, encoding: str='utf-8', errors='strict') -> IO[str]:
     """
     Opens a text data file from this directory for reading.
     

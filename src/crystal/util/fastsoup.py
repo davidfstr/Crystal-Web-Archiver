@@ -77,7 +77,7 @@ class FastSoup:  # abstract
     def tag_string(self, tag: Tag) -> str | None:
         raise NotImplementedError()
     
-    def set_tag_string(self, tag: Tag, string: str | None) -> None:
+    def set_tag_string(self, tag: Tag, string: str) -> None:
         raise NotImplementedError()
     
     def tag_insert_before(self, tag1: Tag, tag2: Tag) -> None:
@@ -142,7 +142,7 @@ class BeautifulFastSoup(FastSoup):
         assert isinstance(tag, bs4.Tag)
         return tag.string
     
-    def set_tag_string(self, tag: Tag, string: str | None) -> None:
+    def set_tag_string(self, tag: Tag, string: str) -> None:
         assert isinstance(tag, bs4.Tag)
         tag.string = string
     
