@@ -14,6 +14,7 @@ from crystal.util.xfunctools import partial2
 from crystal.util.xthreading import bg_affinity, bg_call_later, fg_affinity
 from dataclasses import dataclass
 import datetime
+import errno
 import faulthandler
 import multiprocessing
 import os
@@ -783,6 +784,13 @@ def _run_worker(
                         pass
                 except InterruptedError:
                     pass
+                except OSError as e:
+                    # [Errno 9] Bad file descriptor
+                    if e.errno == errno.EBADF:  # Windows
+                        # InterruptedError
+                        pass
+                    else:
+                        raise
                 
                 # Wait for process to complete
                 returncode = process.wait()
@@ -862,6 +870,13 @@ def _read_until_prompt(
         except InterruptedError:
             # Interrupted
             return (lines, 'interrupted')
+        except OSError as e:
+            # [Errno 9] Bad file descriptor
+            if e.errno == errno.EBADF:  # Windows
+                # Interrupted
+                return (lines, 'interrupted')
+            else:
+                raise
         if not line:
             # EOF
             return (lines, 'eof')
