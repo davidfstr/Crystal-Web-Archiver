@@ -425,6 +425,9 @@ def py_eval_literal(
     printed by the code.
     """
     expr_str = py_eval(python, py_code, timeout=timeout)
+    # HACK: Remove never-valid prefix observed occasionally in
+    #       test_given_untitled_project_created_when_crystal_unexpectedly_quits_then_untitled_project_reopened
+    expr_str = expr_str.removeprefix('>>> ')
     try:
         return literal_eval(expr_str)
     except SyntaxError as e:
