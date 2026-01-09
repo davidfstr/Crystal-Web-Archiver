@@ -175,6 +175,7 @@ class Shell:
             ) + (
                 'terminal_operate users:\n'
                 f'- output_delay_ms: {_OUTPUT_DELAY_MS_ADVISE}\n'
+                '- Multi-line inputs are truncated to first line only. Use a single-line exec() for multi-line inputs.\n'
                 '- Type an empty line using "input": " " (1 space)\n'
                 if mcp_shell_server_detected()
                 else ''
