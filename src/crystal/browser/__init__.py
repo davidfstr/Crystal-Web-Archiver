@@ -1323,7 +1323,13 @@ class MainWindow(CloakMixin):
             create_group: bool,
             ) -> None:
         if url != rr.url:
-            raise ValueError()
+            # NOTE: AI agents can actually encounter this error because they can
+            #       unintentionally edit the value of the _disabled_ URL Pattern
+            #       input in the edit group dialog
+            raise ValueError(
+                'Attempted to change url of existing RootResource. '
+                'URL cannot be changed after root resource is created.'
+            )
         
         if name != rr.name:
             rr.name = name
@@ -1391,7 +1397,13 @@ class MainWindow(CloakMixin):
             download_immediately: bool,
             ) -> None:
         if url_pattern != rg.url_pattern:
-            raise ValueError()
+            # NOTE: AI agents can actually encounter this error because they can
+            #       unintentionally edit the value of the _disabled_ URL Pattern
+            #       input in the edit group dialog
+            raise ValueError(
+                'Attempted to change url_pattern of existing ResourceGroup. '
+                'URL pattern cannot be changed after group is created.'
+            )
         (rg.name, rg.source, rg.do_not_download) = (name, source, do_not_download)
         
         # TODO: This update should happen in response to an event
