@@ -115,7 +115,10 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
                 'CRYSTAL_NO_PROFILE_FG_TASKS': 'True',
                 'CRYSTAL_NO_PROFILE_GC': 'True',
                 'CRYSTAL_NO_PROFILE_RECORD_LINKS': 'True',
+                
+                # Prevent misc messages from being mixed into output
                 'CRYSTAL_NO_SCREENSHOT_MESSAGES': 'True',
+                'CRYSTAL_NO_WIDTH_HACK_WARNINGS': 'True',
                 
                 # Inherit app preferences from this Crystal process
                 'CRYSTAL_PREFS_FILEPATH': app_prefs._get_state_filepath(),
