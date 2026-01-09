@@ -3,7 +3,9 @@ Pylint plugin to ban specific API patterns in Crystal.
 """
 
 from astroid import nodes
+import os
 from pylint.checkers import BaseChecker
+import sys
 from typing import List, Tuple, Optional
 
 
@@ -698,3 +700,39 @@ def _fix_fstring_quotes(original: str, fix: StringQuoteFix) -> str:
     # Replace the quote characters only.
     # The content between quotes stays the same (including nested strings).
     return fix.prefix + fix.new_quote + original[pos + 1:end_pos] + fix.new_quote
+
+
+def _patch_astroid() -> None:
+    """
+    Patches astroid 4.0.3 to work with PATH entries that end with os.path.sep.
+    
+    Backports the fix: https://github.com/pylint-dev/astroid/pull/2928
+    """
+    if sys.platform != 'win32':
+        # Patch only useful on Windows
+        return
+    try:
+        import astroid.modutils
+    except ImportError:
+        pass
+    else:
+        path = '\\\\Mac\\Code\\tests\\test_resources.py'
+        base = '\\\\mac\\code\\'
+        if not astroid.modutils._is_subpath(path, base):
+            def _is_subpath2(path: str, base: str) -> bool:
+                path = os.path.normcase(os.path.normpath(path))
+                base = os.path.normcase(os.path.normpath(base))
+                if not path.startswith(base):
+                    return False
+                return (
+                    (len(path) == len(base)) or 
+                    (path[len(base)] == os.path.sep) or
+                    # Fix
+                    (base.endswith(os.path.sep) and path[len(base) - 1] == os.path.sep)
+                )
+            astroid.modutils._is_subpath = _is_subpath2
+        assert astroid.modutils._is_subpath(path, base)
+
+
+# Patch astroid at import time
+_patch_astroid()
