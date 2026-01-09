@@ -492,14 +492,25 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     
     @override
     def runsource(self, source: str, filename: str = '<input>', symbol: str = 'single') -> bool:
-        # Strongly encourage any AI agent to read help(T) if it tries to use T
         if ai_agent_detected():
             normalized_source = source.strip().replace(' ', '').replace('\t', '')
+            
+            # Strongly encourage any AI agent to read help(T) if it tries to use T
             if normalized_source == 'help(T)':
                 self._help_t_called = True
             elif normalized_source == 'T' and not self._help_t_called and not self._help_t_warning_printed:
                 self.write('🤖 T accessed but help(T) not read. Recommend reading help(T).\n')
                 self._help_t_warning_printed = True
+            
+            # Warn if comment-only input detected, because it could be a multi-line input
+            if normalized_source.startswith('#'):
+                self.write('🤖 Comment-only input detected. Is this a multi-line input?\n')
+                if mcp_shell_server_detected():
+                    self.write(
+                        '🤖 '
+                        'terminal_operate silently truncates multi-line input to first line only. '
+                        'Use only a single line with exec() to run multi-line inputs.\n'
+                    )
         
         return super().runsource(source, filename, symbol)
     
