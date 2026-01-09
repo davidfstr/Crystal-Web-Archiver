@@ -527,7 +527,7 @@ def test_given_crystal_started_without_shell_when_ctrl_c_pressed_then_exits_with
         os.kill(crystal.pid, signal.SIGINT)
         
         # Wait for process to exit
-        crystal.wait(timeout=5.0)
+        wait_for_crystal_to_exit(crystal, timeout=5.0)
         
         # Verify exit code
         assertEqual(-signal.SIGINT, crystal.returncode)
@@ -593,7 +593,7 @@ def test_given_ai_agent_detected_when_ctrl_d_pressed_then_exits_immediately_with
         crystal.stdin.close()
         
         # Wait for process to exit
-        crystal.wait(timeout=2.0)
+        wait_for_crystal_to_exit(crystal, timeout=2.0)
         
         # Verify exit code is 0 (success)
         assertEqual(0, crystal.returncode,

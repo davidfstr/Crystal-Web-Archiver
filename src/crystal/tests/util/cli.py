@@ -143,6 +143,8 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
             assert crystal.stdout is not None
             crystal.stdout.close()
             crystal.kill()
+        # NOTE: Warns upon failure,
+        #       unlike wait_for_crystal_to_exit which errors
         try:
             crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
         except subprocess.TimeoutExpired:
