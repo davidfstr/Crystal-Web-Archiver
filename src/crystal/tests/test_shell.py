@@ -12,7 +12,7 @@ from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
-    DEFAULT_WAIT_TIMEOUT, wait_for_sync,
+    DEFAULT_WAIT_TIMEOUT, WaitTimedOut, wait_for_sync,
 )
 from crystal.util.xos import is_linux
 from crystal.util.xthreading import fg_call_and_wait
@@ -520,14 +520,22 @@ def test_can_import_guppy_in_shell() -> None:
 
 def test_given_crystal_started_without_shell_when_ctrl_c_pressed_then_exits_with_exit_code_sigint() -> None:
     with crystal_running(args=[], kill=False) as crystal:
-        # Wait a little bit for Crystal to start up
-        time.sleep(0.5)
+        # Wait for Crystal to start up
+        # TODO: Find a way to actually detect when Crystal finished starting,
+        #       that doesn't require the shell, which isn't available for this test
+        time.sleep(1.0)
         
         # Send SIGINT (Ctrl-C)
         os.kill(crystal.pid, signal.SIGINT)
         
         # Wait for process to exit
-        wait_for_crystal_to_exit(crystal, timeout=5.0)
+        try:
+            wait_for_crystal_to_exit(crystal, timeout=5.0)
+        except WaitTimedOut as e:
+            if 'Launch error\nSee the py2app website for debugging launch issues\n' in str(e):
+                raise AssertionError('Crystal did not finish starting before it received SIGINT')
+            else:
+                raise
         
         # Verify exit code
         assertEqual(-signal.SIGINT, crystal.returncode)
