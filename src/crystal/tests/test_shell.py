@@ -771,6 +771,19 @@ def test_given_non_ai_agent_when_T_accessed_without_help_T_then_no_warning_shown
             'Expected NameError about T not being defined')
 
 
+@with_subtests
+def test_given_ai_agent_when_comment_only_input_provided_then_warning_shown(subtests: SubtestsContext) -> None:
+    for terminal_operate in [False, True]:
+        with subtests.test(terminal_operate=terminal_operate):
+            with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_MCP_SHELL_SERVER': 'True' if terminal_operate else 'False'}) as (crystal, banner):
+                result = py_eval(crystal, "# Let's search for comic pages that are numbered 1-5")
+                assertIn('🤖 Comment-only input detected. Is this a multi-line input?', result,
+                    'Expected warning message when comment-only input used')
+                if terminal_operate:
+                    assertIn('🤖 terminal_operate silently truncates multi-line input to first line only.', result,
+                        'Expected additional warning message when terminal_operate detected')
+
+
 def test_cannot_set_unexpected_attributes_of_T() -> None:
     """
     Setting unexpected attributes on T (like T.Name) should raise an AttributeError,
