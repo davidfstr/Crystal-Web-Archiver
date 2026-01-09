@@ -128,7 +128,7 @@ PySocks = "^1.7.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0,<10.0"
-mypy = "==1.6.1"
+mypy = ">=1.19,<1.20"
 types-tqdm = "^4.66.0.20240106"
 types-tzlocal = "^4.2.0"
 PyScreeze = { version = "^0.1.28", markers = "sys_platform != 'darwin'" }
@@ -149,7 +149,7 @@ playwright = "^1.48.0"
 # For serializing local function closures in Playwright tests
 dill = "^0.3.8"
 coverage = "^7.11.0"
-pylint = "^4.0.2"
+pylint = ">=4.0,<4.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -115,7 +115,10 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
                 'CRYSTAL_NO_PROFILE_FG_TASKS': 'True',
                 'CRYSTAL_NO_PROFILE_GC': 'True',
                 'CRYSTAL_NO_PROFILE_RECORD_LINKS': 'True',
+                
+                # Prevent misc messages from being mixed into output
                 'CRYSTAL_NO_SCREENSHOT_MESSAGES': 'True',
+                'CRYSTAL_NO_WIDTH_HACK_WARNINGS': 'True',
                 
                 # Inherit app preferences from this Crystal process
                 'CRYSTAL_PREFS_FILEPATH': app_prefs._get_state_filepath(),
@@ -140,6 +143,8 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
             assert crystal.stdout is not None
             crystal.stdout.close()
             crystal.kill()
+        # NOTE: Warns upon failure,
+        #       unlike wait_for_crystal_to_exit which errors
         try:
             crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
         except subprocess.TimeoutExpired:
@@ -305,7 +310,7 @@ def crystal_shell(*, args=[], env_extra={}, kill: bool=True) -> Iterator[tuple[s
         assert isinstance(crystal.stdout, TextIOBase)
         (banner, _) = read_until(
             crystal.stdout, '\n>>> ',
-            timeout=4.0  # 2.0s isn't long enough for macOS test runners on GitHub Actions
+            timeout=8.0  # 4.0s isn't long enough for macOS test runners on GitHub Actions
         )
         assertIn('Crystal', banner)
         yield (crystal, banner)
@@ -422,6 +427,9 @@ def py_eval_literal(
     printed by the code.
     """
     expr_str = py_eval(python, py_code, timeout=timeout)
+    # HACK: Remove never-valid prefix observed occasionally in
+    #       test_given_untitled_project_created_when_crystal_unexpectedly_quits_then_untitled_project_reopened
+    expr_str = expr_str.removeprefix('>>> ')
     try:
         return literal_eval(expr_str)
     except SyntaxError as e:

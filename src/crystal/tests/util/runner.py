@@ -47,8 +47,8 @@ def run_test_coro(
     last_command_result = None  # type: Union[object, Exception]
     while True:
         try:
-            command = fg_call_and_wait_func(
-                lambda: test_co.send(last_command_result),  # type: ignore[attr-defined, union-attr]
+            command = fg_call_and_wait_func(  # cr-traceback: ignore
+                lambda: test_co.send(last_command_result),  # type: ignore[attr-defined, union-attr]  # cr-traceback: ignore
                 profile=False
             )
         except StopIteration as e:

@@ -162,4 +162,4 @@ def _simulate_logout_in_crystal_subprocess(*, open_main_window: bool) -> None:
         py_eval(crystal, 'exit()', stop_suffix='')
         
         # Ensure that the Crystal process quits cleanly
-        wait_for_crystal_to_exit(crystal, timeout=DEFAULT_WAIT_TIMEOUT)
+        wait_for_crystal_to_exit(crystal, timeout=4.0)  # 2.0 not long enough for macOS CI

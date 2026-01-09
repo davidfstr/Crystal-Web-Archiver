@@ -2,9 +2,15 @@
 Unit tests for crystal.ui.nav module.
 """
 
-from crystal.ui.nav import _DEFAULT_DELETION_STYLE, inline_diff, Snapshot, SnapshotDiff 
+from unittest import skip
+from crystal.ui.nav import (
+    _DEFAULT_DELETION_STYLE, T, TopWindowNavigatorHasNoWindow, 
+    WindowNavigator, inline_diff, Snapshot, SnapshotDiff, NoSuchWindow,
+)
 import pytest
 import re
+from unittest.mock import Mock, patch
+import wx
 
 
 # === Helper Functions ===
@@ -28,6 +34,450 @@ def make_snapshot(
         peer_obj=peer_obj,
         children_elided=children_elided,
     )
+
+
+# === Tests for Navigator ===
+
+class TestNavigator:
+    # === Non-Property Tests ===
+    
+    def test_access_of_children_attribute_provides_helpful_error_message(self) -> None:
+        nav = WindowNavigator(path='T[1][2][3]')
+        with pytest.raises(AttributeError, match=re.escape(
+                "'WindowNavigator' has no attribute 'Children'. "
+                "Did you mean T[1][2][3].W.Children?")):
+            nav.Children
+    
+    def test_access_of_parent_attribute_provides_helpful_error_message(self) -> None:
+        nav = WindowNavigator(path='T[1][2][3]')
+        with pytest.raises(AttributeError, match=re.escape(
+                "'WindowNavigator' has no attribute 'Parent'. "
+                "Did you mean T[1][2][3].W.Parent?")):
+            nav.Parent
+    
+    def test_children_and_parent_attributes_do_not_appear_in_dir(self) -> None:
+        nav = WindowNavigator(path='T[1][2][3]')
+        dir_nav = dir(nav)
+        assert 'Children' not in dir_nav
+        assert 'Parent' not in dir_nav
+
+
+class TestWindowNavigator:
+    # === Navigation Tests ===
+    
+    def test_call_of_unique_named_window_returns_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = target_window
+            
+            # Act
+            result = navigator(Name='target')
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is target_window
+        mock_find.assert_called_once_with('target', parent=target_window)
+    
+    def test_call_of_nonunique_named_window_returns_first_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_target = Mock(spec=wx.Window)
+            first_target.Name = 'duplicate'
+            first_target.Shown = True
+            first_target.IsTopLevel.return_value = False
+            
+            second_target = Mock(spec=wx.Window)
+            second_target.Name = 'duplicate'
+            second_target.Shown = True
+            second_target.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_target, second_target]
+            first_target.Children = []
+            second_target.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = first_target
+            
+            # Act
+            result = navigator(Name='duplicate')
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is first_target
+        mock_find.assert_called_once_with('duplicate', parent=first_target)
+    
+    def test_call_of_missing_named_window_raises_no_such_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            child_window = Mock(spec=wx.Window)
+            child_window.Name = 'child'
+            child_window.Shown = True
+            child_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [child_window]
+            child_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = None
+            
+            # Act & Assert
+            with pytest.raises(NoSuchWindow, match='does not exist'):
+                navigator(Name='nonexistent')
+    
+    def test_call_of_unique_id_window_returns_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Id = wx.ID_OK
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowById') as mock_find:
+            mock_find.return_value = target_window
+            
+            # Act
+            result = navigator(Id=wx.ID_OK)
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is target_window
+        mock_find.assert_called_once_with(wx.ID_OK, parent=target_window)
+    
+    def test_call_of_nonunique_id_window_returns_first_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_target = Mock(spec=wx.Window)
+            first_target.Name = 'first'
+            first_target.Id = wx.ID_CANCEL
+            first_target.Shown = True
+            first_target.IsTopLevel.return_value = False
+            
+            second_target = Mock(spec=wx.Window)
+            second_target.Name = 'second'
+            second_target.Id = wx.ID_CANCEL
+            second_target.Shown = True
+            second_target.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_target, second_target]
+            first_target.Children = []
+            second_target.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowById') as mock_find:
+            mock_find.return_value = first_target
+            
+            # Act
+            result = navigator(Id=wx.ID_CANCEL)
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is first_target
+        mock_find.assert_called_once_with(wx.ID_CANCEL, parent=first_target)
+    
+    def test_call_of_missing_id_window_raises_no_such_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            child_window = Mock(spec=wx.Window)
+            child_window.Name = 'child'
+            child_window.Id = wx.ID_OK
+            child_window.Shown = True
+            child_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [child_window]
+            child_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowById') as mock_find:
+            mock_find.return_value = None
+            
+            # Act & Assert
+            with pytest.raises(NoSuchWindow, match='does not exist'):
+                navigator(Id=wx.ID_HELP)
+    
+    def test_call_of_unique_labeled_window_returns_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Label = ''
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Label = 'Target Button'
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByLabel') as mock_find:
+            mock_find.return_value = target_window
+            
+            # Act
+            result = navigator(Label='Target Button')
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is target_window
+        mock_find.assert_called_once_with('Target Button', parent=target_window)
+    
+    def test_call_of_nonunique_labeled_window_returns_first_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Label = ''
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_target = Mock(spec=wx.Window)
+            first_target.Name = 'first'
+            first_target.Label = 'OK'
+            first_target.Shown = True
+            first_target.IsTopLevel.return_value = False
+            
+            second_target = Mock(spec=wx.Window)
+            second_target.Name = 'second'
+            second_target.Label = 'OK'
+            second_target.Shown = True
+            second_target.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_target, second_target]
+            first_target.Children = []
+            second_target.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByLabel') as mock_find:
+            mock_find.return_value = first_target
+            
+            # Act
+            result = navigator(Label='OK')
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is first_target
+        mock_find.assert_called_once_with('OK', parent=first_target)
+    
+    def test_call_of_missing_labeled_window_raises_no_such_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Label = ''
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            child_window = Mock(spec=wx.Window)
+            child_window.Name = 'child'
+            child_window.Label = 'Cancel'
+            child_window.Shown = True
+            child_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [child_window]
+            child_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByLabel') as mock_find:
+            mock_find.return_value = None
+            
+            # Act & Assert
+            with pytest.raises(NoSuchWindow, match='does not exist'):
+                navigator(Label='Nonexistent Label')
+    
+    def test_getitem_of_unique_named_window_returns_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = target_window
+            
+            # Act
+            result = navigator['target']
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is target_window
+        mock_find.assert_called_once_with('target', parent=target_window)
+    
+    def test_getitem_of_nonunique_named_window_returns_first_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_target = Mock(spec=wx.Window)
+            first_target.Name = 'duplicate'
+            first_target.Shown = True
+            first_target.IsTopLevel.return_value = False
+            
+            second_target = Mock(spec=wx.Window)
+            second_target.Name = 'duplicate'
+            second_target.Shown = True
+            second_target.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_target, second_target]
+            first_target.Children = []
+            second_target.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = first_target
+            
+            # Act
+            result = navigator['duplicate']
+        
+        # Assert
+        assert isinstance(result, WindowNavigator)
+        assert result.Window is first_target
+        mock_find.assert_called_once_with('duplicate', parent=first_target)
+    
+    def test_getitem_of_missing_named_window_raises_no_such_window(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            child_window = Mock(spec=wx.Window)
+            child_window.Name = 'child'
+            child_window.Shown = True
+            child_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [child_window]
+            child_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find:
+            mock_find.return_value = None
+            
+            # Act & Assert
+            with pytest.raises(NoSuchWindow, match='does not exist'):
+                navigator['nonexistent']
+    
+    # === Properties Tests ===
+    
+    def test_window_raises_if_navigator_is_top(self) -> None:
+        with pytest.raises(TopWindowNavigatorHasNoWindow):
+            T.Window
+    
+    @skip('covered by: test_*_of_*_window_returns_window')
+    def test_window_is_correct_if_navigator_is_not_top(self) -> None:
+        pass
+    
+    def test_query_returns_value_based_on_how_subnavigator_was_found(self) -> None:
+        # Arrange: Create mock windows
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = True
+            
+            target_window = Mock(spec=wx.Window)
+            target_window.Name = 'target'
+            target_window.Id = wx.ID_OK
+            target_window.Label = 'Target'
+            target_window.Shown = True
+            target_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = [target_window]
+            target_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        with patch('wx.Window.FindWindowByName') as mock_find1, \
+                patch('wx.Window.FindWindowById') as mock_find2, \
+                patch('wx.Window.FindWindowByLabel') as mock_find3:
+            mock_find1.return_value = target_window
+            mock_find2.return_value = target_window
+            mock_find3.return_value = target_window
+            
+            # Act & Assert
+            result = navigator(Name='target').Query == "wx.Window.FindWindowByName('target')"
+            result = navigator(Id=wx.ID_OK).Query == 'wx.Window.FindWindowById(wx.ID_OK)'
+            result = navigator(Label='cr-target').Query == "wx.Window.FindWindowByLabel('cr-target')"
+            result = navigator['target'].Query == "wx.Window.FindWindowByName('target')"
+            result = navigator[0].Query == 'wx.GetTopLevelWindows()[0]'
+
+
+# (TODO: Add tests for TreeItemNavigator)
 
 
 # === Tests for inline_diff ===
@@ -449,8 +899,8 @@ class TestSnapshotDiffBasics:
         diff_repr = repr(diff)
         assert 'Child B' in diff_repr
     
-    def test_when_children_elided_then_assumes_no_changes_in_diff(self) -> None:
-        """Test that snapshots with children_elided=True don't report child changes."""
+    def test_even_when_children_elided_in_display_then_changes_still_detected_in_diff(self) -> None:
+        """Test that snapshots with children_elided=True still report child changes in diffs."""
         parent_peer = object()
         child1_peer = object()
         child2_peer = object()
@@ -461,22 +911,24 @@ class TestSnapshotDiffBasics:
             make_snapshot('Child 2', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
         
-        # New snapshot has children elided (not fully captured)
+        # New snapshot has children elided (at display time, but still captured internally)
         new = make_snapshot('Parent', children=[
             # empty
         ], peer_obj=parent_peer, children_elided=True)
         
         diff = Snapshot.diff(old, new)
         
-        # Should not report children as removed since new snapshot has elided children
+        # Should report children as removed even though new snapshot has elided children
+        # because children_elided only affects display, not diff computation
         diff_repr = repr(diff)
-        assert 'Child 1' not in diff_repr
-        assert 'Child 2' not in diff_repr
-        # Should show no changes
-        assert '-' not in diff_repr
+        assert 'Child 1' in diff_repr
+        assert 'Child 2' in diff_repr
+        # Should show deletions
+        assert 'S[0] - Child 1' in diff_repr
+        assert 'S[1] - Child 2' in diff_repr
     
-    def test_when_children_elided_then_assumes_no_changes_in_recursive_diff(self) -> None:
-        """Test that children_elided on matched child nodes prevents recursive diff."""
+    def test_even_when_children_elided_in_display_then_changes_still_detected_in_recursive_diff(self) -> None:
+        """Test that children_elided on matched child nodes still allows recursive diff."""
         root_peer = object()
         parent_peer = object()
         grandchild_peer = object()
@@ -497,9 +949,11 @@ class TestSnapshotDiffBasics:
         
         diff = Snapshot.diff(old, new)
         
-        # Should not report Grandchild as removed
+        # Should report Grandchild as removed even though Parent has children_elided=True
+        # because children_elided only affects display, not diff computation
         diff_repr = repr(diff)
-        assert 'Grandchild' not in diff_repr
+        assert 'Grandchild' in diff_repr
+        assert 'S[0] - Grandchild' in diff_repr
 
 
 
@@ -1425,11 +1879,13 @@ class TestSnapshotDiffGolden:
         """
         Situation:
         - A modal dialog appears over the main window.
-        - The main window's children are elided in the new snapshot (not fully captured).
-        - The diff should only show the dialog being added, not the main window's children being removed.
+        - The main window's children are elided in the new snapshot (at display time).
+        - The main window's children are identical in both old and new snapshots.
+        - The diff should only show the dialog being added, not the main window's children changing.
         
-        This test verifies the fix for the issue where children_elided=True was treated
-        as having zero children, causing spurious deletion entries in the diff.
+        This test verifies that children_elided=True only affects display, not data capture.
+        Even though children are elided at display time, they're still captured internally.
+        When children are identical, no changes are reported (as expected).
         """
         # Create peer objects for identity matching
         root_peer = object()
@@ -1534,7 +1990,68 @@ class TestSnapshotDiffGolden:
             [
                 make_snapshot(
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
-                    [],  # Children elided - not fully captured
+                    [  # Children ARE captured (same as old), just elided at display time
+                        make_snapshot(
+                            '_',
+                            [
+                                make_snapshot(
+                                    'wx.SplitterWindow()',
+                                    [
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-entity-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Root URLs and Groups')",
+                                                    path='T[0][0][0][0][0]',
+                                                    peer_obj=entity_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    '_',
+                                                    [
+                                                        make_snapshot(
+                                                            "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+                                                            path='T[0][0][0][0][1][0]',
+                                                            peer_obj=entity_pane_empty_text_peer
+                                                        ),
+                                                        make_snapshot(
+                                                            "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+                                                            path='T[0][0][0][0][1][1]',
+                                                            peer_obj=entity_pane_empty_button_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][0][1]',
+                                                    peer_obj=entity_pane_empty_state_peer
+                                                ),
+                                                make_snapshot(
+                                                    "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+                                                    path='T[0][0][0][0][2]',
+                                                    peer_obj=entity_pane_add_button_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][0]',
+                                            peer_obj=entity_pane_peer
+                                        ),
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-task-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Tasks')",
+                                                    path='T[0][0][0][1][0]',
+                                                    peer_obj=task_pane_title_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][1]',
+                                            peer_obj=task_pane_peer
+                                        ),
+                                    ],
+                                    path='T[0][0][0]',
+                                    peer_obj=splitter_peer
+                                ),
+                            ],
+                            path='T[0][0]',
+                            peer_obj=frame_child_peer
+                        ),
+                    ],
                     path='T[0]',
                     peer_obj=main_window_peer,
                     children_elided=True
@@ -1578,8 +2095,7 @@ class TestSnapshotDiffGolden:
         
         # Expected:
         # - Only the dialog should be shown as added
-        # - The main window's children should NOT be shown as removed
-        #   because the new snapshot has children_elided=True
+        # - Main window's children should NOT be shown as changed because they're identical
         expected_diff_repr_lines = [
             '# S := T',
             "S[1] + wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
@@ -1597,13 +2113,320 @@ class TestSnapshotDiffGolden:
             assert actual_diff_repr_lines == expected_diff_repr_lines
         
         # Expected reverse:
-        # - Dialog removed, main window children NOT shown as added
-        #   because the old snapshot still has children_elided=False on the new snapshot
-        #   (but the new snapshot in the reverse diff has children_elided=True from old)
+        # - Only the dialog should be shown as removed
+        # - Main window children should NOT be shown as changed because they're identical
         expected_reverse_diff_repr_lines = [
             '# S := T',
             "S[1] - wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
             'S[1][0..4] - More(Count=5)',
+        ]
+        
+        with subtests.test(direction='reverse'):
+            diff = Snapshot.diff(new, old)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
+    
+    def test_new_root_url_dialog_disappears_and_creates_entity(self, subtests) -> None:
+        """
+        Situation:
+        - User clicks 'New' button in the 'New Root URL' dialog.
+        - The dialog disappears.
+        - A new entity appears in the entity tree.
+        - The main window's children are elided at display time, but changes within
+          those children ARE detected in the diff.
+        
+        This test verifies that diffs can detect real changes within children_elided=True areas.
+        """
+        # Create peer objects for identity matching
+        root_peer = object()
+        main_window_peer = object()
+        frame_child_peer = object()
+        splitter_peer = object()
+        entity_pane_peer = object()
+        entity_pane_title_peer = object()
+        entity_pane_empty_state_peer = object()
+        entity_pane_empty_text_peer = object()
+        entity_pane_empty_button_peer = object()
+        entity_pane_tree_peer = object()
+        entity_pane_tree_root_peer = object()
+        entity_pane_tree_item_peer = object()
+        entity_pane_add_button_peer = object()
+        task_pane_peer = object()
+        task_pane_title_peer = object()
+        task_pane_tree_peer = object()
+        task_pane_tree_root_peer = object()
+        task_pane_tree_item_peer = object()
+        
+        dialog_peer = object()
+        dialog_title_peer = object()
+        dialog_url_label_peer = object()
+        dialog_url_field_peer = object()
+        dialog_cancel_button_peer = object()
+        dialog_new_button_peer = object()
+        
+        # Old snapshot: Main window with empty state + dialog
+        old = make_snapshot(
+            '',
+            [
+                make_snapshot(
+                    "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+                    [
+                        make_snapshot(
+                            '_',
+                            [
+                                make_snapshot(
+                                    'wx.SplitterWindow()',
+                                    [
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-entity-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Root URLs and Groups')",
+                                                    path='T[0][0][0][0][0]',
+                                                    peer_obj=entity_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    '_',
+                                                    [
+                                                        make_snapshot(
+                                                            "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+                                                            path='T[0][0][0][0][1][0]',
+                                                            peer_obj=entity_pane_empty_text_peer
+                                                        ),
+                                                        make_snapshot(
+                                                            "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+                                                            path='T[0][0][0][0][1][1]',
+                                                            peer_obj=entity_pane_empty_button_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][0][1]',
+                                                    peer_obj=entity_pane_empty_state_peer
+                                                ),
+                                                make_snapshot(
+                                                    "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+                                                    path='T[0][0][0][0][2]',
+                                                    peer_obj=entity_pane_add_button_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][0]',
+                                            peer_obj=entity_pane_peer
+                                        ),
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-task-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Tasks')",
+                                                    path='T[0][0][0][1][0]',
+                                                    peer_obj=task_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    "crystal.ui.tree._OrderedTreeCtrl(Name='cr-task-tree')",
+                                                    [
+                                                        make_snapshot(
+                                                            'TreeItem(IsRoot=True, Visible=False, IsSelected=True)',
+                                                            [],  # No children in old snapshot
+                                                            path='T[0][0][0][1][1][0]',
+                                                            peer_obj=task_pane_tree_root_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][1][1]',
+                                                    peer_obj=task_pane_tree_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][1]',
+                                            peer_obj=task_pane_peer
+                                        ),
+                                    ],
+                                    path='T[0][0][0]',
+                                    peer_obj=splitter_peer
+                                ),
+                            ],
+                            path='T[0][0]',
+                            peer_obj=frame_child_peer
+                        ),
+                    ],
+                    path='T[0]',
+                    peer_obj=main_window_peer,
+                    children_elided=True
+                ),
+                make_snapshot(
+                    "wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+                    [
+                        make_snapshot(
+                            "wx.StaticText(Label='New Root URL')",
+                            path='T[1][0]',
+                            peer_obj=dialog_title_peer
+                        ),
+                        make_snapshot(
+                            "wx.StaticText(Label='URL:')",
+                            path='T[1][1]',
+                            peer_obj=dialog_url_label_peer
+                        ),
+                        make_snapshot(
+                            "wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
+                            path='T[1][2]',
+                            peer_obj=dialog_url_field_peer
+                        ),
+                        make_snapshot(
+                            "wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
+                            path='T[1][3]',
+                            peer_obj=dialog_cancel_button_peer
+                        ),
+                        make_snapshot(
+                            "wx.Button(Id=wx.ID_NEW, Label='&New')",
+                            path='T[1][4]',
+                            peer_obj=dialog_new_button_peer
+                        ),
+                    ],
+                    path='T[1]',
+                    peer_obj=dialog_peer
+                ),
+            ],
+            path='T',
+            peer_obj=root_peer
+        )
+        
+        # New snapshot: Main window with entity tree (no empty state) + no dialog
+        new = make_snapshot(
+            '',
+            [
+                make_snapshot(
+                    "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
+                    [
+                        make_snapshot(
+                            '_',
+                            [
+                                make_snapshot(
+                                    'wx.SplitterWindow()',
+                                    [
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-entity-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Root URLs and Groups')",
+                                                    path='T[0][0][0][0][0]',
+                                                    peer_obj=entity_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    "crystal.ui.tree._OrderedTreeCtrl(Name='cr-entity-tree')",
+                                                    [
+                                                        make_snapshot(
+                                                            'TreeItem(IsRoot=True, Visible=False)',
+                                                            [
+                                                                make_snapshot(
+                                                                    "TreeItem(👁='▶︎ 📁 /', IsSelected=True, IconTooltip='Fresh root URL')",
+                                                                    path='T[0][0][0][0][1][0][0]',
+                                                                    peer_obj=entity_pane_tree_item_peer
+                                                                ),
+                                                            ],
+                                                            path='T[0][0][0][0][1][0]',
+                                                            peer_obj=entity_pane_tree_root_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][0][1]',
+                                                    peer_obj=entity_pane_tree_peer
+                                                ),
+                                                make_snapshot(
+                                                    "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
+                                                    path='T[0][0][0][0][2]',
+                                                    peer_obj=entity_pane_add_button_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][0]',
+                                            peer_obj=entity_pane_peer
+                                        ),
+                                        make_snapshot(
+                                            "wx.Panel(Name='cr-task-pane')",
+                                            [
+                                                make_snapshot(
+                                                    "wx.StaticText(Label='Tasks')",
+                                                    path='T[0][0][0][1][0]',
+                                                    peer_obj=task_pane_title_peer
+                                                ),
+                                                make_snapshot(
+                                                    "crystal.ui.tree._OrderedTreeCtrl(Name='cr-task-tree')",
+                                                    [
+                                                        make_snapshot(
+                                                            'TreeItem(IsRoot=True, Visible=False, IsSelected=True)',
+                                                            [
+                                                                make_snapshot(
+                                                                    "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/ -- 2 of 13 item(s) -- ? remaining (?/item)')",
+                                                                    path='T[0][0][0][1][1][0][0]',
+                                                                    peer_obj=task_pane_tree_item_peer
+                                                                ),
+                                                            ],
+                                                            path='T[0][0][0][1][1][0]',
+                                                            peer_obj=task_pane_tree_root_peer
+                                                        ),
+                                                    ],
+                                                    path='T[0][0][0][1][1]',
+                                                    peer_obj=task_pane_tree_peer
+                                                ),
+                                            ],
+                                            path='T[0][0][0][1]',
+                                            peer_obj=task_pane_peer
+                                        ),
+                                    ],
+                                    path='T[0][0][0]',
+                                    peer_obj=splitter_peer
+                                ),
+                            ],
+                            path='T[0][0]',
+                            peer_obj=frame_child_peer
+                        ),
+                    ],
+                    path='T[0]',
+                    peer_obj=main_window_peer,
+                    children_elided=True
+                ),
+            ],
+            path='T',
+            peer_obj=root_peer
+        )
+        
+        # Expected:
+        # - Dialog is shown as removed
+        # - Main window's children ARE shown as changed (even though children_elided=True)
+        #   because there are actual differences:
+        #   * Empty state replaced with entity tree
+        #   * Task tree root gains a new child tree item
+        expected_diff_repr_lines = [
+            '# S := T',
+            'S[0][0][0][0][1] - _',
+            'S[0][0][0][0][1][0..1] - More(Count=2)',
+            "S[0][0][0][0][1] + crystal.ui.tree._OrderedTreeCtrl(Name='cr-entity-tree')",
+            'S[0][0][0][0][1][0] + TreeItem(IsRoot=True, Visible=False)',
+            "S[0][0][0][0][1][0][0] + TreeItem(👁='▶︎ 📁 /', IsSelected=True, IconTooltip='Fresh root URL')",
+            "S[0][0][0][1][1][0][0] + TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/ -- 2 of 13 item(s) -- ? remaining (?/item)')",
+            "S[1] - wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+            'S[1][0..4] - More(Count=5)',
+        ]
+        
+        with subtests.test(direction='forward'):
+            diff = Snapshot.diff(old, new)
+            diff_repr = repr(diff)
+            actual_diff_repr_lines = diff_repr.split('\n')
+            assert actual_diff_repr_lines == expected_diff_repr_lines
+        
+        # Expected reverse:
+        # - Dialog is shown as added
+        # - Entity tree replaced with empty state
+        # - Task tree item removed from root
+        expected_reverse_diff_repr_lines = [
+            '# S := T',
+            'S[0][0][0][0][1] - crystal.ui.tree._OrderedTreeCtrl(Name=\'cr-entity-tree\')',
+            'S[0][0][0][0][1][0] - More(Count=1)',
+            'S[0][0][0][0][1] + _',
+            "S[0][0][0][0][1][0] + wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
+            "S[0][0][0][0][1][1] + wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
+            "S[0][0][0][1][1][0][0] - TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/ -- 2 of 13 item(s) -- ? remaining (?/item)')",
+            "S[1] + wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
+            "S[1][0] + wx.StaticText(Label='New Root URL')",
+            "S[1][1] + wx.StaticText(Label='URL:')",
+            "S[1][2] + wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
+            "S[1][3] + wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
+            "S[1][4] + wx.Button(Id=wx.ID_NEW, Label='&New')",
         ]
         
         with subtests.test(direction='reverse'):

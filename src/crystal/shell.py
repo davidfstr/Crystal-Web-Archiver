@@ -4,30 +4,46 @@ import ast
 import code
 from collections.abc import Callable
 from concurrent.futures import Future
+from contextlib import closing
 from crystal import __version__ as crystal_version
 from crystal.browser import MainWindow
 from crystal.model import Project
 from crystal.tests.util.runner import run_test_coro
-from crystal.util.ai_agents import ai_agent_detected
+from crystal.util.ai_agents import ai_agent_detected, mcp_shell_server_detected
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.headless import is_headless_mode
+from crystal.util.pipes import create_selectable_pipe
+from crystal.util.readers import InterruptableReader
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xfunctools import partial2
 import crystal.util.xsite as site
 from crystal.util.xthreading import (
-    bg_affinity, bg_call_later, fg_call_and_wait, has_foreground_thread,
+    bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, has_foreground_thread,
     NoForegroundThreadError,
 )
+from crystal.util.xtraceback import format_exception_for_terminal_user
+import getpass
 import inspect
 import os
+import selectors
 import signal
 import sys
-import threading
+from threading import Thread
+import time
 import types
 from typing import Any, Literal, Optional, TypeVar
 from typing_extensions import override
 
 
 _R = TypeVar('_R')
+
+
+# Additional time to wait after running a command
+# to observe any immediately-scheduled asynchronous UI updates
+_ASYNC_UI_UPDATE_DELAY = 50 / 1000  # secs
+
+# Advise to AI agents RE how many milliseconds are best to wait for terminal output.
+_OUTPUT_DELAY_MS_ADVISE = 'use 500 for UI actions, 200 for non-UI actions'
 
 
 class Shell:
@@ -38,7 +54,8 @@ class Shell:
         Start the shell by calling start().
         """
         self._started = False
-        self._shell_thread = None  # type: Optional[threading.Thread]
+        self._stopping = False
+        self._shell_thread = None  # type: Optional[Thread]
         
         # Setup proxy variables for shell
         _Proxy._patch_help()
@@ -124,12 +141,12 @@ class Shell:
         if not self.is_running():
             return
         
-        # Send SIGINT to the process to interrupt the shell REPL
-        # TODO: Better to wait until the next >>> prompt appears,
-        #       rather than interrupting any code that is already running
+        # Interrupt the shell REPL
+        self._stopping = True
         os.kill(os.getpid(), signal.SIGINT)
     
     @capture_crashes_to_stderr
+    @bg_affinity
     def _run(self, banner_printed: Future[Literal[True]]) -> None:
         # Define exit instructions,
         # based on site.setquit()'s definition in Python 3.8
@@ -141,7 +158,7 @@ class Shell:
         
         if ai_agent_detected():
             from crystal.ui.nav import T
-            from crystal.tests.util.controls import click, TreeItem
+            from crystal.tests.util.controls import click, screenshot, TreeItem
             from crystal.tests.util.wait import wait_for
             import wx
             
@@ -149,17 +166,31 @@ class Shell:
                 'AI agents:\n'
                 '- Use `T` to view/control the UI. Learn more with `help(T)`.\n'
                 '- Use `click(window)` to click a button.\n'
+                '- Use `await screenshot()` to capture the UI as an image.\n'
+                '- Run multi-line code with exec(): exec("for i in range(5):\\n    print(i)")\n'
+                # TODO: Wait until agents _regularly_ try to run async code before 
+                #       spending banner space explaining how to do so.
+                #'- For async multi-line code: use exec() to define async def, then await it.\n'
                 '- Use Python control flow (for/while loops, if statements, etc.) to batch operations.\n'
+            ) + (
+                'terminal_operate users:\n'
+                f'- output_delay_ms: {_OUTPUT_DELAY_MS_ADVISE}\n'
+                '- Type an empty line using "input": " " (1 space)\n'
+                if mcp_shell_server_detected()
+                else ''
             )
             agent_locals = dict(
+                # Referenced in agent instructions
                 T=T,
-                click=click,
+                click=partial2(click, sync=False),
+                screenshot=screenshot,
                 
-                # NOTE: Having these as a built-in makes it easy to immediately use
-                #       CodeExpressions obtained from T that reference them.
+                # Referenced in help(T)
+                wait_for=wait_for,
+                
+                # Referenced in CodeExpressions returned/printed by Navigators
                 wx=wx,
                 TreeItem=TreeItem,
-                wait_for=wait_for,
             )
         else:
             agent_instructions = ''
@@ -188,6 +219,7 @@ class Shell:
                 ),
                 exitmsg='now waiting for all windows to close...',
                 banner_printed=banner_printed,
+                shell_stopping_func=lambda: self._stopping,
             )
         except SystemExit:
             pass
@@ -272,29 +304,39 @@ class _Proxy:
             return getattr(value, attr_name)
 
 
+@bg_affinity
 def fg_interact(
         banner=None,
         local=None,
         exitmsg=None,
         banner_printed: Future[Literal[True]] | None = None,
+        shell_stopping_func: Callable[[], bool] = lambda: False,
         ) -> None:
     """
     Similar to code.interact(), but evaluates code on the foreground thread.
     """
-    console = _FgInteractiveConsole(local, banner_printed=banner_printed)
-    try:
-        import readline
-    except ImportError:
-        pass
-    try:
-        console.interact(banner, exitmsg='')
-    finally:
-        if not _main_loop_has_exited():
-            if is_headless_mode() or ai_agent_detected():
-                # Exit the entire process when the shell exits
-                os.kill(os.getpid(), signal.SIGINT)  # simulate Ctrl-C
-            else:
-                console.write('%s\n' % exitmsg)
+    
+    console = _FgInteractiveConsole(
+        local,
+        banner_printed=banner_printed,
+        shell_stopping_func=shell_stopping_func,
+    )
+    with closing(console):
+        # Try to enable readline support
+        try:
+            import readline
+        except ImportError:
+            pass
+        
+        try:
+            console.interact(banner, exitmsg='')
+        finally:
+            if not _main_loop_has_exited():
+                if is_headless_mode() or ai_agent_detected():
+                    # Exit the entire process when the shell exits
+                    os._exit(0)
+                else:
+                    console.write('%s\n' % exitmsg)
 
 
 # TODO: Rename as _AsyncFgInteractiveConsole
@@ -308,12 +350,14 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     def __init__(self,
             *args,
             banner_printed: Future[Literal[True]] | None = None,
+            shell_stopping_func: Callable[[], bool] = lambda: False,
             **kwargs
             ) -> None:
         super().__init__(*args, **kwargs)
         self._first_write = True
         self._first_input = True
         self.banner_printed = banner_printed or Future()  # type: Future[Literal[True]]
+        self._shell_stopping_func = shell_stopping_func
         
         # Track whether help(T) has been called (for AI agents)
         self._help_t_called = False
@@ -321,18 +365,59 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         
         # Allow top-level await in code lines
         self.compile.compiler.flags |= ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+        
+        self._open()
     
-    @override
-    def write(self, data: str) -> None:
-        if self._first_write:
-            self._first_write = False
-            self.banner_printed.set_result(True)
-        super().write(data)
+    def _open(self) -> None:
+        # Create interrupt pipe for handling Ctrl-C,
+        # in non-blocking mode so that it can be used with signal.set_wakeup_fd()
+        self._interrupt_pipe = create_selectable_pipe(blocking=False)
+        
+        # Wrap stdin in InterruptableReader
+        self._stdin = InterruptableReader(
+            sys.stdin,
+            self._interrupt_pipe.readable_end
+        )
+        
+        # Customize how unhandled exceptions are printed
+        self._old_sys_excepthook = sys.excepthook
+        sys.excepthook = lambda *args: self._sys_excepthook(*args)
+    
+    def close(self) -> None:
+        sys.excepthook = self._old_sys_excepthook
+        
+        # Clean up interrupt pipe
+        try:
+            self._interrupt_pipe.readable_end.close()
+        except OSError:
+            pass
+        try:
+            self._interrupt_pipe.writable_end.close()
+        except OSError:
+            pass
+    
+    # === REPL ===
     
     @override
     @bg_affinity
-    def raw_input(self, *args, **kwargs) -> str:
+    def interact(self, banner=None, exitmsg=None):
+        super().interact(banner=banner, exitmsg=exitmsg)
+    
+    # === Read ===
+    
+    @override
+    @bg_affinity
+    def raw_input(self, prompt: str = '') -> str:
+        """
+        Reads a line from standard input, minus the trailing newline.
+        
+        Raises:
+        * EOFError -- if the user pressed Ctrl-D to close standard input
+        * KeyboardInterrupt -- if the user pressed Ctrl-C to interrupt the program
+        """
         if self._first_input:
+            fg_call_and_wait(lambda: self._configure_ctrl_c_to_interrupt_stdin_readline())
+            
             # Try to execute startup file specified in $PYTHONSTARTUP
             startup_filepath = os.environ.get('PYTHONSTARTUP')
             if startup_filepath is not None and os.path.isfile(startup_filepath):
@@ -342,7 +427,68 @@ class _FgInteractiveConsole(code.InteractiveConsole):
                 self.runcode(code)
             
             self._first_input = False
-        return super().raw_input(*args, **kwargs)
+        
+        # When running under MCP shell-server (terminal_operate):
+        # - Disallow direct multi-line input because terminal_operate
+        #   never sends any data after the first \n
+        if mcp_shell_server_detected() and prompt == sys.ps2:  # '... ' usually
+            if 'exec(' in ''.join(self.buffer):
+                sys.stdout.write(
+                    '🤖 Multi-line exec() call detected. '
+                    'terminal_operate silently truncates multi-line input to first line only. '
+                    'Use only a single line with exec() to run multi-line inputs.\n'
+                )
+            else:
+                sys.stdout.write(
+                    '🤖 Multi-line input without exec() detected. '
+                    'terminal_operate silently truncates multi-line input to first line only. '
+                    'Use exec() to run multi-line inputs as a single line.\n'
+                )
+            
+            # Cancel further attempts to read remainder of multi-line input
+            self.resetbuffer()
+            return ''
+        
+        # Write prompt
+        sys.stdout.write(prompt)
+        sys.stdout.flush()
+        
+        # When running under MCP shell-server (terminal_operate):
+        # - Suppress automatic echo to avoid newline injection issues
+        # - Write everything to a consistent stream (stdout) to reduce
+        #   output delay from 150ms -> 60ms (40% improvements)
+        if mcp_shell_server_detected() and not tests_are_running():
+            # Read input without echoing
+            try:
+                line = getpass.getpass(prompt='', stream=sys.stdout)
+            except InterruptedError:
+                self._stdin.clear_interrupt()
+                if self._shell_stopping_func():
+                    raise EOFError()
+                raise KeyboardInterrupt()
+            except EOFError:
+                # Handle Ctrl-D
+                sys.stdout.write('\n')
+                raise
+            
+            # Echo the complete input line all at once
+            sys.stdout.write(f'{line}\n')
+            return line
+        else:
+            try:
+                line = self._stdin.readline()
+            except InterruptedError:
+                self._stdin.clear_interrupt()
+                if self._shell_stopping_func():
+                    raise EOFError()
+                raise KeyboardInterrupt()
+            else:
+                if not line:
+                    # Handle Ctrl-D
+                    raise EOFError()
+                return line.removesuffix('\n')
+    
+    # === Eval ===
     
     @override
     def runsource(self, source: str, filename: str = '<input>', symbol: str = 'single') -> bool:
@@ -367,28 +513,36 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             from crystal.ui.nav import T
             snap_before = self._fg_call_and_wait_noprofile(lambda: T.snapshot())  # capture
         
+        #@fg_affinity
         def fg_run_code() -> Any:
-            # Ensure __builtins__ is available to prevent KeyError
-            # during coroutine cleanup if a coroutine is created but not awaited
-            if '__builtins__' not in self.locals:
-                self.locals['__builtins__'] = __builtins__  # type: ignore[index]
-            
-            func = types.FunctionType(code, self.locals)  # type: ignore[arg-type]
+            self._configure_ctrl_c_to_raise_keyboardinterrupt_on_fg_thread()
             try:
-                return func()
-            except SystemExit:
-                raise
-            except BaseException:
-                self.showtraceback()
-                return None
-        
+                # Check for unhandled Ctrl-C before executing code
+                if self._consume_any_ctrl_c_queued_for_stdin_readline():
+                    raise KeyboardInterrupt()
+                
+                # Ensure __builtins__ is available to prevent KeyError
+                # during coroutine cleanup if a coroutine is created but not awaited
+                if '__builtins__' not in self.locals:
+                    self.locals['__builtins__'] = __builtins__  # type: ignore[index]
+                
+                func = types.FunctionType(code, self.locals)  # type: ignore[arg-type]
+                try:
+                    return func()  # cr-traceback: ignore
+                except SystemExit:
+                    raise
+                except BaseException:
+                    self.showtraceback()
+                    return None
+            finally:
+                self._configure_ctrl_c_to_interrupt_stdin_readline()
         coro = self._fg_call_and_wait_noprofile(fg_run_code)
         
         if not inspect.iscoroutine(coro):
             result = coro
         else:
             try:
-                result = run_test_coro(
+                result = run_test_coro(  # cr-traceback: ignore
                     coro,  # type: ignore[arg-type]
                     fg_call_and_wait_func=self._fg_call_and_wait_noprofile
                 )
@@ -399,6 +553,11 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         # Capture snapshot after executing code and show diff (for AI agents only)
         if ai_agent_detected():
             from crystal.ui.nav import Snapshot, T
+            
+            # Wait for a short grace period to detect 
+            # immediately-scheduled asynchronous UI updates
+            time.sleep(_ASYNC_UI_UPDATE_DELAY)
+            
             snap_after = self._fg_call_and_wait_noprofile(lambda: T.snapshot())  # capture
             diff = Snapshot.diff(snap_before, snap_after, name='S')
             
@@ -421,7 +580,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             return callable()
         else:
             try:
-                return fg_call_and_wait(
+                return fg_call_and_wait(  # cr-traceback: ignore
                     callable,
                     # Don't complain if callable() takes a long time to run.
                     # For example the help() command blocks for a long time.
@@ -429,16 +588,53 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             except NoForegroundThreadError:
                 return callable()
     
+    # === Print ===
+    
     @override
-    def showtraceback(self) -> None:
-        # Force default behavior of printing the most recent traceback to
-        # the console, even if sys.excepthook has been overridden
-        old_excepthook = sys.excepthook  # capture
-        sys.excepthook = sys.__excepthook__
-        try:
-            super().showtraceback()
-        finally:
-            sys.excepthook = old_excepthook
+    def write(self, data: str) -> None:
+        if self._first_write:
+            self._first_write = False
+            self.banner_printed.set_result(True)
+        super().write(data)
+    
+    # === Handle Raised Exceptions ===
+    
+    def _sys_excepthook(self, typ, value, tb):
+        # Print nicely-formatted tracebacks
+        self.write(format_exception_for_terminal_user(value))
+    
+    # === Ctrl-C Signal Handling ===
+    
+    # NOTE: Python only allows signals to be reconfigured on the main thread
+    @fg_affinity
+    def _configure_ctrl_c_to_interrupt_stdin_readline(self) -> None:
+        # When SIGINT occurs, write byte(signal.SIGINT) to
+        # the interrupt pipe to wake up the InterruptableReader
+        # wrapping sys.stdin
+        signal.signal(signal.SIGINT, lambda signum, frame: None)
+        signal.set_wakeup_fd(self._interrupt_pipe.writable_end.fileno())
+    
+    # NOTE: Python only allows signals to be reconfigured on the main thread
+    @fg_affinity
+    def _configure_ctrl_c_to_raise_keyboardinterrupt_on_fg_thread(self) -> None:
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+        signal.set_wakeup_fd(-1)
+    
+    def _consume_any_ctrl_c_queued_for_stdin_readline(self) -> bool:
+        """
+        Returns whether a Ctrl-C (SIGINT) was received.
+        """
+        interrupt_pipe = self._interrupt_pipe  # cache
+        with selectors.DefaultSelector() as selector:
+            selector.register(interrupt_pipe.readable_end.fileno(), selectors.EVENT_READ)
+            events = selector.select(timeout=0)
+            if events:
+                # Drain the interrupt pipe
+                interrupt_pipe.readable_end.read(1024)
+                
+                return True
+            else:
+                return False
 
 
 def _main_loop_has_exited() -> bool:

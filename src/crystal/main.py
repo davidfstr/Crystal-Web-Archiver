@@ -687,11 +687,13 @@ def _main2(args: list[str]) -> None:
     try:
         # (Don't insert anything between set_foreground_thread() and MyApp())
         if not parsed_args.headless:
-            # Queue call of app.OnInit() and _did_launch() after main loop starts
+            # - Queue call of app.OnInit() and _did_launch() after main loop starts
+            # - When using --shell, don't let wxPython override Ctrl-C handling,
+            #   so that the shell can handle Ctrl-C properly
+            # - When not using --shell, allow wxPython to override Ctrl-C 
+            #   exit process immediately (rather than raising KeyboardInterrupt)
             # NOTE: Shows the dock icon on macOS
-            # NOTE: Overrides Ctrl-C handling to exit process immediately,
-            #       without raising KeyboardInterrupt in main thread
-            app = MyApp(redirect=False)
+            app = MyApp(redirect=False, clearSigInt=(shell is None))
         else:
             # Queue call of _did_launch() after main loop starts
             from crystal.util.xthreading import start_fg_coroutine
@@ -1079,7 +1081,7 @@ async def _prompt_for_project(
         
         dialog = BetterMessageDialog(menubar_frame,
             message='Create a new project or open an existing project?',
-            title='Select a Project',
+            caption='Select a Project',
             checkbox_label='Open as &read only',
             checkbox_checked=readonly_default,
             on_checkbox_clicked=on_checkbox_clicked,

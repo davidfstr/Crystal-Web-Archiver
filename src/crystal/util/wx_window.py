@@ -29,6 +29,7 @@ def SetFocus(
     
     if previously_focused is Ellipsis:
         previously_focused = wx.Window.FindFocus()
+    assert not isinstance(previously_focused, EllipsisType)  # help mypy
     
     if simulate_events is None:  # auto
         simulate_events = (

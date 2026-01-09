@@ -87,7 +87,7 @@ import time
 from tqdm import tqdm
 import traceback
 from typing import (
-    Any, BinaryIO, cast, Dict, Generic, List, Literal, Optional, Self, Tuple,
+    Any, BinaryIO, cast, Dict, Generic, IO, List, Literal, Optional, Self, Tuple,
     TYPE_CHECKING, TypedDict, TypeAlias, TypeVar, Union,
 )
 from typing_extensions import deprecated, override
@@ -3669,7 +3669,7 @@ class ResourceRevision:
     def create_from_response(
             resource: Resource,
             metadata: ResourceRevisionMetadata | None,
-            body_stream: BinaryIO,
+            body_stream: IO[bytes],
             request_cookie: str | None=None
             ) -> ResourceRevision:
         """
@@ -3721,7 +3721,7 @@ class ResourceRevision:
             *, request_cookie: str | None=None,
             error: Exception | None=None,
             metadata: ResourceRevisionMetadata | None=None,
-            body_stream: BinaryIO | None=None
+            body_stream: IO[bytes] | None=None
             ) -> ResourceRevision:
         """
         Creates a new revision.

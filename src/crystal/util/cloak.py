@@ -8,12 +8,14 @@ _R = TypeVar('_R')
 
 class CloakMixin:
     """
-    Mixin whose dir() excludes any functions marked with @cloak
+    Mixin whose dir() excludes any functions marked with @cloak,
+    and any attributes named in __cloak__
     """
     def __dir__(self) -> Iterable[str]:
+        extra_cloaked_names = getattr(self, '__cloak__', ())  # type: Iterable[str]
         return [
             n for n in super().__dir__()
-            if not hasattr(getattr(self, n), '_cloaked')
+            if not (hasattr(getattr(type(self), n, None), '_cloaked') or n in extra_cloaked_names)
         ]
 
 

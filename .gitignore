@@ -34,3 +34,6 @@ tmpdir_*
 
 # Coverage
 .coverage
+
+# Screenshots captured by AI agents
+.screenshots

@@ -170,7 +170,8 @@ class MainWindow(CloakMixin):
                 if is_linux():
                     width_discrepancy = raw_frame.GetSize().Width - entity_pane.GetSize().Width
                     if width_discrepancy == 0:
-                        if tests_are_running():
+                        print_width_warnings = os.environ.get('CRYSTAL_NO_WIDTH_HACK_WARNINGS', 'False') != 'True'
+                        if tests_are_running() and print_width_warnings:
                             print('*** MainWindow width hack for Linux may no longer be needed', file=sys.stderr)
                     elif width_discrepancy > 0:
                         min_width += width_discrepancy

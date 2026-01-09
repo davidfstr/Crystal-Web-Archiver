@@ -1,18 +1,25 @@
 from typing import List
 from crystal import __version__ as crystal_version
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.cli import _OK_THREAD_STOP_SUFFIX, PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, delay_between_downloads_minimized, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, crystal_shell
+from crystal.tests.util.cli import (
+    _OK_THREAD_STOP_SUFFIX, PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, 
+    close_main_window, close_open_or_create_dialog, create_new_empty_project, 
+    delay_between_downloads_minimized, drain, py_eval, py_eval_await, 
+    py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, 
+    crystal_shell, crystal_running
+)
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
-    DEFAULT_WAIT_TIMEOUT, wait_for_sync,
+    DEFAULT_WAIT_TIMEOUT, WaitTimedOut, wait_for_sync,
 )
 from crystal.util.xos import is_linux
 from crystal.util.xthreading import fg_call_and_wait
 from io import TextIOBase
 import os
 import re
+import signal
 import sys
 import tempfile
 import textwrap
@@ -20,6 +27,7 @@ import time
 from unittest import skip
 from unittest.mock import ANY
 import urllib
+
 
 _EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
 
@@ -508,6 +516,155 @@ def test_can_import_guppy_in_shell() -> None:
 
 
 # ------------------------------------------------------------------------------
+# Tests: Ctrl-C (and KeyboardInterrupt)
+
+def test_given_crystal_started_without_shell_when_ctrl_c_pressed_then_exits_with_exit_code_sigint() -> None:
+    with crystal_running(args=[], kill=False) as crystal:
+        # Wait for Crystal to start up
+        # TODO: Find a way to actually detect when Crystal finished starting,
+        #       that doesn't require the shell, which isn't available for this test
+        time.sleep(1.0)
+        
+        # Send SIGINT (Ctrl-C)
+        os.kill(crystal.pid, signal.SIGINT)
+        
+        # Wait for process to exit
+        try:
+            wait_for_crystal_to_exit(crystal, timeout=5.0)
+        except WaitTimedOut as e:
+            if 'Launch error\nSee the py2app website for debugging launch issues\n' in str(e):
+                raise AssertionError('Crystal did not finish starting before it received SIGINT')
+            else:
+                raise
+        
+        # Verify exit code
+        assertEqual(-signal.SIGINT, crystal.returncode)
+
+
+def test_given_crystal_started_with_shell_and_waiting_for_input_when_ctrl_c_pressed_then_prints_keyboardinterrupt_and_a_new_prompt() -> None:
+    with crystal_shell() as (crystal, banner):
+        # Send SIGINT (Ctrl-C) while waiting for input
+        os.kill(crystal.pid, signal.SIGINT)
+        
+        # Wait for KeyboardInterrupt message and new prompt
+        assert isinstance(crystal.stdout, TextIOBase)
+        (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+        
+        # Verify "KeyboardInterrupt" was printed
+        assertIn('KeyboardInterrupt', output,
+            'Expected "KeyboardInterrupt" to be printed when Ctrl-C is pressed at prompt')
+        
+        # Verify a new prompt appears (matched by read_until)
+        assertEqual('\n>>> ', matched)
+        
+        # Verify shell is still responsive
+        assertEqual('2\n', py_eval(crystal, '1 + 1'))
+
+
+def test_given_crystal_started_with_shell_and_running_a_command_when_ctrl_c_pressed_then_raises_keyboardinterrupt_and_prints_a_new_prompt() -> None:
+    with crystal_shell() as (crystal, banner):
+        # Start a long-running command that prints output periodically
+        assert isinstance(crystal.stdout, TextIOBase)
+        assert isinstance(crystal.stdin, TextIOBase)
+        crystal.stdin.write("exec('import time\\nwhile True:\\n    print(\"loop\")\\n    time.sleep(0.1)\\n')\n")
+        crystal.stdin.flush()
+        
+        # Wait for the command to start printing output
+        (output, _) = read_until(crystal.stdout, 'loop\n', timeout=2.0)
+        
+        # Send SIGINT (Ctrl-C) to interrupt the running command
+        os.kill(crystal.pid, signal.SIGINT)
+        
+        # Wait for KeyboardInterrupt traceback and new prompt
+        (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+        
+        # Verify KeyboardInterrupt was raised
+        assertIn('KeyboardInterrupt', output,
+            'Expected KeyboardInterrupt to be raised when Ctrl-C is pressed during command execution')
+        assertIn('Traceback', output,
+            'Expected a traceback to be shown for the KeyboardInterrupt')
+        
+        # Verify a new prompt appears (matched by read_until)
+        assertEqual('\n>>> ', matched)
+        
+        # Verify shell is still responsive
+        assertEqual('2\n', py_eval(crystal, '1 + 1'))
+
+
+# ------------------------------------------------------------------------------
+# Tests: Ctrl-D (and EOFError)
+
+def test_given_ai_agent_detected_when_ctrl_d_pressed_then_exits_immediately_with_success_code() -> None:
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True'}, kill=False) as (crystal, _):
+        # Close stdin to simulate Ctrl-D (EOF)
+        assert isinstance(crystal.stdin, TextIOBase)
+        crystal.stdin.close()
+        
+        # Wait for process to exit
+        wait_for_crystal_to_exit(crystal, timeout=2.0)
+        
+        # Verify exit code is 0 (success)
+        assertEqual(0, crystal.returncode,
+            'Expected Crystal to exit with code 0 when Ctrl-D is pressed at prompt')
+
+
+@skip('covered by: test_when_launched_with_shell_and_ctrl_d_pressed_then_exits')
+def test_given_no_ai_agent_and_windows_exist_when_ctrl_d_pressed_then_prints_waiting_for_windows_to_close() -> None:
+    pass
+
+
+# ------------------------------------------------------------------------------
+# Tests: Shell Usability
+
+def test_exception_raised_by_sync_code_only_shows_frames_back_to_the_console_file() -> None:
+    with crystal_shell() as (crystal, _):
+        result = py_eval(crystal, 'raise ValueError("boom")')
+        
+        expected_traceback = (
+            'Traceback (most recent call last):\n'
+            '  File "<console>", line 1, in <module>\n'
+            'ValueError: boom\n'
+        )
+        assertEqual(expected_traceback, result)
+
+
+def test_exception_raised_by_async_code_only_shows_frames_back_to_the_console_file() -> None:
+    with crystal_shell() as (crystal, _):
+        py_exec(crystal, textwrap.dedent('''\
+            async def async_raise_error():
+                raise ValueError("boom from async")
+            '''
+        ))
+        result = py_eval(crystal, 'await async_raise_error()')
+        
+        source_available = (getattr(sys, 'frozen', None) != 'macosx_app')
+        if source_available:
+            # Match traceback exactly
+            expected_traceback = (
+                'Traceback (most recent call last):\n'
+                '  File "<console>", line 1, in <module>\n'
+                '  File "<string>", line 2, in async_raise_error\n'
+                'ValueError: boom from async\n'
+            )
+            assertEqual(expected_traceback, result)
+        else:
+            expected_traceback_lines = [
+                'Traceback (most recent call last):\n',
+                #'   File "crystal/util/xthreading.py", line 131, in wrapper',
+                #'   File "crystal/tests/util/runner.py", line 50, in run_test_coro',
+                #'   File "crystal/shell.py", line 589, in _fg_call_and_wait_noprofile',
+                #'   File "crystal/util/xthreading.py", line 366, in fg_call_and_wait',
+                #'   File "crystal/util/xthreading.py", line 337, in fg_task',
+                #'   File "crystal/tests/util/runner.py", line 51, in <lambda>',
+                '  File "<console>", line 1, in <module>\n',
+                '  File "<string>", line 2, in async_raise_error\n',
+                'ValueError: boom from async\n',
+            ]
+            for line in expected_traceback_lines:
+                assertIn(line, result)
+
+
+# ------------------------------------------------------------------------------
 # Tests: AI Agents: Custom Behavior
 
 def test_help_T_shows_custom_docstring() -> None:
@@ -727,6 +884,68 @@ def test_shell_detects_and_reports_ui_changes_to_ai_agents() -> None:
                 'Expected dialog to be reported as deleted')
 
 
+def test_given_terminal_operate_tool_then_banner_says_to_use_exec_for_multi_line_input_and_exec_works() -> None:
+    """
+    The shell banner should mention using exec() for multi-line inputs,
+    and exec() should successfully execute multi-line code.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_MCP_SHELL_SERVER': 'True'}) as (crystal, banner):
+        # Verify the banner mentions using exec() for multi-line input
+        assertIn('Run multi-line code with exec()', banner,
+            'Expected banner to mention using exec() for multi-line input')
+        
+        # Test that exec() successfully runs multi-line code
+        result = py_eval(crystal, 'exec("for i in range(1, 6):\\n    print(i)")')
+        
+        # Verify the output shows all numbers printed
+        assertIn('1', result,
+            'Expected number 1 to be printed')
+        assertIn('2', result,
+            'Expected number 2 to be printed')
+        assertIn('3', result,
+            'Expected number 3 to be printed')
+        assertIn('4', result,
+            'Expected number 4 to be printed')
+        assertIn('5', result,
+            'Expected number 5 to be printed')
+        
+        # Verify no error/traceback
+        assertNotIn('Traceback', result,
+            'Expected exec() to run without error')
+
+
+def test_given_terminal_operate_tool_when_multi_line_input_used_directly_then_prints_error() -> None:
+    """
+    When multi-line input is attempted without using exec(),
+    an error message should be printed to guide the user.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_MCP_SHELL_SERVER': 'True'}) as (crystal, banner):
+        # Attempt to start a for loop without exec()
+        result = py_eval(crystal, 'for i in range(1, 6):')
+        
+        # Verify the error message is shown
+        assertIn('🤖 Multi-line input without exec() detected', result,
+            'Expected error message when multi-line input is attempted')
+        assertIn('Use exec() to run multi-line inputs as a single line', result,
+            'Expected error message to suggest using exec()')
+
+
+def test_given_terminal_operate_tool_when_multi_line_exec_attempted_then_prints_error() -> None:
+    """
+    When multi-line input is attempted without using exec(),
+    an error message should be printed to guide the user.
+    """
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_MCP_SHELL_SERVER': 'True'}) as (crystal, banner):
+        # Attempt to start an exec() with a multi-line string
+        result = py_eval(crystal, 'exec("""')
+        
+        # Verify the error message is shown
+        assertIn('🤖 Multi-line exec() call detected.', result,
+            'Expected error message when multi-line input is attempted')
+        assertIn('Use only a single line with exec() to run multi-line inputs', result,
+            'Expected error message to exphasize using a single line only')
+
+
 # ------------------------------------------------------------------------------
 # Tests: Waiting for Shell to Close
 
@@ -772,6 +991,71 @@ def test_given_shell_running_when_all_windows_closed_then_shell_exits_and_app_ex
             wait_for_crystal_to_exit(
                 crystal,
                 timeout=DEFAULT_WAIT_TIMEOUT)
+
+
+# ------------------------------------------------------------------------------
+# Tests: AI Agents: Modal Dialog Handling
+
+def test_given_ai_agent_when_modal_message_dialog_shown_then_shell_remains_responsive() -> None:
+    """
+    When an AI agent is detected and a modal MessageDialog is shown,
+    the shell should remain responsive and able to interact with the dialog.
+    
+    This test simulates the scenario where:
+    1. Agent creates a new project
+    2. Agent adds a root URL
+    3. Agent tries to add the same root URL again
+    4. A modal MessageDialog appears saying "Root URL Exists"
+    5. Shell should remain responsive and able to click OK on the dialog
+    """
+    # NOTE: Must set CRYSTAL_RUNNING_TESTS=False so that ShowModal will
+    #       actually try to show a modal wx.MessageDialog without raising
+    #       an AssertionError
+    with crystal_shell(env_extra={'CRYSTAL_AI_AGENT': 'True', 'CRYSTAL_RUNNING_TESTS': 'False'}) as (crystal, banner):
+        # Verify AI agent banner appears
+        assertIn('AI agents:', banner)
+        
+        # Create a new project
+        result = py_eval(crystal, 'click(T(Id=wx.ID_YES).W)')
+        assertIn('🤖 UI changed', result)
+        
+        # Add a root URL
+        home_url = 'https://xkcd.daarchive.net/'
+        py_exec(crystal, 'from crystal.model import Resource')
+        py_exec(crystal, 'from crystal.model import RootResource')
+        py_eval(crystal, f'r = Resource(project, {home_url!r})', empty_ok=True)
+        py_eval(crystal, f'root_r = RootResource(project, "Home", r)', empty_ok=True)
+        
+        # Try to add the same root URL again.
+        # Should fail with a modal MessageDialog.
+        if True:
+            result = py_eval(crystal, "click(T['cr-add-url-button'].W)")
+            assertIn('🤖 UI changed', result)
+            
+            if True:
+                # URL will already be populated from the newly-added root resource
+                result = py_eval_literal(crystal, f"T['cr-new-root-url-dialog__url-field'].W.Value")
+                assertEqual(home_url, result)
+            else:
+                # NOTE: The code has been observed to hang, for an unknown reason
+                result = py_eval(crystal, f"T['cr-new-root-url-dialog__url-field'].W.Value = {home_url!r}")
+                assertIn('🤖 UI changed', result)
+            
+            result = py_eval(crystal, 'click(T(Id=wx.ID_NEW).W)')
+            assertIn('🤖 UI changed', result)
+            assertIn("MessageDialog(IsModal=True, Name='cr-root-url-exists'", result,
+                'Expected the "Root URL Exists" dialog to be visible')
+            
+            # Verify the shell is still responsive
+            result = py_eval(crystal, 'click(T(Id=wx.ID_OK).W)')
+            assertIn('🤖 UI changed', result)
+            
+            # Close the New Root URL dialog
+            result = py_eval(crystal, 'click(T(Id=wx.ID_CANCEL).W)')
+            assertIn('🤖 UI changed', result)
+        
+        # Close the main window
+        result = py_eval(crystal, 'window.close()')
 
 
 # ------------------------------------------------------------------------------

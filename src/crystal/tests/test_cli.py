@@ -14,7 +14,7 @@ from crystal.tests.util.asserts import (
 )
 from crystal.tests.util.cli import (
     ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, crystal_shell,
-    crystal_running_with_banner, run_crystal, wait_for_main_window,
+    crystal_running_with_banner, run_crystal, wait_for_crystal_to_exit, wait_for_main_window,
 )
 from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.skip import skipTest
@@ -429,16 +429,15 @@ async def test_when_launched_with_shell_and_ctrl_d_pressed_then_exits() -> None:
         #       so close_open_or_create_dialog() won't work.
         ## Close last window to quit the process
         #close_open_or_create_dialog`(crystal)
-        #crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+        #wait_for_crystal_to_exit(crystal, timeout=DEFAULT_WAIT_TIMEOUT)
 
 
-async def test_when_launched_with_shell_and_ctrl_c_pressed_then_exits() -> None:
-    with crystal_shell() as (crystal, banner):
-        await OpenOrCreateDialog.wait_for()
-        
-        # Simulate Ctrl-C to quit the process
-        os.kill(crystal.pid, signal.SIGINT)
-        crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+@skip('covered by: ' + ', '.join([
+    'test_given_crystal_started_with_shell_and_waiting_for_input_when_ctrl_c_pressed_then_prints_keyboardinterrupt_and_a_new_prompt',
+    'test_given_crystal_started_with_shell_and_running_a_command_when_ctrl_c_pressed_then_raises_keyboardinterrupt_and_prints_a_new_prompt',
+]))
+async def test_when_launched_with_shell_and_ctrl_c_pressed_then_prints_keyboardinterrupt() -> None:
+    pass
 
 
 # === Headless Mode Tests (---headless) ===
@@ -467,7 +466,7 @@ def test_when_headless_serve_with_project_then_starts_server_without_gui() -> No
 
             # Simulate Ctrl-C to quit the process
             os.kill(crystal.pid, signal.SIGINT)
-            crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+            wait_for_crystal_to_exit(crystal, timeout=DEFAULT_WAIT_TIMEOUT)
 
 
 def test_when_headless_serve_with_custom_port_then_starts_server_on_custom_port() -> None:
@@ -510,7 +509,7 @@ def test_when_headless_shell_with_project_then_starts_shell_without_gui() -> Non
             # Simulate Ctrl-D to exit the shell
             assert crystal.stdin is not None
             crystal.stdin.close()
-            crystal.wait(timeout=DEFAULT_WAIT_TIMEOUT)
+            wait_for_crystal_to_exit(crystal, timeout=DEFAULT_WAIT_TIMEOUT)
 
 
 def test_when_headless_shell_without_project_then_starts_shell_without_gui() -> None:

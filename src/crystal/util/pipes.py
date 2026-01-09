@@ -1,10 +1,11 @@
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 import os
 import socket
+import sys
 from typing import Optional
 
 
-def create_selectable_pipe() -> 'Pipe':
+def create_selectable_pipe(*, blocking: bool = True) -> 'Pipe':
     """
     Similar to os.pipe(), but returns a Pipe that works with selectors
     like select.select() on all platforms.
@@ -12,12 +13,21 @@ def create_selectable_pipe() -> 'Pipe':
     - On Unix-like systems, returns a pipe backed by os.pipe().
     - On Windows, returns a pipe backed by connected sockets.
     
+    Arguments:
+    * blocking -- If False, the pipe ends will be opened in non-blocking mode.
+    
     Returns:
     * Pipe object with readable_end and writable_end.
     """
     if is_mac_os() or is_linux():
         # On Unix-like systems, use regular pipes which work fine with selectors
         (read_fd, write_fd) = os.pipe()
+        
+        # Set non-blocking mode if requested
+        if not blocking:
+            _make_nonblocking_unix(write_fd)
+            _make_nonblocking_unix(read_fd)
+        
         return Pipe(
             readable_end=ReadablePipeEnd(read_fd, None),
             writable_end=WritablePipeEnd(write_fd, None),
@@ -40,6 +50,10 @@ def create_selectable_pipe() -> 'Pipe':
         (connected_socket, _) = server_socket.accept()
         server_socket.close()
         
+        # Set non-blocking mode if requested
+        if not blocking:
+            client_socket.setblocking(False)
+        
         # The 'read' end is the connected_socket (server-side after accept).
         # The 'write' end is the client_socket.
         # Keep socket objects alive in the pipe ends to prevent garbage collection
@@ -50,6 +64,20 @@ def create_selectable_pipe() -> 'Pipe':
         )
     else:
         raise NotImplementedError('Unrecognized operating system')
+
+
+def _make_nonblocking_unix(fd: int) -> None:
+    """
+    Make a Unix file descriptor non-blocking.
+    
+    This is only available on Unix-like systems (macOS, Linux, etc.).
+    """
+    if sys.platform == 'win32':  # help mypy
+        raise ValueError('Not support on Windows')
+    
+    import fcntl
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
 
 class Pipe:

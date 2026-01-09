@@ -9,6 +9,7 @@ from collections.abc import Callable, Hashable, Sequence
 # TODO: Promote the TreeItem abstraction to the crystal.ui package,
 #       outside of the crystal.tests.** namespace
 from crystal.tests.util.controls import TreeItem
+from crystal.util.cloak import CloakMixin, cloak
 from crystal.util.xthreading import fg_affinity
 from crystal.util.xtyping import not_none
 from difflib import SequenceMatcher
@@ -26,7 +27,7 @@ import wx
 _P = TypeVar('_P')  # peer
 
 
-class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
+class Navigator(Generic[_P], Sequence['Navigator[_P]'], CloakMixin):  # abstract
     """
     Points to a peer. Shows the peer's tree of descendents when printed.
     
@@ -38,7 +39,10 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
     # NOTE: Not using __slots__ here because it prevents setting __doc__
     _ALLOWED_ATTRS = frozenset({'_peer', '__doc__'})
     
+    __cloak__ = []  # extended later
+    
     _peer: _P
+    _path: str
     
     def __setattr__(self, name: str, value: Any) -> None:
         """Prevent accidental assignment to any non-existent attribute."""
@@ -134,6 +138,24 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]']):  # abstract
         Shorthand property equivalent to .Query, for quick scripts.
         """
         return self.Query
+    
+    # === Non-Properties ===
+    
+    @property
+    def Children(self) -> NoReturn:
+        raise AttributeError(
+            f'{type(self).__name__!r} has no attribute {"Children"!r}. '
+            f'Did you mean {self._path}.{self._PEER_ACCESSOR}.Children?'
+        )
+    __cloak__.append('Children')
+    
+    @property
+    def Parent(self) -> NoReturn:
+        raise AttributeError(
+            f'{type(self).__name__!r} has no attribute {"Parent"!r}. '
+            f'Did you mean {self._path}.{self._PEER_ACCESSOR}.Parent?'
+        )
+    __cloak__.append('Parent')
 
 
 # ------------------------------------------------------------------------------
@@ -222,6 +244,7 @@ class WindowNavigator(Navigator[wx.Window]):
             peer: wx.Window | None,
             path: str,
             query: str | None,
+            *, children_elided: bool = False,
             ) -> Snapshot[wx.Window]:
         # Get peer description (may be '' for top-level navigator)
         peer_description = cls._describe(peer) if peer is not None else ''
@@ -267,25 +290,13 @@ class WindowNavigator(Navigator[wx.Window]):
                 else f'wx.GetTopLevelWindows()[{all_children_list.index(c)}]'
             )
             
-            c_snapshot: Snapshot[wx.Window]
-            if modal_tlws and c not in modal_tlws:
-                # Create a shallow snapshot for non-interactable windows
-                c_snapshot = Snapshot(
-                    peer_description=cls._describe(c),
-                    children=[],  # Empty - elided
-                    children_elided=True,
-                    path=f'{path}[{i}]',
-                    query=c_query,
-                    peer_accessor=cls._PEER_ACCESSOR,
-                    peer_obj=c,
-                )
-            else:
-                # Recursively create full snapshot
-                c_snapshot = cls._snapshot_for(
-                    peer=c,
-                    path=f'{path}[{i}]',
-                    query=c_query,
-                )
+            c_snapshot = cls._snapshot_for(
+                peer=c,
+                path=f'{path}[{i}]',
+                query=c_query,
+                # Display shallow snapshot for non-interactable windows
+                children_elided=(len(modal_tlws) > 0 and c not in modal_tlws),
+            )
             child_snapshots.append(c_snapshot)
         
         return Snapshot(
@@ -295,6 +306,7 @@ class WindowNavigator(Navigator[wx.Window]):
             query=query or 'T',
             peer_accessor=cls._PEER_ACCESSOR,
             peer_obj=peer,
+            children_elided=children_elided,
         )
     
     @classmethod
@@ -412,7 +424,14 @@ class WindowNavigator(Navigator[wx.Window]):
             *, Name: str | None = None,
             Id: str | None = None,
             Label: str | None = None,
-            ) -> WindowNavigator | None:
+            ) -> WindowNavigator:
+        """
+        Finds the first visible descendent with a matching Name, Id, or Label.
+        Raises NoSuchWindow if no match was found.
+        
+        Raises:
+        * NoSuchWindow -- if a matching window does not exist
+        """
         kwarg_count = (Name is not None) + (Id is not None) + (Label is not None)
         if kwarg_count != 1:
             raise ValueError('Provide exactly 1 kwarg: Name, Id, Label')
@@ -444,7 +463,7 @@ class WindowNavigator(Navigator[wx.Window]):
     @overload
     def __getitem__(self, index: int) -> WindowNavigator: ...
     @overload
-    def __getitem__(self, index: str) -> WindowNavigator | None: ...
+    def __getitem__(self, index: str) -> WindowNavigator: ...
     @overload
     def __getitem__(self, index: slice) -> NavigatorSlice[wx.Window]: ...
     def __getitem__(self, index: int | str | slice):
@@ -453,9 +472,12 @@ class WindowNavigator(Navigator[wx.Window]):
           the i'th visible child of this navigator's window.
         - navigator['cr-name'], where 'cr-name' is a Name of a window,
           returns a navigator pointing to the first visible descendent with a
-          matching Name, or None if no match was found.
+          matching Name, or raises NoSuchWindow if no match was found.
         - navigator[i:j:k], where i:j:k is a slice, returns navigators
           corresponding to the associated children of this navigator's window.
+        
+        Raises:
+        * NoSuchWindow -- if the named window does not exist
         """
         if isinstance(index, int):
             c_peer = self._children_of(self._peer)[index]
@@ -497,7 +519,11 @@ class WindowNavigator(Navigator[wx.Window]):
             finder_str: str,
             *, index_repr: str | None = None,
             index_path: str | None = None,
-            ) -> WindowNavigator | None:
+            ) -> WindowNavigator:
+        """
+        Raises:
+        * NoSuchWindow -- if a matching window does not exist
+        """
         if index_repr is None:  # auto
             index_repr = repr(index)
         if index_path is None:  # auto
@@ -516,7 +542,7 @@ class WindowNavigator(Navigator[wx.Window]):
                         else f'{finder_str}({index_repr})'
                     ),
                 )
-        return None
+        raise NoSuchWindow(f'Window {index_path} does not exist')
     
     def __len__(self) -> int:
         """
@@ -628,6 +654,10 @@ class WindowNavigator(Navigator[wx.Window]):
 
 
 class TopWindowNavigatorHasNoWindow(ValueError):
+    pass
+
+
+class NoSuchWindow(ValueError):
     pass
 
 
@@ -989,14 +1019,11 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         """
         children = self._children
         path = self._path
-        peer_accessor = self._peer_accessor
-        children_elided = self._children_elided
         
-        if len(children) == 0:
-            if children_elided:
-                return ['{...}']
-            else:
-                return ['{}']
+        if self._children_elided:
+            return ['{...}']
+        elif len(children) == 0:
+            return ['{}']
         else:
             lines = []
             lines.append('{')
@@ -1112,12 +1139,6 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         
         # If description of each snapshot's peer differs, diff root is here
         if old._peer_description != new._peer_description:
-            return diff_rooted_here()
-        
-        # If either snapshot has children elided, skip comparing children entirely
-        # Children are not fully captured, so we can't determine if they changed
-        if old._children_elided or new._children_elided:
-            # Return an empty diff since we can't detect child changes
             return diff_rooted_here()
         
         # If children count differs, diff root is here
@@ -1268,15 +1289,13 @@ class SnapshotDiff(Generic[_P]):
             ))
         
         # Compute child diffs
-        # NOTE: If children are elided, assume nothing changed.
-        if not old._children_elided and not new._children_elided:
-            child_entries = cls._compute_children_diff(
-                old._children,
-                new._children,
-                path,
-                deletion_style,
-            )
-            entries.extend(child_entries)
+        child_entries = cls._compute_children_diff(
+            old._children,
+            new._children,
+            path,
+            deletion_style,
+        )
+        entries.extend(child_entries)
         
         return entries
     
@@ -1380,15 +1399,13 @@ class SnapshotDiff(Generic[_P]):
                     pass
                 
                 # Recursively diff children of matched nodes
-                # NOTE: If children are elided, assume nothing changed.
-                if not old_snap._children_elided and not new_snap._children_elided:
-                    recursive_entries = cls._compute_children_diff(
-                        old_snap._children,
-                        new_snap._children,
-                        f'{parent_path}[{new_idx}]',  # Use new index for path
-                        deletion_style,
-                    )
-                    entries.extend(recursive_entries)
+                recursive_entries = cls._compute_children_diff(
+                    old_snap._children,
+                    new_snap._children,
+                    f'{parent_path}[{new_idx}]',  # Use new index for path
+                    deletion_style,
+                )
+                entries.extend(recursive_entries)
             
             # Add deletion entries
             for (old_idx, old_snap) in deletions:

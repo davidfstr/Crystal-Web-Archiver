@@ -10,6 +10,7 @@ from crystal.tests.runner.shared import normalize_test_names
 from crystal.tests.util.cli import get_crystal_command
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.pipes import create_selectable_pipe, Pipe, ReadablePipeEnd
+from crystal.util.readers import InterruptableReader, ReadableStream, TeeReader
 from crystal.util.xfunctools import partial2
 from crystal.util.xthreading import bg_affinity, bg_call_later, fg_affinity
 from dataclasses import dataclass
@@ -20,7 +21,6 @@ import multiprocessing
 import os
 import queue
 from queue import Queue
-import selectors
 import signal
 import subprocess
 import sys
@@ -28,7 +28,7 @@ import tempfile
 import threading
 import time
 import traceback
-from typing import IO, Literal, Optional, assert_never
+from typing import Literal, Optional, assert_never
 
 
 # === Main ===
@@ -682,9 +682,11 @@ def _run_worker(
         if verbose:
             print(f'[Worker {worker_id}] Starting with pid {process.pid}', file=sys.stderr)
         
-        # Wrap stdout to copy output to log file and to provide interruptability
-        reader = InterruptableTeeReader(
-            process.stdout, interrupt_read_pipe, log_file_path
+        # Wrap stdout to copy output to log file and to provide interruptability.
+        # Compose: process.stdout -> TeeReader -> InterruptableReader.
+        reader = InterruptableReader(
+            TeeReader(process.stdout, log_file_path),
+            interrupt_read_pipe,
         )
         with closing(reader):
             
@@ -852,13 +854,13 @@ def _run_worker(
 
 
 def _read_until_prompt(
-        reader: 'InterruptableTeeReader'
+        reader: 'ReadableStream'
         ) -> tuple[list[str], Literal['found', 'interrupted', 'eof']]:
     """
     Read lines from reader until we see the 'test>' prompt.
     
     Arguments:
-    * reader -- TeeReader to read from.
+    * reader -- stream to read from.
     
     Returns:
     * Tuple of (list of lines read (excluding the prompt line), status).
@@ -1006,69 +1008,6 @@ def _display_test_result(test_result: TestResult) -> None:
         for line in test_result.output_lines:
             print(line)
         sys.stdout.flush()
-
-
-# === Utility: TeeReader ===
-
-class InterruptableTeeReader:
-    """
-    - InterruptableReader: A wrapper around a text stream which enforces that
-      every I/O operation performed in an interruptable manner.
-    - TeeReader: A wrapper around a text stream that copies everything read 
-      to a log file. Similar to the Unix 'tee' command.
-    """
-    def __init__(self,
-            source: IO[str],
-            interrupt_read_pipe: 'ReadablePipeEnd',
-            log_file_path: str,
-            ) -> None:
-        log_file = open(log_file_path, 'w', encoding='utf-8')
-        
-        self.source = source
-        self.interrupt_read_pipe = interrupt_read_pipe
-        self.log_file = log_file
-        self._interrupted = False
-    
-    def readline(self) -> str:
-        """
-        Reads a line from the underlying text stream.
-        
-        Raises:
-        * InterruptedError -- if the read was interrupted.
-        """
-        if self._interrupted:
-            raise InterruptedError()
-        
-        # Wait for either the source or interrupt pipe to become readable
-        with selectors.DefaultSelector() as fileobjs:
-            fileobjs.register(self.source.fileno(), selectors.EVENT_READ)
-            fileobjs.register(self.interrupt_read_pipe.fileno(), selectors.EVENT_READ)
-            events = fileobjs.select(timeout=None)
-            
-            for (key, _) in events:
-                if key.fd == self.interrupt_read_pipe.fileno():
-                    self._interrupted = True
-                    raise InterruptedError()
-            else:
-                # self.source.fileno() must be in events
-                pass
-        
-        line = self.source.readline()
-        
-        if line:
-            self.log_file.write(line)
-            self.log_file.flush()
-        
-        return line
-    
-    def close(self) -> None:
-        self.source.close()
-        try:
-            # NOTE: May raise `OSError: [Errno 9] Bad file descriptor` if
-            #       log_file has never been read from.
-            self.log_file.close()
-        except Exception:
-            pass
 
 
 # ------------------------------------------------------------------------------
