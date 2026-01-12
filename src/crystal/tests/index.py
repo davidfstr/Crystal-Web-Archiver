@@ -10,7 +10,7 @@ from crystal.tests import (
     test_parse_html, test_preferences,
     test_profile, test_project_migrate, test_readonly_mode,
     test_runner, test_server, test_shell, test_ssd, test_tasks, test_tasktree,
-    test_untitled_projects,
+    test_untitled_projects, test_url_normalization,
     test_window_modal_titles, test_workflows, test_xthreading,
 )
 
@@ -65,6 +65,7 @@ TEST_FUNCS = (
     _test_functions_in_module(test_tasks) +
     _test_functions_in_module(test_tasktree) +
     _test_functions_in_module(test_untitled_projects) +
+    _test_functions_in_module(test_url_normalization) +
     _test_functions_in_module(test_window_modal_titles) +
     _test_functions_in_module(test_workflows) +
     _test_functions_in_module(test_xthreading) +

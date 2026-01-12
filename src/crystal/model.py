@@ -2930,6 +2930,9 @@ class Resource:
         
         Newer projects will attempt to save new URLs in the most normalized
         form possible.
+        
+        For more information, see the covering test module:
+        - test_url_normalization.py
         """
         alternatives = []
         

@@ -119,7 +119,7 @@ def served_project_from_filepath(
 class MockHttpServer:
     port: int
     
-    def __init__(self, routes) -> None:
+    def __init__(self, routes={}) -> None:
         self.requested_paths = []  # type: List[str]
         
         mock_server = self  # capture
@@ -494,6 +494,12 @@ class WebPage:
             return ''
         else:
             return m.group(1).strip()
+    
+    @property
+    def redirect_target_href(self) -> str | None:
+        if (self.status // 100) != 3:
+            return None
+        return self._headers.get('Location')
     
     # === Low-Level Attributes ===
     
