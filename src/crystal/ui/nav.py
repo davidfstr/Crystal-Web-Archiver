@@ -394,6 +394,8 @@ class WindowNavigator(Navigator[wx.Window]):
             details.append(('IsModal', repr(True)))
         if isinstance(win, wx.TopLevelWindow) and win.IsFullScreen():
             details.append(('IsFullScreen', repr(True)))
+        if not win.Enabled:
+            details.append(('Enabled', repr(False)))
         default_name = cls._DEFAULT_NAME_FOR_WINDOW_TYPE_STR.get(win_type)
         if default_name is None or win.Name != default_name:
             # NOTE: If default Name for the window type isn't known, conservatively
@@ -1021,6 +1023,7 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         path = self._path
         
         if self._children_elided:
+            # TODO: Use '{ ... }' here to be consistent with similar usage elsewhere
             return ['{...}']
         elif len(children) == 0:
             return ['{}']
