@@ -1041,7 +1041,7 @@ async def _prompt_for_project(
     
     # Create a hidden parent frame for the Open or Create Project dialog
     # so that it can have a menubar on macOS
-    menubar_frame = wx.Frame(None, -1, '')
+    menubar_frame = wx.Frame(None, -1, '', name='cr-menubar-frame')
     try:
         def select_choice_in_dialog(choice_id) -> None:
             wx.PostEvent(dialog, wx.CommandEvent(
