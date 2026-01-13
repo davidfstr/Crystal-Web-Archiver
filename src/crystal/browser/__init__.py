@@ -257,7 +257,7 @@ class MainWindow(CloakMixin):
             enabled=True)
         self._close_project_action = Action(
             wx.ID_CLOSE,
-            '',
+            '&Close Project',
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W')),
             action_func=self._on_close_window,
             enabled=True)
