@@ -16,29 +16,6 @@ from unittest.mock import Mock, patch
 import wx
 
 
-# === Helper Functions ===
-
-def make_snapshot(
-        desc: str,
-        children: list[Snapshot] | None = None,
-        path: str = 'T',
-        query: str = '',
-        accessor: str = 'I',
-        peer_obj: object | None = None,
-        children_elided: bool = False,
-        ) -> Snapshot:
-    """Helper to create a Snapshot for testing."""
-    return Snapshot(
-        peer_description=desc,
-        children=children or [],
-        path=path,
-        query=query,
-        peer_accessor=accessor,
-        peer_obj=peer_obj,
-        children_elided=children_elided,
-    )
-
-
 # === Tests for Navigator ===
 
 class TestNavigator:
@@ -706,16 +683,16 @@ class TestSnapshot:
     
     def test_can_create_basic_snapshot(self) -> None:
         """Test that a basic snapshot can be created."""
-        snap = make_snapshot('Test Node')
+        snap = _make_snapshot('Test Node')
         assert snap._peer_description == 'Test Node'
         assert snap._children == []
         assert snap._path == 'T'
     
     def test_can_create_snapshot_with_children(self) -> None:
         """Test that a snapshot can have children."""
-        parent = make_snapshot('Parent', children=[
-            child1 := make_snapshot('Child 1', path='T[0]'),
-            child2 := make_snapshot('Child 2', path='T[1]')
+        parent = _make_snapshot('Parent', children=[
+            child1 := _make_snapshot('Child 1', path='T[0]'),
+            child2 := _make_snapshot('Child 2', path='T[1]')
         ])
         
         assert len(parent._children) == 2
@@ -725,12 +702,12 @@ class TestSnapshot:
     def test_can_create_snapshot_with_peer_obj(self) -> None:
         """Test that a snapshot can store a peer_obj for identity matching."""
         peer_obj = object()
-        snap = make_snapshot('Node', peer_obj=peer_obj)
+        snap = _make_snapshot('Node', peer_obj=peer_obj)
         assert snap._peer_obj is peer_obj
     
     def test_repr_shows_description(self) -> None:
         """Test that repr() includes the node description."""
-        snap = make_snapshot('Test Description', path='T', accessor='I')
+        snap = _make_snapshot('Test Description', path='T', accessor='I')
         result = repr(snap)
         assert 'Test Description' in result
 
@@ -742,7 +719,7 @@ class TestSnapshotDiffBasics:
     
     def test_no_changes_returns_empty_diff(self) -> None:
         """Test that comparing identical snapshots shows no changes."""
-        snap = make_snapshot('Node', peer_obj=object())
+        snap = _make_snapshot('Node', peer_obj=object())
         diff = Snapshot.diff(snap, snap)
         
         assert isinstance(diff, SnapshotDiff)
@@ -752,8 +729,8 @@ class TestSnapshotDiffBasics:
     def test_root_description_change(self) -> None:
         """Test that a change in root description is detected."""
         peer_obj = object()
-        old = make_snapshot('Old Description', peer_obj=peer_obj)
-        new = make_snapshot('New Description', peer_obj=peer_obj)
+        old = _make_snapshot('Old Description', peer_obj=peer_obj)
+        new = _make_snapshot('New Description', peer_obj=peer_obj)
         
         diff = Snapshot.diff(old, new)
         
@@ -767,11 +744,11 @@ class TestSnapshotDiffBasics:
         parent_peer = object()
         child_peer = object()
         
-        old = make_snapshot('Parent', children=[
+        old = _make_snapshot('Parent', children=[
             # (none)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
-            make_snapshot('New Child', path='T[0]', peer_obj=child_peer)
+        new = _make_snapshot('Parent', children=[
+            _make_snapshot('New Child', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -786,10 +763,10 @@ class TestSnapshotDiffBasics:
         parent_peer = object()
         child_peer = object()
         
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Old Child', path='T[0]', peer_obj=child_peer)
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Old Child', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
+        new = _make_snapshot('Parent', children=[
             # (none)
         ], peer_obj=parent_peer)
         
@@ -805,11 +782,11 @@ class TestSnapshotDiffBasics:
         parent_peer = object()
         child_peer = object()
         
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Child v1', path='T[0]', peer_obj=child_peer)
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Child v1', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
-            make_snapshot('Child v2', path='T[0]', peer_obj=child_peer)
+        new = _make_snapshot('Parent', children=[
+            _make_snapshot('Child v2', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -826,13 +803,13 @@ class TestSnapshotDiffBasics:
         child1_peer = object()
         child2_peer = object()
         
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Other Child', path='T[0]', peer_obj=child2_peer),
-            make_snapshot('Moved Child', path='T[1]', peer_obj=child1_peer),
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Other Child', path='T[0]', peer_obj=child2_peer),
+            _make_snapshot('Moved Child', path='T[1]', peer_obj=child1_peer),
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
-            make_snapshot('Moved Child', path='T[0]', peer_obj=child1_peer),
-            make_snapshot('Other Child', path='T[1]', peer_obj=child2_peer),
+        new = _make_snapshot('Parent', children=[
+            _make_snapshot('Moved Child', path='T[0]', peer_obj=child1_peer),
+            _make_snapshot('Other Child', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -850,13 +827,13 @@ class TestSnapshotDiffBasics:
         child1_peer = object()
         child2_peer = object()
         
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Child 1 v1', path='T[0]', peer_obj=child1_peer),
-            make_snapshot('Child 2 v1', path='T[1]', peer_obj=child2_peer),
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Child 1 v1', path='T[0]', peer_obj=child1_peer),
+            _make_snapshot('Child 2 v1', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
-            make_snapshot('Child 1 v2', path='T[0]', peer_obj=child1_peer),
-            make_snapshot('Child 2 v2', path='T[1]', peer_obj=child2_peer),
+        new = _make_snapshot('Parent', children=[
+            _make_snapshot('Child 1 v2', path='T[0]', peer_obj=child1_peer),
+            _make_snapshot('Child 2 v2', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -874,14 +851,14 @@ class TestSnapshotDiffBasics:
         parent_peer = object()
         grandchild_peer = object()
         
-        old = make_snapshot('Root', children=[
-            make_snapshot('Parent', children=[
-                make_snapshot('Grandchild v1', path='T[0][0]', peer_obj=grandchild_peer)
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Parent', children=[
+                _make_snapshot('Grandchild v1', path='T[0][0]', peer_obj=grandchild_peer)
             ], path='T[0]', peer_obj=parent_peer)
         ], peer_obj=root_peer)
-        new = make_snapshot('Root', children=[
-            make_snapshot('Parent', children=[
-                make_snapshot('Grandchild v2', path='T[0][0]', peer_obj=grandchild_peer)
+        new = _make_snapshot('Root', children=[
+            _make_snapshot('Parent', children=[
+                _make_snapshot('Grandchild v2', path='T[0][0]', peer_obj=grandchild_peer)
             ], path='T[0]', peer_obj=parent_peer)
         ], peer_obj=root_peer)
         
@@ -901,15 +878,15 @@ class TestSnapshotDiffBasics:
         modify_peer = object()
         add_peer = object()
         
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Keep', path='T[0]', peer_obj=keep_peer),
-            make_snapshot('Remove', path='T[1]', peer_obj=remove_peer),
-            make_snapshot('Modify v1', path='T[2]', peer_obj=modify_peer),
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Keep', path='T[0]', peer_obj=keep_peer),
+            _make_snapshot('Remove', path='T[1]', peer_obj=remove_peer),
+            _make_snapshot('Modify v1', path='T[2]', peer_obj=modify_peer),
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
-            make_snapshot('Keep', path='T[0]', peer_obj=keep_peer),
-            make_snapshot('Modify v2', path='T[1]', peer_obj=modify_peer),
-            make_snapshot('Add', path='T[2]', peer_obj=add_peer),
+        new = _make_snapshot('Parent', children=[
+            _make_snapshot('Keep', path='T[0]', peer_obj=keep_peer),
+            _make_snapshot('Modify v2', path='T[1]', peer_obj=modify_peer),
+            _make_snapshot('Add', path='T[2]', peer_obj=add_peer),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -931,15 +908,15 @@ class TestSnapshotDiffBasics:
         new_child2_peer = object()
         new_grandchild_peer = object()
         
-        old = make_snapshot('Root', children=[
+        old = _make_snapshot('Root', children=[
             # (empty)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Root', children=[
-            make_snapshot('New Parent', children=[
-                make_snapshot('New Child 1', children=[
-                    make_snapshot('New Grandchild', path='T[0][0][0]', peer_obj=new_grandchild_peer)
+        new = _make_snapshot('Root', children=[
+            _make_snapshot('New Parent', children=[
+                _make_snapshot('New Child 1', children=[
+                    _make_snapshot('New Grandchild', path='T[0][0][0]', peer_obj=new_grandchild_peer)
                 ], path='T[0][0]', peer_obj=new_child1_peer),
-                make_snapshot('New Child 2', path='T[0][1]', peer_obj=new_child2_peer),
+                _make_snapshot('New Child 2', path='T[0][1]', peer_obj=new_child2_peer),
             ], path='T[0]', peer_obj=new_parent_peer)
         ], peer_obj=parent_peer)
         
@@ -962,15 +939,15 @@ class TestSnapshotDiffBasics:
         old_child2_peer = object()
         old_grandchild_peer = object()
         
-        old = make_snapshot('Root', children=[
-            make_snapshot('Old Parent', children=[
-                make_snapshot('Old Child 1', children=[
-                    make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Old Parent', children=[
+                _make_snapshot('Old Child 1', children=[
+                    _make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
                 ], path='T[0][0]', peer_obj=old_child1_peer),
-                make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
+                _make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
             ], path='T[0]', peer_obj=old_parent_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Root', children=[
+        new = _make_snapshot('Root', children=[
             # (empty)
         ], peer_obj=parent_peer)
         
@@ -993,15 +970,15 @@ class TestSnapshotDiffBasics:
         old_child2_peer = object()
         old_grandchild_peer = object()
         
-        old = make_snapshot('Root', children=[
-            make_snapshot('Old Parent', children=[
-                make_snapshot('Old Child 1', children=[
-                    make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Old Parent', children=[
+                _make_snapshot('Old Child 1', children=[
+                    _make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
                 ], path='T[0][0]', peer_obj=old_child1_peer),
-                make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
+                _make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
             ], path='T[0]', peer_obj=old_parent_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Root', children=[
+        new = _make_snapshot('Root', children=[
             # (empty)
         ], peer_obj=parent_peer)
         
@@ -1022,13 +999,13 @@ class TestSnapshotDiffBasics:
         """Test that matching falls back to description when peer_obj is None."""
         parent_peer = object()
         
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Child A', path='T[0]', peer_obj=None),
-            make_snapshot('Child B', path='T[1]', peer_obj=None),
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Child A', path='T[0]', peer_obj=None),
+            _make_snapshot('Child B', path='T[1]', peer_obj=None),
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
-            make_snapshot('Child A', path='T[0]', peer_obj=None),
-            make_snapshot('Child B Modified', path='T[1]', peer_obj=None),
+        new = _make_snapshot('Parent', children=[
+            _make_snapshot('Child A', path='T[0]', peer_obj=None),
+            _make_snapshot('Child B Modified', path='T[1]', peer_obj=None),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -1045,13 +1022,13 @@ class TestSnapshotDiffBasics:
         child2_peer = object()
         
         # Old snapshot has children fully captured
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Child 1', path='T[0]', peer_obj=child1_peer),
-            make_snapshot('Child 2', path='T[1]', peer_obj=child2_peer),
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Child 1', path='T[0]', peer_obj=child1_peer),
+            _make_snapshot('Child 2', path='T[1]', peer_obj=child2_peer),
         ], peer_obj=parent_peer)
         
         # New snapshot has children elided (at display time, but still captured internally)
-        new = make_snapshot('Parent', children=[
+        new = _make_snapshot('Parent', children=[
             # empty
         ], peer_obj=parent_peer, children_elided=True)
         
@@ -1073,15 +1050,15 @@ class TestSnapshotDiffBasics:
         grandchild_peer = object()
         
         # Old snapshot has full tree
-        old = make_snapshot('Root', children=[
-            make_snapshot('Parent', children=[
-                make_snapshot('Grandchild', path='T[0][0]', peer_obj=grandchild_peer)
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Parent', children=[
+                _make_snapshot('Grandchild', path='T[0][0]', peer_obj=grandchild_peer)
             ], path='T[0]', peer_obj=parent_peer)
         ], peer_obj=root_peer)
         
         # New snapshot has Parent with elided children
-        new = make_snapshot('Root', children=[
-            make_snapshot('Parent', children=[
+        new = _make_snapshot('Root', children=[
+            _make_snapshot('Parent', children=[
                 # empty
             ], path='T[0]', peer_obj=parent_peer, children_elided=True)
         ], peer_obj=root_peer)
@@ -1108,10 +1085,10 @@ class TestSnapshotDiffDeletionStyle:
         parent_peer = object()
         child_peer = object()
         
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Child', path='T[0]', peer_obj=child_peer)
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Child', path='T[0]', peer_obj=child_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
+        new = _make_snapshot('Parent', children=[
             # (empty)
         ], peer_obj=parent_peer)
         
@@ -1131,13 +1108,13 @@ class TestSnapshotDiffDeletionStyle:
         old_child1_peer = object()
         old_child2_peer = object()
         
-        old = make_snapshot('Root', children=[
-            make_snapshot('Old Parent', children=[
-                make_snapshot('Old Child 1', path='T[0][0]', peer_obj=old_child1_peer),
-                make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Old Parent', children=[
+                _make_snapshot('Old Child 1', path='T[0][0]', peer_obj=old_child1_peer),
+                _make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
             ], path='T[0]', peer_obj=old_parent_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Root', children=[
+        new = _make_snapshot('Root', children=[
             # (empty)
         ], peer_obj=parent_peer)
         
@@ -1161,15 +1138,15 @@ class TestSnapshotDiffDeletionStyle:
         old_child2_peer = object()
         old_grandchild_peer = object()
         
-        old = make_snapshot('Root', children=[
-            make_snapshot('Old Parent', children=[
-                make_snapshot('Old Child 1', children=[
-                    make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Old Parent', children=[
+                _make_snapshot('Old Child 1', children=[
+                    _make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
                 ], path='T[0][0]', peer_obj=old_child1_peer),
-                make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
+                _make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
             ], path='T[0]', peer_obj=old_parent_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Root', children=[
+        new = _make_snapshot('Root', children=[
             # (empty)
         ], peer_obj=parent_peer)
         
@@ -1194,15 +1171,15 @@ class TestSnapshotDiffDeletionStyle:
         old_child2_peer = object()
         old_grandchild_peer = object()
         
-        old = make_snapshot('Root', children=[
-            make_snapshot('Old Parent', children=[
-                make_snapshot('Old Child 1', children=[
-                    make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Old Parent', children=[
+                _make_snapshot('Old Child 1', children=[
+                    _make_snapshot('Old Grandchild', path='T[0][0][0]', peer_obj=old_grandchild_peer)
                 ], path='T[0][0]', peer_obj=old_child1_peer),
-                make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
+                _make_snapshot('Old Child 2', path='T[0][1]', peer_obj=old_child2_peer),
             ], path='T[0]', peer_obj=old_parent_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Root', children=[
+        new = _make_snapshot('Root', children=[
             # (empty)
         ], peer_obj=parent_peer)
         
@@ -1230,15 +1207,15 @@ class TestSnapshotDiffDeletionStyle:
         new_child2_peer = object()
         new_grandchild_peer = object()
         
-        old = make_snapshot('Root', children=[
+        old = _make_snapshot('Root', children=[
             # (empty)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Root', children=[
-            make_snapshot('New Parent', children=[
-                make_snapshot('New Child 1', children=[
-                    make_snapshot('New Grandchild', path='T[0][0][0]', peer_obj=new_grandchild_peer)
+        new = _make_snapshot('Root', children=[
+            _make_snapshot('New Parent', children=[
+                _make_snapshot('New Child 1', children=[
+                    _make_snapshot('New Grandchild', path='T[0][0][0]', peer_obj=new_grandchild_peer)
                 ], path='T[0][0]', peer_obj=new_child1_peer),
-                make_snapshot('New Child 2', path='T[0][1]', peer_obj=new_child2_peer),
+                _make_snapshot('New Child 2', path='T[0][1]', peer_obj=new_child2_peer),
             ], path='T[0]', peer_obj=new_parent_peer)
         ], peer_obj=parent_peer)
         
@@ -1261,14 +1238,14 @@ class TestSnapshotDiffDeletionStyle:
         old_grandchild1_peer = object()
         old_grandchild2_peer = object()
         
-        old = make_snapshot('Root', children=[
-            make_snapshot('Old Child', children=[
-                make_snapshot('Old Grandchild 1', path='T[0][0]', peer_obj=old_grandchild1_peer),
-                make_snapshot('Old Grandchild 2', path='T[0][1]', peer_obj=old_grandchild2_peer),
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Old Child', children=[
+                _make_snapshot('Old Grandchild 1', path='T[0][0]', peer_obj=old_grandchild1_peer),
+                _make_snapshot('Old Grandchild 2', path='T[0][1]', peer_obj=old_grandchild2_peer),
             ], path='T[0]', peer_obj=old_child_peer)
         ], peer_obj=parent_peer)
-        new = make_snapshot('Root', children=[
-            make_snapshot('New Child', path='T[0]', peer_obj=new_child_peer)
+        new = _make_snapshot('Root', children=[
+            _make_snapshot('New Child', path='T[0]', peer_obj=new_child_peer)
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new, deletion_style='minimal')
@@ -1303,23 +1280,23 @@ class TestSnapshotDiffShiftedMoreSyntax:
         item2 = object()
         item3 = object()
         
-        old = make_snapshot(
+        old = _make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='T[0]', peer_obj=item1),
-                make_snapshot('Item2', path='T[1]', peer_obj=item2),
-                make_snapshot('Item3', path='T[2]', peer_obj=item3),
+                _make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                _make_snapshot('Item2', path='T[1]', peer_obj=item2),
+                _make_snapshot('Item3', path='T[2]', peer_obj=item3),
             ],
         )
         
-        new = make_snapshot(
+        new = _make_snapshot(
             'Root',
             [
-                make_snapshot('NewItem1', path='T[0]', peer_obj=object()),
-                make_snapshot('Item1', path='T[1]', peer_obj=item1),
-                make_snapshot('NewItem2', path='T[2]', peer_obj=object()),
-                make_snapshot('Item2', path='T[3]', peer_obj=item2),
-                make_snapshot('Item3', path='T[4]', peer_obj=item3),
+                _make_snapshot('NewItem1', path='T[0]', peer_obj=object()),
+                _make_snapshot('Item1', path='T[1]', peer_obj=item1),
+                _make_snapshot('NewItem2', path='T[2]', peer_obj=object()),
+                _make_snapshot('Item2', path='T[3]', peer_obj=item2),
+                _make_snapshot('Item3', path='T[4]', peer_obj=item3),
             ],
         )
         
@@ -1347,23 +1324,23 @@ class TestSnapshotDiffShiftedMoreSyntax:
         item2 = object()
         item3 = object()
         
-        old = make_snapshot(
+        old = _make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='T[0]', peer_obj=item1),
-                make_snapshot('Item2', path='T[1]', peer_obj=item2),
-                make_snapshot('Item3', path='T[2]', peer_obj=item3),
+                _make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                _make_snapshot('Item2', path='T[1]', peer_obj=item2),
+                _make_snapshot('Item3', path='T[2]', peer_obj=item3),
             ],
         )
         
         # Items move with a gap in the middle
-        new = make_snapshot(
+        new = _make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='T[0]', peer_obj=item1),  # Stays at 0
-                make_snapshot('NewItem', path='T[1]', peer_obj=object()),  # New item creates gap
-                make_snapshot('Item2', path='T[2]', peer_obj=item2),  # Moves 1→2
-                make_snapshot('Item3', path='T[3]', peer_obj=item3),  # Moves 2→3
+                _make_snapshot('Item1', path='T[0]', peer_obj=item1),  # Stays at 0
+                _make_snapshot('NewItem', path='T[1]', peer_obj=object()),  # New item creates gap
+                _make_snapshot('Item2', path='T[2]', peer_obj=item2),  # Moves 1→2
+                _make_snapshot('Item3', path='T[3]', peer_obj=item3),  # Moves 2→3
             ],
         )
         
@@ -1384,18 +1361,18 @@ class TestSnapshotDiffShiftedMoreSyntax:
         """
         item1 = object()
         
-        old = make_snapshot(
+        old = _make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                _make_snapshot('Item1', path='T[0]', peer_obj=item1),
             ],
         )
         
-        new = make_snapshot(
+        new = _make_snapshot(
             'Root',
             [
-                make_snapshot('NewItem', path='T[0]', peer_obj=object()),
-                make_snapshot('Item1', path='T[1]', peer_obj=item1),
+                _make_snapshot('NewItem', path='T[0]', peer_obj=object()),
+                _make_snapshot('Item1', path='T[1]', peer_obj=item1),
             ],
         )
         
@@ -1421,30 +1398,30 @@ class TestSnapshotDiffShiftedMoreSyntax:
         item4 = object()
         item5 = object()
         
-        old = make_snapshot(
+        old = _make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='T[0]', peer_obj=item1),
-                make_snapshot('Item2', path='T[1]', peer_obj=item2),
-                make_snapshot('Item3', path='T[2]', peer_obj=item3),
-                make_snapshot('Item4', path='T[3]', peer_obj=item4),
-                make_snapshot('Item5', path='T[4]', peer_obj=item5),
+                _make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                _make_snapshot('Item2', path='T[1]', peer_obj=item2),
+                _make_snapshot('Item3', path='T[2]', peer_obj=item3),
+                _make_snapshot('Item4', path='T[3]', peer_obj=item4),
+                _make_snapshot('Item5', path='T[4]', peer_obj=item5),
             ],
         )
         
         # Two separate ranges with a gap: Items 1-2 shift to 2-3, Items 4-5 shift to 6-7
         # Item3 stays at same position creating a break in the sequence
-        new = make_snapshot(
+        new = _make_snapshot(
             'Root',
             [
-                make_snapshot('NewItem1', path='T[0]', peer_obj=object()),
-                make_snapshot('NewItem2', path='T[1]', peer_obj=object()),
-                make_snapshot('Item1', path='T[2]', peer_obj=item1),
-                make_snapshot('Item2', path='T[3]', peer_obj=item2),
-                make_snapshot('Item3', path='T[4]', peer_obj=item3),  # Stays at relative position, breaking continuity
-                make_snapshot('NewItem3', path='T[5]', peer_obj=object()),
-                make_snapshot('Item4', path='T[6]', peer_obj=item4),
-                make_snapshot('Item5', path='T[7]', peer_obj=item5),
+                _make_snapshot('NewItem1', path='T[0]', peer_obj=object()),
+                _make_snapshot('NewItem2', path='T[1]', peer_obj=object()),
+                _make_snapshot('Item1', path='T[2]', peer_obj=item1),
+                _make_snapshot('Item2', path='T[3]', peer_obj=item2),
+                _make_snapshot('Item3', path='T[4]', peer_obj=item3),  # Stays at relative position, breaking continuity
+                _make_snapshot('NewItem3', path='T[5]', peer_obj=object()),
+                _make_snapshot('Item4', path='T[6]', peer_obj=item4),
+                _make_snapshot('Item5', path='T[7]', peer_obj=item5),
             ],
         )
         
@@ -1472,24 +1449,24 @@ class TestSnapshotDiffShiftedMoreSyntax:
         item3 = object()
         item4 = object()
         
-        old = make_snapshot(
+        old = _make_snapshot(
             'Root',
             [
-                make_snapshot('Item1', path='T[0]', peer_obj=item1),
-                make_snapshot('Item2-old', path='T[1]', peer_obj=item2),
-                make_snapshot('Item3', path='T[2]', peer_obj=item3),
-                make_snapshot('Item4', path='T[3]', peer_obj=item4),
+                _make_snapshot('Item1', path='T[0]', peer_obj=item1),
+                _make_snapshot('Item2-old', path='T[1]', peer_obj=item2),
+                _make_snapshot('Item3', path='T[2]', peer_obj=item3),
+                _make_snapshot('Item4', path='T[3]', peer_obj=item4),
             ],
         )
         
-        new = make_snapshot(
+        new = _make_snapshot(
             'Root',
             [
-                make_snapshot('NewItem', path='T[0]', peer_obj=object()),  # Addition forces items to move
-                make_snapshot('Item1', path='T[1]', peer_obj=item1),
-                make_snapshot('Item2-new', path='T[2]', peer_obj=item2),  # Modified
-                make_snapshot('Item3', path='T[3]', peer_obj=item3),
-                make_snapshot('Item4', path='T[4]', peer_obj=item4),
+                _make_snapshot('NewItem', path='T[0]', peer_obj=object()),  # Addition forces items to move
+                _make_snapshot('Item1', path='T[1]', peer_obj=item1),
+                _make_snapshot('Item2-new', path='T[2]', peer_obj=item2),  # Modified
+                _make_snapshot('Item3', path='T[3]', peer_obj=item3),
+                _make_snapshot('Item4', path='T[4]', peer_obj=item4),
             ],
         )
         
@@ -1518,12 +1495,12 @@ class TestSnapshotDiffAddAndDeleteMoreSyntax:
         parent_peer = object()
         
         # Create a snapshot with many additions (35 new children)
-        old = make_snapshot('Parent', children=[], peer_obj=parent_peer)
+        old = _make_snapshot('Parent', children=[], peer_obj=parent_peer)
         new_children = [
-            make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
+            _make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
             for i in range(35)
         ]
-        new = make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
+        new = _make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
         
@@ -1552,11 +1529,11 @@ class TestSnapshotDiffAddAndDeleteMoreSyntax:
         
         # Create a snapshot with many deletions (35 removed children)
         old_children = [
-            make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
+            _make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
             for i in range(35)
         ]
-        old = make_snapshot('Parent', children=old_children, peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[], peer_obj=parent_peer)
+        old = _make_snapshot('Parent', children=old_children, peer_obj=parent_peer)
+        new = _make_snapshot('Parent', children=[], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
         
@@ -1584,12 +1561,12 @@ class TestSnapshotDiffAddAndDeleteMoreSyntax:
         parent_peer = object()
         
         # Create a snapshot with exactly 7 additions
-        old = make_snapshot('Parent', children=[], peer_obj=parent_peer)
+        old = _make_snapshot('Parent', children=[], peer_obj=parent_peer)
         new_children = [
-            make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
+            _make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object())
             for i in range(7)
         ]
-        new = make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
+        new = _make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
         
@@ -1609,8 +1586,8 @@ class TestSnapshotDiffAddAndDeleteMoreSyntax:
         existing_child = object()
         
         # Create old with one child in the middle
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Existing', path='T[5]', peer_obj=existing_child),
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Existing', path='T[5]', peer_obj=existing_child),
         ], peer_obj=parent_peer)
         
         # Create new with additions before and after the existing child
@@ -1618,10 +1595,10 @@ class TestSnapshotDiffAddAndDeleteMoreSyntax:
         new_children = []
         for i in range(11):
             if i == 5:
-                new_children.append(make_snapshot('Existing', path=f'S[{i}]', peer_obj=existing_child))
+                new_children.append(_make_snapshot('Existing', path=f'S[{i}]', peer_obj=existing_child))
             else:
-                new_children.append(make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object()))
-        new = make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
+                new_children.append(_make_snapshot(f'Child {i}', path=f'S[{i}]', peer_obj=object()))
+        new = _make_snapshot('Parent', children=new_children, peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
         
@@ -1646,8 +1623,8 @@ class TestSnapshotDiffApi:
     
     def test_old_property_returns_old_snapshot(self) -> None:
         """Test that diff.old returns the old snapshot."""
-        old = make_snapshot('Old', peer_obj=object())
-        new = make_snapshot('New', peer_obj=object())
+        old = _make_snapshot('Old', peer_obj=object())
+        new = _make_snapshot('New', peer_obj=object())
         
         diff = Snapshot.diff(old, new)
         
@@ -1655,8 +1632,8 @@ class TestSnapshotDiffApi:
     
     def test_new_property_returns_new_snapshot(self) -> None:
         """Test that diff.new returns the new snapshot."""
-        old = make_snapshot('Old', peer_obj=object())
-        new = make_snapshot('New', peer_obj=object())
+        old = _make_snapshot('Old', peer_obj=object())
+        new = _make_snapshot('New', peer_obj=object())
         
         diff = Snapshot.diff(old, new)
         
@@ -1664,8 +1641,8 @@ class TestSnapshotDiffApi:
     
     def test_sub_operator(self) -> None:
         """Test that the __sub__ operator works like Snapshot.diff()."""
-        old = make_snapshot('Old', peer_obj=object())
-        new = make_snapshot('New', peer_obj=object())
+        old = _make_snapshot('Old', peer_obj=object())
+        new = _make_snapshot('New', peer_obj=object())
         
         diff_method = Snapshot.diff(old, new)
         diff_operator = new - old
@@ -1678,8 +1655,8 @@ class TestSnapshotDiffApi:
     
     def test_bool_true_when_changes_exist(self) -> None:
         """Test that bool(diff) is True when there are changes."""
-        old = make_snapshot('Old', peer_obj=object())
-        new = make_snapshot('New', peer_obj=object())
+        old = _make_snapshot('Old', peer_obj=object())
+        new = _make_snapshot('New', peer_obj=object())
         
         diff = Snapshot.diff(old, new)
         
@@ -1687,7 +1664,7 @@ class TestSnapshotDiffApi:
     
     def test_bool_false_when_no_changes(self) -> None:
         """Test that bool(diff) is False when there are no changes."""
-        snap = make_snapshot('Same', peer_obj=object())
+        snap = _make_snapshot('Same', peer_obj=object())
         
         diff = Snapshot.diff(snap, snap)
         
@@ -1695,8 +1672,8 @@ class TestSnapshotDiffApi:
     
     def test_custom_name_parameter(self) -> None:
         """Test that the name parameter customizes the root symbol."""
-        old = make_snapshot('Old', peer_obj=object())
-        new = make_snapshot('New', peer_obj=object())
+        old = _make_snapshot('Old', peer_obj=object())
+        new = _make_snapshot('New', peer_obj=object())
         
         diff = Snapshot.diff(old, new, name='CUSTOM')
         
@@ -1708,13 +1685,13 @@ class TestSnapshotDiffApi:
         root_peer = object()
         
         # Old snapshot: Dialog (minimal)
-        old = make_snapshot(
+        old = _make_snapshot(
             '',
             [
-                make_snapshot(
+                _make_snapshot(
                     "crystal.ui.dialog.BetterMessageDialog(Name='cr-open-or-create-project', Label='Select a Project')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.StaticText(Label='Create a new project or open an existing project?')",
                             path='T[0][0]',
                             peer_obj=object()
@@ -1729,13 +1706,13 @@ class TestSnapshotDiffApi:
         )
         
         # New snapshot: Main window (minimal)
-        new = make_snapshot(
+        new = _make_snapshot(
             '',
             [
-                make_snapshot(
+                _make_snapshot(
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             '_',
                             path='T[0][0]',
                             peer_obj=object()
@@ -1784,16 +1761,16 @@ class TestSnapshotDiffSorting:
         child1_peer = object()
         grandchild_peer = object()
         
-        old = make_snapshot('Root', children=[
-            make_snapshot('Child 0 v1', path='T[0]', peer_obj=child0_peer),
-            make_snapshot('Child 1', children=[
-                make_snapshot('Grandchild v1', path='T[1][0]', peer_obj=grandchild_peer)
+        old = _make_snapshot('Root', children=[
+            _make_snapshot('Child 0 v1', path='T[0]', peer_obj=child0_peer),
+            _make_snapshot('Child 1', children=[
+                _make_snapshot('Grandchild v1', path='T[1][0]', peer_obj=grandchild_peer)
             ], path='T[1]', peer_obj=child1_peer),
         ], peer_obj=root_peer)
-        new = make_snapshot('Root', children=[
-            make_snapshot('Child 0 v2', path='T[0]', peer_obj=child0_peer),
-            make_snapshot('Child 1', children=[
-                make_snapshot('Grandchild v2', path='T[1][0]', peer_obj=grandchild_peer)
+        new = _make_snapshot('Root', children=[
+            _make_snapshot('Child 0 v2', path='T[0]', peer_obj=child0_peer),
+            _make_snapshot('Child 1', children=[
+                _make_snapshot('Grandchild v2', path='T[1][0]', peer_obj=grandchild_peer)
             ], path='T[1]', peer_obj=child1_peer),
         ], peer_obj=root_peer)
         
@@ -1811,11 +1788,11 @@ class TestSnapshotDiffSorting:
         old_child_peer = object()
         new_child_peer = object()
         
-        old = make_snapshot('Parent', children=[
-            make_snapshot('Old Child', path='T[0]', peer_obj=old_child_peer),
+        old = _make_snapshot('Parent', children=[
+            _make_snapshot('Old Child', path='T[0]', peer_obj=old_child_peer),
         ], peer_obj=parent_peer)
-        new = make_snapshot('Parent', children=[
-            make_snapshot('New Child', path='T[0]', peer_obj=new_child_peer),
+        new = _make_snapshot('Parent', children=[
+            _make_snapshot('New Child', path='T[0]', peer_obj=new_child_peer),
         ], peer_obj=parent_peer)
         
         diff = Snapshot.diff(old, new)
@@ -1862,28 +1839,28 @@ class TestSnapshotDiffGolden:
         task_pane_title_peer = object()
         
         # Old snapshot: Dialog with children
-        old = make_snapshot(
+        old = _make_snapshot(
             '',
             [
-                make_snapshot(
+                _make_snapshot(
                     "crystal.ui.dialog.BetterMessageDialog(Name='cr-open-or-create-project', Label='Select a Project')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.StaticText(Label='Create a new project or open an existing project?')",
                             path='T[0][0]',
                             peer_obj=dialog_text_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.CheckBox(Name='cr-open-or-create-project__checkbox', Label='Open as &read only', Value=False)",
                             path='T[0][1]',
                             peer_obj=dialog_checkbox_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.Button(Id=wx.ID_NO, Label='&Open')",
                             path='T[0][2]',
                             peer_obj=dialog_open_button_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.Button(Id=wx.ID_YES, Label='&New Project')",
                             path='T[0][3]',
                             peer_obj=dialog_new_button_peer
@@ -1898,35 +1875,35 @@ class TestSnapshotDiffGolden:
         )
         
         # New snapshot: Main window with nested hierarchy
-        new = make_snapshot(
+        new = _make_snapshot(
             '',
             [
-                make_snapshot(
+                _make_snapshot(
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             '_',
                             [
-                                make_snapshot(
+                                _make_snapshot(
                                     'wx.SplitterWindow()',
                                     [
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-entity-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Root URLs and Groups')",
                                                     path='T[0][0][0][0][0]',
                                                     peer_obj=entity_pane_title_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     '_',
                                                     [
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
                                                             path='T[0][0][0][0][1][0]',
                                                             peer_obj=entity_pane_empty_text_peer
                                                         ),
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
                                                             path='T[0][0][0][0][1][1]',
                                                             peer_obj=entity_pane_empty_button_peer
@@ -1935,7 +1912,7 @@ class TestSnapshotDiffGolden:
                                                     path='T[0][0][0][0][1]',
                                                     peer_obj=entity_pane_empty_state_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
                                                     path='T[0][0][0][0][2]',
                                                     peer_obj=entity_pane_add_button_peer
@@ -1944,10 +1921,10 @@ class TestSnapshotDiffGolden:
                                             path='T[0][0][0][0]',
                                             peer_obj=entity_pane_peer
                                         ),
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-task-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Tasks')",
                                                     path='T[0][0][0][1][0]',
                                                     peer_obj=task_pane_title_peer
@@ -2047,35 +2024,35 @@ class TestSnapshotDiffGolden:
         dialog_new_button_peer = object()
         
         # Old snapshot: Just main window with full children
-        old = make_snapshot(
+        old = _make_snapshot(
             '',
             [
-                make_snapshot(
+                _make_snapshot(
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             '_',
                             [
-                                make_snapshot(
+                                _make_snapshot(
                                     'wx.SplitterWindow()',
                                     [
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-entity-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Root URLs and Groups')",
                                                     path='T[0][0][0][0][0]',
                                                     peer_obj=entity_pane_title_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     '_',
                                                     [
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
                                                             path='T[0][0][0][0][1][0]',
                                                             peer_obj=entity_pane_empty_text_peer
                                                         ),
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
                                                             path='T[0][0][0][0][1][1]',
                                                             peer_obj=entity_pane_empty_button_peer
@@ -2084,7 +2061,7 @@ class TestSnapshotDiffGolden:
                                                     path='T[0][0][0][0][1]',
                                                     peer_obj=entity_pane_empty_state_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
                                                     path='T[0][0][0][0][2]',
                                                     peer_obj=entity_pane_add_button_peer
@@ -2093,10 +2070,10 @@ class TestSnapshotDiffGolden:
                                             path='T[0][0][0][0]',
                                             peer_obj=entity_pane_peer
                                         ),
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-task-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Tasks')",
                                                     path='T[0][0][0][1][0]',
                                                     peer_obj=task_pane_title_peer
@@ -2123,35 +2100,35 @@ class TestSnapshotDiffGolden:
         )
         
         # New snapshot: Main window with children elided + new dialog
-        new = make_snapshot(
+        new = _make_snapshot(
             '',
             [
-                make_snapshot(
+                _make_snapshot(
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
                     [  # Children ARE captured (same as old), just elided at display time
-                        make_snapshot(
+                        _make_snapshot(
                             '_',
                             [
-                                make_snapshot(
+                                _make_snapshot(
                                     'wx.SplitterWindow()',
                                     [
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-entity-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Root URLs and Groups')",
                                                     path='T[0][0][0][0][0]',
                                                     peer_obj=entity_pane_title_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     '_',
                                                     [
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
                                                             path='T[0][0][0][0][1][0]',
                                                             peer_obj=entity_pane_empty_text_peer
                                                         ),
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
                                                             path='T[0][0][0][0][1][1]',
                                                             peer_obj=entity_pane_empty_button_peer
@@ -2160,7 +2137,7 @@ class TestSnapshotDiffGolden:
                                                     path='T[0][0][0][0][1]',
                                                     peer_obj=entity_pane_empty_state_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
                                                     path='T[0][0][0][0][2]',
                                                     peer_obj=entity_pane_add_button_peer
@@ -2169,10 +2146,10 @@ class TestSnapshotDiffGolden:
                                             path='T[0][0][0][0]',
                                             peer_obj=entity_pane_peer
                                         ),
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-task-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Tasks')",
                                                     path='T[0][0][0][1][0]',
                                                     peer_obj=task_pane_title_peer
@@ -2194,30 +2171,30 @@ class TestSnapshotDiffGolden:
                     peer_obj=main_window_peer,
                     children_elided=True
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.StaticText(Label='New Root URL')",
                             path='T[1][0]',
                             peer_obj=dialog_title_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.StaticText(Label='URL:')",
                             path='T[1][1]',
                             peer_obj=dialog_url_label_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
                             path='T[1][2]',
                             peer_obj=dialog_url_field_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
                             path='T[1][3]',
                             peer_obj=dialog_cancel_button_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.Button(Id=wx.ID_NEW, Label='&New')",
                             path='T[1][4]',
                             peer_obj=dialog_new_button_peer
@@ -2304,35 +2281,35 @@ class TestSnapshotDiffGolden:
         dialog_new_button_peer = object()
         
         # Old snapshot: Main window with empty state + dialog
-        old = make_snapshot(
+        old = _make_snapshot(
             '',
             [
-                make_snapshot(
+                _make_snapshot(
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             '_',
                             [
-                                make_snapshot(
+                                _make_snapshot(
                                     'wx.SplitterWindow()',
                                     [
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-entity-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Root URLs and Groups')",
                                                     path='T[0][0][0][0][0]',
                                                     peer_obj=entity_pane_title_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     '_',
                                                     [
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             "wx.StaticText(Label='Download your first page by defining a root URL for the page.')",
                                                             path='T[0][0][0][0][1][0]',
                                                             peer_obj=entity_pane_empty_text_peer
                                                         ),
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             "wx.Button(Name='cr-empty-state-new-root-url-button', Label='New Root URL...')",
                                                             path='T[0][0][0][0][1][1]',
                                                             peer_obj=entity_pane_empty_button_peer
@@ -2341,7 +2318,7 @@ class TestSnapshotDiffGolden:
                                                     path='T[0][0][0][0][1]',
                                                     peer_obj=entity_pane_empty_state_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
                                                     path='T[0][0][0][0][2]',
                                                     peer_obj=entity_pane_add_button_peer
@@ -2350,18 +2327,18 @@ class TestSnapshotDiffGolden:
                                             path='T[0][0][0][0]',
                                             peer_obj=entity_pane_peer
                                         ),
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-task-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Tasks')",
                                                     path='T[0][0][0][1][0]',
                                                     peer_obj=task_pane_title_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "crystal.ui.tree._OrderedTreeCtrl(Name='cr-task-tree')",
                                                     [
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             'TreeItem(IsRoot=True, Visible=False, IsSelected=True)',
                                                             [],  # No children in old snapshot
                                                             path='T[0][0][0][1][1][0]',
@@ -2388,30 +2365,30 @@ class TestSnapshotDiffGolden:
                     peer_obj=main_window_peer,
                     children_elided=True
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "wx.Dialog(IsModal=True, Name='cr-new-root-url-dialog', Label='New Root URL')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.StaticText(Label='New Root URL')",
                             path='T[1][0]',
                             peer_obj=dialog_title_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.StaticText(Label='URL:')",
                             path='T[1][1]',
                             peer_obj=dialog_url_label_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.TextCtrl(Name='cr-new-root-url-dialog__url-field', Value='')",
                             path='T[1][2]',
                             peer_obj=dialog_url_field_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.Button(Id=wx.ID_CANCEL, Label='&Cancel')",
                             path='T[1][3]',
                             peer_obj=dialog_cancel_button_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "wx.Button(Id=wx.ID_NEW, Label='&New')",
                             path='T[1][4]',
                             peer_obj=dialog_new_button_peer
@@ -2426,33 +2403,33 @@ class TestSnapshotDiffGolden:
         )
         
         # New snapshot: Main window with entity tree (no empty state) + no dialog
-        new = make_snapshot(
+        new = _make_snapshot(
             '',
             [
-                make_snapshot(
+                _make_snapshot(
                     "wx.Frame(Name='cr-main-window', Label='Untitled Project')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             '_',
                             [
-                                make_snapshot(
+                                _make_snapshot(
                                     'wx.SplitterWindow()',
                                     [
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-entity-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Root URLs and Groups')",
                                                     path='T[0][0][0][0][0]',
                                                     peer_obj=entity_pane_title_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "crystal.ui.tree._OrderedTreeCtrl(Name='cr-entity-tree')",
                                                     [
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             'TreeItem(IsRoot=True, Visible=False)',
                                                             [
-                                                                make_snapshot(
+                                                                _make_snapshot(
                                                                     "TreeItem(👁='▶︎ 📁 /', IsSelected=True, IconTooltip='Fresh root URL')",
                                                                     path='T[0][0][0][0][1][0][0]',
                                                                     peer_obj=entity_pane_tree_item_peer
@@ -2465,7 +2442,7 @@ class TestSnapshotDiffGolden:
                                                     path='T[0][0][0][0][1]',
                                                     peer_obj=entity_pane_tree_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.Button(Name='cr-add-url-button', Label='New Root URL...')",
                                                     path='T[0][0][0][0][2]',
                                                     peer_obj=entity_pane_add_button_peer
@@ -2474,21 +2451,21 @@ class TestSnapshotDiffGolden:
                                             path='T[0][0][0][0]',
                                             peer_obj=entity_pane_peer
                                         ),
-                                        make_snapshot(
+                                        _make_snapshot(
                                             "wx.Panel(Name='cr-task-pane')",
                                             [
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "wx.StaticText(Label='Tasks')",
                                                     path='T[0][0][0][1][0]',
                                                     peer_obj=task_pane_title_peer
                                                 ),
-                                                make_snapshot(
+                                                _make_snapshot(
                                                     "crystal.ui.tree._OrderedTreeCtrl(Name='cr-task-tree')",
                                                     [
-                                                        make_snapshot(
+                                                        _make_snapshot(
                                                             'TreeItem(IsRoot=True, Visible=False, IsSelected=True)',
                                                             [
-                                                                make_snapshot(
+                                                                _make_snapshot(
                                                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/ -- 2 of 13 item(s) -- ? remaining (?/item)')",
                                                                     path='T[0][0][0][1][1][0][0]',
                                                                     peer_obj=task_pane_tree_item_peer
@@ -2598,46 +2575,46 @@ class TestSnapshotDiffGolden:
         root_7_peer = object()
         
         # Old snapshot: Root resource collapsed
-        old = make_snapshot(
+        old = _make_snapshot(
             'TreeItem(IsRoot=True, Visible=False)',
             [
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /', IsSelected=True, IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[0]',
                     peer_obj=root_0_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /1/', IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[1]',
                     peer_obj=root_1_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /2/', IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[2]',
                     peer_obj=root_2_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     'More(Count=2)',
                     [],
                     path='T[0][0][0][0][1].Tree[3:5]',
                     peer_obj=root_more_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /5/', IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[5]',
                     peer_obj=root_5_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /6/', IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[6]',
                     peer_obj=root_6_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /#/index.html - Comic', IconTooltip='Group')",
                     [],
                     path='T[0][0][0][0][1].Tree[7]',
@@ -2649,55 +2626,55 @@ class TestSnapshotDiffGolden:
         )
         
         # New snapshot: Root resource expanded
-        new = make_snapshot(
+        new = _make_snapshot(
             'TreeItem(IsRoot=True, Visible=False)',
             [
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▼ 📂 /', IsSelected=True, IconTooltip='Fresh root URL')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /#/index.html - 8 of Comic', IconTooltip='Grouped urls')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][0]',
                             peer_obj=root_0_0_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /atom.xml - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][1]',
                             peer_obj=root_0_1_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /rss.xml - Unknown Link (rel=alternate), Link: RSS Feed', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][2]',
                             peer_obj=root_0_2_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /styles.css - Link: Stylesheet', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][3]',
                             peer_obj=root_0_3_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /script.js - Link: Script', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][4]',
                             peer_obj=root_0_4_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /license.html - Link: More details', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][5]',
                             peer_obj=root_0_5_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 (Low-priority: Offsite)', IconTooltip='Offsite URLs')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][6]',
                             peer_obj=root_0_6_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 (Hidden: Embedded)', IconTooltip='Embedded URLs')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][7]',
@@ -2707,37 +2684,37 @@ class TestSnapshotDiffGolden:
                     path='T[0][0][0][0][1].Tree[0]',
                     peer_obj=root_0_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /1/', IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[1]',
                     peer_obj=root_1_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /2/', IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[2]',
                     peer_obj=root_2_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     'More(Count=2)',
                     [],
                     path='T[0][0][0][0][1].Tree[3:5]',
                     peer_obj=root_more_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /5/', IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[5]',
                     peer_obj=root_5_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /6/', IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[6]',
                     peer_obj=root_6_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /#/index.html - Comic', IconTooltip='Group')",
                     [],
                     path='T[0][0][0][0][1].Tree[7]',
@@ -2800,19 +2777,19 @@ class TestSnapshotDiffGolden:
         group_more_new_peer = object()
         
         # Old snapshot: Group with nodes /1/ through /100/ visible and a "2,338 more" node
-        old = make_snapshot(
+        old = _make_snapshot(
             'TreeItem(IsRoot=True, Visible=False)',
             [
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 / - Home', IsSelected=True, IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[0]',
                     peer_obj=group_0_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▼ 📂 /#/index.html - Comic', IconTooltip='Group')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             f"TreeItem(👁='▶︎ 📁 /{i}/index.html', IconTooltip='Undownloaded URL')",
                             [],
                             path=f'T[0][0][0][0][1].Tree[1][{i-1}]',
@@ -2820,7 +2797,7 @@ class TestSnapshotDiffGolden:
                         )
                         for i in range(1, 101)
                     ] + [
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 2,338 more')",
                             [],
                             path='T[0][0][0][0][1].Tree[1][100]',
@@ -2836,19 +2813,19 @@ class TestSnapshotDiffGolden:
         )
         
         # New snapshot: Group with nodes /1/ through /120/ visible and a "2,318 more" node
-        new = make_snapshot(
+        new = _make_snapshot(
             'TreeItem(IsRoot=True, Visible=False)',
             [
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 / - Home', IsSelected=True, IconTooltip='Fresh root URL')",
                     [],
                     path='T[0][0][0][0][1].Tree[0]',
                     peer_obj=group_0_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▼ 📂 /#/index.html - Comic', IconTooltip='Group')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             f"TreeItem(👁='▶︎ 📁 /{i}/index.html', IconTooltip='Undownloaded URL')",
                             [],
                             path=f'T[0][0][0][0][1].Tree[1][{i-1}]',
@@ -2856,7 +2833,7 @@ class TestSnapshotDiffGolden:
                         )
                         for i in range(1, 121)
                     ] + [
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 2,318 more')",
                             [],
                             path='T[0][0][0][0][1].Tree[1][120]',
@@ -2938,109 +2915,109 @@ class TestSnapshotDiffGolden:
         group_root_peer = object()
         
         # Old snapshot: Before group is defined
-        old = make_snapshot(
+        old = _make_snapshot(
             'TreeItem(IsRoot=True, Visible=False)',
             [
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▼ 📂 / - Home', IconTooltip='Fresh root URL')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /atom.xml - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][0]',
                             peer_obj=root_0_0_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /rss.xml - Unknown Link (rel=alternate), Link: RSS Feed', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][1]',
                             peer_obj=root_0_1_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /styles.css - Link: Stylesheet', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][3]',
                             peer_obj=object()
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /script.js - Link: Script', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][4]',
                             peer_obj=object()
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IsSelected=True, IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][5]',
                             peer_obj=url_1_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][6]',
                             peer_obj=url_2438_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /other1.html - Link', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][7]',
                             peer_obj=object()
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /other2.html - Link', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][8]',
                             peer_obj=object()
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /150/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][9]',
                             peer_obj=url_150_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /730/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][10]',
                             peer_obj=url_730_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /162/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][11]',
                             peer_obj=url_162_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /688/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][12]',
                             peer_obj=url_688_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /556/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][13]',
                             peer_obj=url_556_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /1732/index.html - Link', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][14]',
                             peer_obj=url_1732_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /license.html - Link: More details', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][15]',
                             peer_obj=root_0_39_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 (Low-priority: Offsite)', IconTooltip='Offsite URLs')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][16]',
                             peer_obj=root_0_40_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 (Hidden: Embedded)', IconTooltip='Embedded URLs')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][17]',
@@ -3056,58 +3033,58 @@ class TestSnapshotDiffGolden:
         )
         
         # New snapshot: After group is defined
-        new = make_snapshot(
+        new = _make_snapshot(
             'TreeItem(IsRoot=True, Visible=False)',
             [
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▼ 📂 / - Home', IconTooltip='Fresh root URL')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▼ 📂 /#/index.html - 8 of Comic', IconTooltip='Grouped urls')",
                             [
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 /1/index.html - Link: |<, Link: |<', IsSelected=True, IconTooltip='Undownloaded URL')",
                                     [],
                                     path='T[0][0][0][0][1].Tree[0][0][0]',
                                     peer_obj=url_1_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 /2438/index.html - Link: < Prev, Link: < Prev', IconTooltip='Undownloaded URL')",
                                     [],
                                     path='T[0][0][0][0][1].Tree[0][0][1]',
                                     peer_obj=url_2438_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 /150/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                                     [],
                                     path='T[0][0][0][0][1].Tree[0][0][2]',
                                     peer_obj=url_150_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 /730/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                                     [],
                                     path='T[0][0][0][0][1].Tree[0][0][3]',
                                     peer_obj=url_730_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 /162/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                                     [],
                                     path='T[0][0][0][0][1].Tree[0][0][4]',
                                     peer_obj=url_162_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 /688/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                                     [],
                                     path='T[0][0][0][0][1].Tree[0][0][5]',
                                     peer_obj=url_688_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 /556/index.html - Unknown Href (area)', IconTooltip='Undownloaded URL')",
                                     [],
                                     path='T[0][0][0][0][1].Tree[0][0][6]',
                                     peer_obj=url_556_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 /1732/index.html - Link', IconTooltip='Undownloaded URL')",
                                     [],
                                     path='T[0][0][0][0][1].Tree[0][0][7]',
@@ -3117,55 +3094,55 @@ class TestSnapshotDiffGolden:
                             path='T[0][0][0][0][1].Tree[0][0]',
                             peer_obj=group_inlined_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /atom.xml - Unknown Link (rel=alternate), Link: Feed, Link: Atom Feed', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][1]',
                             peer_obj=root_0_0_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /rss.xml - Unknown Link (rel=alternate), Link: RSS Feed', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][2]',
                             peer_obj=root_0_1_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /other1.html - Link', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][3]',
                             peer_obj=object()
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /other2.html - Link', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][4]',
                             peer_obj=object()
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /styles.css - Link: Stylesheet', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][5]',
                             peer_obj=object()
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /script.js - Link: Script', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][6]',
                             peer_obj=object()
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 /license.html - Link: More details', IconTooltip='Undownloaded URL')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][7]',
                             peer_obj=root_0_39_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 (Low-priority: Offsite)', IconTooltip='Offsite URLs')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][8]',
                             peer_obj=root_0_40_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 (Hidden: Embedded)', IconTooltip='Embedded URLs')",
                             [],
                             path='T[0][0][0][0][1].Tree[0][9]',
@@ -3175,7 +3152,7 @@ class TestSnapshotDiffGolden:
                     path='T[0][0][0][0][1].Tree[0]',
                     peer_obj=root_0_peer
                 ),
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▶︎ 📁 /#/index.html - Comic', IconTooltip='Group')",
                     [],
                     path='T[0][0][0][0][1].Tree[1]',
@@ -3271,81 +3248,81 @@ class TestSnapshotDiffGolden:
         more_end_peer = object()
         
         # Old snapshot: 27 items completed
-        old = make_snapshot(
+        old = _make_snapshot(
             'TreeItem(IsRoot=True, Visible=False, IsSelected=True)',
             [
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▼ 📂 Downloading group: Comic -- 27 of 2,438 item(s) -- 2:18:01 remaining (3.43s/item)')",
                     [  
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 Finding members of group: Comic -- Complete')",
                             path='T[0][0]',
                             peer_obj=subtask_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▼ 📂 Downloading members of group: Comic -- 27 of 2,438 item(s) -- 2:18:01 remaining (3.43s/item)')",
                             [
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='— 📄 22 more')",
                                     path='T[0][1][0]',
                                     peer_obj=more_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2424/index.html -- Complete')",
                                     path='T[0][1][1]',
                                     peer_obj=item_2424_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2423/index.html -- Complete')",
                                     path='T[0][1][2]',
                                     peer_obj=item_2423_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2422/index.html -- Complete')",
                                     path='T[0][1][3]',
                                     peer_obj=item_2422_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2421/index.html -- Complete')",
                                     path='T[0][1][4]',
                                     peer_obj=item_2421_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2420/index.html -- Complete')",
                                     path='T[0][1][5]',
                                     peer_obj=item_2420_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- Downloading')",
                                     path='T[0][1][6]',
                                     peer_obj=item_1001_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- Queued')",
                                     path='T[0][1][7]',
                                     peer_obj=item_1002_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- Queued')",
                                     path='T[0][1][8]',
                                     peer_obj=item_1003_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- Queued')",
                                     path='T[0][1][9]',
                                     peer_obj=item_1004_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1005/index.html -- Queued')",
                                     path='T[0][1][10]',
                                     peer_obj=item_1005_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1006/index.html -- Queued')",
                                     path='T[0][1][11]',
                                     peer_obj=item_1006_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='— 📄 2,310 more')",
                                     path='T[0][1][12]',
                                     peer_obj=more_end_peer
@@ -3364,89 +3341,89 @@ class TestSnapshotDiffGolden:
         )
         
         # New snapshot: 30 items completed, scrolled up by 3 items
-        new = make_snapshot(
+        new = _make_snapshot(
             'TreeItem(IsRoot=True, Visible=False, IsSelected=True)',
             [
-                make_snapshot(
+                _make_snapshot(
                     "TreeItem(👁='▼ 📂 Downloading group: Comic -- 30 of 2,438 item(s) -- 2:19:18 remaining (3.47s/item)')",
                     [
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▶︎ 📁 Finding members of group: Comic -- Complete')",
                             path='T[0][0]',
                             peer_obj=subtask_peer
                         ),
-                        make_snapshot(
+                        _make_snapshot(
                             "TreeItem(👁='▼ 📂 Downloading members of group: Comic -- 30 of 2,438 item(s) -- 2:19:18 remaining (3.47s/item)')",
                             [
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='— 📄 25 more')",
                                     path='T[0][1][0]',
                                     peer_obj=more_peer
                                 ),
                                 # 2424, 2423, 2422 removed (scrolled off by 3 items)
                                 # 2421, 2420 stay visible and complete
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2421/index.html -- Complete')",
                                     path='T[0][1][1]',
                                     peer_obj=item_2421_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/2420/index.html -- Complete')",
                                     path='T[0][1][2]',
                                     peer_obj=item_2420_peer
                                 ),
                                 # 1001 moved from index 6 to 3 and completed
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1001/index.html -- Complete')",
                                     path='T[0][1][3]',
                                     peer_obj=item_1001_peer
                                 ),
                                 # 1002 moved from index 7 to 4 and completed
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1002/index.html -- Complete')",
                                     path='T[0][1][4]',
                                     peer_obj=item_1002_peer
                                 ),
                                 # 1003 moved from index 8 to 5 and completed
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1003/index.html -- Complete')",
                                     path='T[0][1][5]',
                                     peer_obj=item_1003_peer
                                 ),
                                 # 1004 moved from index 9 to 6 and now downloading
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1004/index.html -- Downloading')",
                                     path='T[0][1][6]',
                                     peer_obj=item_1004_peer
                                 ),
                                 # 1005, 1006 stay queued and shifted up
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1005/index.html -- Queued')",
                                     path='T[0][1][7]',
                                     peer_obj=item_1005_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1006/index.html -- Queued')",
                                     path='T[0][1][8]',
                                     peer_obj=item_1006_peer
                                 ),
                                 # 1007, 1008, 1009 newly visible, queued
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1007/index.html -- Queued')",
                                     path='T[0][1][9]',
                                     peer_obj=item_1007_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1008/index.html -- Queued')",
                                     path='T[0][1][10]',
                                     peer_obj=item_1008_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='▶︎ 📁 Downloading: https://xkcd.daarchive.net/1009/index.html -- Queued')",
                                     path='T[0][1][11]',
                                     peer_obj=item_1009_peer
                                 ),
-                                make_snapshot(
+                                _make_snapshot(
                                     "TreeItem(👁='— 📄 2,307 more')",
                                     path='T[0][1][12]',
                                     peer_obj=more_end_peer
@@ -3515,3 +3492,26 @@ class TestSnapshotDiffGolden:
             diff_repr = repr(diff)
             actual_diff_repr_lines = diff_repr.split('\n')
             assert actual_diff_repr_lines == expected_reverse_diff_repr_lines
+
+
+# === Utility ===
+
+def _make_snapshot(
+        desc: str,
+        children: list[Snapshot] | None = None,
+        path: str = 'T',
+        query: str = '',
+        accessor: str = 'I',
+        peer_obj: object | None = None,
+        children_elided: bool = False,
+        ) -> Snapshot:
+    """Helper to create a Snapshot for testing."""
+    return Snapshot(
+        peer_description=desc,
+        children=children or [],
+        path=path,
+        query=query,
+        peer_accessor=accessor,
+        peer_obj=peer_obj,
+        children_elided=children_elided,
+    )
