@@ -74,13 +74,6 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]'], CloakMixin):  # abstract
         raise NotImplementedError()
     
     @classmethod
-    def _describe_children(cls,
-            parent: _P,
-            path: str,
-            ) -> list[str]:
-        raise NotImplementedError()
-    
-    @classmethod
     def _describe(cls, peer: _P) -> str:
         raise NotImplementedError()
     
@@ -308,70 +301,6 @@ class WindowNavigator(Navigator[wx.Window]):
             peer_obj=peer,
             children_elided=children_elided,
         )
-    
-    @classmethod
-    def _describe_children(cls,
-            parent: wx.Window | None,
-            path: str,
-            ) -> list[str]:
-        children = cls._children_of(parent)
-        tree_item_root = (
-            TreeItem.GetRootItem(parent)
-            if isinstance(parent, wx.TreeCtrl)
-            else None
-        )
-        if len(children) == 0 and tree_item_root is None:
-            return ['{}']
-        else:
-            modal_tlws = [
-                tlw for tlw in wx.GetTopLevelWindows()
-                if isinstance(tlw, wx.Dialog) and tlw.IsModal()
-            ] if parent is None else []
-            
-            lines = []
-            lines.append('{')
-            if tree_item_root is not None:
-                c = tree_item_root
-                c_path = f'{path}.Tree'
-                inner_lines = TreeItemNavigator._describe_children(c, c_path)
-                inner_lines[0] = f'({c_path} := {TreeItemNavigator._describe(c)}): ' + inner_lines[0]
-                for x in inner_lines:
-                    lines.append(f'  {x}')
-                lines[-1] += ','
-            
-            for i in range(min(len(children), 7)):
-                if len(children) > 7:
-                    # Insert a More(...) item in the center of the children list
-                    # such that no more than 7 children are displayed by default
-                    if i < 3:
-                        c_index = i
-                        # (keep going)
-                    elif i == 3:
-                        inner_line = f'({path}[{3}:{len(children)-3}] := More(Count={len(children) - 6})): [...]'
-                        lines.append(f'  {inner_line}')
-                        lines[-1] += ','
-                        continue
-                    elif i > 3:
-                        c_index = len(children) - 3 + (i - 4)
-                        # (keep going)
-                else:
-                    # Display the full children list
-                    c_index = i
-                c = children[c_index]
-                
-                c_path = f'{path}[{c_index}]'
-                if modal_tlws and c not in modal_tlws:
-                    # Elide tree for a top-level window that isn't interactable
-                    # because some other modal window is visible
-                    inner_lines = ['{ ... }']
-                else:
-                    inner_lines = cls._describe_children(c, c_path)
-                inner_lines[0] = f'({c_path}.{cls._PEER_ACCESSOR} := {cls._describe(c)}): ' + inner_lines[0]
-                for x in inner_lines:
-                    lines.append(f'  {x}')
-                lines[-1] += ','
-            lines.append('}')
-            return lines
     
     @classmethod
     def _describe(cls, peer: wx.Window) -> str:
@@ -741,46 +670,6 @@ class TreeItemNavigator(Navigator[TreeItem]):
         )
     
     @classmethod
-    def _describe_children(cls,
-            parent: TreeItem,
-            path: str,
-            ) -> list[str]:
-        children = cls._children_of(parent)
-        if len(children) == 0:
-            return ['{}']
-        else:
-            lines = []
-            lines.append('{')
-            for i in range(min(len(children), 7)):
-                if len(children) > 7:
-                    # Insert a More(...) item in the center of the children list
-                    # such that no more than 7 children are displayed by default
-                    if i < 3:
-                        c_index = i
-                        # (keep going)
-                    elif i == 3:
-                        inner_line = f'({path}[{3}:{len(children)-3}] := More(Count={len(children) - 6})): [...]'
-                        lines.append(f'  {inner_line}')
-                        lines[-1] += ','
-                        continue
-                    elif i > 3:
-                        c_index = len(children) - 3 + (i - 4)
-                        # (keep going)
-                else:
-                    # Display the full children list
-                    c_index = i
-                c = children[c_index]
-                
-                c_path = f'{path}[{c_index}]'
-                inner_lines = cls._describe_children(c, c_path)
-                inner_lines[0] = f'({c_path}.{cls._PEER_ACCESSOR} := {cls._describe(c)}): ' + inner_lines[0]
-                for x in inner_lines:
-                    lines.append(f'  {x}')
-                lines[-1] += ','
-            lines.append('}')
-            return lines
-    
-    @classmethod
     def _describe(cls, peer: TreeItem) -> str:
         item = peer
         item_is_root = item.IsRoot()  # cache
@@ -1023,7 +912,6 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         path = self._path
         
         if self._children_elided:
-            # TODO: Use '{ ... }' here to be consistent with similar usage elsewhere
             return ['{...}']
         elif len(children) == 0:
             return ['{}']
@@ -2015,15 +1903,13 @@ class NavigatorSlice(Generic[_P], tuple[Navigator[_P], ...]):  # pylint: disable
         if len(items) == 0:
             return ['{}']
         else:
-            path = self._path  # cache
-            N = type(items[0])
-            
             lines = []
             lines.append('{')
             for (c_index, c) in enumerate(items, start=self._start):
-                c_path = f'{path}[{c_index}]'
-                inner_lines = N._describe_children(c._peer, c_path)
-                inner_lines[0] = f'({c_path}.{N._PEER_ACCESSOR} := {N._describe(c._peer)}): ' + inner_lines[0]
+                # Get snapshot of this navigator and use its _describe_children()
+                c_snapshot = c.snapshot()
+                inner_lines = c_snapshot._describe_children()
+                inner_lines[0] = f'({c_snapshot._path}.{c_snapshot._peer_accessor} := {c_snapshot._peer_description}): ' + inner_lines[0]
                 for x in inner_lines:
                     lines.append(f'  {x}')
                 lines[-1] += ','
