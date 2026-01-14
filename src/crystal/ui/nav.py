@@ -10,6 +10,7 @@ from collections.abc import Callable, Hashable, Sequence
 #       outside of the crystal.tests.** namespace
 from crystal.tests.util.controls import TreeItem
 from crystal.util.cloak import CloakMixin, cloak
+from crystal.util.xos import is_mac_os
 from crystal.util.xthreading import fg_affinity
 from crystal.util.xtyping import not_none
 from difflib import SequenceMatcher
@@ -245,6 +246,13 @@ class WindowNavigator(Navigator[wx.Window]):
         # Get children
         children = cls._children_of(peer)
         
+        # Check for MenuBar
+        menubar = (
+            peer.MenuBar
+            if isinstance(peer, wx.Frame)
+            else None
+        )
+        
         # Check for TreeCtrl with root item
         tree_item_root = (
             TreeItem.GetRootItem(peer)
@@ -262,7 +270,20 @@ class WindowNavigator(Navigator[wx.Window]):
         all_children_list = cls._all_children_of(peer)
         child_snapshots: list[Snapshot[wx.Window]] = []
         
-        # Add TreeItem root as first "child" if present
+        # Add MenuBar as first "child" if present
+        if menubar is not None:
+            menubar_snapshot = MenuBarNavigator._snapshot_for(
+                peer=menubar,
+                path=f'{path}.MenuBar',
+                query=(
+                    f'{query}.MenuBar'
+                    if query
+                    else f'wx.GetTopLevelWindows()[...].MenuBar'
+                ),
+            )
+            child_snapshots.append(menubar_snapshot)  # type: ignore[arg-type]
+        
+        # Add TreeItem root as second "child" if present
         if tree_item_root is not None:
             tree_snapshot = TreeItemNavigator._snapshot_for(
                 peer=tree_item_root,
@@ -482,6 +503,26 @@ class WindowNavigator(Navigator[wx.Window]):
         return len(self._children_of(self._peer))
     
     @property
+    def MenuBar(self) -> MenuBarNavigator:
+        """
+        Returns a navigator pointing to the MenuBar of this
+        navigator's window, which must be a wx.Frame to have one.
+        
+        Raises:
+        * NoMenuBar -- if the window has no menubar
+        """
+        if not isinstance(self._peer, wx.Frame):
+            raise NoMenuBar()
+        menubar = self._peer.MenuBar
+        if menubar is None:
+            raise NoMenuBar()
+        return MenuBarNavigator(
+            menubar,
+            f'{self._path}.MenuBar',
+            f'{self._query}.MenuBar',
+        )
+    
+    @property
     def Tree(self) -> TreeItemNavigator:
         """
         Returns a navigator pointing to the root TreeItem of this
@@ -592,8 +633,516 @@ class NoSuchWindow(ValueError):
     pass
 
 
+class NoMenuBar(ValueError):
+    pass
+
+
 class NotATreeCtrl(ValueError):
     pass
+
+
+# ------------------------------------------------------------------------------
+# MenuBarNavigator
+
+class MenuBarNavigator(Navigator[wx.MenuBar]):
+    """
+    Points to a wx.MenuBar. Shows the menubar's menus when printed.
+    
+    When viewed as a Sequence, returns a MenuNavigator to navigate to each of the
+    menubar's menus. See __getitem__() documentation for all ways
+    to navigate.
+    """
+    # Attributes that can be set on this class
+    _ALLOWED_ATTRS = frozenset({'_path', '_query'})
+    
+    # === Init ===
+
+    def __init__(self,
+            menubar: wx.MenuBar,
+            path: str,
+            query: str,
+            ) -> None:
+        """
+        Creates a navigator. Most code will obtain a navigator by navigating
+        from a WindowNavigator rather than creating one directly.
+        """
+        self._peer = menubar
+        self._path = path
+        self._query = query
+    
+    # === Formatting ===
+    
+    def __repr__(self) -> str:
+        """
+        Describes a CodeExpression to obtain this navigator's wx.MenuBar
+        and describes all of the menubar's menus, including a
+        CodeExpression to navigate to each menu.
+        """
+        return repr(self.snapshot())
+    
+    @fg_affinity
+    def snapshot(self) -> Snapshot[wx.MenuBar]:
+        """
+        Creates a snapshot of this navigator's state, recursively capturing
+        all menus.
+        """
+        return self._snapshot_for(self._peer, self._path, self._query)
+    
+    @classmethod
+    def _snapshot_for(cls,
+            peer: wx.MenuBar,
+            path: str,
+            query: str,
+            ) -> Snapshot[wx.MenuBar]:
+        peer_description = cls._describe(peer)
+        
+        # Get menus
+        menu_count = peer.GetMenuCount()
+        child_snapshots: list[Snapshot[wx.Menu]] = []
+        for i in range(menu_count):
+            menu = peer.GetMenu(i)
+            c_path = f'{path}[{i}]'
+            # NOTE: .Menus[index] isn't appropriate because it doesn't return a wx.Menu
+            c_query = f'{query}.GetMenu({i})'
+            
+            menu_snapshot = MenuNavigator._snapshot_for(
+                peer=menu,
+                path=c_path,
+                query=c_query,
+                collapsed=True,
+            )
+            child_snapshots.append(menu_snapshot)  # type: ignore[arg-type]
+        
+        return Snapshot(
+            peer_description=peer_description,
+            children=child_snapshots,
+            path=path,
+            query=query,
+            peer_accessor=cls._PEER_ACCESSOR,
+            peer_obj=peer,
+        )
+    
+    @classmethod
+    def _describe(cls, peer: wx.MenuBar) -> str:
+        return 'wx.MenuBar()'
+    
+    # === Navigation ===
+    
+    @overload
+    def __getitem__(self, index: int) -> MenuNavigator: ...
+    @overload
+    def __getitem__(self, index: slice) -> NavigatorSlice[wx.Menu]: ...
+    def __getitem__(self, index: int | slice):
+        """
+        - navigator[i], where i is an int, returns a navigator pointing to
+          the i'th menu in the menubar.
+        - navigator[i:j:k], where i:j:k is a slice, returns navigators
+          corresponding to the associated menus in the menubar.
+        """
+        if isinstance(index, int):
+            menu = self._peer.GetMenu(index)
+            c_path = f'{self._path}[{index}]'
+            # NOTE: .Menus[index] isn't appropriate because it doesn't return a wx.Menu
+            c_query = f'{self._query}.GetMenu({index})'
+            return MenuNavigator(menu, c_path, c_query)
+        elif isinstance(index, slice):
+            menu_count = self._peer.GetMenuCount()
+            items = [
+                self[i]
+                for i in range(index.start or 0, index.stop or menu_count, index.step or 1)
+            ]
+            return NavigatorSlice(index.start or 0, items, self._path)
+        else:
+            assert_never(index)
+    
+    def __len__(self) -> int:
+        """
+        The number of menus in the menubar.
+        """
+        return self._peer.GetMenuCount()
+    
+    # === Properties ===
+    
+    _PEER_ACCESSOR = 'M'
+    
+    @property
+    def MenuBar(self) -> wx.MenuBar:
+        """
+        The wx.MenuBar that this navigator is pointing to.
+        """
+        return self._peer
+    
+    @property
+    def M(self) -> wx.MenuBar:
+        """
+        Shorthand property equivalent to .MenuBar, for quick scripts.
+        """
+        return self.MenuBar
+    
+    @property
+    def Query(self) -> CodeExpression:
+        """
+        A code expression suitable for including in production code
+        which returns this navigator's menubar.
+        """
+        return CodeExpression(self._query)
+    
+    @property
+    def Q(self) -> CodeExpression:
+        """
+        Shorthand property equivalent to .Query, for quick scripts.
+        """
+        return self.Query
+
+
+# ------------------------------------------------------------------------------
+# MenuNavigator
+
+class MenuNavigator(Navigator[wx.Menu]):
+    """
+    Points to a wx.Menu. Shows the menu's items when printed.
+    
+    When viewed as a Sequence, returns a MenuItemNavigator to navigate to each of the
+    menu's items. See __getitem__() documentation for all ways
+    to navigate.
+    """
+    # Attributes that can be set on this class
+    _ALLOWED_ATTRS = frozenset({'_path', '_query', '_title'})
+    
+    # === Init ===
+
+    def __init__(self,
+            menu: wx.Menu,
+            path: str,
+            query: str,
+            ) -> None:
+        """
+        Creates a navigator. Most code will obtain a navigator by navigating
+        from a MenuBarNavigator rather than creating one directly.
+        """
+        self._peer = menu
+        self._path = path
+        self._query = query
+    
+    # === Formatting ===
+    
+    def __repr__(self) -> str:
+        """
+        Describes a CodeExpression to obtain this navigator's wx.Menu
+        and describes all of the menu's items, including a
+        CodeExpression to navigate to each item.
+        """
+        return repr(self.snapshot())
+    
+    @fg_affinity
+    def snapshot(self) -> Snapshot[wx.Menu]:
+        """
+        Creates a snapshot of this navigator's state, recursively capturing
+        all menu items.
+        
+        Note: This implicitly opens the menu to read its items,
+        then closes it.
+        """
+        return self._snapshot_for(self._peer, self._path, self._query)
+    
+    @classmethod
+    def _snapshot_for(cls,
+            peer: wx.Menu,
+            path: str,
+            query: str,
+            *, collapsed: bool = False,
+            ) -> Snapshot[wx.Menu]:
+        peer_description = cls._describe(peer)
+        
+        # Get menu items
+        child_snapshots: list[Snapshot[wx.MenuItem]] = []
+        if not collapsed:
+            for (i, menu_item) in enumerate(peer.MenuItems):
+                c_path = f'{path}[{i}]'
+                c_query = f'{query}.MenuItems[{i}]'
+                
+                item_snapshot = MenuItemNavigator._snapshot_for(
+                    peer=menu_item,
+                    path=c_path,
+                    query=c_query,
+                )
+                child_snapshots.append(item_snapshot)  # type: ignore[arg-type]
+        
+        return Snapshot(
+            peer_description=peer_description,
+            children=child_snapshots,
+            path=path,
+            query=query,
+            peer_accessor=cls._PEER_ACCESSOR,
+            peer_obj=peer,
+            children_elided=collapsed,
+        )
+    
+    @classmethod
+    def _describe(cls, peer: wx.Menu) -> str:
+        return f'wx.Menu(Title={repr(peer.Title)})'
+    
+    # === Navigation ===
+    
+    @overload
+    def __getitem__(self, index: int) -> MenuItemNavigator: ...
+    @overload
+    def __getitem__(self, index: slice) -> NavigatorSlice[wx.MenuItem]: ...
+    def __getitem__(self, index: int | slice):
+        """
+        - navigator[i], where i is an int, returns a navigator pointing to
+          the i'th item in the menu.
+        - navigator[i:j:k], where i:j:k is a slice, returns navigators
+          corresponding to the associated items in the menu.
+        """
+        menu_items = self._peer.MenuItems
+        if isinstance(index, int):
+            c = menu_items[index]
+            c_path = f'{self._path}[{index}]'
+            c_query = f'{self._query}.MenuItems[{index}]'
+            return MenuItemNavigator(c, c_path, c_query)
+        elif isinstance(index, slice):
+            items = [
+                self[i]
+                for i in range(index.start or 0, index.stop or len(menu_items), index.step or 1)
+            ]
+            return NavigatorSlice(index.start or 0, items, self._path)
+        else:
+            assert_never(index)
+    
+    def __len__(self) -> int:
+        """
+        The number of items in the menu.
+        """
+        return len(self._peer.MenuItems)
+    
+    # === Properties ===
+    
+    _PEER_ACCESSOR = 'M'
+    
+    @property
+    def Menu(self) -> wx.Menu:
+        """
+        The wx.Menu that this navigator is pointing to.
+        """
+        return self._peer
+    
+    @property
+    def M(self) -> wx.Menu:
+        """
+        Shorthand property equivalent to .Menu, for quick scripts.
+        """
+        return self.Menu
+    
+    @property
+    def Query(self) -> CodeExpression:
+        """
+        A code expression suitable for including in production code
+        which returns this navigator's menu.
+        """
+        return CodeExpression(self._query)
+    
+    @property
+    def Q(self) -> CodeExpression:
+        """
+        Shorthand property equivalent to .Query, for quick scripts.
+        """
+        return self.Query
+
+
+# ------------------------------------------------------------------------------
+# MenuItemNavigator
+
+class MenuItemNavigator(Navigator[wx.MenuItem]):
+    """
+    Points to a wx.MenuItem. Shows the menu item when printed.
+    
+    Currently does not support navigating to sub-menus.
+    """
+    # Attributes that can be set on this class
+    _ALLOWED_ATTRS = frozenset({'_path', '_query'})
+    
+    # === Init ===
+
+    def __init__(self,
+            menu_item: wx.MenuItem,
+            path: str,
+            query: str,
+            ) -> None:
+        """
+        Creates a navigator. Most code will obtain a navigator by navigating
+        from a MenuNavigator rather than creating one directly.
+        """
+        self._peer = menu_item
+        self._path = path
+        self._query = query
+    
+    # === Formatting ===
+    
+    def __repr__(self) -> str:
+        """
+        Describes a CodeExpression to obtain this navigator's wx.MenuItem.
+        """
+        return repr(self.snapshot())
+    
+    @fg_affinity
+    def snapshot(self) -> Snapshot[wx.MenuItem]:
+        """
+        Creates a snapshot of this navigator's state.
+        """
+        return self._snapshot_for(self._peer, self._path, self._query)
+    
+    @classmethod
+    def _snapshot_for(cls,
+            peer: wx.MenuItem,
+            path: str,
+            query: str,
+            ) -> Snapshot[wx.MenuItem]:
+        peer_description = cls._describe(peer)
+        
+        # Report no children, because sub-menus are not yet supported
+        child_snapshots: list[Snapshot] = []
+        
+        return Snapshot(
+            peer_description=peer_description,
+            children=child_snapshots,
+            path=path,
+            query=query,
+            peer_accessor=cls._PEER_ACCESSOR,
+            peer_obj=peer,
+        )
+    
+    @classmethod
+    def _describe(cls, peer: wx.MenuItem) -> str:
+        # Identify key identifying & descriptive attributes
+        details = []  # type: list[tuple[str, str]]
+        if (kind := peer.Kind) != wx.ITEM_NORMAL:
+            if kind == wx.ITEM_SEPARATOR:
+                details.append(('Kind', 'wx.ITEM_SEPARATOR'))
+            elif kind == wx.ITEM_CHECK:
+                details.append(('Kind', 'wx.ITEM_CHECK'))
+            elif kind == wx.ITEM_RADIO:
+                details.append(('Kind', 'wx.ITEM_RADIO'))
+            else:
+                details.append(('Kind', '?'))
+        if not peer.IsEnabled():
+            details.append(('Enabled', repr(False)))
+        # NOTE: Don't report negative IDs, which are auto-generated by wx.IdManager
+        if kind != wx.ITEM_SEPARATOR and (item_id := peer.Id) > 0:
+            details.append(('Id', WindowNavigator._SYMBOL_NAME_FOR_WX_ID_VALUE.get(item_id, str(item_id))))
+        if kind != wx.ITEM_SEPARATOR:
+            details.append(('ItemLabelText', repr(peer.ItemLabelText)))
+        if (accel := peer.Accel) is not None:
+            details.append(('Accel', repr(cls._format_accel(accel))))
+        if peer.IsChecked():
+            details.append(('IsChecked', repr(True)))
+        
+        # Format constructor-like call syntax with key details
+        description = 'wx.MenuItem(' + ', '.join([
+            f'{k}={v}'
+            for (k, v) in details
+        ]) + ')'
+        return description
+    
+    @staticmethod
+    def _format_accel(accel: wx.AcceleratorEntry) -> str:
+        """
+        Format accelerator key as a string matching native OS appearance.
+        
+        Examples:
+        - macOS: '⌘S', '⇧⌘S'
+        - Windows/Linux: 'Ctrl-S', 'Ctrl-Shift-S'
+        """
+        # Build modifier string
+        modifiers = []
+        flags = accel.Flags
+        if is_mac_os():
+            if flags & wx.ACCEL_RAW_CTRL:  # Control key
+                modifiers.append('⌃')
+            if flags & wx.ACCEL_ALT:  # Option key
+                modifiers.append('⌥')
+            if flags & wx.ACCEL_SHIFT:
+                modifiers.append('⇧')
+            if flags & wx.ACCEL_CTRL:  # Command key
+                modifiers.append('⌘')
+        else:
+            if flags & wx.ACCEL_CTRL:
+                modifiers.append('Ctrl')
+            if flags & wx.ACCEL_ALT:
+                modifiers.append('Alt')
+            if flags & wx.ACCEL_SHIFT:
+                modifiers.append('Shift')
+        
+        # Get key name
+        keycode = accel.KeyCode
+        key_name = chr(keycode) if 32 <= keycode < 127 else f'Key{keycode}'
+        
+        # Format based on OS
+        if is_mac_os():
+            # macOS: no separator
+            return ''.join(modifiers) + key_name
+        else:
+            # Windows/Linux: dash separator
+            if modifiers:
+                return '-'.join(modifiers) + '-' + key_name
+            else:
+                return key_name
+    
+    # === Navigation ===
+    
+    @overload
+    def __getitem__(self, index: int) -> NoReturn: ...
+    @overload
+    def __getitem__(self, index: slice) -> NoReturn: ...
+    def __getitem__(self, index: int | slice) -> NoReturn:
+        """
+        Menu items do not currently support sub-menu navigation.
+        
+        Raises:
+        * NotImplementedError
+        """
+        raise NotImplementedError(
+            'MenuItemNavigator does not yet support navigating to sub-menus.'
+        )
+    
+    def __len__(self) -> int:
+        """
+        Menu items currently report no children, because sub-menus are not yet supported.
+        """
+        return 0
+    
+    # === Properties ===
+    
+    _PEER_ACCESSOR = 'M'
+    
+    @property
+    def MenuItem(self) -> wx.MenuItem:
+        """
+        The wx.MenuItem that this navigator is pointing to.
+        """
+        return self._peer
+    
+    @property
+    def M(self) -> wx.MenuItem:
+        """
+        Shorthand property equivalent to .MenuItem, for quick scripts.
+        """
+        return self.MenuItem
+    
+    @property
+    def Query(self) -> CodeExpression:
+        """
+        A code expression suitable for including in production code
+        which returns this navigator's menu item.
+        """
+        return CodeExpression(self._query)
+    
+    @property
+    def Q(self) -> CodeExpression:
+        """
+        Shorthand property equivalent to .Query, for quick scripts.
+        """
+        return self.Query
 
 
 # ------------------------------------------------------------------------------
@@ -616,7 +1165,7 @@ class TreeItemNavigator(Navigator[TreeItem]):
     def __init__(self, item: TreeItem, path: str, query: str) -> None:
         """
         Creates a navigator. Most code will obtain a navigator by navigating
-        from the top navigator `T` rather than creating one directly.
+        from a WindowNavigator rather than creating one directly.
         """
         self._peer = item
         self._path = path

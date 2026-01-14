@@ -7,8 +7,10 @@ from crystal.ui.nav import (
     _DEFAULT_DELETION_STYLE, T, TopWindowNavigatorHasNoWindow, 
     WindowNavigator, inline_diff, Snapshot, SnapshotDiff, NoSuchWindow,
     NotATreeCtrl, TreeItemNavigator,
+    MenuBarNavigator, MenuNavigator, MenuItemNavigator,
+    NoMenuBar,
 )
-from crystal.util.xos import is_windows
+from crystal.util.xos import is_mac_os, is_windows
 from crystal.tests.util.controls import TreeItem
 import pytest
 import re
@@ -43,6 +45,10 @@ class TestNavigator:
 
 
 class TestWindowNavigator:
+    # === Formatting Tests: Describe ===
+    
+    # (TODO: Implement tests)
+    
     # === Navigation Tests ===
     
     def test_call_of_unique_named_window_returns_window(self) -> None:
@@ -446,6 +452,61 @@ class TestWindowNavigator:
             with pytest.raises(NoSuchWindow, match='does not exist'):
                 navigator['nonexistent']
     
+    def test_menubar_of_non_frame_raises_nomenubar(self) -> None:
+        # Arrange: Create a non-Frame mock window
+        if True:
+            window = Mock(spec=wx.Window)
+            window.Name = 'window'
+            window.Shown = True
+            window.IsTopLevel.return_value = False
+            
+            window.Children = []
+        
+        navigator = WindowNavigator(window)
+        
+        # Act & Assert
+        with pytest.raises(NoMenuBar):
+            navigator.MenuBar
+    
+    def test_menubar_of_frame_without_menubar_raises_nomenubar(self) -> None:
+        # Arrange: Create a Frame mock without a menubar
+        if True:
+            frame = Mock(spec=wx.Frame)
+            frame.Name = 'frame'
+            frame.Shown = True
+            frame.IsTopLevel.return_value = True
+            frame.MenuBar = None
+            
+            frame.Children = []
+        
+        navigator = WindowNavigator(frame)
+        
+        # Act & Assert
+        with pytest.raises(NoMenuBar):
+            navigator.MenuBar
+    
+    def test_menubar_of_frame_with_menubar_returns_menubar(self) -> None:
+        # Arrange: Create a Frame mock with a menubar
+        if True:
+            frame = Mock(spec=wx.Frame)
+            frame.Name = 'frame'
+            frame.Shown = True
+            frame.IsTopLevel.return_value = True
+            
+            menubar = Mock(spec=wx.MenuBar)
+            frame.MenuBar = menubar
+            
+            frame.Children = []
+        
+        navigator = WindowNavigator(frame)
+        
+        # Act
+        result = navigator.MenuBar
+        
+        # Assert
+        assert isinstance(result, MenuBarNavigator)
+        assert result.MenuBar is menubar
+    
     def test_tree_of_non_treectrl_raises_notatreectrl(self) -> None:
         # Arrange: Create a non-TreeCtrl mock window
         if True:
@@ -529,7 +590,478 @@ class TestWindowNavigator:
             result = navigator[0].Query == 'wx.GetTopLevelWindows()[0]'
 
 
+class TestMenuBarNavigator:
+    # === Formatting Tests: Describe ===
+    
+    def test_describe_menubar(self) -> None:
+        # Arrange
+        menubar = Mock(spec=wx.MenuBar)
+        
+        # Act & Assert
+        assert MenuBarNavigator._describe(menubar) == 'wx.MenuBar()'
+    
+    # === Navigation Tests ===
+    
+    def test_getitem_of_index_returns_menu(self) -> None:
+        # Arrange: Create mock menubar with menus
+        if True:
+            menubar = Mock(spec=wx.MenuBar)
+            
+            file_menu = Mock(spec=wx.Menu)
+            edit_menu = Mock(spec=wx.Menu)
+            
+            menubar.GetMenuCount.return_value = 2
+            menubar.GetMenu.side_effect = lambda i: [file_menu, edit_menu][i]
+        
+        navigator = MenuBarNavigator(menubar, 'T[0].MenuBar', 'wx.GetTopLevelWindows()[0]')
+        
+        # Act
+        result0 = navigator[0]
+        result1 = navigator[1]
+        
+        # Assert
+        assert isinstance(result0, MenuNavigator)
+        assert result0.Menu is file_menu
+        assert isinstance(result1, MenuNavigator)
+        assert result1.Menu is edit_menu
+    
+    def test_len_returns_menu_count(self) -> None:
+        # Arrange
+        menubar = Mock(spec=wx.MenuBar)
+        menubar.GetMenuCount.return_value = 3
+        
+        navigator = MenuBarNavigator(menubar, 'T[0].MenuBar', 'wx.GetTopLevelWindows()[0]')
+        
+        # Act & Assert
+        assert len(navigator) == 3
+    
+    # === Properties Tests ===
+    
+    def test_menubar_property_returns_menubar(self) -> None:
+        # Arrange
+        menubar = Mock(spec=wx.MenuBar)
+        navigator = MenuBarNavigator(menubar, 'T[0].MenuBar', 'wx.GetTopLevelWindows()[0]')
+        
+        # Act & Assert
+        assert navigator.MenuBar is menubar
+        assert navigator.M is menubar
+    
+    def test_query_returns_correct_expression(self) -> None:
+        # Arrange
+        menubar = Mock(spec=wx.MenuBar)
+        navigator = MenuBarNavigator(menubar, 'T[0].MenuBar', 'wx.GetTopLevelWindows()[0]')
+        
+        # Act & Assert
+        assert str(navigator.Query) == 'wx.GetTopLevelWindows()[0]'
+        assert str(navigator.Q) == 'wx.GetTopLevelWindows()[0]'
+
+
+class TestMenuNavigator:
+    # === Formatting Tests: Describe ===
+    
+    def test_describe_menu(self) -> None:
+        # Arrange
+        menu = Mock(spec=wx.Menu)
+        menu.Title = 'File'
+        
+        # Act & Assert
+        assert MenuNavigator._describe(menu) == "wx.Menu(Title='File')"
+    
+    def test_describe_menu_with_special_title(self) -> None:
+        # Arrange
+        menu = Mock(spec=wx.Menu)
+        menu.Title = 'Help & Support'
+        
+        # Act & Assert
+        assert MenuNavigator._describe(menu) == "wx.Menu(Title='Help & Support')"
+    
+    # === Navigation Tests ===
+    
+    def test_getitem_of_index_returns_menu_item(self) -> None:
+        # Arrange: Create mock menu with menu items
+        if True:
+            menu = Mock(spec=wx.Menu)
+            
+            item1 = Mock(spec=wx.MenuItem)
+            item1.Kind = wx.ITEM_NORMAL
+            item1.IsEnabled.return_value = True
+            item1.Id = wx.ID_NEW
+            item1.ItemLabelText = 'New'
+            item1.Accel = None
+            item1.IsSubMenu.return_value = False
+            
+            item2 = Mock(spec=wx.MenuItem)
+            item2.Kind = wx.ITEM_SEPARATOR
+            item2.IsSubMenu.return_value = False
+            
+            menu.MenuItems = [item1, item2]
+        
+        navigator = MenuNavigator(menu, 'T[0].MenuBar[0]', 'menubar.GetMenu(0)')
+        
+        # Act
+        result0 = navigator[0]
+        result1 = navigator[1]
+        
+        # Assert
+        assert isinstance(result0, MenuItemNavigator)
+        assert result0.MenuItem is item1
+        assert isinstance(result1, MenuItemNavigator)
+        assert result1.MenuItem is item2
+    
+    def test_len_returns_menu_item_count(self) -> None:
+        # Arrange
+        menu = Mock(spec=wx.Menu)
+        item1 = Mock(spec=wx.MenuItem)
+        item2 = Mock(spec=wx.MenuItem)
+        menu.MenuItems = [item1, item2]
+        
+        navigator = MenuNavigator(menu, 'T[0].MenuBar[0]', 'menubar.GetMenu(0)')
+        
+        # Act & Assert
+        assert len(navigator) == 2
+    
+    # === Properties Tests ===
+    
+    def test_menu_property_returns_menu(self) -> None:
+        # Arrange
+        menu = Mock(spec=wx.Menu)
+        navigator = MenuNavigator(menu, 'T[0].MenuBar[0]', 'menubar.GetMenu(0)')
+        
+        # Act & Assert
+        assert navigator.Menu is menu
+        assert navigator.M is menu
+    
+    def test_query_returns_correct_expression(self) -> None:
+        # Arrange
+        menu = Mock(spec=wx.Menu)
+        navigator = MenuNavigator(menu, 'T[0].MenuBar[0]', 'menubar.GetMenu(0)')
+        
+        # Act & Assert
+        assert str(navigator.Query) == 'menubar.GetMenu(0)'
+        assert str(navigator.Q) == 'menubar.GetMenu(0)'
+
+
+class TestMenuItemNavigator:
+    # === Formatting Tests: Describe ===
+    
+    def test_describe_normal_menu_item(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_NORMAL
+        menu_item.IsEnabled.return_value = True
+        menu_item.Id = wx.ID_NEW
+        menu_item.ItemLabelText = 'New Project...'
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = False
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert description == "wx.MenuItem(Id=wx.ID_NEW, ItemLabelText='New Project...')"
+    
+    def test_describe_disabled_menu_item(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_NORMAL
+        menu_item.IsEnabled.return_value = False
+        menu_item.Id = wx.ID_SAVE
+        menu_item.ItemLabelText = 'Save'
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = False
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert 'Enabled=False' in description
+        assert description == "wx.MenuItem(Enabled=False, Id=wx.ID_SAVE, ItemLabelText='Save')"
+    
+    def test_describe_separator_menu_item(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_SEPARATOR
+        menu_item.IsEnabled.return_value = True
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = False
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert description == 'wx.MenuItem(Kind=wx.ITEM_SEPARATOR)'
+    
+    def test_describe_check_menu_item_unchecked(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_CHECK
+        menu_item.IsEnabled.return_value = True
+        menu_item.Id = 100
+        menu_item.ItemLabelText = 'Show Toolbar'
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = False
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert 'Kind=wx.ITEM_CHECK' in description
+        assert 'IsChecked' not in description  # Omit when False
+        assert description == "wx.MenuItem(Kind=wx.ITEM_CHECK, Id=100, ItemLabelText='Show Toolbar')"
+    
+    def test_describe_check_menu_item_checked(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_CHECK
+        menu_item.IsEnabled.return_value = True
+        menu_item.Id = 100
+        menu_item.ItemLabelText = 'Show Toolbar'
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = True
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert 'Kind=wx.ITEM_CHECK' in description
+        assert 'IsChecked=True' in description
+        assert description == "wx.MenuItem(Kind=wx.ITEM_CHECK, Id=100, ItemLabelText='Show Toolbar', IsChecked=True)"
+    
+    def test_describe_radio_menu_item_unselected(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_RADIO
+        menu_item.IsEnabled.return_value = True
+        menu_item.Id = 201
+        menu_item.ItemLabelText = 'as URL - Name'
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = False
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert 'Kind=wx.ITEM_RADIO' in description
+        assert 'IsChecked' not in description  # Omit when False
+        assert description == "wx.MenuItem(Kind=wx.ITEM_RADIO, Id=201, ItemLabelText='as URL - Name')"
+    
+    def test_describe_radio_menu_item_selected(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_RADIO
+        menu_item.IsEnabled.return_value = True
+        menu_item.Id = 201
+        menu_item.ItemLabelText = 'as URL - Name'
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = True
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert 'Kind=wx.ITEM_RADIO' in description
+        assert 'IsChecked=True' in description
+        assert description == "wx.MenuItem(Kind=wx.ITEM_RADIO, Id=201, ItemLabelText='as URL - Name', IsChecked=True)"
+    
+    def test_describe_menu_item_with_negative_id(self) -> None:
+        # Arrange: Auto-assigned IDs are negative and should be omitted
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_NORMAL
+        menu_item.IsEnabled.return_value = False
+        menu_item.Id = -31953
+        menu_item.ItemLabelText = 'View:'
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = False
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert 'Id=' not in description
+        assert 'Enabled=False' in description
+        assert "ItemLabelText='View:'" in description
+        assert description == "wx.MenuItem(Enabled=False, ItemLabelText='View:')"
+    
+    def test_describe_menu_item_with_custom_id(self) -> None:
+        # Arrange: Custom positive IDs should be shown
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_NORMAL
+        menu_item.IsEnabled.return_value = True
+        menu_item.Id = 12345
+        menu_item.ItemLabelText = 'Custom Action'
+        menu_item.Accel = None
+        menu_item.IsChecked.return_value = False
+        menu_item.IsSubMenu.return_value = False
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert 'Id=12345' in description
+        assert description == "wx.MenuItem(Id=12345, ItemLabelText='Custom Action')"
+    
+    def test_describe_menu_item_with_accelerator(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        menu_item.Kind = wx.ITEM_NORMAL
+        menu_item.IsEnabled.return_value = True
+        menu_item.Id = wx.ID_NEW
+        menu_item.ItemLabelText = 'New'
+        menu_item.IsChecked.return_value = False
+        menu_item.IsSubMenu.return_value = False
+        
+        accel = Mock(spec=wx.AcceleratorEntry)
+        accel.Flags = wx.ACCEL_CTRL
+        accel.KeyCode = ord('N')
+        menu_item.Accel = accel
+        
+        # Act
+        description = MenuItemNavigator._describe(menu_item)
+        
+        # Assert
+        assert 'Accel=' in description
+        if is_mac_os():
+            assert description == "wx.MenuItem(Id=wx.ID_NEW, ItemLabelText='New', Accel='⌘N')"
+        else:
+            assert description == "wx.MenuItem(Id=wx.ID_NEW, ItemLabelText='New', Accel='Ctrl-N')"
+    
+    # === Formatting Tests: Format Accel ===
+    
+    def test_format_accel_ctrl_or_command_key(self) -> None:
+        # Arrange
+        accel = Mock(spec=wx.AcceleratorEntry)
+        accel.Flags = wx.ACCEL_CTRL
+        accel.KeyCode = ord('S')
+        
+        # Act & Assert
+        if is_mac_os():
+            assert MenuItemNavigator._format_accel(accel) == '⌘S'
+        else:
+            assert MenuItemNavigator._format_accel(accel) == 'Ctrl-S'
+    
+    def test_format_accel_shift_modifier(self) -> None:
+        # Arrange
+        accel = Mock(spec=wx.AcceleratorEntry)
+        accel.Flags = wx.ACCEL_CTRL | wx.ACCEL_SHIFT
+        accel.KeyCode = ord('S')
+        
+        # Act & Assert
+        if is_mac_os():
+            assert MenuItemNavigator._format_accel(accel) == '⇧⌘S'
+        else:
+            assert MenuItemNavigator._format_accel(accel) == 'Ctrl-Shift-S'
+    
+    def test_format_accel_ctrl_macos(self) -> None:
+        # Arrange: RAW_CTRL is the actual Control key on macOS
+        accel = Mock(spec=wx.AcceleratorEntry)
+        accel.Flags = wx.ACCEL_RAW_CTRL | wx.ACCEL_CTRL
+        accel.KeyCode = ord('N')
+        
+        # Act & Assert
+        if is_mac_os():
+            assert MenuItemNavigator._format_accel(accel) == '⌃⌘N'
+    
+    def test_format_accel_alt_modifier(self) -> None:
+        # Arrange: ALT is Option on macOS
+        accel = Mock(spec=wx.AcceleratorEntry)
+        accel.Flags = wx.ACCEL_ALT | wx.ACCEL_CTRL
+        accel.KeyCode = ord('A')
+        
+        # Act & Assert
+        if is_mac_os():
+            assert MenuItemNavigator._format_accel(accel) == '⌥⌘A'
+        else:
+            assert MenuItemNavigator._format_accel(accel) == 'Ctrl-Alt-A'
+    
+    def test_format_accel_all_modifiers(self) -> None:
+        # Arrange
+        accel_macos = Mock(spec=wx.AcceleratorEntry)
+        accel_macos.Flags = wx.ACCEL_RAW_CTRL | wx.ACCEL_ALT | wx.ACCEL_SHIFT | wx.ACCEL_CTRL
+        accel_macos.KeyCode = ord('X')
+        
+        accel_windows = Mock(spec=wx.AcceleratorEntry)
+        accel_windows.Flags = wx.ACCEL_CTRL | wx.ACCEL_ALT | wx.ACCEL_SHIFT
+        accel_windows.KeyCode = ord('X')
+        
+        # Act & Assert
+        if is_mac_os():
+            assert MenuItemNavigator._format_accel(accel_macos) == '⌃⌥⇧⌘X'
+        else:
+            assert MenuItemNavigator._format_accel(accel_windows) == 'Ctrl-Alt-Shift-X'
+    
+    def test_format_accel_no_modifiers(self) -> None:
+        # Arrange
+        accel = Mock(spec=wx.AcceleratorEntry)
+        accel.Flags = 0
+        accel.KeyCode = wx.WXK_F1
+        
+        # Act & Assert
+        # Result should be the same on both macOS and non-macOS
+        assert MenuItemNavigator._format_accel(accel) == f'Key{wx.WXK_F1}'
+    
+    def test_format_accel_special_key(self) -> None:
+        # Arrange: Test a non-printable keycode
+        accel = Mock(spec=wx.AcceleratorEntry)
+        accel.Flags = wx.ACCEL_CTRL
+        accel.KeyCode = wx.WXK_DELETE
+        
+        # Act & Assert
+        if not is_mac_os():
+            assert MenuItemNavigator._format_accel(accel) == f'Ctrl-Key{wx.WXK_DELETE}'
+    
+    # === Navigation Tests ===
+    
+    def test_getitem_raises_not_implemented_error(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        navigator = MenuItemNavigator(menu_item, 'T[0].MenuBar[0][0]', 'menu.MenuItems[0]')
+        
+        # Act & Assert
+        with pytest.raises(NotImplementedError, match='does not yet support navigating to sub-menus'):
+            navigator[0]
+    
+    def test_len_returns_zero(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        navigator = MenuItemNavigator(menu_item, 'T[0].MenuBar[0][0]', 'menu.MenuItems[0]')
+        
+        # Act & Assert
+        assert len(navigator) == 0
+    
+    # === Properties Tests ===
+    
+    def test_menuitem_property_returns_menuitem(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        navigator = MenuItemNavigator(menu_item, 'T[0].MenuBar[0][0]', 'menu.MenuItems[0]')
+        
+        # Act & Assert
+        assert navigator.MenuItem is menu_item
+        assert navigator.M is menu_item
+    
+    def test_query_returns_correct_expression(self) -> None:
+        # Arrange
+        menu_item = Mock(spec=wx.MenuItem)
+        navigator = MenuItemNavigator(menu_item, 'T[0].MenuBar[0][0]', 'menu.MenuItems[0]')
+        
+        # Act & Assert
+        assert str(navigator.Query) == 'menu.MenuItems[0]'
+        assert str(navigator.Q) == 'menu.MenuItems[0]'
+
+
 class TestTreeItemNavigator:
+    # === Formatting Tests: Describe ===
+    
+    # (TODO: Implement tests)
+    
     # === Navigation Tests ===
     
     def test_getitem_of_index_returns_tree_item(self) -> None:
