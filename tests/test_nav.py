@@ -6,7 +6,10 @@ from unittest import skip
 from crystal.ui.nav import (
     _DEFAULT_DELETION_STYLE, T, TopWindowNavigatorHasNoWindow, 
     WindowNavigator, inline_diff, Snapshot, SnapshotDiff, NoSuchWindow,
+    NotATreeCtrl, TreeItemNavigator,
 )
+from crystal.util.xos import is_windows
+from crystal.tests.util.controls import TreeItem
 import pytest
 import re
 from unittest.mock import Mock, patch
@@ -343,6 +346,40 @@ class TestWindowNavigator:
             with pytest.raises(NoSuchWindow, match='does not exist'):
                 navigator(Label='Nonexistent Label')
     
+    def test_getitem_of_index_returns_window(self) -> None:
+        # Arrange: Create mock windows with parent-child relationship
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            first_child = Mock(spec=wx.Window)
+            first_child.Name = 'first'
+            first_child.Shown = True
+            first_child.IsTopLevel.return_value = False
+            
+            second_child = Mock(spec=wx.Window)
+            second_child.Name = 'second'
+            second_child.Shown = True
+            second_child.IsTopLevel.return_value = False
+            
+            parent_window.Children = [first_child, second_child]
+            first_child.Children = []
+            second_child.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        # Act
+        result0 = navigator[0]
+        result1 = navigator[1]
+        
+        # Assert
+        assert isinstance(result0, WindowNavigator)
+        assert result0.Window is first_child
+        assert isinstance(result1, WindowNavigator)
+        assert result1.Window is second_child
+    
     def test_getitem_of_unique_named_window_returns_window(self) -> None:
         # Arrange: Create mock windows
         if True:
@@ -432,13 +469,51 @@ class TestWindowNavigator:
             with pytest.raises(NoSuchWindow, match='does not exist'):
                 navigator['nonexistent']
     
+    def test_tree_of_non_treectrl_raises_notatreectrl(self) -> None:
+        # Arrange: Create a non-TreeCtrl mock window
+        if True:
+            parent_window = Mock(spec=wx.Window)
+            parent_window.Name = 'parent'
+            parent_window.Shown = True
+            parent_window.IsTopLevel.return_value = False
+            
+            parent_window.Children = []
+        
+        navigator = WindowNavigator(parent_window)
+        
+        # Act & Assert
+        with pytest.raises(NotATreeCtrl):
+            navigator.Tree
+    
+    def test_tree_of_treectrl_returns_tree_item_navigator(self) -> None:
+        # Arrange: Create a TreeCtrl mock window with a root item
+        if True:
+            tree_window = Mock(spec=wx.TreeCtrl)
+            tree_window.Name = 'tree'
+            tree_window.Shown = True
+            tree_window.IsTopLevel.return_value = False
+            
+            root_item_id = Mock(spec=wx.TreeItemId)
+            root_item_id.IsOk.return_value = True
+            tree_window.GetRootItem.return_value = root_item_id
+            
+            tree_window.Children = []
+        
+        navigator = WindowNavigator(tree_window)
+        
+        # Act
+        result = navigator.Tree
+        
+        # Assert
+        assert isinstance(result, TreeItemNavigator)
+    
     # === Properties Tests ===
     
     def test_window_raises_if_navigator_is_top(self) -> None:
         with pytest.raises(TopWindowNavigatorHasNoWindow):
             T.Window
     
-    @skip('covered by: test_*_of_*_window_returns_window')
+    @skip('covered by: test_*_of_*_returns_window')
     def test_window_is_correct_if_navigator_is_not_top(self) -> None:
         pass
     
@@ -477,7 +552,71 @@ class TestWindowNavigator:
             result = navigator[0].Query == 'wx.GetTopLevelWindows()[0]'
 
 
-# (TODO: Add tests for TreeItemNavigator)
+class TestTreeItemNavigator:
+    # === Navigation Tests ===
+    
+    def test_getitem_of_index_returns_tree_item(self) -> None:
+        # Arrange: Create mock tree with parent-child relationships
+        if True:
+            tree_ctrl = Mock(spec=wx.TreeCtrl)
+            tree_ctrl.Name = 'tree'
+            
+            parent_item_id = Mock(spec=wx.TreeItemId)
+            parent_item_id.IsOk.return_value = True
+            
+            first_child_id = Mock(spec=wx.TreeItemId)
+            first_child_id.IsOk.return_value = True
+            
+            second_child_id = Mock(spec=wx.TreeItemId)
+            second_child_id.IsOk.return_value = True
+            
+            # On Windows, TreeItem equality comparison requires _ItemData to be set.
+            # Create unique sentinel objects for each item's data.
+            if is_windows():
+                parent_data = object()
+                first_child_data = object()
+                second_child_data = object()
+                
+                def get_item_data(item_id):
+                    if item_id is parent_item_id:
+                        return parent_data
+                    elif item_id is first_child_id:
+                        return first_child_data
+                    elif item_id is second_child_id:
+                        return second_child_data
+                    return None
+                
+                tree_ctrl.GetItemData.side_effect = get_item_data
+            
+            parent_item = TreeItem(tree_ctrl, parent_item_id)
+            first_child = TreeItem(tree_ctrl, first_child_id)
+            second_child = TreeItem(tree_ctrl, second_child_id)
+            
+            # Mock the Children property to return the child items
+            with patch.object(TreeItem, 'Children', new_callable=lambda: property(lambda self: [first_child, second_child] if self.id == parent_item_id else [])):
+                navigator = TreeItemNavigator(parent_item, path='T.Tree', query='TreeItem.GetRootItem(tree)')
+                
+                # Act
+                result0 = navigator[0]
+                result1 = navigator[1]
+                
+                # Assert
+                assert isinstance(result0, TreeItemNavigator)
+                assert result0.Item is first_child
+                assert str(result0.Query) == 'TreeItem.GetRootItem(tree).Children[0]'
+                assert isinstance(result1, TreeItemNavigator)
+                assert result1.Item is second_child
+                assert str(result1.Query) == 'TreeItem.GetRootItem(tree).Children[1]'
+    
+    # === Properties Tests ===
+    
+    @skip('covered by: test_*_of_*_returns_tree_item')
+    def test_item_is_correct(self) -> None:
+        pass
+    
+    @skip('covered by: test_*_of_*_returns_tree_item')
+    def test_query_returns_value_based_on_how_subnavigator_was_found(self) -> None:
+        pass
 
 
 # === Tests for inline_diff ===
@@ -954,7 +1093,6 @@ class TestSnapshotDiffBasics:
         diff_repr = repr(diff)
         assert 'Grandchild' in diff_repr
         assert 'S[0] - Grandchild' in diff_repr
-
 
 
 class TestSnapshotDiffDeletionStyle:
