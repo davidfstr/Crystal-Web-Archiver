@@ -2,7 +2,6 @@
 Unit tests for crystal.ui.nav module.
 """
 
-from unittest import skip
 from crystal.ui.nav import (
     _DEFAULT_DELETION_STYLE, T, TopWindowNavigatorHasNoWindow, 
     WindowNavigator, inline_diff, Snapshot, SnapshotDiff, NoSuchWindow,
@@ -14,6 +13,7 @@ from crystal.util.xos import is_mac_os, is_windows
 from crystal.tests.util.controls import TreeItem
 import pytest
 import re
+from unittest import skip, skipIf, skipUnless
 from unittest.mock import Mock, patch
 import wx
 
@@ -544,6 +544,134 @@ class TestWindowNavigator:
         
         # Assert
         assert isinstance(result, TreeItemNavigator)
+    
+    # === Children Tests ===
+    
+    # (TODO: Add tests for handling of invisible children, top-level children, etc)
+    
+    # === Children Tests: macOS Common Menubar ===
+    
+    @skipUnless(is_mac_os(), 'only runs on macOS')
+    def test_macos_invisible_frame_with_menubar_shown_when_no_visible_frames(self) -> None:
+        # Arrange: Create invisible frame with menubar and a dialog (non-frame)
+        if True:
+            invisible_frame = Mock(spec=wx.Frame)
+            invisible_frame.Name = 'cr-menubar-frame'
+            invisible_frame.Shown = False
+            invisible_frame.IsTopLevel.return_value = True
+            invisible_frame.MenuBar = Mock(spec=wx.MenuBar)
+            invisible_frame.Children = []
+            
+            dialog = Mock(spec=wx.Dialog)
+            dialog.Name = 'dialog'
+            dialog.Shown = True
+            dialog.IsTopLevel.return_value = True
+            dialog.IsModal.return_value = False
+            dialog.Children = []
+        
+        navigator = WindowNavigator(None)
+        
+        with patch('wx.GetTopLevelWindows') as mock_get_tlws:
+            mock_get_tlws.return_value = [invisible_frame, dialog]
+            
+            # Act
+            children = navigator._children_of(None)
+            
+            # Assert: Invisible frame with menubar should be included
+            assert invisible_frame in children
+            assert dialog in children
+            # Invisible frame should come first
+            assert children.index(invisible_frame) < children.index(dialog)
+    
+    @skipUnless(is_mac_os(), 'only runs on macOS')
+    def test_macos_invisible_frame_with_menubar_hidden_when_visible_frame_exists(self) -> None:
+        # Arrange: Create invisible frame with menubar and visible frame
+        if True:
+            invisible_frame = Mock(spec=wx.Frame)
+            invisible_frame.Name = 'cr-menubar-frame'
+            invisible_frame.Shown = False
+            invisible_frame.IsTopLevel.return_value = True
+            invisible_frame.MenuBar = Mock(spec=wx.MenuBar)
+            invisible_frame.Children = []
+            
+            visible_frame = Mock(spec=wx.Frame)
+            visible_frame.Name = 'cr-main-window'
+            visible_frame.Shown = True
+            visible_frame.IsTopLevel.return_value = True
+            visible_frame.MenuBar = Mock(spec=wx.MenuBar)
+            visible_frame.Children = []
+        
+        navigator = WindowNavigator(None)
+        
+        with patch('wx.GetTopLevelWindows') as mock_get_tlws:
+            mock_get_tlws.return_value = [invisible_frame, visible_frame]
+            
+            # Act
+            children = navigator._children_of(None)
+            
+            # Assert: Invisible frame should NOT be included
+            assert invisible_frame not in children
+            assert visible_frame in children
+    
+    @skipUnless(is_mac_os(), 'only runs on macOS')
+    def test_macos_invisible_frame_without_menubar_never_shown(self) -> None:
+        # Arrange: Create invisible frame WITHOUT menubar
+        if True:
+            invisible_frame = Mock(spec=wx.Frame)
+            invisible_frame.Name = 'invisible-frame'
+            invisible_frame.Shown = False
+            invisible_frame.IsTopLevel.return_value = True
+            invisible_frame.MenuBar = None  # No menubar
+            invisible_frame.Children = []
+            
+            dialog = Mock(spec=wx.Dialog)
+            dialog.Name = 'dialog'
+            dialog.Shown = True
+            dialog.IsTopLevel.return_value = True
+            dialog.IsModal.return_value = False
+            dialog.Children = []
+        
+        navigator = WindowNavigator(None)
+        
+        with patch('wx.GetTopLevelWindows') as mock_get_tlws:
+            mock_get_tlws.return_value = [invisible_frame, dialog]
+            
+            # Act
+            children = navigator._children_of(None)
+            
+            # Assert: Invisible frame without menubar should NOT be included
+            assert invisible_frame not in children
+            assert dialog in children
+    
+    @skipIf(is_mac_os(), 'only runs on non-macOS platforms')
+    def test_non_macos_invisible_frame_with_menubar_never_shown(self) -> None:
+        # Arrange: Create invisible frame with menubar
+        if True:
+            invisible_frame = Mock(spec=wx.Frame)
+            invisible_frame.Name = 'cr-menubar-frame'
+            invisible_frame.Shown = False
+            invisible_frame.IsTopLevel.return_value = True
+            invisible_frame.MenuBar = Mock(spec=wx.MenuBar)
+            invisible_frame.Children = []
+            
+            dialog = Mock(spec=wx.Dialog)
+            dialog.Name = 'dialog'
+            dialog.Shown = True
+            dialog.IsTopLevel.return_value = True
+            dialog.IsModal.return_value = False
+            dialog.Children = []
+        
+        navigator = WindowNavigator(None)
+        
+        with patch('wx.GetTopLevelWindows') as mock_get_tlws:
+            mock_get_tlws.return_value = [invisible_frame, dialog]
+            
+            # Act
+            children = navigator._children_of(None)
+            
+            # Assert: On non-macOS, invisible frame should NOT be included
+            assert invisible_frame not in children
+            assert dialog in children
     
     # === Properties Tests ===
     

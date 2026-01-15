@@ -552,10 +552,30 @@ class WindowNavigator(Navigator[wx.Window]):
             include_top_level = (window is None)
         
         children = cls._all_children_of(window)
+        
+        # Filter out top-level windows unless include_top_level=True
         if not include_top_level:
             children = [c for c in children if not c.IsTopLevel()]
+        
+        # Filter out hidden windows unless include_hidden=True
         if not include_hidden:
             children = [c for c in children if c.Shown]
+
+            # Exception: Show invisible frames with menubars on macOS
+            # if they affect the common menubar (MacGetCommonMenuBar)
+            if window is None and is_mac_os():
+                visible_frames = [c for c in children if isinstance(c, wx.Frame)]
+                if len(visible_frames) == 0:
+                    # No visible frames that could affect the common menubar,
+                    # so the remaining invisible frame with a menubar must be affecting
+                    # the common menubar. Therefore include it in output.
+                    all_children = cls._all_children_of(window)
+                    invisible_frames_with_menubar = [
+                        c for c in all_children
+                        if isinstance(c, wx.Frame) and not c.Shown and c.MenuBar is not None
+                    ]
+                    children = invisible_frames_with_menubar + children
+        
         if isinstance(window, wx.TreeCtrl):
             # Filter out scrollbars & other unimportant child windows that
             # sometimes show themselves and sometimes don't.
@@ -566,6 +586,7 @@ class WindowNavigator(Navigator[wx.Window]):
                 # Filter out empty panel child
                 (c.Name == 'panel' and len(c.Children) == 0)
             )]
+        
         return children
     
     @classmethod
