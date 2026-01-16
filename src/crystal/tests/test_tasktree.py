@@ -10,7 +10,7 @@ from crystal.task import (
     DownloadResourceTask,
 )
 from crystal.tests.util.asserts import assertEqual
-from crystal.tests.util.controls import select_menuitem_now, TreeItem
+from crystal.tests.util.controls import select_menuitem_now
 from crystal.tests.util.downloads import load_children_of_drg_task
 from crystal.tests.util.server import assert_does_open_webbrowser_to, served_project
 from crystal.tests.util.tasks import (
@@ -24,6 +24,7 @@ from crystal.tests.util.tasks import (
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
 from crystal.ui.tree2 import NodeView as NodeView2
 from crystal.ui.tree import NodeView
+from crystal.util.controls import TreeItem
 from crystal.util.xcollections.lazy import (
     AppendableLazySequence, UnmaterializedItem,
 )

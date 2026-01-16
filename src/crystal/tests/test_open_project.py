@@ -6,7 +6,7 @@ from crystal.model import Project, Resource
 from crystal.progress import CancelOpenProject
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.cli import crystal_shell, py_eval_await_literal
-from crystal.tests.util.controls import TreeItem
+from crystal.util.controls import TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project
 from crystal.tests.util.skip import skipTest

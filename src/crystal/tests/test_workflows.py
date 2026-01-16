@@ -12,7 +12,7 @@ from crystal.task import DownloadResourceGroupTask, TaskDisposedException
 from crystal.tests.test_server import _navigate_from_home_to_comic_1_nia_page
 from crystal.tests.util.asserts import assertEqual, assertRegex
 from crystal.tests.util.console import console_output_copied
-from crystal.tests.util.controls import (
+from crystal.util.controls import (
     click_button, click_checkbox, set_checkbox_value, TreeItem,
 )
 from crystal.tests.util.mark import serial_only, should_check_focused_windows

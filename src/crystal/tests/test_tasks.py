@@ -12,7 +12,7 @@ from crystal.task import (
 )
 from crystal.tests.util.asserts import assertEqual, assertIn
 from crystal.tests.util.console import console_output_copied
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.util.controls import click_button, TreeItem
 from crystal.tests.util.data import (
     MAX_TIME_TO_DOWNLOAD_404_URL, MAX_TIME_TO_DOWNLOAD_XKCD_HOME_URL_BODY,
 )

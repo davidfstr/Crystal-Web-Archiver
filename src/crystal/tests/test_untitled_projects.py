@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
+from crystal.app_preferences import app_prefs
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import (
@@ -11,9 +12,7 @@ from crystal.tests.util import xtempfile
 from crystal.tests.util.cli import (
     PROJECT_PROXY_REPR_STR, close_main_window, close_open_or_create_dialog, create_new_empty_project, crystal_shell, py_eval, py_eval_literal, py_exec, wait_for_main_window, _OK_THREAD_STOP_SUFFIX,
 )
-from crystal.tests.util.controls import (
-    TreeItem, file_dialog_returning,
-)
+from crystal.tests.util.controls import file_dialog_returning
 from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.save_as import (
     save_as_with_ui,
@@ -28,8 +27,8 @@ from crystal.tests.util.tasks import (
     step_scheduler_until_done,
 )
 from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
+from crystal.util.controls import TreeItem
 from crystal.util.db import DatabaseCursor
-from crystal.app_preferences import app_prefs
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xappdirs import user_untitled_projects_dir
 from crystal.util.xos import is_ci, is_linux, is_mac_os, is_windows

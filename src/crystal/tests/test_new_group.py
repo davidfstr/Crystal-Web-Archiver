@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.clipboard import FakeClipboard
-from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
+from crystal.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish

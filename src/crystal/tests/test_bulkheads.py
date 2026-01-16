@@ -12,9 +12,7 @@ from crystal.task import (
     DownloadResourceTask, ParseResourceRevisionLinks, Task,
     UpdateResourceGroupMembersTask,
 )
-from crystal.tests.util.controls import (
-    click_button, select_menuitem_now, TreeItem,
-)
+from crystal.tests.util.controls import select_menuitem_now
 from crystal.tests.util.runner import pump_wx_events
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
@@ -43,6 +41,9 @@ from crystal.util.bulkheads import (
     run_bulkhead_call,
 )
 from crystal.util.bulkheads import BulkheadCell, capture_crashes_to
+from crystal.util.controls import (
+    click_button, TreeItem,
+)
 from crystal.util.ellipsis import Ellipsis
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_asan, is_ci, is_mac_os

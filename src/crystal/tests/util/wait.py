@@ -13,7 +13,7 @@ import warnings
 import wx
 
 if TYPE_CHECKING:
-    from crystal.tests.util.controls import TreeItem
+    from crystal.util.controls import TreeItem
 
 
 _T = TypeVar('_T')
@@ -330,7 +330,7 @@ def tree_has_no_children_condition(
         tree: wx.TreeCtrl, 
         ) -> Callable[[], Literal[True] | None]:
     """Whether the specified tree has no children."""
-    from crystal.tests.util.controls import TreeItem
+    from crystal.util.controls import TreeItem
     return tree_item_has_no_children_condition(TreeItem(tree, tree.GetRootItem()))
 
 

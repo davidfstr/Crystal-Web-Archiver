@@ -2,7 +2,7 @@ from crystal.model import Project, Resource, ResourceGroup
 from crystal.progress import CancelLoadUrls
 # TODO: Consider extracting serve_and_fetch_xkcd_home_page() to utility module
 from crystal.tests.test_server import serve_and_fetch_xkcd_home_page
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.util.controls import click_button, TreeItem
 from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.ssd import database_on_ssd
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext

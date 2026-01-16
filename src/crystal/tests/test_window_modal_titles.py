@@ -7,7 +7,7 @@ the title appears in the window title bar and no additional heading is needed.
 """
 
 from crystal.model import Resource, RootResource
-from crystal.tests.util.controls import click_button
+from crystal.util.controls import click_button
 from crystal.tests.util.wait import wait_for
 from crystal.tests.util.windows import (
     NewGroupDialog, NewRootUrlDialog, OpenOrCreateDialog, PreferencesDialog, TreeItem,

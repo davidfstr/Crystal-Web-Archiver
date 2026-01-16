@@ -5,7 +5,7 @@ from crystal.model import Project, Resource, RootResource
 from crystal.task import DownloadResourceGroupTask
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.clipboard import FakeClipboard
-from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
+from crystal.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.mark import reacts_to_focus_changes, serial_only, should_check_focused_windows
 from crystal.tests.util.server import MockHttpServer, served_project
 from crystal.tests.util.subtests import (

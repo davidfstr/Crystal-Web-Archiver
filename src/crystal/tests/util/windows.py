@@ -22,13 +22,16 @@ from crystal.browser.new_root_url import (
 from crystal.model import Project
 from crystal.task import is_synced_with_scheduler_thread
 from crystal.tests.util.controls import (
-    click_button, file_dialog_returning, select_menuitem_now, TreeItem,
+    file_dialog_returning, select_menuitem_now,
 )
 from crystal.tests.util.save_as import wait_for_save_as_to_complete
 from crystal.tests.util.tasks import first_task_title_progression
 from crystal.tests.util.wait import (
     WaitTimedOut, not_condition, or_condition, tree_has_no_children_condition, wait_for,
     wait_for_and_return, window_condition, window_disposed_condition,
+)
+from crystal.util.controls import (
+    click_button, TreeItem,
 )
 from crystal.util import features
 from crystal.util.wx_dialog import mocked_show_modal

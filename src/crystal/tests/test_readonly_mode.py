@@ -9,7 +9,7 @@ from crystal.tests.test_untitled_projects import (
 )
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual
 from crystal.tests.util.clipboard import FakeClipboard
-from crystal.tests.util.controls import TreeItem, click_button
+from crystal.util.controls import TreeItem, click_button
 from crystal.tests.util.hdiutil import hdiutil_disk_image_mounted
 from crystal.tests.util.save_as import save_as_with_ui
 from crystal.tests.util.server import MockHttpServer, served_project, extracted_project

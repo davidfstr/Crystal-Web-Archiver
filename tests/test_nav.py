@@ -10,7 +10,7 @@ from crystal.ui.nav import (
     NoMenuBar,
 )
 from crystal.util.xos import is_mac_os, is_windows
-from crystal.tests.util.controls import TreeItem
+from crystal.util.controls import TreeItem
 import pytest
 import re
 from unittest import skip, skipIf, skipUnless

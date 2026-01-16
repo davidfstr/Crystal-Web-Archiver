@@ -5,7 +5,7 @@ from crystal.model import (
     Project, Resource, ResourceGroup, ResourceRevision, RootResource,
 )
 from crystal.server import ProjectServer
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import (
     assert_does_open_webbrowser_to, extracted_project,

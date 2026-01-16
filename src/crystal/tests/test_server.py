@@ -13,7 +13,7 @@ from crystal.server import (
 from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
 from crystal.server.special_pages import generic_404_page_html
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
-from crystal.tests.util.controls import click_button, click_checkbox, TreeItem
+from crystal.util.controls import click_button, click_checkbox, TreeItem
 from crystal.tests.util.data import LOREM_IPSUM_LONG, LOREM_IPSUM_SHORT
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.pages import (

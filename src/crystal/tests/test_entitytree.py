@@ -4,7 +4,7 @@ from crystal.model import (
 )
 from crystal.app_preferences import app_prefs
 from crystal.tests.util.asserts import assertEqual, assertIn
-from crystal.tests.util.controls import TreeItem, click_button, click_checkbox
+from crystal.util.controls import TreeItem, click_button, click_checkbox
 from crystal.tests.util.downloads import network_down
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project, served_project

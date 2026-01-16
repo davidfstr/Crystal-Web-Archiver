@@ -5,7 +5,7 @@ from crystal.app_preferences import app_prefs
 from crystal.model import Resource, RootResource
 import crystal.task
 from crystal.tests.util.asserts import assertEqual, assertIn
-from crystal.tests.util.controls import click_button, TreeItem
+from crystal.util.controls import click_button, TreeItem
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import MockHttpServer, MockFtpServer, served_project
 from crystal.tests.util.tasks import wait_for_download_task_to_start_and_finish

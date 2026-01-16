@@ -158,7 +158,7 @@ class Shell:
         
         if ai_agent_detected():
             from crystal.ui.nav import T
-            from crystal.tests.util.controls import click, screenshot, TreeItem
+            from crystal.util.controls import click, screenshot, TreeItem
             from crystal.tests.util.wait import wait_for
             import wx
             

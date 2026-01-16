@@ -4,7 +4,7 @@ Tests the About Box displayed by AboutDialog.
 
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import Resource, RootResource
-from crystal.tests.util.controls import TreeItem
+from crystal.util.controls import TreeItem
 from crystal.tests.util.windows import OpenOrCreateDialog
 from unittest import skip
 import wx

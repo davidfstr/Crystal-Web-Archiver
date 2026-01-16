@@ -6,9 +6,7 @@ wxPython-based program.
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Sequence
-# TODO: Promote the TreeItem abstraction to the crystal.ui package,
-#       outside of the crystal.tests.** namespace
-from crystal.tests.util.controls import TreeItem
+from crystal.util.controls import TreeItem
 from crystal.util.cloak import CloakMixin, cloak
 from crystal.util.xos import is_mac_os
 from crystal.util.xthreading import fg_affinity

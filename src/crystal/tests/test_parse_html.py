@@ -11,7 +11,7 @@ from crystal.model import (
     RootResource,
 )
 from crystal.tests.util.asserts import assertEqual, assertRaises
-from crystal.tests.util.controls import click_button
+from crystal.util.controls import click_button
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import served_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext

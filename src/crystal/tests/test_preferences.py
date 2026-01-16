@@ -3,7 +3,7 @@ Tests preferences in the PreferencesDialog.
 """
 
 from crystal.app_preferences import app_prefs
-from crystal.tests.util.controls import click_radio_button
+from crystal.util.controls import click_radio_button
 from crystal.tests.util.server import extracted_project
 from crystal.tests.util.windows import OpenOrCreateDialog
 from unittest import skip

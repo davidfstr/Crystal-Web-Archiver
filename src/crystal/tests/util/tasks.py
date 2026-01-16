@@ -7,7 +7,7 @@ from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import Project, ResourceRevision
 import crystal.task
 from crystal.task import RootTask, _is_scheduler_thread, scheduler_affinity, Task
-from crystal.tests.util.controls import TreeItem
+from crystal.util.controls import TreeItem
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_PERIOD, wait_while,
 )

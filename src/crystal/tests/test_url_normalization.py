@@ -30,7 +30,7 @@ from contextlib import asynccontextmanager, closing
 from crystal.model import Project, Resource, RootResource
 from crystal.server import ProjectServer
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual, assertNotIn
-from crystal.tests.util.controls import TreeItem
+from crystal.util.controls import TreeItem
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import MockHttpServer
 from crystal.tests.util.wait import first_child_of_tree_item_is_not_loading_condition, wait_for, wait_for_future
