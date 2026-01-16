@@ -466,7 +466,7 @@ class WindowNavigator(Navigator[wx.Window]):
             assert_never(index)
     
     def _find(self,
-            index: str,
+            index: str | int,
             finder: Callable,
             finder_str: str,
             *, index_repr: str | None = None,
