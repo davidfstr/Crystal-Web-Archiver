@@ -112,7 +112,7 @@ class Navigator(Generic[_P], Sequence['Navigator[_P]'], CloakMixin):  # abstract
         return getattr(self, self._PEER_ACCESSOR)
     
     @property
-    def P(self) -> wx.Window:
+    def P(self) -> _P:
         """
         Shorthand property equivalent to .Peer, for quick scripts.
         """
@@ -374,7 +374,7 @@ class WindowNavigator(Navigator[wx.Window]):
     
     def __call__(self,
             *, Name: str | None = None,
-            Id: str | None = None,
+            Id: int | None = None,
             Label: str | None = None,
             ) -> WindowNavigator:
         """
