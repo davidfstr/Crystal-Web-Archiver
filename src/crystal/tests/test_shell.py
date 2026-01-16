@@ -1,8 +1,10 @@
-from typing import List
+from collections.abc import Iterator
+from contextlib import contextmanager
 from crystal import __version__ as crystal_version
+from crystal.shell import ConsoleImplementation
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
 from crystal.tests.util.cli import (
-    _OK_THREAD_STOP_SUFFIX, PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, 
+    _OK_THREAD_STOP_SUFFIX, PROJECT_PROXY_REPR_STR, WINDOW_PROXY_REPR_STR, ReadUntilTimedOut, 
     close_main_window, close_open_or_create_dialog, create_new_empty_project, 
     delay_between_downloads_minimized, drain, py_eval, py_eval_await, 
     py_eval_literal, py_exec, read_until, wait_for_crystal_to_exit, 
@@ -14,17 +16,19 @@ from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import (
     DEFAULT_WAIT_TIMEOUT, WaitTimedOut, wait_for_sync,
 )
-from crystal.util.xos import is_linux
+from crystal.util.xos import is_ci, is_linux
 from crystal.util.xthreading import fg_call_and_wait
 from io import TextIOBase
 import os
 import re
 import signal
+import subprocess
 import sys
 import tempfile
 import textwrap
 import time
-from unittest import skip
+from typing import List
+from unittest import SkipTest, skip
 from unittest.mock import ANY
 import urllib
 
@@ -541,54 +545,259 @@ def test_given_crystal_started_without_shell_when_ctrl_c_pressed_then_exits_with
         assertEqual(-signal.SIGINT, crystal.returncode)
 
 
-def test_given_crystal_started_with_shell_and_waiting_for_input_when_ctrl_c_pressed_then_prints_keyboardinterrupt_and_a_new_prompt() -> None:
-    with crystal_shell() as (crystal, banner):
-        # Send SIGINT (Ctrl-C) while waiting for input
-        os.kill(crystal.pid, signal.SIGINT)
+@with_subtests
+def test_given_crystal_started_with_shell_and_waiting_for_input_when_ctrl_c_pressed_then_prints_keyboardinterrupt_and_a_new_prompt(subtests: SubtestsContext) -> None:
+    # ...when default py_repl used
+    
+    with subtests.test(console_impl='stdio_buffered', ctrl_c_effect='ignored'):
+        _skip_if_no_tty_available()
         
-        # Wait for KeyboardInterrupt message and new prompt
-        assert isinstance(crystal.stdout, TextIOBase)
-        (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+        with _echo_restored_on_exit():
+            env = {
+                'CRYSTAL_MCP_SHELL_SERVER': 'True',
+                'CRYSTAL_RUNNING_TESTS': 'False',
+            }
+            with crystal_shell(env_extra=env) as (crystal, banner):
+                # NOTE: getpass interferes with understanding typing, so don't try here
+                #assertEqual(True, py_eval_literal(crystal, 'mcp_shell_server_detected()'))
+                #assertEqual('stdio_buffered', _console_impl(crystal))
+                
+                # Send SIGINT (Ctrl-C) while waiting for input
+                os.kill(crystal.pid, signal.SIGINT)
+                
+                # Wait for any effect. None expected.
+                assert isinstance(crystal.stdout, TextIOBase)
+                try:
+                    (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=1.0)
+                except ReadUntilTimedOut:
+                    pass  # expected
+                else:
+                    raise AssertionError(f'Ctrl-C had an effect, unexpectedly: {output=}')
+    
+    with subtests.test(console_impl='basic_repl', ctrl_c_effect='exits_program'):
+        with crystal_shell() as (crystal, banner):
+            assertEqual('basic_repl', _console_impl(crystal))
+            
+            # Send SIGINT (Ctrl-C) while waiting for input
+            os.kill(crystal.pid, signal.SIGINT)
+            
+            # Expect exit with code -SIGINT
+            try:
+                returncode = crystal.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                raise AssertionError('Expected Crystal to exit after receiving Ctrl-C')
+            else:
+                assertEqual(-signal.SIGINT, returncode)
+    
+    with subtests.test(console_impl='basic_repl_interruptible', ctrl_c_effect='prints_keyboardinterrupt_and_a_new_prompt'):
+        with crystal_shell(env_extra={'CRYSTAL_CONSOLE_IMPL': 'basic_repl_interruptible'}) as (crystal, banner):
+            assertEqual('basic_repl_interruptible', _console_impl(crystal))
+            
+            # Send SIGINT (Ctrl-C) while waiting for input
+            os.kill(crystal.pid, signal.SIGINT)
+            
+            # Wait for KeyboardInterrupt message and new prompt
+            assert isinstance(crystal.stdout, TextIOBase)
+            (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+            
+            # Verify "KeyboardInterrupt" was printed
+            assertIn('KeyboardInterrupt', output,
+                'Expected "KeyboardInterrupt" to be printed when Ctrl-C is pressed at prompt')
+            
+            # Verify a new prompt appears (matched by read_until)
+            assertEqual('\n>>> ', matched)
+            
+            # Verify shell is still responsive
+            _verify_shell_is_responsive(crystal)
+    
+    with subtests.test(console_impl='py_repl', ctrl_c_effect='prints_keyboardinterrupt_and_a_new_prompt'):
+        _skip_if_no_tty_available()
         
-        # Verify "KeyboardInterrupt" was printed
-        assertIn('KeyboardInterrupt', output,
-            'Expected "KeyboardInterrupt" to be printed when Ctrl-C is pressed at prompt')
-        
-        # Verify a new prompt appears (matched by read_until)
-        assertEqual('\n>>> ', matched)
-        
-        # Verify shell is still responsive
-        assertEqual('2\n', py_eval(crystal, '1 + 1'))
+        # Enable py_repl with tty=True
+        with crystal_shell(tty=True) as (crystal, banner):
+            # NOTE: Very difficult to understand typing when tty=True, so don't try here
+            #assertEqual('py_repl', _console_impl(crystal))
+            
+            # Send SIGINT (Ctrl-C) while waiting for input
+            os.kill(crystal.pid, signal.SIGINT)
+            
+            # Wait for KeyboardInterrupt message and new prompt
+            assert isinstance(crystal.stdout, TextIOBase)
+            (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+            
+            # Verify "KeyboardInterrupt" was printed
+            assertIn('KeyboardInterrupt', output,
+                'Expected "KeyboardInterrupt" to be printed when Ctrl-C is pressed at prompt')
+            
+            # Verify a new prompt appears (matched by read_until)
+            assertEqual('\n>>> ', matched)
+            
+            # Verify shell is still responsive
+            _verify_shell_is_responsive(crystal, tty=True)
 
 
-def test_given_crystal_started_with_shell_and_running_a_command_when_ctrl_c_pressed_then_raises_keyboardinterrupt_and_prints_a_new_prompt() -> None:
-    with crystal_shell() as (crystal, banner):
-        # Start a long-running command that prints output periodically
-        assert isinstance(crystal.stdout, TextIOBase)
-        assert isinstance(crystal.stdin, TextIOBase)
-        crystal.stdin.write("exec('import time\\nwhile True:\\n    print(\"loop\")\\n    time.sleep(0.1)\\n')\n")
-        crystal.stdin.flush()
+@with_subtests
+def test_given_crystal_started_with_shell_and_running_a_command_when_ctrl_c_pressed_then_raises_keyboardinterrupt_and_prints_a_new_prompt(subtests: SubtestsContext) -> None:
+    # ...when default py_repl used
+    
+    with subtests.test(console_impl='stdio_buffered', ctrl_c_effect='prints_keyboardinterrupt_and_a_new_prompt'):
+        _skip_if_no_tty_available()
         
-        # Wait for the command to start printing output
-        (output, _) = read_until(crystal.stdout, 'loop\n', timeout=2.0)
+        with _echo_restored_on_exit():
+            env = {
+                'CRYSTAL_MCP_SHELL_SERVER': 'True',
+                'CRYSTAL_RUNNING_TESTS': 'False',
+            }
+            with crystal_shell(env_extra=env) as (crystal, banner):
+                # NOTE: getpass interferes with understanding typing, so don't try here
+                #assertEqual(True, py_eval_literal(crystal, 'mcp_shell_server_detected()'))
+                #assertEqual('stdio_buffered', _console_impl(crystal))
+                
+                # Start a long-running command that prints output periodically
+                assert isinstance(crystal.stdout, TextIOBase)
+                assert isinstance(crystal.stdin, TextIOBase)
+                crystal.stdin.write("exec('import time\\nwhile True:\\n    print(\"loop\")\\n    time.sleep(0.1)\\n')\n")
+                crystal.stdin.flush()
+                
+                # TODO: Figure out why can't see "loop" output,
+                #       which blocks finishing implementation of this test
+                raise SkipTest('finish implementing this subtest')
+                
+                # Wait for the command to start printing output
+                (output, _) = read_until(crystal.stdout, 'loop\n', timeout=2.0)
+                
+                # Send SIGINT (Ctrl-C) to interrupt the running command
+                os.kill(crystal.pid, signal.SIGINT)
+                
+                # Wait for KeyboardInterrupt traceback and new prompt
+                (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+                
+                # Verify KeyboardInterrupt was raised
+                assertIn('KeyboardInterrupt', output,
+                    'Expected KeyboardInterrupt to be raised when Ctrl-C is pressed during command execution')
+                assertIn('Traceback', output,
+                    'Expected a traceback to be shown for the KeyboardInterrupt')
+                
+                # Verify a new prompt appears (matched by read_until)
+                assertEqual('\n>>> ', matched)
+                
+                # Verify shell is still responsive
+                _verify_shell_is_responsive(crystal)
+    
+    with subtests.test(console_impl='basic_repl', ctrl_c_effect='exits_program'):
+        with crystal_shell() as (crystal, banner):
+            assertEqual('basic_repl', _console_impl(crystal))
+            
+            # Start a long-running command that prints output periodically
+            assert isinstance(crystal.stdout, TextIOBase)
+            assert isinstance(crystal.stdin, TextIOBase)
+            crystal.stdin.write("exec('import time\\nwhile True:\\n    print(\"loop\")\\n    time.sleep(0.1)\\n')\n")
+            crystal.stdin.flush()
+            
+            # Wait for the command to start printing output
+            (output, _) = read_until(crystal.stdout, 'loop\n', timeout=2.0)
+            
+            # Send SIGINT (Ctrl-C) to interrupt the running command
+            os.kill(crystal.pid, signal.SIGINT)
+            
+            # Expect exit with code -SIGINT
+            try:
+                returncode = crystal.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                raise AssertionError('Expected Crystal to exit after receiving Ctrl-C')
+            else:
+                assertEqual(-signal.SIGINT, returncode)
+    
+    with subtests.test(console_impl='basic_repl_interruptible', ctrl_c_effect='prints_keyboardinterrupt_and_a_new_prompt'):
+        with crystal_shell(env_extra={'CRYSTAL_CONSOLE_IMPL': 'basic_repl_interruptible'}) as (crystal, banner):
+            assertEqual('basic_repl_interruptible', _console_impl(crystal))
+            
+            # Start a long-running command that prints output periodically
+            assert isinstance(crystal.stdout, TextIOBase)
+            assert isinstance(crystal.stdin, TextIOBase)
+            crystal.stdin.write("exec('import time\\nwhile True:\\n    print(\"loop\")\\n    time.sleep(0.1)\\n')\n")
+            crystal.stdin.flush()
+            
+            # Wait for the command to start printing output
+            (output, _) = read_until(crystal.stdout, 'loop\n', timeout=2.0)
+            
+            # Send SIGINT (Ctrl-C) to interrupt the running command
+            os.kill(crystal.pid, signal.SIGINT)
+            
+            # Wait for KeyboardInterrupt traceback and new prompt
+            (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+            
+            # Verify KeyboardInterrupt was raised
+            assertIn('KeyboardInterrupt', output,
+                'Expected KeyboardInterrupt to be raised when Ctrl-C is pressed during command execution')
+            assertIn('Traceback', output,
+                'Expected a traceback to be shown for the KeyboardInterrupt')
+            
+            # Verify a new prompt appears (matched by read_until)
+            assertEqual('\n>>> ', matched)
+            
+            # Verify shell is still responsive
+            _verify_shell_is_responsive(crystal)
+    
+    with subtests.test(console_impl='py_repl', ctrl_c_effect='prints_keyboardinterrupt_and_a_new_prompt'):
+        _skip_if_no_tty_available()
         
-        # Send SIGINT (Ctrl-C) to interrupt the running command
-        os.kill(crystal.pid, signal.SIGINT)
-        
-        # Wait for KeyboardInterrupt traceback and new prompt
-        (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
-        
-        # Verify KeyboardInterrupt was raised
-        assertIn('KeyboardInterrupt', output,
-            'Expected KeyboardInterrupt to be raised when Ctrl-C is pressed during command execution')
-        assertIn('Traceback', output,
-            'Expected a traceback to be shown for the KeyboardInterrupt')
-        
-        # Verify a new prompt appears (matched by read_until)
-        assertEqual('\n>>> ', matched)
-        
-        # Verify shell is still responsive
-        assertEqual('2\n', py_eval(crystal, '1 + 1'))
+        # Enable py_repl with tty=True
+        with crystal_shell(tty=True) as (crystal, banner):
+            # NOTE: Very difficult to understand typing when tty=True, so don't try here
+            #assertEqual('py_repl', _console_impl(crystal))
+            
+            # Start a long-running command that prints output periodically
+            assert isinstance(crystal.stdout, TextIOBase)
+            assert isinstance(crystal.stdin, TextIOBase)
+            crystal.stdin.write("exec('import time\\nwhile True:\\n    print(\"loop\")\\n    time.sleep(0.1)\\n')\n")
+            crystal.stdin.flush()
+            
+            # Wait for the command to start printing output
+            (output, _) = read_until(crystal.stdout, 'loop\r\n', timeout=2.0)
+            
+            # Send SIGINT (Ctrl-C) to interrupt the running command
+            os.kill(crystal.pid, signal.SIGINT)
+            
+            # Wait for KeyboardInterrupt traceback and new prompt
+            (output, matched) = read_until(crystal.stdout, '\n>>> ', timeout=2.0)
+            
+            # Verify KeyboardInterrupt was raised
+            assertIn('KeyboardInterrupt', output,
+                'Expected KeyboardInterrupt to be raised when Ctrl-C is pressed during command execution')
+            assertIn('Traceback', output,
+                'Expected a traceback to be shown for the KeyboardInterrupt')
+            
+            # Verify a new prompt appears (matched by read_until)
+            assertEqual('\n>>> ', matched)
+            
+            # Verify shell is still responsive
+            _verify_shell_is_responsive(crystal, tty=True)
+
+
+def _skip_if_no_tty_available() -> None:
+    """
+    Raises:
+    * SkipTest -- if no TTY is available on sys.stdin
+    """
+    # NOTE: Notably the CI environment does NOT provide a TTY.
+    # TODO: Run Crystal with "script"/etc in CI so that TTY-related tests will run
+    if not sys.stdin.isatty():
+        raise SkipTest('subtest requires a TTY to run')
+
+
+def _verify_shell_is_responsive(crystal: subprocess.Popen, *, tty: bool = False) -> None:
+    """
+    Raises:
+    * AssertionError -- if shell is unresponsive
+    """
+    if not tty:
+        assertEqual(2, py_eval_literal(crystal, '1 + 1'))
+    else:
+        result = py_eval(crystal, '1')
+        result = result.replace('>>> 1', '')  # ignore echo of input (because tty=True)
+        result = result.replace('\r', '').replace('\n', '')  # ignore newlines around output
+        assertEqual('1', result)
 
 
 # ------------------------------------------------------------------------------
@@ -1069,6 +1278,30 @@ def test_given_ai_agent_when_modal_message_dialog_shown_then_shell_remains_respo
         
         # Close the main window
         result = py_eval(crystal, 'window.close()')
+
+
+# ------------------------------------------------------------------------------
+# Utility
+
+def _console_impl(crystal) -> ConsoleImplementation:
+    py_exec(crystal, 'import crystal.shell')
+    return py_eval_literal(crystal, 'crystal.shell._CrystalInteractiveConsole.implementation()')
+
+
+@contextmanager
+def _echo_restored_on_exit() -> Iterator[None]:
+    if sys.platform == 'win32':
+        raise SkipTest('not supported on Windows')
+    try:
+        yield
+    finally:
+        # Enable echo, because getpass may leave it turned off
+        if sys.stdin.isatty():
+            import termios
+            fd = sys.stdin.fileno()
+            attrs = termios.tcgetattr(fd)
+            attrs[3] |= termios.ECHO  # lflags is index 3
+            termios.tcsetattr(fd, termios.TCSADRAIN, attrs)
 
 
 # ------------------------------------------------------------------------------

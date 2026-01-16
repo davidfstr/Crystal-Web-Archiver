@@ -22,6 +22,7 @@ from crystal.util.xthreading import (
     NoForegroundThreadError,
 )
 from crystal.util.xtraceback import format_exception_for_terminal_user
+from functools import partial
 import getpass
 import inspect
 import os
@@ -31,7 +32,7 @@ import sys
 from threading import Thread
 import time
 import types
-from typing import Any, Literal, Optional, TypeVar
+from typing import Any, Literal, Optional, TypeAlias, TypeVar, assert_never
 from typing_extensions import override
 
 
@@ -89,6 +90,16 @@ class Shell:
             import guppy.heapy.View  # type: ignore[reportMissingImports]
         except ImportError:
             pass
+    
+    @classmethod
+    def handles_ctrl_c(cls) -> bool:
+        """
+        Whether the shell handles Ctrl-C internally.
+        
+        If it does not handle it internally, the CALLER of Shell is
+        responsible for implementing Ctrl-C handling.
+        """
+        return _CrystalInteractiveConsole.handles_ctrl_c()
     
     def start(self, *, wait_for_banner: bool = True) -> None:
         """
@@ -314,21 +325,19 @@ def fg_interact(
         shell_stopping_func: Callable[[], bool] = lambda: False,
         ) -> None:
     """
-    Similar to code.interact(), but evaluates code on the foreground thread.
+    Runs Crystal's interactive shell, on a background thread,
+    with code still evaluated on the foreground thread.
+    
+    See _CrystalInteractiveConsole's docstring for full information
+    about the features and capabilities of Crystal's shell.
     """
     
-    console = _FgInteractiveConsole(
+    console = _CrystalInteractiveConsole(
         local,
         banner_printed=banner_printed,
         shell_stopping_func=shell_stopping_func,
     )
     with closing(console):
-        # Try to enable readline support
-        try:
-            import readline
-        except ImportError:
-            pass
-        
         try:
             console.interact(banner, exitmsg='')
         finally:
@@ -340,14 +349,78 @@ def fg_interact(
                     console.write('%s\n' % exitmsg)
 
 
-# TODO: Rename as _AsyncFgInteractiveConsole
-# TODO: Update docstring to mention that this console supports async
-class _FgInteractiveConsole(code.InteractiveConsole):
-    """
-    Similar to code.InteractiveConsole, but evaluates code on the foreground thread.
+ConsoleImplementation: TypeAlias = Literal[
+    # Advanced Python REPL
+    # - Used whenever possible when Python >= 3.13
+    # - Ctrl-C interrupt prints "KeyboardInterrupt"
+    # - Supports line editing (with arrow keys, etc)
+    'py_repl',
     
-    Will also execute a startup file specified in $PYTHONSTARTUP if defined.
+    # Basic Python REPL, but no Ctrl-C support
+    # - Used when Python <= 3.12 or PYTHON_BASIC_REPL=1
+    # - Ctrl-C interrupt exits program,
+    #   assuming caller implements that behavior for Ctrl-C
+    # - Supports line editing (with arrow keys, etc) when readline available
+    'basic_repl',
+    
+    # Basic Python REPL, with Ctrl-C support but no line editing
+    # - Currently unused (except by automated tests)
+    # - Ctrl-C interrupt prints "KeyboardInterrupt"
+    # - Does NOT support line editing (with arrow keys, etc)
+    'basic_repl_interruptible',
+    
+    # Standard stream based REPL, which only echos complete input lines
+    # - Used when running under MCP shell-server (terminal_operate),
+    #   regardless of Python version
+    #     - Suppresses automatic echo to avoid newline injection issues
+    #     - Writes everything to a consistent stream (stdout) to reduce
+    #       output delay from 150ms -> 60ms (40% improvement)
+    # - Ctrl-C interrupt prints "KeyboardInterrupt"
+    #     - BUT ignores Ctrl-C if typed while waiting for input at prompt
+    # - Does NOT support line editing (with arrow keys, etc)
+    'stdio_buffered',
+]
+
+class _CrystalInteractiveConsole(code.InteractiveConsole):
     """
+    Extends code.InteractiveConsole with several capabilities:
+    - Background Operation: Runs on a background thread
+      (to avoid blocking the foreground thread), while still
+      excuting code on the foreground thread
+    - Async Support: Supports top-level await expressions, similar to
+      asyncio.AsyncIOInteractiveConsole, that use Crystal's internal
+      awaitable testing utilities. Awaitables that rely on the
+      asyncio event loop are NOT supported.
+    - Simplified Tracebacks: Noisy Crystal-internal frames are omitted
+      from tracebacks, using format_exception_for_terminal_user
+    - Multi-Line Editing & Paste: Similar to
+      _pyrepl.simple_interact.run_multiline_interactive_console
+    - PYTHONSTARTUP: Will execute a startup file specified in $PYTHONSTARTUP
+      if defined, similar to sys._baserepl() and _pyrepl.main.interactive_console
+    - AI Agent Assistance: When an AI agent is detected:
+        - UI changes are detected and printed automatically
+          when caused by a command the agent ran
+        - Warnings are printed for common agent mistakes
+    
+    Partially supports:
+    - Color
+        - Colored prompts and code syntax highlighting from pyrepl is available
+        - Colored tracebacks, from _pyrepl.console.InteractiveColoredConsole
+          and traceback.format_exception(..., colorize=True), are NOT yet supported
+    
+    Retains:
+    - Line Editing Support: Left/right arrow keys can be used to edit within a line
+    - Ctrl-C Interruption Support: When handles_ctrl_c=True, handles Ctrl-C
+      specially to support typical KeyboardInterrupt behavior of a Python REPL.
+      Otherwise the caller should provide its own Ctrl-C handling
+    """
+    # For implementation() == 'basic_repl_interruptible' only
+    _interruptible_stdin: InterruptableReader | None
+    
+    # For implementation() == 'py_repl' only
+    _pyrepl_multiline_input: Callable[[], str] | None
+    _pyrepl_interrupted: bool
+    
     def __init__(self,
             *args,
             banner_printed: Future[Literal[True]] | None = None,
@@ -367,6 +440,31 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         # Allow top-level await in code lines
         self.compile.compiler.flags |= ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
         
+        if self.implementation() == 'basic_repl':
+            # Try to enable readline support for line editing (with arrow keys, etc)
+            try:
+                import readline
+            except ImportError:
+                pass
+        
+        if self.implementation() == 'py_repl':
+            import _pyrepl.readline
+            from _pyrepl.simple_interact import (
+                _more_lines,
+                _strip_final_indent,
+            )
+            
+            # Emulate _pyrepl.simple_interact.run_multiline_interactive_console
+            more_lines = partial(_more_lines, self)  # cache
+            ps1 = getattr(sys, 'ps1', '>>> ')  # capture, cache
+            ps2 = getattr(sys, 'ps2', '... ')  # capture, cache
+            self._pyrepl_multiline_input = lambda: _strip_final_indent(
+                _pyrepl.readline.multiline_input(more_lines, ps1, ps2)
+            )
+        else:
+            self._pyrepl_multiline_input = None
+        self._pyrepl_interrupted = False
+        
         self._open()
     
     def _open(self) -> None:
@@ -374,11 +472,14 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         # in non-blocking mode so that it can be used with signal.set_wakeup_fd()
         self._interrupt_pipe = create_selectable_pipe(blocking=False)
         
-        # Wrap stdin in InterruptableReader
-        self._stdin = InterruptableReader(
-            sys.stdin,
-            self._interrupt_pipe.readable_end
-        )
+        if self.implementation() == 'basic_repl_interruptible':
+            # Wrap stdin in InterruptableReader
+            self._interruptible_stdin = InterruptableReader(
+                sys.stdin,
+                self._interrupt_pipe.readable_end
+            )
+        else:
+            self._interruptible_stdin = None
         
         # Customize how unhandled exceptions are printed
         self._old_sys_excepthook = sys.excepthook
@@ -399,8 +500,42 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     
     # === REPL ===
     
+    @classmethod
+    def implementation(cls) -> ConsoleImplementation:
+        """
+        Console implementation style to use.
+        
+        See ConsoleImplementation for more information.
+        """
+        # Allow tests to force a particular implemenation
+        if (impl := os.environ.get('CRYSTAL_CONSOLE_IMPL')) is not None:
+            return impl  # type: ignore[return-value]  # don't validate
+        
+        # Should 'stdio_buffered' be used?
+        if mcp_shell_server_detected() and not tests_are_running():
+            return 'stdio_buffered'
+        
+        # Is pyrepl usable and should it be used?
+        if sys.version_info >= (3, 13):
+            # _pyrepl module only available in Python 3.13+
+            
+            # NOTE: Duplicates asyncio/__main__.py logic to determine
+            #       whether pyrepl should be used
+            if os.getenv('PYTHON_BASIC_REPL'):
+                # Honor Python's PYTHON_BASIC_REPL environment variable to
+                # force the use of the basic REPL
+                CAN_USE_PYREPL = False
+            else:
+                # NOTE: Notably, cannot use pyrepl if stdin is not a TTY
+                from _pyrepl.main import CAN_USE_PYREPL  # type: ignore[no-redef]
+            if CAN_USE_PYREPL:
+                return 'py_repl'
+        
+        # Fallback to basic REPL
+        return 'basic_repl'
+    
     @override
-    @bg_affinity
+    @bg_affinity  # expects to run on a background thread
     def interact(self, banner=None, exitmsg=None):
         super().interact(banner=banner, exitmsg=exitmsg)
     
@@ -418,6 +553,43 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         """
         if self._first_input:
             fg_call_and_wait(lambda: self._configure_ctrl_c_to_interrupt_stdin_readline())
+            
+            # Configure default Reader, if using pyrepl
+            if self.implementation() == 'py_repl':
+                from _pyrepl.commands import Command
+                from _pyrepl.console import Event
+                import _pyrepl.readline
+                
+                # NOTE: _get_reader() may alter signal handlers during its first call,
+                #       which must be done on the foreground thread
+                reader = fg_call_and_wait(lambda: _pyrepl.readline._get_reader())
+                
+                # Register custom InterruptCommand
+                class InterruptCommand(Command):
+                    def do(self) -> None:
+                        self.finish = True
+                reader.commands['interrupt-from-thread'] = InterruptCommand
+                
+                # Add hook to check whether Ctrl-C pressed,
+                # every 100ms in the Python 3.14 pyrepl implementation
+                super_run_hooks = reader.run_hooks
+                def run_hooks() -> None:
+                    # Interrupt hook
+                    try:
+                        self._interrupt_pipe.readable_end.read(1)
+                    except BlockingIOError:
+                        # No Ctrl-C
+                        pass
+                    else:
+                        # Ctrl-C
+                        self._pyrepl_interrupted = True
+                        reader.console.event_queue.insert(
+                            Event(evt='interrupt-from-thread', data='', raw=b'')
+                        )
+                    
+                    # Other hooks
+                    super_run_hooks()
+                reader.run_hooks = run_hooks
             
             # Try to execute startup file specified in $PYTHONSTARTUP
             startup_filepath = os.environ.get('PYTHONSTARTUP')
@@ -450,23 +622,16 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             self.resetbuffer()
             return ''
         
-        # Write prompt
-        sys.stdout.write(prompt)
-        sys.stdout.flush()
-        
-        # When running under MCP shell-server (terminal_operate):
-        # - Suppress automatic echo to avoid newline injection issues
-        # - Write everything to a consistent stream (stdout) to reduce
-        #   output delay from 150ms -> 60ms (40% improvements)
-        if mcp_shell_server_detected() and not tests_are_running():
+        impl = self.implementation()
+        if impl == 'stdio_buffered':
+            # Write prompt
+            sys.stdout.write(prompt)
+            sys.stdout.flush()
+            
             # Read input without echoing
+            # TODO: Support Ctrl-C interrupt while waiting for input
             try:
                 line = getpass.getpass(prompt='', stream=sys.stdout)
-            except InterruptedError:
-                self._stdin.clear_interrupt()
-                if self._shell_stopping_func():
-                    raise EOFError()
-                raise KeyboardInterrupt()
             except EOFError:
                 # Handle Ctrl-D
                 sys.stdout.write('\n')
@@ -475,19 +640,52 @@ class _FgInteractiveConsole(code.InteractiveConsole):
             # Echo the complete input line all at once
             sys.stdout.write(f'{line}\n')
             return line
-        else:
+        elif impl == 'basic_repl':
+            # NOTE: Loses the Ctrl-C interruptability support provided by self._interruptible_stdin
+            #       (as defined by 'basic_repl_interruptible' code),
+            #       but regains line editing (like arrow key navigation)
+            return input(prompt)
+        elif impl == 'basic_repl_interruptible':
+            assert self._interruptible_stdin is not None
+            
+            # Write prompt
+            sys.stdout.write(prompt)
+            sys.stdout.flush()
+            
             try:
-                line = self._stdin.readline()
+                line = self._interruptible_stdin.readline()
             except InterruptedError:
-                self._stdin.clear_interrupt()
+                self._interruptible_stdin.clear_interrupt()
+                
                 if self._shell_stopping_func():
                     raise EOFError()
-                raise KeyboardInterrupt()
+                else:
+                    raise KeyboardInterrupt()
             else:
                 if not line:
                     # Handle Ctrl-D
                     raise EOFError()
                 return line.removesuffix('\n')
+        elif impl == 'py_repl':
+            assert self._pyrepl_multiline_input is not None
+            
+            line = self._pyrepl_multiline_input()
+            if self._pyrepl_interrupted:
+                self._pyrepl_interrupted = False
+                
+                if self._shell_stopping_func():
+                    raise EOFError()
+                else:
+                    # Move cursor back up, because caller assumes that cursor
+                    # was not moved down when a KeyboardInterrupt happens,
+                    # which is incorrect for pyrepl
+                    sys.stdout.write('\x1b[A')
+                    sys.stdout.flush()
+                    
+                    raise KeyboardInterrupt()
+            return line
+        else:
+            assert_never(impl)
     
     # === Eval ===
     
@@ -517,6 +715,7 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     
     # NOTE: Uses a similar implementation pattern as
     #       AsyncIOInteractiveConsole.runcode() from asyncio/__main__.py
+    #       to support executing code with top-level await
     @override
     @bg_affinity
     def runcode(self, code: types.CodeType) -> None:
@@ -617,9 +816,19 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     
     # === Ctrl-C Signal Handling ===
     
+    @classmethod
+    def handles_ctrl_c(cls) -> bool:
+        """Whether the console handles Ctrl-C internally."""
+        # NOTE: See ConsoleImplementation for detailed information about how
+        #       different implementations handle Ctrl-C.
+        return cls.implementation() != 'basic_repl'
+    
     # NOTE: Python only allows signals to be reconfigured on the main thread
     @fg_affinity
     def _configure_ctrl_c_to_interrupt_stdin_readline(self) -> None:
+        if not self.handles_ctrl_c():
+            return
+        
         # When SIGINT occurs, write byte(signal.SIGINT) to
         # the interrupt pipe to wake up the InterruptableReader
         # wrapping sys.stdin
@@ -629,6 +838,9 @@ class _FgInteractiveConsole(code.InteractiveConsole):
     # NOTE: Python only allows signals to be reconfigured on the main thread
     @fg_affinity
     def _configure_ctrl_c_to_raise_keyboardinterrupt_on_fg_thread(self) -> None:
+        if not self.handles_ctrl_c():
+            return
+        
         signal.signal(signal.SIGINT, signal.default_int_handler)
         signal.set_wakeup_fd(-1)
     
@@ -636,6 +848,9 @@ class _FgInteractiveConsole(code.InteractiveConsole):
         """
         Returns whether a Ctrl-C (SIGINT) was received.
         """
+        if not self.handles_ctrl_c():
+            return False
+        
         interrupt_pipe = self._interrupt_pipe  # cache
         with selectors.DefaultSelector() as selector:
             selector.register(interrupt_pipe.readable_end.fileno(), selectors.EVENT_READ)

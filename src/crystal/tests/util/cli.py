@@ -15,7 +15,7 @@ import textwrap
 import time
 from typing import Any, Literal, Optional
 import warnings
-from io import TextIOBase
+from io import BufferedIOBase, TextIOBase, TextIOWrapper
 import os
 import subprocess
 import sys
@@ -71,7 +71,13 @@ def run_crystal(args: list[str]) -> subprocess.CompletedProcess[str]:
 # Start CLI
 
 @contextmanager
-def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill: bool=True) -> Iterator[subprocess.Popen]:
+def crystal_running(
+        *, args=[],
+        env_extra={},
+        discrete_stderr: bool=False,
+        kill: bool=True,
+        tty: bool=False,
+        ) -> Iterator[subprocess.Popen]:
     """
     Context which starts "crystal" upon enter
     and cleans up the associated process upon exit.
@@ -95,12 +101,23 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
     # Determine how to run Crystal on command line
     crystal_command = get_crystal_command()
     
+    if tty:
+        # TODO: Support Windows, probably via the pywintty library
+        if sys.platform == 'win32':
+            raise NotImplementedError('tty=True not supported on Windows')
+        import pty
+        (master_fd, slave_fd) = pty.openpty()
+    
     did_raise = False
     crystal = subprocess.Popen(
         [*crystal_command, *args],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE if discrete_stderr else subprocess.STDOUT,
+        stdin=(subprocess.PIPE if not tty else slave_fd),
+        stdout=(subprocess.PIPE if not tty else slave_fd),
+        stderr=(
+            (subprocess.STDOUT if not tty else slave_fd)
+            if not discrete_stderr
+            else subprocess.PIPE
+        ),
         encoding='utf-8',
         env={
             **os.environ,
@@ -126,6 +143,28 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
             **env_extra
         })
     try:
+        if tty:
+            stdinout_raw = os.fdopen(
+                master_fd,
+                # Reading and writing; binary mode
+                'r+b',
+                # Don't buffer reads or writes
+                buffering=0,
+                # Will close fd manually
+                closefd=False,
+            )
+            stdinout = TextIOWrapper(
+                stdinout_raw,
+                encoding='utf-8',
+                # Do not translate \r or \n
+                newline='',
+                # Don't buffer writes
+                write_through=True
+            )
+            stdinout._cr_tty = True  # type: ignore[attr-defined]
+            crystal.stdin = crystal.stdout = stdinout
+            
+            os.close(slave_fd)
         assert isinstance(crystal.stdout, TextIOBase)
         
         # Flush app preferences before starting subprocess,
@@ -137,12 +176,18 @@ def crystal_running(*, args=[], env_extra={}, discrete_stderr: bool=False, kill:
         did_raise = True
         raise
     finally:
+        if tty:
+            os.close(master_fd)
+        
         if kill or did_raise:
-            assert crystal.stdin is not None
-            crystal.stdin.close()
-            assert crystal.stdout is not None
-            crystal.stdout.close()
+            if not tty:
+                assert crystal.stdin is not None
+                crystal.stdin.close()
+                assert crystal.stdout is not None
+                crystal.stdout.close()
+            
             crystal.kill()
+        
         # NOTE: Warns upon failure,
         #       unlike wait_for_crystal_to_exit which errors
         try:
@@ -298,7 +343,12 @@ def _ensure_can_use_crystal_cli() -> None:
 
 
 @contextmanager
-def crystal_shell(*, args=[], env_extra={}, kill: bool=True) -> Iterator[tuple[subprocess.Popen, str]]:
+def crystal_shell(
+        *, args=[],
+        env_extra={},
+        kill: bool=True,
+        tty: bool=False,
+        ) -> Iterator[tuple[subprocess.Popen, str]]:
     """
     Context which starts "crystal --shell" upon enter
     and cleans up the associated process upon exit.
@@ -306,7 +356,7 @@ def crystal_shell(*, args=[], env_extra={}, kill: bool=True) -> Iterator[tuple[s
     Raises:
     * SkipTest -- if Crystal CLI cannot be used in the current environment
     """
-    with crystal_running(args=['--shell', *args], env_extra=env_extra, kill=kill) as crystal:
+    with crystal_running(args=['--shell', *args], env_extra=env_extra, kill=kill, tty=tty) as crystal:
         assert isinstance(crystal.stdout, TextIOBase)
         (banner, _) = read_until(
             crystal.stdout, '\n>>> ',
@@ -537,6 +587,7 @@ def read_until(
         else:
             raise
 
+
 def _read_until_inner(
         stream: TextIOBase,
         stop_suffix: str | tuple[str, ...],
@@ -562,6 +613,7 @@ def _read_until_inner(
     stop_suffix_bytes_choices = [s.encode(stream.encoding) for s in stop_suffix]
     
     read_buffer = b''
+    READ_CHUNK_SIZE = 1024  # arbitrary
     found_stop_suffix = None  # type: Optional[str]
     start_time = time.monotonic()
     hard_timeout_exceeded = False
@@ -586,9 +638,20 @@ def _read_until_inner(
                     found_stop_suffix = ''
             else:
                 # Read stream
-                # NOTE: Append uses quadratic performance.
+                stream_buffer = stream.buffer  # type: ignore[attr-defined]
+                if isinstance(stream_buffer, BufferedIOBase):
+                    chunk = stream_buffer.read1(READ_CHUNK_SIZE)
+                else:
+                    chunk = stream_buffer.read(READ_CHUNK_SIZE)
+                # NOTE: Append has quadratic performance.
                 #       Not using for large amounts of text so I don't care.
-                read_buffer += stream.buffer.read1(1024)  # type: ignore[attr-defined]  # arbitrary
+                read_buffer += chunk
+                
+                # Clean TTY output on a best-effort basis
+                if getattr(stream, '_cr_tty', False):
+                    # NOTE: Repeated cleaning has quadratic performance.
+                    #       Not using for large amounts of text so I don't care.
+                    read_buffer = _clean_tty_bytes(read_buffer)
                 
                 # Look for an acceptable "stop suffix"
                 for (i, s_bytes) in enumerate(stop_suffix_bytes_choices):
@@ -669,6 +732,38 @@ def drain(stream: TextIOBase | subprocess.Popen, ttl: float | None=None) -> str:
         return e.read_so_far
     else:
         raise ValueError('Actually encountered EOT while reading stream!')
+
+
+# Byte regex for ANSI / terminal control sequences
+_ANSI_ESCAPE_RE_BYTES = re.compile(
+    rb"""
+    \x1B  # ESC
+    (
+        \[ [0-?]* [ -/]* [@-~]   |  # CSI sequences
+        \] .*? (?:\x07|\x1B\\)   |  # OSC sequences (BEL or ST)
+        [=><]                    |  # ESC =, ESC >, ESC <
+        .                           # other single-char ESC sequences
+    )
+    """,
+    re.VERBOSE | re.DOTALL,
+)
+
+def _clean_tty_bytes(data: bytes) -> bytes:
+    """
+    Normalize PTY/terminal output at the byte level:
+    - Strip ANSI / terminal control sequences (CSI, OSC, etc.)
+    
+    '\n' amd '\r' are NOT stripped because sometimes they are used
+        - to create a new line or
+        - to rewrite the current line
+    and it's difficult to determine automatically how to handle them.
+    So force callers that use tty=True to handle them directly.
+    """
+    
+    # Strip ANSI / terminal escape sequences
+    data = _ANSI_ESCAPE_RE_BYTES.sub(b'', data)
+    
+    return data
 
 
 # ------------------------------------------------------------------------------

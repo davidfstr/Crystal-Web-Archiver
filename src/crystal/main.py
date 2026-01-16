@@ -687,13 +687,19 @@ def _main2(args: list[str]) -> None:
     try:
         # (Don't insert anything between set_foreground_thread() and MyApp())
         if not parsed_args.headless:
-            # - Queue call of app.OnInit() and _did_launch() after main loop starts
             # - When using --shell, don't let wxPython override Ctrl-C handling,
             #   so that the shell can handle Ctrl-C properly
-            # - When not using --shell, allow wxPython to override Ctrl-C 
+            # - When not using --shell, allow wxPython to override Ctrl-C to
             #   exit process immediately (rather than raising KeyboardInterrupt)
+            shell_handles_ctrl_c = (
+                shell is not None and
+                shell.handles_ctrl_c()
+            )
+            wx_handles_ctrl_c = not shell_handles_ctrl_c
+            
+            # Queue call of app.OnInit() and _did_launch() after main loop starts
             # NOTE: Shows the dock icon on macOS
-            app = MyApp(redirect=False, clearSigInt=(shell is None))
+            app = MyApp(redirect=False, clearSigInt=wx_handles_ctrl_c)
         else:
             # Queue call of _did_launch() after main loop starts
             from crystal.util.xthreading import start_fg_coroutine
