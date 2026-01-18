@@ -229,7 +229,7 @@ async def test_when_view_callout_permanently_dismissed_then_stays_hidden() -> No
                 'Callout should be visible'
             
             # Check the "Don't show this message again" checkbox
-            dismiss_checkbox = view_callout.FindWindow(name='cr-view-button-callout__dismiss-checkbox')
+            dismiss_checkbox = view_callout.FindWindow(name='cr-view-button-callout__dont-show-again')
             assert dismiss_checkbox is not None, \
                 'Dismiss checkbox should exist'
             dismiss_checkbox.SetValue(True)

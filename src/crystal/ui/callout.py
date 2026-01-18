@@ -149,7 +149,7 @@ class Callout(wx.Panel):
         self._dismiss_checkbox = wx.CheckBox(
             self,
             label="Don't show this message again",
-            name=self.Name + '__dismiss-checkbox')
+            name=self.Name + '__dont-show-again')
         self._dismiss_checkbox.SetForegroundColour(self.GetForegroundColour())
         if is_windows():
             # On Windows, explicitly set background color to match parent
