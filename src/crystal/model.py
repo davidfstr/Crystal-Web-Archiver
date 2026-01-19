@@ -488,7 +488,6 @@ class Project(ListenableMixin):
         self._scheduler_thread = (
             crystal.task.start_scheduler_thread(new_root_task)
         )  # type: threading.Thread | None
-        
     
     # --- Load: Validity ---
     
